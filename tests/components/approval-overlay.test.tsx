@@ -339,6 +339,8 @@ describe('the frame, composed at full size', () => {
       gateId: 'gate-1',
       decision: 'approve',
       identifier: 'GATE-1',
+      // The stamp the READ handed over — never one fetched at press time (MOTIR-5235).
+      stamp: 'v1.stamp-the-read-handed-over',
     });
     expect(screen.getByText(en.approvalGate.state.approved)).toBeTruthy();
     expect(screen.getByText(en.approvalGate.record.filesKept)).toBeTruthy();
@@ -379,6 +381,123 @@ describe('the frame, composed at full size', () => {
     expect(screen.getByRole('link', { name: zh.approvalOverlay.openWorkItem })).toBeTruthy();
     expect(
       screen.getByRole('dialog', { name: `GATE-1 的${zh.workbench.approvals.kind.design_result}` }),
+    ).toBeTruthy();
+  });
+});
+
+describe('a STALE press (Story MOTIR-5232 · Subtask MOTIR-5235)', () => {
+  const stale = en.approvalGate.refusal.stale;
+  const staleRefusal = (moved: ('subject' | 'pull_requests' | 'criteria')[]) => ({
+    ok: false as const,
+    refusal: { tag: 'APPROVAL_GATE_STALE_SUBJECT' as const, moved },
+  });
+  const requestChanges = () =>
+    act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    });
+
+  it('draws the refusal IN PLACE naming what moved, with its ONE control — and writes, refreshes and closes nothing', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(readOf());
+    decideApprovalGateAction.mockResolvedValue(staleRefusal(['criteria']));
+    await renderOverlay();
+    await requestChanges();
+
+    const alert = screen.getByRole('alert');
+    expect(within(alert).getByText(stale.criteria)).toBeTruthy();
+    expect(within(alert).getByText(stale.next)).toBeTruthy();
+    expect(within(alert).getByRole('button', { name: stale.control })).toBeTruthy();
+    // Pressing again would be refused again: the refusal's own control is the only way on.
+    expect(
+      (
+        screen.getByRole('button', {
+          name: en.approvalGate.verb.requestChanges,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(announceGateDecided).not.toHaveBeenCalled();
+    expect(shallowPush).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('“Show the current version” re-reads IN PLACE, and the second press — with the FRESH stamp — lands', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay
+      .mockResolvedValueOnce(readOf())
+      .mockResolvedValueOnce(
+        readOf({ stamp: 'v1.the-current-version', gate: { ...GATE, subjectVersion: 'c0ffee12' } }),
+      );
+    decideApprovalGateAction
+      .mockResolvedValueOnce(staleRefusal(['subject']))
+      .mockResolvedValueOnce({
+        ok: true,
+        gate: { ...GATE, state: 'changes_requested', decidedAt: GATE.updatedAt },
+        filesKept: null,
+      });
+    await renderOverlay();
+    await requestChanges();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: stale.control }));
+    });
+
+    // The SAME read the overlay opened with, run again — never a navigation.
+    expect(fetchApprovalGateOverlay).toHaveBeenCalledTimes(2);
+    expect(fetchApprovalGateOverlay.mock.calls[1]!.slice(0, 2)).toEqual([
+      'GATE-1',
+      'design_result',
+    ]);
+    expect(shallowPush).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    // The refusal is gone and the verbs are back — a fresh read is a fresh frame.
+    expect(screen.queryByRole('alert')).toBeNull();
+    // …and the reader starts again from the top of what changed: the port has focus.
+    expect(document.activeElement?.getAttribute('role')).toBe('group');
+    await requestChanges();
+    expect(decideApprovalGateAction).toHaveBeenLastCalledWith(
+      expect.objectContaining({ stamp: 'v1.the-current-version' }),
+    );
+    expect(screen.getByText(en.approvalGate.state.changesRequested)).toBeTruthy();
+  });
+
+  it('keeps the THREE live-gate refusals apart: three sentences, and only the stale one has a control', async () => {
+    const sentences: string[] = [];
+    for (const refusal of [
+      { tag: 'APPROVAL_GATE_ALREADY_DECIDED', decidedByLabel: 'Sam Someone' },
+      { tag: 'APPROVAL_GATE_SUPERSEDED', supersedeCause: 'republished' },
+      { tag: 'APPROVAL_GATE_STALE_SUBJECT', moved: ['subject', 'criteria'] },
+    ]) {
+      cleanup();
+      openAt('GATE-1', 'design_result');
+      fetchApprovalGateOverlay.mockResolvedValue(readOf());
+      decideApprovalGateAction.mockResolvedValue({ ok: false, refusal });
+      await renderOverlay();
+      await requestChanges();
+      const alert = screen.getByRole('alert');
+      sentences.push(alert.textContent ?? '');
+      expect(Boolean(within(alert).queryByRole('button', { name: stale.control }))).toBe(
+        refusal.tag === 'APPROVAL_GATE_STALE_SUBJECT',
+      );
+    }
+    expect(new Set(sentences).size).toBe(3);
+    expect(sentences[2]).toContain(
+      stale.several.replace('{things}', `${stale.noun.subject} and ${stale.noun.criteria}`),
+    );
+  });
+
+  it('speaks zh — the sentence, the next action and the control', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(readOf());
+    decideApprovalGateAction.mockResolvedValue(staleRefusal(['pull_requests']));
+    await renderOverlay(zh as unknown as Record<string, unknown>);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: zh.approvalGate.verb.requestChanges }));
+    });
+    const alert = screen.getByRole('alert');
+    expect(within(alert).getByText(zh.approvalGate.refusal.stale.pullRequests)).toBeTruthy();
+    expect(within(alert).getByText(zh.approvalGate.refusal.stale.next)).toBeTruthy();
+    expect(
+      within(alert).getByRole('button', { name: zh.approvalGate.refusal.stale.control }),
     ).toBeTruthy();
   });
 });

@@ -131,7 +131,13 @@ function renderFrame(
         itemIdentifier="ACME-12"
         manualLinkable
         howToTest={STORY}
-        mergeGate={{ gate: APPROVED, canDecide: true, routedToLabel: null, ...read }}
+        mergeGate={{
+          gate: APPROVED,
+          canDecide: true,
+          routedToLabel: null,
+          stamp: 'v1.stamp-on-screen',
+          ...read,
+        }}
         gateActions={actions}
       />
     </OptimisticStatusProvider>,

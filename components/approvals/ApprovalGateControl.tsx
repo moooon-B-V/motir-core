@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import { useTranslations } from 'next-intl';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { AlertTriangle, Maximize2, Minimize2 } from 'lucide-react';
+import { AlertTriangle, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { PortRenderStatusProvider, usePortRenderStatus } from './portRenderStatus';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 import type { GateDecision } from '@/lib/dto/approvalGate';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
+import type { StampComponent } from '@/lib/approvalGates/stamp';
 
 // THE UNIVERSAL APPROVAL FRAME (Story MOTIR-4778 · Subtask MOTIR-4792), built to
 // `design/work-items/approval-control.mock.html` + `design-notes.md`
@@ -210,6 +211,20 @@ export interface ApprovalGateControlProps {
    * null on success — at which point the caller has already reconciled.
    */
   onDecide: (decision: GateDecision) => Promise<GateRefusal | null>;
+  /**
+   * RE-READ what is being decided, in place — the STALE refusal's one control,
+   * *Show the current version* (Story MOTIR-5232 · Subtask MOTIR-5235; design
+   * `approval-control--stale-refusal.mock.html` Panel 4).
+   *
+   * ⚠️ THE HOST RE-RUNS THE READ IT OPENED WITH, so the current subject and a FRESH
+   * stamp arrive together. A control that refetched the subject and kept the old
+   * stamp would be refused for ever, and each half would look right alone. The frame
+   * only draws the control; a host that supplies none draws the refusal without it.
+   */
+  onShowCurrentVersion?: () => void;
+  /** The host has just re-read after *Show the current version*: focus the port on mount
+   *  (design Panel 4). Never on an ordinary first render — that would steal focus. */
+  focusPortOnMount?: boolean;
 }
 
 type Phase =
@@ -296,8 +311,12 @@ function PortBox({
   sectioned,
   showExpand,
   onToggleExpanded,
+  focusOnMount = false,
 }: {
   children: ReactNode;
+  /** Move focus to the port as it mounts — after *Show the current version*, so the
+   *  reader starts again from the top of what changed (MOTIR-5235, Panel 4). */
+  focusOnMount?: boolean;
   expanded: boolean;
   /** The `section` form — the floor, ceiling and scroll stay; the side padding
    *  is the host's, and a hairline above divides it from band 1. */
@@ -331,9 +350,16 @@ function PortBox({
   onToggleExpanded: () => void;
 }) {
   const t = useTranslations('approvalGate.port');
+  const portRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focusOnMount) portRef.current?.focus();
+    // Mount only: a re-read remounts the frame, and that is the one moment it moves focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
+      ref={portRef}
       className={
         expanded || fill
           ? // ⚠️ `min-h-0 flex-1 overflow-y-auto` IS THE LOAD-BEARING PART, AND
@@ -427,8 +453,52 @@ function RecordStrip({ children, sectioned }: { children: ReactNode; sectioned: 
  * `--el-danger-on-surface` for the ink, never `--el-danger-text`, which is the
  * ink FOR a danger fill and renders white-on-white here (CLAUDE.md's danger rule).
  */
-function RefusalAlert({ refusal, sectioned }: { refusal: GateRefusal; sectioned: boolean }) {
+function RefusalAlert({
+  refusal,
+  sectioned,
+  onShowCurrentVersion,
+}: {
+  refusal: GateRefusal;
+  sectioned: boolean;
+  onShowCurrentVersion?: () => void;
+}) {
   const { headline, nextAction } = useRefusalCopy(refusal);
+  const t = useTranslations('approvalGate.refusal.stale');
+
+  // ⚠️ THE STALE REFUSAL IS THE ONLY ONE WITH A CONTROL (MOTIR-5235; design
+  // `approval-control--stale-refusal.mock.html`). The other two mean *there is nothing
+  // here for you*; this one means *still yours, and it moved*. Same band, same place —
+  // told apart by the words, the glyph and the control, never by colour alone. The
+  // glyph is secondary ink, not danger: nothing failed.
+  if (refusal.tag === 'APPROVAL_GATE_STALE_SUBJECT') {
+    return (
+      <div
+        role="alert"
+        className={`${sectioned ? 'mt-3 ' : ''}flex flex-wrap items-start gap-x-3 gap-y-2 border-t border-(--el-border-soft) bg-(--el-tint-peach) px-4 py-3`}
+      >
+        {/* The sentence takes the full width below `sm`, so the control drops under it
+            and the reason is read before the action (Panel 6). */}
+        <div className="flex min-w-0 flex-1 basis-full gap-2.5 sm:basis-0">
+          <RefreshCw className="mt-0.5 h-4 w-4 flex-none text-(--el-text-secondary)" aria-hidden />
+          <p className="text-[13px] leading-snug text-(--el-text-strong)">
+            <b>{headline}</b> <span className="text-(--el-text-secondary)">{nextAction}</span>
+          </p>
+        </div>
+        {onShowCurrentVersion ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            leftIcon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}
+            onClick={onShowCurrentVersion}
+          >
+            {t('control')}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -454,6 +524,7 @@ function RefusalAlert({ refusal, sectioned }: { refusal: GateRefusal; sectioned:
  */
 export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAction: string } {
   const t = useTranslations('approvalGate.refusal');
+  const locale = useLocale();
   // The withdrawal's CAUSE sentences live beside state `G`'s, not under `refusal`,
   // because the two surfaces must say the same thing about one event (MOTIR-5667).
   const tGate = useTranslations('approvalGate');
@@ -476,6 +547,20 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
       // at the frame is being told about one event, and two sentences that differ
       // read as two events.
       headline = tGate(`withdrawn.cause.${refusal.supersedeCause ?? 'unknown'}`);
+      break;
+    case 'APPROVAL_GATE_STALE_SUBJECT':
+      // WHAT MOVED, one sentence per component and one for more than one (MOTIR-5235;
+      // design `approval-control--stale-refusal.mock.html` Panel 3). The list joins the
+      // component NOUNS in the one order the server reports them, with the locale's own
+      // list format — so zh reads `a、b和c` rather than an English comma list.
+      headline =
+        refusal.moved.length === 1
+          ? t(`stale.${STALE_KEY[refusal.moved[0]!]}`)
+          : t('stale.several', {
+              things: new Intl.ListFormat(locale, { type: 'conjunction' }).format(
+                refusal.moved.map((component) => t(`stale.noun.${STALE_KEY[component]}`)),
+              ),
+            });
       break;
     case 'APPROVAL_GATE_NOT_AUTHORISED':
       headline = t('notAuthorised.title');
@@ -596,6 +681,13 @@ function PortFailedAlert({ sectioned }: { sectioned: boolean }) {
   );
 }
 
+/** A stale component → its copy key under `approvalGate.refusal.stale`. */
+const STALE_KEY: Record<StampComponent, string> = {
+  subject: 'subject',
+  pull_requests: 'pullRequests',
+  criteria: 'criteria',
+};
+
 /** Tag → its copy namespace. Kept beside the switch it mirrors. */
 function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
   switch (tag) {
@@ -603,6 +695,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'alreadyDecided';
     case 'APPROVAL_GATE_SUPERSEDED':
       return 'superseded';
+    case 'APPROVAL_GATE_STALE_SUBJECT':
+      return 'stale';
     case 'APPROVAL_GATE_NOT_AUTHORISED':
       return 'notAuthorised';
     case 'APPROVAL_GATE_NOT_FOUND':
@@ -647,6 +741,8 @@ export function ApprovalGateControl({
   recordDetail,
   withdrawnPort,
   onDecide,
+  onShowCurrentVersion,
+  focusPortOnMount = false,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
   const tGithub = useTranslations('approvalGate.pullRequestApproval.github');
@@ -831,6 +927,7 @@ export function ApprovalGateControl({
           // over `G`'s dead port, which has nothing to expand.
           showExpand={!fill && canDecide && !decided && !withdrawn && portShown}
           onToggleExpanded={() => setExpanded((v) => !v)}
+          focusOnMount={focusPortOnMount}
         >
           {withdrawn ? (
             <div className="flex flex-col items-center justify-center gap-1 bg-(--el-muted) px-4 py-10 text-center">
@@ -864,7 +961,11 @@ export function ApprovalGateControl({
       {alert ?? null}
 
       {phase.kind === 'refused' ? (
-        <RefusalAlert refusal={phase.refusal} sectioned={sectioned} />
+        <RefusalAlert
+          refusal={phase.refusal}
+          sectioned={sectioned}
+          onShowCurrentVersion={onShowCurrentVersion}
+        />
       ) : null}
 
       {/* BAND 3 — withdrawn: no decision at all. Decided: the record. Awaiting:
@@ -1003,7 +1104,12 @@ export function ApprovalGateControl({
                   variant={verb.variant}
                   size="sm"
                   type="button"
-                  disabled={phase.kind === 'pending'}
+                  // ⚠️ DISABLED UNDER ANY REFUSAL, not only while pending (design
+                  // `approval-control--stale-refusal.mock.html`, Panel 1). A second press
+                  // would be refused again — for a stale one, with the same stamp — so the
+                  // refusal's own next action is the only live one. A re-read remounts the
+                  // frame, which is what gives the verbs back.
+                  disabled={phase.kind === 'pending' || phase.kind === 'refused'}
                   onClick={() =>
                     verb.confirms ? setPhase({ kind: 'confirming', verb }) : void run(verb)
                   }
