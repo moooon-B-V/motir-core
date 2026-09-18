@@ -55,6 +55,29 @@ export const jobEventRepository = {
     });
   },
 
+  /**
+   * The NEWEST `work-item/transitioned` event for one work item INTO one status
+   * (Story MOTIR-4931 · MOTIR-5709) — the acceptance lane's handle on "the
+   * transition I just made", so it can wait on that event's resolve run instead
+   * of on a sleep. Reads the event's JSON payload by path.
+   */
+  async findLatestTransitioned(
+    workItemId: string,
+    toStatusKey: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobEvent | null> {
+    return tx.jobEvent.findFirst({
+      where: {
+        name: 'work-item/transitioned',
+        AND: [
+          { data: { path: ['workItemId'], equals: workItemId } },
+          { data: { path: ['toStatusKey'], equals: toStatusKey } },
+        ],
+      },
+      orderBy: { receivedAt: 'desc' },
+    });
+  },
+
   /** Count the events recorded for one name. A cheap assertion surface for the tests. */
   async countByName(name: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.jobEvent.count({ where: { name } });

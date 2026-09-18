@@ -94,6 +94,11 @@ const PORT = new URL(BASE_URL).port || '3200';
 // thing that EXECUTES it is `startJobWorker` in `globalSetup` below — without
 // which `email.send` never delivers and every `waitForEmail` in this lane hangs.
 process.env['E2E_JOB_WORKER'] ??= '1';
+// …and the worker must select the SAME fake monitor provider the webServer does
+// below, with the same token key, or the resolve-back job (MOTIR-5703) runs
+// against the real adapter and a grant it cannot decrypt (MOTIR-5709;
+// `monitorFakeEnv` in `tests/e2e/_helpers/job-worker-process.ts`).
+process.env['E2E_JOB_WORKER_MONITOR_FAKE'] ??= '1';
 
 // The cloud posture and the two reasons for it: the "Cloud posture" block in
 // this file's header. What follows is that block's mechanics — the boundary
