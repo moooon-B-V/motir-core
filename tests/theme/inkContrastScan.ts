@@ -171,7 +171,6 @@ export const TINTED_SURFACE_TOKENS: readonly string[] = [
   '--el-sidebar-bg',
   '--el-surface',
   '--el-surface-soft',
-  '--el-switch-knob',
   '--el-tabnav-track',
 ];
 

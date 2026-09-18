@@ -60,8 +60,10 @@ export function Switch({
       <span
         aria-hidden
         className={cn(
-          'inline-block size-3.5 rounded-full bg-(--el-switch-knob) shadow-(--shadow-subtle) transition-transform',
-          checked ? 'translate-x-[18px]' : 'translate-x-0.5',
+          'inline-block size-3.5 rounded-full shadow-(--shadow-subtle) transition-transform',
+          checked
+            ? 'translate-x-[18px] bg-(--el-switch-knob)'
+            : 'translate-x-0.5 bg-(--el-switch-knob-off)',
         )}
       />
     </button>
