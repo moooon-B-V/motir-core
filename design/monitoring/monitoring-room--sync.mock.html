@@ -1,0 +1,1398 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Monitoring room — sync delta (MOTIR-5700)</title>
+    <!--
+      DELTA MOCK — MOTIR-5700 (Story MOTIR-4931). It amends the connection row of
+      monitoring-room--ingestion.mock.html (MOTIR-5575, §12) and draws ONLY the
+      panels changed by sync. monitoring-room.mock.html (MOTIR-5256 / MOTIR-5288)
+      and the ingestion delta remain the design of record for everything else.
+
+      SHIPPED REALITY FIRST. The row below mirrors the SHIPPED ConnectionRow in
+      app/(authed)/settings/project/monitoring/_components/MonitoringRoom.tsx,
+      class for class (flex-wrap top line, 18px bug glyph, mono slug, inline
+      "Minimum level" label before the Combobox trigger, icon-button Disconnect,
+      and the filled warning line a refused write renders). The switch mirrors
+      the design system's Switch primitive
+      (packages/design-system/src/components/ui/Switch.tsx): 36x20 track,
+      14px knob, role="switch", named by its visible label.
+
+      PANELS (review every one):
+        1 · the default — both switches ON — reached from the settings rail;
+        2 · each switch OFF, one per row;
+        3 · a failed resolve-back line on the row;
+        4 · a degraded grant, with the switches still operable;
+        5 · saving, and a refused save.
+
+      The settings-rail entrance is unchanged (General, below Repositories,
+      integration:manage). A gone issue is NOT drawn: it is said on the bug.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-fill: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-muted: #f3f4f6;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-mint: #d9f3e1;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-link: #0070d2;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-sm: 32px;
+        --height-control: 36px;
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-hairline);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-card: var(--color-background);
+        --el-success: var(--color-success);
+        --el-success-surface: var(--color-tint-mint);
+        --el-warning: var(--color-warning);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-icon-muted: var(--color-steel);
+        --el-icon-active: var(--color-primary);
+        --el-input-border: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      button {
+        color: inherit;
+        font: inherit;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .sr {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .board {
+        max-width: 1040px;
+        margin: 0 auto;
+      }
+      .board-title {
+        margin: 0 0 5px;
+        font: 600 24px/1.2 var(--font-serif);
+      }
+      .board-subtitle,
+      .panel-note {
+        max-width: 72rem;
+        color: var(--el-text-secondary);
+      }
+      .board-subtitle {
+        margin: 0 0 30px;
+      }
+      .panel-block {
+        margin: 0 0 42px;
+      }
+      .panel-label {
+        margin-bottom: 6px;
+        font-weight: 650;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 13px;
+      }
+      .panel {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 28px;
+        box-shadow: var(--shadow-subtle);
+      }
+      .room {
+        max-width: 736px;
+        margin: 0 auto;
+      }
+      /* ── the settings area (panel 1 only) — the base mock's rail, General group ── */
+      .settings {
+        display: grid;
+        grid-template-columns: 15rem 1fr;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .set-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        border-right: 1px solid var(--el-sidebar-border);
+        background: var(--el-sidebar-bg);
+        padding: 20px 12px;
+      }
+      .set-rail .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .set-rail .grp > .h {
+        padding: 6px var(--spacing-control-x) 2px;
+        color: var(--el-text-secondary);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        color: var(--el-text-secondary);
+      }
+      .rail-row .icon {
+        color: var(--el-icon-muted);
+      }
+      .rail-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .rail-row.active .icon {
+        color: var(--el-icon-active);
+      }
+      .rail-elided {
+        margin: 0;
+        padding: 0 var(--spacing-control-x);
+        color: var(--el-text-secondary);
+        font-size: 11px;
+      }
+      .set-pane {
+        min-width: 0;
+        padding: 28px;
+      }
+      /* ── the room head and grant — unchanged from MOTIR-5288 ── */
+      .pane-head {
+        margin-bottom: 24px;
+      }
+      .eyebrow,
+      .section-label {
+        color: var(--el-text-secondary);
+        font: 650 11px/1.2 var(--font-mono);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .pane-head h2 {
+        margin: 5px 0 4px;
+        font: 600 30px/1.15 var(--font-serif);
+      }
+      .pane-head p,
+      .section-hint {
+        margin: 0;
+        color: var(--el-text-secondary);
+      }
+      .grant-card {
+        margin-bottom: 20px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+      }
+      .grant-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .grant-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        flex: none;
+        place-items: center;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        color: var(--el-icon-muted);
+      }
+      .grant-copy {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .grant-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 650;
+      }
+      .grant-meta {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .mono {
+        font-family: var(--font-mono);
+      }
+      .health {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-success-surface);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .health.warning {
+        background: var(--el-warning-surface);
+      }
+      .health.ok .icon {
+        color: var(--el-success);
+      }
+      .health.warning .icon {
+        color: var(--el-warning);
+      }
+      .btn {
+        display: inline-flex;
+        min-height: var(--height-btn-sm);
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-btn);
+        background: var(--el-page-bg);
+        padding: var(--spacing-btn-y-sm) var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn-primary {
+        border-color: var(--el-accent);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .warning-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-warning-surface);
+        padding: 12px 14px;
+        color: var(--el-warning-text);
+      }
+      .warning-banner .icon {
+        color: var(--el-warning);
+      }
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .section-hint {
+        max-width: 68ch;
+        font-size: 13px;
+      }
+      /* ── THE ROW — mirrors the shipped ConnectionRow ── */
+      .rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .row {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        padding: 12px 14px;
+      }
+      .row-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+      }
+      .row-glyph {
+        width: 18px;
+        height: 18px;
+        color: var(--el-icon-muted);
+      }
+      .row-main {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .slug {
+        font: 600 14px/1.3 var(--font-mono);
+      }
+      .bound,
+      .poll {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .poll strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .poll.warning {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 4px;
+        border-radius: var(--radius-card);
+        background: var(--el-warning-surface);
+        padding: 6px 10px;
+        color: var(--el-warning-text);
+      }
+      .poll.warning strong {
+        color: inherit;
+      }
+      .level {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 8px;
+      }
+      .level-label {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .combo {
+        display: flex;
+        min-width: 9rem;
+        min-height: var(--height-control);
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 13px;
+      }
+      .icon-btn {
+        display: inline-grid;
+        width: var(--height-control);
+        height: var(--height-control);
+        flex: none;
+        place-items: center;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-icon-muted);
+      }
+      .icon-btn:disabled {
+        opacity: 0.5;
+      }
+      /* ── NEW · the SYNC band (§13 decision 1) ── */
+      .sync {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-left: 30px; /* the 18px glyph + the row's 12px gap: aligns with the slug */
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 10px;
+      }
+      .sync-head {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .sync-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .sync-copy {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .sync-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--el-text);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .sync-hint {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .saving {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 400;
+      }
+      /* the design system's Switch — 36x20, knob 14px, rounded-full carve-out */
+      .switch {
+        position: relative;
+        display: inline-flex;
+        width: 36px;
+        height: 20px;
+        flex: none;
+        align-items: center;
+        margin-top: 1px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        padding: 0;
+      }
+      .switch.on {
+        border-color: var(--el-switch-on);
+        background: var(--el-switch-on);
+      }
+      .switch:disabled {
+        opacity: 0.5;
+      }
+      .knob {
+        width: 14px;
+        height: 14px;
+        border-radius: var(--radius-badge);
+        background: var(--el-switch-knob);
+        box-shadow: var(--shadow-subtle);
+        transform: translateX(2px);
+      }
+      .switch.on .knob {
+        transform: translateX(18px);
+      }
+      /* the filled warning line — the shipped refused-write treatment */
+      .line {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 6px 0 0;
+        border-radius: var(--radius-card);
+        background: var(--el-warning-surface);
+        padding: 8px 12px;
+        color: var(--el-warning-text);
+        font-size: 12px;
+      }
+      .line .icon,
+      .poll.warning .icon {
+        margin-top: 1px;
+        color: var(--el-warning);
+      }
+      .line strong {
+        font-weight: 600;
+      }
+      .line.refused {
+        margin: 0;
+      }
+      .key {
+        color: var(--el-link);
+        font-family: var(--font-mono);
+      }
+      .icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+      }
+      .icon.sm {
+        width: 13px;
+        height: 13px;
+      }
+      .spin {
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sr" aria-hidden="true">
+      <defs>
+        <!-- lucide `activity` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-activity" viewBox="0 0 24 24">
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </symbol>
+        <!-- lucide `sliders-horizontal` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
+        </symbol>
+        <!-- lucide `folder-git-2` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-folder-git-2" viewBox="0 0 24 24">
+          <path d="M18 19a5 5 0 0 1-5-5v8" />
+          <path
+            d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+          />
+          <circle cx="13" cy="12" r="2" />
+          <circle cx="20" cy="19" r="2" />
+        </symbol>
+        <!-- lucide `bug` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-bug" viewBox="0 0 24 24">
+          <path d="M12 20v-9" />
+          <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M21 21a4 4 0 0 0-3.81-4" />
+          <path d="M21 5a4 4 0 0 1-3.55 3.97" />
+          <path d="M22 13h-4" />
+          <path d="M3 21a4 4 0 0 1 3.81-4" />
+          <path d="M3 5a4 4 0 0 0 3.55 3.97" />
+          <path d="M6 13H2" />
+          <path d="m8 2 1.88 1.88" />
+          <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13" />
+        </symbol>
+        <!-- lucide `circle-check-big` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-circle-check-big" viewBox="0 0 24 24">
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </symbol>
+        <!-- lucide `triangle-alert` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <!-- lucide `refresh-cw` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-refresh-cw" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </symbol>
+        <!-- lucide `trash-2` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-trash-2" viewBox="0 0 24 24">
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </symbol>
+        <!-- lucide `chevron-down` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <!-- lucide `loader-circle` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-loader-circle" viewBox="0 0 24 24">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <main class="board">
+      <h1 class="board-title">Monitoring room · sync delta</h1>
+      <p class="board-subtitle">
+        MOTIR-5700 adds a SYNC band to the shipped connection row: one switch per direction, each
+        naming its outcome, and the connection's last failed resolve-back where a person already
+        looks. Minimum level (what comes IN) keeps the row's top line; the band holds what goes OUT
+        and what is taken back.
+      </p>
+
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 1 · The default — both switches on, reached from the rail
+        </div>
+        <p class="panel-note">
+          The whole access path in one panel: <b>General → Monitoring</b> in the settings rail
+          (unchanged, §6), the room it opens, and the SYNC band on each connection row. Both
+          switches are ON — the story's shipped default and the store's <code>DEFAULT true</code>.
+          Minimum level keeps the top line, exactly as it ships.
+        </p>
+        <div class="panel">
+          <div class="settings">
+            <nav class="set-rail" aria-label="Project settings">
+              <div class="grp">
+                <div class="h">General</div>
+                <div class="rail-row">
+                  <svg class="icon"><use href="#i-sliders-horizontal" /></svg>Details
+                </div>
+                <div class="rail-row">
+                  <svg class="icon"><use href="#i-folder-git-2" /></svg>Repositories
+                </div>
+                <div class="rail-row active">
+                  <svg class="icon"><use href="#i-activity" /></svg>Monitoring
+                </div>
+              </div>
+              <p class="rail-elided">Access · Work · Automation — unchanged, elided</p>
+            </nav>
+            <div class="set-pane">
+              <header class="pane-head">
+                <div class="eyebrow">Project settings</div>
+                <h2>Monitoring</h2>
+                <p>
+                  Connect the error monitor your services already report to, and Motir turns its
+                  issues into work items on this project's board.
+                </p>
+              </header>
+              <div class="grant-card">
+                <div class="grant-top">
+                  <span class="grant-mark"
+                    ><svg class="icon"><use href="#i-activity" /></svg></span
+                  ><span class="grant-copy"
+                    ><span class="grant-name"
+                      >Sentry
+                      <span class="health ok"
+                        ><svg class="icon sm"><use href="#i-circle-check-big" /></svg
+                        >Connected</span
+                      ></span
+                    ><span class="grant-meta"
+                      ><span class="mono">acme-inc</span> · checked 4 minutes ago</span
+                    ></span
+                  ><button class="btn" type="button">
+                    <svg class="icon sm"><use href="#i-refresh-cw" /></svg>Re-check
+                  </button>
+                </div>
+              </div>
+              <section class="section">
+                <div class="section-label">Monitored projects</div>
+                <p class="section-hint">
+                  Issues from these Sentry projects become bug work items on this board.
+                </p>
+                <ul class="rows">
+                  <li class="row">
+                    <div class="row-top">
+                      <svg class="icon row-glyph"><use href="#i-bug" /></svg>
+                      <span class="row-main"
+                        ><span class="slug">web-app</span><span class="bound">Bound 2 min ago</span
+                        ><span class="poll">Waiting for the first check</span></span
+                      >
+                      <span class="level"
+                        ><span class="level-label" aria-hidden="true">Minimum level</span
+                        ><button class="combo" type="button">
+                          Every level<svg class="icon sm">
+                            <use href="#i-chevron-down" />
+                          </svg></button
+                      ></span>
+                      <button type="button" class="icon-btn" aria-label="Stop monitoring web-app">
+                        <svg class="icon"><use href="#i-trash-2" /></svg>
+                      </button>
+                    </div>
+                    <div class="sync">
+                      <div class="sync-head">Sync with Sentry</div>
+                      <div class="sync-item">
+                        <button
+                          type="button"
+                          class="switch on"
+                          role="switch"
+                          aria-checked="true"
+                          aria-labelledby="p1a-r"
+                        >
+                          <span class="knob"></span>
+                        </button>
+                        <div class="sync-copy">
+                          <div class="sync-label">
+                            <span id="p1a-r">Resolve in Sentry when the bug is done</span>
+                          </div>
+                          <div class="sync-hint">
+                            Turn off to leave Sentry issues as they are when their bugs are done.
+                          </div>
+                        </div>
+                      </div>
+                      <div class="sync-item">
+                        <button
+                          type="button"
+                          class="switch on"
+                          role="switch"
+                          aria-checked="true"
+                          aria-labelledby="p1a-a"
+                        >
+                          <span class="knob"></span>
+                        </button>
+                        <div class="sync-copy">
+                          <div class="sync-label">
+                            <span id="p1a-a">Take the assignee from Sentry</span>
+                          </div>
+                          <div class="sync-hint">
+                            Turn off to ignore assignments made in Sentry.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                  <li class="row">
+                    <div class="row-top">
+                      <svg class="icon row-glyph"><use href="#i-bug" /></svg>
+                      <span class="row-main"
+                        ><span class="slug">payments</span><span class="bound">Bound yesterday</span
+                        ><span class="poll"
+                          >Checked for new errors 9 min ago · <strong>3 bugs filed</strong></span
+                        ></span
+                      >
+                      <span class="level"
+                        ><span class="level-label" aria-hidden="true">Minimum level</span
+                        ><button class="combo" type="button">
+                          error<svg class="icon sm"><use href="#i-chevron-down" /></svg></button
+                      ></span>
+                      <button type="button" class="icon-btn" aria-label="Stop monitoring payments">
+                        <svg class="icon"><use href="#i-trash-2" /></svg>
+                      </button>
+                    </div>
+                    <div class="sync">
+                      <div class="sync-head">Sync with Sentry</div>
+                      <div class="sync-item">
+                        <button
+                          type="button"
+                          class="switch on"
+                          role="switch"
+                          aria-checked="true"
+                          aria-labelledby="p1b-r"
+                        >
+                          <span class="knob"></span>
+                        </button>
+                        <div class="sync-copy">
+                          <div class="sync-label">
+                            <span id="p1b-r">Resolve in Sentry when the bug is done</span>
+                          </div>
+                          <div class="sync-hint">
+                            Turn off to leave Sentry issues as they are when their bugs are done.
+                          </div>
+                        </div>
+                      </div>
+                      <div class="sync-item">
+                        <button
+                          type="button"
+                          class="switch on"
+                          role="switch"
+                          aria-checked="true"
+                          aria-labelledby="p1b-a"
+                        >
+                          <span class="knob"></span>
+                        </button>
+                        <div class="sync-copy">
+                          <div class="sync-label">
+                            <span id="p1b-a">Take the assignee from Sentry</span>
+                          </div>
+                          <div class="sync-hint">
+                            Turn off to ignore assignments made in Sentry.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">Panel 2 · Each switch off</div>
+        <p class="panel-note">
+          One row per switch. A switch that is off keeps its hint unchanged — the hint describes
+          what OFF means, so the wording never flips under the cursor. Nothing else on the row
+          changes.
+        </p>
+        <div class="panel">
+          <div class="room">
+            <section class="section">
+              <div class="section-label">Monitored projects</div>
+              <p class="section-hint">
+                Issues from these Sentry projects become bug work items on this board.
+              </p>
+              <ul class="rows">
+                <li class="row">
+                  <div class="row-top">
+                    <svg class="icon row-glyph"><use href="#i-bug" /></svg>
+                    <span class="row-main"
+                      ><span class="slug">web-app</span><span class="bound">Bound 3 days ago</span
+                      ><span class="poll">Checked for new errors 4 min ago</span></span
+                    >
+                    <span class="level"
+                      ><span class="level-label" aria-hidden="true">Minimum level</span
+                      ><button class="combo" type="button">
+                        Every level<svg class="icon sm"><use href="#i-chevron-down" /></svg></button
+                    ></span>
+                    <button type="button" class="icon-btn" aria-label="Stop monitoring web-app">
+                      <svg class="icon"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </div>
+                  <div class="sync">
+                    <div class="sync-head">Sync with Sentry</div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch"
+                        role="switch"
+                        aria-checked="false"
+                        aria-labelledby="p2a-r"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p2a-r">Resolve in Sentry when the bug is done</span>
+                        </div>
+                        <div class="sync-hint">
+                          Turn off to leave Sentry issues as they are when their bugs are done.
+                        </div>
+                      </div>
+                    </div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p2a-a"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p2a-a">Take the assignee from Sentry</span>
+                        </div>
+                        <div class="sync-hint">Turn off to ignore assignments made in Sentry.</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+                <li class="row">
+                  <div class="row-top">
+                    <svg class="icon row-glyph"><use href="#i-bug" /></svg>
+                    <span class="row-main"
+                      ><span class="slug">worker</span><span class="bound">Bound 3 days ago</span
+                      ><span class="poll">Checked for new errors 4 min ago</span></span
+                    >
+                    <span class="level"
+                      ><span class="level-label" aria-hidden="true">Minimum level</span
+                      ><button class="combo" type="button">
+                        warning<svg class="icon sm"><use href="#i-chevron-down" /></svg></button
+                    ></span>
+                    <button type="button" class="icon-btn" aria-label="Stop monitoring worker">
+                      <svg class="icon"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </div>
+                  <div class="sync">
+                    <div class="sync-head">Sync with Sentry</div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p2b-r"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p2b-r">Resolve in Sentry when the bug is done</span>
+                        </div>
+                        <div class="sync-hint">
+                          Turn off to leave Sentry issues as they are when their bugs are done.
+                        </div>
+                      </div>
+                    </div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch"
+                        role="switch"
+                        aria-checked="false"
+                        aria-labelledby="p2b-a"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p2b-a">Take the assignee from Sentry</span>
+                        </div>
+                        <div class="sync-hint">Turn off to ignore assignments made in Sentry.</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">Panel 3 · A failed resolve-back, named on the row</div>
+        <p class="panel-note">
+          The connection's LAST failure (<code>lastSyncError*</code>): a filled warning line
+          directly under the switch it belongs to, quoting Sentry's reason verbatim, the bug's key
+          as a link, and when. No line for <i>none yet</i> or <i>last resolve succeeded</i> (a
+          success clears the failure). A gone issue is NOT drawn here — it is said once, on the bug
+          (§13).
+        </p>
+        <div class="panel">
+          <div class="room">
+            <section class="section">
+              <div class="section-label">Monitored projects</div>
+              <p class="section-hint">
+                Issues from these Sentry projects become bug work items on this board.
+              </p>
+              <ul class="rows">
+                <li class="row">
+                  <div class="row-top">
+                    <svg class="icon row-glyph"><use href="#i-bug" /></svg>
+                    <span class="row-main"
+                      ><span class="slug">payments</span><span class="bound">Bound yesterday</span
+                      ><span class="poll"
+                        >Checked for new errors 9 min ago · <strong>3 bugs filed</strong></span
+                      ></span
+                    >
+                    <span class="level"
+                      ><span class="level-label" aria-hidden="true">Minimum level</span
+                      ><button class="combo" type="button">
+                        error<svg class="icon sm"><use href="#i-chevron-down" /></svg></button
+                    ></span>
+                    <button type="button" class="icon-btn" aria-label="Stop monitoring payments">
+                      <svg class="icon"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </div>
+                  <div class="sync">
+                    <div class="sync-head">Sync with Sentry</div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p3a-r"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p3a-r">Resolve in Sentry when the bug is done</span>
+                        </div>
+                        <div class="sync-hint">
+                          Turn off to leave Sentry issues as they are when their bugs are done.
+                        </div>
+                        <div class="line warning">
+                          <svg class="icon sm"><use href="#i-triangle-alert" /></svg
+                          ><span
+                            ><strong
+                              >Couldn't resolve Sentry's issue for
+                              <a class="key" href="#">MOTIR-812</a>:</strong
+                            >
+                            Sentry returned 403: You do not have permission to perform this action.
+                            Tried 12 min ago.</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p3a-a"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p3a-a">Take the assignee from Sentry</span>
+                        </div>
+                        <div class="sync-hint">Turn off to ignore assignments made in Sentry.</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+                <li class="row">
+                  <div class="row-top">
+                    <svg class="icon row-glyph"><use href="#i-bug" /></svg>
+                    <span class="row-main"
+                      ><span class="slug">worker</span><span class="bound">Bound 3 days ago</span
+                      ><span class="poll">Checked for new errors 4 min ago</span></span
+                    >
+                    <span class="level"
+                      ><span class="level-label" aria-hidden="true">Minimum level</span
+                      ><button class="combo" type="button">
+                        warning<svg class="icon sm"><use href="#i-chevron-down" /></svg></button
+                    ></span>
+                    <button type="button" class="icon-btn" aria-label="Stop monitoring worker">
+                      <svg class="icon"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </div>
+                  <div class="sync">
+                    <div class="sync-head">Sync with Sentry</div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p3b-r"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p3b-r">Resolve in Sentry when the bug is done</span>
+                        </div>
+                        <div class="sync-hint">
+                          Turn off to leave Sentry issues as they are when their bugs are done.
+                        </div>
+                      </div>
+                    </div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p3b-a"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p3b-a">Take the assignee from Sentry</span>
+                        </div>
+                        <div class="sync-hint">Turn off to ignore assignments made in Sentry.</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">Panel 4 · Degraded grant — the switches stay operable</div>
+        <p class="panel-note">
+          The base mock's degraded grant (MOTIR-5288 panel 4) and §12's failed poll line, unchanged.
+          The switches are ENABLED: toggling one writes a Motir-side preference and calls nothing at
+          Sentry, and turning resolve-back off before reconnecting is the one useful act available
+          here. A resolve attempted while revoked stacks beneath, in §12's order.
+        </p>
+        <div class="panel">
+          <div class="room">
+            <div class="grant-card">
+              <div class="grant-top">
+                <span class="grant-mark"
+                  ><svg class="icon"><use href="#i-activity" /></svg></span
+                ><span class="grant-copy"
+                  ><span class="grant-name"
+                    >Sentry
+                    <span class="health warning"
+                      ><svg class="icon sm"><use href="#i-triangle-alert" /></svg>Degraded</span
+                    ></span
+                  ><span class="grant-meta"
+                    ><span class="mono">acme-inc</span> · checked 2 minutes ago</span
+                  ></span
+                ><button class="btn" type="button">
+                  <svg class="icon sm"><use href="#i-refresh-cw" /></svg>Re-check</button
+                ><button class="btn btn-primary" type="button">Reconnect</button>
+              </div>
+              <div class="warning-banner">
+                <svg class="icon"><use href="#i-triangle-alert" /></svg
+                ><span
+                  ><strong>Sentry says:</strong> The authorization has been revoked. Motir cannot
+                  read this organisation's issues until somebody reconnects it — nothing new will
+                  reach the board in the meantime.</span
+                >
+              </div>
+            </div>
+            <section class="section">
+              <div class="section-label">Monitored projects</div>
+              <p class="section-hint">
+                Nothing new arrives from these while the connection is degraded.
+              </p>
+              <ul class="rows">
+                <li class="row">
+                  <div class="row-top">
+                    <svg class="icon row-glyph"><use href="#i-bug" /></svg>
+                    <span class="row-main"
+                      ><span class="slug">web-app</span><span class="bound">Bound 3 days ago</span
+                      ><span class="poll warning"
+                        ><svg class="icon sm"><use href="#i-triangle-alert" /></svg
+                        ><span
+                          ><strong>Couldn't check for new errors:</strong> Sentry refused this
+                          connection. Last successful check today at 09:30.</span
+                        ></span
+                      ></span
+                    >
+                    <span class="level"
+                      ><span class="level-label" aria-hidden="true">Minimum level</span
+                      ><button class="combo" type="button">
+                        Every level<svg class="icon sm"><use href="#i-chevron-down" /></svg></button
+                    ></span>
+                    <button type="button" class="icon-btn" aria-label="Stop monitoring web-app">
+                      <svg class="icon"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </div>
+                  <div class="sync">
+                    <div class="sync-head">Sync with Sentry</div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p4a-r"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p4a-r">Resolve in Sentry when the bug is done</span>
+                        </div>
+                        <div class="sync-hint">
+                          Turn off to leave Sentry issues as they are when their bugs are done.
+                        </div>
+                        <div class="line warning">
+                          <svg class="icon sm"><use href="#i-triangle-alert" /></svg
+                          ><span
+                            ><strong
+                              >Couldn't resolve Sentry's issue for
+                              <a class="key" href="#">MOTIR-807</a>:</strong
+                            >
+                            Sentry returned 401: Invalid token. Tried 25 min ago.</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p4a-a"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p4a-a">Take the assignee from Sentry</span>
+                        </div>
+                        <div class="sync-hint">Turn off to ignore assignments made in Sentry.</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">Panel 5 · Saving, and a refused save</div>
+        <p class="panel-note">
+          Write on toggle, with §12's treatment for Minimum level. <b>Pending:</b> the switch has
+          already moved, is disabled, and <i>Saving…</i> follows its label; Disconnect is disabled
+          for the same interval; the other switch stays operable (independent keys).
+          <b>Refused:</b> the switch is back at the stored value and a filled line under the band
+          says nothing changed.
+        </p>
+        <div class="panel">
+          <div class="room">
+            <section class="section">
+              <div class="section-label">Monitored projects</div>
+              <p class="section-hint">
+                Issues from these Sentry projects become bug work items on this board.
+              </p>
+              <ul class="rows">
+                <li class="row">
+                  <div class="row-top">
+                    <svg class="icon row-glyph"><use href="#i-bug" /></svg>
+                    <span class="row-main"
+                      ><span class="slug">worker</span><span class="bound">Bound 3 days ago</span
+                      ><span class="poll">Checked for new errors 4 min ago</span></span
+                    >
+                    <span class="level"
+                      ><span class="level-label" aria-hidden="true">Minimum level</span
+                      ><button class="combo" type="button">
+                        warning<svg class="icon sm"><use href="#i-chevron-down" /></svg></button
+                    ></span>
+                    <button
+                      type="button"
+                      class="icon-btn"
+                      aria-label="Stop monitoring worker"
+                      disabled
+                    >
+                      <svg class="icon"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </div>
+                  <div class="sync">
+                    <div class="sync-head">Sync with Sentry</div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch"
+                        role="switch"
+                        aria-checked="false"
+                        aria-labelledby="p5a-r"
+                        disabled
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p5a-r">Resolve in Sentry when the bug is done</span
+                          ><span class="saving"
+                            ><svg class="icon sm spin"><use href="#i-loader-circle" /></svg>
+                            Saving…</span
+                          >
+                        </div>
+                        <div class="sync-hint">
+                          Turn off to leave Sentry issues as they are when their bugs are done.
+                        </div>
+                      </div>
+                    </div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p5a-a"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p5a-a">Take the assignee from Sentry</span>
+                        </div>
+                        <div class="sync-hint">Turn off to ignore assignments made in Sentry.</div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+                <li class="row">
+                  <div class="row-top">
+                    <svg class="icon row-glyph"><use href="#i-bug" /></svg>
+                    <span class="row-main"
+                      ><span class="slug">payments</span><span class="bound">Bound yesterday</span
+                      ><span class="poll"
+                        >Checked for new errors 9 min ago · <strong>3 bugs filed</strong></span
+                      ></span
+                    >
+                    <span class="level"
+                      ><span class="level-label" aria-hidden="true">Minimum level</span
+                      ><button class="combo" type="button">
+                        error<svg class="icon sm"><use href="#i-chevron-down" /></svg></button
+                    ></span>
+                    <button type="button" class="icon-btn" aria-label="Stop monitoring payments">
+                      <svg class="icon"><use href="#i-trash-2" /></svg>
+                    </button>
+                  </div>
+                  <div class="sync">
+                    <div class="sync-head">Sync with Sentry</div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p5b-r"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p5b-r">Resolve in Sentry when the bug is done</span>
+                        </div>
+                        <div class="sync-hint">
+                          Turn off to leave Sentry issues as they are when their bugs are done.
+                        </div>
+                      </div>
+                    </div>
+                    <div class="sync-item">
+                      <button
+                        type="button"
+                        class="switch on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-labelledby="p5b-a"
+                      >
+                        <span class="knob"></span>
+                      </button>
+                      <div class="sync-copy">
+                        <div class="sync-label">
+                          <span id="p5b-a">Take the assignee from Sentry</span>
+                        </div>
+                        <div class="sync-hint">Turn off to ignore assignments made in Sentry.</div>
+                      </div>
+                    </div>
+                    <p class="line warning refused" role="alert">
+                      <svg class="icon sm"><use href="#i-triangle-alert" /></svg
+                      ><span
+                        ><strong>Couldn't change this setting.</strong> Nothing changed — try
+                        again.</span
+                      >
+                    </p>
+                  </div>
+                </li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
