@@ -147,7 +147,8 @@
     "mentionWorkItems": "工作项",
     "mentionTypeToSearch": "继续输入以搜索工作项…",
     "mentionSearching": "搜索中…",
-    "mentionNoResults": "没有与「{query}」匹配的工作项。"
+    "mentionNoResults": "没有与「{query}」匹配的工作项。",
+    "codeLanguage": "语言"
   },
   "common": {
     "close": "关闭",
@@ -6338,12 +6339,26 @@
           "noRun": "此工作项没有记录的运行。"
         },
         "earlier": {
-          "toggle": "更早的运行（{count}）"
+          "versions": "早前版本（{count}）"
         },
         "child": {
           "pointer": "作为 <link>{key}</link> 的一部分进行测试"
         },
-        "unknownState": "无法识别的测试说明状态：{value}"
+        "unknownState": "无法识别的测试说明状态：{value}",
+        "add": "添加测试方法",
+        "edit": "编辑",
+        "writtenByPerson": "由 <b>{name}</b> 编写 · {time}",
+        "form": {
+          "label": "测试方法",
+          "body": "正文",
+          "previewPath": "预览路径",
+          "optional": "可选",
+          "previewPathHint": "形如 /items/ACME-7 的路径",
+          "dirty": "有未保存的更改",
+          "saving": "保存中…",
+          "save": "保存",
+          "cancel": "取消"
+        }
       },
       "fix": {
         "title": "修复检查",

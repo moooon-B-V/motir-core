@@ -170,7 +170,7 @@ describe('seam 1 — a scoped story run: close-out prompt → MCP publish → th
     expect(dto.state).toBe('record');
     // Byte for byte — sections and both fences as the agent wrote them.
     expect(dto.record!.bodyMd).toBe(RUN_BODY);
-    expect(dto.record!.run?.runId).toBe(s.runId);
+    expect(dto.record!.author).toMatchObject({ kind: 'run', runId: s.runId });
     expect(dto.record!.previewPath).toBe(`/items/${s.story.identifier}`);
 
     expect(dto.repos).toHaveLength(2);
@@ -271,7 +271,7 @@ describe('seam 2 — a single-card run: the per-item prompt → a publish on the
     const dto = await howToTestService.getForWorkItem(card.id, s.fx.ctx);
     expect(dto).toMatchObject({
       state: 'record',
-      record: { bodyMd: body, run: { runId: run.id } },
+      record: { bodyMd: body, author: { kind: 'run', runId: run.id } },
       repos: [{ repoId: s.webRepo.id, commitSha: WEB_HEAD, pullRequest: null, fetchCommand: null }],
     });
     // The single-card record is the card's own — the story's page is untouched.
@@ -330,10 +330,11 @@ describe('seam 4 — a later run supersedes; history lists the earlier run', () 
     const dto = await howToTestService.getForWorkItem(s.story.id, s.fx.ctx);
     expect(dto.record).toMatchObject({
       bodyMd: laterBody,
-      run: { runId: laterRunId, label: 'motir run · 2026-09-14 09:30 UTC' },
+      author: { kind: 'run', runId: laterRunId, label: 'motir run · 2026-09-14 09:30 UTC' },
     });
     expect(dto.history).toHaveLength(1);
-    expect(dto.history[0]!.run).toEqual({
+    expect(dto.history[0]!.author).toEqual({
+      kind: 'run',
       runId: s.runId,
       label: 'motir run · 2026-09-13 12:00 UTC',
     });

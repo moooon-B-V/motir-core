@@ -5,13 +5,19 @@ import { testInstructionsRepository } from '@/lib/repositories/testInstructionsR
 import { repoDeploymentRepository } from '@/lib/repositories/repoDeploymentRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
 import { assembleHowToTestRepo, liveHeadSha, pickPullRequest } from '@/lib/howToTest/assemble';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import type { HowToTestDto, HowToTestRunDto } from '@/lib/dto/howToTest';
+import type { HowToTestDto } from '@/lib/dto/howToTest';
+import { authorOf, dispatchRunLabel } from '@/lib/howToTest/author';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { resolveRunTarget } from './runTarget';
+
+// `dispatchRunLabel` moved to `@/lib/howToTest/author` when the v1 read needed it
+// too (MOTIR-5454). Re-exported here so its existing importers are unchanged.
+export { dispatchRunLabel } from '@/lib/howToTest/author';
 
 /**
  * The HOW TO TEST read (Story MOTIR-4906 · Subtask MOTIR-5333) — per RUN TARGET
@@ -26,9 +32,11 @@ import { resolveRunTarget } from './runTarget';
  *
  * ⚠️ BOUNDED QUERIES, independent of how many repositories or pull requests: the
  * ancestors (1), the subtree (1), the item's record history (1), the ancestors'
- * current records (1), the latest leg run and scope run (2), the project's
- * repositories (1), the deliveries of the item and its descendants with their
- * check rows (1), and the deployments by head commit and by head ref (≤ 2).
+ * current records (1), the latest leg run and scope run (2), the PUBLISHERS of
+ * the current record and every history row TOGETHER (1 — MOTIR-5454), the
+ * project's repositories (1), the deliveries of the item and its descendants
+ * with their check rows (1), and the deployments by head commit and by head ref
+ * (≤ 2).
  */
 export const howToTestService = {
   async getForWorkItem(workItemId: string, ctx: ServiceContext): Promise<HowToTestDto> {
@@ -54,9 +62,23 @@ export const howToTestService = {
 
       const current = history.find((row) => row.isCurrent) ?? null;
       const earlier = history.filter((row) => !row.isCurrent);
+
+      // ONE query for every publisher on this item — the current record and all
+      // its history together. `history` already holds both, so the id set is
+      // known before any of them is mapped; resolving per row would make the
+      // query count grow with the number of versions.
+      const publisherIds = [
+        ...new Set(
+          history.flatMap((row) => (row.publishedById !== null ? [row.publishedById] : [])),
+        ),
+      ];
+      const publishers =
+        publisherIds.length > 0 ? await userRepository.findByIds(publisherIds) : [];
+      const nameById = new Map(publishers.map((user) => [user.id, user.name] as const));
+
       const historyDto = earlier.map((row) => ({
         recordId: row.id,
-        run: runOf(row.dispatchRunId, row.dispatchRun),
+        author: authorOf(row, nameById),
         createdAt: row.createdAt.toISOString(),
       }));
 
@@ -149,7 +171,7 @@ export const howToTestService = {
         owedBy: null,
         record: {
           id: record.id,
-          run: runOf(current.dispatchRunId, current.dispatchRun),
+          author: authorOf(current, nameById),
           createdAt: record.createdAt,
           bodyMd: record.bodyMd,
           previewPath: record.previewPath,
@@ -168,22 +190,3 @@ export const howToTestService = {
     });
   },
 };
-
-function runOf(
-  runId: string | null,
-  run: { command: string; startedAt: Date } | null,
-): HowToTestRunDto | null {
-  if (!runId || !run) return null;
-  return { runId, label: dispatchRunLabel(run.command, run.startedAt) };
-}
-
-/**
- * How a run is named in the block — the command a person would have typed and
- * when it started, e.g. `motir run · 2026-09-13 12:04 UTC`. A scoped run is
- * `motir run` too; that is what its operator typed.
- */
-export function dispatchRunLabel(command: string, startedAt: Date): string {
-  const typed = command === 'run_scope' ? 'run' : command;
-  const when = startedAt.toISOString().slice(0, 16).replace('T', ' ');
-  return `motir ${typed} · ${when} UTC`;
-}

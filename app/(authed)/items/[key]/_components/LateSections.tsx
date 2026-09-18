@@ -23,6 +23,8 @@ import {
   LinkPullRequestForm,
   RemovePullRequestLinkButton,
 } from './DevelopmentLinkControl';
+import { HowToTestWriteProvider } from '@/components/howToTest/HowToTestWrite';
+import { loadHowToTestDraftAction, saveHowToTestAction } from '../actions';
 import { RUN_HISTORY_PAGE, type LateReads } from './lateReads';
 
 // The item page's LATE STACK (Subtask MOTIR-3436), allocated by
@@ -205,107 +207,116 @@ export async function LateUpperSections({
           scopeRunTime={r.scopeRun ? formatRunInstant(r.scopeRun.startedAt) : null}
         />
       </ContentSectionCard>
-      <DevelopmentLinkProvider currentItemId={itemId} identifier={itemIdentifier}>
-        <ContentSectionCard
-          title={tGithub('development.title')}
-          subtitle={tGithub(
-            designInDevelopment ? 'development.glossWithDesign' : 'development.gloss',
-          )}
-          headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
-        >
-          {canEdit ? <LinkPullRequestForm /> : null}
-          <DevelopmentSectionBody
-            pullRequests={r.pullRequests}
-            itemIdentifier={itemIdentifier}
-            manualLinkable={canEdit}
-            // The per-row REMOVE control (Story MOTIR-4878 · MOTIR-5005,
-            // design Panels 5d–5f). Gated on the SAME `work_item:edit` the
-            // header door is — the key `unlinkPullRequestAction` and the MCP
-            // tool both assert — and passed only from THIS host: the read-only
-            // peek omits it, so its rows keep no trailing control at all rather
-            // than a disabled one (design Q1 / Q4).
-            rowAction={
-              canEdit
-                ? (pr) => (
-                    <RemovePullRequestLinkButton
-                      pullRequestId={pr.id}
-                      target={`${pr.repo} · #${pr.number}`}
-                    />
-                  )
-                : undefined
-            }
-            // The item's repository set, VERBATIM (Story MOTIR-2725 ·
-            // MOTIR-2415) — which rows it earns is the section's derivation,
-            // not this page's. Pre-filtering here is what let this page and the
-            // quick view disagree (MOTIR-3036).
-            repoDelivery={repoDelivery}
-            deliveries={deliveries}
-            // THE DEVELOPMENT BLOCK (MOTIR-5336, design §20): How to test renders
-            // INSIDE this card, below the rows — never a second section in this
-            // stack — and an awaiting approve-to-merge gate makes the rows plus
-            // How to test the port of ONE frame, as Design result's gate does.
-            howToTest={r.howToTest}
-            // THE FIX PART (MOTIR-5466, design § 21): below the rows, above How to
-            // test — the copyable `motir fix`, a repair in progress, or a give-up.
-            repair={r.repair}
-            designResult={
-              designInDevelopment ? (
-                <DesignResultPanel
-                  evidence={r.designEvidence}
-                  isDesignCard={r.isDesignCard}
-                  placement="development"
-                />
-              ) : undefined
-            }
-            // ⚠️ WHICH GATE THE FRAME IS A PORT FOR (MOTIR-5667). When the card's
-            // DESIGN question is still open it is the PRIMARY (AMENDMENT 6 Q1), so
-            // the frame names it, and the press addresses it — which is what makes
-            // ONE press answer both questions and merge the set (MOTIR-5664).
-            // Pressing the merge gate here would leave the design question awaiting
-            // after its own commits had merged.
-            //
-            // The MEMBERS stay the merge gate's: they are what the press will merge,
-            // and they are what band 1 counts beneath the subject. After the design
-            // is decided the merge gate leads ALONE (Q2) — the reader is being asked
-            // about the commits, and the design shows as decided rather than as a
-            // second thing to answer.
-            mergeGate={
-              r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate
-                ? {
-                    gate: r.designGate.gate,
-                    canDecide: r.designGate.canDecide,
-                    routedToLabel: r.designGate.routedToLabel,
-                    // The DESIGN gate's stamp — it covers the pull requests beneath it too.
-                    stamp: r.designGate.stamp,
-                    members: r.mergeGate.members,
-                  }
-                : r.mergeGate.gate
+      {/* THE HOW-TO-TEST WRITE DOORS (Story MOTIR-5450 · MOTIR-5455, design § 24).
+          Mounted ONLY for an actor holding `work_item:edit` and ONLY here: the
+          block asks for this context and draws no door without it, so the
+          read-only peek and the approval overlay — which render the same block —
+          have none by construction rather than by a flag each host remembers to
+          pass (§ 24, decisions 10 and 11). Both actions assert the same key
+          server-side, so the gate is not this line's alone. */}
+      <HowToTestWrite canEdit={canEdit} itemId={itemId} itemIdentifier={itemIdentifier}>
+        <DevelopmentLinkProvider currentItemId={itemId} identifier={itemIdentifier}>
+          <ContentSectionCard
+            title={tGithub('development.title')}
+            subtitle={tGithub(
+              designInDevelopment ? 'development.glossWithDesign' : 'development.gloss',
+            )}
+            headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
+          >
+            {canEdit ? <LinkPullRequestForm /> : null}
+            <DevelopmentSectionBody
+              pullRequests={r.pullRequests}
+              itemIdentifier={itemIdentifier}
+              manualLinkable={canEdit}
+              // The per-row REMOVE control (Story MOTIR-4878 · MOTIR-5005,
+              // design Panels 5d–5f). Gated on the SAME `work_item:edit` the
+              // header door is — the key `unlinkPullRequestAction` and the MCP
+              // tool both assert — and passed only from THIS host: the read-only
+              // peek omits it, so its rows keep no trailing control at all rather
+              // than a disabled one (design Q1 / Q4).
+              rowAction={
+                canEdit
+                  ? (pr) => (
+                      <RemovePullRequestLinkButton
+                        pullRequestId={pr.id}
+                        target={`${pr.repo} · #${pr.number}`}
+                      />
+                    )
+                  : undefined
+              }
+              // The item's repository set, VERBATIM (Story MOTIR-2725 ·
+              // MOTIR-2415) — which rows it earns is the section's derivation,
+              // not this page's. Pre-filtering here is what let this page and the
+              // quick view disagree (MOTIR-3036).
+              repoDelivery={repoDelivery}
+              deliveries={deliveries}
+              // THE DEVELOPMENT BLOCK (MOTIR-5336, design §20): How to test renders
+              // INSIDE this card, below the rows — never a second section in this
+              // stack — and an awaiting approve-to-merge gate makes the rows plus
+              // How to test the port of ONE frame, as Design result's gate does.
+              howToTest={r.howToTest}
+              // THE FIX PART (MOTIR-5466, design § 21): below the rows, above How to
+              // test — the copyable `motir fix`, a repair in progress, or a give-up.
+              repair={r.repair}
+              designResult={
+                designInDevelopment ? (
+                  <DesignResultPanel
+                    evidence={r.designEvidence}
+                    isDesignCard={r.isDesignCard}
+                    placement="development"
+                  />
+                ) : undefined
+              }
+              // ⚠️ WHICH GATE THE FRAME IS A PORT FOR (MOTIR-5667). When the card's
+              // DESIGN question is still open it is the PRIMARY (AMENDMENT 6 Q1), so
+              // the frame names it, and the press addresses it — which is what makes
+              // ONE press answer both questions and merge the set (MOTIR-5664).
+              // Pressing the merge gate here would leave the design question awaiting
+              // after its own commits had merged.
+              //
+              // The MEMBERS stay the merge gate's: they are what the press will merge,
+              // and they are what band 1 counts beneath the subject. After the design
+              // is decided the merge gate leads ALONE (Q2) — the reader is being asked
+              // about the commits, and the design shows as decided rather than as a
+              // second thing to answer.
+              mergeGate={
+                r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate
                   ? {
-                      gate: r.mergeGate.gate,
-                      canDecide: r.mergeGate.canDecide,
-                      routedToLabel: r.mergeGate.routedToLabel,
-                      stamp: r.mergeGate.stamp,
+                      gate: r.designGate.gate,
+                      canDecide: r.designGate.canDecide,
+                      routedToLabel: r.designGate.routedToLabel,
+                      // The DESIGN gate's stamp — it covers the pull requests beneath it too.
+                      stamp: r.designGate.stamp,
                       members: r.mergeGate.members,
                     }
-                  : null
-            }
-            // THE FRAME'S VERBS (MOTIR-5484): server actions, handed down as references
-            // so the shared block — also the read-only peek's — imports none of them.
-            gateActions={{
-              decide: decideApprovalGateAction,
-              approveAndMerge: approveAndMergeAction,
-              retryMember: retryApproveAndMergeMemberAction,
-            }}
-            // An `auto` card's exits (MOTIR-5635): Queue again for a reader who may edit.
-            autoQueueExits={{
-              workItemId: itemId,
-              exits: r.mergeGate.autoQueueExits,
-              canEdit,
-              queueAgain: queueAgainAutoAction,
-            }}
-          />
-        </ContentSectionCard>
-      </DevelopmentLinkProvider>
+                  : r.mergeGate.gate
+                    ? {
+                        gate: r.mergeGate.gate,
+                        canDecide: r.mergeGate.canDecide,
+                        routedToLabel: r.mergeGate.routedToLabel,
+                        stamp: r.mergeGate.stamp,
+                        members: r.mergeGate.members,
+                      }
+                    : null
+              }
+              // THE FRAME'S VERBS (MOTIR-5484): server actions, handed down as references
+              // so the shared block — also the read-only peek's — imports none of them.
+              gateActions={{
+                decide: decideApprovalGateAction,
+                approveAndMerge: approveAndMergeAction,
+                retryMember: retryApproveAndMergeMemberAction,
+              }}
+              // An `auto` card's exits (MOTIR-5635): Queue again for a reader who may edit.
+              autoQueueExits={{
+                workItemId: itemId,
+                exits: r.mergeGate.autoQueueExits,
+                canEdit,
+                queueAgain: queueAgainAutoAction,
+              }}
+            />
+          </ContentSectionCard>
+        </DevelopmentLinkProvider>
+      </HowToTestWrite>
       {r.acceptanceEligibility ? (
         <ContentSectionCard title={tAcceptance('title')} subtitle={tAcceptance('gloss')}>
           <AcceptancePanel
@@ -388,5 +399,35 @@ export async function LateLowerSections({
         initialAll={r.initialAll}
       />
     </>
+  );
+}
+
+/**
+ * The write provider, or nothing — a reader without `work_item:edit` gets the
+ * block's children with NO context, which is what makes "no door" structural
+ * (MOTIR-5455). Split out so the mount reads as one element in the stack rather
+ * than a ternary wrapped around half the section.
+ */
+function HowToTestWrite({
+  canEdit,
+  itemId,
+  itemIdentifier,
+  children,
+}: {
+  canEdit: boolean;
+  itemId: string;
+  itemIdentifier: string;
+  children: React.ReactNode;
+}) {
+  if (!canEdit) return <>{children}</>;
+  return (
+    <HowToTestWriteProvider
+      workItemId={itemId}
+      identifier={itemIdentifier}
+      loadDraft={loadHowToTestDraftAction}
+      saveHowToTest={saveHowToTestAction}
+    >
+      {children}
+    </HowToTestWriteProvider>
   );
 }

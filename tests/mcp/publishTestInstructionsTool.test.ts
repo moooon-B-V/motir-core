@@ -131,6 +131,31 @@ describe('runPublishTestInstructions — success', () => {
     expect(rows[0]!.bodyMd).toBe(BODY);
   });
 
+  // ⚠️ `repos` IS OPTIONAL (MOTIR-5689), and this door is the one place the
+  // change is easy to misread: it is optional because a PERSON's form names no
+  // repository, not because an agent may skip it. Both spellings of absent are
+  // covered, and the card is given a CONNECTED repository, so an implementation
+  // that filled the list from what it could find would answer with a section.
+  it.each([
+    ['OMITTED', undefined],
+    ['EMPTY', [] as Array<{ repo: string; commitSha: string }>],
+  ])('stores a BODY-ONLY record when `repos` is %s', async (_name, repos) => {
+    const { fx, card } = await scenario();
+    const result = await runPublishTestInstructions(args(card.identifier, { repos }), fx.ctx);
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({
+      workItemKey: card.identifier,
+      repos: [],
+      created: true,
+      isCurrent: true,
+    });
+    // The summary line says so rather than trailing an empty dash.
+    expect((result.content?.[0] as { text: string }).text).toContain('no repository sections.');
+    const rows = await storedRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.bodyMd).toBe(BODY);
+  });
+
   it('attributes the record to the RUNNING run whose SCOPE TARGET is the item, or that holds a leg for it — and to none otherwise', async () => {
     const { fx, card } = await scenario();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'Scoped story' });
@@ -283,27 +308,17 @@ describe('runPublishTestInstructions — every refusal carries its own code and 
     expect(text).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "repos\[0\]\.commitSha"/);
   });
 
-  it('an ABSENT body or repos (a caller that skipped the schema) is the same typed refusal, not a crash', async () => {
-    // The transport's schema requires both; the adapter is also reachable from a
-    // direct caller, so an omitted field must degrade to the refusal (MOTIR-5337).
+  it('an ABSENT body (a caller that skipped the schema) is the typed refusal, not a crash', async () => {
+    // The transport's schema requires a body; the adapter is also reachable from
+    // a direct caller, so an omitted one must degrade to the refusal (MOTIR-5337).
+    // `repos` is the OTHER half of that arm, and it changed verdict — see the
+    // body-only case below.
     const { fx, card } = await scenario();
     const noBody = errorText(
       await runPublishTestInstructions(args(card.identifier, { bodyMd: undefined }), fx.ctx),
     );
     expect(noBody).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "bodyMd"/);
-    const noRepos = errorText(
-      await runPublishTestInstructions(args(card.identifier, { repos: undefined }), fx.ctx),
-    );
-    expect(noRepos).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "repos"/);
     expect(await storedRows()).toHaveLength(0);
-  });
-
-  it('no repository sections', async () => {
-    const { fx, card } = await scenario();
-    const text = errorText(
-      await runPublishTestInstructions(args(card.identifier, { repos: [] }), fx.ctx),
-    );
-    expect(text).toMatch(/^TEST_INSTRUCTIONS_INVALID_FIELD: "repos"/);
   });
 
   it('the same repository twice', async () => {

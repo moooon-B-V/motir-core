@@ -2035,6 +2035,21 @@ export const currentTestInstructionsSchema = z.object({
     .object({
       /** The dispatch run that wrote it, when one did. */
       dispatchRunId: z.string().nullable(),
+      /**
+       * WHO wrote it (MOTIR-5454) — `run` for a dispatch run, `person` for
+       * somebody who wrote it from the item page. A person's record carries a
+       * null `dispatchRunId`, so this is the field that tells the two apart;
+       * `userId` is null when that account has since been deleted, and `label`
+       * is never blank.
+       */
+      author: z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('run'), runId: z.string(), label: z.string() }),
+        z.object({
+          kind: z.literal('person'),
+          userId: z.string().nullable(),
+          label: z.string(),
+        }),
+      ]),
       createdAt: z.string(),
       /** The run's How to test as rich text (Markdown), exactly as the agent wrote it. */
       bodyMd: z.string(),
@@ -2061,6 +2076,7 @@ export function presentCurrentTestInstructions(
     record: record
       ? {
           dispatchRunId: record.dispatchRunId,
+          author: record.author,
           createdAt: record.createdAt,
           bodyMd: record.bodyMd,
           previewPath: record.previewPath,

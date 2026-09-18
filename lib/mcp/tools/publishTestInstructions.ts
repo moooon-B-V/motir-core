@@ -74,9 +74,12 @@ const inputSchema = {
     ),
   repos: z
     .array(repoSectionSchema)
+    .optional()
     .describe(
       'One entry per repository the run pushed to, at most ' +
-        `${TEST_INSTRUCTIONS_MAX_REPOS}, each with its pushed head commit.`,
+        `${TEST_INSTRUCTIONS_MAX_REPOS}, each with its pushed head commit. Optional only ` +
+        'because a PERSON writing from the form names no repository; SEND ONE PER REPOSITORY ' +
+        'YOU PUSHED TO — your record is the evidence for the delivery set a person approves.',
     ),
   previewPath: z
     .string()
@@ -90,7 +93,7 @@ const inputSchema = {
 interface PublishArgs {
   key: string;
   bodyMd: string;
-  repos: Array<{ repo: string; commitSha: string }>;
+  repos?: Array<{ repo: string; commitSha: string }>;
   previewPath?: string;
 }
 
@@ -119,13 +122,19 @@ export async function runPublishTestInstructions(
     );
 
     const bodyBytes = Buffer.byteLength(record.bodyMd, 'utf8');
-    const sections = args.repos
+    const sections = (args.repos ?? [])
       .map((entry, i) => `${entry.repo}@${record.repos[i]?.commitSha.slice(0, 7) ?? '?'}`)
       .join(', ');
+    // A record with no section is legal (MOTIR-5689) — say so, rather than
+    // printing "0 repository section(s) — " with nothing after the dash.
+    const sectionLine =
+      record.repos.length === 0
+        ? 'no repository sections.'
+        : `${record.repos.length} repository section(s) — ${sections}.`;
     return toolOk(
       created
         ? `Published How to test on ${item.identifier} for this run: ${bodyBytes} bytes of Markdown; ` +
-            `${record.repos.length} repository section(s) — ${sections}.`
+            sectionLine
         : `How to test on ${item.identifier} was already published by this run with this ` +
             'content — nothing changed.',
       exempt(PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME, {

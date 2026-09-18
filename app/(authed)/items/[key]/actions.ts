@@ -14,6 +14,11 @@ import { prLinkErrorMessage } from '@/lib/github/prLinkErrorMessages';
 import type { RelationshipKind } from '@/lib/dto/workItemLinks';
 import type { ReadinessVerdictDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { PullRequestLinkCandidateDto } from '@/lib/dto/github';
+import { testInstructionsService } from '@/lib/services/testInstructionsService';
+import { TestInstructionsError } from '@/lib/testInstructions/errors';
+import { howToTestRefusal, type HowToTestRefusalField } from '@/lib/testInstructions/refusal';
+import { PermissionDeniedError } from '@/lib/projects/errors';
+import type { HowToTestDraftDTO } from '@/lib/dto/testInstructions';
 
 // Server Actions for the detail-page LINK MANAGEMENT surface (Subtask 2.4.9).
 // Transport only: resolve the session + active project, gate the CURRENT item
@@ -27,6 +32,15 @@ import type { PullRequestLinkCandidateDto } from '@/lib/dto/github';
 
 /** The bare outcome of a link write — no payload beyond success/failure. */
 export type LinkActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * A How-to-test save's answer (Subtask MOTIR-5455). A refusal carries WHERE it
+ * belongs as well as what it says: the design draws each one beside the control
+ * it is about, and `null` is the form itself.
+ */
+export type SaveHowToTestActionResult =
+  | { ok: true }
+  | { ok: false; field: HowToTestRefusalField; error: string };
 
 /**
  * A RELATIONSHIP write's answer to the panel. MOTIR-4496: `ok` carries the
@@ -294,6 +308,101 @@ export async function unlinkPullRequestAction(input: {
     throw err;
   }
 
+  revalidatePath(`/items/${input.identifier}`);
+  return { ok: true };
+}
+
+/**
+ * The DRAFT a person's How-to-test form opens on (Story MOTIR-5450 · Subtask
+ * MOTIR-5455, design §24 panels 13a–13b) — the body and the preview path, or
+ * `''`/`null` on an item with no record.
+ *
+ * ⚠️ IT IS READ AT OPEN, not taken from the page's render. Two reasons, and the
+ * second is the load-bearing one: the page may have been rendered minutes ago
+ * and a run may have published since, so seeding from it would open the form on
+ * a version that is no longer current and save over the newer one; and the
+ * service read asserts `work_item:edit`, so OPENING the form is itself gated
+ * server-side rather than only by whether the host drew the door.
+ */
+export async function loadHowToTestDraftAction(
+  workItemId: string,
+): Promise<{ ok: true; draft: HowToTestDraftDTO } | { ok: false; error: string }> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) {
+    const te = await getErrorsTranslator();
+    return { ok: false, error: te('actions.pickProjectFirst') };
+  }
+  try {
+    const draft = await testInstructionsService.getDraftForWorkItem(workItemId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    return { ok: true, draft };
+  } catch (err) {
+    if (err instanceof PermissionDeniedError || err instanceof TestInstructionsError) {
+      return { ok: false, error: err.message };
+    }
+    throw err;
+  }
+}
+
+/**
+ * SAVE a person's How to test (Story MOTIR-5450 · Subtask MOTIR-5455; ADR
+ * `approval-gates.md` §9's 2026-09-17 amendment, point 1).
+ *
+ * ⚠️ IT IS THE SAME WRITER AN AGENT USES — `testInstructionsService.publish`,
+ * with `attributeToRunningDispatch` left FALSE. That flag is the whole of the
+ * difference between the two author kinds: false records `dispatchRunId: null`
+ * and `publishedById` this person, so a person's save and a run's publish are
+ * one row shape in one table, differing only in who is named. There is no
+ * person-shaped write path, and adding one is what point 1 forbids.
+ *
+ * `repos` is not passed at all: the repositories a record covers are DERIVED
+ * from the item's linked pull requests (§24, decisions 8 and 8b), and `publish`
+ * accepts a body-only record since MOTIR-5689.
+ *
+ * A REFUSAL IS AN ANSWER, not a throw: it comes back placed — beside the body,
+ * beside the preview path, or on the form — so the caller can keep the draft
+ * (§24, decision 6) and put the sentence where the reader is looking.
+ */
+export async function saveHowToTestAction(input: {
+  workItemId: string;
+  identifier: string;
+  bodyMd: string;
+  previewPath: string | null;
+}): Promise<SaveHowToTestActionResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) {
+    const te = await getErrorsTranslator();
+    return { ok: false, field: null, error: te('actions.pickProjectFirst') };
+  }
+  try {
+    await testInstructionsService.publish(
+      {
+        workItemId: input.workItemId,
+        bodyMd: input.bodyMd,
+        previewPath: input.previewPath,
+        attributeToRunningDispatch: false,
+      },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+  } catch (err) {
+    const refusal = howToTestRefusal(err);
+    if (refusal) return { ok: false, field: refusal.field, error: refusal.message };
+    if (err instanceof PermissionDeniedError || err instanceof TestInstructionsError) {
+      return { ok: false, field: null, error: err.message };
+    }
+    throw err;
+  }
+
+  // The Development card is server-rendered, so the page read is what re-draws
+  // the saved record and its author (`CLAUDE.md`'s page-state contract, case 2).
+  // The block is NOT patched optimistically: its author line, its history and
+  // its derived sub-blocks all come from that read.
   revalidatePath(`/items/${input.identifier}`);
   return { ok: true };
 }

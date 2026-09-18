@@ -89,6 +89,7 @@ const BODY =
 
 const RECORD: HowToTestRecord = {
   dispatchRunId: RUN_ID,
+  author: { kind: 'run', runId: RUN_ID, label: 'motir run · 2026-09-13 12:00 UTC' },
   createdAt: '2026-09-13T12:00:00.000Z',
   bodyMd: BODY,
   previewPath: '/items/PROD-1',

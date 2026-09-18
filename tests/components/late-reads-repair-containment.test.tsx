@@ -15,6 +15,21 @@ import { CORE_PR } from '../helpers/howToTestFixtures';
 const repairView = vi.hoisted(() => vi.fn());
 
 vi.mock('server-only', () => ({}));
+// The How-to-test write doors mount a provider that calls `useRouter` for the
+// save's refresh (MOTIR-5455), and happy-dom has no app router. Only the router
+// is stubbed — the REAL provider and its doors still render, so a door that
+// stopped appearing would fail here rather than be mocked out of view.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({
+    refresh: vi.fn(),
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+  }),
+}));
 vi.mock('next-intl/server', () => ({
   getTranslations: async (namespace: string) =>
     createTranslator({ locale: 'en', messages, namespace: namespace as never }),
