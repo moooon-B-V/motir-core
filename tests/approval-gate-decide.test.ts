@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
@@ -127,7 +128,13 @@ describe('approvalGatesService.decide — approve, the terminal act (ADR §8 Wor
 
     const before = Date.now();
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui', noteMd: 'Ship it.' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: gate.id,
+        decision: 'approve',
+        source: 'ui',
+        noteMd: 'Ship it.',
+      },
       fx.ctx,
     );
 
@@ -166,7 +173,7 @@ describe('approvalGatesService.decide — approve, the terminal act (ADR §8 Wor
     await expect(workItemsService.isReady(dependent.id, fx.ctx)).resolves.toBe(false);
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -202,7 +209,10 @@ describe('approvalGatesService.decide — approve, the terminal act (ADR §8 Wor
     );
 
     await expect(
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toThrow();
 
     const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
@@ -261,7 +271,7 @@ describe('approvalGatesService.decide — the DISCRIMINATOR: `done` has exactly 
     });
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -284,6 +294,7 @@ describe('approvalGatesService.decide — request_changes records and moves NOTH
 
     const result = await approvalGatesService.decide(
       {
+        stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
         source: 'ui',
@@ -311,9 +322,17 @@ describe('approvalGatesService.decide — CONCURRENCY: two presses, one decision
     // — it reads `awaiting` twice only when the two overlap, which is the
     // ordinary case on a shared queue and never the case in a serial test.
     const results = await Promise.allSettled([
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
       approvalGatesService.decide(
-        { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
+      approvalGatesService.decide(
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: gate.id,
+          decision: 'request_changes',
+          source: 'ui',
+        },
         fx.ctx,
       ),
     ]);
@@ -344,13 +363,18 @@ describe('approvalGatesService.decide — state refusals', () => {
   it('a gate already decided is refused with the typed error, naming the decider and the time', async () => {
     const { gate } = await designSubtaskWithGate();
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
     await expect(
       approvalGatesService.decide(
-        { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: gate.id,
+          decision: 'request_changes',
+          source: 'ui',
+        },
         fx.ctx,
       ),
     ).rejects.toBeInstanceOf(ApprovalGateAlreadyDecidedError);
@@ -359,12 +383,20 @@ describe('approvalGatesService.decide — state refusals', () => {
   it('a `changes_requested` gate is refused with the SAME typed error', async () => {
     const { gate } = await designSubtaskWithGate();
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+      },
       fx.ctx,
     );
 
     await expect(
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateAlreadyDecidedError);
   });
 
@@ -377,14 +409,22 @@ describe('approvalGatesService.decide — state refusals', () => {
     await adminDb.approvalGate.update({ where: { id: gate.id }, data: { state: 'superseded' } });
 
     await expect(
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
   });
 
   it('an unknown gate id is a not-found', async () => {
     await expect(
       approvalGatesService.decide(
-        { gateId: 'no-such-gate', decision: 'approve', source: 'ui' },
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: 'no-such-gate',
+          decision: 'approve',
+          source: 'ui',
+        },
         fx.ctx,
       ),
     ).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
@@ -419,7 +459,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
       });
 
       const result = await approvalGatesService.decide(
-        { gateId: gate.id, decision: verb, source: 'ui' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
         { userId: reporter.id, workspaceId: fx.workspaceId },
       );
       expect(result.gate.state).toBe(STATE_OF[verb]);
@@ -439,7 +479,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
 
       await expect(
         approvalGatesService.decide(
-          { gateId: gate.id, decision: verb, source: 'ui' },
+          { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
           { userId: reporter.id, workspaceId: fx.workspaceId },
         ),
       ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
@@ -454,7 +494,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
       const { gate } = await designSubtaskWithGate({ assigneeId: assignee.id });
 
       const result = await approvalGatesService.decide(
-        { gateId: gate.id, decision: verb, source: 'ui' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
         { userId: assignee.id, workspaceId: fx.workspaceId },
       );
       expect(result.gate.state).toBe(STATE_OF[verb]);
@@ -474,7 +514,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
       const { gate } = await designSubtaskWithGate({ assigneeId: assignee.id });
 
       const result = await approvalGatesService.decide(
-        { gateId: gate.id, decision: verb, source: 'ui' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
         { userId: admin.id, workspaceId: fx.workspaceId },
       );
       expect(result.gate.state).toBe(STATE_OF[verb]);
@@ -493,7 +533,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
     // the surface cannot render: they can see the gate perfectly well.
     await expect(
       approvalGatesService.decide(
-        { gateId: gate.id, decision: 'approve', source: 'ui' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
         { userId: bystander.id, workspaceId: fx.workspaceId },
       ),
     ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
@@ -519,7 +559,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
 
     await expect(
       approvalGatesService.decide(
-        { gateId: gate.id, decision: 'approve', source: 'ui' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
         { userId: outsider.id, workspaceId: fx.workspaceId },
       ),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
@@ -548,7 +588,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
     // TOP of the kind's permission floor, never instead of it.
     await expect(
       approvalGatesService.decide(
-        { gateId: gate.id, decision: 'approve', source: 'ui' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
         { userId: viewer.id, workspaceId: fx.workspaceId },
       ),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
@@ -560,7 +600,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
 
     await expect(
       approvalGatesService.decide(
-        { gateId: gate.id, decision: 'approve', source: 'ui' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
         other.ctx,
       ),
     ).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
@@ -626,7 +666,7 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
     expect(read.canDecide).toBe(true);
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       ctx,
     );
     expect(result.gate.state).toBe('approved');
@@ -653,7 +693,10 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
     // Cleared the FLOOR (`work_item:edit` is in the role), failed the authority
     // test — the 403-shaped refusal, not a 404 and not a permission error.
     await expect(
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
 
     const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
@@ -677,7 +720,7 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
       // and the rule is stated for approve and request_changes alike.
       const fresh = verb === 'approve' ? gate : (await gateRoutedToSomebodyElse()).gate;
       const result = await approvalGatesService.decide(
-        { gateId: fresh.id, decision: verb, source: 'ui' },
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: fresh.id, decision: verb, source: 'ui' },
         ctx,
       );
       expect(result.gate.state).toBe(verb === 'approve' ? 'approved' : 'changes_requested');
@@ -695,7 +738,10 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
     );
     expect(read.canDecide).toBe(false);
     await expect(
-      approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, ctx),
+      approvalGatesService.decide(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+        ctx,
+      ),
     ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
   });
 
@@ -712,7 +758,7 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
 
     const { gate } = await gateRoutedToSomebodyElse();
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       ctx,
     );
     expect(result.gate.state).toBe('approved');
@@ -730,7 +776,7 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
     });
 
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       { userId: assigneeAdmin.id, workspaceId: fx.workspaceId },
     );
     const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });

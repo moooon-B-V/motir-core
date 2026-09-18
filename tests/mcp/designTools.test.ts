@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -89,7 +90,10 @@ async function publishAndApprove(card: WorkItem, label: string): Promise<string>
   const gate = await adminDb.approvalGate.findFirstOrThrow({
     where: { subjectId: evidence.id, kind: 'design_result', state: 'awaiting' },
   });
-  await approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx);
+  await approvalGatesService.decide(
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+    fx.ctx,
+  );
   return evidence.id;
 }
 

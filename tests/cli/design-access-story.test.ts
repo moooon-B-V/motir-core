@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -203,7 +204,7 @@ async function seed(
       where: { subjectId: evidenceId, kind: 'design_result', state: 'awaiting' },
     });
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
   }

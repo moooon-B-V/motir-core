@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shaFor } from '../helpers/commitShaFixtures';
 import type { WorkItem } from '@/generated/prisma/client';
@@ -181,7 +182,10 @@ async function publishAndApprove(label = 'v1') {
   await openPullRequest();
   const v = await publish(label);
   const gate = await gateFor(v.id);
-  await approvalGatesService.decide({ gateId: gate.id, decision: 'approve', source: 'ui' }, fx.ctx);
+  await approvalGatesService.decide(
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
+    fx.ctx,
+  );
   card = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
   return v;
 }
@@ -246,7 +250,13 @@ describe('what the refusal must NOT close', () => {
     const v1 = await publish('v1');
     const gate = await gateFor(v1.id);
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'request_changes', source: 'ui', noteMd: 'the fold is wrong' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+        noteMd: 'the fold is wrong',
+      },
       fx.ctx,
     );
 
@@ -282,7 +292,7 @@ describe('the door back is a person', () => {
     await workItemsService.updateStatus(card.id, 'in_review', fx.ctx);
     const gate2 = await gateFor(v2.id);
     await approvalGatesService.decide(
-      { gateId: gate2.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate2.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -316,7 +326,7 @@ describe('the status-keyed refusal MOTIR-5552 shipped is untouched', () => {
     const v1 = await publish('v1');
     const gate = await gateFor(v1.id);
     await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     card = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });

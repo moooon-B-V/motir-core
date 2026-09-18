@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
@@ -157,7 +158,7 @@ describe('deciding the gate', () => {
     const { item, gate } = await storyWithGate();
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -185,7 +186,7 @@ describe('deciding the gate', () => {
     await adminDb.workflowStatus.deleteMany({ where: { id: { in: ids } } });
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
 
@@ -202,7 +203,12 @@ describe('deciding the gate', () => {
     const { item, gate } = await storyWithGate();
 
     const result = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+      },
       fx.ctx,
     );
 

@@ -99,6 +99,7 @@ function readOf(overrides: Partial<ApprovalGateOverlayReadDTO> = {}): ApprovalGa
     gate: GATE,
     canDecide: true,
     routedToLabel: 'Riley Reviewer',
+    stamp: 'v1.stamp-the-read-handed-over',
     subject: {
       state: 'resolved',
       kind: 'design_result',

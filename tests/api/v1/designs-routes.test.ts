@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import type { WorkItem } from '@/generated/prisma/client';
@@ -95,7 +96,7 @@ async function publishAndApprove(card: WorkItem, label: string): Promise<string>
     where: { subjectId: evidence.id, kind: 'design_result', state: 'awaiting' },
   });
   await approvalGatesService.decide(
-    { gateId: gate.id, decision: 'approve', source: 'ui' },
+    { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: 'approve', source: 'ui' },
     caller.ctx,
   );
   return evidence.id;

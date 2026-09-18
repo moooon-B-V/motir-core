@@ -273,6 +273,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
             canDecide: false,
             routedToLabel: null,
             settingsDoor: null,
+            stamp: null,
             subject: null,
           };
         }
@@ -338,6 +339,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
             canDecide: false,
             routedToLabel: null,
             settingsDoor: null,
+            stamp: null,
             members: [],
             autoQueueExits: [],
           };
