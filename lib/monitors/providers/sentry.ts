@@ -2,6 +2,7 @@ import { MonitorProviderCallError } from '../errors';
 import {
   MONITOR_GRANT_EXCHANGE_TIMEOUT_MS,
   MONITOR_HEALTH_TIMEOUT_MS,
+  MONITOR_ISSUES_PAGE_LIMIT,
   MONITOR_LIST_ISSUES_TIMEOUT_MS,
   MONITOR_LIST_PROJECTS_TIMEOUT_MS,
   MONITOR_REFRESH_TIMEOUT_MS,
@@ -59,10 +60,6 @@ function appCredentials(): { clientId: string; clientSecret: string } {
   }
   return { clientId, clientSecret };
 }
-
-/** The page size asked of Sentry's issues list — its documented maximum. The
- *  poll's page CAP (MOTIR-5580) is counted in these pages. */
-export const SENTRY_ISSUES_PAGE_LIMIT = 100;
 
 /**
  * One bounded request, with the provider's own failure text preserved.
@@ -310,7 +307,7 @@ export const sentryMonitorProvider: MonitorProvider = {
     url.searchParams.set('project', externalProjectId);
     url.searchParams.set('query', 'is:unresolved');
     url.searchParams.set('sort', 'date');
-    url.searchParams.set('limit', String(SENTRY_ISSUES_PAGE_LIMIT));
+    url.searchParams.set('limit', String(MONITOR_ISSUES_PAGE_LIMIT));
     if (cursor) url.searchParams.set('cursor', cursor);
     const res = await call('listIssuesSince', MONITOR_LIST_ISSUES_TIMEOUT_MS, url.toString(), {
       method: 'GET',

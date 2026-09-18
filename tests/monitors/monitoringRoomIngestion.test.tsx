@@ -287,3 +287,75 @@ describe('the poll line — one test per row of §12’s table', () => {
     }
   });
 });
+
+describe('the room’s remaining arms (the story gate’s top-up, MOTIR-5583)', () => {
+  it('choosing Every level PATCHes null — the stored default', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(connection('web'))));
+    renderRoom(view({ connections: [connection('web', { minimumLevel: 'warning' })] }));
+    await act(async () => {
+      fireEvent.click(within(row('web')).getByRole('combobox', { name: 'Minimum level' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('option', { name: 'Every level' }));
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/projects/ACME/monitors/conn-web',
+      expect.objectContaining({ body: JSON.stringify({ minimumLevel: null }) }),
+    );
+  });
+
+  it('a network failure on the write is a refusal too — reverted, said on the row', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    renderRoom(view({ connections: [connection('web', { minimumLevel: 'error' })] }));
+    await act(async () => {
+      fireEvent.click(within(row('web')).getByRole('combobox', { name: 'Minimum level' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('option', { name: 'debug' }));
+    });
+    expect(within(row('web')).getByRole('alert')).toBeTruthy();
+    expect(
+      within(row('web')).getByRole('combobox', { name: 'Minimum level' }).textContent,
+    ).toContain('error');
+  });
+
+  it('a degraded grant with no provider reason and no check time still renders', () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <MonitoringRoom
+          projectKey="ACME"
+          view={view({ health: 'degraded', healthReason: null, connections: [connection('web')] })}
+          banner={{ tone: 'danger', title: 'Could not connect.', body: 'Sentry refused.' }}
+          checkedLabel={null}
+          boundLabels={{ 'conn-web': 'Bound 3 days ago' }}
+        />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText('Degraded')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Could not connect.');
+    // No poll line was decided for the row, so none renders.
+    expect(row('web').querySelector('[data-poll-state]')).toBeNull();
+  });
+
+  it('Add a monitored project opens the picker, and the disconnect confirmation dismisses', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify([])));
+    renderRoom(view({ connections: [connection('web')] }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add a monitored project' }));
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/projects/ACME/monitors/available');
+    await act(async () => {
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    });
+
+    await act(async () => {
+      fireEvent.click(within(row('web')).getByRole('button', { name: 'Stop monitoring web' }));
+    });
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
+    });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+});

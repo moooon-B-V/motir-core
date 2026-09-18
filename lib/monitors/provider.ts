@@ -80,6 +80,12 @@ export const MONITOR_LIST_PROJECTS_TIMEOUT_MS = 10_000;
  *  bounds a page and never the sweep. */
 export const MONITOR_LIST_ISSUES_TIMEOUT_MS = 15_000;
 
+/** How many issues ONE `listIssuesSince` page asks for — Sentry's documented
+ *  maximum. On the SEAM rather than in an adapter because its consumer, the
+ *  poll (MOTIR-5580), states its page cap in these pages, and a consumer may not
+ *  import a provider implementation (`tests/monitors/monitorBoundaries.test.ts`). */
+export const MONITOR_ISSUES_PAGE_LIMIT = 100;
+
 /** Deadline for a resolve-back write, in ms (MOTIR-4931's consumer). */
 export const MONITOR_RESOLVE_ISSUE_TIMEOUT_MS = 10_000;
 

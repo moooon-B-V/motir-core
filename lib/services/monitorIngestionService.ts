@@ -2,7 +2,7 @@ import type { MonitorIssue } from '@/generated/prisma/client';
 import { getMonitorProvider } from '@/lib/monitors';
 import { MonitorBinderUnavailableError, MonitorProviderCallError } from '@/lib/monitors/errors';
 import { meetsMinimumLevel } from '@/lib/monitors/levels';
-import { SENTRY_ISSUES_PAGE_LIMIT } from '@/lib/monitors/providers/sentry';
+import { MONITOR_ISSUES_PAGE_LIMIT } from '@/lib/monitors/provider';
 import type { NormalizedMonitorIssue, NormalizedMonitorIssuePage } from '@/lib/monitors/types';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
@@ -266,37 +266,39 @@ export const monitorIngestionService = {
         issue.externalId,
         tx,
       );
-      const row: MonitorIssue | null = lockedId
-        ? await monitorIssueRepository.findById(lockedId, tx)
-        : null;
-      /* v8 ignore next 3 -- unreachable: the row was inserted or found in THIS
-         transaction, under the same binding. */
+      /* v8 ignore next 3 -- unreachable: the row was inserted (or already
+         present) in THIS transaction, under the same binding, so the lock finds
+         it. Asserted by `tests/monitors/monitor-issue-store.test.ts` › "two
+         simultaneous claims of one issue leave ONE row, and the loser reads the
+         winner’s". */
+      if (lockedId === null) {
+        throw new Error(`monitor_issue row for ${issue.externalId} vanished under its own lock`);
+      }
+      const row: MonitorIssue | null = await monitorIssueRepository.findById(lockedId, tx);
+      /* v8 ignore next 3 -- unreachable for the same reason: it was just locked. */
       if (!row) {
         throw new Error(`monitor_issue row for ${issue.externalId} vanished under its own lock`);
       }
 
-      let previous: PreviousBug | null = null;
-      if (row.workItemId) {
-        const bug = await workItemRepository.findById(row.workItemId, tx);
-        if (bug && !doneKeys.has(bug.status)) {
-          await monitorIssueRepository.updateFacts(row.id, facts, tx);
-          return {
-            outcome: 'updated' as const,
-            workItemId: bug.id,
-            identifier: bug.identifier,
-            relatesTo: null,
-          };
-        }
-        previous = bug
-          ? { identifier: bug.identifier, workItemId: bug.id, reason: 'completed' }
-          : {
-              identifier: row.filedWorkItemIdentifier ?? row.workItemId,
-              workItemId: null,
-              reason: 'deleted',
-            };
-      } else if (row.filedWorkItemIdentifier) {
-        previous = { identifier: row.filedWorkItemIdentifier, workItemId: null, reason: 'deleted' };
+      // The bug the row points at, if any. A DELETED bug cannot be found here:
+      // the FK is ON DELETE SET NULL, so deleting it cleared `workItemId` in the
+      // same statement — and it keeps `filedWorkItemIdentifier`, which is how
+      // "deleted" is told from "never filed" below.
+      const bug = row.workItemId ? await workItemRepository.findById(row.workItemId, tx) : null;
+      if (bug && !doneKeys.has(bug.status)) {
+        await monitorIssueRepository.updateFacts(row.id, facts, tx);
+        return {
+          outcome: 'updated' as const,
+          workItemId: bug.id,
+          identifier: bug.identifier,
+          relatesTo: null,
+        };
       }
+      const previous: PreviousBug | null = bug
+        ? { identifier: bug.identifier, workItemId: bug.id, reason: 'completed' }
+        : row.filedWorkItemIdentifier
+          ? { identifier: row.filedWorkItemIdentifier, workItemId: null, reason: 'deleted' }
+          : null;
 
       // Placement comes from the resolver and NOWHERE else (MOTIR-4927): its
       // folder, or the project root when that is what the project chose.
@@ -402,7 +404,7 @@ export const monitorIngestionService = {
       do {
         if (pages === MONITOR_POLL_MAX_PAGES) {
           const reason =
-            `More than ${MONITOR_POLL_MAX_PAGES * SENTRY_ISSUES_PAGE_LIMIT} issues ` +
+            `More than ${MONITOR_POLL_MAX_PAGES * MONITOR_ISSUES_PAGE_LIMIT} issues ` +
             `(${MONITOR_POLL_MAX_PAGES} pages) since the last check. Nothing was skipped silently: ` +
             'raise the minimum level, or the next check reads them again.';
           await recordOutcome(connection.id, { status: 'failed', error: reason, filedCount: null });
