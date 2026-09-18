@@ -89,13 +89,14 @@ describe('the job manifest is complete on the emit path', () => {
     expect(emitPath).toEqual(worker);
   });
 
-  it('resolves the FIVE fast-lane consumers of work-item/transitioned', async () => {
+  it('resolves the SIX fast-lane consumers of work-item/transitioned', async () => {
     // The concrete case the whole epic turns on: the consumer count against a
     // five-slot account is the arithmetic behind MOTIR-3413 — and MOTIR-3579's
-    // `plan-drift/transitioned` is the fifth, which makes that arithmetic exact
-    // rather than merely close.
+    // `plan-drift/transitioned` was the fifth. MOTIR-5703's `monitor-issue-resolve`
+    // is the sixth, admitted deliberately (`lib/jobs/latencyBudget.ts`).
     expect(await fanOutVisibleToTheEmitPath('work-item/transitioned')).toEqual([
       'automation-engine/transitioned',
+      'monitor-issue-resolve',
       'notification-fan-in/transitioned',
       'plan-drift/transitioned',
       'status-derivation/transitioned',
@@ -118,10 +119,10 @@ describe('the job manifest is complete on the emit path', () => {
     const result = await dispatchEventToEngine('work-item/transitioned', { workspaceId: null });
 
     const { manifestSubscribers } = await import('@/lib/jobs/engine/manifest');
-    expect(manifestSubscribers('work-item/transitioned')).toHaveLength(5);
+    expect(manifestSubscribers('work-item/transitioned')).toHaveLength(6);
     // The dispatch LOADED the manifest and enqueued for every one of them — not
     // for an empty set it happened to read before anything was registered.
-    expect(result.enqueued).toHaveLength(5);
+    expect(result.enqueued).toHaveLength(6);
   });
 
   it('LOADS the manifest before it resolves subscribers', async () => {

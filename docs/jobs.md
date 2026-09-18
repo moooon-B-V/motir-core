@@ -343,6 +343,23 @@ await sendEvent('email.send', {
    a retry, a `sleep` that yields and re-enqueues) is testing the ENGINE and
    belongs in `tests/jobs/engine-*.test.ts` against the real runner.
 
+### A worked consumer: `monitor-issue-resolve` (Story MOTIR-4931 · MOTIR-5703)
+
+`lib/jobs/definitions/monitorIssueResolve.ts` — the resolve-back. A second
+consumer of `work-item/transitioned` (beside `watcher-notify/transitioned`), so
+it takes its own id and names the shared event through `trigger`. When a bug
+linked to monitor issues reaches a done-category status it resolves each issue
+at the provider through `monitorSyncService.resolveLinkedIssues`.
+
+- **Idempotency is the LINK's claim, not the event's.** The event is
+  at-least-once and the monitor poll runs a backstop sweep too, so exactly-once
+  is one conditional `UPDATE` on `monitor_issue` — only its winner calls the
+  provider.
+- **A provider refusal is recorded and returned**, so it spends no retries; an
+  unexpected error throws into the `transient` policy and the dead-letter queue,
+  and the next poll's sweep re-claims the stale claim. The sweep is the recovery
+  for anything that dead-letters here.
+
 ## Retry policies
 
 A job declares its retry **intent** with a named policy (`lib/jobs/retries.ts`)

@@ -191,6 +191,18 @@ export const FAST_LANE_CONSUMER_IDS = [
   // (`plan_item_work_item_id_workspace_id_idx`, added with the same card),
   // usually zero rows, and a short locked write only when a plan actually moves.
   'plan-drift/transitioned',
+  // ⚠️ ADMITTED DELIBERATELY (Story MOTIR-4931 · MOTIR-5703), the sixth. The
+  // resolve-back tells an error monitor a bug was fixed, and its value is that
+  // the monitor stops calling a fixed error unresolved while somebody is still
+  // looking at it — so it belongs inside the latency contract, beside
+  // `plan-drift`, for the same reason. Its shape fits the lane: the CHEAPEST
+  // EXIT comes first — one indexed read of `monitor_issue` by `work_item_id`
+  // (`monitor_issue_work_item_id_idx`), zero rows for every transition on a work
+  // item no monitor filed, which is almost all of them. Only a monitor-filed bug
+  // reaching a done status goes on to one bounded provider call per linked issue
+  // (`MONITOR_RESOLVE_ISSUE_TIMEOUT_MS`), and the poll's backstop sweep covers any
+  // run that is slow or dead-letters.
+  'monitor-issue-resolve',
   'status-derivation/transitioned',
   'watcher-notify/transitioned',
 ] as const;

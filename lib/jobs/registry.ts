@@ -60,6 +60,7 @@ import {
   monitorConnectionPoll,
   monitorIssueReconcileTick,
 } from './definitions/monitorIssueReconcile';
+import { monitorIssueResolveOnTransitioned } from './definitions/monitorIssueResolve';
 import { accountErasureSweep } from './definitions/accountErasureSweep';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
@@ -136,4 +137,7 @@ export const jobDefinitions = [
   // its per-connection fan-out.
   monitorIssueReconcileTick,
   monitorConnectionPoll,
+  // Resolve-back (Story MOTIR-4931 · MOTIR-5703): a done bug resolves its
+  // linked monitor issues, off `work-item/transitioned`.
+  monitorIssueResolveOnTransitioned,
 ];

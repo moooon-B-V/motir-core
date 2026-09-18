@@ -14,6 +14,7 @@ import { monitorInstallationRepository } from '@/lib/repositories/monitorInstall
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
 import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
+import { monitorSyncService } from '@/lib/services/monitorSyncService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { DuplicateLinkError } from '@/lib/workItems/linkErrors';
@@ -185,6 +186,37 @@ async function recordOutcome(
       tx,
     ),
   );
+}
+
+/**
+ * RESOLVE BACK's BACKSTOP (Story MOTIR-4931 · MOTIR-5703), at the end of a
+ * successful poll: every claimable link on this connection whose bug is done is
+ * resolved, capped. The event is the fast path; this is what makes the loop
+ * self-healing — a failed resolve, a crashed one, and a done bug whose status
+ * writer emitted no event are all caught here.
+ *
+ * ⚠️ A SWEEP FAILURE NEVER FAILS THE POLL. The ingestion outcome is already
+ * recorded; an unexpected sweep error is caught and recorded on the connection's
+ * SYNC failure, where the room shows it, and the poll's summary stands.
+ */
+async function sweepResolveBack(connectionId: string, resolveOnDone: boolean): Promise<void> {
+  if (!resolveOnDone) return;
+  try {
+    await monitorSyncService.sweepConnection(connectionId);
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    await withSystemContext((tx) =>
+      monitorConnectionRepository.recordSyncFailure(
+        connectionId,
+        {
+          reason: `Resolving done bugs in the monitor stopped: ${why}`,
+          workItemIdentifier: null,
+          at: new Date(),
+        },
+        tx,
+      ),
+    );
+  }
 }
 
 export const monitorIngestionService = {
@@ -538,6 +570,7 @@ export const monitorIngestionService = {
         tx,
       ),
     );
+    await sweepResolveBack(connection.id, connection.resolveOnDone);
     return summary;
   },
 

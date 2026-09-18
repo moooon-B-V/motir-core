@@ -2,6 +2,7 @@ import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService'
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
+import { monitorSyncService } from '@/lib/services/monitorSyncService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -115,6 +116,9 @@ export const jobServices = {
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick's
   // discovery, one binding's poll, and the terminal write onto that binding.
   monitorIngestion: monitorIngestionService,
+  // Resolve-back (Story MOTIR-4931 · MOTIR-5703): the transitioned consumer's
+  // one call. The poll's backstop sweep reaches the same service directly.
+  monitorSync: monitorSyncService,
 };
 
 export type JobServices = typeof jobServices;
