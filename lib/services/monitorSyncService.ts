@@ -1,12 +1,22 @@
 import type { MonitorIssue } from '@/generated/prisma/client';
 import { getMonitorProvider } from '@/lib/monitors';
 import { MonitorIssueGoneError, MonitorProviderCallError } from '@/lib/monitors/errors';
+import type { MonitorAssigneeSyncNote } from '@/lib/monitors/syncStates';
+import type { NormalizedMonitorAssignee } from '@/lib/monitors/types';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
 import { monitorIssueRepository } from '@/lib/repositories/monitorIssueRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { commentsService } from '@/lib/services/commentsService';
 import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { AssigneeNotInWorkspaceError } from '@/lib/workItems/errors';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 
 // The monitor SYNC service (Story MOTIR-4931) — what Motir writes BACK to a
@@ -45,6 +55,53 @@ export const MONITOR_RESOLVE_STALE_MS = 15 * 60 * 1000;
  * slow. The rest wait for the next poll, oldest first.
  */
 export const MONITOR_RESOLVE_SWEEP_MAX = 25;
+
+/**
+ * The most open links ONE poll re-reads for their ASSIGNEE (MOTIR-5705).
+ *
+ * The poll reads issues whose last-SEEN moved, and assigning an issue in the
+ * provider does not move it — so without this an assignment on a quiet error
+ * would never arrive. The provider documents no batch-by-id read, so each link
+ * is one `getIssue`. At the tick's 30-minute cadence
+ * (`MONITOR_ISSUE_RECONCILE_CRON`) this visits up to 20 × 48 = 960 open links a
+ * day per connection, oldest-checked first — a full rotation of a connection
+ * holding under a thousand open bugs, every day, for 20 bounded reads a poll.
+ * It sits beside `MONITOR_POLL_MAX_PAGES` as the poll's other bound.
+ */
+export const MONITOR_ASSIGNEE_REFRESH_MAX = 20;
+
+/** What one assignee decision did (MOTIR-5705). */
+export type MonitorAssigneeOutcome =
+  | 'assigned'
+  | 'unchanged'
+  | 'unassigned_ignored'
+  | 'team_assignee'
+  | 'no_matching_member'
+  | 'not_assignable'
+  | 'binder_unavailable';
+
+/** The connection an assignee decision runs for — the columns it reads. */
+export interface MonitorAssigneeConnection {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  boundByUserId: string | null;
+}
+
+/** The provider assignee's comparison KEY. A provider's ids are unique only
+ *  within their kind, so a user and a team sharing an id are still two people. */
+export function assigneeKey(assignee: NormalizedMonitorAssignee | null): string | null {
+  return assignee ? `${assignee.kind}:${assignee.externalId}` : null;
+}
+
+/** Is this refusal the update path telling us the BINDER cannot write here? */
+function isBinderRefusal(err: unknown): boolean {
+  return (
+    err instanceof PermissionDeniedError ||
+    err instanceof ProjectAccessDeniedError ||
+    err instanceof ProjectNotFoundError
+  );
+}
 
 /** What one resolve attempt did — the job's and the sweep's ledger output. */
 export type MonitorResolveOutcome = 'resolved' | 'gone' | 'failed' | 'switched_off' | 'not_claimed';
@@ -216,6 +273,172 @@ export const monitorSyncService = {
   },
 
   /**
+   * Carry ONE provider-side assignment onto the link's bug (Story MOTIR-4931 ·
+   * Subtask MOTIR-5705), matched to a Motir member BY EMAIL.
+   *
+   * ⚠️ ONLY A CHANGE ON THE PROVIDER SIDE IS APPLIED. The provider's current
+   * assignee is compared with the one Motir last applied or deliberately
+   * declined (`synced_assignee_external_id`), inside ONE transaction holding the
+   * link `FOR UPDATE` — so a person who re-assigns the bug in Motir is never
+   * overwritten every half hour, and two concurrent decisions about one new
+   * assignee produce ONE write: the loser reads the already-synced key under
+   * the lock and returns.
+   *
+   * | provider says                                  | action     | recorded                          |
+   * |------------------------------------------------|------------|-----------------------------------|
+   * | same as last synced                            | nothing    | —                                 |
+   * | a user whose email is a workspace member        | assign, as the binder | the key, note `null`   |
+   * | a user with no matching member                 | no write   | the key, `no_matching_member`     |
+   * | a team                                         | no write   | the key, `team_assignee`          |
+   * | unassigned after a previous assignee            | no write   | `null`, note `null`               |
+   *
+   * A bug in a done-category status, or a deleted one, is never assigned (and
+   * nothing is recorded, so a reopened bug still takes the assignment). A binder
+   * who is missing or refused records a NAMED failure on the connection and
+   * assigns nothing; no other identity is substituted. The assignment goes
+   * through `workItemsService.updateWorkItem` as the binder, so every guard,
+   * event and notification of an ordinary assignment runs unchanged.
+   */
+  async applyAssignee(
+    connection: MonitorAssigneeConnection,
+    externalIssueId: string,
+    assignee: NormalizedMonitorAssignee | null,
+    doneKeys: ReadonlySet<string>,
+  ): Promise<MonitorAssigneeOutcome> {
+    const key = assigneeKey(assignee);
+    return withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, connection.workspaceId);
+      const lockedId = await monitorIssueRepository.lockByExternalId(
+        connection.id,
+        externalIssueId,
+        tx,
+      );
+      const link = lockedId ? await monitorIssueRepository.findById(lockedId, tx) : null;
+      if (!link || link.syncedAssigneeExternalId === key) return 'unchanged';
+
+      const record = (note: MonitorAssigneeSyncNote | null) =>
+        monitorIssueRepository.recordAssigneeSync(
+          link.id,
+          { externalAssigneeId: key, note, checkedAt: new Date() },
+          tx,
+        );
+
+      // A monitor UNASSIGNING does not take ownership away from a person here.
+      if (assignee === null) {
+        await record(null);
+        return 'unassigned_ignored';
+      }
+      const bug = link.workItemId ? await workItemRepository.findById(link.workItemId, tx) : null;
+      if (!bug || doneKeys.has(bug.status)) return 'not_assignable';
+
+      if (assignee.kind === 'team') {
+        await record('team_assignee');
+        return 'team_assignee';
+      }
+      const user = assignee.email ? await userRepository.findByEmail(assignee.email) : null;
+      if (!user) {
+        await record('no_matching_member');
+        return 'no_matching_member';
+      }
+
+      const binderId = connection.boundByUserId;
+      if (!binderId) {
+        await recordSyncFailureIn(
+          tx,
+          connection.id,
+          `An assignment for ${bug.identifier} arrived from the monitor, and this connection has no binder to make it as. Bind the monitored project again.`,
+          bug.identifier,
+        );
+        return 'binder_unavailable';
+      }
+      if (bug.assigneeId === user.id) {
+        await record(null);
+        return 'unchanged';
+      }
+      // The LOCK IS HELD ACROSS THE UPDATE — the `reconcileIssue` shape:
+      // `updateWorkItem` owns its own transaction on disjoint rows, and a second
+      // decision about this link waits here, then reads the key recorded below.
+      try {
+        await workItemsService.updateWorkItem(
+          bug.id,
+          { assigneeId: user.id },
+          { userId: binderId, workspaceId: connection.workspaceId },
+        );
+      } catch (err) {
+        if (err instanceof AssigneeNotInWorkspaceError) {
+          await record('no_matching_member');
+          return 'no_matching_member';
+        }
+        if (isBinderRefusal(err)) {
+          const why = err instanceof Error ? err.message : String(err);
+          await recordSyncFailureIn(
+            tx,
+            connection.id,
+            `The person who bound this connection could not assign ${bug.identifier}: ${why}`,
+            bug.identifier,
+          );
+          return 'binder_unavailable';
+        }
+        throw err;
+      }
+      await record(null);
+      return 'assigned';
+    });
+  },
+
+  /**
+   * The BOUNDED ASSIGNEE REFRESH (MOTIR-5705): re-read up to
+   * {@link MONITOR_ASSIGNEE_REFRESH_MAX} of the connection's open links,
+   * oldest-checked first, through `getIssue`, and apply what comes back. An issue
+   * the provider no longer has is stamped and left — saying so on the card is
+   * the resolve side's job. ONE link's refusal does not stop the rest, and
+   * nothing here changes the poll's recorded ingestion outcome.
+   */
+  async refreshAssignees(
+    connection: MonitorAssigneeConnection & { installationId: string },
+    doneKeys: ReadonlySet<string>,
+  ): Promise<{ checked: number; failed: number }> {
+    const links = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, connection.workspaceId);
+      return monitorIssueRepository.listForAssigneeRefresh(
+        connection.id,
+        [...doneKeys],
+        MONITOR_ASSIGNEE_REFRESH_MAX,
+        tx,
+      );
+    });
+    let failed = 0;
+    for (const link of links) {
+      try {
+        const current = await monitorCredentialService.withFreshCredential(
+          connection.installationId,
+          (credential) =>
+            getMonitorProvider(credential.provider).getIssue({
+              accessToken: credential.token,
+              orgSlug: credential.orgSlug ?? '',
+              externalIssueId: link.externalIssueId,
+            }),
+        );
+        if (current) {
+          await monitorSyncService.applyAssignee(
+            connection,
+            link.externalIssueId,
+            current.assignee,
+            doneKeys,
+          );
+        }
+      } catch (err) {
+        if (!(err instanceof MonitorProviderCallError)) throw err;
+        failed += 1;
+      }
+      await withSystemContext((tx) =>
+        monitorIssueRepository.markAssigneeChecked(link.id, new Date(), tx),
+      );
+    }
+    return { checked: links.length, failed };
+  },
+
+  /**
    * The BACKSTOP: resolve every claimable link on one connection whose bug is
    * done, capped at {@link MONITOR_RESOLVE_SWEEP_MAX}. Called at the end of every
    * poll when the connection resolves on done.
@@ -262,6 +485,19 @@ export const monitorSyncService = {
     return summary;
   },
 };
+
+async function recordSyncFailureIn(
+  tx: Parameters<typeof monitorConnectionRepository.recordSyncFailure>[2],
+  connectionId: string,
+  reason: string,
+  workItemIdentifier: string | null,
+): Promise<void> {
+  await monitorConnectionRepository.recordSyncFailure(
+    connectionId,
+    { reason, workItemIdentifier, at: new Date() },
+    tx,
+  );
+}
 
 function tally(summary: MonitorResolveSummary, outcome: MonitorResolveOutcome): void {
   if (outcome === 'resolved') summary.resolved += 1;

@@ -219,6 +219,62 @@ async function sweepResolveBack(connectionId: string, resolveOnDone: boolean): P
   }
 }
 
+async function doneKeysOf(projectId: string, workspaceId: string): Promise<Set<string>> {
+  const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
+  return new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
+}
+
+/** Record an unexpected assignee-sync error on the connection's SYNC failure —
+ *  never on the poll's ingestion outcome, which stands. */
+async function recordAssigneeError(connectionId: string, err: unknown): Promise<void> {
+  const why = err instanceof Error ? err.message : String(err);
+  await withSystemContext((tx) =>
+    monitorConnectionRepository.recordSyncFailure(
+      connectionId,
+      {
+        reason: `Taking assignees from the monitor stopped: ${why}`,
+        workItemIdentifier: null,
+        at: new Date(),
+      },
+      tx,
+    ),
+  );
+}
+
+/** One reconcile visit's assignee (MOTIR-5705). A failure here never turns a
+ *  filed issue into a failed one. */
+async function applyAssigneeQuietly(
+  target: MonitorReconcileConnection,
+  issue: NormalizedMonitorIssue,
+  doneKeys: ReadonlySet<string>,
+): Promise<void> {
+  try {
+    await monitorSyncService.applyAssignee(target, issue.externalId, issue.assignee, doneKeys);
+  } catch (err) {
+    await recordAssigneeError(target.id, err);
+  }
+}
+
+/** The bounded assignee refresh at the end of a successful poll (MOTIR-5705).
+ *  One link's refusal is absorbed inside the refresh; an unexpected error is
+ *  recorded on the connection and the poll's outcome stands. */
+async function refreshAssigneesQuietly(
+  connection: {
+    id: string;
+    projectId: string;
+    workspaceId: string;
+    boundByUserId: string | null;
+    installationId: string;
+  },
+  doneKeys: ReadonlySet<string>,
+): Promise<void> {
+  try {
+    await monitorSyncService.refreshAssignees(connection, doneKeys);
+  } catch (err) {
+    await recordAssigneeError(connection.id, err);
+  }
+}
+
 export const monitorIngestionService = {
   /**
    * Bring Motir into agreement with ONE provider issue for ONE binding.
@@ -511,6 +567,11 @@ export const monitorIngestionService = {
     // ── 3–4. FILTER + RECONCILE ──────────────────────────────────────────────
     const summary: MonitorPollSummary = { ...NOTHING_POLLED, pages };
     const failures: string[] = [];
+    // The project's done category, read once — only when the assignee direction
+    // is on, so a switched-off connection makes no read on its behalf.
+    const assigneeDoneKeys = connection.syncAssignee
+      ? await doneKeysOf(connection.projectId, connection.workspaceId)
+      : null;
     const target: MonitorReconcileConnection = {
       id: connection.id,
       projectId: connection.projectId,
@@ -526,6 +587,12 @@ export const monitorIngestionService = {
       try {
         const result = await monitorIngestionService.reconcileIssue(target, issue);
         summary[result.outcome] += 1;
+        // ASSIGNEE FROM THE MONITOR (MOTIR-4931 · MOTIR-5705), on every reconcile
+        // visit, with the assignee the page already carried. A hook BESIDE
+        // `reconcileIssue`, never inside it (the loop guard edits that method).
+        if (assigneeDoneKeys) {
+          await applyAssigneeQuietly(target, issue, assigneeDoneKeys);
+        }
       } catch (err) {
         const why =
           err instanceof MonitorBinderUnavailableError
@@ -571,6 +638,9 @@ export const monitorIngestionService = {
       ),
     );
     await sweepResolveBack(connection.id, connection.resolveOnDone);
+    if (assigneeDoneKeys) {
+      await refreshAssigneesQuietly(connection, assigneeDoneKeys);
+    }
     return summary;
   },
 
