@@ -4,7 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ArrowUpRight, CircleDashed, FileX2, Lock, X } from 'lucide-react';
+import {
+  ArrowUpRight,
+  CircleDashed,
+  FileX2,
+  Lock,
+  RefreshCw,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -20,6 +28,8 @@ import {
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { parseApprovalOverlay, withoutApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { fetchApprovalGateOverlay } from '@/lib/approvals/approvalOverlayClient';
+import { useWorkbenchLiveSignal } from '@/app/(authed)/workbench/_components/useWorkbenchLive';
+import type { StampComponent } from '@/lib/approvalGates/stamp';
 import { announceGateDecided } from '@/lib/approvals/decidedGates';
 import type {
   ApprovalGateDTO,
@@ -188,6 +198,83 @@ function Frameless({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * *What you are looking at has moved* — the notice an OPEN approval draws when
+ * its subject changes under the reader (Story MOTIR-5238 · Subtask MOTIR-5243;
+ * `design/workbench/design-notes.md` § 26, DECISION 2).
+ *
+ * ⚠️ IT IS INFORMATIVE, NEVER A GATE. The verbs are untouched and Approve still
+ * goes to the door — the STAMP is what actually prevents a wrong approval, and a
+ * notice can be missed. Drawing this as a block, or disabling the verbs behind
+ * it, would claim a guarantee it cannot make.
+ *
+ * ⚠️ AND IT IS TOLD APART FROM THE REFUSAL IT PRECEDES, which is the design's
+ * own constraint. The refusal is `--el-tint-peach` with `RefreshCw`; this is
+ * UNTINTED, because the frame has already spent yellow on band 1's *Awaiting
+ * you* and peach on that refusal — a third meaning in a third colour on one
+ * screen is a reader's problem. What separates them is the words: this one is
+ * present tense about the SUBJECT and predicts a refusal, the refusal is past
+ * tense about the PRESS and reports that nothing was recorded.
+ *
+ * ⚠️ IT SHARES THE REFUSAL'S NOUNS AND ITS CONTROL, deliberately. `movedSince`
+ * is the same component vocabulary the refusal names, so the two describe one
+ * change in one language; and *Show the current version* is the same act, on the
+ * same handler, so the reader is not offered two words for one door.
+ */
+function SubjectMovedNotice({
+  moved,
+  onShow,
+}: {
+  moved: readonly StampComponent[];
+  onShow: () => void;
+}) {
+  const t = useTranslations('approvalOverlay.moved');
+  const tStale = useTranslations('approvalGate.refusal.stale');
+  const nouns: Record<StampComponent, string> = {
+    subject: tStale('noun.subject'),
+    pull_requests: tStale('noun.pullRequests'),
+    criteria: tStale('noun.criteria'),
+  };
+  const things = moved.map((component) => nouns[component]);
+  const headline =
+    things.length === 1
+      ? t('one', { thing: things[0]! })
+      : t('several', { things: listFormat(things, t('and')) });
+  return (
+    <div
+      role="status"
+      data-testid="approval-subject-moved"
+      className="flex flex-wrap items-start gap-x-3 gap-y-2 border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
+    >
+      <div className="flex min-w-0 flex-1 basis-full gap-2.5 sm:basis-0">
+        <TriangleAlert
+          className="mt-0.5 h-4 w-4 flex-none text-(--el-text-secondary)"
+          aria-hidden
+        />
+        <p className="text-[13px] leading-snug text-(--el-text-strong)">
+          <b>{headline}</b> <span className="text-(--el-text-secondary)">{t('next')}</span>
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="shrink-0"
+        leftIcon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}
+        onClick={onShow}
+      >
+        {tStale('control')}
+      </Button>
+    </div>
+  );
+}
+
+/** *a, b and c* — in the reader's locale-agnostic simplest form. */
+function listFormat(items: readonly string[], and: string): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} ${and} ${items[items.length - 1]!}`;
+}
+
 export function ApprovalOverlay() {
   const t = useTranslations('approvalOverlay');
   const tc = useTranslations('common');
@@ -269,6 +356,57 @@ export function ApprovalOverlay() {
     })();
     return () => controller.abort();
   }, [itemKey, kind, reread]);
+
+  // ⚠️ WHAT THIS READER IS LOOKING AT MAY HAVE MOVED (Story MOTIR-5238 · Subtask
+  // MOTIR-5243). The Workbench host holds ONE stream and hands its signal down;
+  // this surface OPENS NOTHING — `useWorkbenchLiveSignal` reads the context, and
+  // outside the Workbench it is simply never nudged.
+  //
+  // ⚠️ A NUDGE IS NOT AN ANSWER. A frame says a TAB moved, which is mostly other
+  // people's rows; the question this surface has is narrower — *did the gate I am
+  // holding open move?* — so a nudge triggers ONE probe, and the probe hands back
+  // the stamp this reader was shown. The SERVER compares, with the decide door's
+  // own `stampMoved`, so this notice and the refusal a press would meet cannot
+  // disagree.
+  //
+  // ⚠️ AND THE PROBE DOES NOT TOUCH WHAT IS ON SCREEN. Its read is used for one
+  // thing — `movedSince` — and never applied to `load`. Swapping the port's bytes
+  // under a reader mid-sentence is the one outcome the design forbids outright;
+  // *Show the current version* is the reader's own act, and it is the only thing
+  // that replaces the render.
+  const live = useWorkbenchLiveSignal();
+  const [moved, setMoved] = useState<StampComponent[]>([]);
+  const settledRead =
+    token !== null && load?.token === token && load.outcome === 'read' ? load.read : null;
+  const heldStamp = settledRead?.stamp ?? null;
+  useEffect(() => {
+    // Nothing to compare against: no live question, or nothing on screen yet.
+    if (itemKey === null || kind === null || !heldStamp || live.nudge === 0) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const probe = await fetchApprovalGateOverlay(itemKey, kind, controller.signal, heldStamp);
+        if (controller.signal.aborted || !probe) return;
+        // One move produces one notice; a second, different move UPDATES it
+        // rather than stacking — this is a set, not a log.
+        setMoved((prev) =>
+          prev.join(',') === probe.movedSince.join(',') ? prev : probe.movedSince,
+        );
+      } catch {
+        // A failed probe says nothing. The reader keeps what they have, and the
+        // stamp still protects the press — a notice is a courtesy layered on a
+        // precondition, never the precondition.
+      }
+    })();
+    return () => controller.abort();
+  }, [live.nudge, heldStamp, itemKey, kind]);
+  // A fresh render — a different address, or *Show the current version* — carries
+  // a fresh stamp, so the notice it was about is gone.
+  const shownFor = useRef<string | null>(null);
+  if (shownFor.current !== heldStamp) {
+    shownFor.current = heldStamp;
+    if (moved.length > 0) setMoved([]);
+  }
 
   if (!open) return null;
 
@@ -475,6 +613,15 @@ export function ApprovalOverlay() {
             ]}
             routedToLabel={read.routedToLabel}
             filesKept={local ? local.filesKept : subject.filesKept}
+            // ⚠️ THE FRAME'S OWN SLOT, drawn BETWEEN THE PORT AND BAND 3 — which
+            // is where design-notes § 26's DECISION 2 puts the notice, above the
+            // verbs. Nothing in `ApprovalGateControl` changes: this card passes a
+            // node to an input that already exists.
+            alert={
+              moved.length > 0 && gate.state === 'awaiting' && !decidedState ? (
+                <SubjectMovedNotice moved={moved} onShow={() => setReread((n) => n + 1)} />
+              ) : undefined
+            }
             onDecide={onDecide}
             onShowCurrentVersion={() => setReread((n) => n + 1)}
             focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}

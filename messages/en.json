@@ -8606,6 +8606,12 @@
     },
     "subjectGone": {
       "body": "The design was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now."
+    },
+    "moved": {
+      "one": "{thing} changed since you opened this.",
+      "several": "{things} changed since you opened this.",
+      "and": "and",
+      "next": "Approving now would be refused."
     }
   },
   "approvals": {

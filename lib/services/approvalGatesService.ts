@@ -37,6 +37,7 @@ import {
   movedAsReaderSees,
   stampMoved,
   type DecisionStamp,
+  type StampComponent,
 } from '@/lib/approvalGates/stamp';
 import {
   approvalGateRepository,
@@ -257,6 +258,18 @@ export interface WorkItemGateRead {
    * something anybody can press, so there is nothing to stamp.
    */
   stamp: string | null;
+  /**
+   * WHAT HAS MOVED since the stamp the caller handed back as `since` — empty
+   * when nothing has, when no `since` was given, and when there is no `awaiting`
+   * gate to be stale (Story MOTIR-5238 · Subtask MOTIR-5243).
+   *
+   * ⚠️ IT IS THE REFUSAL'S OWN ANSWER, asked one press earlier. `stampMoved` is
+   * what the decide door refuses with, and `movedAsReaderSees` is the same
+   * renaming the refusal's copy uses — so the notice an open approval draws
+   * BEFORE a press and the refusal it would meet AFTER one are two renderings of
+   * one comparison rather than two comparisons that agree today.
+   */
+  movedSince: StampComponent[];
 }
 
 /**
@@ -516,7 +529,24 @@ export const approvalGatesService = {
    * and nothing here may be carried into that write.
    */
   async getForWorkItem(
-    input: { workItemId: string; kind: ApprovalGateKindDTO },
+    input: {
+      workItemId: string;
+      kind: ApprovalGateKindDTO;
+      /**
+       * A stamp this reader was shown EARLIER, handed back to ask ONE question:
+       * what has moved since (Story MOTIR-5238 · Subtask MOTIR-5243)?
+       *
+       * ⚠️ THE COMPARISON IS THE SERVER'S, and that is the whole reason this
+       * parameter exists rather than the client diffing two stamps. The token is
+       * opaque on the wire by design (`lib/approvalGates/stamp.ts`) — a client
+       * holds one string and compares nothing — and the answer has to name WHICH
+       * component moved, which only the composite can do. Answered through the
+       * SAME `stampMoved` the decide door refuses with, so the notice a reader
+       * sees before pressing and the refusal they would meet after it cannot
+       * disagree about whether something changed.
+       */
+      since?: string | null;
+    },
     ctx: ServiceContext,
   ): Promise<WorkItemGateRead> {
     return withWorkspaceContext(ctx, async (tx) => {
@@ -530,6 +560,7 @@ export const approvalGatesService = {
           routedToLabel: null,
           settingsDoor: null,
           stamp: null,
+          movedSince: [],
         };
 
       const row = await approvalGateRepository.findLatestByWorkItem(
@@ -544,6 +575,7 @@ export const approvalGatesService = {
           routedToLabel: null,
           settingsDoor: null,
           stamp: null,
+          movedSince: [],
         };
 
       // ⚠️ THE SAME FUNCTION the decide door calls, not merely the same rule
@@ -588,19 +620,33 @@ export const approvalGatesService = {
 
       // THE STAMP — only an `awaiting` gate can be pressed, so only one is stamped,
       // and the companion read is skipped for every decided gate on this render path.
-      const stamp =
+      // ⚠️ ONE set of inputs, TWO answers — the stamp this reader is being shown,
+      // and (when they handed one back) what has moved since the one they held.
+      // Computing the inputs twice would be two readings of the same rows a
+      // transaction apart, which is the drift the single definition exists to
+      // stop.
+      const stampInputs =
         row.state === 'awaiting'
-          ? computeGateStamp({
+          ? {
               subjectVersion: row.subjectVersion,
               companionSubjectVersion: await companionSubjectVersion(row, tx),
               descriptionMd: item.descriptionMd,
-            })
+            }
           : null;
+      const stamp = stampInputs ? computeGateStamp(stampInputs) : null;
+      // Only an `awaiting` gate can be pressed, so only one can be stale. A
+      // decided or withdrawn gate answers `[]` — it has already moved past the
+      // question this asks.
+      const movedSince =
+        input.since && stampInputs
+          ? movedAsReaderSees(stampMoved(input.since, stampInputs), input.kind)
+          : [];
 
       return {
         gate: toApprovalGateDto(row),
         canDecide,
         stamp,
+        movedSince,
         routedToLabel: routedToDisplayName(routedTo),
         settingsDoor: settingsDoorFor(
           isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
@@ -1091,7 +1137,14 @@ export const approvalGatesService = {
     // non-awaiting answer here means this kind has no live question — never
     // that one was hidden behind a decided row.
     if (read.gate?.state !== 'awaiting')
-      return { gate: null, canDecide: false, routedToLabel: null, settingsDoor: null, stamp: null };
+      return {
+        gate: null,
+        canDecide: false,
+        routedToLabel: null,
+        settingsDoor: null,
+        stamp: null,
+        movedSince: [],
+      };
     return read;
   },
 

@@ -3,7 +3,10 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
-import { ApprovalGateNotAuthorisedError } from '@/lib/approvalGates/errors';
+import {
+  ApprovalGateNotAuthorisedError,
+  ApprovalGateStaleSubjectError,
+} from '@/lib/approvalGates/errors';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -610,5 +613,118 @@ describe('canDecide holds the KIND’s permission FLOOR, as the door does (MOTIR
 
     expect((await read(assignee.id)).canDecide).toBe(true);
     expect((await read((await plainMember()).id)).canDecide).toBe(false);
+  });
+});
+
+describe('`since` — what has moved for a reader HOLDING this gate open (MOTIR-5243)', () => {
+  // ⚠️ THE POINT OF THIS BLOCK IS THE AGREEMENT, not the list. An open approval
+  // draws a notice BEFORE a press and the door refuses AFTER one, and the whole
+  // design rests on those two never disagreeing about whether something moved.
+  // They agree here because they are one comparison asked twice — `stampMoved`,
+  // through `getForWorkItem`'s `since` and through `decide`'s own check.
+
+  async function stampOf(item: { id: string }): Promise<string> {
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+    if (!read.stamp) throw new Error('an awaiting gate must carry a stamp');
+    return read.stamp;
+  }
+
+  async function movedSince(item: { id: string }, since: string) {
+    return (
+      await approvalGatesService.getForWorkItem(
+        { workItemId: item.id, kind: 'design_result', since },
+        fx.ctx,
+      )
+    ).movedSince;
+  }
+
+  it('answers EMPTY while nothing has moved — a notice that fires on any activity is noise', async () => {
+    const { item } = await designSubtaskWithGate({ assigneeId: fx.ownerId });
+    const stamp = await stampOf(item);
+
+    expect(await movedSince(item, stamp)).toEqual([]);
+  });
+
+  it('answers EMPTY when no `since` is presented — the read is unchanged for every other caller', async () => {
+    const { item } = await designSubtaskWithGate({ assigneeId: fx.ownerId });
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'design_result' },
+      fx.ctx,
+    );
+    expect(read.movedSince).toEqual([]);
+  });
+
+  it('names `criteria` when the card body moved under the reader', async () => {
+    const { item } = await designSubtaskWithGate({ assigneeId: fx.ownerId });
+    const stamp = await stampOf(item);
+
+    await workItemsService.updateWorkItem(
+      item.id,
+      { descriptionMd: '## Acceptance criteria\n\n- one more thing' },
+      fx.ctx,
+    );
+
+    expect(await movedSince(item, stamp)).toEqual(['criteria']);
+  });
+
+  it('names `subject` when the published version moved under the reader', async () => {
+    const { item, gate } = await designSubtaskWithGate({ assigneeId: fx.ownerId });
+    const stamp = await stampOf(item);
+
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: { subjectVersion: 'a-newer-version' },
+    });
+
+    expect(await movedSince(item, stamp)).toEqual(['subject']);
+  });
+
+  it('AGREES WITH THE DOOR, from ONE change — the notice and the refusal are one comparison', async () => {
+    const { item, gate } = await designSubtaskWithGate({ assigneeId: fx.ownerId });
+    const stamp = await stampOf(item);
+
+    // ONE change, read two ways.
+    await workItemsService.updateWorkItem(
+      item.id,
+      { descriptionMd: '## Acceptance criteria\n\n- it moved' },
+      fx.ctx,
+    );
+
+    const noticeSays = await movedSince(item, stamp);
+
+    let refusalSays: readonly string[] = [];
+    try {
+      await approvalGatesService.decide(
+        { stamp, gateId: gate.id, decision: 'approve', source: 'ui' },
+        fx.ctx,
+      );
+      throw new Error('the door must refuse a press against a stamp that has moved');
+    } catch (err) {
+      if (!(err instanceof ApprovalGateStaleSubjectError)) throw err;
+      refusalSays = err.moved;
+    }
+
+    expect(noticeSays).toEqual(['criteria']);
+    expect([...refusalSays]).toEqual([...noticeSays]);
+  });
+
+  it('answers EMPTY for a gate nobody can press — a decided gate has moved past the question', async () => {
+    const { item, gate } = await designSubtaskWithGate({ assigneeId: fx.ownerId });
+    const stamp = await stampOf(item);
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: { state: 'approved', decidedAt: new Date() },
+    });
+
+    expect(await movedSince(item, stamp)).toEqual([]);
+  });
+
+  it('names EVERY component for a stamp it cannot read — the honest answer to a token nobody can vouch for', async () => {
+    const { item } = await designSubtaskWithGate({ assigneeId: fx.ownerId });
+
+    expect(await movedSince(item, 'not-a-stamp')).toEqual(['subject', 'pull_requests', 'criteria']);
   });
 });
