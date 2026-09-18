@@ -116,6 +116,7 @@ export type PersonalDataDelegate =
   | 'planChangeMailboxEntry'
   | 'workItemTodo'
   | 'folder'
+  | 'monitorConnection'
   | 'approvalGate'
   | 'planRevision';
 
