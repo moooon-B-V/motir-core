@@ -10293,6 +10293,27 @@ model MonitorConnection {
   /// a named failure rather than substituting anyone.
   boundByUserId String? @map("bound_by_user_id")
 
+  // ── SYNC STATE (Story MOTIR-4931 · Subtask MOTIR-5701) ──────────────────────
+  // The two per-connection direction switches, and the most recent FAILED
+  // resolve-back — what the Monitoring room shows on the row.
+
+  /// Motir → monitor: resolve each linked issue when its bug reaches a
+  /// done-category status. Defaults ON — the story's shipped default, so every
+  /// connection bound before this column existed resolves on done after deploy.
+  resolveOnDone Boolean @default(true) @map("resolve_on_done")
+  /// Monitor → Motir: take a provider-side assignment onto the bug. Defaults ON
+  /// (Linear's default, the plan's recorded assumption).
+  syncAssignee  Boolean @default(true) @map("sync_assignee")
+
+  /// The provider's own reason from the most recent FAILED resolve-back,
+  /// verbatim. `null` = nothing has failed since the last success.
+  lastSyncError                   String?   @map("last_sync_error")
+  /// When that failure happened. `null` exactly when `lastSyncError` is.
+  lastSyncErrorAt                 DateTime? @map("last_sync_error_at")
+  /// The `KEY-<n>` of the bug whose resolve failed, so the row can link to it.
+  /// `null` exactly when `lastSyncError` is.
+  lastSyncErrorWorkItemIdentifier String?   @map("last_sync_error_work_item_identifier")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -10360,6 +10381,35 @@ model MonitorIssue {
   /// is deleted, so a re-filed bug can name the one it replaces.
   filedWorkItemIdentifier String? @map("filed_work_item_identifier")
 
+  // ── SYNC STATE (Story MOTIR-4931 · Subtask MOTIR-5701) ──────────────────────
+  // What Motir did TO the provider for this issue, and what it last took FROM it.
+
+  /// The resolve-back's state (`lib/monitors/syncStates.ts`): `null` = never
+  /// attempted · `pending` = claimed, call in flight · `resolved` · `failed` ·
+  /// `gone` (the provider no longer has the issue). `resolved` and `gone` are
+  /// terminal — never re-claimed.
+  resolveState       String?   @map("resolve_state")
+  /// When the current or last claim was taken. `null` = never claimed. It is
+  /// what lets a stale `pending` (a crashed attempt) be re-claimed.
+  resolveAttemptedAt DateTime? @map("resolve_attempted_at")
+  /// When Motir's resolve SUCCEEDED. THE LOOP GUARD'S INPUT: an issue last seen
+  /// at or before this moment is one Motir itself closed. `null` = Motir has
+  /// not resolved it.
+  resolvedByMotirAt  DateTime? @map("resolved_by_motir_at")
+  /// The provider's reason on `failed`. `null` in every other state.
+  resolveError       String?   @map("resolve_error")
+
+  /// The provider-side assignee id Motir last APPLIED, or last deliberately
+  /// declined. An assignment is applied only when the provider's current value
+  /// differs from this. `null` = none synced (or the issue is unassigned).
+  syncedAssigneeExternalId String?   @map("synced_assignee_external_id")
+  /// Why the last provider assignment was a no-op — `team_assignee` ·
+  /// `no_matching_member` — or `null` when it was applied or there was none.
+  assigneeSyncNote         String?   @map("assignee_sync_note")
+  /// When the bounded refresh last read this issue's assignee. Orders the
+  /// refresh oldest-first; `null` = never checked (sorts first).
+  assigneeCheckedAt        DateTime? @map("assignee_checked_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -10380,5 +10430,7 @@ model MonitorIssue {
   @@index([workItemId])
   @@index([workspaceId])
   @@index([projectId])
+  /// The assignee refresh's oldest-first scan over one connection's links.
+  @@index([connectionId, assigneeCheckedAt])
   @@map("monitor_issue")
 }
