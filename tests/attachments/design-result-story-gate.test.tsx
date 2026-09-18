@@ -240,7 +240,13 @@ describe('the race — a dependent closes while the publish is in flight', () =>
 });
 
 // ── 4 ────────────────────────────────────────────────────────────────────────
-describe('one gate per card, with a pull request (Q8)', () => {
+// ⚠️ REVERSED — Bug MOTIR-5652 · Subtask MOTIR-5662 (AMENDMENT 6 Q1), reversing
+// AMENDMENT 4 Q8 / MOTIR-5534. A design card with an open delivering pull request
+// raises its design gate again, and that gate is the PRIMARY: the result still
+// renders inside the Development block, with the pull requests beneath it as what
+// approving will merge. The peek assertions are UNCHANGED — the composition is what
+// Q8 got right, and the suppressed question is what it got wrong.
+describe('two gates per card, with a pull request (AMENDMENT 6 Q1)', () => {
   async function connect(repos: string[]) {
     await githubInstallationService.persistInstallation({
       workspaceId: fx.workspaceId,
@@ -282,7 +288,7 @@ describe('one gate per card, with a pull request (Q8)', () => {
     );
   }
 
-  it('an OPEN linked pull request: the publish raises no design gate, and the result goes to the Development block', async () => {
+  it('an OPEN linked pull request: the publish raises the design gate, and the result goes to the Development block', async () => {
     await connect(['motir-core']);
     const card = await designCard();
     await makeWorkWaitOn(card.id, fx);
@@ -290,13 +296,13 @@ describe('one gate per card, with a pull request (Q8)', () => {
 
     expect((await publish(card.identifier)).isError).toBeFalsy();
 
-    expect(await designGates(card.id)).toHaveLength(0);
+    expect((await designGates(card.id)).map((g) => g.state)).toEqual(['awaiting']);
     const peek = await readPeek(card);
     expect(hasOpenPullRequest(peek.pullRequests, peek.deliveries)).toBe(true);
     expect(peek.designEvidence?.assets.map((a) => a.kind)).toEqual(['mock', 'note_file']);
   });
 
-  it('TWO linked pull requests in two repositories, one open and one merged: still no design gate', async () => {
+  it('TWO linked pull requests in two repositories, one open and one merged: the design gate too', async () => {
     await connect(['motir-core', 'motir-gateway']);
     const card = await designCard();
     await makeWorkWaitOn(card.id, fx);
@@ -309,13 +315,13 @@ describe('one gate per card, with a pull request (Q8)', () => {
 
     expect((await publish(card.identifier)).isError).toBeFalsy();
 
-    expect(await designGates(card.id)).toHaveLength(0);
+    expect((await designGates(card.id)).map((g) => g.state)).toEqual(['awaiting']);
     const peek = await readPeek(card);
     expect(peek.pullRequests.map((pr) => pr.state).sort()).toEqual(['merged', 'open']);
     expect(peek.designEvidence).not.toBeNull();
   });
 
-  it('a pull request linked AFTER the publish supersedes the awaiting design gate', async () => {
+  it('a pull request linked AFTER the publish LEAVES the awaiting design gate standing', async () => {
     await connect(['motir-core']);
     const card = await designCard();
     await makeWorkWaitOn(card.id, fx);
@@ -325,8 +331,10 @@ describe('one gate per card, with a pull request (Q8)', () => {
 
     await link(card.id, 'motir-core', 43);
 
+    // A link is evidence the design gate is ABOUT, not an answer to it
+    // (`retireDesignGateForOpenPullRequest` is retired outright, MOTIR-5662).
     const [after] = await designGates(card.id);
-    expect(after?.state).toBe('superseded');
+    expect(after?.state).toBe('awaiting');
   });
 
   it('with NO open delivery — none linked, or only a merged one — the publish raises one gate', async () => {

@@ -291,13 +291,33 @@ export class DesignEvidenceNothingWaitsError extends DesignEvidenceError {
 export class DesignCardClosedError extends DesignEvidenceError {
   readonly code = 'DESIGN_CARD_CLOSED' as const;
   readonly status = 409;
-  constructor(identifier: string, statusKey: string) {
+  constructor(identifier: string, statusKey: string, reason?: string) {
     super(
-      `${identifier} is ${statusKey}, so its design is decided and it accepts no new design ` +
-        'result, upload or withdrawal. To change it, either reopen the card by hand (move it ' +
-        `out of ${statusKey}), or propose a new design card beside the card that needs it, ` +
-        `relates_to ${identifier}.`,
+      `${identifier} ${reason ?? `is ${statusKey}`}, so its design is decided and it accepts no ` +
+        'new design result, upload or withdrawal. To change it, either reopen the card by hand ' +
+        `(move it out of ${statusKey}), or propose a new design card beside the card that needs ` +
+        `it, relates_to ${identifier}.`,
     );
     this.name = 'DesignCardClosedError';
+  }
+
+  /**
+   * The SECOND thing that settles a design: somebody approved the card's current
+   * result, and the card still stands on that approval (Subtask MOTIR-5661;
+   * AMENDMENT 6 Q3). Same code, same status, same two ways forward — only the
+   * clause naming WHY changes, because *"MOTIR-1 is in_review, so its design is
+   * decided"* would be false, and an agent reading a false reason looks for the
+   * wrong way out.
+   *
+   * A separate factory rather than a second error class, deliberately: this card
+   * introduces no new error vocabulary, so every consumer that already maps
+   * `DESIGN_CARD_CLOSED` keeps working with nothing to add.
+   */
+  static becauseApproved(identifier: string, statusKey: string): DesignCardClosedError {
+    return new DesignCardClosedError(
+      identifier,
+      statusKey,
+      'has an APPROVED design result and is still in review',
+    );
   }
 }

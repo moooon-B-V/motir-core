@@ -168,7 +168,12 @@ describe('a card returning to review is asked again', () => {
     expect(awaiting[0]!.subjectId).toBe(evidence.id);
   });
 
-  it('raises NO design gate on a card with an open pull request — the approve-to-merge gate decides it (MOTIR-5534)', async () => {
+  // ⚠️ REVERSED — MOTIR-5662 (AMENDMENT 6 Q1), reversing MOTIR-5534 (AMENDMENT 4
+  // Q8). This test pinned the re-ask's half of the old suppression: an open pull
+  // request meant no design gate, here as at the publish, so the two ends of the
+  // rule agreed. They did agree — on a rule that left the card holding no question
+  // at all. Both ends are corrected together, for the same reason they had to match.
+  it('raises the design gate on a card WITH an open pull request — a link is not an answer (MOTIR-5662)', async () => {
     await publish('v1');
     const [a] = await gatesOf();
     await adminDb.approvalGate.update({ where: { id: a!.id }, data: { state: 'superseded' } });
@@ -217,7 +222,9 @@ describe('a card returning to review is asked again', () => {
       workItemsService.applyStatusTransition(card.id, 'in_review', fx.ctx, tx, { system: true }),
     );
 
-    expect((await gatesOf()).filter((g) => g.state === 'awaiting')).toHaveLength(0);
+    const awaiting = (await gatesOf()).filter((g) => g.state === 'awaiting');
+    expect(awaiting).toHaveLength(1);
+    expect(awaiting[0]!.kind).toBe('design_result');
   });
 
   it('raises nothing on an item with no current design result', async () => {

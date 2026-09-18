@@ -4542,6 +4542,48 @@ enum ApprovalGateState {
   @@map("approval_gate_state")
 }
 
+/// WHY a gate was superseded (Story MOTIR-5652 · Subtask MOTIR-5659;
+/// `design-result.md` AMENDMENT 6 Q5, `approval-gates.md` §6b's MOTIR-5658
+/// amendment).
+///
+/// §6b made a supersede write `state` and NOTHING else, so the row could not tell
+/// the causes apart and every surface rendering one had to guess or go vague. That
+/// is two shipped defects — MOTIR-5586 and MOTIR-5651 — which are the same false
+/// sentence (_a newer design was published … the current version is above_) on two
+/// surfaces, each repaired by making the sentence vaguer because the honest
+/// sentence was the only one available.
+///
+/// ⚠️ ONE MEMBER PER WRITING PATH, AND NO MEMBER MEANING "UNSAID". An optional
+/// cause would let the eighth superseding path — written by somebody who does not
+/// know this history — write a row that says nothing, with nothing reporting that
+/// it did. The repository writes take it as a REQUIRED argument so that omission
+/// is a compile error at the one moment anybody is positioned to answer it.
+///
+/// `unknown` is NOT that hole: it means THIS ROW PREDATES THE COLUMN, which is a
+/// different fact from any live cause, and the backfill is its only writer. A
+/// surface renders it as *the reason was not recorded* — never as a real cause,
+/// because reconstructing one from a row's shape manufactures evidence and these
+/// sentences are shown to a person as fact.
+enum ApprovalGateSupersedeCause {
+  /// A newer design version superseded the one the gate asked about.
+  republished
+  /// The design result was withdrawn.
+  withdrawn
+  /// A member's head moved, so the commits are not the ones asked about.
+  head_moved
+  /// A member pull request closed.
+  member_closed
+  /// A delivery row joined or left the card.
+  set_changed
+  /// The work was pulled out of review, or moved to Cancelled.
+  pulled_back
+  /// A person re-opened a decided design gate (AMENDMENT 6 Q3's door back).
+  /// Written ONLY by MOTIR-5659's backfill: this row predates the column.
+  unknown
+
+  @@map("approval_gate_supersede_cause")
+}
+
 /// UNDER WHICH PERMISSION a gate was decided (the ADR §6a audit set · Subtask
 /// MOTIR-4912). §2's amendment makes AUTHORITY `assignee OR reporter OR admin`,
 /// and a role is a MOVING fact: a member promoted or demoted after the decision
@@ -4697,6 +4739,17 @@ model ApprovalGate {
   /// transaction for the same reason — so the outcome is known before the row is
   /// written.
   outcomeRef            String?                     @map("outcome_ref")
+
+  /// WHY this gate was superseded — null for every row that is not `superseded`,
+  /// and `unknown` for a row superseded before the column existed (MOTIR-5659).
+  /// Nullable is the right shape and is NOT the "unsaid" hole the enum's own
+  /// comment forbids: a live supersede supplies a cause because the repository
+  /// write REQUIRES one, so null here means the row was never superseded at all.
+  ///
+  /// ⚠️ It carries no actor, no authority and no note, exactly as `state` does not
+  /// (§6b). A cause says what HAPPENED to the question; it must never make a
+  /// withdrawn question readable as a decision somebody made.
+  supersededCause ApprovalGateSupersedeCause? @map("superseded_cause")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -6877,13 +6930,13 @@ model GithubPullRequestReview {
 
   /// `review.user.id` — the stable identity the actor resolution joins on
   /// (`GithubIdentity.githubUserId`), never the login, which a person can change.
-  reviewerGithubUserId String  @map("reviewer_github_user_id")
+  reviewerGithubUserId String @map("reviewer_github_user_id")
   /// `review.user.login` — what a surface SHOWS, and the whole label when Motir
   /// cannot map the reviewer to a member (decision 3).
-  reviewerLogin        String  @map("reviewer_login")
+  reviewerLogin        String @map("reviewer_login")
   /// `review.user.type` — `User` or `Bot`. Stored as given rather than as an
   /// enum: it is GitHub's vocabulary and it grows.
-  reviewerType         String  @map("reviewer_type")
+  reviewerType         String @map("reviewer_type")
 
   state GithubReviewState
 

@@ -7,6 +7,9 @@ import {
   githubPullRequestRepository,
   type GithubPullRequestWithInstallation,
 } from '@/lib/repositories/githubPullRequestRepository';
+import { designApprovalStandsForMerge } from '@/lib/approvalGates/gateSet';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { resolveRunTargetFor } from './runTarget';
@@ -71,6 +74,22 @@ export function mergeCandidateHead(
  *
  * Either way only the RUN TARGET's members count, and only merge candidates.
  */
+/** {@link designApprovalStandsForMerge}, read from the card's own rows. */
+async function designApprovalHolds(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const [currentDesign, latestDesignGate, latestMergeGate] = await Promise.all([
+    designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
+    approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
+    approvalGateRepository.findLatestByWorkItem(workItemId, 'pull_request_approval', tx),
+  ]);
+  // The same ONE-TIME clause the predicate applies: once a merge gate has existed,
+  // the commits are the merge gate's question and a later green is not this
+  // approval's to carry (MOTIR-5666).
+  return latestMergeGate === null && designApprovalStandsForMerge(currentDesign, latestDesignGate);
+}
+
 export async function settleGreenVerdict(
   args: { item: WorkItem; pullRequestIds: readonly string[] },
   ctx: ServiceContext,
@@ -79,8 +98,24 @@ export async function settleGreenVerdict(
   void ctx;
   if (args.pullRequestIds.length === 0) return [];
   const mode = await projectRepository.findPrMergeMode(args.item.projectId, tx);
-  if (mode?.prMergeMode !== 'auto') return [];
-  if ((await resolveRunTargetFor(args.item, tx)).kind === 'ancestor') return [];
+  if (mode?.prMergeMode === 'manual') {
+    // ⚠️ THE MERGE A DESIGN APPROVAL IS ALREADY HOLDING (Story MOTIR-5652 ·
+    // Subtask MOTIR-5664; `design-result.md` AMENDMENT 6 Q4). The design gate
+    // rises on PUBLISH and the merge gate on GREEN, so the primary can be
+    // pressed before CI has spoken — and Q4 settles that the press is not
+    // refused: *"the decision stands and the merge follows on the next green
+    // verdict, with no second press."* This IS that next green.
+    //
+    // The predicate has already answered *no merge gate is owed* for the same
+    // reason, so without this arm the card would go green holding an approval
+    // nobody carried out. Both readers ask the one question, in
+    // `designApprovalStandsForMerge`.
+    if (!(await designApprovalHolds(args.item.id, tx))) return [];
+  } else if (mode?.prMergeMode !== 'auto') {
+    return [];
+  } else if ((await resolveRunTargetFor(args.item, tx)).kind === 'ancestor') {
+    return [];
+  }
 
   const requests: AutoMergeRequest[] = [];
   for (const pullRequestId of args.pullRequestIds) {

@@ -50,6 +50,7 @@ function awaiting(id: string): ApprovalGateDTO {
     decidedById: null,
     decidedAt: null,
     noteMd: null,
+    supersededCause: null,
     subjectVersion: '9840d00ea1b2',
     decidedByLabel: null,
     routedToId: 'user-2',
@@ -304,7 +305,8 @@ describe('the states the page KEEPS render in place, with no verbs (MOTIR-5229)'
 
   it('G — withdrawn: the dead port and no verb, even for a reader who could have decided', () => {
     renderSection({ gate: { ...awaiting('keep-g'), state: 'superseded' } });
-    expect(screen.getByText(en.approvalGate.withdrawn.port)).toBeTruthy();
+    // MOTIR-5667: no cause on the fixture reads as `unknown` — the reason was not recorded.
+    expect(screen.getByText(en.approvalGate.withdrawn.cause.unknown)).toBeTruthy();
     expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
   });
 

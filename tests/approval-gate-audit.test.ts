@@ -527,6 +527,10 @@ describe('the DTO carries the audit set, and no Prisma model crosses the boundar
       'decidedById',
       'decidedAt',
       'noteMd',
+      // WHY a withdrawal happened (MOTIR-5659 wrote it, MOTIR-5667 renders it).
+      // Null on every state but `superseded`, and `unknown` there means the row
+      // predates the column — a fact, not a missing value.
+      'supersededCause',
       'subjectVersion',
       'decidedByLabel',
       'routedToId',

@@ -561,19 +561,22 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
 
   it('approveAndMerge handed a gate of another KIND is a programming error, and decides nothing', async () => {
     const { item } = await pressable();
-    const design = await adminDb.approvalGate.create({
+    // ⚠️ `decision_approval`, not `design_result` — MOTIR-5664 ADMITS the design kind
+    // by name, because pressing the primary design gate is what merges the set. The
+    // guard is still the guard: a kind it does not know is still a programming error.
+    const foreign = await adminDb.approvalGate.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         workItemId: item.id,
-        kind: 'design_result',
+        kind: 'decision_approval',
         subjectId: 'ev-1',
       },
     });
     await expect(
-      pullRequestMergeService.approveAndMerge({ gateId: design.id, source: 'ui' }, fx.ctx),
-    ).rejects.toThrow(/handed a design_result gate/);
-    expect((await gateRow(design.id)).state).toBe('awaiting');
+      pullRequestMergeService.approveAndMerge({ gateId: foreign.id, source: 'ui' }, fx.ctx),
+    ).rejects.toThrow(/handed a decision_approval gate/);
+    expect((await gateRow(foreign.id)).state).toBe('awaiting');
   });
 
   it('a retry it cannot act on is refused with the door’s own errors — unknown, undecided, not a member', async () => {
@@ -697,5 +700,146 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
         requeueable: false,
       },
     ]);
+  });
+});
+
+describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design gate merges the set', () => {
+  // Yue's sentence, quoted in `design-result.md` AMENDMENT 4 Q8 and built here:
+  // "if there's linked PR, the PR and the design should show together in one section
+  // … because they become one gate, approve the design will merge the PR too."
+  //
+  // The cards before this one arrange for both gates to exist with the design
+  // primary. Without this one, pressing the primary records an opinion and leaves
+  // the pull requests sitting there with nobody having merged them — a worse state
+  // than the bug being fixed, because the surface would now claim to have asked and
+  // been answered.
+
+  /** Give a pressable card a CURRENT design result and an awaiting design gate. */
+  async function withDesignGate(item: { id: string }) {
+    const evidence = await adminDb.designEvidence.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: item.id,
+        commitSha: HEAD_WEB,
+        isCurrent: true,
+      },
+    });
+    const gate = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.create(
+        {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          workItemId: item.id,
+          kind: 'design_result',
+          subjectId: evidence.id,
+          subjectVersion: evidence.commitSha,
+        },
+        tx,
+      ),
+    );
+    return { evidence, gate };
+  }
+
+  it('decides BOTH gates — one actor, one instant — and merges every member', async () => {
+    const { item, approval, web, api } = await pressable();
+    const { gate: design } = await withDesignGate(item);
+    const host = stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'merged', commitSha: 'merge-api' },
+    });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: design.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    const [designRow, mergeRow] = await Promise.all([gateRow(design.id), gateRow(approval.id)]);
+    expect(designRow.state).toBe('approved');
+    expect(mergeRow.state).toBe('approved');
+    // ONE person's decision at ONE instant — §8's amendment, decision 5(c), the
+    // option the approve-and-merge press already uses for exactly this.
+    expect(mergeRow.decidedById).toBe(designRow.decidedById);
+    expect(mergeRow.decidedAt?.toISOString()).toBe(designRow.decidedAt?.toISOString());
+
+    expect(host).toHaveBeenCalledTimes(2);
+    expect(result.members.map((m) => m.outcome)).toEqual(['merged', 'merged']);
+    // Each outcome on its OWN pull request — where it has lived since MOTIR-5613.
+    expect((await prRecord(web.prId)).mergeOutcomeRef).not.toBeNull();
+    expect((await prRecord(api.prId)).mergeOutcomeRef).not.toBeNull();
+  });
+
+  it('a member the host REFUSES is reported, not silently skipped, and the approval stands', async () => {
+    // MOTIR-5604's finding: a card going quiet is worse than a card saying no.
+    const { item, approval } = await pressable();
+    const { gate: design } = await withDesignGate(item);
+    const host = vi.spyOn(github, 'mergeChangeRequest').mockImplementation(async (args) => {
+      if (args.number === 12)
+        throw new MergeChangeRequestError('the host is behind', 'unexpected_status');
+      return { outcome: 'merged', commitSha: 'merge-web' };
+    });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: design.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    expect(host).toHaveBeenCalledTimes(2);
+    expect(result.members.map((m) => m.outcome).sort()).toEqual(['merged', 'refused']);
+    expect((await gateRow(approval.id)).state).toBe('approved');
+    expect((await gateRow(design.id)).state).toBe('approved');
+  });
+
+  it('with NO merge gate the design decision STANDS and the merge is HELD (AMENDMENT 6 Q4)', async () => {
+    // The design gate rises on PUBLISH and the merge gate on GREEN, so the primary
+    // can be pressed before CI has spoken. Q4: "the decision stands and the merge
+    // follows on the next green verdict, with no second press." Refusing the press
+    // would leave a card with a question on it that cannot be answered, which is the
+    // silent stall MOTIR-5652 was filed about, arriving through a door built on purpose.
+    const { item, approval } = await pressable();
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.supersedeAwaitingByWorkItem(
+        item.id,
+        'pull_request_approval',
+        'head_moved',
+        tx,
+      ),
+    );
+    const { gate: design } = await withDesignGate(item);
+    const host = stubHost({ 7: { outcome: 'merged', commitSha: 'merge-web' } });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: design.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    expect((await gateRow(design.id)).state).toBe('approved');
+    expect(result.members).toEqual([]);
+    expect(host).not.toHaveBeenCalled();
+    // The withdrawn merge gate is untouched: the press answered the design question,
+    // and the commits are answered by `settleGreenVerdict` on the next green.
+    expect((await gateRow(approval.id)).state).toBe('superseded');
+  });
+
+  it('a card with NO pull request still writes `done` and merges nothing — today’s behaviour', async () => {
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'A design nobody delivers' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
+    const { gate: design } = await withDesignGate(item);
+    const host = stubHost({});
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { gateId: design.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    expect((await gateRow(design.id)).state).toBe('approved');
+    expect(result.members).toEqual([]);
+    expect(host).not.toHaveBeenCalled();
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(
+      'done',
+    );
   });
 });

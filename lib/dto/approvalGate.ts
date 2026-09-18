@@ -88,6 +88,21 @@ export interface HeldTransitionDTO {
  *  Prisma enum. */
 export type ApprovalGateStateDTO = 'awaiting' | 'approved' | 'changes_requested' | 'superseded';
 
+/**
+ * WHY a `superseded` gate was withdrawn — mirrors the `ApprovalGateSupersedeCause`
+ * Prisma enum (`design-result.md` AMENDMENT 6 Q5). One value per writing path, and
+ * **no value meaning _unsaid_**: `unknown` says the row PREDATES the column, which
+ * is a different fact from any live cause.
+ */
+export type ApprovalGateSupersedeCauseDTO =
+  | 'republished'
+  | 'withdrawn'
+  | 'head_moved'
+  | 'member_closed'
+  | 'set_changed'
+  | 'pulled_back'
+  | 'unknown';
+
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
  *  answer *"was this person entitled?"* without re-deriving a role that has
@@ -147,6 +162,21 @@ export interface ApprovalGateDTO {
   decidedAt: string | null;
   /** Why they said yes, or what they sent back. Null while `awaiting`. */
   noteMd: string | null;
+  /**
+   * WHY the question was withdrawn — null on every state but `superseded`
+   * (Story MOTIR-5652 · Subtask MOTIR-5659 wrote it, MOTIR-5667 renders it).
+   *
+   * ⚠️ IT IS NOT AN ACTOR AND MUST NEVER BE RENDERED AS ONE. §6b's supersede
+   * carries no decider, no authority and no note on purpose; a cause says what
+   * happened to the SUBJECT. A surface that turned it into *somebody withdrew
+   * this* would put a decision nobody made into the one record an audit trusts.
+   *
+   * ⚠️ `unknown` MEANS THE REASON WAS NOT RECORDED — a row that predates the
+   * column. A surface renders it as exactly that and NEVER as one of the real
+   * causes, because inferring one from a row's shape manufactures evidence, and
+   * these sentences are shown to a person as fact.
+   */
+  supersededCause: ApprovalGateSupersedeCauseDTO | null;
 
   // ── THE AUDIT SET (ADR §6a · MOTIR-4912) ─────────────────────────────────
   /** WHAT was approved, immutably: the subject's version at decision time — a

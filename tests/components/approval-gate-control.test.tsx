@@ -28,6 +28,7 @@ const AWAITING: ApprovalGateDTO = {
   decidedById: null,
   decidedAt: null,
   noteMd: null,
+  supersededCause: null,
   subjectVersion: '9840d00ea1b2',
   decidedByLabel: null,
   routedToId: 'user-2',
@@ -229,7 +230,10 @@ describe('H · refused — every member of the union renders in place, with a ne
       refusal: { tag: 'APPROVAL_GATE_ALREADY_DECIDED', decidedByLabel: null },
       expect: /Someone decided this a moment ago\./,
     },
-    { refusal: { tag: 'APPROVAL_GATE_SUPERSEDED' }, expect: /This question was withdrawn\./ },
+    {
+      refusal: { tag: 'APPROVAL_GATE_SUPERSEDED', supersedeCause: null },
+      expect: /This question was withdrawn\. The reason was not recorded\./,
+    },
     { refusal: { tag: 'APPROVAL_GATE_NOT_AUTHORISED' }, expect: /not yours to make/ },
     { refusal: { tag: 'APPROVAL_GATE_NOT_FOUND' }, expect: /no longer here/ },
     { refusal: { tag: 'APPROVAL_GATE_KIND_UNREGISTERED' }, expect: /cannot decide this kind/ },
@@ -302,7 +306,7 @@ describe('H · refused — every member of the union renders in place, with a ne
     // so no sentence here can name a cause honestly — and "Reload to see the
     // current version" sends a reader who has just withdrawn their own design
     // to look for a version that does not exist.
-    render({}, async () => ({ tag: 'APPROVAL_GATE_SUPERSEDED' }));
+    render({}, async () => ({ tag: 'APPROVAL_GATE_SUPERSEDED', supersedeCause: null }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
 
@@ -311,8 +315,10 @@ describe('H · refused — every member of the union renders in place, with a ne
     expect(text).not.toContain('Reload to see the current version');
     // What survives is the fact every raise site leaves true, in the register
     // MOTIR-5586 shipped on the port.
-    expect(text).toContain('This question was withdrawn.');
-    expect(text).toContain('Nobody decided it.');
+    // ⚠️ MOTIR-5667 REPLACED THE VAGUE SENTENCE WITH A TRUE ONE. MOTIR-5651 could
+    // only make this refusal vaguer, because the row recorded no cause; it does
+    // now, and a refusal carrying none is a row that predates the column.
+    expect(text).toContain('This question was withdrawn. The reason was not recorded.');
   });
 });
 
