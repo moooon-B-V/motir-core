@@ -111,3 +111,30 @@ export class MonitorConnectionNotFoundError extends Error {
     this.name = 'MonitorConnectionNotFoundError';
   }
 }
+
+/**
+ * The person whose name a monitor-filed bug goes on cannot file it (Story
+ * MOTIR-4929 · Subtask MOTIR-5578).
+ *
+ * A filed bug's reporter is the person who BOUND the connection — never a system
+ * principal, and never another member substituted in their place. So when that
+ * person is unknown (a binding made before the column existed, or a deleted
+ * account) or can no longer create work items in the project (removed from the
+ * workspace, or the project's access changed), the reconciler files NOTHING and
+ * records this error's `reason` on the connection's row, where a person sees it.
+ *
+ * ⚠️ THE REASON NAMES THE FIX. It is a sentence a project admin reads in the
+ * Monitoring room, so it says what to do — re-bind the monitored project as
+ * someone who can file into the project — rather than which guard refused.
+ */
+export class MonitorBinderUnavailableError extends Error {
+  readonly code = 'MONITOR_BINDER_UNAVAILABLE' as const;
+  constructor(
+    readonly connectionId: string,
+    /** The person-readable sentence the room shows, naming the remedy. */
+    readonly reason: string,
+  ) {
+    super(reason);
+    this.name = 'MonitorBinderUnavailableError';
+  }
+}
