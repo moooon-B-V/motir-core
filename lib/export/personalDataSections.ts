@@ -417,6 +417,19 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     where: (userId) => ({ createdById: userId }),
   },
   {
+    // `bound_by_user_id` attributes an act — binding a monitored project to this
+    // Motir project — to a person, and it is WHOSE NAME every bug the reconciler
+    // files goes on (Story MOTIR-4929 · MOTIR-5576). The same SetNull-preserved
+    // attribution shape as `folder.created_by_id` above, so it is EXPORTED. The
+    // row carries no secret: the credential lives on the grant
+    // (`monitor_installation`), which is not exported from here.
+    table: 'monitor_connection',
+    model: 'monitorConnection',
+    tier: 'tenant',
+    basis: 'Monitored projects the reader bound, whose bugs are filed in their name.',
+    where: (userId) => ({ boundByUserId: userId }),
+  },
+  {
     table: 'attachment',
     model: 'attachment',
     tier: 'tenant',
