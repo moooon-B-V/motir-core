@@ -97,7 +97,8 @@ describe('the premise: a keep-alive client does not honour the server hint', () 
       http
         .get({ host: '127.0.0.1', port, path: '/', agent }, (res) => {
           res.resume();
-          res.on('end', () => resolve(res.headers['keep-alive']));
+          // Typed as the index signature's `string | string[]`; the header is single-valued.
+          res.on('end', () => resolve(res.headers['keep-alive']?.toString()));
         })
         .on('error', reject);
     });
