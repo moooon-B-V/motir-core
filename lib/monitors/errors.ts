@@ -138,3 +138,23 @@ export class MonitorBinderUnavailableError extends Error {
     this.name = 'MonitorBinderUnavailableError';
   }
 }
+
+/**
+ * A minimum level that is not one of the vocabulary's members (Story MOTIR-4929
+ * · Subtask MOTIR-5579). `null` — every level — is always valid; anything else
+ * must be one of `lib/monitors/levels.ts`'s `MONITOR_LEVELS`.
+ *
+ * Refused rather than stored, because the filter treats an unrecognised MINIMUM
+ * as filtering nothing: a typo would silently mean "file everything", which is
+ * the opposite of what the person choosing a minimum asked for.
+ */
+export class InvalidMonitorLevelError extends Error {
+  readonly code = 'INVALID_MONITOR_LEVEL' as const;
+  constructor(readonly value: unknown) {
+    super(
+      `"${String(value)}" is not a monitor level. Choose debug, info, warning, error or fatal, ` +
+        'or null for every level.',
+    );
+    this.name = 'InvalidMonitorLevelError';
+  }
+}

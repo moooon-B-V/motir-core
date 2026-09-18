@@ -168,6 +168,14 @@ export const monitorConnectionRepository = {
     });
   },
 
+  /** Lock one binding `FOR UPDATE` — the read that guards a minimum-level
+   *  change, which decides a REWIND from the level it replaces. The caller
+   *  re-reads through {@link findById} inside the same transaction (the
+   *  `monitorInstallationRepository.lockById` idiom). */
+  async lockById(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM monitor_connection WHERE id = ${id} FOR UPDATE`;
+  },
+
   /** One binding by id — the disconnect path's read, which runs inside the
    *  disconnect transaction and guards the delete. */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<MonitorConnection | null> {
