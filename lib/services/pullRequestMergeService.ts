@@ -303,6 +303,17 @@ export const pullRequestMergeService = {
    * gate left for anyone to press. `approveAndMerge` decides FIRST and merges after, so the
    * order 5613 protected still holds; what this restores is that every door to the same gate
    * means the same thing. Every other decision reaches the door unchanged.
+   *
+   * ⚠️ AND AN APPROVE ON A DESIGN GATE IS THE PRIMARY PRESS, WHATEVER DOOR IT CAME THROUGH
+   * (Bug MOTIR-5712; `design-result.md` AMENDMENT 6 Q1 and Q4). The same argument one kind
+   * over: the item page's frame already pressed the design gate through
+   * {@link approveAndMerge}, so one press decided the design AND the merge it carries — while
+   * the full-screen overlay (opened from the To-approve row) and the REST route reached the
+   * plain door, decided the design alone, and left the merge gate for a SECOND press Q4
+   * forbids. Once the queue lists that card by its design gate only, this is the one press
+   * it offers, so it has to mean what the frame's press means. A design gate with no merge
+   * gate beside it decides exactly as before: `approveDesignAndMerge` finds no companion and
+   * merges nothing.
    */
   async decideGate(
     input: DecideGateInput,
@@ -315,6 +326,10 @@ export const pullRequestMergeService = {
       );
       if (gate?.kind === APPROVAL_KIND) {
         const { approval, members } = await approveAndMergeGate(input, ctx);
+        return { ...approval, members };
+      }
+      if (gate?.kind === 'design_result') {
+        const { approval, members } = await approveDesignAndMerge(input, ctx);
         return { ...approval, members };
       }
     }
