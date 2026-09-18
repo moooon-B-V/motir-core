@@ -50,7 +50,7 @@
   // true; what it does not carry is a SECOND variable. Four readings of one
   // unchanged `origin/main` put the tests project at 89.1–90.8% — over the line in
   // two runs of four, so the lane was passing on GC timing rather than on the tree.
-  // Four more readings of THE SAME TREE put it at 66.2–69.1%. The whole of the
+  // Four more readings of THE SAME TREE put it at 66.3–72.7%. The whole of the
   // difference is one line in a generated declaration, and `files` is 6891 on both
   // sides, unchanged:
   //
@@ -62,9 +62,18 @@
   // measured upstream at types +221%, instantiations +164%, memory +32%
   // (prisma/prisma#29011). A `= undefined` generic default stops the checker
   // reusing cached instantiations, so every delegate re-instantiates the payload
-  // graph. This repository was pinned at 7.8.0, inside the bad range; it is on
-  // ^7.10.0 now, and the floor is declared rather than merely allowed so a future
-  // lockfile regeneration cannot resolve back into it.
+  // graph. This repository was pinned at 7.8.0, inside the bad range.
+  //
+  // ⚠️ IT IS ON `~7.9.0`, AND THE TILDE IS THE POINT. 7.9.0 is where the fix
+  // landed, and it is the LAST version that carries it without 7.10.0's changes to
+  // automatic batching and to parameter-chunked statements ("now executed
+  // atomically in a transaction"). On 7.10.0 the approve-to-merge door's
+  // `SELECT … FOR UPDATE` stopped serialising two concurrent webhook deliveries:
+  // `githubReviewSyncStoryGate`'s CONCURRENT-redelivery guard failed 2 of 4 CI runs,
+  // against 20 of 20 green on 7.8.0 — a ~50% race where a pre-existing one would
+  // have shown on main long ago. That is NOT root-caused, so 7.10.0 is held rather
+  // than blamed; a caret would let `pnpm update` walk back into it silently, which
+  // is the whole reason the range is a tilde and not a caret.
   //
   // **So `files` is a lower bound on the question, never the whole of it.** A
   // program can get dramatically cheaper or dearer without gaining or losing a
@@ -79,7 +88,7 @@
   //     never reached this model.
   //   · **A wide run-to-run SPREAD is a symptom, not just noise.** The app
   //     project's 11.7-point spread — which MOTIR-4422 recorded as the tree's
-  //     natural variance, and which this file taught as such — collapsed to 0.9
+  //     natural variance, and which this file taught as such — collapsed to 0.4
   //     points on the same fix. Variance that large was the regression, not the GC.
   //
   // The order to work in follows: read `Instantiations` against a known-good tree

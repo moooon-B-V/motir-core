@@ -69,14 +69,19 @@ import ts from 'typescript';
  * ⚠️ THAT TABLE DESCRIBES A REGRESSED TREE, AND ITS SPREADS ARE NOT THE TREE'S
  * NATURAL VARIANCE (MOTIR-5687). It was measured against prisma 7.8.0, which
  * carried prisma/prisma#29011 — a `= undefined` generic default that stops the
- * checker reusing cached instantiations. On ^7.10.0, four readings of one
- * unchanged `origin/main` give: tests 66.2–69.1% (spread 2.9), app 48.2–49.1%
- * (spread 0.9), scripts 20.2–20.4% (0.2). **The app project's 11.7 points
- * collapsed to 0.9** — so most of what this comment taught as GC noise was the
- * regression re-instantiating payload graphs. The tests project's own spread
- * (2.9) is close to the 2.9 recorded above, which is why THRESHOLD is LEFT AT
- * 90% here: the gate caught a real defect and is not moved while it is being
- * paid down. Re-derive it from a post-fix distribution, or not at all.
+ * checker reusing cached instantiations. On ~7.9.0, four readings of one
+ * unchanged `origin/main` give: tests 66.3–72.7% (spread 6.4), app 48.1–48.5%
+ * (spread 0.4), scripts 20.2–20.4% (0.2). **The app project's 11.7 points
+ * collapsed to 0.4** — so most of what this comment taught as GC noise was the
+ * regression re-instantiating payload graphs. The tests project's own spread here
+ * is 6.4 points — WIDER than the 2.9 recorded above, not narrower, and said plainly
+ * because the convenient reading would be the opposite: a sibling worktree's suite
+ * was competing for the box during part of these four, so treat 6.4 as an upper
+ * bound on the noise rather than as a property of the version. The number that
+ * decides anything is the WORST reading, 72.7%, which is 17 points clear.
+ * THRESHOLD is LEFT AT 90%: the gate caught a real defect and is not moved while
+ * that defect is being paid down. Re-derive it from a quiet-box distribution, or
+ * not at all.
  *
  * 90% is 7.2 points clear of the observed maximum — 2.5x the tests project's
  * measured spread, and roughly seven to twelve stories at ~0.6–1 point each (50
@@ -365,7 +370,7 @@ function main() {
       `     sides of the line. The tell is a reading that moved while \`files\` did not,\n` +
       `     or a wide run-to-run spread. The instrument is \`--extendedDiagnostics\`'s\n` +
       `     \`Instantiations\` / \`Types\`, and \`--generateTrace\` for where. Measured:\n` +
-      `     prisma 7.8.0 -> 7.10.0 took this project 90.8% -> 69.1% with \`files\`\n` +
+      `     prisma 7.8.0 -> 7.9.0 took this project 90.8% -> 72.7% with \`files\`\n` +
       `     UNCHANGED, against 5.5 points for the largest boundary available.\n` +
       `  2. THE PROGRAM — the \`files\` column above, declarations included, ~0.48 MB\n` +
       `     each. A project boundary is worth exactly the files it removes from THIS\n` +
