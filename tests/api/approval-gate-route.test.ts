@@ -376,6 +376,44 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(body.subject.designEvidence.id).toBe(evidence.id);
   });
 
+  it('a DESIGN gate that carries an awaiting merge gate is ported by the Development block — the reader sees what one press merges (MOTIR-5712)', async () => {
+    // The To-approve queue lists this card by its design gate ONLY, and its row opens
+    // this overlay — so the port is the one place that reader meets the pull requests
+    // the press will merge (AMENDMENT 6 Q1; the item page's frame, MOTIR-5667).
+    const card = await designCard();
+    const evidence = await publish(card);
+    await deliver(card, { name: 'core', number: 31 });
+    await rawGate(card, 'pull_request_approval', card.id);
+    signIn(owner());
+
+    const body = await (await gateViaRoute({ key: card.identifier, kind: 'design_result' })).json();
+
+    // The GATE is still the design gate — it is what the frame presses.
+    expect(body.gate).toMatchObject({ kind: 'design_result', state: 'awaiting' });
+    expect(body.stamp).not.toBeNull();
+    // The PORT is the Development block, with the design result first in it.
+    expect(body.subject.state).toBe('resolved');
+    expect(body.subject.kind).toBe('pull_request_approval');
+    expect(body.subject.pullRequests.map((pr: { number: number }) => pr.number)).toEqual([31]);
+    expect(body.subject.designEvidence.id).toBe(evidence.id);
+    expect(body.subject.isDesignCard).toBe(false);
+    expect(body.subject.members).toEqual([]);
+  });
+
+  it('a DESIGN gate whose merge gate is NOT awaiting keeps its own design port', async () => {
+    const card = await designCard();
+    const evidence = await publish(card);
+    await deliver(card, { name: 'core', number: 31 });
+    const merge = await rawGate(card, 'pull_request_approval', card.id);
+    await adminDb.approvalGate.update({ where: { id: merge.id }, data: { state: 'superseded' } });
+    signIn(owner());
+
+    const body = await (await gateViaRoute({ key: card.identifier, kind: 'design_result' })).json();
+
+    expect(body.subject).toMatchObject({ state: 'resolved', kind: 'design_result' });
+    expect(body.subject.evidence.id).toBe(evidence.id);
+  });
+
   it('an approve-to-merge gate whose delivery set has EMPTIED is gone — the handler answers null for it', async () => {
     const card = await designCard();
     await rawGate(card, 'pull_request_approval', card.id);
