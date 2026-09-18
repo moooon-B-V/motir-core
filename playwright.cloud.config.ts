@@ -10,6 +10,7 @@ import {
   E2E_PROVISIONING_ORG,
 } from './tests/e2e/_helpers/github-const';
 import { E2E_LEGAL_DOCUMENTS_JSON } from './tests/e2e/_helpers/legal-manifest';
+import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
 
 // The CLOUD-ON regression lane (Subtask 8.1.10, widened by MOTIR-2849).
 //
@@ -188,7 +189,8 @@ export default defineConfig({
       // that does not build it fails in globalSetup before a single spec runs.
       // The main config's command has carried this since MOTIR-3427; this one did
       // not need it while the executor was a second `webServer`.
-      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
+      // MOTIR-5697: the server must outlive the runner's idle sockets — see the helper.
+      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT} ${NEXT_START_KEEP_ALIVE_FLAG}`,
       // The promoted public-redirect regression intentionally redirects `/`.
       url: `${BASE_URL}/sign-in`,
       reuseExistingServer: !process.env['CI'] && !USING_CUSTOM_ORIGIN,
