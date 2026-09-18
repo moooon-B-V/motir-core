@@ -2163,6 +2163,17 @@ export default defineConfig({
         'lib/approvalGates/deliverySetVersion.ts',
         'lib/approvalGates/memberVersion.ts',
         'lib/services/pullRequestApprovalGates.ts',
+        // ── Bug MOTIR-5652 · MOTIR-5660 / MOTIR-5662 — THE GATE-SET PREDICATE and its
+        // one loader. Added to `include`, deliberately NOT to `thresholds`, by this
+        // config's own rule: MEASURED on this branch over `tests/approvalGates`,
+        // `tests/github/{pullRequestApprovalGates,approveAndMerge,mergeGates}` and
+        // `tests/approval-gate-pull-request-approval-kind` at 100 / 100 / 100 / 100 for
+        // `gateSet.ts` and 100 / 87.5 / 100 / 100 for `gateSetFor.ts`, whose one
+        // uncovered branch is the `mode?.prMergeMode ?? null` fallback for a project row
+        // that cannot be missing here. Publishing the number without pinning a floor
+        // under it is the honest reading of that measurement.
+        'lib/approvalGates/gateSet.ts',
+        'lib/services/gateSetFor.ts',
         'components/github/DevelopmentGateFrame.tsx',
         'components/github/MergeOutcomeSlot.tsx',
         // ── Story MOTIR-5460 · HAND A RED PULL REQUEST TO AN AGENT ────────────

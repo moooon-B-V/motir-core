@@ -132,6 +132,7 @@ export const AWAITING_MERGE_GATE: ApprovalGateDTO = {
   decidedById: null,
   decidedAt: null,
   noteMd: null,
+  supersededCause: null,
   subjectVersion: null,
   decidedByLabel: null,
   routedToId: 'user-2',

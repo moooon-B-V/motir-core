@@ -254,15 +254,22 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       await expect(
         page.getByRole('main').getByText('No decision · no one to attribute'),
       ).toBeVisible();
-      // ⚠️ ADDED BY MOTIR-5586, alongside the record line above rather than in
-      // place of it. THIS is the surface the bug was observed on: state `G`'s
-      // dead port told the reviewer who had just withdrawn this very result
-      // that a newer design had been published and to look above, where the
-      // port is dead and nothing is current. Four writers mark a gate
-      // `superseded` and only a republish publishes anything, so the port
-      // claims no cause and points nowhere.
-      await expect(page.getByRole('main').getByText('This question was withdrawn.')).toBeVisible();
-      await expect(page.getByRole('main').getByText('Nobody decided it.')).toBeVisible();
+      // ⚠️ ADDED BY MOTIR-5586, AMENDED BY MOTIR-5667. THIS is the surface the
+      // bug was observed on: state `G`'s dead port told the reviewer who had just
+      // withdrawn this very result that a newer design had been published and to
+      // look above, where the port is dead and nothing is current.
+      //
+      // MOTIR-5586 could only make the sentence VAGUER — *this question was
+      // withdrawn* — because the row recorded `state` and nothing else, so no
+      // named cause was true of more than one of the writing paths. MOTIR-5659
+      // gave the row its CAUSE, and this is the withdrawal case: the result was
+      // taken away, and the port now says so. The republish sentence must still
+      // be absent, which is the half this assertion has always been about.
+      await expect(
+        page
+          .getByRole('main')
+          .getByText('The design result was withdrawn, so this question went with it.'),
+      ).toBeVisible();
       await expect(page.getByRole('main')).not.toContainText('A newer design was published');
       await expect(page.getByRole('main')).not.toContainText('The current version is above');
       await expect(page.getByRole('link', { name: 'Review & approve' })).toHaveCount(0);

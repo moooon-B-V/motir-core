@@ -537,3 +537,59 @@ describe('a per-row failure is COUNTED, never thrown', () => {
     expect(await statusOf(card.id)).toBe('implemented');
   });
 });
+
+// ── MOTIR-5671: the sweep also repairs a card whose GATES are wrong ─────────────
+describe('a card whose question went missing is repaired by the sweep', () => {
+  it('a still-open row whose card is green and gateless gets its gate back', async () => {
+    // A LOST EVENT costs a card its gate exactly as it costs it a merge: every
+    // raise in the product hangs off a delivery, so a check-suite delivery that
+    // never arrived leaves a green card with no question on it and nothing else
+    // ever asks again. That is this sweep's own justification, applied to the
+    // other thing a delivery carries — and it is independent of MOTIR-5670's
+    // premise, which the measurement there falsified.
+    const s = await makeScenario('reconcile-gate@example.com');
+    const card = await linkedCard(s, 'green and gateless', [CORE]);
+    hostOpen(card, CORE);
+
+    // The green verdict arrived and its gate did not: the row is green, the card
+    // is in review, and no gate exists. Written directly because the point is a
+    // state the product cannot reach through a door — that is what makes it a
+    // repair rather than a raise.
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: (await prRow(CORE)).id,
+        commitSha: 'sha-lost',
+        checkName: 'ci / vitest',
+        conclusion: 'success',
+      },
+    });
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'in_review' } });
+    expect(await adminDb.approvalGate.count({ where: { workItemId: card.id } })).toBe(0);
+    await adminDb.githubPullRequest.updateMany({
+      data: { updatedAt: new Date(Date.now() - 60 * 60_000) },
+    });
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ stillOpen: 1, replayed: 0, gatesRaised: 1 });
+    const [gate] = await adminDb.approvalGate.findMany({ where: { workItemId: card.id } });
+    expect(gate).toMatchObject({ kind: 'pull_request_approval', state: 'awaiting' });
+  });
+
+  it('writes NOTHING for a card whose gates are already right', async () => {
+    // `reconcileGatesFor` only raises what is missing and never supersedes, so a
+    // sweep over a correct card is a no-op — which is what makes running it every
+    // thirty minutes safe.
+    const s = await makeScenario('reconcile-gate-noop@example.com');
+    const card = await linkedCard(s, 'already right', [CORE]);
+    hostOpen(card, CORE);
+    await adminDb.githubPullRequest.updateMany({
+      data: { updatedAt: new Date(Date.now() - 60 * 60_000) },
+    });
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ stillOpen: 1, gatesRaised: 0 });
+    expect(await adminDb.approvalGate.count({ where: { workItemId: card.id } })).toBe(0);
+  });
+});

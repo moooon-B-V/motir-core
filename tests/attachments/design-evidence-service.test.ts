@@ -1260,7 +1260,17 @@ describe('AMENDMENT 4 — a result is published only while OPEN work waits on th
 // AMENDMENT 4 Q8 (MOTIR-5534) — no design gate while a pull request is open
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('AMENDMENT 4 Q8 — a design card with an OPEN linked pull request raises no design gate', () => {
+// ⚠️ REVERSED — Bug MOTIR-5652 · Subtask MOTIR-5662 (`design-result.md` AMENDMENT 6
+// Q1), reversing AMENDMENT 4 Q8 / MOTIR-5534.
+//
+// These cases pinned the suppression: a design card with an OPEN delivering pull
+// request raised no `design_result` gate, because that card's pull requests were
+// taken to carry the decision. They did not — the merge gate then refused on the run
+// target, and the card held NO question at all. The suite is kept with its
+// assertions inverted rather than deleted, because *a design card with an open pull
+// request holds its design gate* is precisely the sentence that would otherwise have
+// no test at this altitude.
+describe('AMENDMENT 6 Q1 — a design card with an OPEN linked pull request HOLDS its design gate', () => {
   /** A connected repository per name, and a delivery of one pull request in it. */
   async function deliver(
     fx: WorkItemFixture,
@@ -1331,7 +1341,7 @@ describe('AMENDMENT 4 Q8 — a design card with an OPEN linked pull request rais
   const designGates = (workItemId: string) =>
     adminDb.approvalGate.count({ where: { workItemId, kind: 'design_result' } });
 
-  it('one open pull request: the evidence is recorded and NO design gate is raised', async () => {
+  it('one open pull request: the evidence is recorded AND the design gate is raised', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);
     await deliver(fx, card.id, { repo: 'core', number: 1, state: 'open' });
@@ -1342,10 +1352,10 @@ describe('AMENDMENT 4 Q8 — a design card with an OPEN linked pull request rais
     expect((await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx))!.id).toBe(
       evidence.id,
     );
-    expect(await designGates(card.id)).toBe(0);
+    expect(await designGates(card.id)).toBe(1);
   });
 
-  it('TWO pull requests in two repositories, one open and one merged: still no design gate', async () => {
+  it('TWO pull requests in two repositories, one open and one merged: the design gate too', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);
     await deliver(fx, card.id, { repo: 'core', number: 2, state: 'open' });
@@ -1353,7 +1363,7 @@ describe('AMENDMENT 4 Q8 — a design card with an OPEN linked pull request rais
 
     await publishOnto(fx, card.id);
 
-    expect(await designGates(card.id)).toBe(0);
+    expect(await designGates(card.id)).toBe(1);
   });
 
   it('only MERGED or CLOSED pull requests: the design gate is raised as before', async () => {
@@ -1367,7 +1377,7 @@ describe('AMENDMENT 4 Q8 — a design card with an OPEN linked pull request rais
     expect(await designGates(card.id)).toBe(1);
   });
 
-  it('a republish while a pull request is open retires the earlier awaiting gate and raises none', async () => {
+  it('a republish while a pull request is open retires the earlier gate and raises its replacement', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);
     await publishOnto(fx, card.id, 'before.mock.html');
@@ -1378,9 +1388,17 @@ describe('AMENDMENT 4 Q8 — a design card with an OPEN linked pull request rais
     await deliver(fx, card.id, { repo: 'core', number: 6, state: 'open' });
     await publishOnto(fx, card.id, 'after.mock.html');
 
+    // The prior version's question is retired and the NEW version's is asked — the
+    // replacement the publish path writes in the same transaction, which is why a
+    // republish never leaves a card whose only gate is superseded.
     expect(
       await adminDb.approvalGate.count({ where: { workItemId: card.id, state: 'awaiting' } }),
-    ).toBe(0);
-    expect(await designGates(card.id)).toBe(1);
+    ).toBe(1);
+    expect(await designGates(card.id)).toBe(2);
+    expect(
+      await adminDb.approvalGate.count({
+        where: { workItemId: card.id, state: 'superseded', supersededCause: 'republished' },
+      }),
+    ).toBe(1);
   });
 });

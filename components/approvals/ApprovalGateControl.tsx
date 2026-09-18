@@ -454,6 +454,9 @@ function RefusalAlert({ refusal, sectioned }: { refusal: GateRefusal; sectioned:
  */
 export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAction: string } {
   const t = useTranslations('approvalGate.refusal');
+  // The withdrawal's CAUSE sentences live beside state `G`'s, not under `refusal`,
+  // because the two surfaces must say the same thing about one event (MOTIR-5667).
+  const tGate = useTranslations('approvalGate');
 
   // ⚠️ EXHAUSTIVE over `GateRefusal`, which is itself total over the service's
   // `ApprovalGateErrorTag` (`lib/approvalGates/refusals.ts`). A tag added there
@@ -468,7 +471,11 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
         : t('alreadyDecided.unattributed');
       break;
     case 'APPROVAL_GATE_SUPERSEDED':
-      headline = t('superseded.title');
+      // The refusal says WHY, exactly as state `G`'s port does (MOTIR-5667). The
+      // two must agree: a reader who presses a withdrawn question and then looks
+      // at the frame is being told about one event, and two sentences that differ
+      // read as two events.
+      headline = tGate(`withdrawn.cause.${refusal.supersedeCause ?? 'unknown'}`);
       break;
     case 'APPROVAL_GATE_NOT_AUTHORISED':
       headline = t('notAuthorised.title');
@@ -671,6 +678,23 @@ export function ApprovalGateControl({
   // is the thing that is supposed to make that unpressable.
   const withdrawn = gate.state === 'superseded';
 
+  // ⚠️ AND IT SAYS WHY (Story MOTIR-5652 · Subtask MOTIR-5667; `design-result.md`
+  // AMENDMENT 6 Q5). This line rendered ONE sentence for every superseded gate,
+  // whatever had happened to it. MOTIR-5586 made that sentence vaguer because
+  // there was no way to make it true — the row recorded `state` and nothing else,
+  // so *a newer design was published* was right about one of the six paths and
+  // wrong about the other five. The row carries its cause now.
+  //
+  // ⚠️ `unknown` SAYS THE REASON WAS NOT RECORDED, and never picks a real cause.
+  // A row that predates the column genuinely does not know, and inferring one
+  // from its shape would manufacture evidence a reader is shown as fact. A null
+  // cause on a superseded row is the same situation — a row written between the
+  // migration and the writes — and reads the same way.
+  //
+  // A KIND THAT KNOWS BETTER STILL WINS: `withdrawnPort` is the merge gate's own
+  // two sentences, which name the pull request, and this is the default beneath it.
+  const withdrawnSentence = t(`withdrawn.cause.${gate.supersededCause ?? 'unknown'}`);
+
   // ⚠️ THE GATE LIVES HERE, IN THE FRAME'S OWN RENDER PATH — not in a consumer,
   // and not in the port. A consumer that passes a verb set and a failing port
   // gets no verbs, because the decision is taken from the port's report on this
@@ -811,7 +835,7 @@ export function ApprovalGateControl({
           {withdrawn ? (
             <div className="flex flex-col items-center justify-center gap-1 bg-(--el-muted) px-4 py-10 text-center">
               <p className="text-[13px] text-(--el-text-secondary)">
-                {withdrawnPort ? withdrawnPort.port : t('withdrawn.port')}
+                {withdrawnPort ? withdrawnPort.port : withdrawnSentence}
               </p>
               <p className="text-xs text-(--el-text-secondary)">
                 {withdrawnPort ? withdrawnPort.cite : t('withdrawn.portCite')}

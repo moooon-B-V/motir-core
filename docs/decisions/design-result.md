@@ -883,6 +883,14 @@ amendment is where a reader learns which of its rows a new publish may still use
 
 #### Q8 — a design card WITH open linked pull requests: the result renders INSIDE the Development block, and ONE gate decides (MOTIR-5533, 2026-09-14)
 
+> ⚠️ **SUPERSEDED IN PART by AMENDMENT 6 (MOTIR-5658, 2026-09-17) — read that
+> first.** The ONE-APPROVAL ruling below stands; the CARRIER is reversed. A
+> design card with an open linked pull request holds **two** gates, with
+> `design_result` as the PRIMARY and the merge riding on it — point 1's _"raises
+> no `design_result` gate"_ and point 3's LINK arm are both retired. Point 2's
+> rendering is unchanged. This block is kept as the record of what was decided on
+> 2026-09-14 and why.
+
 **Settled by Yue on review of this story's own design:** _"if there's linked PR,
 the PR and the design should show together in one section, just like how to
 test. because they become one gate, approve the design will merge the PR too.
@@ -963,6 +971,13 @@ This supersedes two sentences that have been read as current for months, both
 listed with their sweeper in Q8.
 
 #### Q2 — what "approved" means to a consumer: the version the APPROVAL named, not the version that is current
+
+> ⚠️ **ARM (b) IS RETIRED by AMENDMENT 6 Q6 (MOTIR-5658, 2026-09-17).** It exists
+> only for AMENDMENT 4 Q8's no-gate path, and AMENDMENT 6 Q1 restores the design
+> gate on a card with an open pull request — so arm (a) covers that window and
+> the ladder becomes **gate → current**. The `pinnedAt` write STAYS: §6c's
+> retention reads it. The window this Q describes is closed a second way by
+> AMENDMENT 6 Q3, which refuses a publish on a card whose design gate is decided.
 
 **This is the question `approval-gates.md` §6c's second amendment part 7
 deliberately left open and handed here**, and the answer is not the one this
@@ -1105,6 +1120,271 @@ directly** — everything else is a proposal a person approves.
 AMENDMENT 4's contents rules (Q1's shape, Q2's publish-only-when-work-waits, the
 two-file set, the delta mock, the note as a link). Q2 above answers the one
 question §6c part 7 handed here; it changes nothing §6c decided.
+
+### AMENDMENT 6 (MOTIR-5658, 2026-09-17): TWO gates and ONE approval — the design gate is the PRIMARY carrier, the merge gate re-opens ALONE, and a DECIDED design gate closes the design
+
+**AMENDMENT 4 Q8 got the DECISION right and the CARRIER backwards.** The
+one-approval ruling stands and nothing here reverses it. What changes is which
+of the two questions is presented as the thing being decided.
+
+**The pair that recorded the inverted carrier**, named so a reader can follow the
+reasoning rather than only the outcome: [MOTIR-5533](motir:cmu1mcnok0008i0txvnf4j2n1)
+specified Q8 and [MOTIR-5534](motir:cmu1mcnrr000ai0txplyb9iqz) shipped it. Neither
+was careless — Q8 reasoned that asking twice about one change would be noise, which
+is true, and concluded that the merge gate should therefore be the one asked, which
+is the half that was backwards.
+
+**The defect that forced this** is [MOTIR-5652](motir:cmu5dutva002dhwtxwxlbty76):
+a design card with a published result AND an open linked pull request ended up
+with **no approval gate of any kind** — CI green, card In Review, pull request
+linked and `CLEAN`, design rendered on the page, and nothing for anyone to
+press. Two independently-reasoned refusals produced it: Q8 suppressed the design
+gate on the reasoning that the pull requests carry the decision, and
+`raisePullRequestApprovalGate` then refused because the card's run target
+resolved to an `ancestor`. Each was defensible alone; together they left a hole
+neither author could see from their own card.
+
+#### Q1 — TWO gates, ONE approval, the design gate PRIMARY
+
+Yue's settling words, quoted in Q8 and unchanged in force: _"if there's linked
+PR, the PR and the design should show together in one section, just like how to
+test. **because they become one gate, approve the design will merge the PR
+too.** reuse the development PR UI."_ That sentence says the design is what gets
+approved and the merge is what follows. Q8 wrote it down the other way round.
+
+A design card with a published result and at least one open linked pull request
+holds **TWO gates**, because it has two questions and they have different
+lifetimes:
+
+| gate                          | the question             | lifetime                                                                 |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------------------ |
+| `design_result` — **PRIMARY** | _is this design right?_  | **durable.** Once answered, nothing about a failed merge makes it untrue |
+| the approve-to-merge gate     | _do these commits land?_ | **per attempt.** It can fail and be re-asked                             |
+
+**The design gate is PRESENTED as the primary**, with the pull requests rendered
+beneath it as what the approval will merge. **One press passes through both.**
+
+**⚠️ AND "ONE GATE PER CARD" IS NOT WHAT [MOTIR-5603](motir:cmu396zoh005ihwtxd5xpny37)
+SETTLED.** That defect was two _merge_ gates on one card — a per-pull-request
+`pull_request_merge` beside the per-card `pull_request_approval` — and its
+invariant is **ONE MERGE GATE PER CARD**, not one gate in total. **The rule is
+one gate per QUESTION.** Reading it as one-gate-per-card is what made Q8's
+suppression look obligatory, and the next reader will re-derive it unless this
+paragraph is here.
+
+#### Q2 — the merge gate has its OWN lifecycle and re-opens ALONE
+
+After the approval the merge can still fail: a merge-queue ejection, a conflict,
+a failed validation. When it does, **the merge gate re-opens for that card and
+the design gate stays DECIDED.** Nobody is asked a second time whether the design
+is right, because nothing about the design changed.
+
+This is [MOTIR-5461](motir:cmu1aiteu00behyoic0vnik35)'s _Queue again_ keyed to
+the merge gate rather than to a single card-level approval: the design decision
+is what is REUSED, and the merge question is what is RE-ASKED.
+
+> ⚠️ **AND THAT SENTENCE IS THE MECHANISM, not an illustration of one — recorded
+> when this was built (MOTIR-5666).** _Re-opens_ does NOT mean a fresh `awaiting`
+> merge gate appears. §4's THIRD AMENDMENT decision 6 already holds an ejected
+> card at `implemented` with **no awaiting gate**, deliberately, so that a green
+> check at the same head cannot re-ask about commits somebody has approved; a gate
+> raised on ejection would be that same second ask arriving from another
+> direction, and it contradicts MOTIR-5632 as squarely as it contradicts decision 6. The merge question comes back through the two doors that already exist —
+> **Queue again**, which reuses the decision while the head is unchanged, and a
+> **PUSH**, whose new head supersedes the gate with `head_moved` and whose next
+> green raises a fresh one.
+>
+> What this Q owns, and what is asserted, is the other half: **none of those
+> touches the DESIGN gate.** An ejection, a merge refusal and a push each leave it
+> exactly as decided, and Q3's refusal stops the design being swapped underneath
+> it in the meantime.
+
+**So a failure after approval can only be about the COMMITS** — which is only
+true because of Q3.
+
+#### Q3 — a DECIDED design gate CLOSES the design, and this closes AMENDMENT 5 Q2's window
+
+**Once the card's `design_result` gate is APPROVED over its current result, and a
+pull request is open to merge it, publish, upload and withdraw are refused on
+that card while it stands on that approval — `done` or not.**
+
+Three conditions, and each one is doing work:
+
+1. **APPROVED, not merely decided** — correction 1 below.
+2. **Over the card's CURRENT result** — an approval of v1 closes nothing on a
+   card whose current result is already v2, and an AWAITING gate closes nothing
+   at all.
+3. **With an OPEN delivery, at or above `implemented`** — a merge is what would
+   ship the unapproved version, so an open pull request is what makes this a
+   window; and the rung is the door back (correction 2 below). With nothing open
+   there is nothing to ship, and §6d's approve → reopen → republish → approve
+   cycle is untouched.
+
+> ⚠️ **CORRECTION 3 — the rung is `implemented`, not `in_review` (MOTIR-5666).**
+> It was written as the review band, and a merge-queue ejection moves every card
+> it delivers to `implemented` (§4's THIRD AMENDMENT) — one rung BELOW it. So the
+> ordinary shape this refusal exists for, _the queue ejects the pull request and
+> an agent comes back and re-publishes the asset_, was the one shape it let
+> through. `implemented` is the rung that claims the branch is pushed and the pull
+> request is open: from there up the card is OFFERING commits, and below it the
+> work is being reworked, which is exactly when a design may legitimately change.
+> Found by building Q2's card, not by re-reading this one.
+
+> ⚠️ **CORRECTED WHEN IT WAS BUILT — MOTIR-5661, 2026-09-17.** This Q was written
+> as _"once the gate is DECIDED … WHATEVER its status"_, and both halves were
+> wrong in ways the build found. The corrections are below, at the two paragraphs
+> they belong to, and the rule above is what ships.
+
+An agent returning to a failed pull request therefore **cannot re-add or
+re-publish the design asset**. That is what makes Q2's sentence true rather than
+merely intended: the remaining work is the commits.
+
+**The window this closes is one this record already named and deliberately left
+open.** [MOTIR-5552](motir:cmu1wgavk008dhvoijhh3wa5i) makes a design final by
+testing the card's STATUS (`done`), and under Q1 an approved design card is **not
+yet `done`** — the merge writes `done`. AMENDMENT 5 Q2 states the gap in its own
+words: _"the approval named X, a publish makes Y current, the merge writes
+`done`, and the current result of a `done` design card is Y, **a version nobody
+approved**."_ **Move the test from the STATUS to the APPROVED GATE.** MOTIR-5552's
+refusals and their way-forward copy stay; only what they key on changes.
+
+> ⚠️ **CORRECTION 1 — `approved`, not `decided`.** `changes_requested` is a
+> decision too, and it is the one whose entire purpose is to ASK FOR A NEW
+> VERSION. Keying the refusal on _decided_ would refuse the republish the verb
+> exists to request, breaking the review loop instead of closing a window. Only
+> an APPROVAL settles a design.
+
+**The door back is a person, deliberately.** Reopening the card by hand — the
+ordinary pull-back out of the review band — lets a fresh version be published and
+re-approved. That is why condition 3 reads the band: it is exactly what a person
+leaves when they re-open the card.
+
+> ⚠️ **CORRECTION 2 — the re-open does NOT touch the approved gate, and the
+> original sentence could not have been built.** This Q said reopening
+> _"withdraws the decided design gate — recording the cause `reopened_by_hand`"_.
+> A decided gate cannot be updated at all: `trg_approval_gate_decided_immutable`
+> (MOTIR-4912) refuses every UPDATE of a row at `approved` or
+> `changes_requested` except the two user FKs going NULL, and that guard is the
+> audit's integrity, not an obstacle to route around. **Measured, not reasoned**:
+> the update raises `AG_DECIDED_IMMUTABLE` (`ERRCODE 23514`).
+>
+> So the re-open is the pull-back the product already has. It costs nothing new
+> and it is stronger than the original: the SAME move withdraws every awaiting
+> question on the card with the cause `pulled_back`, so the merge gate cannot
+> carry an unapproved design to `done` behind the re-open. The approved gate
+> stays approved — it is the record of what somebody agreed to, and AMENDMENT 5
+> Q2 arm (a) goes on reading it until a second approval lands.
+>
+> **`reopened_by_hand` is REMOVED from Q5's vocabulary.** It was minted for the
+> mechanism this correction retires, and a value nothing writes is the shape Q5
+> set out to avoid — the same reason no `pull_request_linked` member was minted.
+> Neither the enum nor its migration had left this branch when it was removed.
+
+This does not contradict §6c's _an answer outlives its subject_: that rule is
+about a decided gate surviving its subject being superseded underneath it, and
+here nothing supersedes it at all.
+
+**An AWAITING design gate is untouched by this Q.** A republish while the
+decision is still open supersedes and refuses exactly as §6b and Q8 point 3
+describe — that is the case AMENDMENT 5 Q2's arm (a) was written for.
+
+#### Q4 — approving BEFORE the delivery set is green: the merge is HELD, the press is not refused
+
+The design gate rises on PUBLISH and the merge gate on GREEN, so the primary can
+be pressed before CI has spoken. Two arms were available and this record settles
+the first:
+
+**HOLD THE MERGE UNTIL GREEN.** The press records the design decision
+immediately. If the set is green at press time the merge fires at once, exactly
+as Q1 describes. If it is not, **the decision stands and the merge follows on the
+next green verdict, with no second press.**
+
+**Why not refuse the press.** A design question does not depend on CI: the mock
+is either right or it is not, and a reviewer who has read it has everything they
+need. Telling them _you may not answer this yet_ leaves a card with a question on
+it that cannot be answered — which is the silent stall MOTIR-5652 was filed
+about, arriving through a door we built on purpose.
+
+**What the surface shows in that window:** the design decided, and the merge
+waiting on checks. Not a second question.
+
+**`done` still has exactly ONE writer.** The merge writes it, before and after
+this amendment (§8's invariant, untouched).
+
+#### Q5 — §6b's supersede gains a CAUSE
+
+§6b makes a supersede write `state` and **nothing else**, which is why no surface
+can say a true sentence about a withdrawn gate.
+[MOTIR-5586](motir:cmu30qjra00g6hvoiiu6ljuhv) and
+[MOTIR-5651](motir:cmu5aympl0020hvoik1mfccrg) are the same false sentence on two
+surfaces — _a newer design was published, the current version is above_ — true
+for one of the ways a gate is superseded and false for the rest. Both were fixed
+by making the sentence vaguer, which is the only repair available while the row
+is silent.
+
+**A supersede now records WHY, from a closed vocabulary with one value per
+writing path and no value meaning _unsaid_:**
+
+| cause           | written when                                                       |
+| --------------- | ------------------------------------------------------------------ |
+| `republished`   | a newer design version superseded the one the gate asked about     |
+| `withdrawn`     | the design result was withdrawn                                    |
+| `head_moved`    | a member's head moved, so the commits are not the ones asked about |
+| `member_closed` | a member pull request closed                                       |
+| `set_changed`   | a delivery row joined or left the card                             |
+| `pulled_back`   | the work was pulled out of review, or moved to Cancelled           |
+
+**No cause is minted for the pull-request-LINK path** — the one that retires a
+design gate when an open pull request is linked (AMENDMENT 4 Q8). Q7 retires that
+path outright, so a member for it would enter the vocabulary with nothing left to
+write it. Until the path is deleted its single write records `set_changed`, which
+is what a delivery row joining the card literally is.
+
+**Rows superseded before this amendment carry an UNKNOWN value**, and a surface
+must render it as _the reason was not recorded_ — never as one of the real
+causes. Reconstructing a cause from a row's shape manufactures evidence, and
+these sentences are shown to a person as fact.
+
+**It remains a product write with no actor, no authority and no note.** Adding a
+cause does not make a withdrawn question readable as a human decision, which is
+§6b's whole point.
+
+#### Q6 — AMENDMENT 5 Q2's arm (b) RETIRES
+
+AMENDMENT 5 Q2 resolves the approved design of a card as _(a) the subject of the
+most recent decided `approved` `design_result` gate, else (b) the newest pinned
+row, else (c) the current row_. **Arm (b) exists only for Q8's no-gate path** —
+its own justification says so: _"a card with an open delivering pull request
+raises no `design_result` gate … so there is no gate to read."_
+
+Under Q1 such a card raises a design gate again, so every approval on it leaves
+arm (a)'s evidence. **The ladder becomes gate → current**, and the `pinnedAt`
+write stays exactly as it is: §6c's retention reads it, and this amendment
+retires a READER of that column rather than the column.
+
+#### Q7 — what this SUPERSEDES, and what does NOT change
+
+**SUPERSEDED:**
+
+- **AMENDMENT 4 Q8 point 1** (_"Its design result raises **no** `design_result`
+  gate"_) — reversed by Q1. A publish raises the gate whether or not a pull
+  request is open.
+- **AMENDMENT 4 Q8 point 3's LINK arm** (_"linking a pull request … supersedes
+  that gate"_) — retired by Q1. A link is evidence the design gate is ABOUT, not
+  an answer to it. `retireDesignGateForOpenPullRequest` and its call sites go,
+  and the `pull_request_linked` cause in Q5 is listed only so a reader meeting it
+  on an old row knows what it meant.
+- **AMENDMENT 5 Q2 arm (b)** — retired by Q6.
+- **`approval-gates.md` §1's keying** of `design_result` to _a design with no
+  pull request_, and the reading of §8's Workflow B that follows from it. Amended
+  there, in this same change.
+
+**NOT changed:** Q8 point 2's RENDERING — the result still renders inside the
+Development block, once, with How to test and every pull-request row, as ONE
+section and ONE frame. What moves is which gate that frame is a port for. Also
+unchanged: Q1–Q7 of AMENDMENT 4 in full, AMENDMENT 5 Q1 and Q3–Q8, §6c's pin,
+§6b's no-actor rule, and MOTIR-5603's real invariant — **at most one MERGE gate
+per card**.
 
 ### 7. Relationship to the runtime design-approval gate (Story MOTIR-693 / 9.2)
 

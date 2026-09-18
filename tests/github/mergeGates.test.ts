@@ -324,7 +324,19 @@ describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on 
     expect(await mergeGates(item.id)).toEqual([]);
   });
 
-  it('a CHILD a container run delivers holds no gate; its run target holds the one — and How to test names the same card', async () => {
+  // ⚠️ REVERSED — MOTIR-5662, one of MOTIR-5652's two root causes. This test
+  // pinned `raisePullRequestApprovalGate`'s run-target refusal: a card whose run
+  // target resolved to `{ kind: 'ancestor' }` raised nothing. `resolveRunTargetFor`
+  // answers *whose How to test is this*, which is true and useful; it was never an
+  // answer to *does this card have something to decide*. In a parent run the
+  // How-to-test record is written once onto the PARENT, so EVERY child resolved to
+  // `ancestor` and raised nothing — while the parent's own promotion was skipped by
+  // `ContainerHasOpenChildrenError`. No gate anywhere.
+  //
+  // The How-to-test half of the assertion is UNCHANGED and is why the test is kept
+  // rather than deleted: the two questions used to share one answer, and this is
+  // where they are shown to have come apart.
+  it('a CHILD a container run delivers raises its gate exactly as its run target does — and How to test still names the ancestor', async () => {
     const s = await makeScenario('mg-child@example.com');
     const story = await workItemsService.createWorkItem(
       { projectId: s.project.id, kind: 'story', title: 'The story' },
@@ -365,12 +377,13 @@ describe('ONE GATE — a green delivery set leaves exactly one awaiting gate on 
       };
     });
 
-    expect(raised.child).toBe(false);
+    expect(raised.child).toBe(true);
     expect(raised.story).toBe(true);
-    expect(await gatesOf(child.id)).toEqual([]);
+    expect(await awaitingVersions(child.id)).toEqual(['moooon/acme#13@sha-p']);
     expect(await awaitingVersions(story.id)).toEqual(['moooon/acme#13@sha-p']);
 
-    // The raise and the How to test block resolve the SAME run target.
+    // The child's run target is still the STORY — naming the resolved kind, because
+    // the point is that a gate is now raised DESPITE it.
     expect(raised.target).toMatchObject({ kind: 'ancestor', holder: { id: story.id } });
     expect((await howToTestService.getForWorkItem(child.id, s.ctx)).runTarget).toEqual({
       key: story.identifier,
@@ -467,7 +480,13 @@ describe('WITHDRAW — the card’s ONE gate is superseded when its SET changes'
     expect((await gatesOf(item.id)).map((g) => g.state)).toEqual(['superseded']);
   });
 
-  it('UNLINKING a member supersedes that card’s gate', async () => {
+  // ⚠️ AMENDED — MOTIR-5663. The withdrawal still happens and still records
+  // `set_changed`; what is new is that the site then ASKS what the card should hold
+  // now. The remaining member is green, so the answer is a gate over the SMALLER
+  // set — which is the structural half of this level: a question retired for an
+  // excellent reason used to leave the card with none (MOTIR-5604, paid for once at
+  // one site while six others behaved the same way).
+  it('UNLINKING a member supersedes that card’s gate and re-asks over the smaller set', async () => {
     const { s, item } = await reviewedWithOneGate('mg-unlink@example.com');
 
     const result = await githubPullRequestService.unlinkPullRequestByCoordinates(
@@ -476,7 +495,7 @@ describe('WITHDRAW — the card’s ONE gate is superseded when its SET changes'
     );
 
     expect(result.removed).toBe(true);
-    expect(await awaitingVersions(item.id)).toEqual([]);
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#11@sha-a']);
   });
 });
 

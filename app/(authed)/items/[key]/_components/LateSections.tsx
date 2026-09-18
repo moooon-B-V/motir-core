@@ -175,8 +175,17 @@ export async function LateUpperSections({
   // the Development block's slot, and the standalone section (and its
   // `design_result` frame) is not drawn. With no open pull request, or nothing
   // published yet, the section renders exactly as before.
+  // ⚠️ RE-DERIVED FROM THE GATES, not from "a pull request exists" (Story
+  // MOTIR-5652 · Subtask MOTIR-5667; AMENDMENT 6 Q1 reversing AMENDMENT 4 Q8).
+  // The old rule keyed on an open pull request because one meant NO design gate at
+  // all — the card had a merge question and nothing else, so the result was a slot
+  // rather than a subject. Such a card raises a design gate again, and the design
+  // gate LEADS: the result is the Development block's subject and the pull requests
+  // sit beneath it as what approving will merge.
   const designInDevelopment =
-    r.designEvidence !== null && hasOpenPullRequest(r.pullRequests, deliveries ?? []);
+    r.designEvidence !== null &&
+    r.designGate.gate !== null &&
+    hasOpenPullRequest(r.pullRequests, deliveries ?? []);
   const showDesignResult = !designInDevelopment && (r.designEvidence !== null || r.isDesignCard);
   return (
     <>
@@ -258,15 +267,34 @@ export async function LateUpperSections({
                   />
                 ) : undefined
               }
+              // ⚠️ WHICH GATE THE FRAME IS A PORT FOR (MOTIR-5667). When the card's
+              // DESIGN question is still open it is the PRIMARY (AMENDMENT 6 Q1), so
+              // the frame names it, and the press addresses it — which is what makes
+              // ONE press answer both questions and merge the set (MOTIR-5664).
+              // Pressing the merge gate here would leave the design question awaiting
+              // after its own commits had merged.
+              //
+              // The MEMBERS stay the merge gate's: they are what the press will merge,
+              // and they are what band 1 counts beneath the subject. After the design
+              // is decided the merge gate leads ALONE (Q2) — the reader is being asked
+              // about the commits, and the design shows as decided rather than as a
+              // second thing to answer.
               mergeGate={
-                r.mergeGate.gate
+                r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate
                   ? {
-                      gate: r.mergeGate.gate,
-                      canDecide: r.mergeGate.canDecide,
-                      routedToLabel: r.mergeGate.routedToLabel,
+                      gate: r.designGate.gate,
+                      canDecide: r.designGate.canDecide,
+                      routedToLabel: r.designGate.routedToLabel,
                       members: r.mergeGate.members,
                     }
-                  : null
+                  : r.mergeGate.gate
+                    ? {
+                        gate: r.mergeGate.gate,
+                        canDecide: r.mergeGate.canDecide,
+                        routedToLabel: r.mergeGate.routedToLabel,
+                        members: r.mergeGate.members,
+                      }
+                    : null
               }
               // THE FRAME'S VERBS (MOTIR-5484): server actions, handed down as references
               // so the shared block — also the read-only peek's — imports none of them.

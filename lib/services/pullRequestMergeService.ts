@@ -141,7 +141,8 @@ async function checkMember(
       throw new ApprovalGateNotAuthorisedError(approvalGateId);
     }
 
-    if (gate.state === 'superseded') throw new ApprovalGateSupersededError(approvalGateId);
+    if (gate.state === 'superseded')
+      throw new ApprovalGateSupersededError(approvalGateId, gate.supersededCause);
     // A merge only ever follows an APPROVAL: changes requested on the set merges none of it.
     if (gate.state === 'changes_requested') {
       throw new ApprovalGateAlreadyDecidedError(
@@ -406,6 +407,12 @@ export const pullRequestMergeService = {
     const gate = await withWorkspaceContext(ctx, (tx) =>
       approvalGateRepository.findById(input.gateId, tx),
     );
+    // ⚠️ `design_result` IS ADMITTED BY NAME (Story MOTIR-5652 · Subtask MOTIR-5664;
+    // `design-result.md` AMENDMENT 6 Q1), never by deleting the guard. The guard is what
+    // stops a gate of some future kind merging things by accident, and a kind admitted
+    // by name is a decision somebody made — a guard deleted is a decision nobody will
+    // remember making.
+    if (gate && gate.kind === 'design_result') return approveDesignAndMerge(input, ctx);
     if (gate && gate.kind !== APPROVAL_KIND) {
       throw new Error(`approveAndMerge was handed a ${gate.kind} gate (${input.gateId})`);
     }
@@ -602,6 +609,57 @@ async function approveAndMergeGate(
 }
 
 /**
+ * THE PRIMARY PRESS — one press, two questions answered (Subtask MOTIR-5664;
+ * `design-result.md` AMENDMENT 6 Q1, building Yue's sentence in AMENDMENT 4 Q8:
+ * *"if there's linked PR, the PR and the design should show together in one section …
+ * because they become one gate, approve the design will merge the PR too."*).
+ *
+ * A design card with commits has TWO questions with different lifetimes — *is this
+ * design right?* is durable, *do these commits land?* is per attempt — and the design
+ * gate is the one a person is presented with. Pressing it:
+ *
+ *  1. decides the DESIGN gate, in its own transaction, through the one decide door;
+ *  2. decides the card's awaiting MERGE gate with the SAME `decidedAt`, so the two rows
+ *     read as one person's decision at one instant (§8's amendment, decision 5(c) — the
+ *     option the approve-and-merge press already uses for exactly this);
+ *  3. merges or enqueues every member through {@link mergeApprovedSetMembers}, the
+ *     shared path, after those decisions commit.
+ *
+ * ⚠️ NO SECOND MERGE PATH. `approveAndMerge` was re-keyed onto *(the card's own gate,
+ * the pull request)* by MOTIR-5613 precisely so any approving kind could drive it; a
+ * merge written for the design case would be the same duplication that produced two
+ * gates on one card, one layer down.
+ *
+ * ⚠️ AND WHEN THERE IS NO MERGE GATE, THE MERGE IS HELD, NOT REFUSED (AMENDMENT 6 Q4).
+ * The design gate rises on PUBLISH and the merge gate on GREEN, so the press can land
+ * first. The decision stands, `members` comes back empty, and the merge follows on the
+ * next green verdict with no second press — `settleGreenVerdict` carries it, because
+ * the predicate has answered *no merge gate is owed* for the same reason.
+ */
+async function approveDesignAndMerge(
+  input: Omit<DecideGateInput, 'decision'>,
+  ctx: ServiceContext,
+): Promise<ApproveAndMergeResult> {
+  const approval = await approvalGatesService.decide({ ...input, decision: 'approve' }, ctx);
+
+  const merge = await withWorkspaceContext(ctx, async (tx) =>
+    (await approvalGateRepository.findAwaitingByWorkItem(approval.gate.workItemId, tx)).find(
+      (row) => row.kind === APPROVAL_KIND,
+    ),
+  );
+  if (!merge) return { approval, members: [] };
+
+  await approvalGatesService.decide(
+    { gateId: merge.id, decision: 'approve', source: input.source, noteMd: null },
+    ctx,
+    // The DTO carries an ISO string; the option wants the instant.
+    { decidedAt: approval.gate.decidedAt ? new Date(approval.gate.decidedAt) : undefined },
+  );
+  const members = await mergeApprovedSetMembers(merge.id, merge.subjectVersion, ctx);
+  return { approval, members };
+}
+
+/**
  * STEP 2 OF THE PRESS, ON ITS OWN — merge or enqueue every member of a gate that has just
  * been approved, in the set's canonical order.
  *
@@ -672,6 +730,13 @@ async function mergeMember(
   } catch (err) {
     const refusal = memberRefusal(err);
     if (!refusal) throw err;
+    // ⚠️ THE APPROVAL STANDS AND NO GATE IS RE-RAISED (Subtask MOTIR-5666). A
+    // refusal is news about the COMMITS, and the merge question comes back as
+    // RETRY on the decision that already stands — §4's THIRD AMENDMENT decision 6,
+    // which AMENDMENT 6 Q2 names as its own mechanism. Raising a fresh gate would
+    // ask about commits somebody approved a moment ago. The DESIGN gate is
+    // untouched for the same reason, and cannot be swapped underneath the standing
+    // approval either (MOTIR-5661).
     return {
       subjectVersion: member.subjectVersion,
       pullRequestId: target.pullRequestId,
@@ -776,6 +841,8 @@ function memberRefusal(err: unknown): GateRefusal | null {
   if (err instanceof ApprovalGateAlreadyDecidedError) {
     return toGateRefusal(err.tag, { decidedByLabel: err.decidedByLabel });
   }
+  if (err instanceof ApprovalGateSupersededError)
+    return toGateRefusal(err.tag, { supersedeCause: err.supersedeCause });
   if (err instanceof ApprovalGateError) return toGateRefusal(err.tag);
   if (err instanceof PermissionDeniedError) return toGateRefusal('APPROVAL_GATE_NOT_AUTHORISED');
   if (err instanceof ProjectNotFoundError) return toGateRefusal('APPROVAL_GATE_NOT_FOUND');

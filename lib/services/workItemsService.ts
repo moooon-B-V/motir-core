@@ -55,9 +55,12 @@ import { assessArtifactEvidence, requiresArtifactEvidence } from '@/lib/workItem
 import { isStatusTransitionRefusal } from '@/lib/workItems/statusTransitionRefusals';
 import {
   CONTAINER_CLAIM_STATUS_KEYS,
+  RUNG_RANK,
   childrenBelowClaimBar,
+  rankOfStatus,
   withdrawsPendingQuestion,
 } from '@/lib/workItems/statusLadder';
+import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -3012,27 +3015,81 @@ export const workItemsService = {
     // the audit cannot read it as a decision; who pulled the work back is on this
     // transition's own revision row. Placed AFTER the guard, which can only ever
     // refuse a move INTO an owned status — never one of these.
-    if (awaitingGates.length > 0 && !opts.system && !opts.keepPendingQuestions) {
-      const projectStatuses = (statuses ??= await workflowsService.listStatusesByProject(
+    // Computed whether or not anything is awaiting, because the RE-ASK below has to
+    // know it: a move this rule calls a pull-back must not be immediately undone by
+    // a fresh raise (MOTIR-5670).
+    const pullsTheWorkBack =
+      !opts.system &&
+      !opts.keepPendingQuestions &&
+      withdrawsPendingQuestion({
+        fromKey,
+        toKey: toStatusKey,
+        statuses: (statuses ??= await workflowsService.listStatusesByProject(
+          current.projectId,
+          ctx.workspaceId,
+          tx,
+        )),
+        keys: {
+          reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
+          implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
+          approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
+        },
+        system: false,
+      });
+    if (awaitingGates.length > 0 && pullsTheWorkBack) {
+      {
+        await approvalGateRepository.supersedeAllAwaitingByWorkItem(
+          workItemId,
+          // The WORK moved backwards under the question — out of review, or to
+          // Cancelled. Nothing about the design or the pull requests changed
+          // (AMENDMENT 6 Q5).
+          'pulled_back',
+          tx,
+        );
+      }
+    }
+
+    // ⚠️ THE CARD'S OWN STATUS CHANGE RE-ASKS THE PREDICATE (Story MOTIR-5652 ·
+    // Subtask MOTIR-5670), and it is here because a MEASUREMENT said it was owed
+    // rather than because a reading said so — see the note below for what the
+    // measurement falsified.
+    //
+    // A card whose delivery set went green BEFORE it was eligible is asked
+    // nothing by the CI side: `promoteDeliveredCardsOnGreen` filters to
+    // `implemented` / `in_review` / `approved` before it asks anything, and the
+    // verdict has already been delivered. The CI-GREEN LATCH (MOTIR-3006) covers
+    // the ordinary path — a card ARRIVING at `implemented` re-reads its green
+    // verdict and promotes itself — and that is the path a run takes.
+    //
+    // ⚠️ WHAT IT DOES NOT COVER, MEASURED: a card that reaches `in_review`
+    // WITHOUT passing through `implemented`. The latch watches one rung, so the
+    // card lands in review, green, with nothing to press — MOTIR-5652's own
+    // shape, reached by a different road. This closes it for every rung at or
+    // above `implemented`.
+    //
+    // ⚠️ IT ONLY RAISES, AND NOT ON A PULL-BACK. `reconcileGatesFor` never
+    // supersedes (MOTIR-5663), and `pullsTheWorkBack` keeps it off the moves rule 6
+    // has just withdrawn — `in_review → implemented` is one of them, and re-raising
+    // there would defeat rule 6 one statement after it fired. It is idempotent by
+    // construction: a gate that already exists is left exactly as it is, which is
+    // what keeps a status change from churning `subjectVersion` or re-asking a
+    // question somebody has answered.
+    //
+    // In the funnel's own transaction and under the locks it has already taken.
+    if (target.category !== 'done' && !pullsTheWorkBack) {
+      const known = (statuses ??= await workflowsService.listStatusesByProject(
         current.projectId,
         ctx.workspaceId,
         tx,
       ));
-      const keyOf = (key: string) => projectStatuses.find((s) => s.key === key)?.key ?? null;
-      if (
-        withdrawsPendingQuestion({
-          fromKey,
-          toKey: toStatusKey,
-          statuses: projectStatuses,
-          keys: {
-            reviewKey: keyOf('in_review'),
-            implementedKey: keyOf('implemented'),
-            approvedKey: keyOf('approved'),
-          },
-          system: false,
-        })
-      ) {
-        await approvalGateRepository.supersedeAllAwaitingByWorkItem(workItemId, tx);
+      const rank = rankOfStatus(toStatusKey, known, {
+        reviewKey: 'in_review',
+        implementedKey: 'implemented',
+        approvedKey: 'approved',
+      });
+      if (rank >= RUNG_RANK.implemented) {
+        const fresh = await workItemRepository.findById(workItemId, tx);
+        if (fresh) await reconcileGatesFor(fresh, tx);
       }
     }
 

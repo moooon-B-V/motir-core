@@ -155,6 +155,7 @@ export function DevelopmentGateFrame({
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
   const tGate = useTranslations('approvalGate');
+  const tDesign = useTranslations('approvalGate.designResult');
   const router = useRouter();
   // The in-browser path to the status rail (Bug MOTIR-5212) — a no-op outside the item page.
   const { applyOptimisticStatus, clearOptimisticStatus } = useOptimisticStatusWriter();
@@ -510,7 +511,19 @@ export function DevelopmentGateFrame({
           // the audit column itself is untouched.
           gate={{ ...gate, subjectVersion: null }}
           canDecide={read.canDecide}
-          kindLabel={t('kindLabel')}
+          // ⚠️ THE KIND LABEL FOLLOWS THE GATE, not the block (Story MOTIR-5652 ·
+          // Subtask MOTIR-5667; `design-result.md` AMENDMENT 6 Q1). A design card
+          // with commits holds TWO gates and the DESIGN one leads: the frame is its
+          // port, with the pull requests beneath it as what approving will merge.
+          // Band 1 saying *Pull requests* over a design subject is the near miss
+          // this level is about — a question that IS there, wearing the words of a
+          // different one, which a reviewer would answer anyway.
+          //
+          // Band 3 is deliberately UNCHANGED: the verb and the consequence are the
+          // shipped approve-and-merge wording, because one press is what merges the
+          // set (MOTIR-5664), and a second visual language for the same act would be
+          // the duplication this level exists to remove.
+          kindLabel={gate.kind === 'design_result' ? tDesign('kindLabel') : t('kindLabel')}
           subjectMeta={subjectMeta}
           // `data-port` lifts the block's code surfaces to `--el-card` on the port's
           // `--el-surface` (§20 Decisions: the same fill would leave only the edge).
