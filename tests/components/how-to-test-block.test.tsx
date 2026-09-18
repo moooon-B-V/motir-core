@@ -95,10 +95,19 @@ describe("a run's record (Panel 12a)", () => {
     expect(writeText).toHaveBeenLastCalledWith('pnpm dev');
   });
 
-  it('draws no anchor at all, and no verb', () => {
+  it("draws no anchor of its own — every link is the author's, and none is a pull request or a preview", () => {
     const { container } = renderBlock(recordDto());
-    // The retired preview link was the one URL the part drew; the rows keep theirs.
-    expect(container.querySelectorAll('a')).toHaveLength(0);
+    const anchors = [...container.querySelectorAll('a')];
+    // The body autolinks the author's own text (the seed's e-mail address); the
+    // part itself draws none since the preview link was retired with the sub-block.
+    const body = container.querySelector('.motir-how-to-test')!;
+    expect(anchors.every((a) => body.contains(a))).toBe(true);
+    // Parsed, not substring-matched: no anchor's HOST is GitHub's or a preview's.
+    const hosts = anchors.map(
+      (a) => new URL(a.getAttribute('href')!, 'https://motir.test').hostname,
+    );
+    expect(hosts.some((host) => host === 'github.com' || host.endsWith('.github.com'))).toBe(false);
+    expect(hosts.some((host) => host.includes('preview'))).toBe(false);
     expect(screen.queryByRole('button', { name: /approve|merge|request changes/i })).toBeNull();
   });
 
