@@ -1,4 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from '../helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
@@ -236,7 +237,7 @@ describe('project_repository RLS — write isolation', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     // Sanity (as superuser): no smuggled row landed in B's project.
     expect(
@@ -257,7 +258,7 @@ describe('project_repository RLS — write isolation', () => {
           data: { workspaceId: fx.workspaceBId },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
     const a = await adminDb.projectRepo.findUnique({ where: { id: fx.rowAId } });
     expect(a?.workspaceId).toBe(fx.workspaceAId);
   });

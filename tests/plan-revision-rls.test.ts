@@ -1,4 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from './helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
@@ -101,7 +102,7 @@ describe('plan_revision RLS — the gate is the parent plan, not a column on the
           data: { planId: planB.id, changeKind: 'appended', diff: { proposalCount: 1 } },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     // …and nothing landed.
     expect(await adminDb.planRevision.count({ where: { planId: planB.id } })).toBe(1);
@@ -191,7 +192,7 @@ describe('plan_revision RLS — the out-of-band reader (MOTIR-5034)', () => {
           data: { planId: planA.id, changeKind: 'forged', diff: { proposalCount: 1 } },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     expect(await adminDb.planRevision.count({ where: { planId: planA.id } })).toBe(1);
   });

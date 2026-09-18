@@ -1,4 +1,5 @@
 import { Prisma, type WorkItemRevision } from '@/generated/prisma/client';
+import { RLS_DENIAL, isRlsDenial } from '../../helpers/sqlstate';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
@@ -649,7 +650,7 @@ describe('work_item_revision RLS — write isolation (WITH CHECK)', () => {
           },
         }),
       ),
-    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
 
     // Sanity (superuser): nothing landed against W2's item beyond its own
     // 'created' revision.

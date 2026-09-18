@@ -45,6 +45,57 @@
   //      largest single subdirectory) takes the ceiling from 7013 files / 82.8% to
   //      6212 files / 77.3% — 801 files, 5.5 points.
   //
+  // ⚠️ AND THE MODEL PRICES FILES, NOT TYPE INSTANTIATIONS — WHICH IS WHY THIS
+  // CEILING WAS MISREAD TWICE (MOTIR-5687). Everything above is measured and still
+  // true; what it does not carry is a SECOND variable. Four readings of one
+  // unchanged `origin/main` put the tests project at 89.1–90.8% — over the line in
+  // two runs of four, so the lane was passing on GC timing rather than on the tree.
+  // Four more readings of THE SAME TREE put it at 66.3–72.7%. The whole of the
+  // difference is one line in a generated declaration, and `files` is 6891 on both
+  // sides, unchanged:
+  //
+  //     generated/prisma/internal/class.ts
+  //     -  in out OmitOpts extends Prisma.PrismaClientOptions['omit'] = undefined,
+  //     +  in out OmitOpts extends Prisma.PrismaClientOptions['omit'] = Prisma.PrismaClientOptions['omit'],
+  //
+  // That is prisma/prisma#29592, fixing a regression shipped in prisma 7.2.0 and
+  // measured upstream at types +221%, instantiations +164%, memory +32%
+  // (prisma/prisma#29011). A `= undefined` generic default stops the checker
+  // reusing cached instantiations, so every delegate re-instantiates the payload
+  // graph. This repository was pinned at 7.8.0, inside the bad range.
+  //
+  // ⚠️ IT IS ON `~7.9.0`, AND THE TILDE IS THE POINT. 7.9.0 is where the fix
+  // landed, and it is the LAST version that carries it without 7.10.0's changes to
+  // automatic batching and to parameter-chunked statements ("now executed
+  // atomically in a transaction"). On 7.10.0 the approve-to-merge door's
+  // `SELECT … FOR UPDATE` stopped serialising two concurrent webhook deliveries:
+  // `githubReviewSyncStoryGate`'s CONCURRENT-redelivery guard failed 2 of 4 CI runs,
+  // against 20 of 20 green on 7.8.0 — a ~50% race where a pre-existing one would
+  // have shown on main long ago. That is NOT root-caused, so 7.10.0 is held rather
+  // than blamed; a caret would let `pnpm update` walk back into it silently, which
+  // is the whole reason the range is a tilde and not a caret.
+  //
+  // **So `files` is a lower bound on the question, never the whole of it.** A
+  // program can get dramatically cheaper or dearer without gaining or losing a
+  // single file. Two consequences for anyone reading this with a red gate in front
+  // of them:
+  //
+  //   · **A reading that moved while the file count did not is evidence about
+  //     TYPES**, and the instrument for that is `--extendedDiagnostics`'s
+  //     `Instantiations` / `Types` lines, with `--generateTrace` for where — not
+  //     the `files` column. MOTIR-4295 had already measured one instance of this
+  //     (a two-constituent union costing 9.6 s in a single method) and the lesson
+  //     never reached this model.
+  //   · **A wide run-to-run SPREAD is a symptom, not just noise.** The app
+  //     project's 11.7-point spread — which MOTIR-4422 recorded as the tree's
+  //     natural variance, and which this file taught as such — collapsed to 0.4
+  //     points on the same fix. Variance that large was the regression, not the GC.
+  //
+  // The order to work in follows: read `Instantiations` against a known-good tree
+  // FIRST, and reach for a boundary only once the per-file cost is the cost it
+  // ought to be. A boundary drawn over an inflated per-file cost buys a fraction of
+  // what it should and leaves the inflation in place on both sides of the line.
+  //
   // **Price a boundary before you draw it, in one command**: the `files` column
   // `assert-typecheck-headroom.mjs` already prints IS the variable, so a candidate
   // config's file count answers what it would cost. Do not estimate a split from a
