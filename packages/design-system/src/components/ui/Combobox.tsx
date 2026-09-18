@@ -147,6 +147,14 @@ export interface ComboboxProps<T extends string> {
    */
   query?: string;
   onQueryChange?: (query: string) => void;
+  /**
+   * A non-interactive note pinned BELOW the listbox, inside the open menu
+   * (MOTIR-5582 — the Monitoring room's minimum-level control says, at the
+   * action that causes it, that lowering also re-checks earlier issues). It is
+   * not an option: keyboard navigation and the listbox's option indices are
+   * unaffected, and it is announced as ordinary text. Omit it for no note.
+   */
+  footer?: ReactNode;
 }
 
 // Walk up from a node to the nearest ancestor that clips overflow, classifying
@@ -184,6 +192,7 @@ export function Combobox<T extends string>({
   onClose,
   query: controlledQuery,
   onQueryChange,
+  footer,
 }: ComboboxProps<T>) {
   const [open, setOpen] = useState(autoOpen);
   // Server-driven mode (6.9.2): when `onQueryChange` is provided the query is
@@ -578,6 +587,11 @@ export function Combobox<T extends string>({
           })
         )}
       </div>
+      {footer ? (
+        <p className="border-(--el-border-soft) mt-1 max-w-[18rem] border-t px-(--spacing-control-x) pt-2 pb-1 text-xs leading-relaxed text-(--el-text-secondary)">
+          {footer}
+        </p>
+      ) : null}
     </>
   );
 

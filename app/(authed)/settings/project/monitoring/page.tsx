@@ -12,11 +12,13 @@ import {
   buildMonitoringBanner,
   type MonitoringBannerTranslator,
 } from '@/lib/monitors/returnBanner';
+import { MONITOR_ISSUE_RECONCILE_OVERDUE_MS } from '@/lib/jobs/definitions/monitorIssueReconcile';
+import { pollLineState } from '@/lib/monitors/pollLine';
 import { monitorConnectionService } from '@/lib/services/monitorConnectionService';
 import { guardSettingsPage } from '../_guard';
 import { MonitoringLoading } from './_components/MonitoringStates';
 import { MonitoringLoadError } from './_components/MonitoringLoadError';
-import { MonitoringRoom } from './_components/MonitoringRoom';
+import { MonitoringRoom, type PollLineView } from './_components/MonitoringRoom';
 
 // THE MONITORING ROOM (Story MOTIR-4928 · MOTIR-5262). Layout source of truth:
 // `design/monitoring/monitoring-room.mock.html` panels 1, 1b, 2–5, 8, 9 and 10,
@@ -133,11 +135,45 @@ async function MonitoringPaneBody({
     decodeReason: decodeMonitorConnectResult,
   });
 
+  // THE POLL LINE per row (MOTIR-5582, `design-notes.md` §12) — DECIDED here,
+  // against the same server `now`, because the overdue threshold is the
+  // reconciler's own constant and lives beside its cron in a server-only module.
+  // The island receives the decided state with its times already formatted.
+  const absolute = (d: Date) => format.dateTime(d, { dateStyle: 'medium', timeStyle: 'short' });
+  const pollLines: Record<string, PollLineView> = Object.fromEntries(
+    view.connections.map((c) => {
+      const state = pollLineState(c, {
+        now,
+        overdueMs: MONITOR_ISSUE_RECONCILE_OVERDUE_MS,
+        grantDegraded: view.health === 'degraded',
+        grantReason: view.healthReason,
+      });
+      const line: PollLineView =
+        state.kind === 'waiting'
+          ? { kind: 'waiting' }
+          : state.kind === 'ok'
+            ? {
+                kind: 'ok',
+                ago: format.relativeTime(state.checkedAt, now),
+                filedCount: state.filedCount,
+              }
+            : state.kind === 'overdue'
+              ? { kind: 'overdue', since: absolute(state.since) }
+              : {
+                  kind: 'failed',
+                  reason: state.reason,
+                  lastSuccess: state.lastSucceededAt ? absolute(state.lastSucceededAt) : null,
+                };
+      return [c.id, line];
+    }),
+  );
+
   return (
     <MonitoringRoom
       projectKey={projectKey}
       view={view}
       banner={banner}
+      pollLines={pollLines}
       checkedLabel={
         view.healthCheckedAt
           ? t('grant.checked', { when: format.relativeTime(new Date(view.healthCheckedAt), now) })

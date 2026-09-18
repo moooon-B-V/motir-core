@@ -2273,6 +2273,20 @@ export default defineConfig({
         'lib/repositories/monitorConnectionRepository.ts',
         'lib/repositories/monitorInstallationRepository.ts',
         'lib/mappers/monitorMappers.ts',
+        // Story MOTIR-4929 · Subtask MOTIR-5583 — the monitor-INGESTION surface
+        // (the store, the reconciler, the poll, the scheduled job, the room's
+        // poll line). MEASURED on the parent branch before being pinned, over the
+        // story's own suites: every file at 100 on all four axes except
+        // `pollLine.ts` branches (94.7) and `MonitoringRoom.tsx` (96.5 lines /
+        // 97.9 branches / 96.3 functions — the picker's `onBound`, whose bind is
+        // the picker's own suite's). The ingestion routes are not added: a route
+        // glob here also gates the connect story's sibling route files.
+        'lib/monitors/levels.ts',
+        'lib/monitors/pollLine.ts',
+        'lib/repositories/monitorIssueRepository.ts',
+        'lib/services/monitorIngestionService.ts',
+        'lib/jobs/definitions/monitorIssueReconcile.ts',
+        'app/**/settings/project/monitoring/_components/MonitoringRoom.tsx',
         // ── Story MOTIR-4906 · HOW TO TEST per RUN ─────────────────────────────
         // Its story gate (MOTIR-5337). Every file the story ADDED that compiles to
         // something, MEASURED on the parent branch before being pinned below, over
@@ -4737,6 +4751,34 @@ export default defineConfig({
           statements: 90,
         },
         'lib/mappers/monitorMappers.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        // Story MOTIR-4929 · Subtask MOTIR-5583 — the ingestion surface, at the
+        // list's ordinary floor (measured values in the include note above).
+        'lib/monitors/levels.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/pollLine.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/repositories/monitorIssueRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/monitorIngestionService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/monitorIssueReconcile.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/settings/project/monitoring/_components/MonitoringRoom.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-4906 · HOW TO TEST per RUN (Subtask MOTIR-5337) ────────
         // MEASURED on the parent branch before pinning (stmts / branches / funcs /
         // lines). Fourteen files at 100 on all four axes; `howToTestService.ts`

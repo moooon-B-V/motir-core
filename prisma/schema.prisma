@@ -384,6 +384,12 @@ model User {
   // Folders this person created (Story MOTIR-5308 · MOTIR-5312). Restrict,
   // matching `WorkItem.reporter`: the creator is durable attribution.
   createdFolders                   Folder[]                  @relation("FolderCreator")
+  // Monitor connections this person BOUND (Story MOTIR-4926 · MOTIR-4929 ·
+  // MOTIR-5576) — whose identity the reconciler files each monitor bug as.
+  // SetNull, NOT Cascade: removing the person must not remove the binding; the
+  // reconciler reads the null binder and records a named failure telling someone
+  // to re-bind, rather than inventing another identity.
+  boundMonitorConnections          MonitorConnection[]       @relation("MonitorConnectionBinder")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1230,6 +1236,8 @@ model Workspace {
   // BOTH sides per the FK-`@relation` rule.
   monitorInstallations        MonitorInstallation[]
   monitorConnections          MonitorConnection[]
+  // The provider issues those bindings have ingested (MOTIR-4929 · MOTIR-5576).
+  monitorIssues               MonitorIssue[]
   // Issue-import runs + their external-id → work-item map (Story 7.16 · MOTIR-939).
   // Workspace-scoped tenant data — cascade with the workspace.
   imports                     Import[]
@@ -1688,6 +1696,8 @@ model Project {
   // MOTIR-5258) — a SET whose degenerate case is one, never a column on this
   // model. Cascade: the bindings existed only to route this project's errors.
   monitorConnections          MonitorConnection[]
+  // The provider issues ingested into this project (MOTIR-4929 · MOTIR-5576).
+  monitorIssues               MonitorIssue[]
   // Metered CI runs attributed to this project (Story MOTIR-1775 · MOTIR-1896).
   // SetNull, NOT Cascade: the run rows are a spend AUDIT, and Motir was really
   // billed for those minutes whether or not the project still exists — deleting
@@ -2609,6 +2619,12 @@ model WorkItem {
   dispatchRunCards     DispatchRunCard[]
   /// Runs that were pointed AT this card as their scope. Also `SetNull`.
   dispatchRunScopes    DispatchRun[]             @relation("DispatchRunScope")
+
+  // The monitor issues this bug was filed for (MOTIR-4929 · MOTIR-5576). MANY
+  // issues may point at one work item (MOTIR-4932's manual link), one issue at
+  // most one. SetNull on the child: a deleted bug leaves the issue row with a
+  // null pointer, which is how the reconciler tells "deleted" from "never filed".
+  monitorIssues MonitorIssue[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -10244,14 +10260,47 @@ model MonitorConnection {
   /// degraded, which is the exact state it most needs to show.
   externalProjectSlug String @map("external_project_slug")
 
+  // ── INGESTION STATE (Story MOTIR-4929 · Subtask MOTIR-5576) ─────────────────
+  // What the reconciling poll reads and writes on its own binding. Every column
+  // is nullable, and each NULL means something specific rather than "unknown".
+
+  /// The lowest provider level that files a bug (`lib/monitors/levels.ts`).
+  /// `null` means EVERY level qualifies — the shipped default.
+  minimumLevel String? @map("minimum_level")
+
+  /// The newest `lastSeen` the poll has fully reconciled. `null` means "read from
+  /// this binding's `createdAt`" — the NEW-issue rule: nothing from before the
+  /// binding is back-filled. Lowering `minimumLevel` resets it to `null`.
+  lastSeenWatermark DateTime? @map("last_seen_watermark")
+
+  /// The last poll's outcome — what the Monitoring room shows on the row, so a
+  /// reconciler that stopped is visible where a person looks.
+  lastPolledAt        DateTime? @map("last_polled_at")
+  /// `ok` | `failed`; `null` = never polled.
+  lastPollStatus      String?   @map("last_poll_status")
+  lastPollError       String?   @map("last_poll_error")
+  lastPollFiledCount  Int?      @map("last_poll_filed_count")
+  /// When a poll last came back `ok`. Distinct from `lastPolledAt`, which moves on
+  /// a FAILED poll too — so a failing row can still say when it last worked
+  /// (the design delta, MOTIR-5575 §12). `null` = never succeeded.
+  lastPollSucceededAt DateTime? @map("last_poll_succeeded_at")
+
+  /// FK → User.id: the person who BOUND this monitored project, whose identity
+  /// every bug it files is created as. `null` on rows bound before the column
+  /// existed, and on a binder whose account is gone — the reconciler then records
+  /// a named failure rather than substituting anyone.
+  boundByUserId String? @map("bound_by_user_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  /// All three modelled on BOTH sides with the actions the migration SQL uses
+  /// All modelled on BOTH sides with the actions the migration SQL uses
   /// (the FK-`@relation` rule).
   installation MonitorInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
   project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  boundBy      User?               @relation("MonitorConnectionBinder", fields: [boundByUserId], references: [id], onDelete: SetNull)
+  issues       MonitorIssue[]
 
   /// ⚠️ THE UNIQUENESS IS THE DATABASE'S, NOT THE READ'S. Binding a project is a
   /// check-then-write, and two authorisation returns can land at once — so the
@@ -10263,5 +10312,71 @@ model MonitorConnection {
   @@index([workspaceId])
   @@index([installationId])
   @@index([projectId])
+  @@index([boundByUserId])
   @@map("monitor_connection")
+}
+
+/// ONE PROVIDER ISSUE, AS ONE BINDING HAS INGESTED IT (Story MOTIR-4929 ·
+/// Subtask MOTIR-5576) — the link between an error monitor's issue and the `bug`
+/// work item the reconciler filed for it, plus the recurrence facts a thin bug
+/// and a later panel need.
+///
+/// ⚠️ THE DEDUP KEY IS THE PROVIDER'S ISSUE ID, NOT ITS FINGERPRINT. The
+/// fingerprint is the provider's grouping decision and can change under us; the
+/// issue id is stable, and is what the resolve-back call will need anyway.
+model MonitorIssue {
+  id String @id @default(cuid())
+
+  /// FK → MonitorConnection.id — the binding that ingested it.
+  connectionId String @map("connection_id")
+  /// FK → Project.id — denormalised from the binding so a project-scoped read
+  /// needs no join.
+  projectId    String @map("project_id")
+  /// WHOSE this row is — carried on the CHILD for the reason
+  /// `MonitorConnection.workspaceId` gives: an RLS policy should be a column
+  /// comparison, not a correlated EXISTS over the parent.
+  workspaceId  String @map("workspace_id")
+
+  /// The provider's own issue id, as a string. THE DEDUP KEY (see above).
+  externalIssueId String @map("external_issue_id")
+
+  /// The issue's facts as last reconciled (`NormalizedMonitorIssue`).
+  title       String
+  culprit     String?
+  level       String?
+  permalink   String?
+  eventCount  Int      @default(0) @map("event_count")
+  firstSeenAt DateTime @map("first_seen_at")
+  lastSeenAt  DateTime @map("last_seen_at")
+
+  /// FK → WorkItem.id, `onDelete: SetNull`. A DELETED bug leaves this row with a
+  /// null pointer — which is exactly how the reconciler tells "its work item was
+  /// deleted" apart from "never filed" (the second has no identifier below).
+  workItemId String? @map("work_item_id")
+
+  /// The `KEY-<n>` identifier last filed for this issue, KEPT after the work item
+  /// is deleted, so a re-filed bug can name the one it replaces.
+  filedWorkItemIdentifier String? @map("filed_work_item_identifier")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// All modelled on BOTH sides with the actions the migration SQL uses (the
+  /// FK-`@relation` rule).
+  connection MonitorConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace  Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem   WorkItem?         @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+
+  /// ⚠️ THE UNIQUENESS IS THE DATABASE'S, NOT THE READ'S. Two reconcilers of one
+  /// issue can run at once (a slow poll and the next tick); the constraint plus
+  /// the claim-or-lock in `monitorIssueRepository` is what makes a second row —
+  /// and so a second bug — impossible.
+  @@unique([connectionId, externalIssueId])
+  /// NOT unique: many issues may point at one work item (MOTIR-4932's manual
+  /// link), and one issue at most one.
+  @@index([workItemId])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@map("monitor_issue")
 }
