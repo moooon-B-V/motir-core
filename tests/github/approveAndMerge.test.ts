@@ -875,4 +875,71 @@ describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design ga
       'done',
     );
   });
+
+  // Bug MOTIR-5712 — THE SAME PRESS THROUGH THE OTHER DOORS. The To-approve queue now
+  // lists such a card by its design gate ONLY, and its row opens the overlay, whose
+  // design port presses through `decideGate` (as does the REST decide route). Before
+  // this, `decideGate` handed a design approve to the plain door: the design was
+  // decided, the merge gate stayed awaiting, and it came back as a second question.
+  it('decideGate on the design gate is the SAME press — both gates decided, every member merged', async () => {
+    const { item, approval } = await pressable();
+    const { gate: design } = await withDesignGate(item);
+    const host = stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'merged', commitSha: 'merge-api' },
+    });
+
+    const result = await pullRequestMergeService.decideGate(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, decision: 'approve', source: 'api' },
+      fx.ctx,
+    );
+
+    expect(result.gate.id).toBe(design.id);
+    expect((await gateRow(design.id)).state).toBe('approved');
+    expect((await gateRow(approval.id)).state).toBe('approved');
+    expect(host).toHaveBeenCalledTimes(2);
+    expect(result.members.map((m) => m.outcome)).toEqual(['merged', 'merged']);
+  });
+
+  it('decideGate on a design gate with NO merge gate beside it decides the design alone, as before', async () => {
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'A design nobody delivers' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
+    const { gate: design } = await withDesignGate(item);
+    const host = stubHost({});
+
+    const result = await pullRequestMergeService.decideGate(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: design.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
+
+    expect((await gateRow(design.id)).state).toBe('approved');
+    expect(result.members).toEqual([]);
+    expect(host).not.toHaveBeenCalled();
+  });
+
+  it('decideGate REQUEST CHANGES on the design gate decides only the design — nothing is merged', async () => {
+    const { item, approval } = await pressable();
+    const { gate: design } = await withDesignGate(item);
+    const host = stubHost({});
+
+    const result = await pullRequestMergeService.decideGate(
+      {
+        stamp: DECIDED_WITHOUT_A_READER,
+        gateId: design.id,
+        decision: 'request_changes',
+        noteMd: 'The empty state is missing.',
+        source: 'ui',
+      },
+      fx.ctx,
+    );
+
+    expect((await gateRow(design.id)).state).toBe('changes_requested');
+    expect((await gateRow(approval.id)).state).toBe('awaiting');
+    expect(result.members).toEqual([]);
+    expect(host).not.toHaveBeenCalled();
+  });
 });
