@@ -51,6 +51,7 @@ function delivery(
       number,
       state,
       ci: null,
+      headSha: null,
       url: `https://github.com/${repoLabel}/pull/${number}`,
       githubReview: null,
     },

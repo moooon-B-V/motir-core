@@ -5,23 +5,14 @@ import type { Prisma } from '@/generated/prisma/client';
 // repository's own host reports (Story MOTIR-4906 · Subtask MOTIR-5329).
 //
 // Writes run under withSystemContext from the webhook services (a delivery has
-// no tenant session); reads run under the reader's workspace context. Both
-// take `tx`, which is what binds the GUC the table's policies read.
-
-/** One stored deployment status, as every read returns it. */
-export interface RepoDeploymentRow {
-  id: string;
-  workspaceId: string;
-  repoId: string;
-  provider: string;
-  providerDeploymentId: string;
-  commitSha: string;
-  ref: string;
-  environment: string;
-  state: string;
-  environmentUrl: string | null;
-  occurredAt: Date;
-}
+// no tenant session), taking `tx`, which is what binds the GUC the table's
+// policies read.
+//
+// ⚠️ NOTHING IN THE PRODUCT READS THIS TABLE ANY MORE (MOTIR-5691). Its two reads
+// fed HOW TO TEST's per-repository preview, which `design/github/design-notes.md`
+// § 25 retired: a preview is per SYSTEM — one configured environment for every
+// work item — not a per-head derivation. The webhook keeps recording, so the
+// history is there for whichever card makes preview a per-system setting.
 
 /** What one delivery writes. `environmentUrl` must already be sanitised. */
 export interface RepoDeploymentUpsert {
@@ -36,12 +27,6 @@ export interface RepoDeploymentUpsert {
   environmentUrl: string | null;
   occurredAt: Date;
 }
-
-const SELECT_COLUMNS = `
-  "id", "workspace_id" AS "workspaceId", "repo_id" AS "repoId", "provider",
-  "provider_deployment_id" AS "providerDeploymentId", "commit_sha" AS "commitSha",
-  "ref", "environment", "state", "environment_url" AS "environmentUrl",
-  "occurred_at" AS "occurredAt"`;
 
 export const repoDeploymentRepository = {
   /**
@@ -91,54 +76,5 @@ export const repoDeploymentRepository = {
       RETURNING "id"
     `;
     return rows[0]?.id ?? null;
-  },
-
-  /**
-   * The LATEST status per `(repoId, commitSha, environment)` for a batch of
-   * `(repoId, commitSha)` pairs — ONE query however many pairs. The HOW TO TEST
-   * read (MOTIR-5333) keys a pull request's preview on its head commit.
-   */
-  async listLatestByCommits(
-    pairs: ReadonlyArray<{ repoId: string; commitSha: string }>,
-    tx: Prisma.TransactionClient,
-  ): Promise<RepoDeploymentRow[]> {
-    if (pairs.length === 0) return [];
-    const repoIds = pairs.map((p) => p.repoId);
-    const shas = pairs.map((p) => p.commitSha);
-    return tx.$queryRawUnsafe<RepoDeploymentRow[]>(
-      `SELECT DISTINCT ON ("repo_id", "commit_sha", "environment") ${SELECT_COLUMNS}
-         FROM "repo_deployment"
-        WHERE ("repo_id", "commit_sha") IN (
-          SELECT * FROM unnest($1::text[], $2::text[])
-        )
-        ORDER BY "repo_id", "commit_sha", "environment", "occurred_at" DESC, "updated_at" DESC`,
-      repoIds,
-      shas,
-    );
-  },
-
-  /**
-   * The LATEST status per `(repoId, ref, environment)` for a batch of
-   * `(repoId, ref)` pairs — ONE query. The read falls back to this when a pull
-   * request's head commit is not yet known (no check has reported), because
-   * `github_pull_request` stores the head REF but no head sha.
-   */
-  async listLatestByRefs(
-    pairs: ReadonlyArray<{ repoId: string; ref: string }>,
-    tx: Prisma.TransactionClient,
-  ): Promise<RepoDeploymentRow[]> {
-    if (pairs.length === 0) return [];
-    const repoIds = pairs.map((p) => p.repoId);
-    const refs = pairs.map((p) => p.ref);
-    return tx.$queryRawUnsafe<RepoDeploymentRow[]>(
-      `SELECT DISTINCT ON ("repo_id", "ref", "environment") ${SELECT_COLUMNS}
-         FROM "repo_deployment"
-        WHERE ("repo_id", "ref") IN (
-          SELECT * FROM unnest($1::text[], $2::text[])
-        )
-        ORDER BY "repo_id", "ref", "environment", "occurred_at" DESC, "updated_at" DESC`,
-      repoIds,
-      refs,
-    );
   },
 };

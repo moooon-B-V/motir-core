@@ -9,14 +9,7 @@ import type {
   DevelopmentGateRead,
 } from '@/components/github/DevelopmentGateFrame';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
-import {
-  AWAITING_MERGE_GATE,
-  CORE_PR,
-  GATEWAY_PR,
-  coreRepo,
-  gatewayRepo,
-  recordDto,
-} from '../helpers/howToTestFixtures';
+import { AWAITING_MERGE_GATE, CORE_PR, GATEWAY_PR, recordDto } from '../helpers/howToTestFixtures';
 
 // THE DEVELOPMENT FRAME GETS ITS VERBS (Story MOTIR-4909 · Subtask MOTIR-5484;
 // `design/github/design-notes.md` §20 *The verbs and their states*, Panels 12p–12w).
@@ -58,7 +51,7 @@ const APPROVED: ApprovalGateDTO = {
   decidedAt: '2026-09-15T14:22:00.000Z',
   outcomeRef: 'approved',
 };
-const TWO_REPO_STORY = recordDto({ repos: [coreRepo(), gatewayRepo()] });
+const TWO_REPO_STORY = recordDto();
 
 function fakeActions(overrides: Partial<Record<keyof DevelopmentGateActions, unknown>> = {}) {
   return {

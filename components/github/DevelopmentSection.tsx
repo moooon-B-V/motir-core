@@ -547,12 +547,7 @@ export function DevelopmentSectionBody({
   // The big EmptyState is for an item with NOTHING to show. An item that carries
   // repositories always has rows — the awaiting ones — so it never lands here.
   const nothingLinked = rows.length === 0 && awaiting.length === 0;
-  const howToTestPart = howToTest ? (
-    <HowToTestBlock
-      howToTest={howToTest}
-      pullRequestRows={rows.map((row) => ({ id: row.pr.id, repo: row.repo, number: row.number }))}
-    />
-  ) : null;
+  const howToTestPart = howToTest ? <HowToTestBlock howToTest={howToTest} /> : null;
   const rowsPart = (
     <>
       {/* `@container`: the rows wrap their pill group below a 30rem COLUMN, not a
@@ -645,15 +640,13 @@ export function DevelopmentSectionBody({
   // pull request the run delivered, never one per row. A decided gate keeps its frame,
   // because what the merges did is drawn after the decision (MOTIR-5484).
   if (mergeGate) {
-    // The head each row's pull request is at NOW, from How to test's own read — what
-    // names the member a push moved when the question is withdrawn (state `G`).
-    const currentHeads = (howToTest?.repos ?? []).flatMap((repo) => {
-      const ref = repo.pullRequest;
-      const row = ref ? rows.find((r) => r.pr.id === ref.id) : undefined;
-      return row && ref?.headSha
-        ? [{ repo: row.repo, number: row.number, headSha: ref.headSha }]
-        : [];
-    });
+    // The head each row's pull request is at NOW — what names the member a push moved
+    // when the question is withdrawn (state `G`). Read off the ROW, which is where a
+    // pull request's head belongs (MOTIR-5691); it used to come from How to test's
+    // per-repository read, which only knew the pull requests the record covered.
+    const currentHeads = rows.flatMap((row) =>
+      row.pr.headSha ? [{ repo: row.repo, number: row.number, headSha: row.pr.headSha }] : [],
+    );
     return (
       <DevelopmentGateFrame
         read={mergeGate}

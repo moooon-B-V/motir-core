@@ -52,6 +52,7 @@ const PR: LinkedPullRequestDto = {
   number: 131,
   state: 'merged',
   ci: 'passing',
+  headSha: null,
   url: 'https://github.com/moooon/motir-core/pull/131',
   githubReview: null,
 };
