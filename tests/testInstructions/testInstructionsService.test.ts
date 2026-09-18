@@ -155,6 +155,47 @@ async function finish(runId: string): Promise<void> {
   await adminDb.dispatchRun.update({ where: { id: runId }, data: { status: 'succeeded' } });
 }
 
+let prNumber = 1;
+/**
+ * A pull request in `repoId`, LINKED to `workItemId` by a delivery row, with one
+ * check row per entry in `checks` — the shape the draft read binds a suggested
+ * section to. No check rows means no head has been reported, which is the case
+ * that must suggest a NULL commit rather than inventing one.
+ */
+async function linkedPr(
+  fx: WorkItemFixture,
+  workItemId: string,
+  repoId: string,
+  headRef: string,
+  checks: Array<{ name: string; conclusion: string; sha: string }> = [],
+) {
+  const row = await adminDb.githubPullRequest.create({
+    data: {
+      repoId,
+      number: prNumber++,
+      state: 'open',
+      merged: false,
+      headRef,
+      baseRef: 'main',
+      title: 'A change',
+    },
+  });
+  await adminDb.workItemDelivery.create({
+    data: { workspaceId: fx.workspaceId, workItemId, githubPullRequestId: row.id, repoId },
+  });
+  for (const c of checks) {
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: row.id,
+        commitSha: c.sha,
+        checkName: c.name,
+        conclusion: c.conclusion,
+      },
+    });
+  }
+  return row;
+}
+
 async function rowsFor(workItemId: string) {
   return adminDb.testInstructions.findMany({
     where: { workItemId },
@@ -422,6 +463,71 @@ describe('testInstructionsService.publish', () => {
   });
 });
 
+// ── A BODY-ONLY record (Subtask MOTIR-5689) ────────────────────────────────
+//
+// `approval-gates.md` §9's 2026-09-17 amendment, point 3: Motir does not decide
+// how a team works. A team that keeps its pull requests on the host and its work
+// items here links nothing, so a person's How to test has no repository to name —
+// and until this card `publish` refused the save outright.
+//
+// The cases are chosen so the refusal cannot come back unnoticed: the card is
+// given a CONNECTED repository and a LINKED pull request, so an implementation
+// that quietly filled `repos` from what it could find would answer with a
+// section and fail, rather than passing for the wrong reason.
+
+describe('publish accepts a BODY-ONLY record (MOTIR-5689)', () => {
+  it('writes the record with zero repository rows, and reads back `repos: []`', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Body only' });
+    const web = await connectRepo(fx, 'web');
+    await linkedPr(fx, card.id, web, 'subtask/MOTIR-5689-web', [
+      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
+    ]);
+
+    const { record, created } = await testInstructionsService.publish(
+      input(card.id, web, { repos: [] }),
+      fx.ctx,
+    );
+    expect(created).toBe(true);
+    expect(record.bodyMd).toBe(BODY);
+    expect(record.repos).toEqual([]);
+
+    const rows = await rowsFor(card.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.repos).toEqual([]);
+  });
+
+  it('an identical re-save is still idempotent — two empty lists compare equal', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Saved twice' });
+    await connectRepo(fx, 'web');
+
+    const first = await testInstructionsService.publish(
+      input(card.id, 'unused', { repos: [] }),
+      fx.ctx,
+    );
+    const second = await testInstructionsService.publish(
+      input(card.id, 'unused', { repos: [] }),
+      fx.ctx,
+    );
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.record.id).toBe(first.record.id);
+    expect(await rowsFor(card.id)).toHaveLength(1);
+  });
+
+  it('the BODY is still required — a record with neither a body nor a section is nothing at all', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Empty' });
+    await expect(
+      testInstructionsService.publish(
+        input(card.id, 'unused', { bodyMd: '   ', repos: [] }),
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(TestInstructionsInvalidFieldError);
+  });
+});
+
 describe('normalizeTestInstructionsContent — every cap is a typed refusal naming the field', () => {
   const base = input('wi', 'repo');
   const long = (n: number) => 'x'.repeat(n);
@@ -476,9 +582,22 @@ describe('normalizeTestInstructionsContent — every cap is a typed refusal nami
     expect(out.bodyMd).toBe(body);
   });
 
+  // ⚠️ AN EMPTY SECTION LIST IS LEGAL (MOTIR-5689). It was a refusal — *at least
+  // one* — which was right while an agent was the only author. A person's form
+  // has no repository control, so on a card with nothing linked there is nothing
+  // to give, and the refusal made the form unsaveable. Both spellings of absent
+  // are covered: the list omitted, and the list present and empty.
+  it.each([
+    ['omitted', undefined],
+    ['present and empty', [] as const],
+  ])('accepts a body-only record — `repos` %s', (_name, repos) => {
+    const out = normalizeTestInstructionsContent({ ...base, repos });
+    expect(out.repos).toEqual([]);
+    expect(out.bodyMd).toBe(base.bodyMd.trim());
+  });
+
   it.each([
     ['a blank body', { bodyMd: '  \n ' }, 'bodyMd'],
-    ['no repository sections', { repos: [] }, 'repos'],
     [
       'a non-hex commit sha',
       { repos: [section('repo', { commitSha: 'not-a-sha' })] },
@@ -623,21 +742,28 @@ describe('toTestInstructionsDto', () => {
 });
 
 describe('the defensive arms the story gate measured (MOTIR-5337)', () => {
-  it('an ABSENT body or repos list is the typed refusal naming the field, never a TypeError', () => {
+  // ⚠️ The repos half of this arm CHANGED VERDICT in MOTIR-5689, and the
+  // guarantee it was measuring did not. What MOTIR-5337 pinned is that an absent
+  // list is HANDLED — never a `Cannot read properties of undefined` escaping as a
+  // 500. It was handled by a typed refusal while a section was mandatory; it is
+  // handled by normalising to `[]` now that one is not. The body half is
+  // untouched: a record with no body is still nothing at all.
+  it('an ABSENT body is the typed refusal naming the field, and an absent repos list is [] — never a TypeError', () => {
     const base = input('wi', 'repo');
-    expect(() =>
-      normalizeTestInstructionsContent({ ...base, bodyMd: undefined as unknown as string }),
-    ).toThrow(TestInstructionsInvalidFieldError);
-    let err: unknown;
+    let bodyErr: unknown;
     try {
-      normalizeTestInstructionsContent({
-        ...base,
-        repos: undefined as unknown as PublishTestInstructionsRepoInput[],
-      });
+      normalizeTestInstructionsContent({ ...base, bodyMd: undefined as unknown as string });
     } catch (e) {
-      err = e;
+      bodyErr = e;
     }
-    expect((err as TestInstructionsInvalidFieldError).field).toBe('repos');
+    expect(bodyErr).toBeInstanceOf(TestInstructionsInvalidFieldError);
+    expect((bodyErr as TestInstructionsInvalidFieldError).field).toBe('bodyMd');
+
+    const out = normalizeTestInstructionsContent({
+      ...base,
+      repos: undefined as unknown as PublishTestInstructionsRepoInput[],
+    });
+    expect(out.repos).toEqual([]);
   });
 
   it('the current-record read of an item that does not exist is the typed not-found', async () => {
@@ -658,5 +784,172 @@ describe('the defensive arms the story gate measured (MOTIR-5337)', () => {
     const err = new TestInstructionsRepoNotInProjectError('acme/web', []);
     expect(err.message).toContain('the project has no connected repositories');
     expect(err.message).not.toContain('Use one of');
+  });
+});
+
+// ── the DRAFT a person's form opens on (Story MOTIR-5450 · Subtask MOTIR-5453) ──
+//
+// `approval-gates.md` §9's 2026-09-17 amendment, point 2: what a person writes
+// is the INSTRUCTIONS, and the repository sections are DERIVED from the card's
+// linked pull requests — a person never sets them. So the draft is the two
+// fields the form has, and the cases are chosen so a draft that still reaches
+// for repository data fails rather than merely carrying a spare key:
+//
+//   - both cases assert the draft's KEY SET exactly, so a `sections` or
+//     `projectRepos` left on it is a failure and not an unnoticed extra;
+//   - the ADDING case is given a linked pull request WITH a green check AND two
+//     connected project repositories — every input the retired picker read — so
+//     an implementation still walking them has something to find and still must
+//     return nothing but `''` and `null`;
+//   - the EDITING case's record is published over a repository whose live head
+//     DIFFERS from the stored commit, so nothing about the record's body or
+//     preview can come from the pull request;
+//   - the permission case uses a CUSTOM role that can browse but not edit, and
+//     asserts the same actor CAN read — so a `project:browse` gate would pass it.
+
+describe('testInstructionsService.getDraftForWorkItem', () => {
+  it('EDITING: the current record fills the form — the body and the preview path, and NOTHING else', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'A story run' });
+    const web = await connectRepo(fx, 'web');
+    const api = await connectRepo(fx, 'api');
+    // A live pull request whose head DIFFERS from the record's stored commit.
+    await linkedPr(fx, story.id, web, 'parent/MOTIR-1-web', [
+      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
+    ]);
+    await testInstructionsService.publish(
+      input(story.id, web, { repos: [section(web), section(api, { commitSha: SHA_B })] }),
+      fx.ctx,
+    );
+
+    const draft = await testInstructionsService.getDraftForWorkItem(story.id, fx.ctx);
+    expect(draft.bodyMd).toBe(BODY);
+    expect(draft.previewPath).toBe('/items/ACME-7');
+    expect(Object.keys(draft).sort()).toEqual(['bodyMd', 'previewPath']);
+  });
+
+  it('ADDING: no record — an EMPTY form, even with a linked pull request and connected repositories to walk', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'No record yet' });
+    const web = await connectRepo(fx, 'web');
+    await connectRepo(fx, 'api');
+    await linkedPr(fx, card.id, web, 'subtask/MOTIR-2-web', [
+      { name: 'Vitest', conclusion: 'success', sha: SHA_B },
+    ]);
+
+    const draft = await testInstructionsService.getDraftForWorkItem(card.id, fx.ctx);
+    expect(draft.bodyMd).toBe('');
+    expect(draft.previewPath).toBeNull();
+    expect(Object.keys(draft).sort()).toEqual(['bodyMd', 'previewPath']);
+  });
+
+  it('refuses an actor whose CUSTOM role can browse but lacks work_item:edit — the draft exists only for someone who may SAVE it', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Guarded' });
+    await connectRepo(fx, 'web');
+
+    const viewer = await usersService.createUser({
+      email: 'draft-viewer@ex.com',
+      password: 'hunter2hunter2',
+      name: 'Viewer',
+    });
+    await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
+    const browseOnly = await projectRoleDefinitionService.create({
+      projectId: fx.projectId,
+      ctx: fx.ctx,
+      name: 'Browse only',
+      permissions: ['project:browse', 'comment:add'],
+    });
+    await projectMembersService.addMember({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: viewer.id,
+      role: 'member',
+    });
+    await projectMembersService.setRole({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: viewer.id,
+      role: browseOnly.id,
+    });
+    const viewerCtx = { userId: viewer.id, workspaceId: fx.workspaceId };
+
+    // The control: the same actor CAN read, so the refusal below is about edit.
+    await expect(
+      testInstructionsService.getCurrentForWorkItem(card.id, viewerCtx),
+    ).resolves.toBeNull();
+
+    const err = await testInstructionsService
+      .getDraftForWorkItem(card.id, viewerCtx)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionDeniedError);
+    expect((err as PermissionDeniedError).permission).toBe('work_item:edit');
+  });
+
+  it('refuses an unknown work item', async () => {
+    const fx = await makeWorkItemFixture();
+    await expect(
+      testInstructionsService.getDraftForWorkItem('does-not-exist', fx.ctx),
+    ).rejects.toBeInstanceOf(TestInstructionsWorkItemNotFoundError);
+  });
+});
+
+describe('the PARITY path — one writer, two author kinds (MOTIR-5450)', () => {
+  it('a PERSON saving through `publish` writes `dispatchRunId: null` and `publishedById` that person, while a RUN in flight is attributed to the run', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Both authors' });
+    const web = await connectRepo(fx, 'web');
+    // A dispatch run IS running against this card — so `dispatchRunId: null`
+    // below is the flag's doing, not the absence of a run to attribute to.
+    const runId = await runningRunFor(fx, card.id);
+
+    const person = await testInstructionsService.publish(
+      input(card.id, web, { attributeToRunningDispatch: false }),
+      fx.ctx,
+    );
+    expect(person.created).toBe(true);
+    expect(person.record).toMatchObject({
+      dispatchRunId: null,
+      publishedById: fx.ctx.userId,
+      isCurrent: true,
+    });
+
+    const agent = await testInstructionsService.publish(
+      input(card.id, web, {
+        attributeToRunningDispatch: true,
+        bodyMd: `${BODY}\n\nWritten by the run.`,
+      }),
+      fx.ctx,
+    );
+    expect(agent.record).toMatchObject({ dispatchRunId: runId, isCurrent: true });
+
+    // ONE record table, one writer: the person's row is history, not a parallel
+    // shape, and the two differ only in who is recorded as the author.
+    const rows = await rowsFor(card.id);
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((r) => r.isCurrent)).toHaveLength(1);
+    expect(rows.map((r) => r.dispatchRunId)).toEqual([null, runId]);
+    await finish(runId);
+  });
+
+  it("a person's identical re-save writes nothing — the same idempotency an agent's retry gets", async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Re-save' });
+    const web = await connectRepo(fx, 'web');
+
+    const first = await testInstructionsService.publish(
+      input(card.id, web, { attributeToRunningDispatch: false }),
+      fx.ctx,
+    );
+    const second = await testInstructionsService.publish(
+      input(card.id, web, { attributeToRunningDispatch: false }),
+      fx.ctx,
+    );
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.record.id).toBe(first.record.id);
+    expect(await rowsFor(card.id)).toHaveLength(1);
   });
 });

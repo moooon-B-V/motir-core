@@ -48,6 +48,22 @@ vi.mock('@/app/(authed)/items/[key]/_components/AcceptancePanel', () => ({
 vi.mock('@/app/(authed)/items/[key]/_components/DesignResultSection', () => ({
   DesignResultSection: () => null,
 }));
+// The How-to-test write doors mount a provider that calls `useRouter` (the
+// save's `router.refresh()`), and happy-dom has no app router. The REAL provider
+// is kept — the doors are part of what this seam renders now (MOTIR-5455) — and
+// only the router is stubbed, so a door that stopped rendering would still fail
+// here rather than be mocked out of view.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({
+    refresh: vi.fn(),
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+  }),
+}));
 vi.mock('@/app/(authed)/items/[key]/_components/DevelopmentLinkControl', () => ({
   DevelopmentLinkProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   LinkPullRequestDoor: () => null,

@@ -1798,14 +1798,24 @@ to `implemented`, or before a story/scoped run's pull requests are marked ready.
 Do **not** include the branch fetch — Motir composes it from each pull request's
 own `headRef`.
 
-| Input               | Type   | Required | Notes                                                                                     |
-| ------------------- | ------ | -------- | ----------------------------------------------------------------------------------------- |
-| `key`               | string | yes      | The run target's identifier, e.g. `ACME-7`.                                               |
-| `bodyMd`            | string | yes      | Markdown, not blank, at most 32 KiB (UTF-8 bytes). Stored as written, trimmed.            |
-| `repos`             | array  | yes      | One `{ repo, commitSha }` per repository the run pushed to; at most 8.                    |
-| `repos[].repo`      | string | yes      | `name` or `owner/name`; one of the item's project repositories, and each at most once.    |
-| `repos[].commitSha` | string | yes      | That repository's pushed head commit (7–64 hex).                                          |
-| `previewPath`       | string | no       | A PATH on the preview host starting with a single `/`, e.g. `/items/ACME-7`; never a URL. |
+**`repos` is OPTIONAL, and that is not an invitation to skip it** (MOTIR-5689).
+It became optional because a PERSON writes How to test through the same writer,
+from a form with no repository control — the repositories a person's record
+covers are derived from the card's linked pull requests
+(`docs/decisions/approval-gates.md` §9's 2026-09-17 amendment, point 2). A team
+that keeps its pull requests on the host links nothing, so its record carries no
+section, and a refusal there made the form unsaveable. An AGENT knows exactly
+what it pushed to, and its record is the evidence for the delivery set a person
+approves — so send one entry per repository.
+
+| Input               | Type   | Required | Notes                                                                                                                                                                                            |
+| ------------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `key`               | string | yes      | The run target's identifier, e.g. `ACME-7`.                                                                                                                                                      |
+| `bodyMd`            | string | yes      | Markdown, not blank, at most 32 KiB (UTF-8 bytes). Stored as written, trimmed.                                                                                                                   |
+| `repos`             | array  | no       | One `{ repo, commitSha }` per repository the run pushed to; at most 8. **Optional only because a PERSON writing from the form names none — as an agent, SEND ONE PER REPOSITORY YOU PUSHED TO.** |
+| `repos[].repo`      | string | yes      | `name` or `owner/name`; one of the item's project repositories, and each at most once.                                                                                                           |
+| `repos[].commitSha` | string | yes      | That repository's pushed head commit (7–64 hex).                                                                                                                                                 |
+| `previewPath`       | string | no       | A PATH on the preview host starting with a single `/`, e.g. `/items/ACME-7`; never a URL.                                                                                                        |
 
 **Behaviour.** A run target holds ONE current record — the newest run's — and
 keeps every earlier run's as history. The owing dispatch run is resolved
@@ -1819,13 +1829,13 @@ commitSha }], bodyBytes, created, isCurrent, dispatchRunId, createdAt }`.
 
 **Refusals** — each a typed code whose message names what to fix:
 
-| Refusal                                 | When                                                                                                                |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `TEST_INSTRUCTIONS_REPO_NOT_IN_PROJECT` | A `repos[].repo` is not one of the project's repositories (or a bare name is ambiguous). Lists the valid set.       |
-| `TEST_INSTRUCTIONS_CAP_EXCEEDED`        | A field is over its limit — the message names the field and the limit. Never truncated.                             |
-| `TEST_INSTRUCTIONS_INVALID_FIELD`       | A malformed field: a blank `bodyMd`, no `repos`, a repository twice, a non-hex `commitSha`, a URL as `previewPath`. |
-| `PERMISSION_DENIED`                     | The token or the member's role lacks `work_item:edit`.                                                              |
-| unknown / cross-workspace `key`         | A 404, indistinguishable from a work item the token cannot reach.                                                   |
+| Refusal                                 | When                                                                                                          |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `TEST_INSTRUCTIONS_REPO_NOT_IN_PROJECT` | A `repos[].repo` is not one of the project's repositories (or a bare name is ambiguous). Lists the valid set. |
+| `TEST_INSTRUCTIONS_CAP_EXCEEDED`        | A field is over its limit — the message names the field and the limit. Never truncated.                       |
+| `TEST_INSTRUCTIONS_INVALID_FIELD`       | A malformed field: a blank `bodyMd`, a repository twice, a non-hex `commitSha`, a URL as `previewPath`.       |
+| `PERMISSION_DENIED`                     | The token or the member's role lacks `work_item:edit`.                                                        |
+| unknown / cross-workspace `key`         | A 404, indistinguishable from a work item the token cannot reach.                                             |
 
 **Permission** — `work_item:edit`, the key the evidence publishers above assert
 and one `CLI_TOKEN_GRANT` already carries. The grant is **not** widened.

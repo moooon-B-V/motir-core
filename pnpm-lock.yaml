@@ -77,6 +77,9 @@ importers:
       '@tiptap/core':
         specifier: ^3.24.0
         version: 3.24.0(@tiptap/pm@3.24.0)
+      '@tiptap/extension-code-block':
+        specifier: ^3.24.0
+        version: 3.24.0(@tiptap/core@3.24.0(@tiptap/pm@3.24.0))(@tiptap/pm@3.24.0)
       '@tiptap/extension-image':
         specifier: ^3.24.0
         version: 3.24.0(@tiptap/core@3.24.0(@tiptap/pm@3.24.0))

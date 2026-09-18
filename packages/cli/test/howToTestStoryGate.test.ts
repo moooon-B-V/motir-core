@@ -50,6 +50,7 @@ const BODY = [
 
 const record = (dispatchRunId: string, bodyMd: string): HowToTestRecord => ({
   dispatchRunId,
+  author: { kind: 'run', runId: dispatchRunId, label: `motir run · ${dispatchRunId}` },
   createdAt: '2026-09-13T12:30:00.000Z',
   bodyMd,
   previewPath: '/items/PROD-1',

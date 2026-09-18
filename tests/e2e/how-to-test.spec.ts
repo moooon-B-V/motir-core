@@ -159,13 +159,25 @@ test.describe('a story is tested from one Development block', () => {
       await expect(port.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
       await expect(card.getByText('Awaiting you', { exact: true })).toBeVisible();
 
-      // How to test carries NO control of its own: every button in it is a copy
-      // control.
+      // ⚠️ AMENDED BY MOTIR-5455, which is the change and not a drift. This
+      // step used to assert that How to test carries NO control of its own —
+      // every button in it a copy control. It carries exactly ONE now: the
+      // **Edit** door, in the part head, offered to an actor holding
+      // `work_item:edit` on the run target (§24 panel 13a, decision 3). A
+      // person may edit a RUN's record, which is what this seeded record is.
+      //
+      // Asserted as a SET rather than as a count, so the next control to appear
+      // here names itself instead of moving a number: four copy controls plus
+      // Edit, and nothing else.
       const part = howToTest(page);
       const buttons = part.getByRole('button');
       const copies = part.getByRole('button', { name: 'Copy code', exact: true });
       await expect(copies).toHaveCount(4);
-      await expect(buttons).toHaveCount(4);
+      await expect(part.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(1);
+      await expect(buttons).toHaveCount(5);
+      // And the door is the only one: no repository or commit control reached
+      // this part with it (§24, decision 8b).
+      await expect(part.getByRole('combobox')).toHaveCount(0);
       // The decision verbs belong to the FRAME, once each, for the person it is
       // routed to (MOTIR-4909 registered the kind). Until then this read "no
       // decision verb exists anywhere in the card"; that is the one assertion

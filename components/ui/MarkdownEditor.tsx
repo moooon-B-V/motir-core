@@ -33,6 +33,7 @@ import {
   type MentionWiring,
   type WorkItemMentionSearch,
 } from './markdownEditorMentions';
+import { buildCodeBlockWithLanguage } from './markdownEditorCodeBlock';
 import './markdown-editor.css';
 
 // MarkdownEditor — the WYSIWYG editor over Story 1.4's `descriptionMd` storage
@@ -81,13 +82,28 @@ type Size = 'compact' | 'min' | 'full';
  * the UNIFIED `@` (people + work items) and the `workItemMention` node is
  * registered so `[<KEY>](motir:<id>)` tokens round-trip too; without it the
  * schema is exactly the pre-5.8.5 one (the token degrades to plain text).
+ *
+ * `codeLanguageLabel` (Subtask MOTIR-5458) swaps StarterKit's code block for the
+ * SAME node carrying a language field (`markdownEditorCodeBlock.ts`). The node
+ * name, its attributes, its input rules and its serialization are unchanged —
+ * only a node view is added — so a document round-trips identically with the
+ * field on or off, and every existing consumer is untouched.
  */
-export function buildEditorExtensions(opts?: { mentions?: MentionWiring }) {
+export function buildEditorExtensions(opts?: {
+  mentions?: MentionWiring;
+  codeLanguageLabel?: string;
+}) {
+  const codeLanguageLabel = opts?.codeLanguageLabel;
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
       link: { openOnClick: false },
+      // The language field replaces StarterKit's own code block with the same
+      // node plus a node view (MOTIR-5458) — never both, which would be a
+      // duplicate extension name.
+      ...(codeLanguageLabel === undefined ? {} : { codeBlock: false as const }),
     }),
+    ...(codeLanguageLabel === undefined ? [] : [buildCodeBlockWithLanguage(codeLanguageLabel)]),
     Image.configure({ inline: false, allowBase64: false }),
     TaskList,
     TaskItem.configure({ nested: true }),
@@ -180,6 +196,19 @@ export interface MarkdownEditorProps {
    * `[<KEY>](motir:<workItemId>)`.
    */
   workItemSearch?: WorkItemMentionSearch;
+  /**
+   * Show a code block's LANGUAGE as a field on the focused block (Subtask
+   * MOTIR-5458; `design/github/design-notes.md` §24, panel 13b). Opt-in, so
+   * every other editor surface renders exactly as it did: the field exists
+   * because How to test's rendered blocks print the fence's language above the
+   * code, and a person writing them must be able to set what an agent writes.
+   *
+   * It adds no node and no attribute — `language` is CodeBlock's own, set by
+   * the ```` ```sh ```` input rule and serialized as the fence's info string
+   * whether or not this is on. Read at mount (the schema is fixed per editor
+   * instance), like `mentionCandidates`.
+   */
+  codeLanguage?: boolean;
 }
 
 export function MarkdownEditor({
@@ -193,6 +222,7 @@ export function MarkdownEditor({
   readOnly = false,
   mentionCandidates,
   workItemSearch,
+  codeLanguage = false,
 }: MarkdownEditorProps) {
   const theme = useOptionalTheme();
   const colorMode = theme?.resolvedPattern ?? 'light';
@@ -252,11 +282,17 @@ export function MarkdownEditor({
         }
       : undefined,
   );
+  // The code block's language label, captured at mount for the same reason the
+  // mention labels are: the extension list is fixed per editor instance, so the
+  // locale a node view renders stays stable for that editor's lifetime.
+  const [codeLanguageLabel] = useState<string | undefined>(() =>
+    codeLanguage ? tMention('codeLanguage') : undefined,
+  );
 
   const editor = useEditor({
     immediatelyRender: false,
     editable: !readOnly,
-    extensions: buildEditorExtensions(mentionOpts),
+    extensions: buildEditorExtensions({ ...mentionOpts, codeLanguageLabel }),
     content: value,
     editorProps: {
       attributes: {
