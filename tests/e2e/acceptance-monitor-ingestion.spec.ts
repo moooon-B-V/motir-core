@@ -227,7 +227,9 @@ test('a production error becomes ONE bug, recurrence files nothing, the level fi
       await refreshed;
       connectionId = (await adminDb.monitorConnection.findFirstOrThrow()).id;
 
-      await expect(page.getByText('Waiting for the first check')).toBeVisible();
+      await expect(page.locator('[data-poll-state="waiting"]')).toHaveText(
+        'Waiting for the first check',
+      );
       // …and a poll through the door runs against the FAKE: `ok`, nothing yet.
       expect((await poll(page, { issues: [] })).status).toBe('ok');
       await beat();
@@ -266,7 +268,7 @@ test('a production error becomes ONE bug, recurrence files nothing, the level fi
     await beat();
 
     await page.goto(ROOM);
-    await expect(page.getByText(/Checked for new errors/)).toBeVisible();
+    await expect(page.locator('[data-poll-state="ok"]')).toContainText('Checked for new errors');
     await beat();
   });
 
