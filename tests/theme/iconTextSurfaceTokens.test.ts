@@ -62,7 +62,10 @@ describe('icon/text-role + surface-primitive tokens map to their Tier-0 --color-
     '--el-tooltip-bg': '--color-foreground',
     '--el-tooltip-text': '--color-background',
     '--el-switch-on': '--color-primary-fill',
-    '--el-switch-knob': '--color-surface',
+    // MOTIR-5711 — the knob is a PAIR with its track: ON is the fill's own ink,
+    // OFF the muted grey (switchStateContrast.test.ts measures both at 3:1).
+    '--el-switch-knob': '--color-primary-foreground',
+    '--el-switch-knob-off': '--color-muted-foreground',
     '--el-option-active-bg': '--color-muted',
     '--el-chip-bg': '--color-surface',
     '--el-chip-border': '--color-border',
@@ -101,9 +104,11 @@ describe('icon/text-role + surface-primitive tokens map to their Tier-0 --color-
     // tooltip inverts exactly like the prior --el-text / --el-text-inverted pair.
     expect(mappingOf('--el-tooltip-bg')).toBe(mappingOf('--el-text'));
     expect(mappingOf('--el-tooltip-text')).toBe(mappingOf('--el-text-inverted'));
-    // switch on/knob kept --el-accent / --el-surface bases.
+    // switch on kept --el-accent's base. The knob did NOT keep --el-surface's
+    // (MOTIR-5711): that value was invisible on the OFF track and under 3:1 on
+    // five palettes' ON fill, so it now writes the accent fill's own ink.
     expect(mappingOf('--el-switch-on')).toBe(mappingOf('--el-accent'));
-    expect(mappingOf('--el-switch-knob')).toBe(mappingOf('--el-surface'));
+    expect(mappingOf('--el-switch-knob')).toBe(mappingOf('--el-accent-text'));
     // chip kept --el-surface / --el-border; card kept --el-page-bg (= background).
     expect(mappingOf('--el-chip-bg')).toBe(mappingOf('--el-surface'));
     expect(mappingOf('--el-chip-border')).toBe(mappingOf('--el-border'));
