@@ -1325,14 +1325,15 @@ is silent.
 **A supersede now records WHY, from a closed vocabulary with one value per
 writing path and no value meaning _unsaid_:**
 
-| cause           | written when                                                       |
-| --------------- | ------------------------------------------------------------------ |
-| `republished`   | a newer design version superseded the one the gate asked about     |
-| `withdrawn`     | the design result was withdrawn                                    |
-| `head_moved`    | a member's head moved, so the commits are not the ones asked about |
-| `member_closed` | a member pull request closed                                       |
-| `set_changed`   | a delivery row joined or left the card                             |
-| `pulled_back`   | the work was pulled out of review, or moved to Cancelled           |
+| cause            | written when                                                       |
+| ---------------- | ------------------------------------------------------------------ |
+| `republished`    | a newer design version superseded the one the gate asked about     |
+| `withdrawn`      | the design result was withdrawn                                    |
+| `head_moved`     | a member's head moved, so the commits are not the ones asked about |
+| `member_closed`  | a member pull request closed                                       |
+| `member_drafted` | a member pull request was converted back to a draft (MOTIR-5699)   |
+| `set_changed`    | a delivery row joined or left the card                             |
+| `pulled_back`    | the work was pulled out of review, or moved to Cancelled           |
 
 **No cause is minted for the pull-request-LINK path** — the one that retires a
 design gate when an open pull request is linked (AMENDMENT 4 Q8). Q7 retires that

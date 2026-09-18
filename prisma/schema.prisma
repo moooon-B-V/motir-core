@@ -4573,6 +4573,8 @@ enum ApprovalGateSupersedeCause {
   head_moved
   /// A member pull request closed.
   member_closed
+  /// A member pull request was converted back to a DRAFT (MOTIR-5699).
+  member_drafted
   /// A delivery row joined or left the card.
   set_changed
   /// The work was pulled out of review, or moved to Cancelled.

@@ -1081,7 +1081,8 @@ has several open pull requests and therefore several simultaneous awaiting gates
 >
 > **A `superseded` row now carries a CAUSE**, from a closed vocabulary with one
 > value per writing path and **no value meaning _unsaid_**: `republished` ·
-> `withdrawn` · `head_moved` · `member_closed` · `set_changed` · `pulled_back`.
+> `withdrawn` · `head_moved` · `member_closed` · `member_drafted` · `set_changed` ·
+> `pulled_back` (`member_drafted` added by MOTIR-5699).
 > The full table, with which path writes each, is `design-result.md`
 > AMENDMENT 6 Q5. (A seventh, `reopened_by_hand`, was named here when the
 > amendment was written and removed before it shipped — MOTIR-5661 found that a

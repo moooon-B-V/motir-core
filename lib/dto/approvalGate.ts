@@ -99,6 +99,7 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'withdrawn'
   | 'head_moved'
   | 'member_closed'
+  | 'member_drafted'
   | 'set_changed'
   | 'pulled_back'
   | 'unknown';

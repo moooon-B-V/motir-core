@@ -38,6 +38,11 @@ otherwise be approving commits that are no longer the ones that merge. Nobody
 decided it, and Motir asks again when every check is green. In a project set to
 merge automatically, no gate is raised at all.
 
+A **draft** pull request is never asked about, however green its checks: its
+author has said it is not ready, and GitHub will not merge one. Motir asks when
+the pull request is marked **ready for review**, and converting it back to a
+draft withdraws a question that was already waiting.
+
 ## What you see
 
 The gate always renders as the same three bands, in the same order, and the order

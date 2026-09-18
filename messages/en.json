@@ -8363,6 +8363,7 @@
         "withdrawn": "The design result was withdrawn, so this question went with it.",
         "head_moved": "A push moved the commits, so this question was withdrawn.",
         "member_closed": "A pull request closed, so this question was withdrawn.",
+        "member_drafted": "A pull request went back to draft, so this question was withdrawn.",
         "set_changed": "The pull requests changed, so this question was withdrawn.",
         "pulled_back": "The work was pulled back out of review, so this question was withdrawn.",
         "unknown": "This question was withdrawn. The reason was not recorded."
