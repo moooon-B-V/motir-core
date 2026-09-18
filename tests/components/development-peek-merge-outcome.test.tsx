@@ -113,7 +113,13 @@ describe('the quick view reads the persisted merge outcome (MOTIR-5650)', () => 
       <DevelopmentSectionBody
         pullRequests={[CORE_PR, GATEWAY_PR]}
         itemIdentifier="ACME-12"
-        mergeGate={{ gate: APPROVED, canDecide: false, routedToLabel: null, members: MEMBERS }}
+        mergeGate={{
+          gate: APPROVED,
+          canDecide: false,
+          routedToLabel: null,
+          members: MEMBERS,
+          stamp: null,
+        }}
       />,
     );
     const detail = [pillsOf(CORE_PR.title), pillsOf(GATEWAY_PR.title)];
@@ -139,7 +145,13 @@ describe('the quick view reads the persisted merge outcome (MOTIR-5650)', () => 
         <DevelopmentSectionBody
           pullRequests={[CORE_PR, GATEWAY_PR]}
           itemIdentifier="ACME-12"
-          mergeGate={{ gate: APPROVED, canDecide: false, routedToLabel: null, members }}
+          mergeGate={{
+            gate: APPROVED,
+            canDecide: false,
+            routedToLabel: null,
+            members,
+            stamp: null,
+          }}
         />,
       );
       const detail = pillsOf(GATEWAY_PR.title);

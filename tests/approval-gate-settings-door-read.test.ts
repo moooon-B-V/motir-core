@@ -136,6 +136,8 @@ describe('getForWorkItem hands the settings door ONLY to a workflow:manage holde
       canDecide: false,
       routedToLabel: null,
       settingsDoor: null,
+      // No gate, nothing to press, nothing stamped (MOTIR-5234).
+      stamp: null,
     });
   });
 });

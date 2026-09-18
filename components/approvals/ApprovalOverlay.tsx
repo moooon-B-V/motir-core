@@ -77,7 +77,14 @@ import type { GateRefusal } from '@/lib/approvalGates/refusals';
  *  pending is DERIVED at render (`settled.token !== token`), which is the quick
  *  view's own shape and keeps a synchronous `setState` out of the effect body. */
 type Load =
-  | { token: string; outcome: 'read'; read: ApprovalGateOverlayReadDTO }
+  | {
+      token: string;
+      outcome: 'read';
+      read: ApprovalGateOverlayReadDTO;
+      /** Which re-read produced it — the frame remounts on a new one, clearing a
+       *  refusal and giving the verbs back (MOTIR-5235). */
+      reread: number;
+    }
   | { token: string; outcome: 'unavailable' };
 
 /** A decision THIS reader made here — the frame's own reconcile, per address. */
@@ -202,6 +209,11 @@ export function ApprovalOverlay() {
 
   const [load, setLoad] = useState<Load | null>(null);
   const [decided, setDecided] = useState<Decided | null>(null);
+  // *Show the current version* (MOTIR-5235) — bumping it re-runs THIS read, the one
+  // the overlay opened with, so the current subject and a FRESH stamp arrive together.
+  // The previous read stays on screen until the new one lands: re-read in place, never
+  // re-open, never navigate.
+  const [reread, setReread] = useState(0);
 
   // ⚠️ FOCUS RETURN, and why it is not free here — the planning overlay's reason
   // verbatim: Radix returns focus only to its own `Trigger`, and this dialog is
@@ -243,7 +255,7 @@ export function ApprovalOverlay() {
         if (controller.signal.aborted) return;
         setLoad(
           read
-            ? { token: forToken, outcome: 'read', read }
+            ? { token: forToken, outcome: 'read', read, reread }
             : { token: forToken, outcome: 'unavailable' },
         );
       } catch {
@@ -256,7 +268,7 @@ export function ApprovalOverlay() {
       }
     })();
     return () => controller.abort();
-  }, [itemKey, kind]);
+  }, [itemKey, kind, reread]);
 
   if (!open) return null;
 
@@ -369,7 +381,15 @@ export function ApprovalOverlay() {
       ];
 
       const onDecide = async (decision: GateDecision): Promise<GateRefusal | null> => {
-        const result = await decideApprovalGateAction({ gateId: gate.id, decision, identifier });
+        // ⚠️ THE STAMP THIS READ HANDED OVER, never one fetched at press time (MOTIR-5235).
+        // A stamp asked for when the reader presses always matches, so the check would pass
+        // every time and protect nothing: it has to be the record of what is on screen.
+        const result = await decideApprovalGateAction({
+          gateId: gate.id,
+          decision,
+          identifier,
+          stamp: read.stamp ?? '',
+        });
         // A refusal applies nothing; the frame draws it IN PLACE and the overlay
         // stays open over it.
         if (!result.ok) return result.refusal;
@@ -412,6 +432,7 @@ export function ApprovalOverlay() {
             }
             mergeGate={{
               gate,
+              stamp: read.stamp,
               // A decided gate has nothing left to press, exactly as on the design arm.
               canDecide: read.canDecide && !decidedState,
               routedToLabel: read.routedToLabel,
@@ -423,9 +444,14 @@ export function ApprovalOverlay() {
               retryMember: retryApproveAndMergeMemberAction,
             }}
             gateLayout="fill"
+            // The approve-to-merge port re-reads through the SAME overlay read.
+            onShowCurrentVersion={() => setReread((n) => n + 1)}
+            gateKey={settled?.outcome === 'read' ? settled.reread : 0}
           />
         ) : (
           <ApprovalGateControl
+            // A fresh read is a fresh frame: a stale refusal clears and the verbs return.
+            key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}
             layout="fill"
             gate={gate}
             // THE READ'S ANSWER, never this component's — a decided gate is
@@ -450,6 +476,8 @@ export function ApprovalOverlay() {
             routedToLabel={read.routedToLabel}
             filesKept={local ? local.filesKept : subject.filesKept}
             onDecide={onDecide}
+            onShowCurrentVersion={() => setReread((n) => n + 1)}
+            focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
           />
         );
     }

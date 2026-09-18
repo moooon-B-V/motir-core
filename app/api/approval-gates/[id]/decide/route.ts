@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ApprovalGateError } from '@/lib/approvalGates/errors';
+import { ApprovalGateError, ApprovalGateStaleSubjectError } from '@/lib/approvalGates/errors';
 import { APPROVAL_GATE_STATUS } from '@/lib/approvalGates/httpStatus';
 import type { GateDecision } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
@@ -41,7 +41,8 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // rather than to a human — must not reach it. ADR §6a: the row is the
 // human-in-the-loop evidence an agent-driven pipeline owes an auditor.
 //
-// JSON body: `decision` (required — `approve` | `request_changes`) and `noteMd`
+// JSON body: `decision` (required — `approve` | `request_changes`), `stamp`
+// (required — the `stamp` the gate read returned, MOTIR-5234) and `noteMd`
 // (optional free text — why they said yes, or what they sent back).
 
 const DECISIONS: readonly GateDecision[] = ['approve', 'request_changes'];
@@ -87,6 +88,20 @@ export async function POST(
     );
   }
 
+  // ⚠️ `stamp` IS REQUIRED (MOTIR-5234): what the caller was shown, as the gate read
+  // returned it. A decision that cannot say what it saw is refused before anything is
+  // locked — the door never guesses one.
+  if (typeof body.stamp !== 'string' || body.stamp.trim() === '') {
+    return NextResponse.json(
+      {
+        code: 'BAD_REQUEST',
+        error: '`stamp` is required — pass the stamp the gate read returned.',
+      },
+      { status: 400 },
+    );
+  }
+  const stamp = body.stamp;
+
   try {
     const result = await pullRequestMergeService.decideGate(
       {
@@ -99,6 +114,7 @@ export async function POST(
         // click. An MCP tool deciding a gate would say `mcp` here, and the
         // GitHub sync `github` (§6b's amendment); neither exists yet.
         source: 'api',
+        stamp,
       },
       ctx,
     );
@@ -111,7 +127,10 @@ export async function POST(
     if (gateError) return gateError;
     if (err instanceof ApprovalGateError) {
       return NextResponse.json(
-        { code: err.code, error: err.message },
+        // A stale refusal also says WHAT moved, so a caller can re-read the right thing.
+        err instanceof ApprovalGateStaleSubjectError
+          ? { code: err.code, error: err.message, moved: err.moved }
+          : { code: err.code, error: err.message },
         { status: APPROVAL_GATE_STATUS[err.tag] },
       );
     }

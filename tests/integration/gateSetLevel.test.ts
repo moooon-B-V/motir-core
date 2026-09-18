@@ -1,3 +1,4 @@
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { shaFor } from '../helpers/commitShaFixtures';
 import { db } from '@/lib/db';
@@ -378,7 +379,7 @@ describe('THE SIX DEFECTS, as states this level makes unreachable', () => {
     const [gate] = await gatesOf(item.id);
     const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
     await approvalGatesService.decide(
-      { gateId: gate!.id, decision: 'approve', source: 'ui' },
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate!.id, decision: 'approve', source: 'ui' },
       s.ctx,
     );
 

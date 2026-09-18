@@ -66,6 +66,13 @@ export interface DevelopmentGateRead {
   canDecide: boolean;
   routedToLabel: string | null;
   /**
+   * WHAT THIS READER IS BEING SHOWN (Story MOTIR-5232 · Subtask MOTIR-5235) — the stamp
+   * the gate read handed over, sent back with the press. For a design gate it also covers
+   * the pull requests beneath it, which the one press merges. Null when the gate is not
+   * awaiting, which is also when there is nothing to press.
+   */
+  stamp: string | null;
+  /**
    * What a reload still knows about each member once the gate is APPROVED — whether its merge
    * gate still awaits and whether the press queued it (MOTIR-5484). Empty before that.
    */
@@ -127,6 +134,8 @@ export function DevelopmentGateFrame({
   currentHeads = [],
   actions,
   layout = 'flush',
+  onShowCurrentVersion,
+  gateKey = 0,
   children,
 }: {
   read: DevelopmentGateRead;
@@ -151,6 +160,15 @@ export function DevelopmentGateFrame({
    * state, outcome and refusal below is identical in the two.
    */
   layout?: 'flush' | 'fill';
+  /**
+   * *Show the current version* — re-run the read this frame was rendered from
+   * (MOTIR-5235). The approval overlay passes its own fetch. Omitted — the item page —
+   * it is `router.refresh()`, because there the block is SERVER-rendered and that is
+   * the read it came from (the page-state contract's case 2).
+   */
+  onShowCurrentVersion?: () => void;
+  /** Bumped by a host whose re-read does not change `read.stamp`'s identity on its own. */
+  gateKey?: number;
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
@@ -164,6 +182,9 @@ export function DevelopmentGateFrame({
   // the response returned. A DIFFERENT gate from the server (a withdrawal and a fresh raise
   // arrived on a refresh) replaces it, because it is a different question.
   const [decided, setDecided] = useState<ApprovalGateDTO | null>(null);
+  // The reader asked for the current version (MOTIR-5235): the frame that mounts from the
+  // re-read focuses its port, and no ordinary render ever does.
+  const [rereadAsked, setRereadAsked] = useState(false);
   const gate = decided && decided.id === read.gate.id ? decided : read.gate;
   const [pressing, setPressing] = useState(false);
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, PressOutcome>>(new Map());
@@ -313,7 +334,12 @@ export function DevelopmentGateFrame({
       setPressing(true);
       let result: Awaited<ReturnType<DevelopmentGateActions['approveAndMerge']>>;
       try {
-        result = await actions.approveAndMerge({ gateId: gate.id, identifier: itemIdentifier });
+        // The stamp THIS read handed over — what is on screen, never refetched (MOTIR-5235).
+        result = await actions.approveAndMerge({
+          gateId: gate.id,
+          identifier: itemIdentifier,
+          stamp: read.stamp ?? '',
+        });
       } finally {
         setPressing(false);
       }
@@ -332,7 +358,12 @@ export function DevelopmentGateFrame({
       router.refresh();
       return null;
     }
-    const result = await actions.decide({ gateId: gate.id, decision, identifier: itemIdentifier });
+    const result = await actions.decide({
+      gateId: gate.id,
+      decision,
+      identifier: itemIdentifier,
+      stamp: read.stamp ?? '',
+    });
     if (!result.ok) return result.refusal;
     setDecided(result.gate);
     applyOptimisticStatus(result.gate.outcomeRef);
@@ -504,6 +535,8 @@ export function DevelopmentGateFrame({
     <MergeOutcomeProvider value={rowOutcomes}>
       {inBox(
         <ApprovalGateControl
+          // A fresh read is a fresh frame: the stale refusal clears and the verbs return.
+          key={`${read.gate.id}:${read.stamp ?? ''}:${gateKey}`}
           layout={layout}
           // ⚠️ THE VERSION IS NOT HANDED TO THE RECORD STRIP. The frame prints the first eight
           // characters of `subjectVersion`, which names a design's commit — and would print
@@ -546,6 +579,11 @@ export function DevelopmentGateFrame({
             cite: t('withdrawn.portCite'),
           }}
           onDecide={onDecide}
+          onShowCurrentVersion={() => {
+            setRereadAsked(true);
+            (onShowCurrentVersion ?? (() => router.refresh()))();
+          }}
+          focusPortOnMount={rereadAsked}
         />,
       )}
     </MergeOutcomeProvider>
