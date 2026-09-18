@@ -294,3 +294,58 @@
   color: var(--el-code-text);
   border-radius: var(--radius-control);
 }
+
+/* THE CODE BLOCK'S LANGUAGE FIELD inside the editor (MOTIR-5458, design/github
+   §24 panel 13b). The block draws its own frame — border, radius, the bar — so
+   the `.motir-prose pre` rule above stands down inside it, exactly as it does
+   for the rendered block's frame one rule up. The bar is chrome: it only shows
+   while the block is the one the caret is in (`data-focused`, written by the
+   node view's decoration plugin) or while the field itself has focus, so no
+   other document grows a control it never had. */
+.motir-prose .motir-editor-code-block {
+  border: 1px solid var(--el-border);
+  border-radius: var(--radius-input);
+  background: var(--el-surface);
+  overflow: hidden;
+}
+.motir-prose .motir-editor-code-block[data-focused] {
+  border-color: var(--el-highlight);
+}
+.motir-prose .motir-editor-code-block-bar {
+  display: none;
+  align-items: center;
+  gap: var(--spacing-control-x);
+  padding: var(--spacing-control-y) var(--spacing-control-x);
+  border-bottom: 1px solid var(--el-border);
+}
+.motir-prose .motir-editor-code-block[data-focused] .motir-editor-code-block-bar,
+.motir-prose .motir-editor-code-block:focus-within .motir-editor-code-block-bar {
+  display: flex;
+}
+.motir-prose .motir-editor-code-block-label {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--el-text-secondary);
+}
+.motir-prose .motir-editor-code-block-language {
+  min-width: 96px;
+  height: var(--height-control);
+  padding: 0 var(--spacing-control-x);
+  border: 1px solid var(--el-input-border);
+  border-radius: var(--radius-control);
+  background: var(--el-page-bg);
+  color: var(--el-text);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+}
+.motir-prose .motir-editor-code-block-language:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+.motir-prose .motir-editor-code-block pre {
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: var(--spacing-input-y) var(--spacing-input-x);
+}

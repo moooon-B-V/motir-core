@@ -147,7 +147,8 @@
     "mentionWorkItems": "工作项",
     "mentionTypeToSearch": "继续输入以搜索工作项…",
     "mentionSearching": "搜索中…",
-    "mentionNoResults": "没有与「{query}」匹配的工作项。"
+    "mentionNoResults": "没有与「{query}」匹配的工作项。",
+    "codeLanguage": "语言"
   },
   "common": {
     "close": "关闭",
