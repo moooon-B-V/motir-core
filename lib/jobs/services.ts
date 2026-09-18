@@ -1,6 +1,7 @@
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
+import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -111,6 +112,9 @@ export const jobServices = {
   // requests from GitHub and replays a close whose webhook delivery was lost.
   pullRequestReconcile: pullRequestReconcileService,
   pullRequestAutoMerge: pullRequestAutoMergeService,
+  // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick's
+  // discovery, one binding's poll, and the terminal write onto that binding.
+  monitorIngestion: monitorIngestionService,
 };
 
 export type JobServices = typeof jobServices;

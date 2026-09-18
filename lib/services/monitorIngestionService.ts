@@ -500,4 +500,39 @@ export const monitorIngestionService = {
     );
     return summary;
   },
+
+  /**
+   * Every binding the scheduled tick should poll — its id and whose it is —
+   * across every workspace (MOTIR-5581). SYSTEM context: the tick does not know
+   * whose bindings exist until it has read them.
+   */
+  async listPollableConnections(): Promise<Array<{ id: string; workspaceId: string }>> {
+    const rows = await withSystemContext((tx) => monitorConnectionRepository.listForPolling(tx));
+    return rows.map((row) => ({ id: row.id, workspaceId: row.workspaceId }));
+  },
+
+  /**
+   * Write a TERMINAL poll failure onto the binding (MOTIR-5581) — the job's final
+   * attempt calls this before rethrowing into the dead-letter queue, so the
+   * failure is visible in the Monitoring room and not only in a table nobody
+   * reads (MOTIR-4918). A binding deleted in the meantime has nowhere to show
+   * it, so that write is skipped rather than thrown over the real error.
+   */
+  async recordTerminalFailure(connectionId: string, error: unknown): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error);
+    await withSystemContext(async (tx) => {
+      const row = await monitorConnectionRepository.findById(connectionId, tx);
+      if (!row) return;
+      await monitorConnectionRepository.recordPollOutcome(
+        connectionId,
+        {
+          status: 'failed',
+          error: `The check stopped after repeated failures: ${message}`,
+          filedCount: null,
+          polledAt: new Date(),
+        },
+        tx,
+      );
+    });
+  },
 };
