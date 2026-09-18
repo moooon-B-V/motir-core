@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { E2E_GITHUB_WEBHOOK_SECRET } from './tests/e2e/_helpers/github-const';
+import { NEXT_START_KEEP_ALIVE_FLAG } from './tests/e2e/_helpers/server-keep-alive';
 import { generateKeyPairSync } from 'node:crypto';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
@@ -211,7 +212,8 @@ export default defineConfig({
       // that does not build it fails in globalSetup before a single spec runs.
       // The main config's command has carried this since MOTIR-3427; this one did
       // not need it while the executor was a second `webServer`.
-      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
+      // MOTIR-5697: the server must outlive the runner's idle sockets — see the helper.
+      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT} ${NEXT_START_KEEP_ALIVE_FLAG}`,
       // `/sign-in`, NOT the root: with `MOTIR_PUBLIC_SITE_URL` set (below) the
       // root 308s onto the unreachable public origin, and Playwright's
       // ready-check follows it — so the server would never read as ready. A
