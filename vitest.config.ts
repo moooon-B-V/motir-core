@@ -2287,6 +2287,17 @@ export default defineConfig({
         'lib/services/monitorIngestionService.ts',
         'lib/jobs/definitions/monitorIssueReconcile.ts',
         'app/**/settings/project/monitoring/_components/MonitoringRoom.tsx',
+        // Story MOTIR-4931 · Subtask MOTIR-5708 — the monitor-SYNC surface (the
+        // resolve-back service and its job, the sync vocabulary). MEASURED on the
+        // parent branch before being pinned, over the story's own suites: all three
+        // at 100 on all four axes. The files this story CHANGED that were already
+        // listed above stay pinned where they are (`monitorIngestionService.ts` now
+        // measures 100/100/100/100, `monitorIssueRepository.ts` and
+        // `monitorConnectionRepository.ts` 100, `MonitoringRoom.tsx` 97.5 lines /
+        // 95.9 branches / 97.4 functions).
+        'lib/services/monitorSyncService.ts',
+        'lib/jobs/definitions/monitorIssueResolve.ts',
+        'lib/monitors/syncStates.ts',
         // ── Story MOTIR-4906 · HOW TO TEST per RUN ─────────────────────────────
         // Its story gate (MOTIR-5337). Every file the story ADDED that compiles to
         // something, MEASURED on the parent branch before being pinned below, over
@@ -4773,6 +4784,20 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-4931 · Subtask MOTIR-5708 — measured at 100 on all four.
+        'lib/services/monitorSyncService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/monitorIssueResolve.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/monitors/syncStates.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'app/**/settings/project/monitoring/_components/MonitoringRoom.tsx': {
           lines: 90,
           functions: 90,

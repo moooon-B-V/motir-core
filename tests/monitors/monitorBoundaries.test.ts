@@ -43,6 +43,10 @@ describe('nothing outside lib/monitors reaches a provider implementation directl
   it('found the source tree — the sweep is not walking an empty directory', () => {
     expect(OUTSIDE.length).toBeGreaterThan(1000);
     expect(OUTSIDE).toContain('lib/services/monitorConnectionService.ts');
+    // The sync consumers (Story MOTIR-4931 · MOTIR-5708) are IN the sweep, so the
+    // two assertions below cover them without naming them.
+    expect(OUTSIDE).toContain('lib/services/monitorSyncService.ts');
+    expect(OUTSIDE).toContain('lib/jobs/definitions/monitorIssueResolve.ts');
   });
 
   it('no module imports providers/sentry or providers/fake by path', () => {
@@ -70,6 +74,8 @@ describe('nothing outside lib/monitors reaches a provider implementation directl
     for (const file of [
       'lib/services/monitorConnectionService.ts',
       'lib/services/monitorCredentialService.ts',
+      // Resolve-back and the assignee refresh (MOTIR-4931) call the provider too.
+      'lib/services/monitorSyncService.ts',
     ]) {
       expect(readFileSync(join(ROOT, file), 'utf8')).toMatch(
         /getMonitorProvider\((grant|credential)\.provider\)/,

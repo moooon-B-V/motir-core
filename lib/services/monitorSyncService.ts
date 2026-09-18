@@ -95,7 +95,9 @@ export function assigneeKey(assignee: NormalizedMonitorAssignee | null): string 
 }
 
 /** Is this refusal the update path telling us the BINDER cannot write here? */
-function isBinderRefusal(err: unknown): boolean {
+function isBinderRefusal(
+  err: unknown,
+): err is PermissionDeniedError | ProjectAccessDeniedError | ProjectNotFoundError {
   return (
     err instanceof PermissionDeniedError ||
     err instanceof ProjectAccessDeniedError ||
@@ -135,6 +137,10 @@ async function doneKeysOf(projectId: string, workspaceId: string): Promise<Set<s
 /** The link's bug, read with the link's own workspace bound (`work_item` has no
  *  system arm, so an unbound read would see nothing and say nothing). */
 async function readBug(link: MonitorIssue): Promise<LinkedBug | null> {
+  /* v8 ignore next -- unreachable: both callers hand in links their listing
+     joined to a work item (`listByWorkItem` by its id, `listResolvableForConnection`
+     through the done-status join). Asserted by `monitorSyncArms.test.ts` ›
+     "both listings only ever return links that point at a work item". */
   if (!link.workItemId) return null;
   const workItemId = link.workItemId;
   return withSystemContext(async (tx) => {
@@ -370,11 +376,10 @@ export const monitorSyncService = {
           return 'no_matching_member';
         }
         if (isBinderRefusal(err)) {
-          const why = err instanceof Error ? err.message : String(err);
           await recordSyncFailureIn(
             tx,
             connection.id,
-            `The person who bound this connection could not assign ${bug.identifier}: ${why}`,
+            `The person who bound this connection could not assign ${bug.identifier}: ${err.message}`,
             bug.identifier,
           );
           return 'binder_unavailable';
@@ -472,10 +477,8 @@ export const monitorSyncService = {
     const summary: MonitorResolveSummary = { ...EMPTY, links: links.length };
     for (const link of links) {
       const bug = await readBug(link);
-      /* v8 ignore next 4 -- unreachable: the listing joins the link to a work item
-         in a done status, in the same workspace. Asserted by
-         `monitorResolveBack.test.ts` › "the sweep resolves a done bug that emitted
-         no event". */
+      // The bug was deleted between the listing and this read — a real race, and
+      // nothing to resolve for it.
       if (!bug) {
         summary.skipped += 1;
         continue;
