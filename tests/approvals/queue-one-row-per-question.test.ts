@@ -154,6 +154,37 @@ describe('the To approve tab lists a design card with a pull request ONCE', () =
   });
 });
 
+describe('a DECISION card with a pull request is listed ONCE too (MOTIR-4907 · MOTIR-5681)', () => {
+  it('lists the DECISION gate and not the merge gate its one press carries', async () => {
+    const decision = await cardWith('Decide the page model', [
+      'decision_approval',
+      'pull_request_approval',
+    ]);
+    const mergeOnly = await cardWith('Code card', ['pull_request_approval']);
+
+    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+
+    expect(page.items.map((row) => row.gateId).sort()).toEqual(
+      [decision.gates.decision_approval, mergeOnly.gates.pull_request_approval].sort(),
+    );
+    expect(await approvalGatesService.countAwaitingMe(meCtx)).toBe(2);
+  });
+
+  it('once the decision is DECIDED the merge gate appears alone', async () => {
+    const decision = await cardWith('Decide the page model', [
+      'decision_approval',
+      'pull_request_approval',
+    ]);
+    await adminDb.approvalGate.update({
+      where: { id: decision.gates.decision_approval },
+      data: { state: 'approved', decidedById: meCtx.userId, decidedAt: new Date() },
+    });
+
+    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    expect(page.items.map((row) => row.gateId)).toEqual([decision.gates.pull_request_approval]);
+  });
+});
+
 describe('the Approvals room lists the card ONCE in its pending section', () => {
   it('in the routed view', async () => {
     const { theirs } = await seed();
