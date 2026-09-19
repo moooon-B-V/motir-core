@@ -44,3 +44,53 @@ export interface MonitorIssueLinkDto {
   /** Why the monitor's assignee was NOT applied, or `null` (MOTIR-5705). */
   assigneeNote: MonitorAssigneeSyncNote | null;
 }
+
+// ── THE HAND-MADE LINK (Story MOTIR-4932 · Subtask MOTIR-5731) ───────────────
+
+/** Who holds a search candidate today: nobody, THIS work item, or another one
+ *  (by its key) — what lets the picker say *Linked to KEY-n* before a click. */
+export type MonitorIssueHolderDto = null | 'this' | { identifier: string };
+
+/** One issue a person can pick from the link search. */
+export interface MonitorIssueCandidateDto {
+  connectionId: string;
+  /** The monitored project's slug — how a result says where it came from when
+   *  the project binds more than one. */
+  projectSlug: string;
+  externalIssueId: string;
+  title: string;
+  level: string | null;
+  eventCount: number;
+  lastSeenAt: string;
+  permalink: string | null;
+  linkedTo: MonitorIssueHolderDto;
+}
+
+/** One connection whose search failed, with the PROVIDER's own words. The
+ *  other connections' results still stand. */
+export interface MonitorIssueSearchFailureDto {
+  connectionId: string;
+  projectSlug: string;
+  reason: string;
+}
+
+export interface MonitorIssueSearchResultDto {
+  candidates: MonitorIssueCandidateDto[];
+  failures: MonitorIssueSearchFailureDto[];
+  /** The project binds no monitored project: nothing was searched. */
+  noConnection: boolean;
+  /** The project binds more monitored projects than one search fans out to;
+   *  the first ones by creation were searched. */
+  truncated: boolean;
+}
+
+/** What a link did. `already_linked_here` is a success — a double click is not
+ *  an error. */
+export type MonitorIssueLinkOutcome = 'linked' | 'already_linked_here' | 'moved';
+
+export interface MonitorIssueLinkResultDto {
+  outcome: MonitorIssueLinkOutcome;
+  /** The card's links AFTER the write, through the same read the section renders
+   *  from, so the two can never disagree about shape. */
+  links: MonitorIssueLinkDto[];
+}

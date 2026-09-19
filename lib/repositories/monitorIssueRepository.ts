@@ -197,6 +197,83 @@ export const monitorIssueRepository = {
     });
   },
 
+  // ── THE HAND-MADE LINK (Story MOTIR-4932 · Subtask MOTIR-5731) ───────────
+  // A manual link is an ordinary row, so the reconciler's dedup, the resolve-back
+  // and the assignee sync all apply to it with no special case. These leaves are
+  // the three single statements the link service needs beyond claim-or-lock.
+
+  /**
+   * Which work item — if any — holds each of these provider issues, in ONE
+   * query (the picker's *Linked to KEY-n*). Filters on both columns' sets and
+   * leaves the exact `(connection, issue)` pairing to the caller: the sets are
+   * one search's worth (a few connections × a picker page), so the over-match
+   * is small and bounded.
+   */
+  async listHoldersForIssues(
+    connectionIds: readonly string[],
+    externalIssueIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      connectionId: string;
+      externalIssueId: string;
+      workItemId: string | null;
+      workItem: { identifier: string } | null;
+    }>
+  > {
+    if (connectionIds.length === 0 || externalIssueIds.length === 0) return [];
+    return tx.monitorIssue.findMany({
+      where: {
+        connectionId: { in: [...connectionIds] },
+        externalIssueId: { in: [...externalIssueIds] },
+      },
+      select: {
+        connectionId: true,
+        externalIssueId: true,
+        workItemId: true,
+        workItem: { select: { identifier: true } },
+      },
+    });
+  },
+
+  /**
+   * MOVE a link to another work item: re-point it and CLEAR the per-link sync
+   * record MOTIR-5701 added — the resolve-back and the assignee sync start over
+   * for the new card. `resolved_by_motir_at` is deliberately LEFT: it is the loop
+   * guard's input (MOTIR-5704), a fact about what Motir did to the ISSUE, which a
+   * move does not undo.
+   */
+  async repoint(
+    id: string,
+    workItemId: string,
+    identifier: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorIssue> {
+    return tx.monitorIssue.update({
+      where: { id },
+      data: {
+        workItemId,
+        filedWorkItemIdentifier: identifier,
+        resolveState: null,
+        resolveAttemptedAt: null,
+        resolveError: null,
+        syncedAssigneeExternalId: null,
+        assigneeSyncNote: null,
+      },
+    });
+  },
+
+  /**
+   * Delete one link — UNLINK. Deleting (not nulling the pointer) is what makes
+   * the issue exactly as untracked as one never ingested: a row with a null
+   * pointer and a remembered key reads to the reconciler as "its card was
+   * deleted" and re-files naming that card, which would be false.
+   */
+  async deleteById(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.monitorIssue.deleteMany({ where: { id } });
+    return result.count;
+  },
+
   // ── SYNC (Story MOTIR-4931 · Subtask MOTIR-5701) ───────────────────────────
   // The resolve-back record and the assignee sync record. The sync service owns
   // WHEN each is written; these leaves own only the single statements.
