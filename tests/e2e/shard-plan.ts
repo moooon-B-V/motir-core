@@ -540,6 +540,29 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // against a production build), not from a green CI run — there is none yet.
   // Re-measure from the first green `playwright-report-bulk-*` artifact with it.
   'approval-overlay.spec.ts': 2.8,
+  // MOTIR-5724, completed by MOTIR-5726. BOTH promoted out of the acceptance lane
+  // by MOTIR-5724 (they were `acceptance-approval-overlay.spec.ts` and
+  // `acceptance-approvals-tab.spec.ts`), which is why they arrive here together.
+  //
+  // ⚠️ AN ENTRY IS NOT PAPERWORK FOR THESE TWO — it is whether they run at all.
+  // A promoted spec with no cost is assigned to NO leg, so the promotion had
+  // silently stopped them executing: green on every shard, and green because
+  // nothing ran them. `tests/e2e-shard-plan.test.ts` is the guard that said so,
+  // and it is the reason this pair is recorded before the branch merges.
+  //
+  // MEASURED LOCALLY against a production build, all tests passing in THIS lane
+  // (7 passed, 7.5m wall including the build):
+  //   approval-overlay-walk  8.9 + 2.1 + 2.9 = 13.9 s over three tests
+  //   approvals-tab          3.9 + 1.7 + 2.2 + 3.0 = 10.8 s over four
+  // Recorded at the ~1.5x this file's own calibration note puts between a local
+  // reading and the CI cost the bin-packer is packing — 21.0 and 16.0 — rather
+  // than at the local figure, which that note says runs at or below CI and never
+  // above it. Their acceptance-lane runtimes (~94 s and ~54 s) are NOT
+  // comparable: that was the receipts' `chapter()` / `beat()` pacing, which
+  // `_helpers/promoted-regression` removes. Re-measure both from the first green
+  // `playwright-report-bulk-*` artifact that includes them.
+  'approval-overlay-walk.spec.ts': 21.0,
+  'approvals-tab.spec.ts': 16.0,
   // MOTIR-5306. Promoted from the acceptance lane (it was
   // `acceptance-design-approval.spec.ts`). Measured LOCALLY (4.2 s, one test,
   // against a production build), not from a green CI run — there is none in this
