@@ -126,7 +126,7 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
     lines.push(
       `Advisory (NOT a blocker — ${dto.key} still dispatches): it is sized ` +
         `${s.storyPoints ?? '—'} story points / ${s.estimateMinutes ?? '—'} estimated minutes, ` +
-        'over the estimation gate (13+ points is the SPLIT signal; a coding_agent run must fit ' +
+        'over the estimation gate (8+ points is the SPLIT signal; a coding_agent run must fit ' +
         'in 60 minutes, and the MINUTES figure is a PROXY for that — the estimate column sums ' +
         'agent time and CI time while the ceiling is on the agent run alone). Split it before ' +
         'starting.',
