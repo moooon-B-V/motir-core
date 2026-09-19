@@ -53,11 +53,33 @@ export interface RepairPullRequestDto {
   headRef: string;
   /** Null on a row mirrored before base branches were recorded. */
   baseRef: string | null;
-  /** Always `failing` today; carried so a reader never has to assume it. */
+  /** The pull request's OWN verdict (`derivePrCiState`). `failing` when its own
+   *  checks are red — and possibly `passing` when it is failing only because the
+   *  merge queue threw it out: then {@link RepairPullRequestDto.queueExit} is set
+   *  (MOTIR-5719). */
   ci: PrCiState;
   /** The checks failing at the verdict's commit, by name, sorted — what a
-   *  give-up names (MOTIR-5465). */
+   *  give-up names (MOTIR-5465). The pull request's OWN checks; a queue's failing
+   *  check rides on `queueExit`. */
   failingChecks: string[];
+  /** The standing merge-queue FAILURE that makes this pull request failing — set
+   *  exactly when its latest exit is a failure, not re-queued, at its current head
+   *  (`queueExitHoldsAtHead`), else null. */
+  queueExit: RepairQueueExitDto | null;
+}
+
+/** Why the merge queue threw a pull request out, as the fixing agent is told it
+ *  (Story MOTIR-5628 · MOTIR-5719). */
+export interface RepairQueueExitDto {
+  /** GitHub's own reason string — `CI_FAILURE`, `MERGE_CONFLICT`, … */
+  rawReason: string;
+  /** When the queue removed it, ISO-8601. */
+  exitedAt: string;
+  /** The head the queue tested — the pull request's current head. */
+  headSha: string;
+  /** The queue's failing check, when the attempt named one; null for a conflict. */
+  failingCheckName: string | null;
+  failingCheckUrl: string | null;
 }
 
 /** The result of one repair claim attempt. */
@@ -85,6 +107,14 @@ export interface WorkItemRepairClaimDto {
 export interface RepairPullRequestRefDto {
   repo: string;
   number: number;
+  /** The pull request's OWN verdict — `passing` on a member failing only because
+   *  the merge queue threw it out (MOTIR-5719). */
+  ci: PrCiState;
+  /** Set when the pull request is failing because the merge queue threw it out.
+   *  With `ci`, it is what the Development block's which-to-use line reads: *a
+   *  failing member whose own `ci` is not `failing` and which carries a standing
+   *  queue exit* (`design/github/design-notes.md` § 26, MOTIR-5718). */
+  queueExit: { rawReason: string; failingCheckName: string | null } | null;
 }
 
 /**

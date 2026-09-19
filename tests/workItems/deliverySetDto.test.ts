@@ -320,6 +320,7 @@ describe('zero and one delivery — the cases nearly every card is', () => {
         ci: 'passing',
         baseRef: 'main',
         defaultBranch: 'main',
+        queueExit: null,
       },
     ]);
   });

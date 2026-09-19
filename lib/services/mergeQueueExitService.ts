@@ -17,6 +17,7 @@ import {
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
 import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
+import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { workItemsService } from './workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
@@ -185,6 +186,11 @@ export const mergeQueueExitService = {
         tx,
       );
       const cleared = (await githubPullRequestRepository.clearQueuedOutcome(pr.id, tx)) > 0;
+      // The exit changes the card's `ciState` without any new check arriving
+      // (MOTIR-5717): a failure turns every delivered card red — including one the
+      // loop below leaves where it is — and a neutral exit can supersede an earlier
+      // failure. So every delivered card is recomputed here, in this transaction.
+      await recomputeDeliveredCiState(pr.id, tx);
       const result: MergeQueueExitResult = {
         ...base,
         outcome: 'recorded',
@@ -299,6 +305,28 @@ async function lockCard(workItemId: string, tx: Prisma.TransactionClient): Promi
 }
 
 /**
+ * RECOMPUTE the stored `ciState` of every card a pull request delivers (Story
+ * MOTIR-5628 · MOTIR-5717).
+ *
+ * A merge-queue exit folds into the card's verdict (`queueExitHoldsAtHead`), so the
+ * three writes that change an exit — recording it, *Queue again*'s stamp, and the
+ * release of a stamp the host refused — change the card's badge with no check event
+ * to recompute it. Each calls this in its own transaction.
+ *
+ * Each card is locked in the funnel's order first ({@link lockCard}); the recompute
+ * then takes the card's row lock again, which is re-entrant inside one transaction.
+ */
+async function recomputeDeliveredCiState(
+  pullRequestId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  for (const ref of await resolveDeliveredWorkItems(pullRequestId, tx)) {
+    await lockCard(ref.id, tx);
+    await recomputeWorkItemCiState(ref.id, tx);
+  }
+}
+
+/**
  * Return a card a merge-queue failure moved to `implemented` to the status it was moved
  * from, when it is still there. A card somebody has since moved elsewhere is left where
  * they put it, and a workflow that refuses the move leaves it too — the re-enqueue has
@@ -340,4 +368,4 @@ async function emitMoved(workItemId: string, moved: AppliedMove, ctx: ServiceCon
   });
 }
 
-export const queueExitCardMoves = { lockCard, returnCard, emitMoved };
+export const queueExitCardMoves = { lockCard, returnCard, emitMoved, recomputeDeliveredCiState };

@@ -551,7 +551,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
     // run ended. It sits beside `run` because it is the same work loop's repair.
     signature: '<key>',
     description:
-      'Hand an Implemented work item’s failing pull requests to your agent, on their own branches.',
+      'Hand an Implemented work item’s failing pull requests — including one the merge queue ejected — to your agent, on their own branches.',
     helpGroup: HELP_GROUP.workLoop,
     options: [
       {

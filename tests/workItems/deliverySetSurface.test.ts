@@ -52,6 +52,7 @@ function delivery(
     pullRequest: pr(repoLabel, number, prOver),
     baseRef: 'main',
     defaultBranch: 'main',
+    queueExit: null,
     ...rest,
   };
 }

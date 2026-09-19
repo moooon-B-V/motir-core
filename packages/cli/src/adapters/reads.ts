@@ -335,6 +335,16 @@ export function toWorkItemDetail(body: DetailBody): WorkItemDetail {
             ci: d.ci,
             baseRef: d.baseRef,
             defaultBranch: d.defaultBranch,
+            // MOTIR-5720. `?? null` because an older Motir sends no such field, and
+            // "no standing queue failure" is the honest reading of that silence.
+            queueExit: d.queueExit
+              ? {
+                  rawReason: d.queueExit.rawReason,
+                  headSha: d.queueExit.headSha,
+                  failingCheckName: d.queueExit.failingCheckName,
+                  failingCheckUrl: d.queueExit.failingCheckUrl,
+                }
+              : null,
           })),
         }
       : {}),
@@ -645,6 +655,15 @@ export function toWorkItemRepairClaim(
       baseRef: pr.baseRef,
       ci: pr.ci,
       failingChecks: [...pr.failingChecks],
+      queueExit: pr.queueExit
+        ? {
+            rawReason: pr.queueExit.rawReason,
+            exitedAt: pr.queueExit.exitedAt,
+            headSha: pr.queueExit.headSha,
+            failingCheckName: pr.queueExit.failingCheckName,
+            failingCheckUrl: pr.queueExit.failingCheckUrl,
+          }
+        : null,
     })),
   };
 }

@@ -18,16 +18,16 @@ import type { PrCiState } from '@/lib/github/prCiState';
 
 describe('deliveryStateForCard (MOTIR-5470)', () => {
   it('passes a settled verdict through untouched', () => {
-    expect(deliveryStateForCard('failing', false)).toBe('failing');
-    expect(deliveryStateForCard('running', false)).toBe('running');
-    expect(deliveryStateForCard('passing', false)).toBe('passing');
+    expect(deliveryStateForCard('failing', false, false)).toBe('failing');
+    expect(deliveryStateForCard('running', false, false)).toBe('running');
+    expect(deliveryStateForCard('passing', false, false)).toBe('passing');
   });
 
   it('reads a silent pull request in a CI-less repository as passing', () => {
     // The MOTIR-3823 decision, unchanged: a repository is allowed to have no CI,
     // and holding its cards red for ever punishes it for a choice it was
     // entitled to make.
-    expect(deliveryStateForCard(null, true)).toBe('passing');
+    expect(deliveryStateForCard(null, true, false)).toBe('passing');
   });
 
   it('reads a silent pull request in a REPORTING repository as running', () => {
@@ -35,7 +35,7 @@ describe('deliveryStateForCard (MOTIR-5470)', () => {
     // the whole reason there are two mappers. The promotion has no third answer
     // to give, so it says `null` and withholds; the card is read by a PERSON, and
     // "waiting for a verdict" is exactly what they want to be told.
-    expect(deliveryStateForCard(null, false)).toBe('running');
+    expect(deliveryStateForCard(null, false, false)).toBe('running');
     expect(deliveryStateForPromotion(null, false)).toBeNull();
   });
 });
@@ -124,7 +124,7 @@ describe('the card verdict and the promotion agree on GREEN (MOTIR-5470)', () =>
     'case %i: foldCardCiState === passing ⇔ deliverySetIsGreen',
     (_i, members) => {
       const card = foldCardCiState(
-        members.map((m) => deliveryStateForCard(m.state, m.cannotReport)),
+        members.map((m) => deliveryStateForCard(m.state, m.cannotReport, false)),
       );
       const green = deliverySetIsGreen(
         members.map((m) => deliveryStateForPromotion(m.state, m.cannotReport)),

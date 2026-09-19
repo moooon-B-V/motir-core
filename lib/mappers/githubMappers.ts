@@ -113,7 +113,17 @@ export function toPullRequestMergeRecordDto(
  * two are the same row and joining twice would only give the reader a way to see
  * them disagree.
  */
-export function toWorkItemDeliveryDto(row: WorkItemDeliveryWithChecks): WorkItemDeliveryDto {
+export function toWorkItemDeliveryDto(
+  row: WorkItemDeliveryWithChecks,
+  /** The pull request's STANDING queue failure, when the caller read one
+   *  (`standingQueueFailures`, MOTIR-5720) — the exit row itself, mapped here. */
+  standingExit: {
+    rawReason: string;
+    headSha: string;
+    failingCheckName: string | null;
+    failingCheckUrl: string | null;
+  } | null,
+): WorkItemDeliveryDto {
   return {
     pullRequest: toLinkedPullRequestDto({
       ...row.pullRequest,
@@ -122,6 +132,15 @@ export function toWorkItemDeliveryDto(row: WorkItemDeliveryWithChecks): WorkItem
     }),
     defaultBranch: row.repo.defaultBranch,
     baseRef: row.pullRequest.baseRef,
+    queueExit:
+      standingExit === null
+        ? null
+        : {
+            rawReason: standingExit.rawReason,
+            headSha: standingExit.headSha,
+            failingCheckName: standingExit.failingCheckName,
+            failingCheckUrl: standingExit.failingCheckUrl,
+          },
   };
 }
 

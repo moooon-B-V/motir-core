@@ -387,6 +387,21 @@ const workItemDeliverySchema = z.object({
   /** THAT repository's default branch — never assume `main`. A merge onto anything
    *  else delivered nothing to the trunk. */
   defaultBranch: z.string(),
+  /** The STANDING merge-queue failure on this pull request, or null (MOTIR-5720):
+   *  its latest queue exit is a failure, not re-queued, at its current head. The
+   *  server decides "standing", so a client holds no head logic. `ci` stays the
+   *  pull request's OWN checks — a member reading `ci: 'passing'` with a set
+   *  `queueExit` is RED in the queue, and a repair loop must treat it as red. */
+  queueExit: z
+    .object({
+      /** GitHub's own reason — `CI_FAILURE`, `CI_TIMEOUT`, `MERGE_CONFLICT`, … */
+      rawReason: z.string(),
+      headSha: z.string(),
+      /** The queue's failing check; both null when none is known (a conflict). */
+      failingCheckName: z.string().nullable(),
+      failingCheckUrl: z.string().nullable(),
+    })
+    .nullable(),
 });
 export type WorkItemDelivery = z.infer<typeof workItemDeliverySchema>;
 
@@ -791,6 +806,15 @@ export function presentWorkItemDetail(
       ci: delivery.pullRequest.ci,
       baseRef: delivery.baseRef,
       defaultBranch: delivery.defaultBranch,
+      queueExit:
+        delivery.queueExit === null
+          ? null
+          : {
+              rawReason: delivery.queueExit.rawReason,
+              headSha: delivery.queueExit.headSha,
+              failingCheckName: delivery.queueExit.failingCheckName,
+              failingCheckUrl: delivery.queueExit.failingCheckUrl,
+            },
     })),
   };
 }

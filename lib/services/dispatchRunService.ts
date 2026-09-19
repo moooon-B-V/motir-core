@@ -39,6 +39,7 @@ import {
 } from '@/lib/mappers/dispatchRunMappers';
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
+import { standingQueueFailures } from './deliveryVerdict';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
@@ -754,10 +755,15 @@ export const dispatchRunService = {
           workItemIds,
           tx,
         );
+        // Each member's standing queue failure (MOTIR-5720), one read for the run.
+        const held = await standingQueueFailures(
+          new Map(deliveries.map((row) => [row.githubPullRequestId, row.pullRequest])),
+          tx,
+        );
         const byWorkItem = new Map<string, ReturnType<typeof toWorkItemDeliveryDto>[]>();
         for (const row of deliveries) {
           const list = byWorkItem.get(row.workItemId) ?? [];
-          list.push(toWorkItemDeliveryDto(row));
+          list.push(toWorkItemDeliveryDto(row, held.get(row.githubPullRequestId) ?? null));
           byWorkItem.set(row.workItemId, list);
         }
 
