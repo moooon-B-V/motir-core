@@ -6,6 +6,7 @@ import {
 } from '@/components/planning/PlanningOriginCluster';
 import {
   GhostAnchor,
+  FolderNode,
   LevelGroupNode,
   LevelTruncationTile,
   WorkItemNode,
@@ -47,6 +48,26 @@ export const ORIGIN_ID = '__planning_origin__';
 // and `WorkItemRoadmap.loadLevel` intercepts this id to serve what is behind it —
 // so both halves of the drill must name the same id, never two literals.
 export const NOT_IN_EPIC_ID = '__not_in_an_epic__';
+
+// A FOLDER's node id on the canvas (Bug MOTIR-5710 · MOTIR-5741). A folder is a
+// DOOR like the grouped node — the consumer's `loadLevel` intercepts the prefix
+// and reads that folder's level — so both halves of the drill must spell the id
+// the same way, which is why it is minted and parsed here and nowhere else. A
+// work-item id is a cuid and never carries a colon, so the namespace cannot
+// collide with one.
+export const FOLDER_NODE_PREFIX = 'folder:';
+
+/** The canvas node id of a folder. */
+export function folderNodeId(folderId: string): string {
+  return `${FOLDER_NODE_PREFIX}${folderId}`;
+}
+
+/** The folder id behind a canvas node id, or `null` when the node is not a folder. */
+export function folderIdFromNodeId(nodeId: string | null): string | null {
+  return nodeId !== null && nodeId.startsWith(FOLDER_NODE_PREFIX)
+    ? nodeId.slice(FOLDER_NODE_PREFIX.length)
+    : null;
+}
 
 // The id of the synthetic TRUNCATION tile (MOTIR-3490). Not a door — the consumer
 // intercepts it on ACTIVATION, to re-read this level with the raised ceiling.
@@ -637,6 +658,31 @@ export function buildWorkItemLevel(
         ]
       : [];
 
+  // THE LEVEL'S FOLDERS (Bug MOTIR-5710 · MOTIR-5741, design decisions 2–5). Each
+  // is a DOOR to its own level, drawn with no position of its own: a folder takes
+  // part in no edge, so `deterministicLayout` drops it into the loose band below the
+  // flow — and because the band is laid out in node ORDER, emitting the folders
+  // AHEAD of the work items (and of the grouped node) is what makes them LEAD it, in
+  // the position order the read returned. An empty folder is still drawn: it is a
+  // real record, and its card says `Empty`.
+  const folderNodes: ProjectCanvasNode[] = (wi.folders ?? []).map((f) => ({
+    id: folderNodeId(f.id),
+    parentId: null,
+    // ALWAYS a door — even when empty — because the level behind it is a real
+    // place with its own empty state (sheet 6), not a missing one.
+    drillable: true,
+    // NOT viewable: a folder has no peek; what it holds IS the level behind it.
+    viewable: false,
+    // NOT decorative (decision 5): a folder holds real work, so it counts toward
+    // `autoDescendSingleParent`'s "does this level offer a CHOICE?" — a root with
+    // one epic and one folder must not auto-descend into the epic.
+    searchText: f.name,
+    crumbLabel: f.name,
+    content: (
+      <FolderNode name={f.name} childFolderCount={f.childFolderCount} itemCount={f.itemCount} />
+    ),
+  }));
+
   // THE TRUNCATION TILE (MOTIR-3490) — the level read is capped, and this is the
   // only thing that says so. Compared against the rows the READ returned
   // (`wi.items`), never against the rows left after grouping: grouping moves rows,
@@ -662,7 +708,14 @@ export function buildWorkItemLevel(
       : [];
 
   return {
-    nodes: [...originNodes, ...itemNodes, ...groupNodes, ...anchorNodes, ...moreNodes],
+    nodes: [
+      ...originNodes,
+      ...folderNodes,
+      ...itemNodes,
+      ...groupNodes,
+      ...anchorNodes,
+      ...moreNodes,
+    ],
     deps,
   };
 }

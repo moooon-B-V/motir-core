@@ -197,6 +197,16 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   emptyRoot?: ReactNode;
   /**
+   * Replace a DRILLED empty level's statement, per focus (Bug MOTIR-5710 ·
+   * MOTIR-5741). Given the crumb of the level the canvas is standing on, return what
+   * to say when it is empty, or `null` for the canvas's own `emptyDrilled` copy.
+   * The roadmap passes one for a FOLDER's level: "this node has no children" is
+   * wrong for a place a person files work into. Content-agnostic — the canvas
+   * never learns what a folder is. Absent ⇒ every drilled empty level reads as it
+   * always has.
+   */
+  emptyDrilledFor?: (focus: { id: string; label: string }) => ReactNode | null;
+  /**
    * ARRIVE ALREADY DRILLED (MOTIR-2070). The breadcrumb trail the canvas OPENS on,
    * root-ancestor first: the LAST crumb is the level it loads, and the whole array
    * becomes the breadcrumb. `[]` (the default) is the shipped behaviour — open at
@@ -397,6 +407,7 @@ export function ProjectRoadmapCanvas({
   autoDescendSingleParent = false,
   loadingFallback,
   emptyRoot,
+  emptyDrilledFor,
   initialTrail,
   onLevelChange,
   controlledTrail,
@@ -1104,6 +1115,11 @@ export function ProjectRoadmapCanvas({
   }
 
   const drilled = crumbs.length > 0;
+  const lastCrumb = crumbs[crumbs.length - 1];
+  const drilledEmpty =
+    drilled && emptyDrilledFor && lastCrumb
+      ? emptyDrilledFor({ id: lastCrumb.id, label: lastCrumb.label })
+      : null;
 
   return (
     <div
@@ -1505,6 +1521,12 @@ export function ProjectRoadmapCanvas({
           // "this parent has no children" is a different thing to say.
           <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
             {emptyRoot}
+          </div>
+        ) : drilled && drilledEmpty ? (
+          // The consumer's own statement for THIS drilled level (MOTIR-5741) —
+          // today a folder's, in the same full-size box.
+          <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
+            {drilledEmpty}
           </div>
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">

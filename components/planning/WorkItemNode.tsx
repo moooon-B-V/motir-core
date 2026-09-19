@@ -8,6 +8,8 @@ import {
   CircleDashed,
   CirclePlay,
   Flag,
+  Folder,
+  FolderOpen,
   Layers,
   MapPin,
 } from 'lucide-react';
@@ -636,6 +638,112 @@ export function LevelGroupNode({ count }: { count: number }) {
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The direct-contents line a FOLDER card carries in its identifier slot (Bug
+ * MOTIR-5710 · MOTIR-5741, design decision 3): `794 items` · `1 item` ·
+ * `2 folders · 5 items` · `3 folders` · `Empty`. DIRECT, never recursive, and
+ * never a status tally — a folder is a place, not a unit of work. Exported so the
+ * aria label and the tests read the same sentence the card shows.
+ */
+export function useFolderContentsLabel(): (childFolderCount: number, itemCount: number) => string {
+  const t = useTranslations('roadmap.canvas.folder');
+  return (childFolderCount, itemCount) => {
+    const items = itemCount === 1 ? t('itemsOne') : t('items', { count: itemCount });
+    const folders =
+      childFolderCount === 1 ? t('foldersOne') : t('folders', { count: childFolderCount });
+    if (childFolderCount > 0 && itemCount > 0) return t('both', { folders, items });
+    if (childFolderCount > 0) return folders;
+    if (itemCount > 0) return items;
+    return t('empty');
+  };
+}
+
+/**
+ * A FOLDER on the roadmap canvas (Bug MOTIR-5710 · MOTIR-5741; design
+ * `design/roadmap/roadmap--folder-node.mock.html` sheet 2).
+ *
+ * It is {@link LevelGroupNode}'s BOX, slot for slot — the same `NODE_W`/`NODE_H`,
+ * `--radius-card`, `--el-border`, `--el-surface`, `--shadow-card` — because it sits
+ * on the same grid. The tile is the neutral `--el-muted` one behind the lucide
+ * `folder` glyph (the `/items` folder vocabulary, MOTIR-5311); the identifier slot
+ * carries the DIRECT contents; the title slot carries the name. There is NO status
+ * pill, meter or readiness chrome: a folder carries no workflow, and each of those
+ * would be a claim about work it does not own. It is always a DOOR (the drill
+ * chevron is always drawn), even when empty — an empty folder is a real record a
+ * person made, and its card says `Empty` so nobody drills in expecting work.
+ *
+ * Presentational: the consumer owns the level behind it.
+ */
+export function FolderNode({
+  name,
+  childFolderCount,
+  itemCount,
+}: {
+  name: string;
+  childFolderCount: number;
+  itemCount: number;
+}) {
+  const t = useTranslations('roadmap.canvas.folder');
+  const contentsLabel = useFolderContentsLabel();
+  const contents = contentsLabel(childFolderCount, itemCount);
+  return (
+    <div
+      style={{ width: NODE_W, height: NODE_H }}
+      data-node-state="folder"
+      data-testid="folder-node"
+      aria-label={t('aria', { name, contents })}
+      className="relative flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-3.5 shadow-(--shadow-card)"
+    >
+      {/* TOP ROW — no status pill (a folder has none); the drill chevron alone. */}
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <ChevronRight
+            className="size-4 shrink-0 text-(--el-text-muted)"
+            aria-hidden="true"
+            data-testid="drill-affordance"
+          />
+        </div>
+      </div>
+      <div className="mt-1.5 flex min-h-0 flex-1 items-start gap-2 overflow-hidden">
+        <span
+          className="flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-muted)"
+          aria-hidden="true"
+        >
+          <Folder className="size-4 text-(--el-text-secondary)" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-(--el-text-secondary)">{contents}</span>
+          </div>
+          <span
+            data-node-title
+            className="mt-0.5 line-clamp-2 text-sm leading-snug font-semibold text-(--el-text)"
+          >
+            {name}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * An EMPTY folder's drilled level (Bug MOTIR-5710 · MOTIR-5741; design sheet 6) —
+ * the canvas's drilled-empty slot with folder copy. The generic `emptyDrilled`
+ * ("This node has no children to show") is wrong for a folder, which is a place a
+ * person files work into rather than a node with children.
+ */
+export function FolderEmptyLevel({ name }: { name: string }) {
+  const t = useTranslations('roadmap.canvas.folder');
+  return (
+    <div className="max-w-[24rem] text-center" data-testid="folder-empty-level">
+      <FolderOpen className="mx-auto size-8 text-(--el-text-secondary)" aria-hidden="true" />
+      <p className="mt-2 text-sm font-semibold text-(--el-text-strong)">{t('emptyTitle')}</p>
+      <p className="mt-1 text-sm text-(--el-text-secondary)">{t('emptyDescription', { name })}</p>
     </div>
   );
 }

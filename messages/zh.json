@@ -6201,6 +6201,17 @@
         "countOne": "1 项",
         "aria": "不在篇章中 — {count} 项不属于任何篇章的工作项"
       },
+      "folder": {
+        "items": "{count} 项",
+        "itemsOne": "1 项",
+        "folders": "{count} 个文件夹",
+        "foldersOne": "1 个文件夹",
+        "both": "{folders} · {items}",
+        "empty": "空",
+        "aria": "文件夹“{name}”，{contents}。打开以查看其中的内容。",
+        "emptyTitle": "此文件夹为空",
+        "emptyDescription": "在“工作项”中归入“{name}”的工作项会显示在这里。"
+      },
       "more": {
         "label": "还有 {count} 项",
         "showing": "显示 {total} 项中的 {shown} 项",

@@ -145,7 +145,7 @@ test('a filed work item is placed correctly on its page, in a saved view and on 
 
   await resetDatabase();
   const seed = await seedProject('acceptance-placement@example.com', 'PLACE');
-  const { parked, oldImport, mapFields, q3, tidy } = await seedPlacement(seed);
+  const { parked, y2025, oldImport, mapFields, q3, tidy } = await seedPlacement(seed);
 
   await signIn(page, 'acceptance-placement@example.com', PASSWORD);
 
@@ -276,23 +276,63 @@ test('a filed work item is placed correctly on its page, in a saved view and on 
     await beat();
   });
 
-  await chapter('The roadmap still shows Old import at the root', async () => {
-    const roots = page.waitForResponse(
-      (res) =>
-        res.url().includes('/api/projects/') &&
-        res.url().includes('/roadmap') &&
-        !res.url().includes('parentId') &&
-        !res.url().includes('scope=sprint') &&
-        res.request().method() === 'GET' &&
-        res.ok(),
-    );
-    await page.goto('/roadmap');
-    await roots;
-    const canvas = page.getByRole('main').getByTestId('roadmap-canvas');
-    await expect(canvas.getByText('Old import', { exact: true })).toBeVisible();
-    await expect(canvas.getByText('Q3 launch', { exact: true })).toBeVisible();
-    await beat();
-  });
+  // RESTATED (Bug MOTIR-5710 · MOTIR-5741). This chapter used to assert "the
+  // roadmap still shows Old import at the root" — Story MOTIR-5309's decision that
+  // the roadmap is unchanged by filing. Design MOTIR-5713 retired that premise: on
+  // /roadmap a filed work item leaves the root and sits inside its folder. The
+  // chapter now asserts the new placement, rather than being deleted around.
+  await chapter(
+    'The roadmap shows Old import inside its folder, not loose at the root',
+    async () => {
+      const roots = page.waitForResponse(
+        (res) =>
+          res.url().includes('/api/projects/') &&
+          res.url().includes('/roadmap') &&
+          !res.url().includes('parentId') &&
+          !res.url().includes('folderId') &&
+          !res.url().includes('scope=sprint') &&
+          res.request().method() === 'GET' &&
+          res.ok(),
+      );
+      await page.goto('/roadmap');
+      await roots;
+      const canvas = page.getByRole('main').getByTestId('roadmap-canvas');
+      await expect(canvas.getByText('Q3 launch', { exact: true })).toBeVisible();
+      const parkedCard = canvas.locator(`[data-node-id="folder:${parked.id}"]`);
+      await expect(parkedCard).toBeVisible();
+      await expect(canvas.getByText('Old import', { exact: true })).toHaveCount(0);
+      await beat();
+
+      // Drill Parked. By now it holds the 2025 folder and Map legacy fields (the
+      // chapters above filed that story straight into Parked); 2025 holds Old
+      // import. Each hop is a real read by folder, awaited by its own response.
+      const drillFolder = async (folderId: string, card: typeof parkedCard) => {
+        const level = page.waitForResponse(
+          (res) =>
+            res.url().includes('/roadmap') &&
+            res.url().includes(`folderId=${folderId}`) &&
+            res.request().method() === 'GET' &&
+            res.ok(),
+        );
+        await card.click();
+        await page.getByTestId('drill-button').click();
+        await level;
+      };
+      await drillFolder(parked.id, parkedCard);
+      const y2025Card = canvas.locator(`[data-node-id="folder:${y2025.id}"]`);
+      await expect(y2025Card).toBeVisible();
+      await expect(canvas.getByText('Map legacy fields', { exact: true })).toBeVisible();
+      await expect(canvas.getByText('Old import', { exact: true })).toHaveCount(0);
+      await beat();
+
+      await drillFolder(y2025.id, y2025Card);
+      await expect(canvas.getByText('Old import', { exact: true })).toBeVisible();
+      const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+      await expect(crumbs).toContainText('Parked');
+      await expect(crumbs).toContainText('2025');
+      await beat();
+    },
+  );
 });
 
 test('a viewer without work_item:edit sees the folder on the page but cannot change it', async ({

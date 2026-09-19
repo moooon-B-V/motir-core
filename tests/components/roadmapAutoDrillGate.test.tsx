@@ -120,7 +120,8 @@ describe('the adapter → canvas seam: hasChildren (DTO) reaches drillable (node
     // adapter put on the node is the id the drill travelled on.
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
     const urls = fetchSpy.mock.calls.map(([u]) => String(u));
-    expect(urls[0]).toBe('/api/projects/MOTIR/roadmap');
+    // The ROOT asks for folders (Bug MOTIR-5710 · MOTIR-5741); a parent level does not.
+    expect(urls[0]).toBe('/api/projects/MOTIR/roadmap?folders=1');
     expect(urls[1]).toBe('/api/projects/MOTIR/roadmap?parentId=E1');
   });
 
