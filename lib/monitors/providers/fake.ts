@@ -5,6 +5,7 @@ import type {
   MonitorCredential,
   NormalizedMonitorHealth,
   NormalizedMonitorIssue,
+  NormalizedMonitorIssueContext,
   NormalizedMonitorIssuePage,
   NormalizedMonitorProject,
 } from '../types';
@@ -27,6 +28,29 @@ import type {
 // story's criteria ask for, and what keeps the suite green when sentry.io is
 // down.
 
+/**
+ * A seeded issue: the normalized issue plus what only the fake needs to know
+ * about it (MOTIR-5728). `shortId` is what a person pastes into the link search;
+ * `environment` / `release` are what `getIssueContext` answers;
+ * `externalProjectId` scopes a SEARCH to one monitored project (an issue with
+ * none matches every project, which is what every pre-existing seed means).
+ * None of the four leaks out: every method returns the normalized shape.
+ */
+export interface FakeMonitorIssue extends NormalizedMonitorIssue {
+  shortId?: string | null;
+  environment?: string | null;
+  release?: string | null;
+  externalProjectId?: string | null;
+}
+
+/** One recorded `searchIssues` call — what a test counts to assert "no provider
+ *  call", and reads to assert the query and limit that reached the seam. */
+export interface FakeSearchCall {
+  externalProjectId: string;
+  query: string;
+  limit: number;
+}
+
 /** What the fake will answer, and what it recorded being asked. A test drives it
  *  through this object rather than through a module mock, so the same wiring
  *  works in-process and in a spawned server. */
@@ -35,7 +59,7 @@ export interface FakeMonitorState {
    *  provider refuses a replayed one. */
   grants: Map<string, MonitorCredential>;
   projects: NormalizedMonitorProject[];
-  issues: NormalizedMonitorIssue[];
+  issues: FakeMonitorIssue[];
   health: NormalizedMonitorHealth;
   /** The organisation the fake's installation belongs to. */
   orgSlug: string | null;
@@ -51,6 +75,18 @@ export interface FakeMonitorState {
   /** Issue ids the provider NO LONGER HAS: `getIssue` answers `null` and
    *  `resolveIssue` throws `MonitorIssueGoneError` (MOTIR-5702). */
   deletedIssues: Set<string>;
+  /** Every `searchIssues` call, in order (MOTIR-5728). */
+  searches: FakeSearchCall[];
+  /** Issue ids passed to `getIssueContext`, in order — a gone one included
+   *  (MOTIR-5728). */
+  contextReads: string[];
+  /**
+   * Monitored projects whose `searchIssues` fails, with the status and the
+   * provider's words — NOT consumed, so a search that fans out to several
+   * connections in parallel can fail ONE of them deterministically, which a
+   * per-operation {@link failNext} cannot (MOTIR-5731's criterion).
+   */
+  failSearchForProject: Map<string, { status: number; reason?: string }>;
   /** How many refreshes have been asked for, and what the next one returns. */
   refreshCount: number;
   /** Set to make the next call of that operation fail — how a test drives the
@@ -104,6 +140,9 @@ const freshState = (): FakeMonitorState => ({
   resolvedIssues: [],
   readIssues: [],
   deletedIssues: new Set(),
+  searches: [],
+  contextReads: [],
+  failSearchForProject: new Map(),
   refreshCount: 0,
   failNext: new Set(),
   failNextStatus: new Map(),
@@ -118,6 +157,22 @@ export const fakeMonitorState = (): FakeMonitorState => state;
 /** Put the fake back to its initial state — a test's `beforeEach`. */
 export function resetFakeMonitorProvider(): void {
   state = freshState();
+}
+
+/** A seeded issue as the SEAM returns it — the fake-only fields stripped, so a
+ *  consumer can never come to depend on one. */
+function normalized(issue: FakeMonitorIssue): NormalizedMonitorIssue {
+  return {
+    externalId: issue.externalId,
+    title: issue.title,
+    culprit: issue.culprit,
+    level: issue.level,
+    eventCount: issue.eventCount,
+    firstSeenAt: issue.firstSeenAt,
+    lastSeenAt: issue.lastSeenAt,
+    permalink: issue.permalink,
+    assignee: issue.assignee ? { ...issue.assignee } : null,
+  };
 }
 
 function guard(operation: string): void {
@@ -197,7 +252,7 @@ export const fakeMonitorProvider: MonitorProvider = {
     const offset = cursor ? Number(cursor) || 0 : 0;
     const end = offset + Math.max(1, state.pageSize);
     return {
-      issues: ordered.slice(offset, end).map((issue) => ({ ...issue })),
+      issues: ordered.slice(offset, end).map(normalized),
       nextCursor: end < ordered.length ? String(end) : null,
     };
   },
@@ -221,7 +276,57 @@ export const fakeMonitorProvider: MonitorProvider = {
     state.readIssues.push(externalIssueId);
     if (state.deletedIssues.has(externalIssueId)) return null;
     const issue = state.issues.find((candidate) => candidate.externalId === externalIssueId);
-    return issue ? { ...issue, assignee: issue.assignee ? { ...issue.assignee } : null } : null;
+    return issue ? normalized(issue) : null;
+  },
+
+  /**
+   * The SAME contract as the real adapter (MOTIR-5728): a case-insensitive
+   * title substring, OR an exact short id (the `shortIdLookup=1` half), within
+   * the one monitored project, most recently seen first, at most `limit` — and
+   * an empty query answers the most recent issues. Resolved issues are NOT
+   * filtered, as the real search does not filter them; DELETED ones are, since
+   * the provider no longer has them to return.
+   */
+  async searchIssues({ externalProjectId, query, limit }): Promise<NormalizedMonitorIssue[]> {
+    state.searches.push({ externalProjectId, query, limit });
+    guard('searchIssues');
+    const failure = state.failSearchForProject.get(externalProjectId);
+    if (failure) {
+      throw new MonitorProviderCallError(
+        'searchIssues',
+        failure.status,
+        failure.reason ?? `The provider answered ${failure.status}.`,
+      );
+    }
+    const needle = query.trim().toLowerCase();
+    return state.issues
+      .filter((issue) => !state.deletedIssues.has(issue.externalId))
+      .filter((issue) => !issue.externalProjectId || issue.externalProjectId === externalProjectId)
+      .filter(
+        (issue) =>
+          needle === '' ||
+          issue.title.toLowerCase().includes(needle) ||
+          (issue.shortId != null && issue.shortId.toLowerCase() === needle),
+      )
+      .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime())
+      .slice(0, Math.max(1, limit))
+      .map(normalized);
+  },
+
+  /** The seeded issue's `environment` / `release` (`null` when unseeded); a
+   *  deleted or unknown id is the typed GONE answer, as the real 404 is. */
+  async getIssueContext({ externalIssueId }): Promise<NormalizedMonitorIssueContext> {
+    state.contextReads.push(externalIssueId);
+    guard('getIssueContext');
+    const issue = state.issues.find((candidate) => candidate.externalId === externalIssueId);
+    if (!issue || state.deletedIssues.has(externalIssueId)) {
+      throw new MonitorIssueGoneError(
+        'getIssueContext',
+        externalIssueId,
+        'The requested resource does not exist',
+      );
+    }
+    return { environment: issue.environment ?? null, release: issue.release ?? null };
   },
 };
 

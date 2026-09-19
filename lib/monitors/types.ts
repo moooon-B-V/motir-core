@@ -84,3 +84,16 @@ export interface NormalizedMonitorIssuePage {
   /** The cursor for the NEXT page, or null when this page is the last. */
   nextCursor: string | null;
 }
+
+/**
+ * Two facts about an issue that its LIST row does not carry (Story MOTIR-4932 ·
+ * Subtask MOTIR-5728): where it is happening and in which build. Sentry keeps
+ * both on the issue's LATEST EVENT, so they are read one issue at a time.
+ *
+ * Either is `null` when the latest event carries none — an event with no
+ * release is ordinary, and `null` is the honest answer rather than a guess.
+ */
+export interface NormalizedMonitorIssueContext {
+  environment: string | null;
+  release: string | null;
+}

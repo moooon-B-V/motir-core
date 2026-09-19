@@ -1,5 +1,5 @@
-import type { NormalizedMonitorAssignee, NormalizedMonitorIssue } from './types';
-import { fakeMonitorState } from './providers/fake';
+import type { NormalizedMonitorAssignee } from './types';
+import { fakeMonitorState, type FakeMonitorIssue } from './providers/fake';
 
 // THE E2E SEEDING SEAM for the fake monitor provider (Story MOTIR-4929 ·
 // Subtask MOTIR-5584).
@@ -26,6 +26,13 @@ export interface SeedMonitorIssue {
   permalink?: string | null;
   /** The monitor-side assignee the server-side poll reads (MOTIR-5709). */
   assignee?: NormalizedMonitorAssignee | null;
+  /** What a person pastes into the link search (MOTIR-5728). */
+  shortId?: string | null;
+  /** The latest event's environment and release (MOTIR-5728). */
+  environment?: string | null;
+  release?: string | null;
+  /** Scopes the issue to ONE monitored project for a search; absent = every. */
+  externalProjectId?: string | null;
 }
 
 export interface SeedFakeMonitorInput {
@@ -39,7 +46,7 @@ export function seedFakeMonitor(input: SeedFakeMonitorInput): void {
   const state = fakeMonitorState();
   if (input.issues) {
     state.issues = input.issues.map(
-      (issue): NormalizedMonitorIssue => ({
+      (issue): FakeMonitorIssue => ({
         externalId: issue.externalId,
         title: issue.title,
         culprit: issue.culprit ?? null,
@@ -49,6 +56,10 @@ export function seedFakeMonitor(input: SeedFakeMonitorInput): void {
         lastSeenAt: new Date(issue.lastSeenAt),
         permalink: issue.permalink ?? null,
         assignee: issue.assignee ?? null,
+        shortId: issue.shortId ?? null,
+        environment: issue.environment ?? null,
+        release: issue.release ?? null,
+        externalProjectId: issue.externalProjectId ?? null,
       }),
     );
   }
