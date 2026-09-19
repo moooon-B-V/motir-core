@@ -6328,6 +6328,7 @@
           "part": "Fix the checks"
         },
         "failingOn": "Checks are failing on <prs></prs>.",
+        "leftQueueOn": "<prs></prs> left the merge queue.",
         "lead": "Hand the repair to an agent from your terminal:",
         "how": "An agent works on the pull request's own branch, pushes, and the checks run again.",
         "howMany": "An agent works on each pull request's own branch, pushes, and the checks run again.",
@@ -6346,6 +6347,11 @@
         },
         "child": {
           "pointer": "Run the fix from <link>{key}</link> — this work item was built as part of that run, so its repair runs there."
+        },
+        "which": {
+          "checks": "Nothing changed on your side? <b>Queue again</b> tries the same commits once more. If the failing check points at real code, <code>motir fix</code> hands it to an agent.",
+          "conflict": "A conflict needs new commits. <code>motir fix</code> hands it to an agent; <b>Queue again</b> will fail the same way until it is resolved.",
+          "other": "<b>Queue again</b> tries the same commits once more. If it leaves the queue the same way, <code>motir fix</code> hands it to an agent."
         }
       },
       "emptyTitle": "No linked pull request",

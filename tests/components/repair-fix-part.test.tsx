@@ -195,3 +195,71 @@ describe('relativeLabel', () => {
     expect(relativeLabel(at(4), 'zh', NOW)).toBe('4分钟前');
   });
 });
+
+// ── An EJECTED member (Story MOTIR-5628 · MOTIR-5721; design § 26) ───────────────
+describe('a member the merge queue threw out (MOTIR-5721)', () => {
+  const EJECTED = {
+    repo: GATEWAY_PR.repo,
+    number: GATEWAY_PR.number,
+    ci: 'passing' as const,
+    queueExit: { rawReason: 'CI_FAILURE', failingCheckName: 'CI complete' },
+  };
+  const TAGS = ['<b>', '</b>', '<code>', '</code>'] as const;
+  const plain = (text: string) => TAGS.reduce((out, tag) => out.split(tag).join(''), text);
+
+  it('with NO exit the part is exactly the shipped F1 — no left-the-queue line, no sentence', () => {
+    renderPart({ state: 'offer', failing: [CORE], lastGaveUp: null });
+    const p = part();
+    expect(p.textContent).toContain('Checks are failing on');
+    expect(p.textContent).not.toContain('left the merge queue');
+    expect(within(p).queryByTestId('repair-which')).toBeNull();
+  });
+
+  it('an own-failing and an ejected member draw BOTH lines, own-failing first', () => {
+    renderPart({ state: 'offer', failing: [CORE, EJECTED], lastGaveUp: null });
+    const text = part().textContent!;
+    const own = text.indexOf(`Checks are failing on ${CORE.repo} · #${CORE.number}.`);
+    const left = text.indexOf(`${EJECTED.repo} · #${EJECTED.number} left the merge queue.`);
+    expect(own).toBeGreaterThanOrEqual(0);
+    expect(left).toBeGreaterThan(own);
+    expect(within(part()).getByTestId('repair-which').textContent).toBe(plain(fix.which.checks));
+  });
+
+  it('a member red on its OWN checks that also carries an exit stays on the failing line, and adds no sentence', () => {
+    renderPart({
+      state: 'offer',
+      failing: [{ ...EJECTED, ci: 'failing' }],
+      lastGaveUp: null,
+    });
+    expect(part().textContent).toContain('Checks are failing on');
+    expect(within(part()).queryByTestId('repair-which')).toBeNull();
+  });
+
+  it('a failure that is neither a check nor a conflict reads the OTHER sentence', () => {
+    renderPart({
+      state: 'offer',
+      failing: [
+        { ...EJECTED, queueExit: { rawReason: 'INVALID_MERGE_COMMIT', failingCheckName: null } },
+      ],
+      lastGaveUp: null,
+    });
+    expect(within(part()).getByTestId('repair-which').textContent).toBe(plain(fix.which.other));
+  });
+
+  it('with several ejected members a CONFLICT wins', () => {
+    renderPart({
+      state: 'offer',
+      failing: [
+        { ...EJECTED, repo: CORE.repo, number: CORE.number },
+        { ...EJECTED, queueExit: { rawReason: 'MERGE_CONFLICT', failingCheckName: null } },
+      ],
+      lastGaveUp: null,
+    });
+    expect(within(part()).getByTestId('repair-which').textContent).toBe(plain(fix.which.conflict));
+  });
+
+  it('the pointer state names no command and no sentence', () => {
+    renderPart({ state: 'pointer', failing: [EJECTED], runTargetKey: 'ACME-3' });
+    expect(within(part()).queryByTestId('repair-which')).toBeNull();
+  });
+});
