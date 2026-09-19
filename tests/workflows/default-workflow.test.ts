@@ -73,7 +73,7 @@ describe('defaultWorkflow constant', () => {
     expect(new Set(positions).size).toBe(positions.length); // all distinct
   });
 
-  it('defines thirty-six transitions, each referencing a known status key (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630)', () => {
+  it('defines thirty-six transitions, each referencing a known status key (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630 + MOTIR-5804)', () => {
     expect(DEFAULT_TRANSITIONS).toHaveLength(36);
     const keys = new Set(DEFAULT_STATUSES.map((s) => s.key));
     for (const [from, to] of DEFAULT_TRANSITIONS) {
@@ -82,15 +82,18 @@ describe('defaultWorkflow constant', () => {
     }
     const pairs = DEFAULT_TRANSITIONS.map(([f, t]) => `${f}->${t}`);
     expect(new Set(pairs).size).toBe(pairs.length); // no duplicate edges
-    // MOTIR-5630 — the merge-queue ejection's three edges, by key
-    // (`approval-gates.md` §4 THIRD AMENDMENT, decision 7).
+    // The merge-queue ejection's edges, by key (`approval-gates.md` §4 THIRD
+    // AMENDMENT, decision 7, as the FOURTH AMENDMENT's point 6 amends it —
+    // MOTIR-5804): `approved → in_review` is declared, `implemented → approved` is
+    // ABSENT, and the other two stay.
     expect(pairs).toEqual(
       expect.arrayContaining([
+        'approved->in_review',
         'approved->implemented',
         'in_review->implemented',
-        'implemented->approved',
       ]),
     );
+    expect(pairs).not.toContain('implemented->approved');
   });
 });
 

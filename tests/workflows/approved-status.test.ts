@@ -18,11 +18,10 @@ import { truncateAuthTables } from '../helpers/db';
 // split: a pull request is approved, and separately merged.
 //
 // ⚠️ THE TEST THAT MATTERS is a person being unable to approve past a build that
-// never ran. Until MOTIR-5630 that was asserted as the ABSENCE of
-// `implemented → approved`. That edge is now declared for Queue again
-// (`approval-gates.md` §4 THIRD AMENDMENT, decision 7), so the same protection is
-// asserted where it now lives: §6d rule 2b refuses a hand move into `approved`
-// while an open pull request delivers the card.
+// never ran. It is asserted TWICE, as it now stands: `implemented → approved` is
+// ABSENT again (MOTIR-5630 declared it for Queue again; §4's FOURTH AMENDMENT,
+// point 6, removed it — MOTIR-5804), and §6d rule 2b still refuses a hand move
+// into `approved` while an open pull request delivers the card.
 //
 // ⚠️ SCOPE — this card creates the STATE and moves nothing into it. The parent
 // ROLLUP that must not complete on `approved` children, and the DEPENDENT that
@@ -163,34 +162,37 @@ describe('the transitions in and out are legal without an admin editing anything
     });
   });
 
-  // ⚠️ `implemented → approved` WAS asserted ABSENT here (MOTIR-5139) — CI speaks
-  // before a person does. MOTIR-5630 declares the edge for ONE writer, Queue again
-  // putting an ejected pull request back into the merge queue on the card's
-  // decided approval (`approval-gates.md` §4 THIRD AMENDMENT, decision 7). What
-  // keeps a person from approving past a build is now §6d rule 2b, and both
-  // halves are asserted below: with no pull request there is no build to skip,
-  // and with an OPEN one the hand move is refused.
-  async function builtCard(title: string): Promise<{ id: string }> {
+  // ⚠️ `implemented → approved` is ABSENT (MOTIR-5139; declared by MOTIR-5630 for
+  // Queue again, REMOVED again by MOTIR-5804 under §4's FOURTH AMENDMENT, point 6):
+  // CI speaks before a person does, and an approval is only ever given from
+  // `in_review`. Rule 2b is asserted on `in_review → approved`, the edge a hand
+  // move into `approved` actually uses.
+  async function reviewedCard(title: string): Promise<{ id: string }> {
     const item = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title },
       fx.ctx,
     );
     await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
-    await workItemsService.updateStatus(item.id, 'implemented', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
     return item;
   }
 
-  it('implemented → approved is a declared edge — a card with no pull request has no build to skip', async () => {
-    const item = await builtCard('built, nothing to merge');
-    await expect(workItemsService.updateStatus(item.id, 'approved', fx.ctx)).resolves.toMatchObject(
-      { status: 'approved' },
+  it('implemented → approved is NOT a declared edge — nobody approves past a build that never ran', async () => {
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'built, unchecked' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'implemented', fx.ctx);
+    await expect(workItemsService.updateStatus(item.id, 'approved', fx.ctx)).rejects.toBeInstanceOf(
+      IllegalTransitionError,
     );
   });
 
-  it('⚠️ but a HAND implemented → approved is REFUSED while an open pull request delivers the card (rule 2b)', async () => {
-    // The assertion MOTIR-5139 made by absence, made now by the guard: a person
-    // cannot approve past a build that has not run.
-    const item = await builtCard('built, unchecked');
+  it('⚠️ and a HAND in_review → approved is REFUSED while an open pull request delivers the card (rule 2b)', async () => {
+    // The guard, on the edge a hand move into `approved` actually uses: while an
+    // open pull request delivers the card, only a deciding gate may write `approved`.
+    const item = await reviewedCard('reviewed, awaiting its gate');
     const installation = await adminDb.githubInstallation.create({
       data: {
         workspaceId: fx.workspaceId,
@@ -237,7 +239,7 @@ describe('the transitions in and out are legal without an admin editing anything
     expect(err).toBeInstanceOf(ApprovalGatePendingError);
     expect((err as ApprovalGatePendingError).waitingOn).toBe('decision');
     const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
-    expect(row.status).toBe('implemented');
+    expect(row.status).toBe('in_review');
   });
 
   it('and NOT todo → approved — nobody approves work nobody started', async () => {
@@ -323,11 +325,12 @@ describe('the backfill onto a project that predates the status', () => {
       ].sort(),
     );
     // MOTIR-5139's backfill wires exactly its own four and nothing else: the
-    // ejection's `implemented→approved` and `approved→implemented` are not its to
-    // add. They arrive from MOTIR-5630's migration, asserted in
+    // ejection's `approved→implemented` and `approved→in_review` are not its to
+    // add. They arrive from MOTIR-5630's and MOTIR-5804's migrations, asserted in
     // `queue-ejection-edges.test.ts`.
     expect(touching).not.toContain('implemented→approved');
     expect(touching).not.toContain('approved→implemented');
+    expect(touching).not.toContain('approved→in_review');
   });
 
   it('is IDEMPOTENT — running it twice changes nothing', async () => {

@@ -175,10 +175,12 @@ describe('the seed and the backfill migration AGREE', () => {
     // `migrate deploy` applies them: deleting the status also cascades
     // MOTIR-5630's ejection edges (`approved → implemented`,
     // `in_review → implemented`, `implemented → approved`), which only its own
-    // backfill restores. The CHAIN is what must agree with the seed.
+    // backfill restores — and MOTIR-5804's then removes `implemented → approved`
+    // again. The CHAIN is what must agree with the seed.
     for (const migration of [
       '20260819090000_add_implemented_default_status',
       '20260916180000_add_queue_ejection_default_edges',
+      '20260919200000_reask_ejection_default_edges',
     ]) {
       await adminDb.$executeRawUnsafe(
         readFileSync(join(ROOT, `prisma/migrations/${migration}/migration.sql`), 'utf8'),
