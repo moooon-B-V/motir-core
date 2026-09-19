@@ -5,6 +5,7 @@ import type {
   MonitorIssueSearchFailureDto,
   MonitorIssueSearchResultDto,
 } from '@/lib/dto/monitorIssueLink';
+import { readOrgSlug } from '@/lib/mappers/monitorMappers';
 import { getMonitorProvider } from '@/lib/monitors';
 import {
   MonitorConnectionNotFoundError,
@@ -141,6 +142,7 @@ export const monitorIssueLinkService = {
                 : String(err);
           const failure: MonitorIssueSearchFailureDto = {
             connectionId: connection.id,
+            orgSlug: readOrgSlug(connection.installation.metadata),
             projectSlug: connection.externalProjectSlug,
             reason,
           };
@@ -172,6 +174,7 @@ export const monitorIssueLinkService = {
       }
       return {
         connectionId: connection.id,
+        orgSlug: readOrgSlug(connection.installation.metadata),
         projectSlug: connection.externalProjectSlug,
         externalIssueId: issue.externalId,
         title: issue.title,

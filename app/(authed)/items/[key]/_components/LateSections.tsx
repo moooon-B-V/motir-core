@@ -29,12 +29,7 @@ import {
   saveHowToTestAction,
   unlinkMonitorIssueAction,
 } from '../actions';
-import {
-  MonitorErrorsList,
-  MonitorErrorsLoadFailed,
-  canWriteErrors,
-  errorsSectionState,
-} from './MonitorErrorsSection';
+import { MonitorErrorsCard } from './MonitorErrorsCard';
 import { RUN_HISTORY_PAGE, type LateReads } from './lateReads';
 
 // The item page's LATE STACK (Subtask MOTIR-3436), allocated by
@@ -175,17 +170,12 @@ export async function LateUpperSections({
   currentUserId: string;
 }) {
   const r = await reads;
-  const [tGithub, tAcceptance, tDesignResult, tRuns, tErrors] = await Promise.all([
+  const [tGithub, tAcceptance, tDesignResult, tRuns] = await Promise.all([
     getTranslations('github'),
     getTranslations('acceptance'),
     getTranslations('designResult'),
     getTranslations('runs'),
-    getTranslations('monitorErrors'),
   ]);
-  // THE ERRORS SECTION (Story MOTIR-4932 · MOTIR-5732, design `design/monitoring`
-  // §14). Nothing at all for a card with no link — the page is unchanged for every
-  // card no monitor touched — and a failed read only where a connection exists.
-  const errorsState = errorsSectionState(r.monitorIssueLinks, r.monitorHasConnection);
   // ⚠️ A DESIGN RESULT ON A CARD WITH AN OPEN LINKED PULL REQUEST IS NOT A SECTION
   // (`design-result.md` AMENDMENT 4 Q8). Those pull requests carry the decision —
   // one approve-to-merge gate over all of them — so the result renders ONCE as
@@ -335,24 +325,18 @@ export async function LateUpperSections({
         </DevelopmentLinkProvider>
       </HowToTestWrite>
       {/* ERRORS — directly below Development (§14 access path): the same question,
-          "what outside this tree does this card relate to", from a different source. */}
-      {errorsState !== 'hidden' ? (
-        <ContentSectionCard title={tErrors('title')} subtitle={tErrors('gloss')}>
-          {errorsState === 'failed' ? (
-            <MonitorErrorsLoadFailed />
-          ) : (
-            <MonitorErrorsList
-              links={r.monitorIssueLinks ?? []}
-              // The × — gated like MOTIR-5744's doors (§14 Decision 5): `work_item:edit`
-              // (the key `unlinkMonitorIssueAction` asserts) AND a monitored project.
-              canWrite={canWriteErrors(canEdit, r.monitorHasConnection)}
-              unlinkAction={unlinkMonitorIssueAction}
-              workItemId={itemId}
-              identifier={itemIdentifier}
-            />
-          )}
-        </ContentSectionCard>
-      ) : null}
+          "what outside this tree does this card relate to", from a different source.
+          The host draws NOTHING for a card with no link (the page is unchanged) unless
+          the ⋯ menu's Link an error row asked for it (MOTIR-5744). */}
+      <MonitorErrorsCard
+        links={r.monitorIssueLinks}
+        hasConnection={r.monitorHasConnection}
+        // `work_item:edit` — the key every error-link action asserts (§14 Decision 5).
+        canEdit={canEdit}
+        workItemId={itemId}
+        identifier={itemIdentifier}
+        unlinkAction={unlinkMonitorIssueAction}
+      />
       {r.acceptanceEligibility ? (
         <ContentSectionCard title={tAcceptance('title')} subtitle={tAcceptance('gloss')}>
           <AcceptancePanel

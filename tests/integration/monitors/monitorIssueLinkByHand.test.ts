@@ -379,6 +379,7 @@ describe('search', () => {
     expect(result.failures).toEqual([
       {
         connectionId: s.workerConnectionId,
+        orgSlug: 'fake-org',
         projectSlug: 'worker',
         reason: 'Search is temporarily unavailable',
       },

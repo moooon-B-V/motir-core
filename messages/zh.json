@@ -5369,7 +5369,8 @@
     "noActiveSprint": "没有进行中的 Sprint",
     "alreadyInActiveSprint": "已在进行中的 Sprint 中",
     "addedToSprintToast": "已将 {key} 加入 {sprint}",
-    "addToSprintErrorTitle": "无法加入 Sprint"
+    "addToSprintErrorTitle": "无法加入 Sprint",
+    "linkError": "关联错误"
   },
   "projectSquare": {
     "navProduct": "产品",
@@ -8816,7 +8817,8 @@
     },
     "error": {
       "notFound": "此错误或工作项已不可用。请关闭选择器后重试。",
-      "forbidden": "你无法在此工作项上关联错误。"
+      "forbidden": "你无法在此工作项上关联错误。",
+      "issueGone": "Sentry 中已不存在此错误，因此无法关联。"
     },
     "unlink": {
       "aria": "移除与 {title} 的关联",
@@ -8827,6 +8829,23 @@
       "failed": "无法移除关联：{reason}"
     },
     "loadFailedTitle": "无法加载此工作项的错误",
-    "loadFailedBody": "页面的其余部分不受影响。请稍后重试。"
+    "loadFailedBody": "页面的其余部分不受影响。请稍后重试。",
+    "link": "关联错误",
+    "empty": "此工作项尚未关联任何错误。",
+    "field": "要关联的错误",
+    "searchPlaceholder": "搜索错误，或粘贴短 ID…",
+    "searching": "正在搜索…",
+    "noMatches": "没有匹配的错误",
+    "noMatchesHint": "搜索错误标题中的词语，或粘贴其在 Sentry 中的短 ID。",
+    "searchFailed": "<b>无法搜索 {connection}：</b>{reason}",
+    "candidate": "{connection} · 出现 {count, number} 次 · {when}",
+    "linkedTo": "已关联到 {key}",
+    "linkedHere": "已关联到此处",
+    "linkAction": "关联",
+    "move": {
+      "title": "将此错误的关联从 <link>{key}</link> 移到此工作项？",
+      "body": "{key} 保留其其他关联和历史记录。从下次检查开始，此错误的计数和回写解决将跟随此工作项。",
+      "action": "移动关联"
+    }
   }
 }

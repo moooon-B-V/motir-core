@@ -54,6 +54,9 @@ export type MonitorIssueHolderDto = null | 'this' | { identifier: string };
 /** One issue a person can pick from the link search. */
 export interface MonitorIssueCandidateDto {
   connectionId: string;
+  /** The connection's organisation slug, stored on its grant (`null` when the
+   *  grant recorded none) — the picker's `<org> / <project>` line (MOTIR-5744). */
+  orgSlug: string | null;
   /** The monitored project's slug — how a result says where it came from when
    *  the project binds more than one. */
   projectSlug: string;
@@ -70,6 +73,7 @@ export interface MonitorIssueCandidateDto {
  *  other connections' results still stand. */
 export interface MonitorIssueSearchFailureDto {
   connectionId: string;
+  orgSlug: string | null;
   projectSlug: string;
   reason: string;
 }
