@@ -2491,3 +2491,135 @@ verbatim, and GIVE or TAKE nothing here.
 | [MOTIR-5690](motir:cmu6v9h2l00g0hvtxyly7d5v2)                                                 | nothing either way — the planning record of how the box outlived its premise                                                                                                                                                                                                                                                                                                                  |
 
 Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
+
+## 26 · `motir fix` BESIDE _Queue again_ on an ejected card — which one to use (MOTIR-5718, 2026-09-18)
+
+**AMENDS § 21** (the fix part, Panels F1–F4 in `github--fix-callout.mock.html`) **and § 22** (the
+ejected frame, Panels E1–E7 in `approve-and-merge--ejected.mock.html`), in the delta
+**[`github--fix-callout--ejected.mock.html`](./github--fix-callout--ejected.mock.html)**, Panels
+**X1–X5**, each at desktop, dark and ~400px. Card MOTIR-5718, Story MOTIR-5628. **Neither base mock is
+edited**, and no image export ships (`docs/decisions/design-result.md` AMENDMENT 4). The component
+change is **MOTIR-5721**'s; the claim that admits the card is **MOTIR-5719**'s.
+
+**Why it is owed.** Once the repair claim admits an ejected card (MOTIR-5719), the Development block
+offers two controls that were never drawn together: § 22's **Queue again** on the row, which retries
+the same commits, and § 21's **`motir fix`**, which sends an agent to change them. They answer
+different situations — a flaky or timed-out check needs a retry; a real failure or a conflict needs new
+commits, and a retry fails the same way — and nothing on the page said which is which.
+
+### Access path
+
+None is new. The item page → the **Development block** (§ 20, Panels 12a / 12c), reached from any
+board card, list row or Workbench row that opens the card — now also through the _Checks: Failing_
+filter and the red badge, which find an ejected card (§ _The badge_ below) — and the same frame inside
+the **full-screen approval overlay**, which renders the Development block as its port (§ 22's access
+path).
+
+### Rendered against shipped reality, not redrawn
+
+Both bases carry ONE stylesheet and ONE sprite sheet byte for byte and each adds its own block (`ej-`,
+then `fx-`); the delta carries both blocks unchanged at `origin/main` `bbbe8d9b0`, and adds no rule
+that product UI draws. Two placements come from the shipped body rather than from either sheet:
+
+- **The fix part sits INSIDE the rows part.** `DevelopmentSectionBody` renders rows → caption →
+  `RepairFixPart` as one unit (`rowsPart`), so under a gate it is in **band 2, the port**, with the
+  caption — which § 22's sheet abbreviated away and every X panel draws.
+- **In `auto` the fix part comes BEFORE the Merge queue part.** `QueueExitAutoPart` renders
+  `{rows}` (that same `rowsPart`) and then its own part. X3 draws that order. The card's brief said
+  _E5's part, then F1_; the shipped order is kept because the fix part acts on the rows directly above
+  it and the which-to-use sentence carries its own reason, so the order needs no component change.
+
+### The panels, and the card that builds each
+
+| panel | state                                                                                                                                                                                                                                                      | composes | built by               |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------- |
+| X1    | **Ejected for failed checks, `manual`, heads unchanged** — the row's _Left the queue_ + **Queue again**; in the port, the fix part with the left-the-queue line, the command and the **which-to-use** sentence; the record band's reason and failing check | E1 + F1  | MOTIR-5721             |
+| X2    | **Ejected for a merge conflict** — E6's lone reason, no check; the sentence recommends `motir fix` and says Queue again will fail the same way. Queue again stays offered (the server does not refuse it)                                                  | E6 + F1  | MOTIR-5721             |
+| X3    | **`auto` mode** — no frame: rows, caption, the fix part, then E5's _Merge queue_ part, then How to test                                                                                                                                                    | E5 + F1  | MOTIR-5721             |
+| X4    | **A repair in progress on an ejected card** — F2's _Fixing_ pill and holder, no command and **no which-to-use sentence**; **Queue again** still on the row                                                                                                 | E1 + F2  | MOTIR-5721             |
+| X5    | **Ejected, then the head moved** — E3's _New commits since approval_, the new head's own _Checks running_, and **no fix part**: the exit no longer holds at the head                                                                                       | E3       | MOTIR-5717, MOTIR-5721 |
+
+### The show-when rule, and the field it reads
+
+The fix part's own rule is unchanged (§ 21: shown when the repair claim would answer `claimed`,
+`taken` / `mine`, or the pointer). What this section adds is **per failing member**, read off the page's
+repair view (`WorkItemRepairViewDto.failing[]`, `getRepairView`):
+
+- **A member whose own `ci` is NOT `failing` and which carries a standing `queueExit`** is failing
+  BECAUSE of its exit. It is named on the **left-the-queue line** (`fix.leftQueueOn`) instead of in
+  _Checks are failing on …_ — its own checks are green, so that sentence would be false. A member whose
+  own checks fail stays on § 21's line; a set holding both draws both lines, own-failing first.
+- **The which-to-use sentence** renders under the command's `how` line, in the **`offer` state only**,
+  when at least one member is failing because of its exit. It switches on that exit's `rawReason`:
+  `MERGE_CONFLICT` → `which.conflict`; `CI_FAILURE` / `CI_TIMEOUT` → `which.checks`; any other failure
+  reason → `which.other`. With several ejected members, a conflict wins — Queue again cannot land that
+  member, whatever the others need.
+- **Not in `in_progress`** (X4): nothing is to be chosen while an agent holds the repair. **Not in the
+  pointer state**: the child names no command.
+- **A standing exit** is exactly the fold's rule (MOTIR-5717's shared predicate): latest exit
+  `disposition = 'failure'`, `requeuedAt = null`, `headSha` = the member's current head. X5 is its
+  negative.
+
+### Decisions
+
+| decision                         | chosen                                                                   | why                                                                                                                                                                                             |
+| -------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| where the sentence sits          | under the command, after `how`                                           | it compares the command just offered with the row's button; placed above the command it would ask a question before either control is on screen                                                 |
+| a new container or pill          | **none** — `.fx-line` and `.fx-note`, the part's own two line treatments | § 21's _No card inside a card_; the part already owns this grammar                                                                                                                              |
+| the ejected member's line        | **_{pr} left the merge queue._**, `circle-x` in `--el-danger-on-surface` | _Checks are failing_ is false for a member whose own checks are green; the reason in full is already in the record band (manual) or the Merge queue part (auto), so the line does not repeat it |
+| Queue again during a repair (X4) | **still offered**                                                        | the server does not refuse it, and a person who knows nothing changed may still retry; hiding it would invent a rule the server does not have                                                   |
+| Queue again on a conflict (X2)   | **still offered**, and the sentence says it will fail                    | the conflict ahead may have been reverted; the sentence informs, it does not decide                                                                                                             |
+
+### Copy — `en` + `zh`
+
+Under **`github.development.fix`**, beside § 21's keys. `<prs></prs>` is the list-formatted set, as in
+`failingOn`; `<b>` and `<code>` are rich-text tags (`<code>` is the shipped inline-code treatment,
+`.dvb-mono`). **Queue again** is the shipped `approvalGate.pullRequestApproval.outcome.queueAgain`
+string, repeated in words, not re-keyed. Final wording, drafted on the sheet:
+
+| key              | en                                                                                                                                                          | zh                                                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `leftQueueOn`    | `<prs></prs>` left the merge queue.                                                                                                                         | `<prs></prs>` 已离开合并队列。                                                                                       |
+| `which.checks`   | Nothing changed on your side? **Queue again** tries the same commits once more. If the failing check points at real code, `motir fix` hands it to an agent. | 你这边没有改动？**重新排队**会再试一次相同的提交。如果未通过的检查指向真实的代码问题，`motir fix` 会把它交给智能体。 |
+| `which.conflict` | A conflict needs new commits. `motir fix` hands it to an agent; **Queue again** will fail the same way until it is resolved.                                | 冲突需要新的提交。`motir fix` 会把它交给智能体；在冲突解决之前，**重新排队**会以同样的方式失败。                     |
+| `which.other`    | **Queue again** tries the same commits once more. If it leaves the queue the same way, `motir fix` hands it to an agent.                                    | **重新排队**会再试一次相同的提交。如果它以同样的方式离开队列，`motir fix` 会把它交给智能体。                         |
+
+### Tone and tokens
+
+Nothing new: the left-the-queue line is § 21's failing line (`--el-text`, glyph
+`--el-danger-on-surface`); the sentence is § 21's `fx-note` (`text-xs`, `--el-text-secondary`), its
+bold in `--el-text`, its `motir fix` in the shipped inline-code treatment. `audit-mock-sprites --strict`
+on the delta — 44 symbols, 0 drifted, 0 undeclared.
+
+### The badge — recorded in `design/boards/design-notes.md`, not drawn
+
+An ejected card shows the shipped **_Checks failing_** badge; no new value, no new pixels. The amendment,
+with GitHub's own marking checked first, is in `design/boards/design-notes.md` § _The CI badge
+(MOTIR-5471)_.
+
+### Scope
+
+**Drawn:** the two controls together in five states, each at desktop, dark and ~400px; the
+left-the-queue line; the which-to-use sentence in its three variants (two drawn). **Not drawn, and whose
+it is:** the fold that makes the badge red — MOTIR-5717; the claim and the repair view's `queueExit` —
+MOTIR-5719; `motir fix`'s prompt and watch — MOTIR-5720; the component change — MOTIR-5721; the
+acceptance video — MOTIR-5723. How to test is unchanged and abbreviated on the sheet.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' github--fix-callout--ejected.mock.html | sort -u` — **29** keys. Five
+are this section's (MOTIR-5628, 5717, 5718, 5719, 5721). Three ride the two carried blocks (MOTIR-5463
+and 5466 in the `fx-` block, MOTIR-5631 in the `ej-` block), and 21 are the shared base stylesheet and
+sprite provenance (MOTIR-123, 757, 1273–1277, 1595, 2680, 4672, 4882, 4892, 4900, 4953, 5007, 5008,
+5136, 5327, 5336, 5351, 5480); all 24 are carried verbatim and GIVE or TAKE nothing here.
+
+| key                                  | GIVES / TAKES                                                                                                                                                                                                                                                   |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5721                           | **GIVES** X1–X5, the show-when rule, the four keys and their placement. **TAKES** that the repair view names, per failing member, its own `ci` and its standing `queueExit` (`rawReason`), so the part can pick the line and the sentence without a second read |
+| MOTIR-5719                           | **TAKES** that `WorkItemRepairViewDto.failing[]` carries `queueExit: { rawReason, failingCheckName } \| null` for a member failing because of a standing exit, beside its own `ci` — the field this section reads. **GIVES** nothing drawn                      |
+| MOTIR-5717                           | **TAKES** the one predicate for _standing_ (failure, not re-queued, at the current head); X5 is its negative. **GIVES** nothing drawn                                                                                                                           |
+| MOTIR-5718                           | this card                                                                                                                                                                                                                                                       |
+| MOTIR-5628                           | the story; its verification recipe's steps 1–4 walk X1, X2 and X5                                                                                                                                                                                               |
+| MOTIR-5463 / MOTIR-5466 / MOTIR-5631 | **nothing either way** — their panels are composed, not redrawn                                                                                                                                                                                                 |
+
+Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.

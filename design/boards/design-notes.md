@@ -2035,3 +2035,30 @@ The same fact is drawn two ways, and the split is forced by a width budget rathe
 card has a wrapping row and 288px; an `/items` or Workbench row has a 160px title floor that a labelled
 pill overflows. `design/work-items/design-notes.md` § _The CI badge (MOTIR-5471)_ carries that
 measurement and is the authority for rows.
+
+### AMENDMENT (MOTIR-5718, 2026-09-18) — an EJECTED card shows _Checks failing_
+
+**A card whose pull request the merge queue threw out for a failure — while that pull request's own
+checks stay green — shows the shipped _Checks failing_ badge.** No new pixels, no new value, no new
+string. The fold that makes it true is MOTIR-5717 (`WorkItem.ciState` reads `failing` while a failure
+exit stands at the pull request's current head); this amendment is the design half. The drawn
+Development block for such a card is `design/github/design-notes.md` § 26.
+
+**Why _Checks failing_ and not a fourth state** (the planner's reasons, kept):
+
+1. The badge answers one question: _does this card need a fix?_ An ejection is a yes.
+2. `ciState`'s value set is `CI_STATES` (`lib/github/prCiState.ts`), shared by the fold, the _Checks_
+   filter's whitelist and the board, list and Workbench DTOs. A fourth value costs all of them, for a
+   distinction the card page already draws in words (_Left the queue_, its reason and its check).
+3. The _Checks: Failing_ filter then finds ejected cards with no new option.
+
+**Rung 1 — how GitHub marks it, checked before settling.** GitHub records a merge-queue removal as a
+**timeline event** on the pull request — _"The pull request timeline will display the reason why the
+pull request was removed from the queue"_ (GitHub Docs, _Managing a merge queue_) — and names no
+marker in the pull-request LIST. The list's status icon is the head commit's check rollup, and the
+queue's checks run on the merge group's own commit, not on the head. Measured on this repository
+(`gh api graphql`, `RemovedFromMergeQueueEvent.reason` beside the head's `statusCheckRollup.state`,
+2026-09-18): **#2960, #2955, #2946, #2934 and #2914** (`failed_checks`) and **#2947**
+(`merge_conflict`) all read **`SUCCESS`**. So GitHub's own list shows an ejected pull request as
+green — which is the gap this story closes on Motir's surfaces — and it offers no distinct marker that
+would argue for a fourth value. The three reasons above stand.
