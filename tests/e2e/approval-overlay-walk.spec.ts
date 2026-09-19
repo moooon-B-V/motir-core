@@ -50,13 +50,13 @@ import zh from '@/messages/zh.json';
 // inside the overlay, the scroll and page on return, Back, a pasted address, and
 // the walk in `zh`.
 //
-// ⚠️ THE DECIDED ROW LEAVES ON THE DECISION'S OWN REFRESH, and this spec asserts
-// that rather than a row "settled in place" after the close. The decide action
-// revalidates `/workbench` and the overlay refreshes, and the queue's read
-// returns only `awaiting` gates — so the refreshed page no longer holds the row.
-// That is the behaviour MOTIR-4879's receipt already recorded for the in-list
-// disclosure (its row count reaches 0 in the same state as the badge), and it is
-// recorded on MOTIR-5225 against design-notes § 22's wording.
+// ⚠️ THE DECIDED ROW SETTLES IN PLACE AND LEAVES ON THE NEXT LOAD
+// (design-notes § 20, kept through live-ness by § 26 — MOTIR-5238). The decide
+// action's refresh no longer drops it: the list HOLDS a row the re-read stopped
+// returning, carrying its state pill, while the badge counts only what is still
+// AWAITING. A reload is a load, and drops it. This spec was written when the
+// refresh removed the row — recorded on MOTIR-5225 against § 22's wording — and
+// was updated to § 26 as a regression test after it left the acceptance lane.
 //
 // ⚠️ WHAT IS PUBLISHED FOR REAL: the design under test, through
 // `publish_design_result` over `/api/mcp`. The 25 filler gates that make the
@@ -177,16 +177,32 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       ).toHaveCount(0);
     });
 
-    await test.step('Esc returns to the tab, one decision fewer, in one page state', async () => {
+    await test.step('Esc returns to the tab, the decided row settled in place, one fewer waiting', async () => {
       await page.keyboard.press('Escape');
       await expect(designDialog).toBeHidden();
       await expect(page).toHaveURL(onTheTab);
       // The queue is back in the accessibility tree first — a role-rooted count
       // taken while the dialog's hide settles reads 0 VACUOUSLY.
       await expect(queue(page, en.workbench.tabs.toApprove)).toBeVisible();
-      // AUTHORITATIVE: the decided row has left the queue…
-      await expect(designRow).toHaveCount(0, { timeout: 30_000 });
-      // …and the rows and the badge agree, read in the SAME state.
+      // AUTHORITATIVE: the badge drops once the refreshed read has landed — § 26's
+      // count is what is AWAITING, and a held row is a receipt, not a member.
+      await expect.poll(() => badgeCount(page, toApprove), { timeout: 30_000 }).toBe(25);
+      // …and the decided row is still where it was, carrying its own state
+      // (§ 20, surviving live-ness by § 26): it does not vanish under the reader.
+      await expect(designRow).toHaveCount(1);
+      await expect(designRow.getByText(en.approvalGate.state.approved)).toBeVisible();
+      await expect(
+        designRow.getByRole('button', { name: en.workbench.approvals.review, exact: true }),
+      ).toHaveCount(0);
+      // A re-read ADDS and never removes: the row that slid up from page two
+      // arrives beside the held one, so the page shows twenty-six.
+      await expect(rows(page)).toHaveCount(26);
+    });
+
+    await test.step('The next load drops the held row, and the list and badge agree', async () => {
+      await page.reload();
+      await expect(queue(page, en.workbench.tabs.toApprove)).toBeVisible();
+      await expect(designRow).toHaveCount(0);
       await expect(rows(page)).toHaveCount(25);
       expect(await badgeCount(page, toApprove)).toBe(25);
     });
@@ -334,10 +350,19 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
       await expect(page).toHaveURL(onTheTab);
-      // The queue emptied: the tab draws its empty state, and the badge is gone.
+      // Nothing is waiting any more, so the badge is gone (suppressed at zero)…
+      await expect.poll(() => badgeCount(page, toApprove), { timeout: 30_000 }).toBe(0);
+      // …and the decided row is HELD with its state, in Chinese (§ 26).
+      const held = rowsIn(page, zh.workbench.tabs.toApprove);
+      await expect(held).toHaveCount(1);
+      await expect(held.getByText(zh.approvalGate.state.approved, { exact: true })).toBeVisible();
+    });
+
+    await test.step('下一次加载 — the next load empties the queue', async () => {
+      await page.reload();
       await expect(
         page.getByRole('heading', { name: zh.workbench.empty.approvals.title }),
-      ).toBeVisible({ timeout: 30_000 });
+      ).toBeVisible();
       await expect(queue(page, zh.workbench.tabs.toApprove)).toHaveCount(0);
       expect(await badgeCount(page, toApprove)).toBe(0);
     });

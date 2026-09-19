@@ -45,16 +45,19 @@ import {
 // ── THE ONE THING ONLY AN E2E CAN PROVE ─────────────────────────────────────
 //
 // Deciding from this tab moves THREE things that live in different places: the
-// row leaves the list, the badge on the strip drops, and — because a
-// `design_result` approval is TERMINAL — the subject card reaches `done`.
+// row SETTLES IN PLACE with its state (and leaves on the next load — design-notes
+// § 20, kept through live-ness by § 26), the badge on the strip drops, and —
+// because a `design_result` approval is TERMINAL — the subject card reaches
+// `done`. (Before MOTIR-5238 the refresh removed the row; the spec was updated to
+// § 26 as a regression test after it left the acceptance lane.)
 // MOTIR-4794 keeps them consistent by REFRESHING the server-rendered page
 // rather than patching a client island, and "they agree" is a property of ONE
 // RENDER CONTAINING BOTH. A unit test cannot see it: the badge and the rows are
 // rendered by different components, and a suite asserting them separately would
 // pass on exactly the implementation this contract forbids.
 //
-// So the central assertion reads the badge and the rows IN THE SAME PAGE STATE,
-// before and after — never a render apart.
+// So the central assertion reads the badge and the rows still AWAITING in the
+// SAME PAGE STATE, before and after — never a render apart.
 //
 // ── WHAT IS PUBLISHED FOR REAL, AND WHAT IS SEEDED ──────────────────────────
 //
@@ -208,7 +211,7 @@ test.describe('every decision waiting on you, in one place', () => {
       await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
     });
 
-    await test.step('Approving it clears the row, the badge and the card together', async () => {
+    await test.step('Approving it settles the row in place and drops the badge', async () => {
       await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
       // The confirm band — approving a design is TERMINAL, so it asks once, and
       // says what it is about to do before it does it.
@@ -225,14 +228,25 @@ test.describe('every decision waiting on you, in one place', () => {
         (url) => url.pathname === '/workbench' && url.search === '?tab=approvals',
       );
 
-      // AUTHORITATIVE: the tab's empty state, drawn only once the refreshed read
-      // has landed. ⚠️ NOT the row count first: `rows` is role-rooted, and while
-      // the dialog's hide settles the page is still outside the accessibility
-      // tree, so `toHaveCount(0)` passed VACUOUSLY and the badge was read stale.
-      await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible({
-        timeout: 30_000,
-      });
-      // …and the rows and the badge agree IN THAT SAME STATE.
+      // AUTHORITATIVE: the badge drops once the refreshed read has landed. ⚠️ The
+      // queue is back in the accessibility tree first — a role-rooted count taken
+      // while the dialog's hide settles reads VACUOUSLY.
+      await expect(page.getByRole('table', { name: 'To approve' })).toBeVisible();
+      await expect.poll(() => badgeCount(page), { timeout: 30_000 }).toBe(0);
+      // The decided row SETTLES IN PLACE (design-notes § 20, kept through
+      // live-ness by § 26 — MOTIR-5238): still there, carrying its state, with
+      // nothing left to press. It is a receipt, not a member — so the rows still
+      // AWAITING (those with a Review door) agree with the badge, in this state.
+      await expect(rows(page)).toHaveCount(1);
+      await expect(rows(page).getByText('Approved', { exact: true })).toBeVisible();
+      await expect(rows(page).getByRole('button', { name: 'Review', exact: true })).toHaveCount(
+        await badgeCount(page),
+      );
+    });
+
+    await test.step('The next load drops the settled row, and the tab is empty', async () => {
+      await page.reload();
+      await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible();
       await expect(rows(page)).toHaveCount(0);
       expect(await badgeCount(page)).toBe(0);
     });
