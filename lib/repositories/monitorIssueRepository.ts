@@ -32,6 +32,14 @@ export interface MonitorIssueFacts {
   eventCount: number;
   firstSeenAt: Date;
   lastSeenAt: Date;
+  /**
+   * The latest event's environment and release (MOTIR-5729). OPTIONAL, and
+   * `undefined` is load-bearing: a write that carries no context — the read was
+   * capped, failed, or answered gone — leaves the stored values exactly as they
+   * were, while an explicit `null` records "the latest event carried none".
+   */
+  environment?: string | null;
+  release?: string | null;
 }
 
 export interface InsertMonitorIssueInput extends MonitorIssueFacts {
@@ -113,6 +121,32 @@ export const monitorIssueRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<MonitorIssue> {
     return tx.monitorIssue.update({ where: { id }, data: facts });
+  },
+
+  /**
+   * Which of these provider issues already have a row that points at a work
+   * item, for ONE binding — ONE query, so the poll can tell a hand-linked issue
+   * below the minimum level (which it refreshes) from one it merely skips
+   * (MOTIR-5729). The caller re-checks the bug under the row lock before
+   * writing; this read only decides who is worth a context read.
+   */
+  async listLinkedByExternalIds(
+    connectionId: string,
+    externalIssueIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ externalIssueId: string; workItemId: string }>> {
+    if (externalIssueIds.length === 0) return [];
+    const rows = await tx.monitorIssue.findMany({
+      where: {
+        connectionId,
+        externalIssueId: { in: [...externalIssueIds] },
+        workItemId: { not: null },
+      },
+      select: { externalIssueId: true, workItemId: true },
+    });
+    return rows.flatMap((row) =>
+      row.workItemId ? [{ externalIssueId: row.externalIssueId, workItemId: row.workItemId }] : [],
+    );
   },
 
   // ── SYNC (Story MOTIR-4931 · Subtask MOTIR-5701) ───────────────────────────

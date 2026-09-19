@@ -10372,6 +10372,14 @@ model MonitorIssue {
   firstSeenAt DateTime @map("first_seen_at")
   lastSeenAt  DateTime @map("last_seen_at")
 
+  /// The issue's LATEST EVENT's `environment` tag and release version, as last
+  /// read (Story MOTIR-4932 · Subtask MOTIR-5729). `null` = the latest event
+  /// carried none, or we have never read it. The list the poll reads carries
+  /// neither, so each is read per issue, outside the row lock, and a failed read
+  /// leaves the stored value alone.
+  environment String?
+  release     String?
+
   /// FK → WorkItem.id, `onDelete: SetNull`. A DELETED bug leaves this row with a
   /// null pointer — which is exactly how the reconciler tells "its work item was
   /// deleted" apart from "never filed" (the second has no identifier below).
