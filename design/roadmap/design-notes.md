@@ -2104,6 +2104,9 @@ effective folder path for that. The reader learns which door holds the blocker.
   decision, which this card does not reverse.
 - **The plan-review canvas's folder crumb** (MOTIR-5418): there the path says where a PROPOSAL will
   be filed. That canvas has no folder level to navigate to, so its text crumb stands.
+  **⚠️ SUPERSEDED (MOTIR-5793, 2026-09-19):** bug MOTIR-5782 gives both planning canvases folder
+  levels, and `design/ai-planning/design-notes.md` Part XVIII makes their folder crumbs navigate.
+  This bullet is kept as the record of the decision it was.
 - **Search-to-locate inside an unopened folder**: a folder card's search text is its name. Locate
   still searches the level in view, as today.
 
