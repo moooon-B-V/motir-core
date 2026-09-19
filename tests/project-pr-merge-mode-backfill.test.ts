@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { PrMergeMode } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { adminDb } from './helpers/adminDb';
@@ -22,9 +21,18 @@ import { truncateAuthTables } from './helpers/db';
 // precedent is `acceptance-video-project-tier-backfill.test.ts`. A retyped UPDATE
 // would stay green while the shipped statement drifted.
 //
+// ⚠️ IT NO LONGER EXECUTES THE COPY-FORWARD, and that is MOTIR-5508, not a lost
+// case. Two cases here used to seed workspaces that DISAGREED, run the extracted
+// copy UPDATE verbatim, and assert each project took its workspace's value. That
+// UPDATE reads `workspace."subtaskPrMergeMode"`, which
+// `20260919150000_drop_workspace_subtask_pr_merge_mode` drops, so on a database
+// migrated to head it cannot run at all. The copy ran once, in production, on
+// 2026-09-13; what stays checkable is the migration's TEXT (the copy is still the
+// first of exactly two UPDATEs, and the type rename's order) and the STAMP, which
+// reads only `project` and `project_repository`.
+//
 // Real Postgres, `adminDb` for fixtures and direct-DB reads (the shipped rule in
-// `tests/helpers/adminDb.ts`). Two workspaces that DISAGREE, because with one
-// workspace a blanket write and a per-project copy look identical.
+// `tests/helpers/adminDb.ts`).
 
 const MIGRATION = path.join(
   process.cwd(),
@@ -57,8 +65,8 @@ function backfillStatements(): { copy: string; stamp: string } {
 
 let seq = 0;
 
-/** A workspace holding `mode`, with one project under it. */
-async function seedTenant(tag: string, mode: PrMergeMode) {
+/** A workspace with one project under it. */
+async function seedTenant(tag: string) {
   const n = seq++;
   const org = await adminDb.organization.create({
     data: { name: `Org ${tag}`, slug: `pmm-org-${tag}-${n}` },
@@ -66,12 +74,6 @@ async function seedTenant(tag: string, mode: PrMergeMode) {
   const workspace = await adminDb.workspace.create({
     data: { name: `WS ${tag}`, slug: `pmm-ws-${tag}-${n}`, organizationId: org.id },
   });
-  // The workspace's value is written by SQL rather than through the generated
-  // client: the column has no application writer after MOTIR-4880, and MOTIR-5505
-  // `@ignore`s the field — while this file, which executes the migration's
-  // copy-forward FROM that column, still needs it set.
-  await adminDb.$executeRaw`
-    UPDATE workspace SET "subtaskPrMergeMode" = ${mode}::pr_merge_mode WHERE id = ${workspace.id}`;
   const project = await seedProject(workspace.id, `${tag}${n}`);
   return { workspace, project };
 }
@@ -121,34 +123,12 @@ afterAll(async () => {
 });
 
 describe('Project.prMergeMode inherits its workspace value', () => {
-  it('copies each workspace value forward — auto stays auto, manual stays manual', async () => {
-    const auto = await seedTenant('auto', 'auto');
-    const manual = await seedTenant('manual', 'manual');
-
-    // Both start at the FLOOR, which is the pre-backfill state.
-    expect((await stored(auto.project.id)).prMergeMode).toBe('manual');
-
-    await adminDb.$executeRawUnsafe(backfillStatements().copy);
-
-    expect(
-      (await stored(auto.project.id)).prMergeMode,
-      'a project under a workspace holding auto must not come back manual',
-    ).toBe('auto');
-    expect((await stored(manual.project.id)).prMergeMode).toBe('manual');
-  });
-
-  it('is per-project: every project under one workspace takes its value', async () => {
-    const { workspace, project } = await seedTenant('multi', 'auto');
-    const second = await seedProject(workspace.id, `multib${seq++}`);
-
-    await adminDb.$executeRawUnsafe(backfillStatements().copy);
-
-    expect((await stored(project.id)).prMergeMode).toBe('auto');
-    expect((await stored(second.id)).prMergeMode).toBe('auto');
-  });
+  // The two copy-forward cases were retired by MOTIR-5508: the UPDATE they ran
+  // reads the workspace column that `20260919150000_drop_workspace_subtask_pr_merge_mode`
+  // drops (see the header). The extraction below still asserts the copy is there.
 
   it('stamps an ESTABLISHED project as decided, and leaves an unestablished one open', async () => {
-    const { workspace, project: established } = await seedTenant('est', 'auto');
+    const { workspace, project: established } = await seedTenant('est');
     await seedRow(established, 'connected');
     const pending = await seedProject(workspace.id, `pend${seq++}`);
     await seedRow(pending, 'proposed');
@@ -156,8 +136,12 @@ describe('Project.prMergeMode inherits its workspace value', () => {
     const skipped = await seedProject(workspace.id, `skip${seq++}`);
     await seedRow(skipped, 'skipped');
 
+    // The stamp alone: it reads `project` and `project_repository`, never the
+    // dropped workspace column, so it still runs against a database at head.
     const { copy, stamp } = backfillStatements();
-    await adminDb.$executeRawUnsafe(copy);
+    expect(copy, 'the copy-forward is still the first UPDATE in the file').toMatch(
+      /SET "pr_merge_mode" = w\."subtaskPrMergeMode"/,
+    );
     await adminDb.$executeRawUnsafe(stamp);
 
     expect(
@@ -173,7 +157,7 @@ describe('Project.prMergeMode inherits its workspace value', () => {
   });
 
   it('re-running the stamp moves nothing that is already decided', async () => {
-    const { project } = await seedTenant('rerun', 'manual');
+    const { project } = await seedTenant('rerun');
     await seedRow(project, 'created');
     const { stamp } = backfillStatements();
     await adminDb.$executeRawUnsafe(stamp);
@@ -211,7 +195,7 @@ describe('Project.prMergeMode inherits its workspace value', () => {
 
 describe('projectRepository merge-mode leaf', () => {
   it('reads the floor as undecided, and a write is read back stamped', async () => {
-    const { project } = await seedTenant('leaf', 'manual');
+    const { project } = await seedTenant('leaf');
 
     expect(await projectRepository.findPrMergeMode(project.id, adminDb)).toEqual({
       prMergeMode: 'manual',

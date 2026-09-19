@@ -19,8 +19,9 @@ import { makeWorkItemFixture } from './fixtures/workItemFixtures';
 // One project cannot distinguish a per-project read from a per-organisation one:
 // both return the same boolean. So each test drives ONE credential against TWO
 // stories in TWO projects of the SAME organisation whose switches disagree, and
-// asserts the refusal lands on exactly one of them. The organisation's own column
-// is left ON throughout, so a verdict cannot be right by accident.
+// asserts the refusal lands on exactly one of them. The organisation has no switch
+// of its own any more (its column was dropped by MOTIR-5195), so a verdict cannot
+// come from it.
 //
 // `billingService` is mocked at the `getAiAccessForContext` seam only — the gate is
 // `hasPaidAiPlan AND the switch`, and with no paid plan every case would refuse
@@ -155,25 +156,12 @@ beforeEach(async () => {
   aiAccess.current = access({ organizationId: orgId, hasPaidAiPlan: true });
 });
 
-/** The organisation's own switch, asserted ON so no verdict can come from it. */
-async function assertOrgSwitchStillOn() {
-  // By SQL, not the generated client: the column has no application reader after
-  // MOTIR-5172, and MOTIR-5173 takes the field out of the client entirely.
-  const [org] = await adminDb.$queryRaw<{ acceptance_video_enabled: boolean }[]>`
-    SELECT acceptance_video_enabled FROM organization WHERE id = ${orgId}`;
-  expect(
-    org!.acceptance_video_enabled,
-    'the fixture leaves the ORGANISATION switch ON: a gate reading it would admit both stories',
-  ).toBe(true);
-}
-
 describe('the CI publish gate refuses on the STORY’S OWN project', () => {
   it('one credential, two projects: the OFF project refuses and the ON project passes', async () => {
     const off = await projectWithSwitch(false);
     const on = await projectWithSwitch(true);
     const offStory = await storyIn(off.id, 'Receipt in the quiet project');
     const onStory = await storyIn(on.id, 'Receipt in the gated project');
-    await assertOrgSwitchStillOn();
 
     const refused = await authorizeAcceptancePublish(await ciRequest(), offStory);
     expect(refused, 'a story in a switched-off project must be refused').toBeInstanceOf(Response);
@@ -217,7 +205,6 @@ describe('the MCP publish gate refuses on the STORY’S OWN project', () => {
     const on = await projectWithSwitch(true);
     const offStory = await storyIn(off.id, 'MCP receipt, quiet project');
     const onStory = await storyIn(on.id, 'MCP receipt, gated project');
-    await assertOrgSwitchStillOn();
 
     const refused = await runCreateAcceptanceUpload({ key: offStory }, fx.ctx);
     expect(refused.isError, JSON.stringify(refused)).toBe(true);

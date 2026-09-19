@@ -1,0 +1,44 @@
+-- ===========================================================================
+-- CONTRACT — drop `workspace."subtaskPrMergeMode"` (MOTIR-5508 ·
+-- `docs/decisions/approval-gates.md` §7 point 3 ·
+-- `docs/decisions/delivery-reader-migration.md` §6a / §6b).
+--
+-- The merge policy is `project.pr_merge_mode` now (MOTIR-4880, 20260913120000,
+-- which ADDED that column and copied each project's workspace value forward in
+-- the same migration). This column has decided nothing since.
+--
+-- ⚠️ THIS IS THE THIRD PHASE OF THREE, AND THE ORDER IS THE WHOLE POINT.
+--
+--   1. EXPAND       (MOTIR-4880) moved every application reader and writer to
+--                   `Project.prMergeMode`.
+--   2. SCHEMA-ONLY  (MOTIR-5505) took the field out of the GENERATED CLIENT with
+--                   `@ignore` while leaving the column — and RELEASED it.
+--   3. CONTRACT     (this) drops the column, and deletes the `@ignore`d field in
+--                   the same commit.
+--
+-- The model DECLARATION is itself a reader: `workspaceRepository`'s bare
+-- `findUnique` / `findFirst` / `findMany` / `update` calls carry no `select`, so
+-- they emit every scalar the model names. `fly.toml`'s `release_command` runs
+-- `prisma migrate deploy` BEFORE any new machine takes traffic, so this drop is
+-- safe only because the still-serving image is one whose client no longer names
+-- the column.
+--
+-- The marker below is `tests/contract-phase-guard.test.ts`'s declaration that
+-- phase 2 has SHIPPED AND RELEASED. It was verified against the platform by
+-- MOTIR-5506 (2026-09-19T13:58:48Z) before this migration was written:
+-- @client-stopped-selecting: MOTIR-5505
+--
+--   • release v595 `complete`; all 4 machines (app ×2, worker, standby worker)
+--     on it, one image digest `sha256:22ab433f…b954d`;
+--   • that image's `GH_SHA` is `5ce9c84ec`, which contains MOTIR-5505's merge
+--     `6dccc212f` (`git merge-base --is-ancestor`), and its `schema.prisma`
+--     declares the field `@ignore`.
+--
+-- NO BACKFILL IS RE-RUN, and NO TYPE IS DROPPED. 20260913120000's copy-forward
+-- was a one-time seed of a column that has been written on its own since: a
+-- project's merge mode is set on the project. The `pr_merge_mode` type stays,
+-- because `project.pr_merge_mode` still uses it.
+-- ===========================================================================
+
+-- AlterTable
+ALTER TABLE "workspace" DROP COLUMN "subtaskPrMergeMode";
