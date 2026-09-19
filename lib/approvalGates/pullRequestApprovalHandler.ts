@@ -12,6 +12,9 @@ import {
   type WorkItemDeliveryWithChecks,
 } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
+import { ApprovalGateDecisionPendingError } from '@/lib/approvalGates/errors';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 
 // THE `pull_request_approval` HANDLER — the registry's THIRD member (Story MOTIR-4909 ·
 // MOTIR-5481; ADR docs/decisions/approval-gates.md §8's amendment, decisions 2 and 6).
@@ -138,6 +141,17 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
    * exempts THIS gate only.
    */
   async approve({ gate, ctx, tx, resolvedStatusKey }: GateEffectArgs): Promise<GateEffect> {
+    // ⚠️ THE MERGE FOLLOWS ONLY THE DECISION (Story MOTIR-4907 · MOTIR-5677;
+    // `approval-gates.md` §8's FIFTH AMENDMENT, clause 5). On a decision card this gate is
+    // the COMPANION of the decision gate, decided by the decision's own press once that
+    // decision is on the record. Any other door reaching it first — the merge row pressed
+    // alone, the REST route — would merge the commits of a decision nobody accepted, so it
+    // is refused here, under the door's lock, whatever door it came through. A card that
+    // does not ask the decision question is untouched.
+    const item = await workItemRepository.findById(gate.workItemId, tx);
+    if (item && (await decisionHoldsMerge(item, tx))) {
+      throw new ApprovalGateDecisionPendingError(gate.workItemId);
+    }
     if (resolvedStatusKey !== PULL_REQUEST_APPROVAL_TARGET.key) {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }

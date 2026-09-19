@@ -1,4 +1,4 @@
-import type { Prisma } from '@/generated/prisma/client';
+import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import type {
   GateEffect,
   GateEffectArgs,
@@ -13,6 +13,8 @@ import {
   type DecisionMember,
 } from '@/lib/approvalGates/decisionSubject';
 import { ApprovalGateDecisionUnresolvableError } from '@/lib/approvalGates/errors';
+import { decisionApprovalStandsForMerge } from '@/lib/approvalGates/gateSet';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import {
   workItemDeliveryRepository,
@@ -44,7 +46,9 @@ import {
  * closed pull request asks nothing: its document either already shipped or never
  * will.
  */
-function membersOf(deliveries: readonly WorkItemDeliveryWithChecks[]): DecisionMember[] {
+export function decisionMembersOf(
+  deliveries: readonly WorkItemDeliveryWithChecks[],
+): DecisionMember[] {
   return deliveries
     .filter((delivery) => delivery.pullRequest.state === 'open' && !delivery.pullRequest.merged)
     .map((delivery) => ({
@@ -67,8 +71,35 @@ export async function loadDecisionIdentity(
   tx: Prisma.TransactionClient,
 ): Promise<DecisionIdentity | null> {
   return decisionIdentityOf(
-    membersOf(await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx)),
+    decisionMembersOf(await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx)),
   );
+}
+
+/**
+ * DOES THE DECISION HOLD THIS CARD'S MERGE? (Story MOTIR-4907 · MOTIR-5677;
+ * `approval-gates.md` §8's FIFTH AMENDMENT, clauses 5 and 6.)
+ *
+ * True for a `decision` + `coding_agent` card whose decision has NOT been approved over
+ * the document its pull requests carry now — awaiting, sent back, unresolvable, never
+ * captured, or approved over a document a later push rewrote. False for every other
+ * card, which is what keeps a code card's and a design card's merges exactly as they
+ * were.
+ *
+ * ⚠️ ONE ANSWER FOR EVERY DOOR THAT WOULD MERGE. `settleGreenVerdict`'s `auto` arm, the
+ * approve-to-merge gate's own `approve` (the item page's merge row, the REST route) and
+ * the GitHub review sync all ask it, so *the merge follows only the decision* is one
+ * statement rather than three that could drift.
+ */
+export async function decisionHoldsMerge(
+  item: Pick<WorkItem, 'id' | 'type' | 'executor'>,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  if (!asksTheDecisionQuestion(item)) return false;
+  const [identity, latestDecisionGate] = await Promise.all([
+    loadDecisionIdentity(item.id, tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'decision_approval', tx),
+  ]);
+  return !decisionApprovalStandsForMerge(identity, latestDecisionGate);
 }
 
 export const decisionApprovalGateHandler: GateHandler<DecisionIdentity> = {

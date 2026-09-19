@@ -1,4 +1,5 @@
 import type { ApprovalGateState } from '@/generated/prisma/client';
+import { decisionSubjectVersion, type DecisionIdentity } from '@/lib/approvalGates/decisionSubject';
 
 // THE GATE-SET PREDICATE — which questions a card should currently be ASKING
 // (Story MOTIR-5652 · Subtask MOTIR-5660; ADR `docs/decisions/design-result.md`
@@ -29,7 +30,8 @@ import type { ApprovalGateState } from '@/generated/prisma/client';
 // ⚠️ PURE, AND DELIBERATELY SO. No repository call, no Prisma client, no
 // transaction. Every caller already holds these facts under its own lock, so this
 // adds no query, no writer and no lock ordering — and its tests need no fixtures.
-// It imports one TYPE and nothing else.
+// It imports one TYPE and one pure sibling (`decisionSubject`, whose version rule the
+// decision question must share with the handler), and nothing else.
 //
 // ⚠️ ITS INPUTS ARE LOADED IN EXACTLY ONE PLACE — `lib/services/gateSetFor.ts`
 // (MOTIR-5662). A caller that gathered some of them itself could answer half the
@@ -39,8 +41,9 @@ import type { ApprovalGateState } from '@/generated/prisma/client';
 // before any behaviour depended on it; the RAISERS were converted by MOTIR-5662
 // and the WITHDRAWERS are MOTIR-5663's.
 
-/** The kinds this predicate decides between. */
-export type AwaitableGateKind = 'design_result' | 'pull_request_approval';
+/** The kinds this predicate decides between. `decision_approval` joined with Story
+ *  MOTIR-4907 (MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT). */
+export type AwaitableGateKind = 'design_result' | 'decision_approval' | 'pull_request_approval';
 
 /** One member of the card's delivery set, reduced to what the answer depends on. */
 export interface GateSetMember {
@@ -101,6 +104,20 @@ export interface GateSetInput {
    * a question whose answer is already on the record.
    */
   designApprovalStandsForMerge: boolean;
+  /**
+   * THE DECISION QUESTION'S INPUTS (Story MOTIR-4907 · MOTIR-5677; `approval-gates.md`
+   * §8's FIFTH AMENDMENT). Absent on every card that is not a `decision` +
+   * `coding_agent` card, which is what keeps such a card's answer byte-identical to
+   * the one it had before the kind existed.
+   */
+  decision?: {
+    /** What the card's pull requests carry, from the capture — or null when nothing
+     *  has been captured yet (clause 3: a question is not asked before the head has
+     *  been looked at). An UNRESOLVABLE identity is still asked about. */
+    identity: DecisionIdentity | null;
+    /** The card's most recent `decision_approval` gate, whatever its state. */
+    latestGate: ExistingGate | null;
+  };
   /** The card's own id — a merge gate's `subjectId` is the card (MOTIR-5603). */
   workItemId: string;
 }
@@ -207,6 +224,26 @@ export function designApprovalStandsForMerge(
 }
 
 /**
+ * Does a decided DECISION approval already authorise this card's merge (clause 5, the
+ * design gate's Q4 carry one kind over)? True only when the card's latest decision
+ * gate is `approved` over the version the card's pull requests carry NOW.
+ *
+ * ⚠️ OVER THE CURRENT VERSION, and the version is the document's BLOB (clause 4). An
+ * approval of a document a later push rewrote authorises nothing — the new text is a
+ * new question — while a push that left the document alone leaves it standing.
+ */
+export function decisionApprovalStandsForMerge(
+  identity: DecisionIdentity | null,
+  latestDecisionGate: { state: string; subjectVersion: string | null } | null,
+): boolean {
+  if (!identity || !identity.resolvable || !latestDecisionGate) return false;
+  return (
+    latestDecisionGate.state === 'approved' &&
+    latestDecisionGate.subjectVersion === decisionSubjectVersion(identity)
+  );
+}
+
+/**
  * WHICH GATES this card should be asking, and which one leads.
  *
  * The whole answer, in the order the ADR states it:
@@ -254,6 +291,27 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     });
   }
 
+  // THE DECISION QUESTION (clauses 1–4). Owed whenever the card asks it and a captured
+  // head gives it something to ask about — INCLUDING an unresolvable one, which raises
+  // a gate that cannot be approved and holds the merge (clause 3). `subjectId` is the
+  // card, so only the VERSION says which document was answered.
+  const decision = input.decision;
+  const decisionVersion = decision?.identity ? decisionSubjectVersion(decision.identity) : null;
+  if (
+    decision?.identity &&
+    !alreadyDecided(decision.latestGate, input.workItemId, decisionVersion, true)
+  ) {
+    awaited.push({
+      kind: 'decision_approval',
+      subjectId: input.workItemId,
+      subjectVersion: decisionVersion,
+    });
+  }
+  const decisionStands = decisionApprovalStandsForMerge(
+    decision?.identity ?? null,
+    decision?.latestGate ?? null,
+  );
+
   const version = setVersion(input.members);
   // ⚠️ Q4'S CARRY IS ONE-TIME, AND ONLY WHILE THE CARD HAS NO MERGE GATE AT ALL
   // (MOTIR-5666 found this; MOTIR-5664 shipped it without the second clause). Q4
@@ -262,9 +320,13 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // the commits have a history of their own, and a later PUSH is a new question
   // about new commits. Without this clause the design approval would go on
   // authorising every future green, merging code nobody approved.
-  const carriedByDesign = input.designApprovalStandsForMerge && input.latestMergeGate === null;
+  //
+  // The DECISION approval carries the merge on exactly the same one-time terms
+  // (clause 5): a primary answered before the set went green, followed once.
+  const carriedByPrimary =
+    (input.designApprovalStandsForMerge || decisionStands) && input.latestMergeGate === null;
   const answered =
-    carriedByDesign || alreadyDecided(input.latestMergeGate, input.workItemId, version, true);
+    carriedByPrimary || alreadyDecided(input.latestMergeGate, input.workItemId, version, true);
   const everyMemberMergeable =
     input.members.length > 0 && input.members.every((member) => member.isMergeCandidate);
   if (input.prMergeMode === 'manual' && !answered && everyMemberMergeable && version !== null) {
@@ -275,8 +337,13 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     });
   }
 
+  // A PRIMARY question leads whenever it is owed — the design, else the decision
+  // (clause 5); the merge question leads only when it is asked alone.
   const primary: AwaitableGateKind | null =
-    awaited.find((gate) => gate.kind === 'design_result')?.kind ?? awaited[0]?.kind ?? null;
+    awaited.find((gate) => gate.kind === 'design_result')?.kind ??
+    awaited.find((gate) => gate.kind === 'decision_approval')?.kind ??
+    awaited[0]?.kind ??
+    null;
 
   return { awaited, primary };
 }

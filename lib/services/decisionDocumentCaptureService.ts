@@ -9,6 +9,10 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
+import { loadDecisionIdentity } from '@/lib/approvalGates/decisionApprovalHandler';
+import { decisionSubjectVersion } from '@/lib/approvalGates/decisionSubject';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { reconcileGatesFor } from './gateSetFor';
 
 // CAPTURE THE DECISION DOCUMENT AT THE HEAD (Story MOTIR-4907 · Subtask MOTIR-5674;
 // ADR `docs/decisions/approval-gates.md` §8's FIFTH AMENDMENT, clause 7).
@@ -83,6 +87,7 @@ export async function captureDecisionDocument(
       await bindWorkspaceContext(tx, pr.repo.workspaceId);
       await githubPullRequestRepository.recordDecisionDocCapture(pr.id, capture, tx);
     });
+    await reconcileDecisionGates(pr.id, pr.repo.workspaceId);
     return { outcome: capture.outcome };
   } catch (err) {
     console.error(
@@ -92,6 +97,61 @@ export async function captureDecisionDocument(
     );
     return { outcome: 'failed' };
   }
+}
+
+/**
+ * ASK THE DECISION QUESTION THE NEW CAPTURE IMPLIES (Story MOTIR-4907 · MOTIR-5677;
+ * `approval-gates.md` §8's FIFTH AMENDMENT, clauses 3 and 4), for every decision card
+ * this pull request delivers, each under its own row lock.
+ *
+ * A capture is the moment the decision question changes — the design gate's PUBLISH, one
+ * kind over — so it is where the gate is raised and where a stale one is retired:
+ *
+ *  - an AWAITING decision gate whose version is not the capture's now is SUPERSEDED with
+ *    the cause `head_moved` — the writing path is the head move, and for this kind it only
+ *    writes when that move changed the document (the version is the BLOB, so a push that
+ *    left the document alone leaves the question, and a decided answer, standing);
+ *  - then the gate set says what the card should be asking, and whatever is missing is
+ *    raised — the new question, an unresolvable one included.
+ *
+ * A decided gate is never touched: `trg_approval_gate_decided_immutable` would refuse it,
+ * and an answer outlives a changed subject (§6c); the predicate asks the NEW version as a
+ * new question.
+ */
+async function reconcileDecisionGates(pullRequestId: string, workspaceId: string): Promise<void> {
+  await withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, workspaceId);
+    for (const { workItemId } of await workItemDeliveryRepository.listByPullRequest(
+      pullRequestId,
+      tx,
+    )) {
+      await workItemRepository.lockById(workItemId, tx);
+      const item = await workItemRepository.findById(workItemId, tx);
+      if (!item || !asksTheDecisionQuestion(item)) continue;
+      const identity = await loadDecisionIdentity(item.id, tx);
+      const awaiting = (await approvalGateRepository.findAwaitingByWorkItem(item.id, tx)).find(
+        (gate) => gate.kind === 'decision_approval',
+      );
+      // ⚠️ A NULL VERSION IS NOT A DIFFERENT ONE. The review-entry re-ask
+      // (`approvalGatesService.raiseOnReviewEntry`) raises every kind with no version —
+      // the door stamps it at decision time — so reading null as *stale* would retire
+      // that question the moment it was asked.
+      if (
+        awaiting &&
+        identity &&
+        awaiting.subjectVersion !== null &&
+        awaiting.subjectVersion !== decisionSubjectVersion(identity)
+      ) {
+        await approvalGateRepository.supersedeAwaitingByWorkItem(
+          item.id,
+          'decision_approval',
+          'head_moved',
+          tx,
+        );
+      }
+      await reconcileGatesFor(item, tx);
+    }
+  });
 }
 
 /**

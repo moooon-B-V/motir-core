@@ -285,7 +285,9 @@ async function companionSubjectVersion(
   gate: { kind: string; workItemId: string },
   tx: Prisma.TransactionClient,
 ): Promise<string | null> {
-  if (gate.kind !== 'design_result') return null;
+  // A DECISION gate is a primary too (MOTIR-5677; `approval-gates.md` §8's FIFTH
+  // AMENDMENT, clause 5): its press decides the same companion, so its stamp covers it.
+  if (gate.kind !== 'design_result' && gate.kind !== 'decision_approval') return null;
   const merge = (await approvalGateRepository.findAwaitingByWorkItem(gate.workItemId, tx)).find(
     (row) => row.kind === 'pull_request_approval',
   );
