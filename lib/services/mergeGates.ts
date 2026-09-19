@@ -7,7 +7,7 @@ import {
   githubPullRequestRepository,
   type GithubPullRequestWithInstallation,
 } from '@/lib/repositories/githubPullRequestRepository';
-import { designApprovalStandsForMerge } from '@/lib/approvalGates/gateSet';
+import { designApprovalStandsForMerge, designHoldsMerge } from '@/lib/approvalGates/gateSet';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -99,6 +99,22 @@ async function designApprovalHolds(
   return latestMergeGate === null && designApprovalStandsForMerge(currentDesign, latestDesignGate);
 }
 
+/**
+ * {@link designHoldsMerge}, read from the card's own rows — whether an unanswered design
+ * holds this card's merge (Bug MOTIR-5762). Exported for the review sync, the other merge
+ * path that does not go through the design's own press.
+ */
+export async function designResultHoldsMerge(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const [currentDesign, latestDesignGate] = await Promise.all([
+    designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
+    approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
+  ]);
+  return designHoldsMerge(currentDesign, latestDesignGate);
+}
+
 export async function settleGreenVerdict(
   args: { item: WorkItem; pullRequestIds: readonly string[] },
   ctx: ServiceContext,
@@ -123,6 +139,14 @@ export async function settleGreenVerdict(
   } else if (mode?.prMergeMode !== 'auto') {
     return [];
   } else if ((await resolveRunTargetFor(args.item, tx)).kind === 'ancestor') {
+    return [];
+  } else if (await designResultHoldsMerge(args.item.id, tx)) {
+    // ⚠️ AN UNANSWERED DESIGN HOLDS AN AUTOMATIC MERGE (Bug MOTIR-5762; `design-result.md`
+    // AMENDMENT 6 Q1). §7a's *"`auto` means no gate"* is about the MERGE gate — the design
+    // gate is raised at publish in both modes, and it is the PRIMARY question the merge
+    // follows. Awaiting, sent back, or approved for a result since superseded all hold.
+    // The merge follows the approval: on the next green verdict, or at once when the press
+    // lands on a set that is already green (`pullRequestMergeService`).
     return [];
   }
 
