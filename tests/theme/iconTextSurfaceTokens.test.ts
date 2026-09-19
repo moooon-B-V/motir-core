@@ -65,6 +65,9 @@ describe('icon/text-role + surface-primitive tokens map to their Tier-0 --color-
     // MOTIR-5715 — the ON track's edge is the primary INK, not the fill: the fill
     // is under 3:1 on the page in three light palettes (switchStateContrast.test.ts).
     '--el-switch-on-border': '--color-primary',
+    // MOTIR-5725 — the OFF edge was --el-border-strong (1.52-2.41:1 on the page);
+    // it takes the OFF knob's own ink, and --el-border-strong keeps its mapping.
+    '--el-switch-off-border': '--color-muted-foreground',
     // MOTIR-5711 — the knob is a PAIR with its track: ON is the fill's own ink,
     // OFF the muted grey (switchStateContrast.test.ts measures both at 3:1).
     '--el-switch-knob': '--color-primary-foreground',

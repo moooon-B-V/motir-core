@@ -24,6 +24,10 @@ import { contrast, flattenColorMix } from './colorMetrics';
 // in amber, citrine and candy light. The edge now has its own token, and this
 // suite measures it over the same matrix.
 //
+// MOTIR-5725 — the OFF track's outer edge, the last pair the primitive paints.
+// It was `--el-border-strong`, 1.52-2.41:1 on `--el-page-bg` in all twenty
+// contexts; it now has its own `--el-switch-off-border` as well.
+//
 // Same shape as `dangerFillInkContrast.test.ts`, and for the same reason: this is
 // a property of the token LAYER used exactly as designed, invisible to any scan
 // of the components, because `Switch.tsx` is correct — it paints the tokens it
@@ -85,7 +89,7 @@ describe('the Switch knob is distinguishable from its track, in every palette an
     // binds to each state. A knob moved back onto one shared token, or a track
     // repainted, would leave this suite measuring a pairing nothing renders.
     expect(SWITCH_SRC).toContain("'border-(--el-switch-on-border) bg-(--el-switch-on)'");
-    expect(SWITCH_SRC).toContain("'border-(--el-border-strong) bg-(--el-muted)'");
+    expect(SWITCH_SRC).toContain("'border-(--el-switch-off-border) bg-(--el-muted)'");
     expect(SWITCH_SRC).toContain("'translate-x-[18px] bg-(--el-switch-knob)'");
     expect(SWITCH_SRC).toContain("'translate-x-0.5 bg-(--el-switch-knob-off)'");
   });
@@ -114,6 +118,16 @@ describe('the Switch knob is distinguishable from its track, in every palette an
     expect(
       under,
       `An ON switch's edge must clear ${AA_NON_TEXT}:1 against the page everywhere (WCAG 1.4.11).\n${table}\n`,
+    ).toEqual([]);
+  });
+
+  it("the OFF track's edge (`--el-switch-off-border`) on the page (`--el-page-bg`) clears 3:1", () => {
+    // The ON edge's twin. `--el-border-strong`, which this edge used to be, is
+    // also the input and secondary-button border, so it is not retuned here.
+    const { under, table } = measure('--el-switch-off-border', '--el-page-bg');
+    expect(
+      under,
+      `An OFF switch's edge must clear ${AA_NON_TEXT}:1 against the page everywhere (WCAG 1.4.11).\n${table}\n`,
     ).toEqual([]);
   });
 });
