@@ -262,6 +262,24 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
       expect(agentPrompt()).toContain(rule);
     });
 
+    // Design review 2026-09-19 (MOTIR-5673): the decision port shows NO How to test, so the
+    // agent is not asked to write one — neither the record nor the pull request's section.
+    it('an agent’s decision card writes NO How to test — not the record, not the PR section', () => {
+      const prompt = agentPrompt();
+      expect(prompt).toContain(
+        'do NOT publish How to test for PROD-7. A decision card ships a document',
+      );
+      expect(prompt).toContain('It carries NO "## How to test" section');
+      expect(prompt).not.toContain("4b. publish this run's HOW TO TEST");
+      expect(prompt).not.toContain('Its body carries a "## How to test" section');
+    });
+
+    it('a CODE card still publishes How to test — the decision rule is the decision type’s alone', () => {
+      const { prompt } = assembleDispatchPrompt(source({ type: 'code', executor: 'coding_agent' }));
+      expect(prompt).toContain("4b. publish this run's HOW TO TEST");
+      expect(prompt).toContain('Its body carries a "## How to test" section');
+    });
+
     it('a HUMAN decision card never reaches the lane — it gets the manual steps and none of the rules', () => {
       const { prompt } = assembleDispatchPrompt(source({ type: 'decision', executor: 'human' }));
       expect(prompt).toContain('Never paste a secret into the work item.');

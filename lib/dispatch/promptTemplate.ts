@@ -1474,7 +1474,7 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
         `       (\`gh pr list --head ${sessionBranch}\`), or open it from that branch if`,
         '       you are the first item to reach this point in it',
       ]
-    : openPullRequestStep();
+    : openPullRequestStep(src);
   return [
     'Two outcomes end this work, and the loop can only tell them apart if you SAY',
     'which one happened. A process that exits 0 proves the process ended, nothing',
@@ -1559,6 +1559,18 @@ function howToTestStep(src: DispatchPromptSource): string[] {
       `        once, onto ${src.runTargetKey}, by the run's close-out step.`,
     ];
   }
+  // ⚠️ A DECISION CARD HAS NOTHING TO RUN (Story MOTIR-4907; design review 2026-09-19,
+  // `design/github/design-notes.md` § 27 *Revised on review*). Its deliverable is the
+  // document, and the decision gate's port draws the document with the pull request
+  // beneath it and NO How-to-test part — so a record written here would be one nobody
+  // is ever shown.
+  if (src.type === 'decision') {
+    return [
+      `    4b. do NOT publish How to test for ${src.key}. A decision card ships a document,`,
+      '        not something to run: the person approving reads the decision document',
+      '        itself, and the decision gate shows no How to test.',
+    ];
+  }
   return [
     `    4b. publish this run's HOW TO TEST with the ${HOW_TO_TEST_TOOL_NAME} tool —`,
     `        ONCE, on ${src.key} (this item is the run's target). "bodyMd" is RICH TEXT`,
@@ -1583,7 +1595,16 @@ function howToTestStep(src: DispatchPromptSource): string[] {
  * record on the work item is what Motir renders; the body is what a reviewer on
  * the host reads, and §9's amendment keeps both.
  */
-function openPullRequestStep(): string[] {
+function openPullRequestStep(src: DispatchPromptSource): string[] {
+  // A decision card's pull request carries the document and nothing to run (see
+  // `howToTestStep`), so its body names the document instead of a How to test.
+  if (src.type === 'decision') {
+    return [
+      "    3. open the pull request. Its body names the decision document's path and",
+      '       says in one line what it decides. It carries NO "## How to test" section:',
+      '       there is nothing to run.',
+    ];
+  }
   return [
     '    3. open the pull request. Its body carries a "## How to test" section with',
     '       the SAME Markdown step 4b publishes on the run target — its sections and',
