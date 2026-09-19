@@ -40,6 +40,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { foldersService } from '@/lib/services/foldersService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { waitForDerivedStatus } from './derivedStatus';
 
@@ -695,5 +696,91 @@ export async function seedWideRoadmap(email: string): Promise<WideRoadmapSeed> {
     drillSiblingTitle,
     frontierEpicTitle,
     rootEpicCount: FILLER + 2,
+  };
+}
+
+export interface FolderRoadmapSeed {
+  email: string;
+  password: string;
+  projectKey: string;
+  epicTitles: [string, string];
+  looseBugTitle: string;
+  /** Root folder "Archive" — holds child folder "Imports" and three filed items. */
+  archiveId: string;
+  /** "Imports", inside Archive — holds one filed bug. */
+  importsId: string;
+  /** "Later" — an EMPTY root folder. */
+  laterId: string;
+  archivedTitles: [string, string, string];
+  deepBugTitle: string;
+  /** The one filed bug that is a member of the active sprint. */
+  sprintBugTitle: string;
+}
+
+/**
+ * The FOLDER roadmap fixture (Bug MOTIR-5710 · MOTIR-5743): a project whose root
+ * holds two epics, an unfiled bug and two folders — "Archive" (a child folder
+ * plus three filed items, one of them an epic) and an empty "Later" — with one
+ * filed bug committed to the active sprint, so sprint scope has a filed member
+ * to draw WITHOUT its folder. Seeded through the shipped folder service; its own
+ * raw writes (the sprint) ride `adminDb` per the ratchet noted above.
+ */
+export async function seedFolderRoadmap(email: string): Promise<FolderRoadmapSeed> {
+  const { ctx, projectId, projectKey } = await makeTenant(
+    email,
+    'Roadmap E2E — folders',
+    'Folder Roadmap',
+    'FOLD',
+  );
+  const make = (kind: 'epic' | 'bug' | 'story', title: string) =>
+    workItemsService.createWorkItem({ projectId, kind, title }, ctx);
+  const folder = (name: string, parentFolderId: string | null = null) =>
+    foldersService.createFolder({ projectId, parentFolderId, name }, ctx);
+
+  const epicTitles: [string, string] = ['Platform foundation', 'Growth experiments'];
+  for (const title of epicTitles) await make('epic', title);
+  const looseBugTitle = 'Loose bug';
+  await make('bug', looseBugTitle);
+
+  const archive = await folder('Archive');
+  const later = await folder('Later');
+  const imports = await folder('Imports', archive.id);
+
+  const archivedTitles: [string, string, string] = ['Filed epic', 'Filed bug one', 'Filed bug two'];
+  const archived = [
+    await make('epic', archivedTitles[0]),
+    await make('bug', archivedTitles[1]),
+    await make('bug', archivedTitles[2]),
+  ];
+  for (const item of archived) {
+    await foldersService.fileWorkItem(item.id, { folderId: archive.id }, ctx);
+  }
+  const deepBugTitle = 'Deep bug';
+  const deep = await make('bug', deepBugTitle);
+  await foldersService.fileWorkItem(deep.id, { folderId: imports.id }, ctx);
+
+  const sprint = await adminDb.sprint.create({
+    data: {
+      workspaceId: ctx.workspaceId,
+      projectId,
+      name: 'Sprint 1',
+      state: 'active',
+      sequence: 1,
+    },
+  });
+  await adminDb.workItem.update({ where: { id: archived[1]!.id }, data: { sprintId: sprint.id } });
+
+  return {
+    email,
+    password: ROADMAP_SEED_PASSWORD,
+    projectKey,
+    epicTitles,
+    looseBugTitle,
+    archiveId: archive.id,
+    importsId: imports.id,
+    laterId: later.id,
+    archivedTitles,
+    deepBugTitle,
+    sprintBugTitle: archivedTitles[1],
   };
 }
