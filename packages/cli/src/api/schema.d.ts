@@ -386,7 +386,7 @@ export interface paths {
         };
         /**
          * List the projects in this token’s workspace
-         * @description Every project the token owner may browse in the bound workspace, ordered by key ascending — a total order the page addressing owns, so a cursor can never skip or duplicate a row.
+         * @description Every project the token owner may browse in the bound workspace, ordered by key ascending — a total order the page addressing owns, so a cursor can never skip or duplicate a row. A token BOUND to one project lists exactly that project — the same set `getProject` lets it open — so a narrowed credential is never shown a project it would then be refused.
          *
          *     Requires the `project:browse` permission.
          */
