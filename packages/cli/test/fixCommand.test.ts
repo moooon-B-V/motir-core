@@ -373,7 +373,7 @@ describe('motir fix — giving up', () => {
 
 describe('motir fix — refusals touch neither git nor the agent', () => {
   const REASONS: [WorkItemRepairRefusal, string][] = [
-    ['not_implemented', 'it is not at Implemented'],
+    ['not_implemented', 'it is not waiting on a repair'],
     [
       'repair_on_run_target',
       'its pull requests belong to the run on PROD-2 — run `motir fix PROD-2` instead',

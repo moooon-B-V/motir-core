@@ -26,8 +26,9 @@ import { withProjectSession } from '../session.js';
 import { requireAgent } from './auto.js';
 import { CI_WATCH_EVENT, CI_WATCH_STOP_REASON } from './dispatch.js';
 
-// `motir fix <key>` (Story MOTIR-5460 · MOTIR-5465) — hand an `implemented`
-// card's RED pull requests to an agent, after the run that opened them has ended.
+// `motir fix <key>` (Story MOTIR-5460 · MOTIR-5465) — hand a card's RED pull
+// requests to an agent, after the run that opened them has ended: an `implemented`
+// card, or an `in_review` one the merge queue threw out (MOTIR-5803).
 //
 // ── Everything it needs already ships, except the claim and the checkout ─────
 // The fixing loop is `runCiWatchPhase` exactly as `motir run` calls it: the same
@@ -91,8 +92,8 @@ const bindSigint = (handler: () => void): (() => void) => {
  */
 const REFUSAL_LINES = {
   not_implemented: () =>
-    'it is not at Implemented. `motir fix` picks up a card whose run has ended and whose pull ' +
-    'requests went red afterwards.',
+    'it is not waiting on a repair. `motir fix` picks up a card whose run has ended and whose ' +
+    'pull requests went red afterwards, or that the merge queue threw out.',
   repair_on_run_target: (claim) =>
     `its pull requests belong to the run on ${claim.runTargetKey ?? 'its parent'} — ` +
     `run \`motir fix ${claim.runTargetKey ?? '<that key>'}\` instead.`,
@@ -230,7 +231,7 @@ export function renderRepairGaveUp(input: {
     lines.push(`  ${pr.repo}#${pr.number} — failing: ${checks} (${pr.url})`);
   }
   lines.push(
-    `The card stays at Implemented. Look at the failure, then run \`motir fix ${key}\` again.`,
+    `The card stays where it is. Look at the failure, then run \`motir fix ${key}\` again.`,
   );
   return lines.join('\n');
 }

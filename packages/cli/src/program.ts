@@ -353,7 +353,8 @@ export function buildProgram(): Command {
       'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
     )
     .action(runCommand);
-  // `motir fix <key>` (MOTIR-5465) — the repair of a red, Implemented card.
+  // `motir fix <key>` (MOTIR-5465) — the repair of a red card, or one the merge queue
+  // threw out (MOTIR-5803).
   register(program, 'fix')
     .option('--agent <cmd>', 'Run THIS agent command on the fix (overrides MOTIR_AGENT).')
     .option(

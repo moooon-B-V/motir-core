@@ -145,7 +145,9 @@ describe('claimRepair — the claim', () => {
 });
 
 describe('claimRepair — the refusals, in order', () => {
-  it.each(['todo', 'in_review', 'in_progress', 'done'])(
+  // `in_review` left this list with MOTIR-5803: an In Review card the merge queue ejected
+  // is claimed, and any other is `not_failing` (the IN REVIEW cases further down).
+  it.each(['todo', 'in_progress', 'approved', 'done'])(
     'a card at `%s` is not_implemented',
     async (status) => {
       const fx = await makeWorkItemFixture();
@@ -313,7 +315,9 @@ describe('claimRepair — who holds it', () => {
     const fx = await makeWorkItemFixture();
     const { card } = await redCard(fx);
     await claim(fx, card.identifier);
-    await setStatus(card.id, 'in_review');
+    // `done`, not `in_review`: an In Review card is now evaluated for an ejection
+    // (MOTIR-5803), so it is no longer the status that left the repairable rungs.
+    await setStatus(card.id, 'done');
     const rival = await member(fx, 'Rival Runner');
 
     expect((await claim(fx, card.identifier, rival.ctx)).reason).toBe('not_implemented');
@@ -715,6 +719,87 @@ describe('claimRepair — a standing merge-queue failure (MOTIR-5719)', () => {
     expect(byNumber.get(ejected.number)).toMatchObject({
       ci: 'passing',
       queueExit: { rawReason: 'CI_FAILURE' },
+    });
+  });
+
+  // ── IN REVIEW (MOTIR-5803; `approval-gates.md` §4 FOURTH AMENDMENT, point 5) ──────
+  // A manual FAILURE ejection now returns the card to In Review with a fresh gate, and
+  // `motir fix` must accept it THERE — but only while the failure exit stands at a
+  // member's head. Any other In Review card waits on a person, not on a repair.
+
+  it('IN REVIEW: an ejected card is claimed with the exit’s reason and check, and its status and gates are unchanged', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await setStatus(card.id, 'in_review');
+    await exitOn(pr.id);
+    const gatesBefore = await adminDb.approvalGate.findMany({ where: { workItemId: card.id } });
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result.outcome).toBe('claimed');
+    expect(result.pullRequests).toEqual([
+      expect.objectContaining({
+        number: pr.number,
+        ci: 'passing',
+        queueExit: expect.objectContaining({
+          rawReason: 'CI_FAILURE',
+          failingCheckName: 'Merge queue / e2e',
+          failingCheckUrl: 'https://github.com/acme/web/runs/77',
+        }),
+      }),
+    ]);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).status).toBe(
+      'in_review',
+    );
+    expect(await adminDb.approvalGate.findMany({ where: { workItemId: card.id } })).toEqual(
+      gatesBefore,
+    );
+  });
+
+  it.each([
+    ['no exit at all', null],
+    ['an exit that was re-queued', { requeuedAt: new Date() }],
+    ['an exit a push has left behind', { headSha: 'a'.repeat(40) }],
+    ['a NEUTRAL exit', { disposition: 'neutral' as const, rawReason: 'MANUAL' }],
+  ])('IN REVIEW with %s is refused not_failing, and opens nothing', async (_label, opts) => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await setStatus(card.id, 'in_review');
+    if (opts) await exitOn(pr.id, opts);
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result).toMatchObject({ outcome: 'not_repairable', reason: 'not_failing' });
+    expect(result.pullRequests).toEqual([]);
+    expect(await fixRuns(card.id)).toHaveLength(0);
+  });
+
+  it('IN REVIEW with a red check of its own but no queue exit is still refused — only an ejection admits it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, repo } = await greenCard(fx);
+    await setStatus(card.id, 'in_review');
+    await deliveredPr(fx, card.id, repo, {
+      headRef: 'subtask/red-in-review',
+      checks: { Vitest: 'failure' },
+    });
+
+    expect(await claim(fx, card.identifier)).toMatchObject({
+      outcome: 'not_repairable',
+      reason: 'not_failing',
+    });
+  });
+
+  it('IN REVIEW: the page’s repair view offers the fix on an ejected card, and hides it otherwise', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await setStatus(card.id, 'in_review');
+    expect((await workItemRepairService.getRepairView(card.id, fx.ctx)).state).toBe('hidden');
+
+    await exitOn(pr.id);
+
+    expect(await workItemRepairService.getRepairView(card.id, fx.ctx)).toMatchObject({
+      state: 'offer',
+      failing: [{ number: pr.number, queueExit: { rawReason: 'CI_FAILURE' } }],
     });
   });
 

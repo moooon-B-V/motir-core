@@ -156,12 +156,14 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     method: 'POST',
     path: '/api/v1/work-items/{key}/repair',
     operationId: 'claimWorkItemRepair',
-    summary: 'Claim the repair of an Implemented work item\u2019s failing pull requests',
+    summary: 'Claim the repair of a work item\u2019s failing or ejected pull requests',
     description:
-      'Hand an `implemented` work item\u2019s RED pull requests to ONE fixing agent, after the ' +
-      'run that opened them has ended (`motir fix <key>`). In ONE transaction the item\u2019s row ' +
-      'is locked and, in order: an archived item or one not at the Implemented status is ' +
-      '`not_repairable` (`not_implemented`); an item whose pull requests belong to a run ' +
+      'Hand a work item\u2019s RED pull requests to ONE fixing agent, after the run that opened ' +
+      'them has ended (`motir fix <key>`): an `implemented` item, or an `in_review` one the merge ' +
+      'queue threw out for a failure. In ONE transaction the item\u2019s row is locked and, in ' +
+      'order: an archived item, or one at neither the Implemented nor the In Review status, is ' +
+      '`not_repairable` (`not_implemented`); an In Review item with no merge-queue failure ' +
+      'standing at a pull request\u2019s current head is `not_failing`; an item whose pull requests belong to a run ' +
       'launched against another item is `not_repairable` (`repair_on_run_target`, naming ' +
       '`runTargetKey`); an item with no pull requests is `no_pull_requests`; an item with no ' +
       'failing OPEN pull request is `ci_running` when one is running, else `not_failing`. ' +

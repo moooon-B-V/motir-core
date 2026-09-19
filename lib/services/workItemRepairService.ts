@@ -25,6 +25,8 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE REPAIR CLAIM (Story MOTIR-5460 · MOTIR-5464) — hand an `implemented` card's
 // red pull requests to ONE fixing agent, after the run that opened them has ended.
+// Since MOTIR-5803 it also takes an `in_review` card the merge queue EJECTED (a
+// standing failure exit at a member's head), where a manual ejection now leaves it.
 //
 // ── Why the keyed claim cannot do it ────────────────────────────────────────
 // `workItemsService.claimWorkItem` admits the to-do category (or the caller's own
@@ -98,10 +100,14 @@ async function evaluate(
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
 ): Promise<Evaluation> {
-  if (
-    item.archivedAt !== null ||
-    rankOfStatus(item.status, statuses, ladderKeysOf(statuses)) !== RUNG_RANK.implemented
-  ) {
+  const rank = rankOfStatus(item.status, statuses, ladderKeysOf(statuses));
+  // ⚠️ IN REVIEW IS ADMITTED TOO — but only for a card the merge queue EJECTED
+  // (MOTIR-5803; `approval-gates.md` §4 FOURTH AMENDMENT, point 5). A manual FAILURE
+  // removal now returns the card to In Review with a fresh approve-to-merge gate, and
+  // `motir fix` is the answer when that failure is real. An ordinary In Review card is
+  // waiting on a person, not on a repair, so it is refused below as `not_failing`.
+  const inReview = rank === RUNG_RANK.in_review;
+  if (item.archivedAt !== null || (rank !== RUNG_RANK.implemented && !inReview)) {
     return { ok: false, reason: 'not_implemented', runTargetKey: null, failing: [] };
   }
 
@@ -122,6 +128,12 @@ async function evaluate(
     new Map(openRows.map((d) => [d.pullRequest.id, d.pullRequest])),
     tx,
   );
+  // In Review: the ONLY admission is a standing failure exit at a member's current head
+  // (the same `queueExitHoldsAtHead` read). No exit, one re-queued, or one a push has
+  // since left behind — the card waits on review and nothing is failing.
+  if (inReview && queueHeld.size === 0) {
+    return { ok: false, reason: 'not_failing', runTargetKey: null, failing: [] };
+  }
   const open = openRows.map((d) => ({
     row: d,
     ci: derivePrCiState(d.pullRequest.checkRuns),

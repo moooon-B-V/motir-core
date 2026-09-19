@@ -134,9 +134,9 @@ describe('the curated overview', () => {
                                   deliver its prompt.
         run [options] <scope>     Run a scope: one work item, a whole story, or
                                   \`sprint\` for the active one.
-        fix [options] <key>       Hand an Implemented work item’s failing pull
-                                  requests — including one the merge queue ejected —
-                                  to your agent, on their own branches.
+        fix [options] <key>       Hand a work item whose pull requests are failing, or
+                                  that the merge queue threw out, to your agent, on
+                                  their own branches.
         auto [options]            Drain the ready set unattended: one item at a time
                                   onto a session branch.
         batch [options]           Implement a FROZEN snapshot of the ready set: one

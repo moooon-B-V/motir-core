@@ -226,9 +226,12 @@ illegal flip surfaces the server's own allowed-targets error verbatim. A merged
 motir fix <key> [--agent <cmd>] [--report-log]
 ```
 
-**When to use it.** A card is **Implemented**, its run has ended, and one of its
-pull requests has gone red since — a check failed later, or a merge queue threw
-it out. The item page's Development block offers this command, ready to copy.
+**When to use it.** A work item's pull requests are failing, or the merge queue
+threw one out, and the run that opened them has ended. That is a card at
+**Implemented** whose checks went red later, or a card back at **In Review** after
+the merge queue ejected it for a failure (it waits there for a fresh approval, and
+`motir fix` is the answer when the failure is real). The item page's Development
+block offers this command, ready to copy.
 
 **What it does:**
 
@@ -237,7 +240,8 @@ it out. The item page's Development block offers this command, ready to copy.
    changes the card's status or assignee. A refusal is printed in words and
    exits non-zero:
    - somebody is already fixing it, and they are named;
-   - the card is not at Implemented;
+   - the card is not waiting on a repair (neither Implemented, nor In Review after
+     a merge-queue ejection);
    - the pull requests belong to the parent's run, and the key to fix instead is
      named;
    - the card has no pull requests;
