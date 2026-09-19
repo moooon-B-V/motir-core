@@ -628,3 +628,250 @@ extracted from the installed `lucide-react`, each with its provenance comment.
 | **MOTIR-5705** | **GIVES** the switch that gates it. **No TAKES:** its no-op notes are not drawn here.                                                                                                                                                                  |
 | **MOTIR-5701** | **GIVES** a reader for both switches and the failure columns. **No TAKES.**                                                                                                                                                                            |
 | **MOTIR-4932** | Nothing drawn. Named only to hold the scope boundary above.                                                                                                                                                                                            |
+
+---
+
+## §14 · The Errors section on the work-item page
+
+_A NEW surface, drawn by MOTIR-5727 for Story MOTIR-4932 in
+`design/monitoring/work-item-errors.mock.html`. It amends no earlier mock: §7, §12 and §13 each handed
+this surface to MOTIR-4932 by name, and this section is where those hand-offs land. Built by
+**MOTIR-5732** (the section, its door and picker, both confirmations, both locales), which is
+`blocked_by` this card._
+
+### What it composes — the Development card grammar with a different source
+
+The Development section already answers _what outside this tree does this work item relate to_ for
+pull requests, and people have learned it. The Errors section answers the same question for monitor
+issues, so it is drawn as the same grammar and invents no second provenance idiom. Each piece below
+was read from the shipped source and rendered from its real class strings with the real theme tokens
+before the mock was drawn.
+
+| Element                   | Shipped primitive it reuses                                                                                                                                                                 | Source                                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| The section               | `ContentSectionCard` — title, the muted `— gloss`, the `headerRight` door                                                                                                                   | `app/(authed)/items/[key]/_components/ContentSectionCard.tsx`                                                                |
+| One row                   | the `PullRequestRow` row, class for class: bordered row on `--el-surface`, 17px muted glyph, 13.5px medium title over a 12px `--el-text-identifier` line, the pill group, the 16px out-link | `components/github/DevelopmentSection.tsx`                                                                                   |
+| The door and the picker   | `DevelopmentLinkControl`'s door + inline form: the `AddLinkControl` / query-driven `Combobox` grammar through `useLinkCandidateSearch`, Link + Cancel, the rose typed-error banner          | `app/(authed)/items/[key]/_components/DevelopmentLinkControl.tsx` · `AddLinkControl.tsx` · `hooks/useLinkCandidateSearch.ts` |
+| Remove, and both confirms | the `RemoveLinkButton` popover: a 24px × LAST in the row, a `Popover.Content` aligned to the trigger's edge, ghost Cancel + the action                                                      | `app/(authed)/items/[key]/_components/RemoveLinkButton.tsx`                                                                  |
+| Level and linked chips    | `Pill` — `severity` for known levels, `tone="neutral"` for the rest and for **Linked to {key}** / **Linked here**                                                                           | `packages/design-system/src/components/ui/Pill.tsx`                                                                          |
+| Loading                   | the shared `LateUpperFallback` / `SectionCardSkeleton`, **unchanged**                                                                                                                       | `app/(authed)/items/[key]/_components/LateSections.tsx`                                                                      |
+| A failed read             | `ErrorState` with a retry, rendered inside the card body                                                                                                                                    | `packages/design-system/src/components/ui/ErrorState.tsx`                                                                    |
+| The no-link door          | one row in the detail page's ⋯ menu — `WorkItemActionsMenu`'s `ITEM_CLASS` row, reached through `WorkItemDetailActions`                                                                     | `components/issues/actions/WorkItemActionsMenu.tsx` · `app/(authed)/items/[key]/_components/WorkItemDetailActions.tsx`       |
+
+### The ACCESS PATH, and where the section sits
+
+It is reached by opening a work item, and there is no other door. It sits in the page's **late upper
+tier, directly below Development** (panel 1 draws the page with Development above it). It streams with
+its neighbours inside the same `LateUpperSections` boundary, so it never blocks the page, and its read
+joins `readLateSections` with that file's containment: a failed read is `null`, never a thrown page.
+
+### Decision 1 · No link ⇒ no section, and the door for that case lives in the ⋯ menu
+
+The story's criterion is that a work item with no link renders no panel and the page is unchanged.
+The story's manual link is FOR exactly such a work item — a customer-reported bug that has never had
+an error. A door that lives only in the section's header therefore cannot reach the case it exists
+for. The two are reconciled like this:
+
+- **With one or more links**, the door is **+ Link error**, header-right, where Development puts
+  **+ Link pull request** (panels 1, 6a).
+- **With no link**, there is no section, no heading and no empty state (panel 5a). The door is ONE row
+  in the detail page's ⋯ menu, **Link an error**, placed after **Add to active sprint** (panel 5b).
+  Choosing it mounts the section in its slot with the picker already open and a one-line body, **No
+  errors linked to this work item yet.** (panel 5c). Cancel with nothing linked takes the section away
+  again; a successful link keeps it, now with its row, and the menu row is no longer shown.
+- **Both doors show under the same rule** (Decision 5). The row is added by the detail page's wrapper,
+  so the shared menu other surfaces render (board cards, list rows) does not gain it.
+
+**Why the menu and not an always-present empty section:** in a monitored project most members hold
+`work_item:edit`, so an empty Errors card would appear on nearly every work item — stories, tasks and
+epics included — to serve an act that happens occasionally. The ⋯ menu is where this page already keeps
+the occasional actions on the work item itself, and it is where Jira keeps its _Link issue_ action.
+
+### Decision 2 · Recurrence reads by WIDTH, not by a chart
+
+Four events and forty thousand are different problems, so the count must be told apart at a glance.
+It is drawn as **Seen `<count>` times**: the number at full precision with the locale's digit
+grouping, in tabular figures, semibold `--el-text`, in a right-aligned slot of its own — so
+**40,112** is visibly five digits against **4**. No compaction to "40k" (it hides the difference
+between 40,112 and 40,999, which is the point of storing the count), no bar and no chart (charts are
+out of scope). Rows are ordered **most recently seen first** — the order the read returns (MOTIR-5730).
+
+### Decision 3 · The level pill, and a level Motir does not know
+
+| Stored `level`   | Pill                                                       |
+| ---------------- | ---------------------------------------------------------- |
+| `fatal`, `error` | `severity="danger"` (`--el-tint-rose`, `--el-text-strong`) |
+| `warning`        | `severity="warning"` (`--el-tint-peach`)                   |
+| `info`           | `severity="info"` (`--el-tint-sky`)                        |
+| `debug`          | `tone="neutral"`                                           |
+| any other string | `tone="neutral"`, the string VERBATIM — never mapped       |
+| `null`           | no pill                                                    |
+
+The level vocabulary is `lib/monitors/levels.ts`'s, which deliberately lets an unrecognised value
+through; mapping one to a plausible known level would hide a real value.
+
+### Decision 4 · The already-linked chip names the key; the LINK to that work item is in the confirmation
+
+The candidate linked to a different work item shows **Linked to `<KEY>`** where its level pill would
+be — the shipped `github.development.linkedTo` chip. The key is text there, not a link: an
+interactive element inside a `Combobox` option is an accessibility defect, and a click on the option
+already has a meaning. The key IS a link in the move confirmation (panel 7), which is the moment the
+reader decides whether to take the error off that work item.
+
+### Decision 5 · Who sees the door
+
+- **The rows** show to anyone who can read the work item (the read is gated like the rest of the page,
+  MOTIR-5730).
+- **The header door, the ⋯-menu row and the × on each row** show only to a reader holding
+  `work_item:edit` on the work item's project **and** only when that project has at least one
+  monitoring connection. Absent otherwise — never disabled (the shipped Development rule, design Q1/Q4
+  in `design/github/design-notes.md`).
+- **A project with no monitoring connection shows no door and no prompt to connect one** (panel 9).
+  The Monitoring room is gated on `integration:manage` (§6), so a prompt would lead most readers to a
+  refusal — the same reason §12 gives for not linking the other way. Such a project can also have no
+  rows: a link is deleted with its connection.
+
+### The state set is the checklist
+
+| Panel | State                                                     | What it shows                                                                                                                                                                                                                                 | Defined by                         |
+| ----- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| 1     | One link                                                  | Title (links out to the permalink, `target=_blank`) · identifier line `<org> / <project> · <environment> · <release>` · level pill · **Seen N times** · **last seen `<relative>`** (absolute on hover) · out-link · ×                         | MOTIR-5730, MOTIR-5576, MOTIR-5729 |
+| 1     | `orgSlug` null                                            | The identifier line starts with the project slug alone                                                                                                                                                                                        | MOTIR-5730                         |
+| 2     | Several links, two connections                            | One row each, most recently seen first; the connection leads each identifier line                                                                                                                                                             | MOTIR-5730                         |
+| 2     | No environment / no release                               | That part of the identifier line is absent — never "unknown"                                                                                                                                                                                  | MOTIR-5729                         |
+| 3     | `resolve_state` `null`                                    | Nothing extra                                                                                                                                                                                                                                 | MOTIR-5701                         |
+| 3     | `pending`                                                 | Quiet line: `LoaderCircle` + **Resolving in Sentry…**                                                                                                                                                                                         | MOTIR-5703                         |
+| 3     | `resolved`                                                | Quiet line: `CircleCheckBig` + **Resolved in Sentry by Motir `<relative resolved_by_motir_at>`**                                                                                                                                              | MOTIR-5703, MOTIR-5704             |
+| 3     | `failed`                                                  | Filled warning line (`--el-warning-surface`, `TriangleAlert` on `--el-warning`): **Couldn't resolve this in Sentry:** `<resolve_error verbatim>` Tried `<relative resolve_attempted_at>` — Motir tries again at the next check.               | MOTIR-5703                         |
+| 3     | `gone`                                                    | The row stays listed on `--el-surface-soft`, title in `--el-text-secondary` and NOT a link, no out-link (a spacer keeps the columns), quiet line with `CircleOff`: **Sentry no longer has this error.** Its facts are as they were last seen. | MOTIR-5703 (§13 hand-off)          |
+| 4     | `assignee_sync_note` `team_assignee`                      | Quiet line, `UsersRound`: Assigned to a team in Sentry, so this work item's assignee was left as it is.                                                                                                                                       | MOTIR-5705 (§13 hand-off)          |
+| 4     | `assignee_sync_note` `no_matching_member`                 | Quiet line, `UserRound`: Assigned in Sentry to someone who isn't a member here, so this work item's assignee was left as it is.                                                                                                               | MOTIR-5705 (§13 hand-off)          |
+| 4     | Both a resolve line and an assignee note                  | Resolve line first, then the note                                                                                                                                                                                                             | —                                  |
+| 5a    | No link                                                   | No section. The page is unchanged from today                                                                                                                                                                                                  | Story MOTIR-4932                   |
+| 5b    | No link, editor, connected project                        | The ⋯ menu's **Link an error** row                                                                                                                                                                                                            | Decision 1                         |
+| 5c    | The menu row chosen                                       | The section mounts below Development, picker open, body **No errors linked to this work item yet.**                                                                                                                                           | Decision 1                         |
+| 6a    | The picker before typing                                  | The most recently seen issues (an empty query), placeholder **Search errors, or paste a short id…**                                                                                                                                           | MOTIR-5728, MOTIR-5731             |
+| 6a    | Results                                                   | Option: title · `<org> / <project> · Seen N times · <relative last seen>` · level pill                                                                                                                                                        | MOTIR-5731                         |
+| 6b    | Searching                                                 | The Combobox loading row, **Searching…**                                                                                                                                                                                                      | —                                  |
+| 6b    | No results                                                | **No matching errors** + hint                                                                                                                                                                                                                 | —                                  |
+| 6b    | One connection's search failed                            | A status line INSIDE the results, filled warning: **Couldn't search `<org> / <project>`:** `<reason verbatim>`; the other connections' candidates still listed below it                                                                       | MOTIR-5728, MOTIR-5731             |
+| 6b    | A refused link (`issue_gone` · `not_found` · `forbidden`) | The rose banner under the list with that code's sentence (copy table)                                                                                                                                                                         | MOTIR-5731                         |
+| 7     | A candidate linked to another work item                   | **Linked to `<KEY>`** chip in the pill slot; picking it and pressing Link opens the move confirmation                                                                                                                                         | MOTIR-5731                         |
+| 7     | A candidate linked to THIS work item                      | **Linked here** chip; the option is disabled                                                                                                                                                                                                  | MOTIR-5731                         |
+| 7     | The move confirmation                                     | Names the work item the link leaves (a link), says it keeps its other links and history; **Move link** re-sends with `move: true`; **Cancel** leaves both as they were                                                                        | MOTIR-5731                         |
+| 8     | Unlink                                                    | The × (hover: `--el-tint-rose`, `--el-danger`) → 300px popover, consequence sentence, ghost Cancel + danger **Remove link**                                                                                                                   | MOTIR-5731                         |
+| 8     | Unlink with nothing to remove (`removed: false`)          | The popover's error line: **There was nothing to unlink — the link had already been removed.**                                                                                                                                                | MOTIR-5731                         |
+| 9     | A reader without `work_item:edit`                         | Rows in full; no door, no ×, no menu row; nothing else moves                                                                                                                                                                                  | Decision 5                         |
+| 9     | A project with no monitoring connection                   | No door anywhere and no section                                                                                                                                                                                                               | Decision 5                         |
+| 10    | Loading                                                   | The shared late-upper fallback, unchanged                                                                                                                                                                                                     | —                                  |
+| 10    | A failed read                                             | `ErrorState` inside the card, with Try again (a page refresh); drawn only in a project that has a connection; Development and every later section unaffected                                                                                  | MOTIR-5730                         |
+
+**Narrow widths** follow the shipped row: below a 30rem column the facts group (level, count, last
+seen) drops to its own line under the title, indented past the glyph — the `@max-[30rem]` rule
+`PullRequestRow` already carries. The resolve and assignee lines keep their indent.
+
+### Copy — every new `en` string
+
+Namespace `monitorErrors.*` in `messages/en.json` (and its `zh` twin, MOTIR-5732's), plus one key in
+the shipped `workItemActions` namespace for the menu row. Counts use ICU plurals; relative times use the
+formatter the Development section uses.
+
+| Key                                   | `en`                                                                                                                         |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `monitorErrors.title`                 | Errors                                                                                                                       |
+| `monitorErrors.gloss`                 | Linked Sentry errors · counts as of the last check                                                                           |
+| `monitorErrors.seen`                  | `Seen <b>{count}</b> {count, plural, one {time} other {times}}`                                                              |
+| `monitorErrors.lastSeen`              | last seen {when}                                                                                                             |
+| `monitorErrors.openInSentry`          | Open in Sentry _(the out-link's `aria-label`)_                                                                               |
+| `monitorErrors.resolve.pending`       | Resolving in Sentry…                                                                                                         |
+| `monitorErrors.resolve.resolved`      | Resolved in Sentry by Motir {when}                                                                                           |
+| `monitorErrors.resolve.failed`        | `<b>Couldn't resolve this in Sentry:</b> {reason} Tried {when} — Motir tries again at the next check.`                       |
+| `monitorErrors.resolve.gone`          | `<b>Sentry no longer has this error.</b> Its facts are as they were last seen.`                                              |
+| `monitorErrors.assignee.teamAssignee` | Assigned to a team in Sentry, so this work item's assignee was left as it is.                                                |
+| `monitorErrors.assignee.noMatch`      | Assigned in Sentry to someone who isn't a member here, so this work item's assignee was left as it is.                       |
+| `monitorErrors.link`                  | Link error                                                                                                                   |
+| `workItemActions.linkError`           | Link an error                                                                                                                |
+| `monitorErrors.empty`                 | No errors linked to this work item yet.                                                                                      |
+| `monitorErrors.field`                 | Error to link                                                                                                                |
+| `monitorErrors.searchPlaceholder`     | Search errors, or paste a short id…                                                                                          |
+| `monitorErrors.searching`             | Searching…                                                                                                                   |
+| `monitorErrors.noMatches`             | No matching errors                                                                                                           |
+| `monitorErrors.noMatchesHint`         | Search words from the error's title, or paste its short id from Sentry.                                                      |
+| `monitorErrors.searchFailed`          | `<b>Couldn't search {connection}:</b> {reason}`                                                                              |
+| `monitorErrors.candidate`             | {connection} · Seen {count} {count, plural, one {time} other {times}} · {when}                                               |
+| `monitorErrors.linkedTo`              | Linked to {key}                                                                                                              |
+| `monitorErrors.linkedHere`            | Linked here                                                                                                                  |
+| `monitorErrors.linkAction`            | Link                                                                                                                         |
+| `monitorErrors.error.issueGone`       | Sentry no longer has this error, so it can't be linked.                                                                      |
+| `monitorErrors.error.notFound`        | This error or work item is no longer available. Close the picker and try again.                                              |
+| `monitorErrors.error.forbidden`       | You can't link errors on this work item.                                                                                     |
+| `monitorErrors.move.title`            | Move this error's link from {key} to this work item?                                                                         |
+| `monitorErrors.move.body`             | {key} keeps its other links and its history. From the next check, this error's count and resolve-back follow this work item. |
+| `monitorErrors.move.action`           | Move link                                                                                                                    |
+| `monitorErrors.unlink.aria`           | Remove the link to {title}                                                                                                   |
+| `monitorErrors.unlink.confirm`        | Remove the link to {title}? If this error happens again, a new bug will be filed for it.                                     |
+| `monitorErrors.unlink.action`         | Remove link                                                                                                                  |
+| `monitorErrors.unlink.nothing`        | There was nothing to unlink — the link had already been removed.                                                             |
+| `monitorErrors.loadFailedTitle`       | Couldn't load this work item's errors                                                                                        |
+| `monitorErrors.loadFailedBody`        | The rest of the page is unaffected. Try again in a moment.                                                                   |
+
+`{reason}` is the stored or returned provider reason VERBATIM — never worded or summarised (§4's
+rule); `{title}` in the unlink strings is the error's title, rendered `font-mono` like the
+Development confirm's target. **The unlink sentence is the consequence, not a warning for effect:**
+deleting the link row makes the error exactly as untracked as one never ingested, so if it happens
+again and qualifies under the connection's minimum level, the reconciler files a new bug
+(MOTIR-5731 §3). Nothing is touched in Sentry. The product noun on every string is **work item**;
+_card_ is not used.
+
+### Tokens and icons
+
+Colour only through `--el-*` (`--el-text*`, `--el-text-identifier`, `--el-surface*`, `--el-border*`,
+`--el-link`, `--el-tint-rose|peach|sky|mint`, `--el-chip-*`, `--el-warning*`, `--el-danger`,
+`--el-accent*`, `--el-icon-muted`); shape only through `--radius-*`, `--spacing-*`, `--height-*` and
+`--shadow-*`. The mock's field label takes `--el-text-secondary`, not the shipped form's
+`--el-text-eyebrow`, which is under AA on `--el-surface-soft`. Icons, each extracted from the installed
+`lucide-react@1.16.0` with its provenance comment: `activity` (a row, a candidate and the menu row —
+the monitoring area's glyph), `plus`, `x`, `external-link`, `triangle-alert`, `circle-check-big`,
+`loader-circle`, `circle-alert`, `circle-off`, `user-round`, `users-round`, `search`, `ellipsis`, and
+the menu frame's `pencil`, `goal`, `copy` plus Development's `git-merge`.
+
+### Scope boundary
+
+- **Not drawn:** a board column or filter for error-sourced bugs; a trend or chart of recurrence; a
+  triage inbox; any change to the Monitoring room (§11–§13 stay its design of record); a link or unlink
+  door for agents (no MCP / v1 surface in this story); the quick-view peek, which stays read-only as
+  Development's does.
+- **The ⋯-menu row belongs to the detail page only** (Decision 1).
+
+### Workflow grounding
+
+| Behaviour drawn                                                                       | Defining card          |
+| ------------------------------------------------------------------------------------- | ---------------------- |
+| The stored facts (title, level, count, first/last seen, permalink)                    | MOTIR-5576             |
+| Environment and release, and a hand-linked issue below the minimum level refreshing   | MOTIR-5729             |
+| The read, its order, its gate, and that it makes no provider call                     | MOTIR-5730             |
+| Search, `linkedTo`, the refusal, the move, unlink and its consequence, the permission | MOTIR-5731             |
+| The search's inputs (text and short id) and its per-connection failure                | MOTIR-5728             |
+| The resolve-back states and the gone issue                                            | MOTIR-5703, MOTIR-5701 |
+| The assignee notes                                                                    | MOTIR-5705             |
+
+These are `relates_to` specifications, not build prerequisites: none of them builds before this card.
+
+### GIVES / TAKES sweep
+
+| Key            | GIVES / TAKES                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5732** | **GIVES** the whole build spec: placement, rows, every state, both doors, the picker, both confirmations, loading and error, the copy table. **TAKES** the ⋯-menu door: the detail page's `WorkItemDetailActions` passes one **Link an error** row (editor + connected project + no link), which mounts the section with the picker open (Decision 1). Amended onto the card. |
+| **MOTIR-5734** | **GIVES** the states the walk checks. **TAKES** step 3's door: a customer-reported work item has no link, so it is linked from the ⋯ menu's **Link an error**, not from a **+ Link error** that is not on the page yet. Amended onto the card.                                                                                                                                |
+| **MOTIR-5730** | **GIVES** a reader for every DTO field. **TAKES** one field: `resolve.attemptedAt` (`resolve_attempted_at`, ISO or `null`), which the failed line's **Tried `<when>`** reads. Amended onto the card.                                                                                                                                                                          |
+| **MOTIR-5731** | **GIVES** the surface its codes and `linkedTo` render on. **No TAKES** — the candidate shape, the codes and `removed` already carry what the picker and the confirmations need.                                                                                                                                                                                               |
+| **MOTIR-5728** | **GIVES** the placeholder that advertises the short-id lookup and the per-connection failure line. **No TAKES.**                                                                                                                                                                                                                                                              |
+| **MOTIR-5729** | **GIVES** the environment · release rendering and its absent case. **No TAKES.**                                                                                                                                                                                                                                                                                              |
+| **MOTIR-5733** | Nothing drawn. **No TAKES.**                                                                                                                                                                                                                                                                                                                                                  |
+| **MOTIR-5701** | **GIVES** a reader for `resolve_state` and `assignee_sync_note`. **No TAKES.**                                                                                                                                                                                                                                                                                                |
+| **MOTIR-5703** | **GIVES** the standing presentation of a gone issue that §13 handed here. **No TAKES** — its one-time comment stays its own.                                                                                                                                                                                                                                                  |
+| **MOTIR-5704** | **GIVES** nothing new; a move leaves `resolved_by_motir_at` alone (MOTIR-5731), so the loop guard is untouched. **No TAKES.**                                                                                                                                                                                                                                                 |
+| **MOTIR-5705** | **GIVES** where its two no-op notes are read. **No TAKES.**                                                                                                                                                                                                                                                                                                                   |
+| **MOTIR-5576** | **GIVES** a reader for its stored facts. **No TAKES.**                                                                                                                                                                                                                                                                                                                        |
+| **MOTIR-4932** | **GIVES** its panel. Its criterion _"a work item with no link renders no panel"_ holds; the one visible change on such a work item is Decision 1's ⋯-menu row for an editor in a monitored project, noted on the story.                                                                                                                                                       |
+| **MOTIR-5727** | This is the producing design card, not a consumer allocation.                                                                                                                                                                                                                                                                                                                 |
