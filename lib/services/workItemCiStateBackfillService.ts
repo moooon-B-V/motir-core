@@ -66,11 +66,42 @@ export interface CiStateBackfillReport {
    *  should not be worked; recomputing its badge is not the sweep's business. */
   skippedArchived: number;
   failed: CiStateBackfillFailure[];
+  /** How many candidates the sweep set out to examine. */
+  total: number;
+  /** `true` when `signal` stopped the sweep before it reached every candidate —
+   *  the counts above are then the PARTIAL sweep's, and the rest were never read. */
+  interrupted: boolean;
 }
+
+/** A running tally, handed to `onProgress` as the sweep goes. `examined` counts
+ *  every candidate the loop has reached (a card deleted underneath the sweep
+ *  included), so `examined === total` is the last call. */
+export interface CiStateBackfillProgress {
+  examined: number;
+  total: number;
+  scanned: number;
+  changed: number;
+  unchanged: number;
+  skippedArchived: number;
+  failed: number;
+}
+
+/** The progress interval when the caller does not name one. */
+export const CI_STATE_BACKFILL_PROGRESS_EVERY = 100;
 
 export interface CiStateBackfillOptions {
   dryRun: boolean;
   workspaceId?: string;
+  /** Called every `progressEvery` candidates and once more on the last one, so a
+   *  long sweep is visibly alive (MOTIR-5765: ~1,957 production cards ran past a
+   *  10-minute job timeout and printed nothing at all). */
+  onProgress?: (progress: CiStateBackfillProgress) => void;
+  progressEvery?: number;
+  /** Checked BEFORE each candidate. Once aborted the sweep stops and RETURNS the
+   *  partial report with `interrupted: true`, so a cancelled operator run still
+   *  leaves its counts. The card in flight when the signal fires finishes first —
+   *  each card is its own transaction, so stopping between cards loses nothing. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -146,9 +177,16 @@ export const workItemCiStateBackfillService = {
       unchanged: 0,
       skippedArchived: 0,
       failed: [],
+      total: candidates.length,
+      interrupted: false,
     };
+    const every = Math.max(1, opts.progressEvery ?? CI_STATE_BACKFILL_PROGRESS_EVERY);
 
-    for (const { workItemId, workspaceId } of candidates) {
+    for (const [index, { workItemId, workspaceId }] of candidates.entries()) {
+      if (opts.signal?.aborted) {
+        report.interrupted = true;
+        break;
+      }
       try {
         const outcome = await withSystemContext(async (tx) => {
           await bindWorkspaceContext(tx, workspaceId);
@@ -219,6 +257,21 @@ export const workItemCiStateBackfillService = {
              silent partial. The ternary stays because `catch` binds `unknown`. */
           error: err instanceof Error ? err.message : 'unknown error',
         });
+      } finally {
+        // In `finally` so every exit from the body — the `gone` / `archived`
+        // `continue`s and the `catch` — still counts toward the interval.
+        const examined = index + 1;
+        if (opts.onProgress && (examined % every === 0 || examined === candidates.length)) {
+          opts.onProgress({
+            examined,
+            total: candidates.length,
+            scanned: report.scanned,
+            changed: report.changed.length,
+            unchanged: report.unchanged,
+            skippedArchived: report.skippedArchived,
+            failed: report.failed.length,
+          });
+        }
       }
     }
 

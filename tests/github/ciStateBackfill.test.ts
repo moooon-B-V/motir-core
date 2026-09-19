@@ -330,3 +330,102 @@ describe('workItemCiStateBackfillService (MOTIR-5472)', () => {
     expect(await ciStateOf(theirItem.id)).toBe('passing');
   });
 });
+
+// MOTIR-5765 — the first PRODUCTION run (~1,957 candidates) was cancelled by its
+// 10-minute job timeout having printed NOTHING, because the report was only ever
+// written at the end. These pin the two halves of the repair at the service: a
+// sweep reports as it goes, and a sweep that is stopped RETURNS what it did.
+describe('workItemCiStateBackfillService — progress and interruption (MOTIR-5765)', () => {
+  /** A card whose stored verdict is stale (`passing` over a red build), so the
+   *  sweep has something to change and the tallies are distinguishable. */
+  async function staleRedCard(s: Scenario, number: number) {
+    const item = await makeCard(s, `A change ${number}`);
+    const headRef = `subtask/${item.identifier}-work`;
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: `acme-${s.project.identifier.toLowerCase()}`,
+      number,
+      headRef,
+      title: `A change (${headRef})`,
+    });
+    await openPrIn(s, headRef, number);
+    await ci(s, { conclusion: 'failure', headSha: `sha-red-${number}`, prNumbers: [number] });
+    await setStoredCiState(item.id, 'passing');
+    return item;
+  }
+
+  it('reports progress every N cards and once more on the LAST card', async () => {
+    const s = await makeScenario('progress@example.com', 'PROG');
+    for (const n of [11, 12, 13]) await staleRedCard(s, n);
+
+    const seen: Array<{ examined: number; total: number; scanned: number; changed: number }> = [];
+    const report = await workItemCiStateBackfillService.backfillCiState({
+      dryRun: true,
+      progressEvery: 2,
+      onProgress: (p) => {
+        seen.push({ examined: p.examined, total: p.total, scanned: p.scanned, changed: p.changed });
+        // The tally is a snapshot of the report so far, never ahead of it.
+        expect(p.unchanged + p.changed + p.skippedArchived + p.failed).toBe(p.scanned);
+      },
+    });
+
+    // Three candidates, interval 2: once at the interval, once at the end — and
+    // not on every card, which at production's size would be ~2,000 lines.
+    expect(seen).toEqual([
+      { examined: 2, total: 3, scanned: 2, changed: 2 },
+      { examined: 3, total: 3, scanned: 3, changed: 3 },
+    ]);
+    expect(report.total).toBe(3);
+    expect(report.interrupted).toBe(false);
+  });
+
+  it('stops at the next card boundary when aborted, and RETURNS the partial report', async () => {
+    const s = await makeScenario('abort@example.com', 'ABRT');
+    const items = [];
+    for (const n of [21, 22, 23]) items.push(await staleRedCard(s, n));
+
+    // Abort from inside the first progress call — the same moment a SIGTERM
+    // would land in production: a card has just committed, the next has not
+    // started.
+    const controller = new AbortController();
+    const report = await workItemCiStateBackfillService.backfillCiState({
+      dryRun: false,
+      progressEvery: 1,
+      signal: controller.signal,
+      onProgress: () => controller.abort(),
+    });
+
+    expect(report.interrupted).toBe(true);
+    expect(report.total).toBe(3);
+    expect(report.scanned).toBe(1);
+    expect(report.changed).toHaveLength(1);
+
+    // Exactly the one card the sweep reached was written; the two it never read
+    // still carry the stale value — so the partial counts describe the database.
+    const states = await Promise.all(items.map((i) => ciStateOf(i.id)));
+    expect(states.filter((v) => v === 'failing')).toHaveLength(1);
+    expect(states.filter((v) => v === 'passing')).toHaveLength(2);
+
+    // And a re-run RESUMES: the written card is a no-op, the other two change.
+    const resumed = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
+    expect(resumed.interrupted).toBe(false);
+    expect(resumed.changed).toHaveLength(2);
+    expect(resumed.unchanged).toBe(1);
+  });
+
+  it('examines nothing when the signal is ALREADY aborted', async () => {
+    const s = await makeScenario('pre@example.com', 'PRE');
+    const item = await staleRedCard(s, 31);
+
+    const controller = new AbortController();
+    controller.abort();
+    const report = await workItemCiStateBackfillService.backfillCiState({
+      dryRun: false,
+      signal: controller.signal,
+    });
+
+    expect(report).toMatchObject({ interrupted: true, total: 1, scanned: 0, changed: [] });
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+});
