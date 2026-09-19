@@ -345,6 +345,9 @@ describe('the subject summary — a row names the document from the capture, wit
       number: expect.any(Number),
       path: 'docs/decisions/page-model.md',
       title: 'Page model',
+      // The row's `title` names the blob; a `several` row counts documents (MOTIR-5679).
+      blobSha: 'blob-1',
+      documentCount: 1,
     });
     expect(summaries.get('g-bad')).toMatchObject({
       kind: 'decision_approval',

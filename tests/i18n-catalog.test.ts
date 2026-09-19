@@ -372,6 +372,10 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // *Pull requests*, which fixes it as a gate kind rather than a type chip.
     'approvalGate.decision.kindLabel':
       "band-1 gate KIND in the approval frame — the decision card's own question (§27)",
+    // …and the same kind on the To-approve ROW (MOTIR-5679; `design/workbench` § 27),
+    // beside the decision type's own glyph, as *Pull requests* labels its row.
+    'workbench.approvals.rowKind.decision_approval':
+      "To-approve row KIND — the decision card's own question, beside its type glyph (§27)",
   },
   zh: {
     // `验证` is the verification TYPE noun and also the ordinary button verb; en
@@ -386,6 +390,7 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     'issueViews.provenanceSourceManual': 'provenance ORIGIN chip, framed by its FieldCard label',
 
     'approvalGate.decision.kindLabel': 'band-1 gate KIND in the approval frame (§27)',
+    'workbench.approvals.rowKind.decision_approval': 'To-approve row KIND (§27)',
   },
 };
 

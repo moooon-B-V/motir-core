@@ -7531,6 +7531,15 @@
       "live": {
         "new": "新增",
         "decidedElsewhere": "已由他人决定"
+      },
+      "rowKind": {
+        "decision_approval": "决策"
+      },
+      "decisionSubject": {
+        "none": "无决策文档 · {pr}",
+        "several": "{count} 份决策文档 · {pr}",
+        "unreadable": "尚未读取决策文档 · {pr}",
+        "title": "{path}，文件版本 {blob}"
       }
     },
     "live": {

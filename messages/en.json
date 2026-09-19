@@ -7535,6 +7535,15 @@
       "live": {
         "new": "New",
         "decidedElsewhere": "Decided elsewhere"
+      },
+      "rowKind": {
+        "decision_approval": "Decision"
+      },
+      "decisionSubject": {
+        "none": "No decision document · {pr}",
+        "several": "{count} decision documents · {pr}",
+        "unreadable": "Decision document not read yet · {pr}",
+        "title": "{path} at blob {blob}"
       }
     },
     "live": {

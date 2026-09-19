@@ -295,6 +295,10 @@ export interface DecisionApprovalSubjectSummaryDTO {
   path: string | null;
   /** A readable title from the file name, for `one`. */
   title: string | null;
+  /** The document's git blob, for `one` — the row's `title` names it (MOTIR-5679). */
+  blobSha: string | null;
+  /** How many documents the head writes — what a `several` row counts (MOTIR-5679). */
+  documentCount: number;
 }
 
 /**
