@@ -242,6 +242,7 @@ apart from body copy. All map to existing neutrals → zero-change defaults.
 | `--el-tooltip-bg` / `-text` | `--color-foreground` / `--color-background`           | `Tooltip.tsx:44-52`                 | matches shipped (inverted)                                            |
 | `--el-switch-on`            | `--color-primary-fill`                                | `Switch.tsx:55-66` (`--el-accent`)  | checked track                                                         |
 | `--el-switch-on-border`     | `--color-primary`                                     | `Switch.tsx` track border, ON       | the ON edge on `--el-page-bg` — ≥ 3:1 in all 20 pairs (MOTIR-5715)    |
+| `--el-switch-off-border`    | `--color-muted-foreground`                            | `Switch.tsx` track border, OFF      | the OFF edge on `--el-page-bg` — ≥ 3:1 in all 20 pairs (MOTIR-5725)   |
 | `--el-switch-knob`          | `--color-primary-foreground`                          | `Switch.tsx` knob, ON               | the ON thumb — the fill's own ink (was `--color-surface`, MOTIR-5711) |
 | `--el-switch-knob-off`      | `--color-muted-foreground`                            | `Switch.tsx` knob, OFF              | the OFF thumb on `--el-muted` — ≥ 3:1 in all 20 pairs (MOTIR-5711)    |
 | `--el-option-active-bg`     | `--color-muted`                                       | `Combobox.tsx:479` (`--el-surface`) | highlighted option                                                    |

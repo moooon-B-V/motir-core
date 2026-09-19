@@ -3553,6 +3553,14 @@
      twenty palette x theme pairs. tests/theme/switchStateContrast.test.ts
      (MOTIR-5715). */
   --el-switch-on-border: var(--color-primary); /* the ON track's edge, on --el-page-bg */
+  /* The OFF track's OUTER EDGE, the same measurement for the other state. It was
+     --el-border-strong, a generic surface border, at 1.52-2.41:1 on
+     --el-page-bg in EVERY palette and theme. That token is also the input and
+     secondary-button border, so it keeps its mapping and the Switch gets its own:
+     the muted-foreground grey, which is the OFF knob's ink, so the outline and
+     the knob read as one control. Lowest 4.54:1 across all twenty palette x
+     theme pairs. tests/theme/switchStateContrast.test.ts (MOTIR-5725). */
+  --el-switch-off-border: var(--color-muted-foreground); /* the OFF track's edge, on --el-page-bg */
   /* The two knob inks are a PAIR with the track under them, and are measured as
      one (WCAG 1.4.11, 3:1 — the knob's position IS the switch's state). The
      OFF knob used to share --el-switch-knob and sat at 1.01:1 on --el-muted in
