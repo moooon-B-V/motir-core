@@ -30,6 +30,7 @@ const merged: LinkedPullRequestDto = {
   number: 2118,
   state: 'merged',
   ci: 'passing',
+  headSha: null,
   url: 'https://github.com/moooon/motir-core/pull/2118',
   githubReview: null,
 };
@@ -113,6 +114,7 @@ const openPr: LinkedPullRequestDto = {
   number: 2120,
   state: 'open',
   ci: 'running',
+  headSha: null,
   url: 'https://github.com/moooon-B-V/motir-core/pull/2120',
   githubReview: null,
 };

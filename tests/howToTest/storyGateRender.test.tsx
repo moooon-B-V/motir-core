@@ -145,12 +145,13 @@ describe('seam 9 — the read’s DTO, rendered by the Development block', () =>
     expect(reads.pullRequests.map((pr) => pr.id).sort()).toEqual([s.webPr.id, s.apiPr.id].sort());
   });
 
-  it('each fenced block in the body copies its content BYTE FOR BYTE; each repository fetch copies its fetchCommand', async () => {
-    const { reads } = await renderStoryPage();
+  it('each fenced block in the body copies its content BYTE FOR BYTE — and those are the ONLY copy controls', async () => {
+    await renderStoryPage();
     const part = screen.getByRole('group', { name: htt.title });
     const controls = within(part).getAllByRole('button', { name: htt.code.copyAria });
-    // Two fences in the body, then one fetch block per repository section.
-    expect(controls).toHaveLength(4);
+    // Two fences in the body, and nothing else: the per-repository fetch block that
+    // made this four was retired with its sub-block (MOTIR-5691, design § 25).
+    expect(controls).toHaveLength(2);
 
     const copied: string[] = [];
     for (const control of controls) {
@@ -159,7 +160,7 @@ describe('seam 9 — the read’s DTO, rendered by the Development block', () =>
       });
       copied.push(writeText.mock.lastCall![0]);
     }
-    expect(writeText).toHaveBeenCalledTimes(4);
+    expect(writeText).toHaveBeenCalledTimes(2);
 
     expect(copied[0]).toBe(COMMAND_SETUP);
     expect(copied[1]).toBe(COMMAND_RUN);
@@ -168,10 +169,7 @@ describe('seam 9 — the read’s DTO, rendered by the Development block', () =>
     expect(Buffer.from(copied[1]!, 'utf8').equals(Buffer.from(COMMAND_RUN, 'utf8'))).toBe(true);
     expect(copied[1]).toContain('\t');
     expect(copied[1]).toContain('→ <ok> & done');
-
-    const fetches = reads.howToTest!.repos.map((r) => r.fetchCommand);
-    expect(fetches.every((f) => typeof f === 'string' && f.length > 0)).toBe(true);
-    expect(copied.slice(2)).toEqual(fetches);
+    expect(part.textContent).not.toContain('git fetch');
   });
 
   it('How to test exists ONLY inside the Development card — no section of its own anywhere in the stack', async () => {

@@ -3543,7 +3543,17 @@
   --el-tooltip-bg: var(--color-foreground); /* inverted tooltip fill (was --el-text) */
   --el-tooltip-text: var(--color-background); /* text on the tooltip (was --el-text-inverted) */
   --el-switch-on: var(--color-primary-fill); /* checked track (was --el-accent) */
-  --el-switch-knob: var(--color-surface); /* the thumb (was --el-surface) */
+  /* The two knob inks are a PAIR with the track under them, and are measured as
+     one (WCAG 1.4.11, 3:1 — the knob's position IS the switch's state). The
+     OFF knob used to share --el-switch-knob and sat at 1.01:1 on --el-muted in
+     light and 1.00:1 (the same hex) in dark; the ON knob on --color-surface fell
+     to 1.33–2.97:1 on the light primary fills of amber, citrine, candy and
+     sienna, and garnet dark. So the ON knob is the palette's own ink FOR its
+     primary fill (what the primary button writes on it), and the OFF knob is the
+     muted-foreground grey: 4.99:1 / 4.12:1 at the lowest across all twenty
+     palette x theme pairs. tests/theme/switchStateContrast.test.ts (MOTIR-5711). */
+  --el-switch-knob: var(--color-primary-foreground); /* the ON thumb, on --el-switch-on */
+  --el-switch-knob-off: var(--color-muted-foreground); /* the OFF thumb, on --el-muted */
   --el-option-active-bg: var(--color-muted); /* highlighted listbox option (was --el-surface) */
   --el-overlay-scrim: #00000066; /* modal/dialog scrim — concrete (light); dark companion below */
   --el-chip-bg: var(--color-surface); /* neutral chip fill (tinted chips keep their tint) */

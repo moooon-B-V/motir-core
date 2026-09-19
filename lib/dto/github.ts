@@ -69,6 +69,16 @@ export interface LinkedPullRequestDto {
   /** Per-PR CI at its latest recorded commit (lib/github/prCiState) — null
    *  renders NO CI pill (absence of CI is not a state). */
   ci: 'passing' | 'failing' | 'running' | null;
+  /**
+   * The pull request's HEAD sha by the same rule `ci` is formed over — the latest
+   * recorded check-row sha (lib/github/prCiState) — or null before any check has
+   * reported. Carried for the approve-to-merge frame, which names the member a push
+   * moved when its question is withdrawn. It used to borrow that head from HOW TO
+   * TEST's per-repository read, which only knew the pull requests the record had a
+   * section for; a pull request's head is the pull request's fact, so it lives on
+   * its row (`design/github/design-notes.md` § 25; MOTIR-5691).
+   */
+  headSha: string | null;
   /** The GitHub link-out (`https://github.com/<owner>/<name>/pull/<n>`). */
   url: string;
   /**

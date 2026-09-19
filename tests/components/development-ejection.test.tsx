@@ -19,14 +19,7 @@ import type {
   PullRequestApprovalMemberDTO,
   PullRequestQueueExitDTO,
 } from '@/lib/dto/approvalGate';
-import {
-  AWAITING_MERGE_GATE,
-  CORE_PR,
-  GATEWAY_PR,
-  coreRepo,
-  gatewayRepo,
-  recordDto,
-} from '../helpers/howToTestFixtures';
+import { AWAITING_MERGE_GATE, CORE_PR, GATEWAY_PR, recordDto } from '../helpers/howToTestFixtures';
 
 // THE DEVELOPMENT FRAME RENDERS THE EJECTION (Story MOTIR-5461 · MOTIR-5635;
 // `design/github/design-notes.md` § 22, `approve-and-merge--ejected.mock.html` E1–E7).
@@ -68,7 +61,7 @@ const APPROVED: ApprovalGateDTO = {
   decidedAt: '2026-09-15T14:22:00.000Z',
   outcomeRef: 'approved',
 };
-const STORY = recordDto({ repos: [coreRepo(), gatewayRepo()] });
+const STORY = recordDto();
 
 function exit(over: Partial<PullRequestQueueExitDTO> = {}): PullRequestQueueExitDTO {
   return {

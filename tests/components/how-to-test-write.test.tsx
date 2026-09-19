@@ -2,14 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import { HowToTestBlock, type HowToTestRowRef } from '@/components/howToTest/HowToTestBlock';
+import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
 import {
   HowToTestWriteProvider,
   type HowToTestSaveResult,
 } from '@/components/howToTest/HowToTestWrite';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { HowToTestDraftDTO } from '@/lib/dto/testInstructions';
-import { CORE_PR, coreRepo, recordDto } from '../helpers/howToTestFixtures';
+import { recordDto } from '../helpers/howToTestFixtures';
 import messages from '@/messages/en.json';
 
 // THE WRITE DOORS AND THE FORM (Story MOTIR-5450 · Subtask MOTIR-5455), against
@@ -22,8 +22,6 @@ import messages from '@/messages/en.json';
 // passed a `canEdit={false}` flag would be testing a different design.
 
 const t = messages.github.development.howToTest;
-
-const ROW_CORE: HowToTestRowRef = { id: CORE_PR.id, repo: CORE_PR.repo, number: CORE_PR.number };
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: refreshSpy }),
@@ -46,7 +44,7 @@ const MISSING: HowToTestDto = {
   runTarget: null,
   owedBy: { runId: 'run-318', label: 'Parent run #318' },
   record: null,
-  repos: [],
+  stale: [],
   history: [],
 };
 
@@ -65,7 +63,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 /** The block WITH the doors — the item page's mount, for `work_item:edit`. */
-function renderWritable(dto: HowToTestDto, rows: HowToTestRowRef[] = []) {
+function renderWritable(dto: HowToTestDto) {
   return render(
     <HowToTestWriteProvider
       workItemId="wi-1"
@@ -73,7 +71,7 @@ function renderWritable(dto: HowToTestDto, rows: HowToTestRowRef[] = []) {
       loadDraft={loadDraft}
       saveHowToTest={saveHowToTest}
     >
-      <HowToTestBlock howToTest={dto} pullRequestRows={rows} />
+      <HowToTestBlock howToTest={dto} />
     </HowToTestWriteProvider>,
   );
 }
@@ -104,7 +102,7 @@ describe('Panel 13a — the doors', () => {
   });
 
   it("EDIT renders in the part head on a record — a person may edit a RUN's record", () => {
-    renderWritable(recordDto({ repos: [coreRepo()] }), [ROW_CORE]);
+    renderWritable(recordDto());
     const part = screen.getByRole('group', { name: t.title });
     // Decision 4: the run's own record, and the door is there anyway — the
     // amendment's reason is that a wrong agent record could otherwise only be
@@ -117,10 +115,10 @@ describe('Panel 13a — the doors', () => {
 
 describe('Panel 13h — NO door', () => {
   it('a surface with no provider draws neither door, on a record OR on a missing one', () => {
-    render(<HowToTestBlock howToTest={recordDto()} pullRequestRows={[ROW_CORE]} />);
+    render(<HowToTestBlock howToTest={recordDto()} />);
     expect(screen.queryByRole('button', { name: t.edit })).toBeNull();
     cleanup();
-    render(<HowToTestBlock howToTest={MISSING} pullRequestRows={[]} />);
+    render(<HowToTestBlock howToTest={MISSING} />);
     expect(screen.queryByRole('button', { name: t.add })).toBeNull();
   });
 
@@ -130,7 +128,7 @@ describe('Panel 13h — NO door', () => {
       runTarget: { key: 'ACME-7' },
       owedBy: null,
       record: null,
-      repos: [],
+      stale: [],
       history: [],
     });
     expect(screen.getByRole('link', { name: 'ACME-7' })).toBeTruthy();
@@ -141,7 +139,7 @@ describe('Panel 13h — NO door', () => {
 
 describe('Panel 13b — the form is TWO fields', () => {
   it('opens filled in from the DRAFT READ, not from the rendered record', async () => {
-    renderWritable(recordDto({ repos: [coreRepo()] }), [ROW_CORE]);
+    renderWritable(recordDto());
     await openForm(t.edit);
     expect(loadDraft).toHaveBeenCalledWith('wi-1');
     expect(screen.getByLabelText(/Preview path/)).toHaveProperty('value', '/items/ACME-12');
@@ -149,7 +147,7 @@ describe('Panel 13b — the form is TWO fields', () => {
   });
 
   it('has NO control naming a repository or a commit (decision 8b)', async () => {
-    renderWritable(recordDto({ repos: [coreRepo()] }), [ROW_CORE]);
+    renderWritable(recordDto());
     const form = await openForm(t.edit);
     // The whole form, read as text and as controls: the two fields and the two
     // verbs, and nothing that asks for a repository or a commit.
@@ -173,7 +171,7 @@ describe('Panel 13b — the form is TWO fields', () => {
   });
 
   it('the form REPLACES the record while it is open — the part head stays', async () => {
-    renderWritable(recordDto({ repos: [coreRepo()] }), [ROW_CORE]);
+    renderWritable(recordDto());
     await openForm(t.edit);
     // Scoped by test id, not by role+name: §24's accessibility note labels the
     // FORM *How to test* too, and the part it opens inside already carries that
@@ -181,7 +179,8 @@ describe('Panel 13b — the form is TWO fields', () => {
     const part = screen.getByTestId('how-to-test');
     expect(within(part).getByRole('heading', { level: 4, name: t.title })).toBeTruthy();
     expect(part.textContent).not.toContain('Written by Parent run #318');
-    expect(screen.queryByText(t.preview.title)).toBeNull();
+    // …and the record's own body goes with it.
+    expect(within(part).queryByRole('heading', { level: 2, name: 'Precondition' })).toBeNull();
   });
 });
 
@@ -265,7 +264,7 @@ describe('Panel 13d — the refusals', () => {
 
 describe('CANCEL', () => {
   it('closes the form and writes nothing', async () => {
-    renderWritable(recordDto({ repos: [coreRepo()] }), [ROW_CORE]);
+    renderWritable(recordDto());
     await openForm(t.edit);
     fireEvent.click(screen.getByRole('button', { name: t.form.cancel }));
     await waitFor(() => expect(screen.queryByTestId('how-to-test-form')).toBeNull());

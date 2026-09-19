@@ -1,81 +1,27 @@
 // The HOW TO TEST assembly — PURE (Story MOTIR-4906 · Subtask MOTIR-5333).
 //
 // `howToTestService.getForWorkItem` does the reads; this turns their rows into
-// one repository section of the run target's block. Kept pure so every arm — and every "why a path is
-// missing" — is testable without a database, and so the one head-sha rule it
-// shares with the Development section's CI pill is visible in one place.
+// the one derived fact the block still draws beside the record — which sections
+// were written for a commit their pull request has since moved past
+// (`design/github/design-notes.md` § 25, Panel 12g). Kept pure so the binding and
+// the head rule are testable without a database, and so the head rule it shares
+// with the Development section's CI pill is visible in one place.
+//
+// ⚠️ THE PER-REPOSITORY FACTS ARE GONE (MOTIR-5691). This file used to compose a
+// fetch line, pick a preview deployment and list the checks at the head, for a
+// sub-block § 25 retired. Only the binding and the head survive, because STALE
+// is a relation between the RECORD and the pull request and needs both.
 
 import { liveRowsAtLatestSha, type PrCheckRunSlice } from '@/lib/github/prCiState';
-import { DEPLOYMENT_STATES } from '@/lib/git/types';
 import type { TestInstructionsRepoDTO } from '@/lib/dto/testInstructions';
-import type {
-  HowToTestCheckConclusion,
-  HowToTestCheckDto,
-  HowToTestDeploymentState,
-  HowToTestPreviewDto,
-  HowToTestRepoDto,
-} from '@/lib/dto/howToTest';
+import type { HowToTestStaleDto } from '@/lib/dto/howToTest';
 
 /** The slice of a delivery's pull request the assembly reads. */
 export interface HowToTestPullRequestInput {
   id: string;
   repoId: string;
-  headRef: string;
   state: string;
-  merged: boolean;
-  checkRuns: Array<PrCheckRunSlice & { checkName: string }>;
-}
-
-/** The slice of a stored deployment the assembly reads. */
-export interface HowToTestDeploymentInput {
-  repoId: string;
-  commitSha: string;
-  ref: string;
-  environment: string;
-  state: string;
-  environmentUrl: string | null;
-  occurredAt: Date;
-}
-
-const CHECK_CONCLUSIONS: readonly Exclude<HowToTestCheckConclusion, 'unknown'>[] = [
-  'success',
-  'failure',
-  'pending',
-  'neutral',
-];
-
-/**
- * A stored state as the closed union. A value no member names maps to the
- * `unknown` arm WITH its raw value — never to a plausible member, which would
- * render a state nobody reported.
- */
-export function toDeploymentState(raw: string): {
-  state: HowToTestDeploymentState;
-  rawState: string | null;
-} {
-  return (DEPLOYMENT_STATES as readonly string[]).includes(raw)
-    ? { state: raw as HowToTestDeploymentState, rawState: null }
-    : { state: 'unknown', rawState: raw };
-}
-
-export function toCheckConclusion(raw: string): {
-  conclusion: HowToTestCheckConclusion;
-  rawConclusion: string | null;
-} {
-  return (CHECK_CONCLUSIONS as readonly string[]).includes(raw)
-    ? { conclusion: raw as HowToTestCheckConclusion, rawConclusion: null }
-    : { conclusion: 'unknown', rawConclusion: raw };
-}
-
-/**
- * Quote a value for a POSIX shell. A plain ref (`feat/MOTIR-7-change`) is left
- * bare so the copied block reads naturally; anything carrying a character the
- * shell would interpret is single-quoted with embedded quotes escaped, so a
- * hostile or merely unusual branch name can never become a different command.
- */
-export function shellQuote(value: string): string {
-  if (/^[A-Za-z0-9._\/@%+=:,-]+$/.test(value)) return value;
-  return `'${value.replace(/'/g, `'\\''`)}'`;
+  checkRuns: PrCheckRunSlice[];
 }
 
 /**
@@ -84,52 +30,6 @@ export function shellQuote(value: string): string {
  */
 export function liveHeadSha(checkRuns: PrCheckRunSlice[]): string | null {
   return liveRowsAtLatestSha(checkRuns)[0]?.commitSha ?? null;
-}
-
-/** The fetch line the read composes — never the agent. */
-export function fetchCommandFor(headRef: string): string {
-  const ref = shellQuote(headRef);
-  return `git fetch origin ${ref} && git checkout ${ref}`;
-}
-
-/** Join a deployment URL and a record's `previewPath` without doubling the slash. */
-export function joinPreviewUrl(url: string, previewPath: string | null): string {
-  if (!previewPath) return url;
-  return `${url.replace(/\/+$/, '')}${previewPath}`;
-}
-
-/**
- * Pick the deployment to show among one pull request's candidates: a `success`
- * that has a URL wins (newest first); otherwise the newest of any state.
- */
-export function pickDeployment<T extends HowToTestDeploymentInput>(candidates: T[]): T | null {
-  if (candidates.length === 0) return null;
-  const newestFirst = [...candidates].sort(
-    (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
-  );
-  return (
-    newestFirst.find((d) => d.state === 'success' && d.environmentUrl !== null) ?? newestFirst[0]!
-  );
-}
-
-function previewFor(
-  deployment: HowToTestDeploymentInput | null,
-  previewPath: string | null,
-): HowToTestPreviewDto {
-  if (!deployment) return { status: 'no_deployment_reported' };
-  if (deployment.state === 'success' && deployment.environmentUrl !== null) {
-    return {
-      status: 'available',
-      url: joinPreviewUrl(deployment.environmentUrl, previewPath),
-      environment: deployment.environment,
-      state: 'success',
-      deployedSha: deployment.commitSha,
-    };
-  }
-  // A `success` with no URL is a deployment with nothing to open: it is
-  // reported as not-ready rather than as "no deployment", because one exists.
-  const { state, rawState } = toDeploymentState(deployment.state);
-  return { status: 'deployment_not_ready', state, rawState, environment: deployment.environment };
 }
 
 /**
@@ -152,66 +52,31 @@ export function pickPullRequest<T extends { repoId: string; state: string }>(
 }
 
 /**
- * Assemble ONE repository section of the run target's block.
+ * The record's sections whose bound pull request has moved past the commit the
+ * section was written for, in the record's order.
  *
- * @param section      the record's section for this repository
- * @param repoName     `owner/name`, for the sub-heading
- * @param pr           the pull request {@link pickPullRequest} bound, or null
- * @param deployments  every latest-per-environment deployment read for the block —
- *                     matched here on the head sha, or on the head REF when no
- *                     check has reported a head yet
- * @param previewPath  the record's `previewPath` (one for the run)
+ * A section with no bound pull request, or whose pull request has no reported
+ * head yet, is NOT stale — there is no head to have moved. A section written
+ * against an ABBREVIATED sha of the head is not stale either.
+ *
+ * @param sections     the record's repository sections
+ * @param own          the run target's own deliveries
+ * @param descendants  its descendants' deliveries
+ * @param repoNameOf   `owner/name` for a repository id, for the sentence
  */
-export function assembleHowToTestRepo(
-  section: TestInstructionsRepoDTO,
-  repoName: string,
-  pr: HowToTestPullRequestInput | null,
-  deployments: HowToTestDeploymentInput[],
-  previewPath: string | null,
-): HowToTestRepoDto {
-  if (!pr) {
-    return {
-      repoId: section.repoId,
-      repoName,
-      commitSha: section.commitSha,
-      pullRequest: null,
-      stale: false,
-      fetchCommand: null,
-      // Without a branch there is neither a head to match a preview on nor checks.
-      preview: { status: 'no_deployment_reported' },
-      ci: { status: 'no_checks_reported' },
-    };
+export function staleSections(
+  sections: readonly TestInstructionsRepoDTO[],
+  own: readonly HowToTestPullRequestInput[],
+  descendants: readonly HowToTestPullRequestInput[],
+  repoNameOf: (repoId: string) => string,
+): HowToTestStaleDto[] {
+  const out: HowToTestStaleDto[] = [];
+  for (const section of sections) {
+    const pr = pickPullRequest(section.repoId, own, descendants);
+    if (!pr) continue;
+    const headSha = liveHeadSha(pr.checkRuns);
+    if (headSha === null || headSha.startsWith(section.commitSha)) continue;
+    out.push({ repoName: repoNameOf(section.repoId), recordSha: section.commitSha, headSha });
   }
-
-  // THE head, by the rule the Development section's CI pill uses — one helper,
-  // so "what CI proved" and the pill can never name different commits.
-  const atHead = liveRowsAtLatestSha(pr.checkRuns);
-  const headSha = atHead[0]?.commitSha ?? null;
-
-  const candidates = deployments.filter(
-    (d) =>
-      d.repoId === pr.repoId && (headSha !== null ? d.commitSha === headSha : d.ref === pr.headRef),
-  );
-
-  const checks: HowToTestCheckDto[] = atHead
-    .map((row) => ({ name: row.checkName, ...toCheckConclusion(row.conclusion) }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  return {
-    repoId: section.repoId,
-    repoName,
-    commitSha: section.commitSha,
-    pullRequest: {
-      id: pr.id,
-      headRef: pr.headRef,
-      headSha,
-      state: pr.state === 'open' ? 'open' : 'closed',
-      merged: pr.merged,
-    },
-    // A section written against an ABBREVIATED sha of the head is not stale.
-    stale: headSha !== null && !headSha.startsWith(section.commitSha),
-    fetchCommand: fetchCommandFor(pr.headRef),
-    preview: previewFor(pickDeployment(candidates), previewPath),
-    ci: checks.length > 0 ? { status: 'available', checks } : { status: 'no_checks_reported' },
-  };
+  return out;
 }
