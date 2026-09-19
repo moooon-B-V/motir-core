@@ -456,6 +456,16 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // measurement. These are conservative, complexity-relative first-run costs;
   // replace them from the first green bulk artifacts, as for every new entry.
   'agent-authored-plan.spec.ts': 18.0,
+  // Bug MOTIR-5782 · MOTIR-5796 — PROMOTED out of the acceptance lane (it was
+  // `acceptance-agent-folder-placement.spec.ts`, MOTIR-5310's receipt; the
+  // disposition is in docs/acceptance-lane-triage.md). Two tests: an integration
+  // files over /api/v1, an agent proposes into the folder over the MCP, a reviewer
+  // approves it into place; and the deleted-folder refusal. MEASURED locally on
+  // 2026-09-19 against a PRODUCTION build (list reporter, the tests' own times):
+  // 5.5 s + 2.0 s = **7.5 s**, warm — recorded as **15.0**, rounded UP for the
+  // lane's slower runner because under-estimating is the direction that unbalances
+  // a bin-packer. RE-MEASURE from the first green bulk artifact that includes it.
+  'agent-folder-placement.spec.ts': 15.0,
   'activity.spec.ts': 13.8,
   // Story MOTIR-4337 · Subtask MOTIR-4566 — the operator's org lookup and org
   // page, plus the 404 a tenant user gets on both. MEASURED locally on

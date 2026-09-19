@@ -158,6 +158,11 @@ const node = (page: Page, nodeId: string) => page.locator(`[data-node-id="${node
 const nodeTitled = (page: Page, title: string) =>
   page.locator('[data-node-id]').filter({ hasText: title });
 const tree = (page: Page) => page.getByRole('treegrid', { name: 'Work Items', exact: true });
+const crumbs = (page: Page) =>
+  page
+    .getByRole('main')
+    .getByTestId('roadmap-canvas')
+    .getByRole('navigation', { name: 'Breadcrumb' });
 
 test('an integration files work, an agent proposes into the folder, and a reviewer approves it into place', async ({
   page,
@@ -208,7 +213,7 @@ test('an integration files work, an agent proposes into the folder, and a review
   await signIn(page, seed.email, PASSWORD);
 
   // ── Step 3 — the reviewer sees where each card lands ─────────────────────
-  await test.step('An agent’s plan says which folder each card will be filed into', async () => {
+  await test.step('An agent’s plan opens INSIDE the folder each card will be filed into', async () => {
     await page.goto(`/plans/${planId}?view=canvas`);
     await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
       'Ready to review',
@@ -216,9 +221,17 @@ test('an integration files work, an agent proposes into the folder, and a review
     // The landmark FIRST: nothing below may pass against a page that never mounted.
     await expect(reviewCanvas(page)).toBeVisible();
 
+    // ⚠️ RESTATED by bug MOTIR-5782 (design Part XVIII decision 2). A folder is a
+    // LEVEL on this canvas now, so both proposals sit on Backlog ideas' level and
+    // the plan ARRIVES there (§18.2). What tells the reviewer where the work lands
+    // is therefore the BREADCRUMB — the placement line would repeat the level the
+    // reader is already standing on, and is kept only for the stale case
+    // (decision 6, asserted in the second test below). The list body keeps the
+    // placement fact unchanged, which is where `folderPath` is still read.
+    await expect(crumbs(page).getByRole('button', { name: `Folder: ${FOLDER}` })).toBeVisible();
     const mapFields = nodeTitled(page, 'Map legacy fields');
     await expect(mapFields).toHaveCount(1);
-    await expect(mapFields.getByTestId('placement-line')).toContainText(FOLDER);
+    await expect(mapFields.getByTestId('placement-line')).toHaveCount(0);
   });
 
   await test.step('Show changes: Old reports moves from the root into Backlog ideas', async () => {
@@ -286,8 +299,12 @@ test('a folder deleted after the plan was written refuses the approve and create
   await signIn(page, seed.email, PASSWORD);
   await page.goto(`/plans/${planId}?view=canvas`);
   await expect(reviewCanvas(page)).toBeVisible();
+  // RESTATED with the moment above: the plan arrives inside Scratch, so the crumb
+  // names the folder and the card spends no slot on saying so (decision 2).
+  await expect(crumbs(page).getByRole('button', { name: 'Folder: Scratch' })).toBeVisible();
   const card = nodeTitled(page, 'Draft scratch notes');
-  await expect(card.getByTestId('placement-line')).toContainText('Scratch');
+  await expect(card).toHaveCount(1);
+  await expect(card.getByTestId('placement-line')).toHaveCount(0);
 
   // The folder goes while the reviewer has the plan open.
   const deleted = await request.delete(`${V1}/folders/${scratch.id}`, { headers: bearer(seed) });
