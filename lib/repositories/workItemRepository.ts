@@ -1401,6 +1401,25 @@ export const workItemRepository = {
   },
 
   /**
+   * The EFFECTIVE folder of each work item in `ids` (Bug MOTIR-5710 ·
+   * MOTIR-5739) — its own `folderId`, else its ROOT ancestor's — so the roadmap
+   * can name the folder an OFF-level blocker is filed in. ONE query for the whole
+   * set, whatever its size, through the same {@link EFFECTIVE_FOLDER_SQL} the
+   * Folder filter compiles to, so the anchor and the filter can never disagree
+   * about where an item lives. An unfiled chain reads `null`.
+   */
+  async findEffectiveFolderIds(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; folderId: string | null }>> {
+    if (ids.length === 0) return [];
+    return tx.$queryRaw<Array<{ id: string; folderId: string | null }>>`
+      SELECT w."id", ${EFFECTIVE_FOLDER_SQL} AS "folderId"
+        FROM "work_item" w
+       WHERE w."id" IN (${Prisma.join([...ids])})`;
+  },
+
+  /**
    * Every work item currently recorded on a given session branch within a
    * workspace (Subtask 7.8.11) — the read backing `complete_session`'s bulk
    * close-out. Workspace-scoped (the explicit finding-#26 tenant gate, since RLS

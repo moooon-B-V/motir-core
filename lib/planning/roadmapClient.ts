@@ -74,6 +74,10 @@ export interface RoadmapBlockerStub {
   identifier: string;
   title: string;
   parentTitle: string | null;
+  /** The blocker's effective folder path, root first — `null` / absent when it is
+   *  not filed (Bug MOTIR-5710 · MOTIR-5739). Optional client-side, so an older
+   *  server degrades to the parent line. */
+  folderPath?: string[] | null;
   /** Blocker is in a terminal (done) status → a SATISFIED dependency (MOTIR-1379). */
   isDone?: boolean;
   /** Blocker is a member of the active sprint → an in-sprint dependency, not an

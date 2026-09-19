@@ -21,6 +21,7 @@ import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
+import { FolderPathLabel } from '@/components/planning/FolderPlacement';
 import { canvasStatusLabel, canvasStatusMeta } from '@/lib/workflows/canvasStatusMeta';
 
 // The CONTENT of a WORK-ITEM node on the project roadmap (Subtask 7.20.2 /
@@ -503,17 +504,23 @@ export function GhostAnchor({
   identifier,
   title,
   parentTitle,
+  folderPath = null,
   outOfSprint = false,
 }: {
   identifier: string;
   /** The blocker's title; falls back to the localized default when absent. */
   title?: string | null;
   parentTitle?: string | null;
+  /** The blocker's effective FOLDER path, root first (Bug MOTIR-5710 · MOTIR-5739,
+   *  design sheet 7). When set it REPLACES the parent line: a filed blocker lives
+   *  behind a folder door, and that door is what the reader has to find. */
+  folderPath?: readonly string[] | null;
   /** Sprint scope (MOTIR-1379): the anchor reads "not in this sprint" — the
    *  blocker is an out-of-sprint, not-done dependency, not a cross-story tangle. */
   outOfSprint?: boolean;
 }) {
   const t = useTranslations('roadmap.canvas.anchor');
+  const tFolders = useTranslations('folders');
   return (
     <div
       // Fixed height (= the layout's NODE_H) + `overflow-hidden`, the SAME fixed-box
@@ -539,6 +546,15 @@ export function GhostAnchor({
       {outOfSprint ? (
         <span className="mt-0.5 line-clamp-1 text-xs text-(--el-danger)">
           {t('notInThisSprint')}
+        </span>
+      ) : folderPath && folderPath.length > 0 ? (
+        <span className="mt-0.5 flex min-w-0 text-xs" data-testid="anchor-folder">
+          <FolderPathLabel
+            path={folderPath}
+            max={2}
+            lastClassName=""
+            srPrefix={tFolders('breadcrumbFolderLabel')}
+          />
         </span>
       ) : parentTitle ? (
         <span className="mt-0.5 line-clamp-1 text-xs text-(--el-danger)">

@@ -300,3 +300,58 @@ describe('with the folder option — a FILED blocker is off the root level', () 
     expect(inside.levelMemberBlockers).toEqual([]);
   });
 });
+
+describe('an OFF-level blocker names its folder (MOTIR-5739)', () => {
+  it('a filed blocker carries its folder path, root first; an unfiled one carries null', async () => {
+    const t = await tree();
+    await workItemsService.linkWorkItems(
+      { fromId: t.e1.id, toId: t.deepBug.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    const road = await make('story', 'Road story', t.e2.id);
+    await workItemsService.linkWorkItems(
+      { fromId: t.e1.id, toId: road.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    // Project-wide root, no folder option — the path is a fact about the blocker.
+    const root = await read(null);
+    const byId = new Map(root.offLevelBlockers.map((b) => [b.id, b]));
+    // deepBug is ON the plain root (it is parentless), so it is not off-level here.
+    expect(byId.has(t.deepBug.id)).toBe(false);
+    expect(byId.get(road.id)?.folderPath).toBeNull();
+
+    const foldered = await read(null, { folders: true });
+    const offById = new Map(foldered.offLevelBlockers.map((b) => [b.id, b]));
+    expect(offById.get(t.deepBug.id)?.folderPath).toEqual(['A', 'A1']);
+  });
+
+  it('a child of a filed epic carries the epic’s folder path', async () => {
+    const t = await tree();
+    const underFiled = await make('story', 'Under the filed epic', t.filedEpic.id);
+    await workItemsService.linkWorkItems(
+      { fromId: t.e1.id, toId: underFiled.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    const root = await read(null, { folders: true });
+
+    expect(root.offLevelBlockers.find((b) => b.id === underFiled.id)?.folderPath).toEqual(['A']);
+  });
+
+  it('resolves every stub’s folder in a bounded number of reads, whatever the stub count', async () => {
+    const t = await tree();
+    for (const id of [t.filedBug.id, t.filedTask.id, t.deepBug.id]) {
+      await workItemsService.linkWorkItems(
+        { fromId: t.e1.id, toId: id, kind: 'is_blocked_by' },
+        fx.ctx,
+      );
+    }
+    const paths = vi.spyOn(folderRepository, 'findPathsByIds');
+
+    const root = await read(null, { folders: true });
+
+    expect(root.offLevelBlockers).toHaveLength(3);
+    expect(paths).toHaveBeenCalledTimes(1);
+  });
+});

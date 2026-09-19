@@ -4613,6 +4613,23 @@ export const workItemsService = {
     const offLevelStubs = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.findRoadmapBlockerStubs(offLevelIds, tx),
     );
+    // WHERE a FILED off-level blocker lives (Bug MOTIR-5710 · MOTIR-5739, design
+    // decision 7): its EFFECTIVE folder's path, root first, so the ghost anchor can
+    // name the door that holds it instead of a parent it does not have. Two bounded
+    // reads for the whole level — the effective folders, then their paths — and
+    // none at all when no blocker is off the level. Carried whether or not the
+    // caller asked for folders: it is a fact about the blocker, true on every canvas.
+    const folderPathByStub = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const effective = await workItemRepository.findEffectiveFolderIds(offLevelIds, tx);
+      const folderIds = [
+        ...new Set(effective.map((e) => e.folderId).filter((f): f is string => f !== null)),
+      ];
+      const paths = await folderRepository.findPathsByIds(folderIds, ctx.workspaceId, tx);
+      const pathByFolder = new Map(paths.map((p) => [p.id, p.path]));
+      return new Map(
+        effective.map((e) => [e.id, e.folderId ? (pathByFolder.get(e.folderId) ?? null) : null]),
+      );
+    });
 
     // ⚠️ A ROW THE CAP DROPPED IS STILL A MEMBER OF THIS LEVEL (bug MOTIR-5043).
     // `levelIds` above is the rows the read RETURNED, and `take` is 200 — so on a
@@ -4670,6 +4687,7 @@ export const workItemsService = {
         identifier: s.identifier,
         title: s.title,
         parentTitle: s.parentTitle,
+        folderPath: folderPathByStub.get(s.id) ?? null,
         // Terminal (incl. `cancelled`), NOT `doneKeys` — a cancelled blocker is
         // satisfied and must not be flagged "not in sprint" (MOTIR-1561).
         isDone: terminalKeys.has(s.status),

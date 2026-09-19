@@ -479,6 +479,7 @@ export function buildWorkItemLevel(
             identifier={stub?.identifier ?? '—'}
             title={stub?.title}
             parentTitle={stub?.parentTitle ?? null}
+            folderPath={stub?.folderPath ?? null}
             outOfSprint={scope === 'sprint'}
           />,
         ),

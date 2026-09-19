@@ -799,6 +799,10 @@ export interface RoadmapBlockerStubDto {
   identifier: string;
   title: string;
   parentTitle: string | null;
+  /** The blocker's EFFECTIVE folder path, root first — its own folder, else its
+   *  root ancestor's — or `null` for an unfiled chain (Bug MOTIR-5710 ·
+   *  MOTIR-5739). The ghost anchor names this door in place of the parent line. */
+  folderPath: string[] | null;
   /** Whether the blocker is in a terminal (`done`-category) status — a done
    *  dependency is SATISFIED, so the sprint-scoped view does not flag it
    *  (MOTIR-1379). */
