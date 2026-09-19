@@ -8134,3 +8134,106 @@ _non-refusing_ notice — a different element, and the stamp this refusal checks
 - **MOTIR-5237's verification recipe names "the item page's band"** as a place to be refused; since
   MOTIR-5215 the item-page press happens in the overlay or the Development block. Its E2E should drive
   the overlay (and may drive the Development block for the pull-requests case).
+
+## ⭐ The ACCEPTANCE gate as the PRIMARY — the receipt leads, the story's code is what the one press merges (Story MOTIR-4949 · MOTIR-5788 — `acceptance-panel--approve-and-merge.mock.html`, DATED 2026-09-19)
+
+**Asset:** `design/work-items/acceptance-panel--approve-and-merge.mock.html` — a NEW delta mock. It
+amends **§ The ACCEPTANCE gate, in the ONE approve language** above and its
+`design/work-items/acceptance-panel.mock.html` (panels G1–G5), and is not an edit of either.
+**G1–G5 remain the single-gate base**: Panel D(ii) below IS that shape, with one sentence changed.
+
+**Drawn to:** `docs/decisions/approval-gates.md` §1's **MOTIR-5787 amendment**, which decides every
+behaviour below (points 1–8). This section decides only what it looks like.
+
+### What changes, in one sentence
+
+When a STORY is run as a whole, its run's pull requests belong to the story, so the story holds two
+questions — _is this what I wanted?_ (**PRIMARY**, `acceptance_result`) and _do these commits land?_
+(`pull_request_approval`) — and **ONE press answers both**. It is the design card's (§ 20 of
+`design/github/design-notes.md`, MOTIR-5667) and the decision card's (§ 27 there, MOTIR-5673)
+arrangement with the **receipt** where the mock or the document goes. **The video is never committed
+and is never what is merged.**
+
+### Composed, never redrawn
+
+| card       | asset it composes (published `sourcePath`)            | what it contributes here                                               |
+| ---------- | ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| MOTIR-4942 | `design/work-items/acceptance-panel.mock.html`        | the RECEIPT — player, scrubber, chapters, provenance chips (G1)        |
+| MOTIR-5673 | `design/github/approve-and-merge--decision.mock.html` | the token block, the sprites, the frame + the primary-slot arrangement |
+| MOTIR-5327 | `design/github/github.mock.html`                      | the Development block as the ONE gate frame                            |
+| MOTIR-5480 | `design/github/approve-and-merge.mock.html`           | band 3's _Approve and merge_, the How-to-test part, the record band    |
+
+The stylesheet and sprites are spliced 1:1 from the decision delta; the receipt's rules (`.player`,
+`.scrub`, `.chapters`, `.chap`, `.prov .chip`) and five sprites (`play`, `commit`, `check-circle`,
+`video`, `revise`) are spliced 1:1 from the base acceptance mock. **The only new rules are
+`.ac-slot` (the receipt's slot) and `.ac-refusal` (Panel E's tool-output block).**
+
+### Panels — which gate leads, which verbs render, what the band says
+
+| panel             | the card and its state                                        | PRIMARY (band 1 kind)                     | verbs                                   | consequence (band 3)                                                                              |
+| ----------------- | ------------------------------------------------------------- | ----------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| A (+dark, ~400px) | story run · both gates awaiting                               | `acceptance_result` — _Acceptance video_  | Request changes · **Approve and merge** | `acceptanceResult.consequenceMerges` — accepts the story AND merges; **the video is not merged**  |
+| B                 | story run · acceptance approved before the set is green       | — (decided)                               | **none**                                | the record band + `acceptanceResult.mergeHeld`                                                    |
+| C                 | story run · merge ejected, then a push · merge re-asked ALONE | `pull_request_approval` — _Pull requests_ | Request changes · Approve and merge     | `acceptanceResult.consequenceMergeOnly`; the slot carries `acceptanceResult.stands`               |
+| D(i)              | single-card run · the E2E subtask's OWN page                  | `pull_request_approval` — _Pull requests_ | Request changes · Approve and merge     | the shipped approve-and-merge sentence for ITS pull request — **no acceptance element at all**    |
+| D(ii)             | single-card run · the STORY's page                            | `acceptance_result` — _Acceptance video_  | Request changes · **Approve**           | `acceptanceResult.consequence` (point 7: Done once nothing under it is open)                      |
+| E                 | a republish AFTER approval                                    | — (decided; the page is Panel B)          | none                                    | nothing on the page changes; the PUBLISHER meets `ACCEPTANCE_EVIDENCE_ALREADY_APPROVED` (shipped) |
+
+**Order inside band 2, every panel that has a receipt:** the receipt FIRST (the shipped order for a
+primary), then How to test, then the pull requests behind the block's soft rule (`.ds-prs`). Unlike a
+decision card, a story run HAS something to run, so **How to test stays**.
+
+**Panel D(i) is drawn so the absence is unambiguous.** The E2E subtask recorded the video and is not
+where it is decided (point 1). Its page shows its own Development gate only — no receipt port, no
+acceptance copy, no acceptance verb. An implementation that puts the port here has built the wrong
+card.
+
+**Panel E is a refusal a PUBLISHER meets, not a reader.** The freeze is the shipped
+`AcceptanceEvidenceAlreadyApprovedError` (MOTIR-2764), keyed on the approval whatever the pull
+requests are doing (point 6). No new refusal, and no new surface: the story page is Panel B.
+
+### Copy — every string, `en` and `zh`
+
+Existing keys are cited, not repeated: `approvalGate.acceptanceResult.kindLabel` / `.meta.*` /
+`.confirm.*` / `.consequence` (MOTIR-4950), the `Approve and merge` / `Request changes` / `Approve`
+verbs, `approvalGate.waitingOn`, and the status-held notice's `decisionNoun.acceptance_result`.
+New keys, under `approvalGate.acceptanceResult.*`, for MOTIR-5790:
+
+| key                    | en                                                                                                                                       | zh                                                                                             |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `headMeta.run`         | recorded by {producer} · {count, plural, =1 {# pull request} other {# pull requests}} · delivered by {run}                               | 由 {producer} 录制 · {count} 个拉取请求 · 由 {run} 交付                                        |
+| `headMeta.alone`       | recorded by {producer}                                                                                                                   | 由 {producer} 录制                                                                             |
+| `consequenceMerges`    | Approving accepts {key} and merges {prs}, then moves {key} to Approved. The video is not merged — it is evidence and is never committed. | 批准即验收 {key} 并合并 {prs}，随后将 {key} 移至“已批准”。视频不会被合并——它是证据，从不提交。 |
+| `consequenceMergeOnly` | Approving merges {prs} at its new head, then moves {key} to Approved. The acceptance is not asked again.                                 | 批准即以新提交合并 {prs}，随后将 {key} 移至“已批准”。验收不会再次询问。                        |
+| `confirm.merges`       | merge {prs} — the video is not part of it.                                                                                               | 合并 {prs} — 视频不在其中。                                                                    |
+| `accepted`             | Acceptance approved by {name} · {when}                                                                                                   | {name} 于 {when} 批准了验收                                                                    |
+| `stands`               | Acceptance approved by {name} · {when} — the video stands                                                                                | {name} 于 {when} 批准了验收 — 视频保持不变                                                     |
+| `mergeHeld`            | The pull request merges when its checks pass — no second press.                                                                          | 拉取请求在检查通过后自动合并，无需再次点击。                                                   |
+
+The **story-run** confirm band lists `confirm.records`, `confirm.freezes`, then `confirm.merges`; the
+**single-card** band keeps `confirm.records`, `confirm.freezes`, `confirm.movesToDone`.
+**G1's _"Approving finishes {key}. Nothing else does."_ is RETIRED** by `consequence` (point 7): it is
+false while a child's code is still open.
+
+### Decisions this asset made, with their reason
+
+- **The receipt LEADS, the pull requests follow.** The shipped order for a primary; a second order
+  would be a second visual language for one act.
+- **The consequence says the video is not merged, in words.** The press merges code to the default
+  branch, which is irreversible and outside Motir; a reviewer who thinks they are approving a video
+  must be told what else the press does (the story's own explanation).
+- **D(ii)'s verb is plain _Approve_.** Nothing is merged on that press, so _and merge_ would be false.
+- **C hands the lead to the merge question.** With the acceptance answered, the only open question is
+  the commits, so band 1 is the plain _Pull requests_ kind and the acceptance is a line, not a band —
+  § 27's Panel 5b decision, one kind over.
+- **E draws no surface.** A refused publish changes nothing a reader sees; inventing a callout would
+  need a record of the refusal that no decision asks for.
+
+### Allocation
+
+**MOTIR-5790 builds Panels A, B, C, D(i), D(ii) and E's (absent) surface**, and the keys above.
+MOTIR-5789 supplies the behaviour they render (the predicate, the one press, the Q4 carry);
+MOTIR-4950 shipped the kind, the port's receipt and the single-card copy. **G1–G5 of MOTIR-4942
+remain the single-gate base** — this asset amends them only in D(ii)'s consequence sentence.
+
+Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
