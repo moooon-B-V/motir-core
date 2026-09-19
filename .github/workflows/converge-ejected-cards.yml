@@ -1,0 +1,76 @@
+name: Converge ejected cards
+
+# Manual operator action (Story MOTIR-5799 · MOTIR-5809; `docs/decisions/approval-gates.md`
+# §4 FOURTH AMENDMENT, point 7): move each `manual` card the merge queue ejected BEFORE
+# the re-ask shipped — stranded at `implemented` with a standing failure exit at its head
+# and an approved merge gate — to `in_review` with ONE fresh approve-to-merge gate,
+# through `reaskMergeAfterEjection`, the SAME entry point a live ejection runs.
+#
+# IDEMPOTENT + SAFE TO RE-RUN: a converged card is at `in_review`, so a second apply
+# converges 0. A card whose head moved is skipped and re-arms on its next green, as
+# today. `workflow_dispatch` ONLY — a data convergence is an explicit operator decision,
+# mirroring `backfill-ci-state.yml`. Running it on production is MOTIR-5810's task, after
+# the release carrying the re-ask is live.
+#
+# DEFAULTS TO A DRY RUN. Read the counts before applying.
+#
+# Inert until the SEED_DATABASE_URL secret is set: the guard step SKIPS (green, with a
+# notice) on an unconfigured repository.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Rehearse only — classify and print, write nothing'
+        type: boolean
+        required: false
+        default: true
+
+concurrency:
+  group: converge-ejected-cards
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    name: Re-ask the merge question on cards ejected before the re-ask shipped
+    runs-on: ubuntu-latest
+    # Production held 6 standing failure exits on 2026-09-19; the sweep reads one card
+    # per transaction, so this is generous headroom rather than a measured duration.
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.SEED_DATABASE_URL }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      GOOGLE_CLIENT_ID: converge-placeholder
+      GOOGLE_CLIENT_SECRET: converge-placeholder
+      HUSKY: '0'
+    steps:
+      - name: Check SEED_DATABASE_URL is configured
+        id: guard
+        env:
+          SEED_DATABASE_URL: ${{ secrets.SEED_DATABASE_URL }}
+        run: |
+          if [ -z "$SEED_DATABASE_URL" ]; then
+            echo "::notice::SEED_DATABASE_URL is not set — skipping the convergence. Add it under Settings → Secrets and variables → Actions to enable it."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.guard.outputs.enabled == 'true'
+        uses: actions/checkout@v6
+      - if: steps.guard.outputs.enabled == 'true'
+        uses: ./.github/actions/pnpm
+      - if: steps.guard.outputs.enabled == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.guard.outputs.enabled == 'true'
+        run: pnpm prisma generate
+      - if: steps.guard.outputs.enabled == 'true'
+        run: pnpm prisma migrate deploy
+      - if: steps.guard.outputs.enabled == 'true'
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "false" ]; then
+            echo "::warning::Applying the ejected-card convergence — this WRITES."
+            pnpm db:converge:ejected-cards
+          else
+            pnpm db:converge:ejected-cards --dry-run
+          fi
