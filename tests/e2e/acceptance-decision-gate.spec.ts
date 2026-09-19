@@ -82,7 +82,8 @@ const pra = en.approvalGate.pullRequestApproval;
 const fill = (text: string, vars: Record<string, string | number>) =>
   text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key]));
 /** The copy with its rich tags dropped — what a reader sees. */
-const plain = (text: string) => text.replace(/<\/?\w+>/g, '');
+const plain = (text: string) =>
+  ['<b>', '</b>', '<mono>', '</mono>'].reduce((out, tag) => out.split(tag).join(''), text);
 
 const prKey = (number: number) => `${REPO}#${number}`;
 const prName = (number: number) => `${REPO} · #${number}`;

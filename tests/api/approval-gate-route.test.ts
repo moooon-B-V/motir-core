@@ -361,6 +361,53 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(body.subject.members).toEqual([]);
   });
 
+  it('a DECISION gate is ported by the Development block with the document read server-side (MOTIR-5678)', async () => {
+    const story = await twoRepoStory();
+    const gate = await rawGate(story, 'decision_approval', story.id);
+    const { decisionDocumentService } = await import('@/lib/services/decisionDocumentService');
+    const document = {
+      outcome: 'resolved' as const,
+      repo: 'acme/web',
+      number: 7,
+      path: 'docs/decisions/page-body.md',
+      blobSha: 'blob-1',
+      headSha: 'head-1',
+      markdown: '# ADR: Page body',
+      hostUrl: 'https://github.com/acme/web/blob/head-1/docs/decisions/page-body.md',
+    };
+    const read = vi
+      .spyOn(decisionDocumentService, 'readViewForWorkItem')
+      .mockResolvedValue(document);
+    signIn(owner());
+
+    const res = await gateViaRoute({ key: story.identifier, kind: 'decision_approval' });
+    const body = await res.json();
+
+    expect(body.gate).toMatchObject({ id: gate.id, kind: 'decision_approval' });
+    expect(body.subject).toMatchObject({ state: 'resolved', kind: 'pull_request_approval' });
+    expect(body.subject.decision).toEqual({ document });
+    expect(read).toHaveBeenCalledWith(story.id, expect.anything());
+    read.mockRestore();
+  });
+
+  it('a DECISION gate whose document read FAILS still ports the block — the slot says it cannot be read', async () => {
+    const story = await twoRepoStory();
+    await rawGate(story, 'decision_approval', story.id);
+    const { decisionDocumentService } = await import('@/lib/services/decisionDocumentService');
+    const read = vi
+      .spyOn(decisionDocumentService, 'readViewForWorkItem')
+      .mockRejectedValue(new Error('host down'));
+    signIn(owner());
+
+    const res = await gateViaRoute({ key: story.identifier, kind: 'decision_approval' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.subject.state).toBe('resolved');
+    expect(body.subject.decision).toEqual({ document: null });
+    read.mockRestore();
+  });
+
   it('on a DESIGN card, the approve-to-merge subject carries the current design result beside its pull request (MOTIR-5439, AMENDMENT 4 Q8)', async () => {
     const card = await designCard();
     const evidence = await publish(card);
