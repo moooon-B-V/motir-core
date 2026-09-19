@@ -226,20 +226,46 @@ export const watcherRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     if (projectScopes.length === 0) return 0;
-    return tx.watcher.count({
-      where: {
-        userId,
-        workItem: {
-          workspaceId,
-          archivedAt: null,
-          triagedAt: null,
-          // The `AND` form even though the keyset is absent here: the twin above
-          // needs it, and a count that is one refactor away from disagreeing
-          // with its list is the defect this card fixed.
-          AND: [homeProjectScopeWhere(projectScopes, HOME_SLICE_UNFINISHED)],
-        },
-      },
-    });
+    return tx.watcher.count({ where: watchedByUserWhere(userId, workspaceId, projectScopes) });
+  },
+
+  /**
+   * THE WATCHING TAB'S WATERMARK (Story MOTIR-5238 · MOTIR-5240) — the tab's
+   * size, and the most recent `updatedAt` among the items it lists.
+   *
+   * ⚠️ TWO READS RATHER THAN ONE `aggregate`, and it is the table's shape that
+   * decides it. `watcher` carries no `updatedAt` of its own — a watch is created
+   * and destroyed, never edited — so the freshness this tab needs belongs to the
+   * WORK ITEM on the other side of the relation, and Prisma's `_max` cannot
+   * reach across one. The maximum is therefore read as a one-row `findFirst`
+   * ordered on the related column, which is the same shape
+   * {@link listByUserInGroup} already orders by and is served by the same index
+   * path.
+   *
+   * ⚠️ AND BOTH READS TAKE {@link watchedByUserWhere} — the SAME predicate the
+   * count and the list use. A watermark over a narrower set than its tab
+   * renders is a tab that goes stale and never nudges, which is invisible in
+   * any test whose fixture touches a row the watermark does see.
+   *
+   * Required `tx` for the same RLS reason as its neighbours.
+   */
+  async watermarkByUser(
+    userId: string,
+    workspaceId: string,
+    projectScopes: readonly HomeProjectScope[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ count: number; latest: Date | null }> {
+    if (projectScopes.length === 0) return { count: 0, latest: null };
+    const where = watchedByUserWhere(userId, workspaceId, projectScopes);
+    const [count, newest] = await Promise.all([
+      tx.watcher.count({ where }),
+      tx.watcher.findFirst({
+        where,
+        orderBy: { workItem: { updatedAt: 'desc' } },
+        select: { workItem: { select: { updatedAt: true } } },
+      }),
+    ]);
+    return { count, latest: newest?.workItem.updatedAt ?? null };
   },
 
   /**
@@ -269,3 +295,29 @@ export const watcherRepository = {
     return client.watcher.count({ where: { workItemId } });
   },
 };
+
+/**
+ * THE WATCHING TAB'S PREDICATE, written ONCE — this user's watches, on live
+ * items of the scoped project, in the categories the tab shows.
+ *
+ * The `AND` form even though no keyset rides here: the list's twin needs it, and
+ * a count one refactor away from disagreeing with its list is the defect
+ * MOTIR-2653 fixed. Three reads now share it — the count, the watermark's two
+ * halves — so the sharing is what keeps the badge, the tab and the nudge
+ * answering one question.
+ */
+function watchedByUserWhere(
+  userId: string,
+  workspaceId: string,
+  projectScopes: readonly HomeProjectScope[],
+): Prisma.WatcherWhereInput {
+  return {
+    userId,
+    workItem: {
+      workspaceId,
+      archivedAt: null,
+      triagedAt: null,
+      AND: [homeProjectScopeWhere(projectScopes, HOME_SLICE_UNFINISHED)],
+    },
+  };
+}

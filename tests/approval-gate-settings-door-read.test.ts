@@ -138,6 +138,10 @@ describe('getForWorkItem hands the settings door ONLY to a workflow:manage holde
       settingsDoor: null,
       // No gate, nothing to press, nothing stamped (MOTIR-5234).
       stamp: null,
+      // …and nothing to have MOVED either (Story MOTIR-5238 · MOTIR-5243). The
+      // field is always present — a caller that passed no `since` asked no
+      // question, and the empty answer is what it gets.
+      movedSince: [],
     });
   });
 });

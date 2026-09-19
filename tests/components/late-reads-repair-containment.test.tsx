@@ -67,6 +67,7 @@ vi.mock('@/lib/services/approvalGatesService', () => ({
       canDecide: false,
       routedToLabel: null,
       settingsDoor: null,
+      movedSince: [],
     }),
   },
 }));

@@ -1742,6 +1742,14 @@ export default defineConfig({
         // route-group path matches no reported file (the note above), so the
         // threshold would pass vacuously.
         'app/**/workbench/_components/**',
+        // Story MOTIR-5238 — the two live modules that do NOT fall under the two
+        // globs above: the watermark service lives with the other services, and
+        // the stream route under `app/api/`. Both are new executable code this
+        // story wrote and tested, so both are GATED in `thresholds` below rather
+        // than report-only. MEASURED on this branch before being pinned, per this
+        // file's own rule.
+        'lib/services/workbenchWatermarkService.ts',
+        'app/**/workbench/stream/route.ts',
         // Story MOTIR-2694 · Subtask MOTIR-2696 — the plan-tree embedding write
         // path. Every one of these is new code this card wrote and tested, so
         // all four are GATED in `thresholds` below rather than report-only;
@@ -4475,6 +4483,57 @@ export default defineConfig({
         // before being pinned: 100 / 100 / 100 with `tests/workbench/landing.test.ts`
         // (the whole truth table), pinned at the repo's 90 floor.
         'lib/workbench/landing.ts': { branches: 90, functions: 90, lines: 90 },
+        // ── Story MOTIR-5238 — THE WORKBENCH IS LIVE (MOTIR-5244's gate) ──────
+        // MEASURED on this branch before being pinned, per this file's own rule,
+        // with `tests/workbench/watermark-cursor.test.ts`,
+        // `tests/integration/workbench/watermark-read.test.ts`,
+        // `tests/api/workbench-stream-route.test.ts`,
+        // `tests/components/workbench-live.test.tsx` and
+        // `tests/components/approval-overlay-subject-moved.test.tsx`.
+        //
+        // The rule and the two pure functions over it: 100 / 100 / 100.
+        'lib/workbench/liveRows.ts': { branches: 90, functions: 90, lines: 90 },
+        // 100 lines / 100 functions, branches measured 93.33.
+        'lib/workbench/watermarkCursor.ts': { branches: 90, functions: 90, lines: 90 },
+        // The read itself: 100 / 100 / 100.
+        'lib/services/workbenchWatermarkService.ts': { branches: 90, functions: 90, lines: 90 },
+        // The host and the row rule: 100 / 100 / 100 apiece.
+        'app/**/workbench/_components/WorkbenchLive.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/workbench/_components/useLiveRows.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // ⚠️ RAISED 85 → 90 BY MOTIR-5245, and the reason the 85 existed is worth
+        // keeping because it was RIGHT and stopped being true. It was written for
+        // the four `cancelled` / `aborted` guards inside the pump — *the reader
+        // has already gone* — which are reachable only by resolving a `fetch`
+        // after an unmount and winning a race with the abort. Those arms are
+        // still there and still unreached; what changed is that the connection
+        // gained arms a test CAN drive (the heartbeat watchdog, `offline`,
+        // `online`, the per-connection abort), so the residual is a smaller
+        // share of a bigger file: MEASURED 97.56 lines / 91.66 branches / 100
+        // functions on this branch. The floor moves up to meet it rather than
+        // sitting under a number nothing is defending.
+        'app/**/workbench/_components/useWorkbenchLive.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // ⚠️ BRANCHES PINNED AT 85, WITH A REASON; lines 97.61 and functions 100.
+        // Two arms remain and neither is reachable from a test worth writing.
+        // The HEARTBEAT fires after fifteen seconds of silence — the suite's own
+        // per-test timeout is fifteen seconds, so asserting it would mean either
+        // a timeout or a second copy of the interval injected for the test's
+        // benefit. And `if (!cancelled) controller.close()` is structurally
+        // unreachable HERE: this stream has no terminal state, so the loop only
+        // ever exits by cancellation. It is kept because it is the shipped
+        // route's own shape, and a later terminal condition would need it.
+        'app/**/workbench/stream/route.ts': { branches: 85, functions: 90, lines: 90 },
         'lib/services/homeService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/homeMappers.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask MOTIR-2653 — the page's own modules, MEASURED before being

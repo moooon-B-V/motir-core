@@ -42,6 +42,9 @@ import { IssueListTable } from '@/app/(authed)/items/_components/IssueListTable'
 import { WorkbenchList } from '@/app/(authed)/workbench/_components/WorkbenchList';
 import { toWorkbenchRowViews } from '@/app/(authed)/workbench/_components/workbenchRows';
 
+/** The empty state a tab's list draws when it holds nothing (MOTIR-5245). */
+const EMPTY = <p>Nothing is waiting</p>;
+
 afterEach(cleanup);
 
 const MEMBERS: WorkspaceMemberDTO[] = [
@@ -171,6 +174,7 @@ const SURFACES: Array<{
           label="To do"
           tab="todo"
           pagination={{ total: 1, page: 1, pageSize: 25 }}
+          empty={EMPTY}
         />,
       ).container,
   },

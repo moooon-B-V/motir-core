@@ -18,8 +18,15 @@ export async function fetchApprovalGateOverlay(
   key: string,
   kind: ApprovalGateKindDTO,
   signal?: AbortSignal,
+  /**
+   * A stamp this reader was shown earlier, handed back to ask what has moved
+   * since (Story MOTIR-5238 · Subtask MOTIR-5243). The answer comes back as
+   * `movedSince`; the token itself is opaque and nothing here reads it.
+   */
+  since?: string | null,
 ): Promise<ApprovalGateOverlayReadDTO | null> {
   const qs = new URLSearchParams({ key, kind });
+  if (since) qs.set('since', since);
   const res = await fetch(`/api/work-items/approval-gate?${qs.toString()}`, {
     headers: { Accept: 'application/json' },
     // A gate's state changes under the reader by design; the route says

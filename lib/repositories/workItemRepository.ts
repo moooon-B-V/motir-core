@@ -395,6 +395,57 @@ export function homeProjectScopeWhere(
 }
 
 /**
+ * WHICH lifecycle slice a Workbench read is for, and — for the finished window
+ * — the axis and floor it is bounded by. The options every membership read
+ * shares, named once so the three that take them cannot drift apart.
+ */
+export interface HomeMembershipOptions {
+  slice: HomeCategorySlice;
+  /** The finished window, on the same axis the matching list read orders by. */
+  since?: Date;
+  sortField?: HomeSortField;
+}
+
+/**
+ * THE WHOLE `WHERE` OF A WORKBENCH MEMBERSHIP READ, written ONCE — the
+ * workspace gate, the read-exclusions, the assignee-OR-reporter membership
+ * `OR`, the per-project status scope, and the finished window.
+ *
+ * ⚠️ IT EXISTS BECAUSE THERE ARE NOW **THREE** READS OVER IT, not two. The list
+ * and its count already carried identical copies of this object and the file's
+ * own comment said why that matters — *"a count that disagrees with its list is
+ * a badge that lies"* (MOTIR-2758, where the badge read ~2 019 against ~263).
+ * MOTIR-5240 adds a third reader, the WATERMARK, whose whole job is to answer
+ * *has anything in this tab moved* — and a watermark taken over a NARROWER set
+ * than the tab renders is a silent hole: the list goes stale and nothing ever
+ * nudges. That failure is invisible in every test whose fixture happens to
+ * change a row the watermark does see, which is why the predicate is shared
+ * rather than re-asserted.
+ *
+ * ⚠️ ALL THREE inner predicates are `OR`-bearing, so they sit in an explicit
+ * `AND` — a spread would have one `OR` overwrite the others and return the
+ * whole workspace's items.
+ */
+export function homeMembershipWhere(
+  userId: string,
+  workspaceId: string,
+  projectScopes: readonly HomeProjectScope[],
+  options: HomeMembershipOptions,
+): Prisma.WorkItemWhereInput {
+  const { slice, since, sortField = 'updatedAt' } = options;
+  return {
+    workspaceId,
+    archivedAt: null,
+    triagedAt: null, // read-exclusion (6.11.3)
+    AND: [
+      { OR: [{ assigneeId: userId }, { reporterId: userId }] },
+      homeProjectScopeWhere(projectScopes, slice),
+      ...(since ? [{ [sortField]: { gte: since } } as Prisma.WorkItemWhereInput] : []),
+    ],
+  };
+}
+
+/**
  * TO DO — the complement of *in progress* and *done*. See
  * {@link HomeCategorySlice} for why this is a complement rather than the `todo`
  * group.
@@ -1166,19 +1217,9 @@ export const workItemRepository = {
     const { projectScopes, slice, take, skip = 0, sortField = 'updatedAt', since } = options;
     if (projectScopes.length === 0) return [];
     return tx.workItem.findMany({
-      where: {
-        workspaceId,
-        archivedAt: null,
-        triagedAt: null, // read-exclusion (6.11.3)
-        // ⚠️ ALL THREE predicates are `OR`s, so they go in an explicit `AND` — a
-        // spread would have one `OR` overwrite the others and return the whole
-        // workspace's items from page two onward.
-        AND: [
-          { OR: [{ assigneeId: userId }, { reporterId: userId }] },
-          homeProjectScopeWhere(projectScopes, slice),
-          ...(since ? [{ [sortField]: { gte: since } } as Prisma.WorkItemWhereInput] : []),
-        ],
-      },
+      // The predicate is {@link homeMembershipWhere}'s — the ONE place it is
+      // written, shared with the count and the watermark beside it.
+      where: homeMembershipWhere(userId, workspaceId, projectScopes, { slice, since, sortField }),
       select: HOME_WORK_ITEM_SELECT,
       orderBy: homeOrderBy(sortField),
       skip,
@@ -1246,28 +1287,52 @@ export const workItemRepository = {
     userId: string,
     workspaceId: string,
     projectScopes: readonly HomeProjectScope[],
-    options: {
-      slice: HomeCategorySlice;
-      /** The finished window, on the same axis the matching list read uses. */
-      since?: Date;
-      sortField?: HomeSortField;
-    },
+    options: HomeMembershipOptions,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     if (projectScopes.length === 0) return 0;
-    const { slice, since, sortField = 'updatedAt' } = options;
     return tx.workItem.count({
-      where: {
-        workspaceId,
-        archivedAt: null,
-        triagedAt: null,
-        AND: [
-          { OR: [{ assigneeId: userId }, { reporterId: userId }] },
-          homeProjectScopeWhere(projectScopes, slice),
-          ...(since ? [{ [sortField]: { gte: since } } as Prisma.WorkItemWhereInput] : []),
-        ],
-      },
+      where: homeMembershipWhere(userId, workspaceId, projectScopes, options),
     });
+  },
+
+  /**
+   * THE WATERMARK over one Workbench work tab (Story MOTIR-5238 · MOTIR-5240) —
+   * how many rows the tab holds, and the most recent `updatedAt` among them, in
+   * ONE query.
+   *
+   * ⚠️ TWO NUMBERS, BECAUSE NEITHER ONE ALONE IS A CHANGE DETECTOR. A count
+   * moves on an arrival and on a departure and stays put when a row is EDITED
+   * in place — which is exactly the case the story is about, a decision's
+   * subject moving under a reader who is holding it open. A maximum moves on an
+   * edit and on an arrival and stays put when a row LEAVES. Together they move
+   * whenever the tab's rendered content can differ, which is the property the
+   * stream rests on.
+   *
+   * ⚠️ AND IT IS AN `aggregate`, NOT A COUNT PLUS A SEPARATE MAX. This read runs
+   * once a second per open Workbench, so a second round trip per tab is a
+   * standing cost rather than a tidiness question; `_count` and `_max` over one
+   * `where` are one statement to Postgres.
+   *
+   * The predicate is {@link homeMembershipWhere}'s, shared with the list and the
+   * count — see that function for why the sharing is load-bearing here rather
+   * than merely tidy. An empty scope short-circuits to the same answer an empty
+   * set would give, without issuing a degenerate query.
+   */
+  async watermarkByAssigneeOrReporterInWorkspace(
+    userId: string,
+    workspaceId: string,
+    projectScopes: readonly HomeProjectScope[],
+    options: HomeMembershipOptions,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ count: number; latest: Date | null }> {
+    if (projectScopes.length === 0) return { count: 0, latest: null };
+    const row = await tx.workItem.aggregate({
+      where: homeMembershipWhere(userId, workspaceId, projectScopes, options),
+      _count: { _all: true },
+      _max: { updatedAt: true },
+    });
+    return { count: row._count._all, latest: row._max.updatedAt ?? null };
   },
 
   /**

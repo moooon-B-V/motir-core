@@ -7514,7 +7514,16 @@
         "more": "另有 {count} 个",
         "openRow": "打开 {key} {title}",
         "openWorkItem": "打开工作项"
+      },
+      "live": {
+        "new": "新增",
+        "decidedElsewhere": "已由他人决定"
       }
+    },
+    "live": {
+      "new": "新增",
+      "decidedElsewhere": "已由他人决定",
+      "reconnecting": "正在重新连接…"
     }
   },
   "approvalRecords": {
@@ -8572,6 +8581,12 @@
     },
     "subjectGone": {
       "body": "此设计在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。"
+    },
+    "moved": {
+      "one": "自你打开以来，{thing}已更改。",
+      "several": "自你打开以来，{things}已更改。",
+      "and": "和",
+      "next": "此时批准将被拒绝。"
     }
   },
   "approvals": {

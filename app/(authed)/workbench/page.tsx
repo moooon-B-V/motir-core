@@ -19,6 +19,7 @@ import { resolveWorkbenchLanding, workbenchLandingHref } from '@/lib/workbench/l
 import { parsePage } from '@/lib/issues/issueListView';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 import { WorkbenchTabs } from './_components/WorkbenchTabs';
+import { WorkbenchReconnecting } from './_components/WorkbenchLive';
 import { WorkbenchList } from './_components/WorkbenchList';
 import { ApprovalsTab } from './_components/ApprovalsTab';
 import { toWorkbenchRowViews } from './_components/workbenchRows';
@@ -283,7 +284,6 @@ export default async function WorkbenchPage({
   ]);
 
   const rows = toWorkbenchRowViews(window.items, workflow, members, tab === 'watching');
-  const isEmpty = rows.length === 0;
 
   return (
     <div data-testid={WORKBENCH_TESTID} className="flex flex-col gap-6">
@@ -296,8 +296,23 @@ export default async function WorkbenchPage({
         </div>
       </header>
 
+      {/* ⚠️ THE HOST IS IN THE SHELL, NOT HERE (Story MOTIR-5238 · MOTIR-5242,
+          MOVED by MOTIR-5245's E2E finding). `app/(authed)/layout.tsx` mounts
+          `<WorkbenchLive>` above both this page and the approval overlay, because
+          the overlay is mounted once at layout level and a provider here could
+          not reach it — see that component's own header. Everything below reads
+          the signal through the context; nothing here opens a connection, and a
+          nudge is still the `router.refresh()` that re-reads the window and the
+          counts through the SAME `Promise.all` above, so they land in one page
+          state (§ 21's rule, and § 26's amendment to it). */}
       <div className="flex flex-col gap-3">
-        <WorkbenchTabs active={tab} counts={counts} />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <WorkbenchTabs active={tab} counts={counts} />
+          {/* Beside the strip at `≥ md`, and BELOW it at `< md` — the strip
+                already scrolls at that width, and a chip inside a scrolling
+                track is a chip that can be scrolled out of sight (§ 26). */}
+          <WorkbenchReconnecting />
+        </div>
 
         {/* The window caption — a bounded list that does not say what bounds it
             reads as a list that is missing things, and the second sentence is
@@ -314,8 +329,16 @@ export default async function WorkbenchPage({
             box, and NO PAGER (`design/workbench/` Panel 10). "A pager on every
             tab", read literally, would put `Showing 0–0 of 0` under an empty
             state: a second, quieter way of saying what the empty state has just
-            said in a sentence. The pager lives INSIDE `WorkbenchList`, so this
-            branch gets that for free rather than by remembering to suppress it. */}
+            said in a sentence.
+
+            ⚠️ THE BRANCH MOVED INSIDE THE LIST (Story MOTIR-5238 · MOTIR-5245)
+            and the rule is unchanged: an empty tab still draws this and only
+            this, and the pager still lives below the list's own early return.
+            What changed is WHO decides — the list is mounted the whole time and
+            draws the empty state as one of its states, because a component that
+            did not exist until the first row landed could not know that the row
+            had ARRIVED, and the arrival into an empty tab is the one a reader is
+            most certainly watching. The E2E found it; § 26 Panel 1 draws it. */}
         {isApprovals ? (
           /* ⚠️ WINDOW 2, and it is INSIDE the page rather than a `loading.tsx`.
              `design/shell/design-notes.md`'s navigation-pending grammar is
@@ -327,14 +350,13 @@ export default async function WorkbenchPage({
           <Suspense fallback={<ApprovalsPending />}>
             <ApprovalsTab ctx={ctx} page={page} />
           </Suspense>
-        ) : isEmpty ? (
-          <EmptyTab tab={tab} />
         ) : (
           <WorkbenchList
             rows={rows}
             label={t(TAB_LABEL_KEY[tab])}
             tab={tab}
             pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
+            empty={<EmptyTab tab={tab} />}
           />
         )}
       </div>

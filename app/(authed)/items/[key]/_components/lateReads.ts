@@ -274,6 +274,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
             routedToLabel: null,
             settingsDoor: null,
             stamp: null,
+            movedSince: [],
             subject: null,
           };
         }
@@ -340,6 +341,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
             routedToLabel: null,
             settingsDoor: null,
             stamp: null,
+            movedSince: [],
             members: [],
             autoQueueExits: [],
           };

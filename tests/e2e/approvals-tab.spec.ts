@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from '@playwright/test';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { servePrivateObjectStore } from './_helpers/object-store';
@@ -19,30 +19,45 @@ import {
   type ApprovalsTabSeed,
 } from './_helpers/approvals-tab-seed';
 
-// THE APPROVALS TAB, END TO END — AND THE ACCEPTANCE RECEIPT FOR IT
+// THE APPROVALS TAB, END TO END
 // (Story MOTIR-4879 · Subtask MOTIR-5149).
 //
-// ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
+// ── PROMOTED FROM THE ACCEPTANCE LANE (MOTIR-5724) ──────────────────────────
+//
+// This was `acceptance-approvals-tab.spec.ts`, the receipt for MOTIR-4879. That
+// story is `done`, so the spec has discharged its purpose and, per
+// docs/decisions/acceptance-receipt-lifecycle.md §3, leaves the lane rather than
+// being edited in place. (No receipt was ever published for it, so nothing
+// frozen is touched either way.) It went RED on Story MOTIR-5238, whose
+// design-notes § 26 HOLDS a decided row in place until the next load. The
+// receipt's `chapter()` / `beat()` pacing and its `acceptanceStory()` tag are
+// gone (`test.step` keeps the structure). Disposition recorded in
+// docs/acceptance-lane-triage.md.
+//
+// ── WHAT IT PROTECTS ─────────────────────────────────────────
 //
 // One thing, and it is the thing the story exists for: a person arrives at work
 // and is TOLD what is waiting on them, instead of having to already know which
-// card to open. The clip's argument is the first screen after sign-in — a tab
+// card to open. The walk's argument is the first screen after sign-in — a tab
 // with a number on it — and the moment after the decision, when that number and
 // the list agree without anybody reloading anything.
 //
 // ── THE ONE THING ONLY AN E2E CAN PROVE ─────────────────────────────────────
 //
 // Deciding from this tab moves THREE things that live in different places: the
-// row leaves the list, the badge on the strip drops, and — because a
-// `design_result` approval is TERMINAL — the subject card reaches `done`.
+// row SETTLES IN PLACE with its state (and leaves on the next load — design-notes
+// § 20, kept through live-ness by § 26), the badge on the strip drops, and —
+// because a `design_result` approval is TERMINAL — the subject card reaches
+// `done`. (Before MOTIR-5238 the refresh removed the row; the spec was updated to
+// § 26 as a regression test after it left the acceptance lane.)
 // MOTIR-4794 keeps them consistent by REFRESHING the server-rendered page
 // rather than patching a client island, and "they agree" is a property of ONE
 // RENDER CONTAINING BOTH. A unit test cannot see it: the badge and the rows are
 // rendered by different components, and a suite asserting them separately would
 // pass on exactly the implementation this contract forbids.
 //
-// So the central assertion reads the badge and the rows IN THE SAME PAGE STATE,
-// before and after — never a render apart.
+// So the central assertion reads the badge and the rows still AWAITING in the
+// SAME PAGE STATE, before and after — never a render apart.
 //
 // ── WHAT IS PUBLISHED FOR REAL, AND WHAT IS SEEDED ──────────────────────────
 //
@@ -139,20 +154,14 @@ test.describe('every decision waiting on you, in one place', () => {
   test('a waiting design is answered from the tab, and the surface agrees with itself', async ({
     page,
     baseURL,
-    chapter,
-    beat,
-    acceptanceStory,
   }) => {
-    // The receipt belongs to the STORY, not to this subtask.
-    acceptanceStory('MOTIR-4879');
-
     await servePrivateObjectStore(page);
 
     const client = await agentSession(seed.token, baseURL!);
     const published = await publish(client, seed.designKey);
     expect(published.isError ?? false).toBe(false);
 
-    await chapter('An agent publishes a design, and the reviewer just signs in', async () => {
+    await test.step('An agent publishes a design, and the reviewer just signs in', async () => {
       await signIn(page, seed.reviewerEmail, seed.password);
       // The strip says there is something waiting BEFORE anybody navigates to
       // it — which is the whole difference between a queue and a folder.
@@ -160,7 +169,7 @@ test.describe('every decision waiting on you, in one place', () => {
       expect(await badgeCount(page)).toBe(1);
     });
 
-    await chapter('The tab says what is waiting, and which design it is about', async () => {
+    await test.step('The tab says what is waiting, and which design it is about', async () => {
       await page.goto('/workbench?tab=approvals');
       await expect(page.getByRole('link', { name: /To approve/ })).toHaveAttribute(
         'aria-current',
@@ -179,35 +188,30 @@ test.describe('every decision waiting on you, in one place', () => {
       // apart would pass against a surface whose count and list disagree.
       expect(await badgeCount(page)).toBe(await rows(page).count());
     });
-    await beat();
 
     const dialog = approvalDialog(page, seed.designKey);
 
-    await chapter(
-      'Opening the row shows the design itself, full screen, over the tab',
-      async () => {
-        // ⚠️ RE-SCOPED by MOTIR-5225 (Story MOTIR-5214): the row no longer
-        // discloses the frame inside the list, it opens the approval OVERLAY
-        // over the tab. `exact`, because a substring match finds TWO things in
-        // this row: the whole-row door (labelled `Review <KEY> <title>`) and the
-        // visible button.
-        await rows(page).first().getByRole('button', { name: 'Review', exact: true }).click();
-        await expect(dialog).toBeVisible();
-        // The tab is never left: the address only gains the overlay's two
-        // parameters.
-        await expect(page).toHaveURL(
-          (url) =>
-            url.pathname === '/workbench' &&
-            url.searchParams.get('tab') === 'approvals' &&
-            url.searchParams.get('approval') === seed.designKey &&
-            url.searchParams.get('approvalKind') === 'design_result',
-        );
-        await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
-      },
-    );
-    await beat();
+    await test.step('Opening the row shows the design itself, full screen, over the tab', async () => {
+      // ⚠️ RE-SCOPED by MOTIR-5225 (Story MOTIR-5214): the row no longer
+      // discloses the frame inside the list, it opens the approval OVERLAY
+      // over the tab. `exact`, because a substring match finds TWO things in
+      // this row: the whole-row door (labelled `Review <KEY> <title>`) and the
+      // visible button.
+      await rows(page).first().getByRole('button', { name: 'Review', exact: true }).click();
+      await expect(dialog).toBeVisible();
+      // The tab is never left: the address only gains the overlay's two
+      // parameters.
+      await expect(page).toHaveURL(
+        (url) =>
+          url.pathname === '/workbench' &&
+          url.searchParams.get('tab') === 'approvals' &&
+          url.searchParams.get('approval') === seed.designKey &&
+          url.searchParams.get('approvalKind') === 'design_result',
+      );
+      await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+    });
 
-    await chapter('Approving it clears the row, the badge and the card together', async () => {
+    await test.step('Approving it settles the row in place and drops the badge', async () => {
       await dialog.getByRole('button', { name: 'Approve', exact: true }).click();
       // The confirm band — approving a design is TERMINAL, so it asks once, and
       // says what it is about to do before it does it.
@@ -224,20 +228,30 @@ test.describe('every decision waiting on you, in one place', () => {
         (url) => url.pathname === '/workbench' && url.search === '?tab=approvals',
       );
 
-      // AUTHORITATIVE: the tab's empty state, drawn only once the refreshed read
-      // has landed. ⚠️ NOT the row count first: `rows` is role-rooted, and while
-      // the dialog's hide settles the page is still outside the accessibility
-      // tree, so `toHaveCount(0)` passed VACUOUSLY and the badge was read stale.
-      await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible({
-        timeout: 30_000,
-      });
-      // …and the rows and the badge agree IN THAT SAME STATE.
+      // AUTHORITATIVE: the badge drops once the refreshed read has landed. ⚠️ The
+      // queue is back in the accessibility tree first — a role-rooted count taken
+      // while the dialog's hide settles reads VACUOUSLY.
+      await expect(page.getByRole('table', { name: 'To approve' })).toBeVisible();
+      await expect.poll(() => badgeCount(page), { timeout: 30_000 }).toBe(0);
+      // The decided row SETTLES IN PLACE (design-notes § 20, kept through
+      // live-ness by § 26 — MOTIR-5238): still there, carrying its state, with
+      // nothing left to press. It is a receipt, not a member — so the rows still
+      // AWAITING (those with a Review door) agree with the badge, in this state.
+      await expect(rows(page)).toHaveCount(1);
+      await expect(rows(page).getByText('Approved', { exact: true })).toBeVisible();
+      await expect(rows(page).getByRole('button', { name: 'Review', exact: true })).toHaveCount(
+        await badgeCount(page),
+      );
+    });
+
+    await test.step('The next load drops the settled row, and the tab is empty', async () => {
+      await page.reload();
+      await expect(emptyHeading(page, 'Nothing is waiting on your approval')).toBeVisible();
       await expect(rows(page)).toHaveCount(0);
       expect(await badgeCount(page)).toBe(0);
     });
-    await beat();
 
-    await chapter('And the work it was holding is done', async () => {
+    await test.step('And the work it was holding is done', async () => {
       // The half that lives outside the page entirely — and the reason the
       // decision is worth anything.
       await expect
@@ -257,10 +271,7 @@ test.describe('every decision waiting on you, in one place', () => {
 
   test('a reader it is NOT routed to is told so, rather than shown an empty box', async ({
     page,
-    acceptanceStory,
   }) => {
-    acceptanceStory('MOTIR-4879');
-
     await signIn(page, seed.readerEmail, seed.password);
     await page.goto('/workbench?tab=approvals');
 
@@ -291,9 +302,7 @@ test.describe('every decision waiting on you, in one place', () => {
   test('a reader who may SEE a decision but not make it gets its state and no verbs', async ({
     page,
     baseURL,
-    acceptanceStory,
   }) => {
-    acceptanceStory('MOTIR-4879');
     await servePrivateObjectStore(page);
 
     // The viewer is a project `viewer` AND the assignee: ROUTED the gate by ADR
@@ -332,10 +341,7 @@ test.describe('every decision waiting on you, in one place', () => {
   test('past one page it inherits the shipped pager, and page two holds different rows', async ({
     page,
     baseURL,
-    acceptanceStory,
   }) => {
-    acceptanceStory('MOTIR-4879');
-
     const client = await agentSession(seed.token, baseURL!);
     expect((await publish(client, seed.designKey)).isError ?? false).toBe(false);
     // `HOME_PAGE_SIZE` is 25, so 25 filler gates plus the published one is a

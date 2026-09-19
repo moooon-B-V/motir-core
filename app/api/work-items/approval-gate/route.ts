@@ -216,13 +216,23 @@ export async function GET(req: Request): Promise<Response> {
 
   try {
     const item = await workItemsService.getWorkItemByIdentifier(active.projectId, key, ctx);
-    const read = await approvalGatesService.getForWorkItem({ workItemId: item.id, kind }, ctx);
+    // ⚠️ `?since=` IS A QUESTION, NOT A CURSOR. A reader who has been holding
+    // this approval open hands back the stamp they were shown, and the read
+    // answers what has moved since — through the decide door's own comparison
+    // (Story MOTIR-5238 · Subtask MOTIR-5243). Absent, the answer is empty and
+    // this route behaves exactly as it did.
+    const since = params.get('since');
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind, since },
+      ctx,
+    );
     const body: ApprovalGateOverlayReadDTO = {
       workItem: { id: item.id, identifier: item.identifier, title: item.title },
       gate: read.gate,
       canDecide: read.canDecide,
       routedToLabel: read.routedToLabel,
       stamp: read.stamp,
+      movedSince: read.movedSince,
       subject: await readSubject(kind, read.gate, item, ctx),
     };
     return NextResponse.json(body, {

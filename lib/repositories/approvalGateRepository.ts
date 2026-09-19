@@ -605,7 +605,7 @@ export const approvalGateRepository = {
    * returns nothing, which is the no-existence-leak convention every other
    * project gate follows. A post-read filter would shorten pages instead of
    * failing, and *"the list sometimes ends early"* is a bug nobody traces back to
-   * an access rule (`homeService`'s `activeProjectScope`, verbatim reasoning).
+   * an access rule (`homeService`'s `resolveActiveProjectScope`, verbatim reasoning).
    *
    * ⚠️ ROUTING IS RE-DERIVED FROM THE WORK ITEM, NOT READ FROM `routed_to_id` —
    * and the two genuinely differ, so this is a decision rather than an
@@ -676,6 +676,39 @@ export const approvalGateRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     return tx.approvalGate.count({ where: awaitingRoutedToWhere(scope) });
+  },
+
+  /**
+   * THE APPROVALS TAB'S WATERMARK (Story MOTIR-5238 · MOTIR-5240) — how many
+   * gates are waiting on this reader, and the most recent `updatedAt` among
+   * them, in ONE query.
+   *
+   * ⚠️ THE SAME PREDICATE AS THE LIST AND THE COUNT, from the same builder. A
+   * third reader of `awaitingRoutedToWhere` rather than a third copy of it: a
+   * watermark taken over a different set than the tab renders is a tab that goes
+   * stale while nothing ever nudges — the silent half of the badge-says-3 bug
+   * this builder was extracted for.
+   *
+   * ⚠️ AND THE MAXIMUM IS WHAT CATCHES A SUBJECT MOVING. A republish supersedes
+   * the prior version's gate (`designEvidenceService`, ADR §6b) — so the count
+   * moves when the set changes size, and `updatedAt` moves when a row is edited
+   * in place or replaced within a tab of the same size. Neither number alone is
+   * a change detector; the pair is.
+   *
+   * Required `tx`, for the reason `findAwaitingRoutedTo` states at length:
+   * without a bound `app.workspace_id` this returns an empty answer and raises
+   * nothing, which on a watermark reads as *nothing has changed*.
+   */
+  async watermarkAwaitingRoutedTo(
+    scope: AwaitingRoutingScope,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ count: number; latest: Date | null }> {
+    const row = await tx.approvalGate.aggregate({
+      where: awaitingRoutedToWhere(scope),
+      _count: { _all: true },
+      _max: { updatedAt: true },
+    });
+    return { count: row._count._all, latest: row._max.updatedAt ?? null };
   },
 
   /**

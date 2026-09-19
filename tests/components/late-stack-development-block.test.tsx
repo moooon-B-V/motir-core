@@ -84,6 +84,8 @@ function reads(): LateReads {
       routedToLabel: null,
       settingsDoor: null,
       stamp: null,
+      // Nothing was asked, so nothing moved (Story MOTIR-5238 · MOTIR-5243).
+      movedSince: [],
       subject: null,
     },
     runs: [],
@@ -97,6 +99,8 @@ function reads(): LateReads {
       routedToLabel: null,
       settingsDoor: null,
       stamp: null,
+      // Nothing was asked, so nothing moved (Story MOTIR-5238 · MOTIR-5243).
+      movedSince: [],
       members: [],
       autoQueueExits: [],
     },

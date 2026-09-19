@@ -65,7 +65,22 @@ export const APPROVALS_FULL_VIEW_GRID_TEMPLATE = 'minmax(10rem,1fr) 228px 88px 1
 /** What one row renders: a live question, or a decided record. */
 export type ApprovalRowRecord =
   | { section: 'awaiting'; row: ApprovalQueueRowDto }
-  | { section: 'decided'; row: ApprovalRecordDecidedRowDto };
+  | { section: 'decided'; row: ApprovalRecordDecidedRowDto }
+  /**
+   * HELD — the row left the awaiting set while the reader was looking at it, and
+   * this surface does not know where it went (Story MOTIR-5238 · MOTIR-5242;
+   * `design/workbench/design-notes.md` § 26, DECISION 1).
+   *
+   * ⚠️ IT IS A THIRD SECTION RATHER THAN AN `awaiting` ROW WITH A FLAG, because
+   * it answers the state question differently from both of the others. A
+   * `decided` row carries the state it reached; an `awaiting` row reaches one
+   * through the announcement store when THIS reader decides it. A held row has
+   * neither: the tab reads `state = awaiting`, so all the surface knows is that
+   * the row is no longer in the set. Drawing a state it cannot read would be the
+   * surface guessing, and `approved` / `changes requested` / `withdrawn` are
+   * three different pieces of news.
+   */
+  | { section: 'held'; row: ApprovalQueueRowDto };
 
 /** Relative time — "4 days", in the active locale; the absolute date goes on hover. */
 function useRelativeLabel(): (iso: string) => string {
@@ -242,6 +257,7 @@ export function ApprovalRow({
   record,
   gridTemplate = APPROVALS_GRID_TEMPLATE,
   person,
+  arrived = false,
 }: {
   record: ApprovalRowRecord;
   gridTemplate?: string;
@@ -250,6 +266,14 @@ export function ApprovalRow({
    * `undefined` renders no cell at all — the tab, and the room's own-records view.
    */
   person?: { label: string; value: string };
+  /**
+   * This row ARRIVED while the reader was looking (design-notes § 26, Panel 1) —
+   * it carries `New` until the next load. A WORD in the shipped neutral `Pill`,
+   * never a tint and never an animation: a sudden silent insertion teaches a
+   * reader to distrust what they have already read, and a flash moves a surface
+   * whose whole promise is that it can be left alone.
+   */
+  arrived?: boolean;
 }) {
   const t = useTranslations('workbench.approvals');
   const tGate = useTranslations('approvalGate');
@@ -271,7 +295,9 @@ export function ApprovalRow({
     row.subject !== null && (row.subject.kind === 'design_result' || pullRequestSet);
   const settledState: ApprovalGateStateDTO | null =
     record.section === 'decided' ? record.row.state : announcedState;
-  const settled = settledState !== null;
+  // A HELD row is settled with no state to show: it has left the awaiting set,
+  // so nothing is left to press, and the surface does not know what it became.
+  const settled = settledState !== null || record.section === 'held';
   const timeIso = record.section === 'decided' ? record.row.decidedAt : record.row.waitingSince;
 
   function onRowClick(e: MouseEvent<HTMLAnchorElement>) {
@@ -335,6 +361,10 @@ export function ApprovalRow({
         ) : (
           <SubjectMeta subject={row.subject} />
         )}
+        {/* It ARRIVED while the reader was looking (§ 26, Panel 1) — at the END
+            of the subject cell, which at `< md` is the end of the row's first
+            line and so is already reading order. */}
+        {arrived ? <Pill tone="neutral">{t('live.new')}</Pill> : null}
       </div>
 
       <div role="presentation" className="flex flex-wrap items-center gap-2 pl-6 md:contents">
@@ -382,7 +412,16 @@ export function ApprovalRow({
         )}
         <div role="cell" className="flex min-w-0 items-center md:justify-end">
           {settled ? (
-            <StatePill state={settledState} />
+            settledState !== null ? (
+              <StatePill state={settledState} />
+            ) : (
+              /* HELD, outcome unknown (§ 26, DECISION 1). Colourless for § 20's
+                 own reason, one case over: this was written by somebody else's
+                 press, and a tinted pill would let a reader take it for their
+                 own answer. The row still OPENS — the overlay reads the gate by
+                 (item, kind) and shows the real record. */
+              <Pill tone="neutral">{t('live.decidedElsewhere')}</Pill>
+            )
           ) : !renderable ? (
             <Pill tone="archived">{t('notBuiltYet')}</Pill>
           ) : record.section === 'awaiting' && !record.row.canDecide ? (

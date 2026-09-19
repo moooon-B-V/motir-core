@@ -1,4 +1,7 @@
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
+// TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
+// and this DTO is imported by client components. An `import type` is erased.
+import type { StampComponent } from '@/lib/approvalGates/stamp';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
@@ -558,6 +561,18 @@ export interface ApprovalGateOverlayReadDTO {
    * nothing. Null when the gate is not `awaiting`.
    */
   stamp: string | null;
+  /**
+   * WHAT HAS MOVED since the stamp the caller presented as `?since=` — empty when
+   * nothing has, and when none was presented (Story MOTIR-5238 · Subtask
+   * MOTIR-5243).
+   *
+   * ⚠️ THE SERVER ANSWERS THIS, and the client must not try to. The stamp is one
+   * opaque token precisely so that nobody parses it; naming WHICH component moved
+   * needs the composite, and the comparison is `stampMoved` — the decide door's
+   * own — so a notice drawn before a press and the refusal met after it can never
+   * disagree.
+   */
+  movedSince: StampComponent[];
   subject: ApprovalGateOverlaySubjectDTO;
 }
 

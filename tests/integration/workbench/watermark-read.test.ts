@@ -1,0 +1,613 @@
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { db } from '@/lib/db';
+import type { Prisma as PrismaNs } from '@/generated/prisma/client';
+import { adminDb } from '../../helpers/adminDb';
+import { workbenchWatermarkService } from '@/lib/services/workbenchWatermarkService';
+import { homeService, type HomeActorContext } from '@/lib/services/homeService';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { projectMembersService } from '@/lib/services/projectMembersService';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { watcherRepository } from '@/lib/repositories/watcherRepository';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { WORKBENCH_TAB_KEYS, type WorkbenchTabKey } from '@/lib/dto/workbench';
+import { encodeWatermarkCursor } from '@/lib/workbench/watermarkCursor';
+import { truncateAuthTables } from '../../helpers/db';
+import { spyOnJobDispatch } from '../../helpers/jobs';
+import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { createTestUser } from '../../fixtures/userFixtures';
+
+// THE WATERMARK READ (Story MOTIR-5238 · Subtask MOTIR-5240), against a real
+// Postgres (the motir-core no-mocks rule).
+//
+// The read answers one question per tab — *has anything you can see changed?* —
+// and it has exactly two ways to be wrong, both silent:
+//
+//   · TOO NARROW. A watermark taken over a smaller set than its tab renders
+//     means the list goes stale and NOTHING EVER NUDGES. Nothing goes red,
+//     because the list is still correct whenever anybody reloads. So every tab
+//     here gets a POSITIVE case driven through the product's own write paths.
+//   · TOO WIDE. A watermark taken over a larger set nudges on rows the reader
+//     cannot see — wasteful, and a claim about access that is not true. So every
+//     tab also gets a NEGATIVE case, and the access case uses a fixture whose
+//     VIEW AND TRUE POPULATION DIFFER; with an actor who sees everything, a
+//     scoped read and an unscoped one return the same answer and prove nothing.
+//
+// ⚠️ AND THE EDIT CASE IS THE ONE A COUNT-ONLY WATERMARK PASSES EVERY NAIVE TEST
+// WITHOUT. Arrivals and departures move a count; a row that stays exactly where
+// it is while its content changes does not — and that is precisely the
+// situation the stale-approval work exists for.
+//
+// ⚠️ ROWS ARE MOVED THROUGH THE SERVICE, never by writing `work_item.status`
+// with `adminDb`: `completedAt` is stamped by the transition (MOTIR-4780), and a
+// fixture that sets the column directly makes the finished-window assertions
+// pass for the wrong reason.
+
+let fx: WorkItemFixture;
+/** A story for subtasks to hang under (`lib/issues/parentRules.ts`). */
+let storyId: string;
+
+beforeEach(async () => {
+  // The status paths emit `work-item/transitioned` post-commit and the test env
+  // has no Inngest key — the comments-suite pattern.
+  spyOnJobDispatch();
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "approval_gate" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe(
+    'TRUNCATE TABLE "watcher", "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
+  );
+  await truncateAuthTables();
+  fx = await makeWorkItemFixture({ identifier: 'WMK' });
+  const story = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'story', title: 'The live Workbench' },
+    fx.ctx,
+  );
+  storyId = story.id;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+afterAll(async () => {
+  await db.$disconnect();
+  await adminDb.$disconnect();
+});
+
+const ctx = (): HomeActorContext => ({ ...fx.ctx, projectId: fx.projectId });
+
+/** A card the reader reports — created THROUGH the service, so it lands in the project's initial status. */
+async function card(title: string): Promise<{ id: string; identifier: string }> {
+  const item = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'task', title },
+    fx.ctx,
+  );
+  return { id: item.id, identifier: item.identifier };
+}
+
+/**
+ * A card somebody ELSE files — reported, assigned and WATCHED by them alone.
+ *
+ * ⚠️ IT MUST BE CREATED UNDER THEIR OWN CONTEXT, not created here and handed
+ * over. `createWorkItem` AUTO-WATCHES its creator (`watcherRepository`'s
+ * auto-watch hooks), so a card this fixture files and then re-assigns is still
+ * one the reader watches — which is correct product behaviour and quietly
+ * destroys every assertion below that says the reader cannot see it. The three
+ * failures that found this were all in the Watching tab.
+ */
+async function theirCard(title: string, userId: string): Promise<{ id: string }> {
+  const item = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'task', title },
+    {
+      userId,
+      workspaceId: fx.workspaceId,
+    },
+  );
+  return { id: item.id };
+}
+
+/** Move a card the way the product does. */
+async function move(id: string, ...keys: string[]): Promise<void> {
+  for (const key of keys) await workItemsService.updateStatus(id, key, fx.ctx);
+}
+
+/** One card carrying one awaiting gate, routed by the columns §2 reads. */
+async function gateOn(opts: { title: string; assigneeId?: string | null; reporterId?: string }) {
+  const item = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'subtask', parentId: storyId, title: opts.title },
+    fx.ctx,
+  );
+  await adminDb.workItem.update({
+    where: { id: item.id },
+    data: {
+      assigneeId: opts.assigneeId ?? null,
+      ...(opts.reporterId ? { reporterId: opts.reporterId } : {}),
+    },
+  });
+  const gate = await withWorkspaceContext(fx.ctx, (tx) =>
+    approvalGateRepository.create(
+      {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: item.id,
+        kind: 'design_result',
+        subjectId: `evidence-${item.id}`,
+      },
+      tx,
+    ),
+  );
+  return { item, gate };
+}
+
+/** Hand a card to somebody else entirely — off the reader's membership `OR`. */
+async function handTo(id: string, userId: string): Promise<void> {
+  await adminDb.workItem.update({
+    where: { id },
+    data: { assigneeId: userId, reporterId: userId },
+  });
+}
+
+async function watch(workItemId: string, userId: string): Promise<void> {
+  await withWorkspaceContext(fx.ctx, (tx) => watcherRepository.add(workItemId, userId, tx));
+}
+
+/** Somebody else in the same workspace — the far side of every negative case. */
+async function stranger(email: string): Promise<string> {
+  const user = await createTestUser({ email, name: email });
+  await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
+  return user.id;
+}
+
+describe('every tab NUDGES on a change its own list would show', () => {
+  it('toDo — an arrival', async () => {
+    const before = await workbenchWatermarkService.read(ctx());
+    await card('Something new to do');
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).toContain('toDo');
+    expect(after.tabs.toDo.count).toBe(before.tabs.toDo.count + 1);
+  });
+
+  it('inProgress — an arrival, which is also toDo DEPARTING', async () => {
+    const moving = await card('About to start');
+    const before = await workbenchWatermarkService.read(ctx());
+    await move(moving.id, 'in_progress');
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    // ⚠️ BOTH TABS, from one write. A row that leaves one tab and arrives in
+    // another is two lists going stale, and a frame that named only the
+    // destination would leave the origin showing a row that is no longer there.
+    expect(after.moved).toEqual(expect.arrayContaining(['toDo', 'inProgress']));
+    expect(after.tabs.toDo.count).toBe(before.tabs.toDo.count - 1);
+    expect(after.tabs.inProgress.count).toBe(before.tabs.inProgress.count + 1);
+  });
+
+  it('recentlyFinished — a card finishing inside the window', async () => {
+    const shipping = await card('About to land');
+    await move(shipping.id, 'in_progress');
+    const before = await workbenchWatermarkService.read(ctx());
+    await move(shipping.id, 'done');
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).toContain('recentlyFinished');
+    expect(after.tabs.recentlyFinished.count).toBe(before.tabs.recentlyFinished.count + 1);
+  });
+
+  it('approvals — a gate arriving, routed to the reader', async () => {
+    const before = await workbenchWatermarkService.read(ctx());
+    await gateOn({ title: 'Waiting on me', assigneeId: fx.ownerId });
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).toContain('approvals');
+    expect(after.tabs.approvals.count).toBe(1);
+  });
+
+  it('watching — a watch arriving on an item the reader does not own', async () => {
+    const other = await stranger('watched-owner@ex.com');
+    const theirs = await theirCard('Somebody else’s card', other);
+    const before = await workbenchWatermarkService.read(ctx());
+    await watch(theirs.id, fx.ownerId);
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).toContain('watching');
+    expect(after.tabs.watching.count).toBe(before.tabs.watching.count + 1);
+  });
+});
+
+describe('a change a tab would NOT show moves nothing', () => {
+  it('another person’s card is invisible to every tab', async () => {
+    const other = await stranger('elsewhere@ex.com');
+    const theirs = await theirCard('Not mine', other);
+
+    const before = await workbenchWatermarkService.read(ctx());
+    await workItemsService.updateWorkItem(theirs.id, { title: 'Still not mine' }, fx.ctx);
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).toEqual([]);
+  });
+
+  it('a gate routed to somebody ELSE does not move the approvals tab', async () => {
+    const other = await stranger('their-decision@ex.com');
+    const before = await workbenchWatermarkService.read(ctx());
+    await gateOn({ title: 'Waiting on them', assigneeId: other, reporterId: other });
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).not.toContain('approvals');
+    expect(after.tabs.approvals.count).toBe(0);
+  });
+
+  it('a card finished LONGER ago than the window does not move recentlyFinished', async () => {
+    const old = await card('Finished in June');
+    await move(old.id, 'in_progress', 'done');
+    await adminDb.workItem.update({
+      where: { id: old.id },
+      data: { completedAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+    });
+
+    const before = await workbenchWatermarkService.read(ctx());
+    // Re-touching an old row must not bring it back: the window is on
+    // `completedAt`, and the watermark reads the same predicate the list does.
+    await adminDb.workItem.update({ where: { id: old.id }, data: { updatedAt: new Date() } });
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).not.toContain('recentlyFinished');
+    expect(after.tabs.recentlyFinished.count).toBe(0);
+  });
+
+  it('an ARCHIVED card leaves the watermark exactly as its list leaves it', async () => {
+    const doomed = await card('About to be archived');
+    const before = await workbenchWatermarkService.read(ctx());
+    await workItemsService.archiveWorkItem(doomed.id, fx.ctx);
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    // The row leaves the tab, so the tab MOVED — and the new reading agrees with
+    // what the list now returns, which is the assertion that matters.
+    expect(after.moved).toContain('toDo');
+    expect(after.tabs.toDo.count).toBe((await homeService.listToDo(ctx())).total);
+  });
+});
+
+describe('THE ACCESS FIXTURE — a reader who may not browse their own active project', () => {
+  it('reads an empty watermark while the true population is NOT empty, on every tab', async () => {
+    // ⚠️ THE VIEW AND THE POPULATION DIFFER, which is the only way this can
+    // distinguish a scoped read from an unscoped one. A plain workspace member —
+    // RLS admits them — with work, a watch and a gate genuinely theirs, inside a
+    // PRIVATE project they hold no role on.
+    const outsider = await stranger('outsider@ex.com');
+    const theirs = await card('Genuinely theirs');
+    await handTo(theirs.id, outsider);
+    await watch(theirs.id, outsider);
+    await gateOn({ title: 'Genuinely their decision', assigneeId: outsider });
+
+    await projectMembersService.setAccessLevel({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      level: 'private',
+    });
+    // Joining a workspace enrols a user in its projects, so the revocation is
+    // what actually creates the state the scope resolver is written for.
+    await adminDb.projectMembership.deleteMany({
+      where: { userId: outsider, projectId: fx.projectId },
+    });
+
+    const trueWork = await adminDb.workItem.count({ where: { assigneeId: outsider } });
+    const trueGates = await adminDb.approvalGate.count({
+      where: { state: 'awaiting', workItem: { assigneeId: outsider } },
+    });
+    const trueWatches = await adminDb.watcher.count({ where: { userId: outsider } });
+    expect([trueWork, trueGates, trueWatches].every((n) => n > 0)).toBe(true);
+
+    const reading = await workbenchWatermarkService.read({
+      userId: outsider,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
+
+    for (const key of WORKBENCH_TAB_KEYS) {
+      expect(reading.tabs[key]).toEqual({ count: 0, latest: null });
+    }
+  });
+});
+
+describe('an EDIT moves the watermark — the case a count-only watermark misses', () => {
+  it('a re-titled card moves toDo while its count stands still', async () => {
+    const edited = await card('First title');
+    const before = await workbenchWatermarkService.read(ctx());
+    await workItemsService.updateWorkItem(edited.id, { title: 'Second title' }, fx.ctx);
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).toContain('toDo');
+    expect(after.tabs.toDo.count).toBe(before.tabs.toDo.count);
+    expect(after.tabs.toDo.latest).not.toBe(before.tabs.toDo.latest);
+  });
+
+  it('a gate edited in place moves approvals while its count stands still', async () => {
+    const { gate } = await gateOn({ title: 'Waiting on me', assigneeId: fx.ownerId });
+    const before = await workbenchWatermarkService.read(ctx());
+    // The shape a REPUBLISH leaves behind: the question is still one row waiting
+    // on this reader, and what changed is the row. `updatedAt` is what carries
+    // it; the count cannot.
+    await adminDb.approvalGate.update({
+      where: { id: gate.id },
+      data: { subjectId: `evidence-v2-${gate.id}` },
+    });
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).toContain('approvals');
+    expect(after.tabs.approvals.count).toBe(before.tabs.approvals.count);
+    expect(after.tabs.approvals.latest).not.toBe(before.tabs.approvals.latest);
+  });
+
+  it('an edit to a WATCHED item the reader does not own moves the watching tab', async () => {
+    const other = await stranger('their-card@ex.com');
+    const theirs = await theirCard('Watched, not owned', other);
+    await watch(theirs.id, fx.ownerId);
+
+    const before = await workbenchWatermarkService.read(ctx());
+    await adminDb.workItem.update({
+      where: { id: theirs.id },
+      data: { title: 'Changed under me' },
+    });
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).toEqual(['watching']);
+    expect(after.tabs.watching.count).toBe(before.tabs.watching.count);
+  });
+});
+
+describe('the RESUME contract — absent, replayed, and unreadable are three answers', () => {
+  it('names nothing when no cursor is presented', async () => {
+    await card('Something to see');
+    const first = await workbenchWatermarkService.read(ctx());
+    expect(first.moved).toEqual([]);
+  });
+
+  it('names nothing when the SAME cursor is replayed — a reconnect is neither a replay nor a gap', async () => {
+    await card('Something to see');
+    const first = await workbenchWatermarkService.read(ctx());
+    const again = await workbenchWatermarkService.read(ctx(), first.cursor);
+    const thrice = await workbenchWatermarkService.read(ctx(), first.cursor);
+
+    expect(again.moved).toEqual([]);
+    expect(thrice.moved).toEqual([]);
+    expect(thrice.cursor).toBe(first.cursor);
+  });
+
+  it('names EVERY tab for an unreadable cursor — one redundant re-read beats a list that stops updating', async () => {
+    const reading = await workbenchWatermarkService.read(ctx(), 'w0.not-this-format');
+    expect(reading.moved).toEqual([...WORKBENCH_TAB_KEYS]);
+  });
+
+  it('names only what moved since a STALE cursor, however many readings ago it was minted', async () => {
+    const other = await stranger('noise@ex.com');
+    const stale = (await workbenchWatermarkService.read(ctx())).cursor;
+    await card('One');
+    await workbenchWatermarkService.read(ctx());
+    await card('Two');
+    await theirCard('Not mine either', other);
+    await workbenchWatermarkService.read(ctx());
+
+    const after = await workbenchWatermarkService.read(ctx(), stale);
+    // ⚠️ TWO TABS, and the second is not noise: filing a card AUTO-WATCHES its
+    // creator, so a reader who files work is watching it. The other person's
+    // card moves neither — which is what makes this a comparison against the
+    // stale cursor rather than a re-read of everything.
+    expect(after.moved).toEqual(['toDo', 'watching']);
+  });
+});
+
+describe('the payload is a SIGNAL — bounded, and carrying no row content', () => {
+  it('is five pairs whatever the project holds', async () => {
+    for (let i = 0; i < 40; i += 1) {
+      const row = await card(`Bulk ${i}`);
+      if (i % 4 === 0) await move(row.id, 'in_progress');
+      if (i % 5 === 0) await watch(row.id, fx.ownerId);
+    }
+    await gateOn({ title: 'And a decision', assigneeId: fx.ownerId });
+
+    const reading = await workbenchWatermarkService.read(ctx());
+
+    expect(Object.keys(reading.tabs).sort()).toEqual([...WORKBENCH_TAB_KEYS].sort());
+    for (const key of WORKBENCH_TAB_KEYS) {
+      // Every tab is exactly two fields — a size and a freshness. Nothing here
+      // grows with the project, which is the property that makes polling this
+      // once a second affordable.
+      expect(Object.keys(reading.tabs[key as WorkbenchTabKey]).sort()).toEqual(['count', 'latest']);
+    }
+    expect(Object.keys(reading).sort()).toEqual(['cursor', 'moved', 'tabs']);
+  });
+
+  it('mentions no title, identifier or id of anything it counted', async () => {
+    const named = await card('A very distinctive title');
+    await watch(named.id, fx.ownerId);
+    await gateOn({ title: 'Another distinctive title', assigneeId: fx.ownerId });
+
+    const serialised = JSON.stringify(await workbenchWatermarkService.read(ctx()));
+
+    expect(serialised).not.toContain('A very distinctive title');
+    expect(serialised).not.toContain('Another distinctive title');
+    expect(serialised).not.toContain(named.id);
+    expect(serialised).not.toContain(named.identifier);
+    expect(serialised).not.toContain(fx.projectId);
+  });
+});
+
+describe('the watermark AGREES with the reads it is derived from', () => {
+  it('matches every tab count the strip renders, over a mixed fixture', async () => {
+    const waiting = await card('Waiting');
+    const moving = await card('Moving');
+    await move(moving.id, 'in_progress');
+    const shipped = await card('Shipped');
+    await move(shipped.id, 'in_progress', 'done');
+    await watch(waiting.id, fx.ownerId);
+    await gateOn({ title: 'Decide me', assigneeId: fx.ownerId });
+
+    const counts = await homeService.tabCounts(ctx());
+    const approvals = await approvalGatesService.countAwaitingMe(ctx());
+    const reading = await workbenchWatermarkService.read(ctx());
+
+    // ⚠️ THE POINT OF THIS ASSERTION IS THE PREDICATE, NOT THE ARITHMETIC. The
+    // badge, the list and the watermark are three readers of one question per
+    // tab; a number that disagrees here is a fourth definition of who sees what,
+    // which is the drift this card was written to make impossible.
+    expect(reading.tabs.toDo.count).toBe(counts.toDo);
+    expect(reading.tabs.inProgress.count).toBe(counts.inProgress);
+    expect(reading.tabs.recentlyFinished.count).toBe(counts.recentlyFinished);
+    expect(reading.tabs.watching.count).toBe(counts.watching);
+    expect(reading.tabs.approvals.count).toBe(counts.approvals);
+    expect(reading.tabs.approvals.count).toBe(approvals);
+  });
+});
+
+describe('COST — this read runs once a second per open Workbench', () => {
+  /**
+   * Every Prisma operation issued inside the poll, in order.
+   *
+   * The service reaches the database through ONE `withWorkspaceContext`, which
+   * is `db.$transaction`; wrapping that transaction's client is what makes the
+   * count observable through the service rather than by re-deriving it from the
+   * repositories. `$`-prefixed calls are counted too, because the three
+   * `set_config` binds are real round trips and pretending otherwise would
+   * understate the poll.
+   */
+  async function statementsOf(run: () => Promise<unknown>): Promise<string[]> {
+    const seen: string[] = [];
+    const real = db.$transaction.bind(db);
+    const spy = vi.spyOn(db, '$transaction').mockImplementation(((fn: unknown, opts: unknown) => {
+      if (typeof fn !== 'function') return (real as (...a: unknown[]) => unknown)(fn, opts);
+      return (real as (...a: unknown[]) => unknown)(async (tx: PrismaNs.TransactionClient) => {
+        const proxy = new Proxy(tx as object, {
+          get(target, prop, receiver) {
+            const value = Reflect.get(target, prop, receiver);
+            if (typeof prop !== 'string') return value;
+            if (prop.startsWith('$') && typeof value === 'function') {
+              return (...args: unknown[]) => {
+                seen.push(prop);
+                return (value as (...a: unknown[]) => unknown).apply(target, args);
+              };
+            }
+            if (typeof value === 'object' && value !== null) {
+              return new Proxy(value, {
+                get(delegate, method, r) {
+                  const fn2 = Reflect.get(delegate, method, r);
+                  if (typeof fn2 !== 'function') return fn2;
+                  return (...args: unknown[]) => {
+                    seen.push(`${prop}.${String(method)}`);
+                    return (fn2 as (...a: unknown[]) => unknown).apply(delegate, args);
+                  };
+                },
+              });
+            }
+            return value;
+          },
+        }) as PrismaNs.TransactionClient;
+        return (fn as (t: PrismaNs.TransactionClient) => unknown)(proxy);
+      }, opts);
+    }) as never);
+    try {
+      await run();
+    } finally {
+      spy.mockRestore();
+    }
+    return seen;
+  }
+
+  const REMEDY =
+    'This read is polled once a second per open Workbench, so its statement count is a ' +
+    'standing cost rather than a detail. If this list has grown, say WHY in the change: a ' +
+    'per-tab second round trip is five more statements per second per reader. The shape to ' +
+    'keep is ONE aggregate per tab (`_count` + `_max` over one `where`), with Watching the ' +
+    'one documented exception — `watcher` carries no `updatedAt`, so its freshness lives ' +
+    'across a relation Prisma cannot `_max` through.';
+
+  it('is ONE transaction of twelve statements, and the shape is the point', async () => {
+    for (let i = 0; i < 10; i += 1) await card(`Bulk ${i}`);
+    await gateOn({ title: 'Decide me', assigneeId: fx.ownerId });
+
+    const seen = await statementsOf(() => workbenchWatermarkService.read(ctx()));
+
+    expect(seen, REMEDY).toEqual([
+      // The workspace context — three `set_config` binds, shared with every
+      // Workbench read and not this card's to remove.
+      '$executeRaw',
+      '$executeRaw',
+      '$executeRaw',
+      // The project SCOPE — the access decision and the project's own status
+      // partition, resolved ONCE for all five tabs because it is the expensive
+      // half and every tab needs the same one.
+      'project.findUnique',
+      'workspaceMembership.findUnique',
+      'workflowStatus.findMany',
+      // The five tabs. Three work tabs, one aggregate each…
+      'workItem.aggregate',
+      'workItem.aggregate',
+      'workItem.aggregate',
+      // …the approvals queue on the gate's own predicate…
+      'approvalGate.aggregate',
+      // …and Watching, the one tab that costs two.
+      'watcher.count',
+      'watcher.findFirst',
+    ]);
+  });
+
+  it('costs ONE statement more than the count read the strip already does — the control', async () => {
+    for (let i = 0; i < 10; i += 1) await card(`Bulk ${i}`);
+
+    const watermark = await statementsOf(() => workbenchWatermarkService.read(ctx()));
+    const counts = await statementsOf(() => homeService.tabCounts(ctx()));
+
+    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Twelve statements is
+    // not obviously cheap or expensive in the abstract; what settles it is that
+    // the strip ALREADY issues eleven to render its badges, and this read
+    // answers strictly more — every tab's freshness as well as its size — for
+    // one more.
+    expect(watermark.length - counts.length).toBe(1);
+  });
+
+  it('is bounded by the PROJECT, not by its size', async () => {
+    for (let i = 0; i < 40; i += 1) {
+      const row = await card(`Bulk ${i}`);
+      if (i % 3 === 0) await watch(row.id, fx.ownerId);
+    }
+    const big = await statementsOf(() => workbenchWatermarkService.read(ctx()));
+    expect(big).toHaveLength(12);
+  });
+
+  it('runs on indexes that are actually present', async () => {
+    // ⚠️ PRESENCE, NOT A PLAN. `EXPLAIN` on a test database of a few dozen rows
+    // reports a sequential scan whatever indexes exist, so a plan assertion here
+    // would measure the fixture's size. What CAN be checked, and is what the
+    // card asks for, is that every predicate this read issues has its index in
+    // the deployed schema.
+    const rows = await adminDb.$queryRawUnsafe<{ indexname: string }[]>(
+      `SELECT indexname FROM pg_indexes WHERE tablename IN ('work_item','watcher','approval_gate')`,
+    );
+    const present = new Set(rows.map((r) => r.indexname));
+    for (const index of [
+      // toDo / inProgress — the per-project status partition.
+      'work_item_projectId_status_idx',
+      // Recently finished — the window, on the axis it orders by.
+      'work_item_projectId_completedAt_idx',
+      // The membership arm of all three work tabs.
+      'work_item_projectId_assigneeId_idx',
+      // Watching — `model Watcher`'s own "the issues I watch" index.
+      'watcher_user_id_idx',
+      // The approvals queue — one project's awaiting rows.
+      'approval_gate_project_id_state_idx',
+    ]) {
+      expect(present, `missing index: ${index}`).toContain(index);
+    }
+  });
+});
+
+describe('the cursor a caller presents is the one this service mints', () => {
+  it('accepts a cursor built from a reading it returned', async () => {
+    await card('One');
+    const reading = await workbenchWatermarkService.read(ctx());
+    const rebuilt = encodeWatermarkCursor(reading.tabs);
+
+    expect(rebuilt).toBe(reading.cursor);
+    expect((await workbenchWatermarkService.read(ctx(), rebuilt)).moved).toEqual([]);
+  });
+});

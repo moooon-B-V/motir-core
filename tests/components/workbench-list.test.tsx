@@ -33,6 +33,9 @@ import { WorkbenchTabs } from '@/app/(authed)/workbench/_components/WorkbenchTab
 import { toWorkbenchRowViews } from '@/app/(authed)/workbench/_components/workbenchRows';
 import type { WorkbenchTab } from '@/lib/workbench/tab';
 
+/** The empty state a tab's list draws when it holds nothing (MOTIR-5245). */
+const EMPTY = <p>Nothing is waiting</p>;
+
 afterEach(() => {
   cleanup();
   push.mockReset();
@@ -99,6 +102,7 @@ const renderRows = (
       label="To do"
       tab={tab}
       pagination={pagination ?? { total: rows.length, page: 1, pageSize: 25 }}
+      empty={EMPTY}
     />,
   );
 

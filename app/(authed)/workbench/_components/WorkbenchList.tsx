@@ -7,11 +7,14 @@ import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
+import { Pill } from '@/components/ui/Pill';
 import { Avatar, StatusValue } from '../../items/_components/issueCellPrimitives';
 import { usePeekRowClick } from '../../items/_components/IssueQuickView';
 import { IssueListPager } from '../../items/_components/IssueListPager';
 import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
+import { useLiveRows } from './useLiveRows';
 import type { WorkbenchRowView } from './workbenchRows';
+import type { ReactNode } from 'react';
 
 // The Workbench list (Story MOTIR-2649 · MOTIR-2653, renamed and widened by
 // Story MOTIR-4777 · MOTIR-4782, per `design/workbench/design-notes.md`
@@ -128,7 +131,16 @@ function useFinishedLabel(): (iso: string) => string {
   };
 }
 
-function WorkbenchRow({ row, showFinished }: { row: WorkbenchRowView; showFinished: boolean }) {
+function WorkbenchRow({
+  row,
+  showFinished,
+  arrived = false,
+}: {
+  row: WorkbenchRowView;
+  showFinished: boolean;
+  /** It arrived while the reader was looking — design-notes § 26, Panel 1. */
+  arrived?: boolean;
+}) {
   const t = useTranslations('workbench');
   const finishedLabel = useFinishedLabel();
   return (
@@ -167,6 +179,10 @@ function WorkbenchRow({ row, showFinished }: { row: WorkbenchRowView; showFinish
               *Recently finished* needs no special case — it lists done-category
               items, and `ciBadgeState` draws nothing for those. */}
           <CiStateBadge ciState={row.ciState} statusCategory={row.statusCategory} form="glyph" />
+          {/* ARRIVED under the reader (§ 26, Panel 1) — a WORD in the shipped
+              neutral `Pill`, kept until the next load. It rides at the end of
+              the title cell, which at `< md` is the end of the row's first line. */}
+          {arrived ? <Pill tone="neutral">{t('live.new')}</Pill> : null}
         </span>
       </div>
 
@@ -268,12 +284,21 @@ export function WorkbenchList({
   label,
   tab,
   pagination,
+  empty,
 }: {
   rows: WorkbenchRowView[];
   label: string;
   tab: WorkbenchTab;
   /** The window this list is one page of — the pager's own contract. */
   pagination: { total: number; page: number; pageSize: number };
+  /**
+   * What an empty tab shows. Drawn HERE for the reason `ApprovalsList`'s own
+   * `empty` records in full: a component that only exists once the first row
+   * has landed cannot know that the row arrived, so the arrival into an empty
+   * tab — the one a reader is most certainly watching — was the one this
+   * surface could never mark.
+   */
+  empty: ReactNode;
 }) {
   const t = useTranslations('workbench');
   const router = useRouter();
@@ -285,7 +310,23 @@ export function WorkbenchList({
     t('columns.status'),
     ...(showFinished ? [t('columns.finished')] : []),
   ];
-  const groups = tab === 'watching' ? splitWatchingGroups(rows) : null;
+  // THE ARRIVAL MARK, on the four work tabs (Story MOTIR-5238 · MOTIR-5242;
+  // design-notes § 26, Panel 1 and planning flag 3). These tabs order
+  // `updatedAt desc`, so an arrival lands at the TOP and shifts the rows below
+  // it by one — the same rule and the same chip as the queue, where the order
+  // puts it at the bottom instead. What the work tabs do NOT take is the HELD
+  // row: § 26 scopes that to a row leaving the AWAITING set, because § 20's
+  // settled-row rule is about a decision queue. A card that moves To do → In
+  // progress leaving the To do list is the list being correct, and holding it
+  // would show a card in a tab it is no longer in with nothing to explain why.
+  const live = useLiveRows(rows, `${tab}:${pagination.page}`, (row) => row.id);
+
+  // These tabs hold nothing (see the note above), so `live.rows` empties exactly
+  // when the server's does — the branch reads the live set anyway, so the two
+  // lists answer *am I empty?* the same way.
+  if (live.rows.length === 0) return <>{empty}</>;
+
+  const groups = tab === 'watching' ? splitWatchingGroups(live.rows) : null;
   return (
     <div
       data-surface="card"
@@ -321,7 +362,12 @@ export function WorkbenchList({
               <div role="rowgroup">
                 <GroupBand label={t('tabs.inProgress')} count={groups.moving.length} />
                 {groups.moving.map((row) => (
-                  <WorkbenchRow key={row.id} row={row} showFinished={false} />
+                  <WorkbenchRow
+                    key={row.id}
+                    row={row}
+                    showFinished={false}
+                    arrived={live.arrivedIds.has(row.id)}
+                  />
                 ))}
               </div>
             ) : null}
@@ -329,15 +375,25 @@ export function WorkbenchList({
               <div role="rowgroup">
                 <GroupBand label={t('tabs.toDo')} count={groups.waiting.length} />
                 {groups.waiting.map((row) => (
-                  <WorkbenchRow key={row.id} row={row} showFinished={false} />
+                  <WorkbenchRow
+                    key={row.id}
+                    row={row}
+                    showFinished={false}
+                    arrived={live.arrivedIds.has(row.id)}
+                  />
                 ))}
               </div>
             ) : null}
           </>
         ) : (
           <div role="rowgroup">
-            {rows.map((row) => (
-              <WorkbenchRow key={row.id} row={row} showFinished={showFinished} />
+            {live.rows.map((row) => (
+              <WorkbenchRow
+                key={row.id}
+                row={row}
+                showFinished={showFinished}
+                arrived={live.arrivedIds.has(row.id)}
+              />
             ))}
           </div>
         )}
