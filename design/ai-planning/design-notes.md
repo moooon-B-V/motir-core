@@ -2,29 +2,30 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                                         | Files                                                     | Card                 | Section   |
-| ----------------------------------------------- | --------------------------------------------------------- | -------------------- | --------- |
-| The Plans surface                               | `plans-surface.mock.html` + `.png`                        | MOTIR-843 (7.4.1)    | Part I    |
-| AI **sprint** planning                          | `sprint-planning.mock.html` + `.png`                      | MOTIR-1749 (7.13.11) | Part II   |
-| **Who authored a plan**                         | `plans-surface.mock.html` (panel A2) + `.png`             | MOTIR-2985           | Part III  |
-| **The status tag's place**                      | `plans-surface.mock.html` (the header gallery) + `.png`   | MOTIR-3074           | Part IV   |
-| A proposal on its parent's **roadmap level**    | `plans-surface.mock.html` (panel E) + `.png`              | MOTIR-3082           | Part V    |
-| A proposal **READ view**                        | `plans-surface.mock.html` (panel F) + `.png`              | MOTIR-3082           | Part V    |
-| A **decided** plan's node treatments            | `plans-surface.mock.html` (panel G) + `.png`              | MOTIR-3159           | Part VI   |
-| What the pane holds **after approve**           | `plans-surface.mock.html` (panel H) + `.png`              | MOTIR-3159           | Part VI   |
-| The Plans list **tabbed by status**             | **`plans-tabbed-list.mock.html`** + `.png`                | MOTIR-3233           | Part VII  |
-| The plan detail's **List ↔ Canvas** switcher    | **`plan-detail-list-view.mock.html`** + `.png`            | MOTIR-3234           | Part VIII |
-| What a **generating** plan offers               | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII |
-| The plan canvas **at arrival**                  | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX   |
-| **Show changes** on the plan canvas             | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX   |
-| The timeline's **CONTENT events**               | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X    |
-| The **FIFTH plan status** on every surface      | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI   |
-| **Revising a plan under review**                | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII  |
-| **The plan detail, refined**                    | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII |
-| **The shipped peek in PROPOSAL mode**           | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV  |
-| **The PROPOSED to-do list in the peek**         | **`peek-proposed-todos.mock.html`** + `.png`              | MOTIR-4615           | Part XV   |
-| **The grouped non-epic roots on a plan canvas** | **`plan-canvas-grouped-roots.mock.html`** + `.png`        | MOTIR-4773           | Part XVI  |
-| **A proposal FILED into a folder**              | **`plan-folder-placement.mock.html`** + `.png`            | MOTIR-5406           | Part XVII |
+| Surface                                         | Files                                                     | Card                 | Section    |
+| ----------------------------------------------- | --------------------------------------------------------- | -------------------- | ---------- |
+| The Plans surface                               | `plans-surface.mock.html` + `.png`                        | MOTIR-843 (7.4.1)    | Part I     |
+| AI **sprint** planning                          | `sprint-planning.mock.html` + `.png`                      | MOTIR-1749 (7.13.11) | Part II    |
+| **Who authored a plan**                         | `plans-surface.mock.html` (panel A2) + `.png`             | MOTIR-2985           | Part III   |
+| **The status tag's place**                      | `plans-surface.mock.html` (the header gallery) + `.png`   | MOTIR-3074           | Part IV    |
+| A proposal on its parent's **roadmap level**    | `plans-surface.mock.html` (panel E) + `.png`              | MOTIR-3082           | Part V     |
+| A proposal **READ view**                        | `plans-surface.mock.html` (panel F) + `.png`              | MOTIR-3082           | Part V     |
+| A **decided** plan's node treatments            | `plans-surface.mock.html` (panel G) + `.png`              | MOTIR-3159           | Part VI    |
+| What the pane holds **after approve**           | `plans-surface.mock.html` (panel H) + `.png`              | MOTIR-3159           | Part VI    |
+| The Plans list **tabbed by status**             | **`plans-tabbed-list.mock.html`** + `.png`                | MOTIR-3233           | Part VII   |
+| The plan detail's **List ↔ Canvas** switcher    | **`plan-detail-list-view.mock.html`** + `.png`            | MOTIR-3234           | Part VIII  |
+| What a **generating** plan offers               | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII  |
+| The plan canvas **at arrival**                  | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX    |
+| **Show changes** on the plan canvas             | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX    |
+| The timeline's **CONTENT events**               | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X     |
+| The **FIFTH plan status** on every surface      | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI    |
+| **Revising a plan under review**                | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII   |
+| **The plan detail, refined**                    | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII  |
+| **The shipped peek in PROPOSAL mode**           | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV   |
+| **The PROPOSED to-do list in the peek**         | **`peek-proposed-todos.mock.html`** + `.png`              | MOTIR-4615           | Part XV    |
+| **The grouped non-epic roots on a plan canvas** | **`plan-canvas-grouped-roots.mock.html`** + `.png`        | MOTIR-4773           | Part XVI   |
+| **A proposal FILED into a folder**              | **`plan-folder-placement.mock.html`** + `.png`            | MOTIR-5406           | Part XVII  |
+| **Folders as LEVELS on the planning canvases**  | **`plan-folder-levels.mock.html`**                        | MOTIR-5793           | Part XVIII |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -4913,6 +4914,11 @@ segment is text, not a link, and leads the chain).
 
 ## 17.2 DECISION 1 — a filed card ARRIVES among the roots, and says where it is filed ON the card
 
+> **⚠️ SUPERSEDED for the planning canvases by Part XVIII (MOTIR-5793, 2026-09-19).** This decision's
+> arrival among the roots, and its non-navigating folder crumb segment, rested on _no canvas level is
+> a folder_; bug MOTIR-5782 gives both planning canvases folder levels. The text below is kept as the
+> record of the decision it was. The LIST body's fact (§17.3) is not affected.
+
 **The arrival rule is unchanged** (Part IX §1): the canvas opens on the level the plan most fills,
 counted by `parentNodeId`. A folder-placed proposal has `parentNodeId: null`, so it counts under the
 top level, and it is drawn there — **among the other roots, not grouped under its folder path**.
@@ -5101,3 +5107,237 @@ Part V §3), the `get_plan` text and the `/api/v1` payload (MOTIR-5415), and the
 - **A `modify` with a two-line title is already cut in half by its diff line today** (the same fixed
   124px, measured in Chromium). MOTIR-5418 fixes it as part of the slot rule above rather than as a
   separate card, because the placement line is the second tenant of the same slot.
+
+---
+
+# Part XVIII — FOLDERS as levels on the planning canvases (MOTIR-5793 · bug MOTIR-5782 — `plan-folder-levels.mock.html`)
+
+**Its OWN asset**: `design/ai-planning/plan-folder-levels.mock.html`, seven sheets, a DELTA. It
+amends, and does not edit, `plan-folder-placement.mock.html` (Part XVII) and
+`design/roadmap/roadmap--folder-node.mock.html` (MOTIR-5713).
+
+**What changed underneath.** MOTIR-5710 gave `/roadmap` folder LEVELS: its root reads `folders=1`,
+leaves filed rows out on the SERVER (`TreeFolderLevel` `excludeFiled`), and draws each root folder
+as the shipped `FolderNode`, a door to a `folderId=` level. Bug MOTIR-5782 opts the two planning
+canvases into the same read — the planning overlay (`PlanChangeCanvas`, beside the planning chat)
+and the plan review (`PlanReviewCanvas`, `/plans/[id]` and `GenerationFlow`). Two approved
+decisions were drawn on the premise that no planning canvas has a folder level, and that premise is
+now false:
+
+- **Part XVII §17.2 (MOTIR-5406, DECISION 1)** — _"a filed card ARRIVES among the roots"_, and its
+  folder crumb _"navigates nowhere, because no canvas level is a folder"_.
+- **`design/roadmap/design-notes.md` DECISION 8 (MOTIR-5713)** — _"The plan-review canvas's folder
+  crumb … That canvas has no folder level to navigate to, so its text crumb stands."_
+
+**This Part SUPERSEDES both, for the two planning canvases only.** `/roadmap`, the plan review's
+LIST body (Part XVII §17.3 — placement stays a fact on the row) and the run canvas are unchanged.
+
+## 18.0 Drawn against SHIPPED reality — what was used, and how
+
+Every card, crumb and control is the shipped component's markup, class string for class string:
+`WorkItemNode`, `FolderNode`, `LevelGroupNode` and `FolderEmptyLevel`
+(`components/planning/WorkItemNode.tsx`), the breadcrumb and `Crumb`
+(`components/planning/ProjectRoadmapCanvas.tsx`, including MOTIR-5742's folder crumb and the
+Show changes toggle's shipped pressed / disabled classes), and `PlanItemNode`'s `add` / `modify`
+frames, placement line, diff line and stale badge as Part XVII lifted them. The title follows the
+MOTIR-5459 rule (`line-clamp-2` with no `block`; `block truncate` only when a bottom slot is
+present). Glyphs are the installed `lucide-react@1.16.0` icon nodes. CSS is compiled by Tailwind v4
+from the real `app/globals.css` + `packages/design-system/theme.css` at `origin/main` `e881bfb86`,
+over the mock's own markup only. Positions use the canvas layout constants (`NODE_W` 280, `NODE_H`
+124, `GAP_X` 80, `GAP_Y` 72, origin 40 — `lib/planning/projectCanvasModel.ts`). The asset was
+rendered headless in Chromium and read back (no page errors; the new badge resolves to
+`--el-surface` fill and `--el-accent-on-surface` ink). The builder was throwaway and is not
+committed.
+
+**One shipped overflow, left as shipped and not drawn around.** A committed container card with a
+TWO-line title and a progress meter overflows its 124px box by roughly a line in this render (the
+body is `overflow-hidden`, so the second title line is cut). MOTIR-5713's mock shows the same. It is
+not this Part's subject, so the mock uses one-line epic titles rather than restyle the card; see
+§18.10.
+
+## 18.1 DECISION 1 — the committed tree is MOTIR-5713's, unchanged (sheet 2)
+
+On both canvases the root reads `folders=1` and composes exactly as `/roadmap` does since MOTIR-5741:
+**epics, then the root folders, then _Not in an epic_**, which now holds only UNFILED parentless
+non-epics. A folder card drills to its `folderId=` level: its child folders, then its filed items.
+The cap tile counts work items only; folders are never cut. An empty folder's level renders the
+shipped `FolderEmptyLevel` (sheet 7), never the generic drilled-empty copy. **Nothing of MOTIR-5713
+decisions 1–7 is carved out** — a canvas whose subject is a proposed change still shows the
+committed tree it changes, and showing a different committed tree from `/roadmap` is the defect.
+
+Part XVI DECISION 2's third conjunct (a row the proposal TOUCHES stays on the road, out of the
+grouped node) is **unchanged**: it is a predicate over the rows the root read RETURNS, and a filed
+row is no longer one of them — it is read on its folder's level, where decision 2 draws it.
+
+## 18.2 DECISION 2 — a proposal is drawn on the level where it will SIT (sheets 3–5)
+
+**The level key of a proposal is its folder when its placement is a folder, else its parent:**
+`folder:<folderTrail leaf id> ?? parentNodeId`. Concretely:
+
+| proposal                                                | drawn on                                                 |
+| ------------------------------------------------------- | -------------------------------------------------------- |
+| an `add` whose `parentRef` is `folder:<id>`             | that folder's level                                      |
+| a `modify` / `remove` of a committed card that is FILED | its folder's level (where the committed read carries it) |
+| a `modify` that MOVES its target into a folder          | the destination folder's level (decision 4)              |
+| an `add` under a committed or proposed work item        | that work item's level, as today                         |
+| an unfiled root proposal                                | the root, as today                                       |
+| a folder-placed proposal whose folder is gone           | the root (decision 6)                                    |
+
+**Why — rung 2, and it is a constraint rather than a preference.** The root read now drops filed
+rows ON THE SERVER. A `modify` / `remove` whose target is filed, and a materialized `add` (whose
+`nodeId` is the committed row's own id), can merge onto their committed node only on the level whose
+read CARRIES that node. Drawn anywhere else, the merge has nothing to land on:
+`decoratePlanChangeLevel` appends the proposal a second time as a keyless node — **bug MOTIR-3206,
+re-created** — and `mergePlanLevel` pushes it as a standalone node, which _"reads as a drifted plan"_
+(Part XVI §16.6). Part XVI kept a touched row ON THE ROAD for exactly this reason; with the grouping
+done client-side that meant the root, and with the folder read done server-side it means the folder.
+**The same rule, applied to where the read now puts the row.** An un-materialized `add` has no such
+constraint, and follows it anyway: one rule for every op, so a filed `add` sits beside the committed
+work it will keep company with (Part V panel E) and the canvas shows the tree the plan will produce.
+
+**The placement line (Part XVII §17.2) is not drawn inside the folder.** The breadcrumb already says
+where the reviewer is standing, so the `add` gives its bottom slot back and its title returns to two
+lines (sheet 4). The line is still drawn where it says something the level does not: the stale case
+(decision 6). The LIST body keeps `in [folder] Parked ▸ 2025` unchanged.
+
+**The arrival level (plan review; Part IX §1).** The rule is unchanged except for what counts as a
+level: count every proposal at its level key above, take the level the plan most fills; the TIE-BREAK
+is the deeper level, where depth is the arrival trail's length **with folder crumbs counted**; an
+exact tie goes to the level holding the plan's first proposal in list order (the order the rail and
+the list already use). **A plan that files everything into ONE folder arrives on that folder.** A
+plan filing into TWO arrives on whichever holds more; on a tie, the deeper one. Sheet 5 is sheet 3's
+plan: the proposed story's own level holds 2 and wins. **The overlay keeps its shipped arrival** (it
+opens where the conversation is anchored) and only gains the levels.
+
+## 18.3 DECISION 3 — a CLOSED folder that holds proposals says so, on the card (sheet 3)
+
+Decision 2 moves proposals off the root and into folders, so a reviewer standing at the root could
+see a plain folder card with work changing behind it. **The folder card gains a `changes` badge** in
+its top-row slot — the slot MOTIR-5713 decision 3 left empty because a folder has no status. It is
+the shipped `add`-op badge (`bg-(--el-surface) text-(--el-accent-on-surface)`, `--radius-badge`,
+`text-[11px] font-semibold`) with the lucide `folder-pen` glyph, reading **`N change(s)`**.
+
+- **N counts DEEP**: every proposal of any op whose `folderTrail` contains this folder's id — the
+  proposals filed in it, in its sub-folders, and under work items filed in it. Sheet 3's **Parked**
+  reads 4 (a story, its two subtasks, one move-in) though only the move-in is its direct child.
+- **Show changes** (armed on arrival, Part XIII §3) treats a folder card like a card: **ringed** when
+  its count is non-zero, **dimmed** otherwise. On a level whose only proposals are behind folders,
+  Show changes is therefore NOT "nothing to light" — Part XIII §3d's disabled reasons count folder
+  cards with a non-zero badge as touched.
+- **Not drawn on `/roadmap`** — it has no plan — and **not drawn on a crumb** (a crumb names where you
+  are; the badge says what is behind a door).
+- **Why a folder card and not an epic card.** An epic card's face already carries a status, a meter
+  and readiness chrome, and the shipped canvas gives committed containers no such signal; the arrival
+  rule, the list and the locate walk are how a reviewer reaches proposals under them. A folder card
+  has an empty slot built for exactly one fact, and a folder is a drawer a reviewer has no reason to
+  expect work to be changing in. This is a decision about folders, not a gap left open for epics.
+- **Why this does not contradict Part XVI §16.4** (the grouped node says nothing about its contents).
+  §16.4 needed no signal because decision 2 there kept touched rows OUT of the group. Here the server
+  read puts them IN the folder, so the signal is the only thing between a reviewer and an unseen
+  proposal.
+
+## 18.4 DECISION 4 — a move into or out of a folder is drawn once, at its DESTINATION (sheet 6)
+
+The re-parent rule MOTIR-3867 set, extended to folders: a `modify` whose placement changes is drawn
+on the level it moves TO, carrying Part XVII §17.4's `Placement` diff line (the source struck, the
+destination beside it). It is NOT drawn at its source: there it is a card about to leave, and after
+approve the source's read no longer carries it. When the source is a folder, that folder's badge
+does NOT count it (the badge counts where proposals will SIT); when the source is the root nothing
+marks it, exactly as a re-parent leaves its old parent. The mirror case — `Parked → Project root` —
+is drawn at the root with the sides swapped.
+
+## 18.5 DECISION 5 — every folder crumb NAVIGATES, on both planning canvases (sheets 4–6)
+
+The breadcrumb is `Roadmap › [folder] … › [folder] › work item › …`, each folder the shipped `Crumb`
+button with the 14px `folder` glyph and a visually-hidden `Folder:` — MOTIR-5713 sheet 5 and
+MOTIR-5742, unchanged, including the middle collapse past three folder crumbs. **Part XVII's text
+crumb segment (MOTIR-5418's `crumbFolderPath`) is RETIRED on these canvases**: it stood in for a
+folder level that did not exist, and drilling into a filed proposal now passes THROUGH its folder
+levels, so the folders are real crumbs ahead of it. The arrival trail (decision 2) and the locate
+walk build the same chain.
+
+## 18.6 DECISION 6 — the stale folder has no level, so its proposal stays at the root (sheet 7)
+
+`folderMissing: true` means the folder was deleted after the plan was written — there is no level to
+draw the proposal on. It is drawn among the roots with Part XVII §17.5's `Out of date` badge and
+`Folder deleted` line, **unchanged**, and approve stays unavailable. It counts toward the ROOT for
+arrival.
+
+## 18.7 DECISION 7 — the review model owes a FOLDER TRAIL (a data seam, not a pixel)
+
+Decisions 2, 3 and 5 all need a proposal's folder chain **with ids**: the level key of an ancestor
+folder, the deep count, and a navigable crumb per folder. `PlanReviewItemDto` carries `folderId`
+(the leaf only) and `folderPath` (names only), and nothing at all for a proposal under a committed
+work item that is itself filed (its `parentTrail` starts below the folder). No session route returns
+a folder trail — `foldersService.getFolderTrail` is reached only from `/roadmap`'s server page.
+**So the review read gains `folderTrail: Array<{ id; name }>`**, root first: the proposal's own
+folder when it is folder-placed; else the effective folder of its root-most committed ancestor; else,
+under a proposed parent, the root-most proposed ancestor's; else `[]`. `folderPath` stays, equal to
+the trail's names. This is its own card — neither canvas card may change `planReviewService` — and it
+is proposed on plan `cmu8n8bwx009ahwtxt750aeeb` under bug MOTIR-5782, with both canvas cards
+`blocked_by` it (§18.12).
+
+## 18.8 Which review-model field each drawn element reads
+
+| element                                       | reads                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------- |
+| the level a proposal is drawn on              | `folderTrail` (leaf id) when folder-placed, else `parentNodeId` (decision 2)    |
+| a folder card's `changes` badge + its ring    | count of proposals whose `folderTrail` contains the card's folder id            |
+| the arrival level and its trail               | the same level key per proposal; `folderTrail` + `parentTrail` build the crumbs |
+| each folder crumb                             | `folderTrail[i]` (`id` for the level, `name` for the label)                     |
+| the `Placement` diff line                     | `placement.from` / `placement.to` (MOTIR-5415), unchanged                       |
+| stale badge + `Folder deleted` line           | `folderMissing: true`, unchanged                                                |
+| folder card, folder level, empty folder state | the roadmap level read with `folders=1` / `folderId=` (MOTIR-5740), unchanged   |
+
+## 18.9 Copy — English and Chinese
+
+| key (suggested)                | en                                                                     | zh                  |
+| ------------------------------ | ---------------------------------------------------------------------- | ------------------- |
+| `planReview.folderChanges`     | {n, plural, one {# change} other {# changes}}                          | {n} 项变更          |
+| `planReview.folderChangesAria` | {n, plural, one {# proposed change} other {# proposed changes}} inside | 内含 {n} 项拟议变更 |
+
+The folder card's accessible name becomes `roadmap.canvas.folder.aria` followed by
+`planReview.folderChangesAria` when the count is non-zero. Every other string on the sheets already
+ships (`roadmap.canvas.folder.*`, `folders.breadcrumbFolderLabel`, `planReview.*`).
+
+## 18.10 a11y
+
+The badge is TEXT with an `aria-hidden` glyph and a visually-hidden `proposed inside`; the count is
+in the card's accessible name, so a screen-reader user hears it on the door before opening it.
+State is never colour alone: the ring under Show changes is backed by the badge's words. The folder
+crumb is a real `<button>` in the breadcrumb `<nav>`'s list (MOTIR-5742). The badge ink is
+`--el-accent-on-surface` on `--el-surface`, the shipped `add` badge pair.
+
+## 18.11 GIVES / TAKES — swept over the tree
+
+The sweep: open work items naming `PlanReviewCanvas`, `PlanChangeCanvas` or `planReviewService`
+(`search_work_items`, text), plus a meaning search for plan-canvas placement / arrival / crumb /
+Show changes — run 2026-09-19. Everything it returned that is not `done` is listed.
+
+| work item                                                    | GIVES / TAKES        | what                                                                                                                                        |
+| ------------------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5794** — the overlay canvas                          | **GIVES**            | decisions 1–6 on `PlanChangeCanvas` and its diff helpers: the folder read, the folder level, the level key, the badge, the ring, the crumbs |
+| **MOTIR-5795** — the plan-review canvas                      | **GIVES**            | decisions 1–6 on `PlanReviewCanvas` / `planLevel.tsx`, plus the arrival rule's level key and tie-break (decision 2)                         |
+| **the folder-trail read** (plan `cmu8n8bwx009ahwtxt750aeeb`) | **GIVES**            | `PlanReviewItemDto.folderTrail` (decision 7)                                                                                                |
+| **MOTIR-5796** — the E2E                                     | **GIVES**            | the journeys sheets 2–7 draw, on both canvases                                                                                              |
+| **MOTIR-5418** (`done`)                                      | **TAKES**            | its canvas text crumb segment and, inside a folder, its placement line on an `add`. Not reopened; MOTIR-5795 retires them on the record     |
+| **MOTIR-5406** (`done`)                                      | **TAKES a DECISION** | §17.2's arrival among the roots and its non-navigating crumb, for the planning canvases. Its text stays, marked superseded                  |
+| **MOTIR-5713** (`done`)                                      | **TAKES a DECISION** | decision 8's plan-review exclusion. Its text stays, marked superseded; decisions 1–7 are composed unchanged                                 |
+| **MOTIR-5649** (`todo`)                                      | **none**             | touches `planReviewService` for the explanation field; disjoint from `folderTrail`                                                          |
+| Parts IX, XIII, XVI                                          | **lose nothing**     | the arrival rule (a level key added), the armed Show changes (folder cards counted as touched), the grouping predicate                      |
+
+## 18.12 What Part XVIII does NOT draw
+
+The run canvas (`ids=` member sets take no folder treatment), the onboarding canvas, the Children
+panel, `/roadmap`, the plan review's list body, any way to CHANGE a proposal's folder, the dark board,
+and the committed-container overflow noted in §18.0.
+
+## 18.13 ⚠️ Planning flags
+
+- **Decision 7 is a data seam no card owned.** The split of MOTIR-5782 bounded both canvas cards off
+  `planReviewService` and told them to report a missing field rather than invent it — that is what
+  happened here. The owner card and both `blocked_by` edges are on plan `cmu8n8bwx009ahwtxt750aeeb`;
+  **the canvas cards are not buildable until it is approved and landed.**
+- **The two-line-title overflow on a committed container card with a meter (§18.0)** is shipped
+  behaviour visible in this render and in MOTIR-5713's; it was not measured against the app's real
+  fonts here, so it is recorded as an observation, not filed as a defect.
