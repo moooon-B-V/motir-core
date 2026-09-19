@@ -10,6 +10,7 @@ import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService'
 import { ApprovalGateError, ApprovalGateMergeRefusedError } from '@/lib/approvalGates/errors';
 import {
   ApprovalGateAlreadyDecidedError,
+  ApprovalGatePrimaryPendingError,
   ApprovalGateSupersededError,
   ApprovalGateStaleSubjectError,
 } from '@/lib/approvalGates/errors';
@@ -160,7 +161,9 @@ function refusalOf(err: unknown): GateRefusal | null {
     // ⚠️ And the STALE refusal is the one that can say WHAT MOVED (MOTIR-5234),
     // because the door compared component by component under its lock.
     const moved = err instanceof ApprovalGateStaleSubjectError ? err.moved : null;
-    return toGateRefusal(err.tag, { decidedByLabel, supersedeCause, moved });
+    // ⚠️ And the PRIMARY-PENDING refusal names WHICH question holds the merge (MOTIR-5785).
+    const primary = err instanceof ApprovalGatePrimaryPendingError ? err.primary : null;
+    return toGateRefusal(err.tag, { decidedByLabel, supersedeCause, moved, primary });
   }
   return null;
 }

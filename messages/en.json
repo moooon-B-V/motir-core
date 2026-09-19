@@ -8404,6 +8404,16 @@
         "title": "Motir cannot decide this kind of approval yet.",
         "next": "The work to support it is planned. Nothing you did caused this."
       },
+      "primaryPending": {
+        "design": {
+          "title": "Approve the design before these pull requests merge.",
+          "next": "Approve the design above. One press approves it and merges them."
+        },
+        "decision": {
+          "title": "Accept the decision before these pull requests merge.",
+          "next": "Approve the decision document above. One press accepts it and merges them."
+        }
+      },
       "alreadyAwaiting": {
         "title": "Another decision on this subject is already waiting.",
         "next": "Reload the page to see it."
