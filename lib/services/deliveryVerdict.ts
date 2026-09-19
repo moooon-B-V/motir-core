@@ -5,10 +5,13 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
+  deliveryMemberState,
   deliveryStateForCard,
   foldCardCiState,
+  membersWithAVerdict,
   queueExitHoldsAtHead,
   repoCannotReportChecks,
+  type DeliveryMember,
 } from '@/lib/workItems/deliverySet';
 
 // A CARD'S DELIVERY SET, AND THE TWO VERDICTS READ OFF IT (MOTIR-5470).
@@ -34,6 +37,16 @@ import {
 // the column read `passing` exactly when the promotion would promote. If they
 // read two different sets that equivalence would be a coincidence; reading one
 // set makes it a property.
+
+/** A delivering pull request, in the fields the verdicts read. `state` and
+ *  `merged` are the host's raw pair, collapsed by `deliveryMemberState`
+ *  (MOTIR-5786 reads them to tell a finished member from a waiting one). */
+export interface DeliveredPullRequest {
+  repoId: string;
+  state: string;
+  merged: boolean;
+  checkRuns: GithubCheckRun[];
+}
 
 /**
  * EVERY pull request that delivers this card, by id, with the check rows the
@@ -62,7 +75,7 @@ import {
 export async function collectDeliveries(
   item: { id: string; sessionBranch: string | null },
   tx: Prisma.TransactionClient,
-): Promise<Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>> {
+): Promise<Map<string, DeliveredPullRequest>> {
   const [deliveries, linked, onBranch] = await Promise.all([
     workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
     githubPullRequestRepository.listByWorkItemWithContext(item.id, tx),
@@ -71,7 +84,7 @@ export async function collectDeliveries(
       : Promise.resolve([]),
   ]);
 
-  const byId = new Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>();
+  const byId = new Map<string, DeliveredPullRequest>();
   for (const delivery of deliveries) byId.set(delivery.githubPullRequestId, delivery.pullRequest);
   for (const pr of [...linked, ...onBranch]) byId.set(pr.id, pr);
   return byId;
@@ -118,6 +131,8 @@ export interface ClassifiedDelivery {
    *  ({@link standingQueueFailures}) — a failure the pull request's OWN `state`
    *  cannot show, because the queue failed on its merge group (MOTIR-5717). */
   queueFailure: boolean;
+  /** Open, merged or closed — `deliveryMemberState`'s collapse (MOTIR-5786). */
+  lifecycle: DeliveryMember['state'];
 }
 
 /**
@@ -134,6 +149,13 @@ export interface ClassifiedDelivery {
  * follow-up is asked of the REPOSITORY, because the pull request cannot tell them
  * apart. A set with no `null` in it — nearly every card — pays nothing: the id
  * list is empty and both reads are skipped.
+ *
+ * ⚠️ AND A FINISHED MEMBER THAT NEVER REPORTED IS NOT RETURNED (MOTIR-5786). A
+ * merged or closed pull request with no check rows, in a repository that can
+ * report, will never get a verdict, so it is waiting on nothing. Before this it
+ * reached the card's mapper as `running` and pinned the card there for ever.
+ * The rule is `membersWithAVerdict`; it is applied HERE, once, so the card's fold
+ * and the promotion read the same members and keep agreeing on `passing`.
  */
 export async function classifyDeliveries(
   item: { id: string; sessionBranch: string | null },
@@ -145,6 +167,7 @@ export async function classifyDeliveries(
     id,
     repoId: pr.repoId,
     state: derivePrCiState(pr.checkRuns),
+    lifecycle: deliveryMemberState(pr),
   }));
 
   const silentRepoIds = [...new Set(members.filter((m) => m.state === null).map((m) => m.repoId))];
@@ -170,12 +193,15 @@ export async function classifyDeliveries(
     ),
   );
 
-  return members.map((m) => ({
-    repoId: m.repoId,
-    state: m.state,
-    cannotReport: cannotReport.has(m.repoId),
-    queueFailure: queueHeld.has(m.id),
-  }));
+  return membersWithAVerdict(
+    members.map((m) => ({
+      repoId: m.repoId,
+      state: m.state,
+      cannotReport: cannotReport.has(m.repoId),
+      queueFailure: queueHeld.has(m.id),
+      lifecycle: m.lifecycle,
+    })),
+  );
 }
 
 /**
