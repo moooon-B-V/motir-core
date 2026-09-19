@@ -16,7 +16,6 @@ import {
   ApprovalGateMergeRefusedError,
   ApprovalGateNotAuthorisedError,
   ApprovalGateNotFoundError,
-  ApprovalGatePrimaryPendingError,
   ApprovalGateSupersededError,
   type MergeRefusalTag,
 } from '@/lib/approvalGates/errors';
@@ -894,8 +893,6 @@ function memberRefusal(err: unknown): GateRefusal | null {
   }
   if (err instanceof ApprovalGateSupersededError)
     return toGateRefusal(err.tag, { supersedeCause: err.supersedeCause });
-  if (err instanceof ApprovalGatePrimaryPendingError)
-    return toGateRefusal(err.tag, { primary: err.primary });
   if (err instanceof ApprovalGateError) return toGateRefusal(err.tag);
   if (err instanceof PermissionDeniedError) return toGateRefusal('APPROVAL_GATE_NOT_AUTHORISED');
   if (err instanceof ProjectNotFoundError) return toGateRefusal('APPROVAL_GATE_NOT_FOUND');
