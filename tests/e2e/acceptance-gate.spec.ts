@@ -349,10 +349,13 @@ test.describe('the acceptance-video gate', () => {
         }
         await page.reload();
         await expect(statusCard(page)).toContainText('Done', { timeout: 60_000 });
-        // A done story asks nothing more, and the recording it was accepted on stands.
+        // A done story asks nothing more, and the recording it was accepted on stands —
+        // said by the SHARED FRAME, whose port is now the recording itself (MOTIR-5792:
+        // the panel drew this with a pill of its own, a second approve language).
         await expect(
-          acceptanceCard(page).getByText(en.acceptance.status.approved, { exact: true }),
+          acceptanceCard(page).getByText(en.approvalGate.state.approved, { exact: true }),
         ).toBeVisible();
+        await expect(acceptanceCard(page).getByText(seed.ownerName)).toBeVisible();
         await expect(
           acceptanceCard(page).getByRole('button', { name: en.approvalGate.verb.approve }),
         ).toHaveCount(0);

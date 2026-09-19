@@ -69,8 +69,9 @@ beforeEach(async () => {
   store.clear();
   minted.clear();
   await truncateAuthTables();
+  // The suite-wide lock order — see `acceptanceOnePress.test.ts`'s note and MOTIR-3066.
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "approval_gate", "acceptance_evidence", "attachment" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "acceptance_evidence", "attachment", "approval_gate" RESTART IDENTITY CASCADE',
   );
   fx = await makeWorkItemFixture();
   await adminDb.project.update({

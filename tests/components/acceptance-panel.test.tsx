@@ -114,15 +114,40 @@ describe('AcceptancePanel', () => {
     expect(screen.queryByRole('button', { name: /request changes/i })).toBeNull();
   });
 
-  it('a reader who may NOT decide gets no door, and an approved receipt shows its pill', () => {
+  it('a reader who may NOT decide gets no door — the SHARED FRAME says who it waits on', () => {
     renderPanel({
       ...baseProps,
       eligibility: eligibility({}),
       initialEvidence: evidence({ status: 'approved', approvedById: 'Yue' }),
       canDecide: false,
+      routedElsewhereName: 'Ada L.',
     });
     expect(screen.queryByRole('link', { name: /review & approve/i })).toBeNull();
-    expect(screen.getByText('Approved')).toBeTruthy();
+    // State `B`: the port is live and there are no verbs — and the sentence is the
+    // frame's, not a pill of this panel's own (MOTIR-5792; the ONE-CONTROL rule).
+    expect(screen.getByText('Ada L.', { exact: false })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^approve$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /request changes/i })).toBeNull();
+  });
+
+  it('a DECIDED question is drawn by the shared frame, never by a pill of our own (MOTIR-5792)', () => {
+    renderPanel({
+      ...baseProps,
+      eligibility: eligibility({}),
+      initialEvidence: evidence({ status: 'approved', approvedById: 'Yue' }),
+      gate: {
+        ...baseProps.gate,
+        state: 'approved',
+        decidedByLabel: 'Ada L.',
+        decidedAt: '2026-09-19T12:00:00.000Z',
+      } as unknown as ApprovalGateDTO,
+      canDecide: true,
+    });
+    // The recording is still the subject — it is the frame's port now.
+    expect(screen.getByRole('button', { name: /1×/ })).toBeTruthy();
+    // And the decision is stated in the one approve language, with its decider.
+    expect(screen.getByText('Ada L.', { exact: false })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /review & approve/i })).toBeNull();
   });
 
   it('pending (eligible, no evidence) → the waiting state', () => {

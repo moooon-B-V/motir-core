@@ -576,7 +576,14 @@ export function ApprovalOverlay() {
                 // A STORY RUN (MOTIR-5790): the receipt leads, the pull requests beneath it.
                 <AcceptanceDevelopmentSlot
                   evidence={subject.acceptanceEvidence}
-                  gate={subject.acceptanceGate}
+                  accepted={
+                    subject.acceptanceGate.state === 'approved'
+                      ? {
+                          name: subject.acceptanceGate.decidedByLabel ?? '',
+                          at: subject.acceptanceGate.decidedAt ?? '',
+                        }
+                      : null
+                  }
                   mergeAwaiting={gate.kind === 'pull_request_approval' && !decidedState}
                 />
               ) : undefined

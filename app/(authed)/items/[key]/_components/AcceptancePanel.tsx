@@ -16,6 +16,7 @@ import { BILLING_PLANS_PATH } from '@/components/ai/AiPaywall';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEligibility';
 import { turnOnAcceptanceVideoAction } from '@/app/(authed)/items/[key]/acceptanceActions';
+import { ApprovalGateControl } from '@/components/approvals/ApprovalGateControl';
 import { GateCallToActionBand } from '@/components/approvals/GateCallToActionBand';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
@@ -70,6 +71,19 @@ export interface AcceptancePanelProps {
  * follows to a rendered switch.
  */
 export const ACCEPTANCE_VIDEO_SETTINGS_HREF = '/settings/project/approvals#acceptance-video';
+
+/** The frame's `onDecide` slot is required, and on this page nothing can call it: the
+ *  verb set is empty and the decision was handed to the overlay (MOTIR-5790). It answers
+ *  nothing rather than pretending to decide — `DesignResultSection`'s own slot, verbatim.
+ *
+ *  ⚠️ UNREACHABLE BY CONSTRUCTION, SO ITS COVERAGE IS AN IGNORE THAT NAMES ITS INVARIANT:
+ *  no approve and no request-changes control exists in this section for ANY gate state ×
+ *  `canDecide`, which `tests/components/acceptance-panel.test.tsx` asserts. A test that
+ *  could call this would be a test that found a verb. */
+/* v8 ignore next 3 */
+async function noDecisionHere(): Promise<null> {
+  return null;
+}
 
 export function AcceptancePanel({
   itemIdentifier,
@@ -213,10 +227,14 @@ export function AcceptancePanel({
   }
 
   const approved = evidence.status === 'approved';
-  return (
+  const subjectMeta = gate?.subjectVersion
+    ? tGate('meta.withVersion', { version: gate.subjectVersion.slice(0, 8) })
+    : tGate('meta.plain');
+
+  // BAND 2's SUBJECT — the recording, as every surface that shows it renders it.
+  const port = (
     <div>
       <AcceptanceReceiptPlayer evidence={evidence} />
-
       <div className="mt-3.5 mb-3 flex flex-wrap items-center gap-2 text-[13px] text-(--el-text-secondary)">
         <CircleCheck className="h-[15px] w-[15px] text-(--el-success)" aria-hidden />
         <span>
@@ -225,33 +243,80 @@ export function AcceptancePanel({
             : t('summary.recorded')}
         </span>
       </div>
+      <AcceptanceReceiptProvenance evidence={evidence} />
+    </div>
+  );
 
-      <AcceptanceReceiptProvenance evidence={evidence} className="mb-4" />
+  // ⚠️ A DECIDED QUESTION IS DRAWN BY THE SHARED FRAME, NOT BY A PILL OF OUR OWN
+  // (Story MOTIR-4949 · Subtask MOTIR-5792; the ONE-CONTROL rule, MOTIR-4796, which
+  // `tests/approval-gate-one-language.test.ts` derives rather than lists).
+  //
+  // MOTIR-5790 handed the DECISION over to the overlay and left the panel drawing the
+  // decided states itself — a success Pill off `evidence.status`, a warning Pill for a
+  // send-back. That is a second language for the one act the frame exists to speak: it
+  // says *approved* without saying by whom, against which recording, or when, and it
+  // drifts from every other kind the moment the frame gains a band. So the frame draws
+  // every state the band does not: the record, who it waits on when the reader may not
+  // press (state `B`), and a withdrawal. The verbs stay EMPTY here — this surface has
+  // handed them over, and `canDecide` is passed for what it SAYS, not what it enables,
+  // exactly as `DesignResultSection` passes it.
+  if (gate && !(gate.state === 'awaiting' && canDecide)) {
+    return (
+      <>
+        <ApprovalGateControl
+          // FLUSH IN THE SECTION: `ContentSectionCard` already carries the border and
+          // the title *Acceptance*. One container, one label.
+          layout="section"
+          gate={gate}
+          canDecide={canDecide}
+          kindLabel={tGate('kindLabel')}
+          subjectMeta={subjectMeta}
+          port={port}
+          verbs={[]}
+          consequence={tGate('consequence', { key: itemIdentifier })}
+          confirmConsequences={[]}
+          routedToLabel={routedElsewhereName}
+          onDecide={noDecisionHere}
+        />
+        {error ? <p className="mt-2 text-[13px] text-(--el-danger)">{error}</p> : null}
+      </>
+    );
+  }
 
-      {approved ? (
-        <Pill severity="success">
-          <Check className="h-3 w-3" aria-hidden />
-          {t('status.approved')}
-        </Pill>
-      ) : gate?.state === 'awaiting' && canDecide ? (
+  return (
+    <div>
+      {port}
+
+      {gate?.state === 'awaiting' && canDecide ? (
         // THE DOOR, NOT THE VERBS (MOTIR-5790): the question is answered in the
         // approval overlay, which renders this recording in the acceptance port.
-        <GateCallToActionBand
-          kind="acceptance_result"
-          subjectLabel={
-            gate.subjectVersion
-              ? tGate('meta.withVersion', { version: gate.subjectVersion.slice(0, 8) })
-              : tGate('meta.plain')
-          }
-          askedAt={gate.createdAt}
-          itemIdentifier={itemIdentifier}
-          routedElsewhereName={routedElsewhereName}
-        />
+        <div className="mt-4">
+          <GateCallToActionBand
+            kind="acceptance_result"
+            subjectLabel={subjectMeta}
+            askedAt={gate.createdAt}
+            itemIdentifier={itemIdentifier}
+            routedElsewhereName={routedElsewhereName}
+          />
+        </div>
+      ) : // ⚠️ NO GATE AT ALL, so there is no decision to speak about — a receipt that
+      // predates the kind, or one whose question has not been raised yet. The receipt's
+      // OWN status is all there is to say, and saying it in a pill is not a second
+      // approval language because no gate is being rendered.
+      approved ? (
+        <div className="mt-4">
+          <Pill severity="success">
+            <Check className="h-3 w-3" aria-hidden />
+            {t('status.approved')}
+          </Pill>
+        </div>
       ) : evidence.status === 'changes_requested' ? (
-        <Pill severity="warning">
-          <CircleAlert className="h-3 w-3" aria-hidden />
-          {t('status.changesRequested')}
-        </Pill>
+        <div className="mt-4">
+          <Pill severity="warning">
+            <CircleAlert className="h-3 w-3" aria-hidden />
+            {t('status.changesRequested')}
+          </Pill>
+        </div>
       ) : null}
 
       {error ? <p className="mt-2 text-[13px] text-(--el-danger)">{error}</p> : null}

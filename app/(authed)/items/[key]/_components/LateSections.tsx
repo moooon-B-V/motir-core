@@ -302,7 +302,14 @@ export async function LateUpperSections({
                 ) : acceptanceInDevelopment && r.acceptanceEvidence && r.acceptanceGate.gate ? (
                   <AcceptanceDevelopmentSlot
                     evidence={r.acceptanceEvidence}
-                    gate={r.acceptanceGate.gate}
+                    accepted={
+                      r.acceptanceGate.gate.state === 'approved'
+                        ? {
+                            name: r.acceptanceGate.gate.decidedByLabel ?? '',
+                            at: r.acceptanceGate.gate.decidedAt ?? '',
+                          }
+                        : null
+                    }
                     mergeAwaiting={r.mergeGate.gate?.state === 'awaiting'}
                   />
                 ) : undefined

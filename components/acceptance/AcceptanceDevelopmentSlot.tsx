@@ -7,7 +7,6 @@ import {
   AcceptanceReceiptProvenance,
 } from '@/components/acceptance/AcceptanceReceiptPlayer';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
-import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
 // THE RECEIPT AS THE DEVELOPMENT BLOCK'S SUBJECT (Story MOTIR-4949 · Subtask MOTIR-5790;
 // `design/work-items/acceptance-panel--approve-and-merge.mock.html`, panels A–C).
@@ -27,21 +26,31 @@ import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
 export function AcceptanceDevelopmentSlot({
   evidence,
-  gate,
+  accepted,
   mergeAwaiting,
 }: {
   evidence: AcceptanceEvidenceDTO;
-  /** The story's `acceptance_result` gate, whatever its state. */
-  gate: ApprovalGateDTO;
+  /**
+   * WHO accepted this recording and WHEN — null while the question is open or was sent
+   * back.
+   *
+   * ⚠️ TWO FACTS, NOT THE GATE (Subtask MOTIR-5792). This is a PORT: the frame around it
+   * carries the question, exactly as `DesignResultPanel` is the design's port. Taking an
+   * `ApprovalGateDTO` here made it a surface that renders a gate, which the ONE-CONTROL
+   * rule (MOTIR-4796) holds to rendering the shared frame — and it cannot, because it IS
+   * what the shared frame puts in band 2. Its caller reads the gate; this draws the
+   * recording and the one line the decision leaves on it.
+   */
+  accepted: { name: string; at: string } | null;
   /** Whether the story's approve-to-merge question is currently being asked. */
   mergeAwaiting: boolean;
 }) {
   const t = useTranslations('approvalGate.acceptanceResult');
   const format = useFormatter();
-  const approved = gate.state === 'approved';
-  const who = gate.decidedByLabel ?? '';
-  const when = gate.decidedAt
-    ? format.dateTime(new Date(gate.decidedAt), { dateStyle: 'medium', timeStyle: 'short' })
+  const approved = accepted !== null;
+  const who = accepted?.name ?? '';
+  const when = accepted?.at
+    ? format.dateTime(new Date(accepted.at), { dateStyle: 'medium', timeStyle: 'short' })
     : '';
 
   return (

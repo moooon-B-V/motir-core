@@ -71,6 +71,10 @@ const RECEIPT: AcceptanceEvidenceDTO = {
   createdAt: '2026-09-19T14:40:00.000Z',
 };
 
+/** The two facts the slot takes — what its caller reads off the gate (MOTIR-5792). */
+const acceptedOf = (gate: ApprovalGateDTO) =>
+  gate.state === 'approved' ? { name: gate.decidedByLabel ?? '', at: gate.decidedAt ?? '' } : null;
+
 function fakeActions() {
   return {
     decide: vi.fn(),
@@ -101,7 +105,7 @@ function storyRun(opts: {
       designResult={
         <AcceptanceDevelopmentSlot
           evidence={RECEIPT}
-          gate={opts.acceptance}
+          accepted={acceptedOf(opts.acceptance)}
           mergeAwaiting={opts.mergeAwaiting}
         />
       }
@@ -198,7 +202,7 @@ describe('panels B and C — the acceptance decided, driven by the server gate',
     render(
       <AcceptanceDevelopmentSlot
         evidence={RECEIPT}
-        gate={ACCEPTANCE_APPROVED}
+        accepted={acceptedOf(ACCEPTANCE_APPROVED)}
         mergeAwaiting={false}
       />,
     );

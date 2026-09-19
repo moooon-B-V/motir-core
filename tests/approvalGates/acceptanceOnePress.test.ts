@@ -43,8 +43,12 @@ let seq = 0;
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // ⚠️ THE ORDER IS THE SUITE'S, NOT THIS FILE'S (MOTIR-3066): every truncate naming these
+  // tables takes them `acceptance_evidence` → `attachment` → `approval_gate`, and two
+  // statements taking shared tables in opposite orders deadlock (40P01) the moment they run
+  // against one database. `tests/truncate-lock-order.test.ts` is what holds the order.
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "approval_gate", "acceptance_evidence" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "acceptance_evidence", "approval_gate" RESTART IDENTITY CASCADE',
   );
   fx = await makeWorkItemFixture();
   await adminDb.project.update({ where: { id: fx.projectId }, data: { prMergeMode: 'manual' } });
