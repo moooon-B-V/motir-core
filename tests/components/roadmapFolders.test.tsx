@@ -101,7 +101,7 @@ describe('buildWorkItemLevel — folders on a level (decisions 2–5)', () => {
     expect(folderIdFromNodeId(null)).toBeNull();
   });
 
-  it('leads the loose band with the folders, in read order, ahead of the items and Not in an epic', () => {
+  it('at the ROOT: epics, then the folders in read order, then Not in an epic (the /items root order)', () => {
     const { nodes } = buildWorkItemLevel(
       level(
         [item({ id: 'E1' }), item({ id: 'B1', kind: 'bug' })],
@@ -110,9 +110,19 @@ describe('buildWorkItemLevel — folders on a level (decisions 2–5)', () => {
       { groupNonEpicRoots: true },
     );
     const ids = nodes.map((n) => n.id);
+    expect(ids.indexOf('E1')).toBeLessThan(ids.indexOf('folder:fA'));
     expect(ids.indexOf('folder:fA')).toBeLessThan(ids.indexOf('folder:fZ'));
-    expect(ids.indexOf('folder:fZ')).toBeLessThan(ids.indexOf('E1'));
     expect(ids.indexOf('folder:fZ')).toBeLessThan(ids.indexOf(NOT_IN_EPIC_ID));
+  });
+
+  it('INSIDE a folder: its child folders lead, then its filed items — an epic included', () => {
+    const { nodes } = buildWorkItemLevel(
+      level([item({ id: 'E9' }), item({ id: 'B9', kind: 'bug' })], [folder({ id: 'f2' })]),
+    );
+    const ids = nodes.map((n) => n.id);
+    expect(ids.indexOf('folder:f2')).toBeLessThan(ids.indexOf('E9'));
+    expect(ids.indexOf('folder:f2')).toBeLessThan(ids.indexOf('B9'));
+    expect(ids).not.toContain(NOT_IN_EPIC_ID);
   });
 
   it('a folder is a DOOR: drillable, not viewable, not decorative, crumb = its name', () => {

@@ -502,6 +502,7 @@ export function buildWorkItemLevel(
     ? (onLevel.find((i) => i.status === 'in_progress')?.id ?? null)
     : null;
 
+  const kindById = new Map(onLevel.map((item) => [item.id, item.kind]));
   const itemNodes: ProjectCanvasNode[] = onLevel.map((item) => {
     // NOT IN SPRINT (MOTIR-1379 follow-up): only meaningful in sprint scope. The
     // root level shows only in-sprint members, but drilling into a committed root
@@ -648,10 +649,10 @@ export function buildWorkItemLevel(
   // THE LEVEL'S FOLDERS (Bug MOTIR-5710 · MOTIR-5741, design decisions 2–5). Each
   // is a DOOR to its own level, drawn with no position of its own: a folder takes
   // part in no edge, so `deterministicLayout` drops it into the loose band below the
-  // flow — and because the band is laid out in node ORDER, emitting the folders
-  // AHEAD of the work items (and of the grouped node) is what makes them LEAD it, in
-  // the position order the read returned. An empty folder is still drawn: it is a
-  // real record, and its card says `Empty`.
+  // flow — and because the band is laid out in node ORDER, where they are emitted
+  // (below) decides where they sit: after the root's epics, ahead of the grouped
+  // node and every other work item, in the position order the read returned. An
+  // empty folder is still drawn: it is a real record, and its card says `Empty`.
   const folderNodes: ProjectCanvasNode[] = (wi.folders ?? []).map((f) => ({
     id: folderNodeId(f.id),
     parentId: null,
@@ -694,11 +695,22 @@ export function buildWorkItemLevel(
         ]
       : [];
 
+  // THE ORDER IS THE LOOSE BAND'S ORDER (`deterministicLayout` lays unconnected
+  // nodes out in node order). At the ROOT it is the `/items` root order — EPICS,
+  // then FOLDERS, then the rest (MOTIR-5550; design decision 2 cites it): an epic
+  // with no edge still sits in the band, and a folder drawn ahead of it would push
+  // the project's own road aside for a drawer — every project carries a seeded
+  // Bugs folder, so that would move every roadmap. INSIDE a folder (no grouping)
+  // the folder's child folders lead, then its filed items (design sheet 4).
+  const rootOrder = opts.groupNonEpicRoots === true;
+  const epicNodes = rootOrder ? itemNodes.filter((n) => kindById.get(n.id) === 'epic') : [];
+  const restNodes = rootOrder ? itemNodes.filter((n) => kindById.get(n.id) !== 'epic') : itemNodes;
   return {
     nodes: [
       ...originNodes,
+      ...epicNodes,
       ...folderNodes,
-      ...itemNodes,
+      ...restNodes,
       ...groupNodes,
       ...anchorNodes,
       ...moreNodes,
