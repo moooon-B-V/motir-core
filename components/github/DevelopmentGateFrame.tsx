@@ -323,6 +323,18 @@ export function DevelopmentGateFrame({
       kind: 'notMergedYet',
       ...retryFor(member, fact.pullRequestId),
     }),
+    // THE HOST REFUSED (MOTIR-5833 · MOTIR-5834; § 28 panels 3 and 4). A setting somebody
+    // can change is named and offers *Retry merge*, which DECIDES the re-asked gate; a
+    // conflict offers nothing, because no approval can land those commits.
+    refusedSetting: (member, fact) => ({
+      kind: 'refusedSetting',
+      setting: fact.refusal?.permission ?? null,
+      ...retryFor(member, fact.requeueable ? fact.pullRequestId : null),
+    }),
+    cannotLand: (_member, fact) => ({
+      kind: 'cannotLand',
+      reason: fact.refusal?.code === 'checks_not_green' ? 'checksNotGreen' : 'conflict',
+    }),
   };
 
   function outcomeFor(member: MemberVersion): RowMergeOutcome | null {
@@ -584,7 +596,17 @@ export function DevelopmentGateFrame({
   const bold = (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>;
   const exitParts = members.flatMap((member) => {
     const kind = rowOutcomes.get(rowKey(member.repo, member.number))?.kind;
-    if (kind !== 'leftQueue' && kind !== 'removedFromQueue' && kind !== 'newCommits') return [];
+    // ⚠️ `cannotLand` IS IN THE LIST (MOTIR-5806; § 28 panel 3). The row offers no verb
+    // there, which is exactly why the record band still has to SAY WHY — a pill reading
+    // *Cannot merge* with no sentence under it would leave the reason nowhere.
+    if (
+      kind !== 'leftQueue' &&
+      kind !== 'removedFromQueue' &&
+      kind !== 'newCommits' &&
+      kind !== 'cannotLand'
+    ) {
+      return [];
+    }
     const fact = factOf(member);
     if (!fact?.exit) return [];
     if (kind !== 'newCommits' && retrying.has(member.subjectVersion)) {
@@ -600,7 +622,14 @@ export function DevelopmentGateFrame({
         key={member.subjectVersion}
         name={nameOf(member)}
         exit={fact.exit}
-        sub={kind === 'newCommits' ? t('exit.newCommits') : t.rich('exit.unchanged', { b: bold })}
+        sub={
+          kind === 'newCommits'
+            ? t('exit.newCommits')
+            : kind === 'cannotLand'
+              ? // No verb is offered, so the sentence says what WOULD move it: new commits.
+                t.rich('exit.cannotLand', { b: bold })
+              : t.rich('exit.unchanged', { b: bold })
+        }
       />,
     ];
   });

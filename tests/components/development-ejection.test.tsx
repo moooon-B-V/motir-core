@@ -88,6 +88,8 @@ function members(over: Partial<PullRequestApprovalMemberDTO>): PullRequestApprov
       exit: null,
       exitAtApprovedHead: false,
       requeueable: false,
+      refusal: null,
+      retryDecidesGateId: null,
     },
     {
       subjectVersion: GATEWAY_V,
@@ -97,6 +99,8 @@ function members(over: Partial<PullRequestApprovalMemberDTO>): PullRequestApprov
       exit: exit(),
       exitAtApprovedHead: true,
       requeueable: true,
+      refusal: null,
+      retryDecidesGateId: null,
       ...over,
     },
   ];
@@ -522,13 +526,17 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
     );
   });
 
-  it('X2 · a merge conflict: the conflict sentence, and Queue again is still offered', () => {
+  // ⚠️ REPLACES "…and Queue again is still offered" (MOTIR-5806; §4 FOURTH AMENDMENT,
+  // point 2): a conflict CANNOT LAND as it stands, so the row offers no verb at all and
+  // `motir fix` is the one way forward.
+  it('X2 · a merge conflict: no verb on the row, the cannot-merge pill, and the conflict sentence', () => {
     renderWithRepair(offer('MERGE_CONFLICT'), {
       rawReason: 'MERGE_CONFLICT',
       failingCheckName: null,
       failingCheckUrl: null,
     });
-    expect(queueAgain()).toBeTruthy();
+    expect(queueAgain()).toBeNull();
+    expect(within(gatewayRow()).getByText(pra.outcome.cannotLandConflict)).toBeTruthy();
     expect(within(fixPart()).getByTestId('repair-which').textContent).toBe(
       sentence(fixMsg.which.conflict),
     );

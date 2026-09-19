@@ -4,6 +4,7 @@ import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // and this DTO is imported by client components. An `import type` is erased.
 import type { StampComponent } from '@/lib/approvalGates/stamp';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
+import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
@@ -584,6 +585,15 @@ export type ApprovalGateOverlaySubjectDTO =
        * is null when nothing has been captured yet.
        */
       decision?: { document: DecisionDocumentViewDTO | null };
+      /**
+       * `motir fix` AS THE PAGE OFFERS IT (Story MOTIR-5799 · MOTIR-5806; § 28 panel 7).
+       * The overlay composes the same Development block, and before this it composed it
+       * WITHOUT the repair part — so a person deciding in the overlay was shown the
+       * approve and not the repair, on exactly the failures where the repair is the
+       * answer. `hidden` when the claim would refuse, which is the predicate the page
+       * and the claim already share.
+       */
+      repair?: WorkItemRepairViewDto | null;
     };
 
 /** The overlay's one read. */

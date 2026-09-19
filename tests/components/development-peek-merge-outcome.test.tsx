@@ -34,7 +34,13 @@ const APPROVED: ApprovalGateDTO = {
   outcomeRef: 'approved',
 };
 
-const NO_EXIT = { exit: null, exitAtApprovedHead: false, requeueable: false } as const;
+const NO_EXIT = {
+  exit: null,
+  exitAtApprovedHead: false,
+  requeueable: false,
+  refusal: null,
+  retryDecidesGateId: null,
+} as const;
 const MEMBERS: PullRequestApprovalMemberDTO[] = [
   { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: true, retryable: false, ...NO_EXIT },
   {
@@ -54,8 +60,10 @@ const exited = (disposition: 'failure' | 'neutral', atHead: boolean) =>
       ...MEMBERS[1]!,
       retryable: false,
       exitAtApprovedHead: atHead,
-      // Never requeueable for a FAILURE exit (MOTIR-5802).
-      requeueable: atHead && disposition === 'neutral',
+      // ⚠️ NO VERB ON A SPENT APPROVAL, whatever the disposition (MOTIR-5802): the
+      // re-asked gate is what the row's press decides, and this fixture is the DECIDED
+      // gate's read.
+      requeueable: false,
       exit: {
         rawReason: disposition === 'failure' ? 'CI_FAILURE' : 'MANUAL',
         disposition,

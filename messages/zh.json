@@ -6358,9 +6358,9 @@
           "pointer": "请从 <link>{key}</link> 运行修复——此工作项是作为该运行的一部分构建的，修复也在那里运行。"
         },
         "which": {
-          "checks": "你这边没有改动？<b>重新排队</b>会再试一次相同的提交。如果未通过的检查指向真实的代码问题，<code>motir fix</code> 会把它交给智能体。",
-          "conflict": "冲突需要新的提交。<code>motir fix</code> 会把它交给智能体；在冲突解决之前，<b>重新排队</b>会以同样的方式失败。",
-          "other": "<b>重新排队</b>会再试一次相同的提交。如果它以同样的方式离开队列，<code>motir fix</code> 会把它交给智能体。"
+          "checks": "你这边没有改动？<b>批准</b>会把同样的提交再送一次。如果未通过的检查指向真实的代码问题，<code>motir fix</code> 会把它交给智能体。",
+          "conflict": "冲突需要新的提交。<code>motir fix</code> 会把它交给智能体；再次批准也无法让这些提交合入，因此在分支变化之前不会提供任何按钮。",
+          "other": "<b>批准</b>会把同样的提交再送一次。如果它以同样的方式离开队列，<code>motir fix</code> 会把它交给智能体。"
         }
       },
       "emptyTitle": "暂无关联的拉取请求",
@@ -8536,6 +8536,10 @@
         "retry": "重试合并",
         "leftQueue": "已离开合并队列",
         "removedFromQueue": "已从合并队列中移除",
+        "setting": "有设置阻止了合并",
+        "settingNamed": "被阻止：{setting}",
+        "cannotLandConflict": "无法合并 — 存在冲突",
+        "cannotLandChecks": "无法合并 — 检查未通过",
         "newCommits": "批准后有新提交",
         "queueAgain": "重新排队"
       },
@@ -8571,6 +8575,7 @@
         },
         "failingCheck": "未通过的检查：<link>{check}</link>",
         "unchanged": "你的批准仍覆盖这些提交，<b>重新排队</b>即可放回队列，无需再次批准。",
+        "cannotLand": "这些提交按现状无法合入。<b>motir fix</b> 会把修复交给智能体；推送新的提交后，检查通过时会再次询问。",
         "newCommits": "你批准后它有了新提交。所有检查通过后，Motir 会再次征求批准。",
         "auto": "Motir 会在检查通过后合并本项目的拉取请求。<b>重新排队</b>会以相同的提交将它放回队列。",
         "partTitle": "合并队列",

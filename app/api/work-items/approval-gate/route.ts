@@ -6,6 +6,7 @@ import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
 import { howToTestService } from '@/lib/services/howToTestService';
+import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -175,19 +176,26 @@ async function readDevelopmentBlock(
   // set that has emptied — every pull request unlinked — is GONE, exactly as the
   // handler answers null for it. Nothing is read by `subjectId` beyond that: the
   // gate's `subjectId` IS the work item's id.
-  const [pullRequests, deliveryView, howToTest, designEvidence, members] = await Promise.all([
-    workItemsService.listLinkedPullRequests(gate.workItemId, ctx),
-    workItemsService.getDeliveryView(gate.workItemId, item.targetRepos, ctx),
-    howToTestService.getForWorkItem(gate.workItemId, ctx),
-    designEvidenceService.getCurrentForWorkItem(gate.workItemId, ctx),
-    // Read ONLY for an approved gate, as the item page reads it.
-    gate.state === 'approved'
-      ? pullRequestMergeService.listApprovalMembers(
-          { workItemId: gate.workItemId, approvalGateId: gate.id },
-          ctx,
-        )
-      : Promise.resolve([]),
-  ]);
+  const [pullRequests, deliveryView, howToTest, designEvidence, members, repair] =
+    await Promise.all([
+      workItemsService.listLinkedPullRequests(gate.workItemId, ctx),
+      workItemsService.getDeliveryView(gate.workItemId, item.targetRepos, ctx),
+      howToTestService.getForWorkItem(gate.workItemId, ctx),
+      designEvidenceService.getCurrentForWorkItem(gate.workItemId, ctx),
+      // ⚠️ READ FOR AN AWAITING GATE TOO (MOTIR-5802 · MOTIR-5806). The RE-ASKED gate is
+      // awaiting, and its members are what carry the row's verb — *Queue again* /
+      // *Retry merge*, whose press decides that very gate.
+      gate.state === 'approved' || gate.state === 'awaiting'
+        ? pullRequestMergeService.listApprovalMembers(
+            { workItemId: gate.workItemId, approvalGateId: gate.id },
+            ctx,
+          )
+        : Promise.resolve([]),
+      // ⚠️ `motir fix` BELONGS IN THE OVERLAY TOO (MOTIR-5806; § 28 panel 7). The page
+      // has offered it since MOTIR-5721; the overlay is where most approvals are
+      // actually decided, and a person deciding there saw only the approve.
+      workItemRepairService.getRepairView(gate.workItemId, ctx),
+    ]);
   if (deliveryView.deliveries.length === 0) return { state: 'gone' };
   return {
     state: 'resolved',
@@ -199,6 +207,7 @@ async function readDevelopmentBlock(
     designEvidence,
     isDesignCard: item.type === 'design',
     members,
+    repair,
   };
 }
 
