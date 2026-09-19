@@ -57,6 +57,13 @@
   and who may press. Row 4a's _"ONE transaction"_ is struck and replaced;
   nothing else in §8 changes.
 
+- **AMENDED 2026-09-19 (MOTIR-5787), at §1, additively.** A fourth kind,
+  `acceptance_result`: it hangs on the STORY whatever the run target; on a story
+  run it is the PRIMARY of two gates whose one press also merges the story's code
+  (never a pull request for the video, which is never committed); and approval
+  writes `done` only when nothing under the story is left for the cascade to
+  close. Nothing else in §1 changes.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -225,6 +232,198 @@ subject body. **No second vocabulary, no second control, no second decide door.*
 > and the frame already accommodates it because the KIND is what decides the
 > verbs. **This record ships none of these handlers** — see _Deliberately NOT
 > decided here_.
+
+> ### §1 — AMENDMENT (MOTIR-5787, 2026-09-19): `acceptance_result` — the gate hangs on the STORY whatever the run target, and on a story run it is the PRIMARY of two gates whose ONE press merges the story's code
+>
+> **Settled by the requester, 2026-09-19** (Story
+> [MOTIR-4949](motir:cmttv7s6o0087i0txzqwrpdw2)): _"if the run is on the story,
+> then it's the double gate like design result gate too. the difference is
+> approval to merge the story code, not the PR for acceptance video, acceptance
+> video will never be committed. if the run is not for the story, the acceptance
+> video gate is not on the test subtask which produced the video, it's on the
+> story work item."_ This amendment writes that down as the rule, and answers the
+> HOW questions it leaves (points 4–7), each with the rung that settles it.
+>
+> **Why this is a kind and not a new mechanism.** §1 generalised its vocabulary
+> FROM acceptance — the evidence table above cites `AcceptancePanel.tsx` and
+> `acceptanceActions.ts` — and acceptance never joined the registry.
+> `acceptanceEvidenceService.decide` still flips the story `in_review → done |
+in_progress` through its own path, so an acceptance decision is invisible to
+> every surface built for gates in general. Registering the kind is
+> [MOTIR-4950](motir:cmttv7s970088i0txmuykzjcw)'s; this amendment is the rule it
+> builds to.
+>
+> **The row, in the kind table's own shape** (point 8):
+>
+> | kind                | the port shows                                                                  | fires when                                                                                                            |
+> | ------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+> | `acceptance_result` | the RECEIPT — player, chapters, provenance (the port `AcceptancePanel` renders) | a **story** holds a published receipt, on a project whose acceptance-video switch is ON — **whatever the run target** |
+>
+> Its **status intent** is the project's `done` category, as the design gate's is
+> (`DESIGN_APPROVAL_TARGET`) — which is what lets §6d's rule 1 hold a story's move
+> into `done` while its acceptance is awaiting. Its **effect** is point 7 below.
+> Its **authority and routing** are §2's, unchanged. Its **retention** is not this record's:
+> `acceptance-receipt-lifecycle.md` §2 freezes an approved receipt and §6c here
+> already defers to it — nothing is pinned, because nothing is ever superseded.
+>
+> **⚠️ THE ACCEPTANCE VIDEO IS NEVER COMMITTED, AND THE ONE PRESS MERGES THE
+> STORY'S CODE — NEVER A PULL REQUEST FOR THE VIDEO.** The receipt is an
+> uploaded artefact on the story (`publish_acceptance_result`), not a file in any
+> repository; there is no pull request for it to ride on, and none is ever opened.
+>
+> #### 1 — the gate hangs on the STORY, always
+>
+> The `acceptance_result` row's work item is **the story that owns the receipt**,
+> whatever the run target. The receipt row is already the story's:
+> `publish_acceptance_result` resolves a leaf key UP to its parent story
+> (`lib/mcp/tools/publishAcceptanceResult.ts` → `publishAuth.findOwningStoryParent`),
+> and `acceptanceEvidenceService.resolveStory` refuses anything that is not a
+> story. The gate follows the receipt. **It is never raised on the producing test
+> subtask**, whose own approve-to-merge gate — when that subtask is its own run
+> target — asks only about that subtask's commits.
+>
+> **Why the story and not the run target.** §8's second amendment hangs a MERGE
+> gate on the run target (`lib/services/runTarget.ts`), because the merge question
+> is about the commits a run delivered. The acceptance question is not about any
+> commits: _is this what I wanted?_ is a question about the STORY, and the video
+> shows the story working. Hanging it on the E2E subtask would have a person
+> approve a story from a card that is not the story, tangled with that subtask's
+> own merge.
+>
+> #### 2 — run on the STORY ⇒ TWO gates on the story, ONE press
+>
+> When the story is its own run target, its run's pull requests are the story's
+> delivery set, and the story holds two questions with different lifetimes —
+> exactly the shape `design-result.md` AMENDMENT 6 Q1 settled, and this record's
+> [MOTIR-5658](motir:cmu5x38aa002shvtxdrj3hwy8) amendment above names the rule it
+> follows: **ONE GATE PER QUESTION**, not one gate per card.
+>
+> | gate                              | the question             | lifetime        |
+> | --------------------------------- | ------------------------ | --------------- |
+> | `acceptance_result` — **PRIMARY** | _is this what I wanted?_ | **durable**     |
+> | `pull_request_approval`           | _do these commits land?_ | **per attempt** |
+>
+> **The acceptance gate is PRESENTED as the question**, with the story's pull
+> requests and How to test beneath it as what the approval will merge. **One
+> Approve decides the acceptance AND merges (or enqueues) every member of the
+> story's delivery set**, through the existing merge-or-enqueue path
+> (`pullRequestMergeService.approveAndMerge`). Putting `acceptance_result` into
+> the gate-set predicate (`lib/approvalGates/gateSet.ts`, whose
+> `AwaitableGateKind` today is `'design_result' | 'pull_request_approval'`) and
+> wiring the one press are [MOTIR-5789](motir:cmu8msz0i0058hvoig072s3ml)'s; the
+> frame that says which question is being asked is
+> [MOTIR-5790](motir:cmu8msz1x005ahvoi3kq80xij)'s, drawn by
+> [MOTIR-5788](motir:cmu8msyyw0056hvoifd30otz6).
+>
+> **⚠️ A STORY CANNOT HOLD BOTH A DESIGN PRIMARY AND AN ACCEPTANCE PRIMARY**,
+> because a design result belongs to the design LEAF that produced it
+> (`design-result.md` §3 — a container target is refused, `NotALeafError`). So the
+> predicate never has to rank the two: on a story only `acceptance_result` can
+> lead.
+>
+> #### 3 — run NOT on the story ⇒ the story's acceptance gate stands ALONE
+>
+> A single-card run of the E2E subtask delivers the subtask's pull request, not
+> the story's; the story has no delivery set of its own. So the story holds the
+> `acceptance_result` gate alone, and the subtask holds its own
+> `pull_request_approval` alone. **The two presses are independent**: approving
+> the subtask's merge says nothing about the story's acceptance, and approving the
+> acceptance merges nothing.
+>
+> #### 4 — approving BEFORE green holds the merge, not the press (rung: `design-result.md` AMENDMENT 6 Q4)
+>
+> Q4 applies unchanged. The acceptance gate rises on PUBLISH and the merge gate
+> on GREEN, so the primary can be pressed first. **The decision stands, and the
+> merge follows on the next green verdict with no second press** — the same
+> one-time carry `settleGreenVerdict` (`lib/services/mergeGates.ts`) already reads
+> for a design through `designApprovalStandsForMerge`, including its MOTIR-5666
+> clause that the carry holds only while the card has never had a merge gate.
+> Teaching that reader to accept a standing ACCEPTANCE approval is
+> [MOTIR-5789](motir:cmu8msz0i0058hvoig072s3ml)'s.
+>
+> #### 5 — what re-asks WHICH question (rung: AMENDMENT 6 Q2, and §6b's supersede)
+>
+> - **A merge that fails after approval re-opens the merge question ALONE.** The
+>   acceptance decision stands. The routes back are AMENDMENT 6 Q2's own: _Queue
+>   again_ while the head is unchanged, and a PUSH, whose next green raises a fresh
+>   merge gate. Neither touches the acceptance gate.
+> - **A PUSH does not by itself re-ask acceptance.** It supersedes the merge gate
+>   with `head_moved`, as it does today. The receipt is not a function of the
+>   head: a push that changes the story's behaviour is expected to produce a new
+>   recording, and it is the RECORDING that re-asks.
+> - **A newly PUBLISHED receipt re-asks acceptance.** It supersedes an `awaiting`
+>   `acceptance_result` gate with the cause **`republished`** — the value
+>   AMENDMENT 6 Q5 already carries for "a newer version superseded the one the gate
+>   asked about". No new cause is minted.
+>
+> #### 6 — a DECIDED acceptance CLOSES the receipt — and that rule already SHIPS, stronger than Q3 (rung: `acceptance-receipt-lifecycle.md` §2 and §6, read at `acceptanceEvidenceService.persistEvidence`)
+>
+> The card asked for the AMENDMENT 6 Q3 analogue: an approved gate refuses a
+> republish while a story pull request is open at or above `implemented`, so an
+> agent returning to a failed merge cannot swap the video under an approval.
+> **Measured: acceptance already has it, unconditionally.** `persistEvidence`
+> locks the story's current receipt row and throws
+> `AcceptanceEvidenceAlreadyApprovedError` when its status is `approved`
+> (MOTIR-2764), and `acceptance-receipt-lifecycle.md` §6 holds that even a
+> re-opened story does not unfreeze it.
+>
+> **So this record keys the refusal on the RECEIPT's `approved` status, as today,
+> and deliberately NOT on Q3's three conditions.** Q3 needs its open-delivery and
+> `implemented`-rung conditions because a design is legitimately re-published
+> after an approval when the work is pulled back and reworked; a receipt is a
+> signature on one recording and is never re-published after it is signed —
+> lifecycle §2 rejected every weaker trigger on the record. Narrowing the freeze
+> to Q3's window would re-open the evidence loss MOTIR-2764 closed. **The one
+> obligation this puts on the build:** the gate's approve effect must still stamp
+> the receipt row `approved` in the same transaction as the decision, or the
+> freeze stops firing. That is [MOTIR-4950](motir:cmttv7s970088i0txmuykzjcw)'s
+> handler (its criterion 4), and it is the reason `stampStatus`'s lock-derived
+> stamp (MOTIR-2851) moves into the handler rather than being dropped with
+> `decide`. The refusal's copy stays `AcceptanceEvidenceAlreadyApprovedError`'s;
+> no new refusal is minted, so [MOTIR-5789](motir:cmu8msz0i0058hvoig072s3ml) owes
+> a test that the freeze holds under the gate, not a second refusal.
+>
+> #### 7 — which STATUS approval writes, per run shape (rung: §3's MOTIR-4911 amendment, and the code read below)
+>
+> §3's rule is _approval writes `done` only when nothing will ever merge_, and it
+> exists to keep ONE writer of `done`. For acceptance the rule has to be read over
+> the story's **subtree**, because a story's `done` does something a leaf's does
+> not: **`childStatusCascadeService` closes every not-done direct child** — from
+> any status, `blocked` included, by a `{ system: true }` write — and each child's
+> own transition re-emits and carries the cascade down.
+>
+> **Measured — why the design handler's discriminator CANNOT be copied.**
+> `designResultGateHandler.approve` (`lib/approvalGates/designResultHandler.ts`)
+> asks `workItemDeliveryRepository.countOpenByWorkItem(gate.workItemId)`, which
+> counts deliveries whose `workItemId` is **the gated card itself**. On a
+> single-card run the story delivers nothing — the open pull request belongs to
+> the E2E subtask — so that count reads **0**, the arm writes `done` on the story,
+> and the cascade then closes the E2E subtask whose pull request is still open,
+> plus every sibling not yet built. Approving acceptance would complete unmerged
+> and unbuilt work. **That is the defect this point exists to prevent.**
+>
+> | the story …                                                                                                                                        | approve does                                                                                                                                                                                                                                                                                                                                                                     |
+> | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **has an open delivery of its own** — a story run                                                                                                  | record the decision, stamp the receipt `approved` (point 6), write **no status** from the acceptance gate. The same press decides the companion `pull_request_approval`, whose handler writes **`approved`** (`PULL_REQUEST_APPROVAL_TARGET`, `pullRequestApprovalHandler.ts`), and **the merge writes `done`**. The cascade then closes children that merge delivered — correct |
+> | **delivers nothing itself, and ANY descendant is not in the `done` category** — a single-card run with work still open, or children still to build | record the decision, stamp the receipt, write **no status**. The story reaches `done` through `parentStatusRollupService`'s forward arm when its LAST child completes — by then the acceptance gate is decided, so §6d's rule 1 no longer holds that move                                                                                                                        |
+> | **delivers nothing itself, and EVERY descendant is in the `done` category**                                                                        | record the decision, stamp the receipt, and write **`done`** — approval is TERMINAL. The rollup already tried this move when the last child finished and was refused `approval_pending` (§6d rule 1: the awaiting gate held the status its intent names), and it does not re-fire, so nothing else would write it                                                                |
+>
+> **The discriminator is therefore "is anything left under this story that a
+> `done` would close?"** — the subtree's done-category check — **plus** the
+> story's own open deliveries, never the card's own open-delivery count alone.
+> `done` keeps exactly one writer in every row: the merge, the rollup, or the
+> approval, and never two. `request_changes` moves nothing, as for every kind
+> (§3); the old path's `in_review → in_progress` write retires with
+> `acceptanceEvidenceService.decide`. Building the effect is
+> [MOTIR-4950](motir:cmttv7s970088i0txmuykzjcw)'s (its criterion 4 names this
+> point), and the placement matrix that proves it on both run shapes is
+> [MOTIR-5791](motir:cmu8msz3a005chvoioew71yhw)'s.
+>
+> **What this amendment does NOT change.** The gate mechanism, routing, authority
+> and state set ([MOTIR-4778](motir:cmtqhxi7r000vhvphp60vjymc)'s);
+> `pull_request_approval`'s own raise conditions (§8's MOTIR-5479 amendment); the
+> switch and its tier ([MOTIR-4925](motir:cmttap29j006dhxoipknbjh7v)); what a run
+> records, how the video is paced, and the storage caps (`acceptance-video.md`).
 
 ### 2. Routing and authority — DECIDED BY THE REQUESTER (Yue, 2026-09-08)
 
