@@ -126,10 +126,13 @@ describe('panel 2 — mixed placements', () => {
   // RESTATED by Part XVIII decision 2: the node carries no placement line any
   // more. WHICH level a filed card is merged onto is MOTIR-5795's (the plan-review
   // canvas keys it on its folder); this asserts only what the node draws.
-  it('draws the filed card on the merged level with NO placement line — every host builds its level here', () => {
+  // RESTATED by MOTIR-5795: the filed card sits on its FOLDER's level, not the root.
+  it('draws the filed card on its folder level with NO placement line — every host builds its level here', () => {
     const plain = planReviewItem({ planItemId: 'pi_plain', nodeId: 'pi_plain', title: 'Plain' });
-    const level = mergePlanLevel({ nodes: [], deps: [] }, [filedAdd(), plain], null);
-    expect(level.nodes.map((n) => n.id)).toEqual(['pi_filed', 'pi_plain']);
+    const root = mergePlanLevel({ nodes: [], deps: [] }, [filedAdd(), plain], null);
+    expect(root.nodes.map((n) => n.id)).toEqual(['pi_plain']);
+    const level = mergePlanLevel({ nodes: [], deps: [] }, [filedAdd(), plain], 'folder:fold_2025');
+    expect(level.nodes.map((n) => n.id)).toEqual(['pi_filed']);
     renderWithIntl(
       <>
         {level.nodes.map((n) => (
@@ -325,8 +328,11 @@ describe('panel 4 — the stale folder', () => {
   });
 });
 
-describe('the folder crumb segment (Part XVII §17.2)', () => {
-  it('leads the drilled chain when its root-most proposal is filed, as text and not a control', async () => {
+// RESTATED by Part XVIII decision 5 (MOTIR-5795): MOTIR-5418's text-only folder
+// segment is RETIRED. A folder is a level on this canvas now, so the drilled chain
+// leads with the folder's own crumbs — `/roadmap`'s, and they navigate.
+describe('the folder crumbs (Part XVIII decision 5, superseding Part XVII §17.2)', () => {
+  it('leads the drilled chain with NAVIGABLE folder crumbs, and draws no text segment', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -336,7 +342,13 @@ describe('the folder crumb segment (Part XVII §17.2)', () => {
         } as Response),
       ),
     );
-    const story = filedAdd({ hasChildren: true });
+    const story = filedAdd({
+      hasChildren: true,
+      folderTrail: [
+        { id: 'fold_parked', name: 'Parked' },
+        { id: 'fold_2025', name: '2025' },
+      ],
+    });
     const child = (n: number) =>
       planReviewItem({
         planItemId: `pi_c${n}`,
@@ -353,8 +365,9 @@ describe('the folder crumb segment (Part XVII §17.2)', () => {
         ariaLabel="Plan canvas"
       />,
     );
-    const segment = await waitFor(() => screen.getByTestId('crumb-folder'));
-    expect(within(segment).getByText('Folder: Parked ▸ 2025')).toBeTruthy();
-    expect(within(segment).queryByRole('button')).toBeNull();
+    const crumb = await waitFor(() => screen.getByRole('button', { name: /Parked/ }));
+    expect(crumb).toBeTruthy();
+    expect(screen.getByRole('button', { name: /2025/ })).toBeTruthy();
+    expect(screen.queryByTestId('crumb-folder')).toBeNull();
   });
 });

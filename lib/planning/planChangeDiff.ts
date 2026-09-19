@@ -170,15 +170,7 @@ export function indexPlanReview(review: PlanReviewDto | null | undefined): PlanC
   const withChildren = proposedParentNodeIds(adds);
   for (const add of adds) add.hasChildren = withChildren.has(add.nodeId);
 
-  const folderChanges = new Map<string, number>();
-  for (const item of review.items) {
-    if (item.folderMissing) continue;
-    // `?? []`: a payload from a server older than MOTIR-5798 carries no trail, and
-    // must read as "no folder" rather than throw while the page renders.
-    for (const crumb of item.folderTrail ?? []) {
-      folderChanges.set(crumb.id, (folderChanges.get(crumb.id) ?? 0) + 1);
-    }
-  }
+  const folderChanges = folderChangeCounts(review.items);
 
   const relocations: FolderRelocation[] = [];
   for (const item of review.items) {
@@ -202,6 +194,26 @@ export function indexPlanReview(review: PlanReviewDto | null | undefined): PlanC
     counts: { added: adds.length, changed: changesById.size, removed: removalsById.size },
     isEmpty: false,
   };
+}
+
+/**
+ * How many of the plan's proposals sit behind each FOLDER, counted DEEP (design
+ * Part XVIII §18.3): every proposal of any op whose `folderTrail` holds the folder
+ * — filed in it, in a sub-folder, or under a work item filed in it. Keyed by the
+ * folder's id. A stale folder counts nowhere (decision 6). One count for both
+ * planning canvases, so the overlay and the review badge the same number.
+ */
+export function folderChangeCounts(items: readonly PlanReviewItemDto[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (item.folderMissing) continue;
+    // `?? []`: a payload from a server older than MOTIR-5798 carries no trail, and
+    // must read as "no folder" rather than throw while the page renders.
+    for (const crumb of item.folderTrail ?? []) {
+      counts.set(crumb.id, (counts.get(crumb.id) ?? 0) + 1);
+    }
+  }
+  return counts;
 }
 
 /** The folder LEVEL a root proposal sits on: its folder's canvas id when it is

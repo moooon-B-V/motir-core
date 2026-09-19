@@ -14,10 +14,16 @@ import {
   LEVEL_MORE_ID,
   NOT_IN_EPIC_ID,
 } from '@/components/planning/workItemLevel';
+import { FolderEmptyLevel } from '@/components/planning/WorkItemNode';
 import { fetchRoadmapLevel } from '@/lib/planning/roadmapClient';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
-import { workItemCrumbLabel } from '@/lib/planning/projectCanvasModel';
-import { fullestContainer } from '@/lib/planning/planShape';
+import {
+  folderIdFromNodeId,
+  folderNodeId,
+  workItemCrumbLabel,
+} from '@/lib/planning/projectCanvasModel';
+import { fullestContainer, proposalLevelKey } from '@/lib/planning/planShape';
+import { folderChangeCounts } from '@/lib/planning/planChangeDiff';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -99,6 +105,12 @@ export interface PlanReviewCanvasProps {
  * breadcrumb at all. When the arrival parent is itself a PROPOSAL there is no
  * committed chain on that item — the trail is its own `parentTrail` plus one
  * crumb for the proposal, walked up as far as the proposal chain goes.
+ *
+ * ⚠️ A FOLDER IS A LEVEL (Bug MOTIR-5782; design Part XVIII §18.2). A filed
+ * proposal is counted on its folder's level, so a plan that files everything into
+ * one folder ARRIVES on that folder; the depth tie-break counts folder crumbs; an
+ * exact tie goes to the level holding the plan's first proposal. The trail leads
+ * with the folder crumbs (`folderTrail`), which navigate like `/roadmap`'s.
  */
 export function arrivalLevel(
   items: PlanReviewItemDto[],
@@ -116,7 +128,7 @@ export function arrivalLevel(
    */
   proposedWord: string,
 ): { id: string; trail: CanvasCrumb[] } | null {
-  const container = fullestContainer(items);
+  const container = fullestContainer(items, { folders: true });
   if (!container?.parentNodeId) return null;
   return {
     id: container.parentNodeId,
@@ -153,8 +165,14 @@ function trailTo(
   proposedWord: string,
 ): CanvasCrumb[] {
   const byNodeId = new Map(items.map((item) => [item.nodeId, item]));
+  // A FOLDER's level: its trail IS its folder chain, which any proposal filed
+  // there carries.
+  if (folderIdFromNodeId(parentNodeId) !== null) {
+    return folderCrumbs(items.find((item) => proposalLevelKey(item) === parentNodeId));
+  }
   const proposed: CanvasCrumb[] = [];
   const seen = new Set<string>();
+  let top: PlanReviewItemDto | undefined;
 
   let cursor: string | null = parentNodeId;
   while (cursor !== null && !seen.has(cursor)) {
@@ -181,8 +199,10 @@ function trailTo(
                 },
               ]
             : [];
-      return [...committed, ...proposed];
+      // The committed chain's ROOT-MOST card may be filed; its folders lead.
+      return [...folderCrumbs(namer), ...committed, ...proposed];
     }
+    top = proposal;
     proposed.unshift({
       id: proposal.nodeId,
       label: workItemCrumbLabel(proposal.identifier ?? proposedWord, proposal.title),
@@ -191,13 +211,21 @@ function trailTo(
   }
   // The chain ran out inside the plan — every ancestor is a proposal. Whatever
   // committed trail the topmost one carries goes in front of them.
-  const top = byNodeId.get(parentNodeId);
+  const container = byNodeId.get(parentNodeId);
   const carried =
-    top?.parentTrail.map((c) => ({
+    container?.parentTrail.map((c) => ({
       id: c.id,
       label: workItemCrumbLabel(c.identifier, c.title),
     })) ?? [];
-  return [...carried, ...proposed];
+  // …and the topmost proposal's folder, when it is filed into one.
+  return [...folderCrumbs(top), ...carried, ...proposed];
+}
+
+/** A proposal's folder chain as navigable crumbs (`folder:<id>`, named). A stale
+ *  folder has no level to navigate to, so it contributes none (decision 6). */
+function folderCrumbs(item: PlanReviewItemDto | undefined): CanvasCrumb[] {
+  if (!item || item.folderMissing) return [];
+  return (item.folderTrail ?? []).map((f) => ({ id: folderNodeId(f.id), label: f.name }));
 }
 
 export function PlanReviewCanvas({
@@ -216,18 +244,23 @@ export function PlanReviewCanvas({
   // have changed and the reader is asking the same thing.
   const decided = outcome !== null;
   const arrival = useMemo(() => arrivalLevel(items, tPlan('proposedCrumb')), [items, tPlan]);
-  // THE FOLDER CRUMB SEGMENT (Part XVII §17.2): a drilled chain whose ROOT-MOST
-  // crumb is a proposal FILED into a folder shows that folder ahead of it. It reads
-  // the proposal's OWN placement — a committed filed ancestor adds no segment, the
-  // story's decision for this surface.
-  const crumbFolderPath = useCallback(
-    (id: string): readonly string[] | null => {
-      const proposal = items.find((item) => item.nodeId === id);
-      if (!proposal || proposal.parentNodeId !== null) return null;
-      return proposal.folderPath && proposal.folderPath.length > 0 ? proposal.folderPath : null;
-    },
-    [items],
+  // FOLDER CRUMBS NAVIGATE (Bug MOTIR-5782; design Part XVIII decision 5). The
+  // folder is a level on this canvas now, so its crumbs are `/roadmap`'s
+  // (MOTIR-5742) and MOTIR-5418's text-only folder segment is retired: a filed
+  // proposal is reached THROUGH its folder, whose crumb already names it.
+  const isFolderCrumb = useCallback(
+    (crumb: CanvasCrumb) => folderIdFromNodeId(crumb.id) !== null,
+    [],
   );
+  // An EMPTY folder's level says so in the folder's own words (MOTIR-5713 sheet 6).
+  const emptyDrilledFor = useCallback(
+    (focus: { id: string; label: string }) =>
+      folderIdFromNodeId(focus.id) !== null ? <FolderEmptyLevel name={focus.label} /> : null,
+    [],
+  );
+  // How many proposals sit behind each folder, DEEP (decision 3) — the badge on a
+  // closed folder card, and the folders Show changes rings.
+  const folderChanges = useMemo(() => folderChangeCounts(items), [items]);
   const initialTrail = useMemo<CanvasCrumb[] | undefined>(
     () => arrival?.trail ?? undefined,
     [arrival],
@@ -421,7 +454,17 @@ export function PlanReviewCanvas({
         levelKeyRef.current = null; // synthetic: no `levelTotal`, so no tile on it
         let grouped: RoadmapLevel = { nodes: [], deps: [] };
         if (projectKey) {
-          const root = await fetchRoadmapLevel(projectKey, null, 'project');
+          // The root WITH folders (Bug MOTIR-5782), so a filed row is behind its
+          // folder and never in the group.
+          const root = await fetchRoadmapLevel(
+            projectKey,
+            null,
+            'project',
+            undefined,
+            false,
+            undefined,
+            { folders: true },
+          );
           for (const it of root.items) identifierByIdRef.current.set(it.id, it.identifier);
           const rows = root.items.filter((i) => isNotInEpicRow(i) && !touchedNodeIds.has(i.id));
           // ⚠️ EDGES SCOPED TO THE ROWS (bug MOTIR-3557) — the root's edge list is
@@ -462,12 +505,23 @@ export function PlanReviewCanvas({
       // (`GenerationFlow`) proposes a tree before one exists, so there is no
       // committed neighbourhood and the proposals legitimately stand alone.
       if (projectKey) {
+        // A FOLDER's level is read by the folder — its child folders, then the
+        // work filed directly in it — and the root opts into the folder read, so
+        // a filed row is drawn behind its folder rather than loose (Bug
+        // MOTIR-5782; the `/roadmap` wiring, MOTIR-5710/5741).
+        const folderId = folderIdFromNodeId(parentId);
         const wi = await fetchRoadmapLevel(
           projectKey,
-          parentId,
+          folderId !== null ? null : parentId,
           'project',
           undefined,
           showAllRef.current.has(levelKey),
+          undefined,
+          folderId !== null
+            ? { folders: true, folderId }
+            : parentId === null
+              ? { folders: true }
+              : undefined,
         );
         for (const it of wi.items) identifierByIdRef.current.set(it.id, it.identifier);
         for (const b of wi.offLevelBlockers) identifierByIdRef.current.set(b.id, b.identifier);
@@ -504,7 +558,7 @@ export function PlanReviewCanvas({
         const levelRowIds = new Set(wi.items.map((i) => i.id));
         const departingIds = new Set(
           items
-            .filter((i) => (i.parentNodeId ?? null) !== parentId && levelRowIds.has(i.nodeId))
+            .filter((i) => proposalLevelKey(i) !== parentId && levelRowIds.has(i.nodeId))
             .map((i) => i.nodeId),
         );
         committed = buildWorkItemLevel(wi, {
@@ -516,13 +570,15 @@ export function PlanReviewCanvas({
           ...(excluded ? { groupExcludeIds: excluded } : {}),
           groupCrumbLabel: t('group.title'),
           levelTotal: wi.levelTotal,
+          // A closed folder holding proposals says so (Part XVIII decision 3).
+          folderChanges,
         });
       }
       const merged = mergePlanLevel(committed, items, parentId, outcome);
       setLevelIsAllProposed(committed.nodes.length === 0 && merged.nodes.length > 0);
       return merged;
     },
-    [items, projectKey, outcome, touchedNodeIds, t],
+    [items, projectKey, outcome, touchedNodeIds, folderChanges, t],
   );
 
   return (
@@ -537,7 +593,8 @@ export function PlanReviewCanvas({
         // approve, rather than being left addressed by an id that has stopped
         // naming anything (bug MOTIR-3439).
         resolveHeldNode={resolveHeldNode}
-        crumbFolderPath={crumbFolderPath}
+        isFolderCrumb={isFolderCrumb}
+        emptyDrilledFor={emptyDrilledFor}
         // Part IX §1.4's caption, on the one level that needs it. The foundation
         // owns the slot and knows only that it has nodes; which KIND of nodes
         // they are is this consumer's to say.
@@ -567,7 +624,9 @@ export function PlanReviewCanvas({
         // change?"* is a better question after approve than before it, and the
         // decided pane exists to be a RECORD (Part VI).
         emphasis={{
-          ids: items.map((i) => i.nodeId),
+          // …and every FOLDER holding one, so a closed folder with work changing
+          // behind it is ringed like a card (Part XVIII decision 3).
+          ids: [...items.map((i) => i.nodeId), ...[...folderChanges.keys()].map(folderNodeId)],
           total: items.length,
           label: decided ? tPlan('showChangesPast') : t('showChanges'),
           emptyLabel: t('showChangesNone'),
