@@ -174,8 +174,11 @@ async function readHeadFiles(pr: {
 }): Promise<PullRequestFiles | null> {
   if (pr.provider !== LISTABLE_PROVIDER) return null;
   try {
+    // The App is chosen by the repository's PROVENANCE, as the merge's is: a hosted
+    // repository is not on the user-facing App's installation (MOTIR-5681).
     const { token } = await getGitProvider(LISTABLE_PROVIDER).mintInstallationToken(
       pr.repo.installation.installationId,
+      { owner: pr.repo.owner },
     );
     return await listPullRequestFiles(token, pr.repo.owner, pr.repo.name, pr.number);
   } catch (err) {

@@ -121,7 +121,12 @@ function frameGateFor(r: LateReads): DevelopmentGateRead | null {
     if (decision.state === 'awaiting' || decision.state === 'superseded') {
       return primary(r.decisionGate);
     }
-    return r.mergeGate.gate?.state === 'awaiting' ? merge : primary(r.decisionGate);
+    // Only an ACCEPTED decision hands the lead to the merge question (Panel 5b). One sent
+    // back keeps the frame — its commits cannot merge (`decisionHoldsMerge`), so an
+    // *Approve and merge* over them would be a press the door refuses.
+    return decision.state === 'approved' && r.mergeGate.gate?.state === 'awaiting'
+      ? merge
+      : primary(r.decisionGate);
   }
   if (r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate) return primary(r.designGate);
   return merge;
