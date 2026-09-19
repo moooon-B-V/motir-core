@@ -62,6 +62,11 @@ export type ApprovalGateErrorTag =
   | 'APPROVAL_GATE_NOT_AUTHORISED'
   | 'APPROVAL_GATE_KIND_UNREGISTERED'
   | 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH'
+  // A DECISION gate whose card's pull requests carry no single decision document —
+  // none, several, or one the host could not name (Story MOTIR-4907 · MOTIR-5676;
+  // `approval-gates.md` §8's FIFTH AMENDMENT, clause 3). Approve is refused;
+  // Request changes is not.
+  | 'APPROVAL_GATE_DECISION_UNRESOLVABLE'
   // The approve-to-merge gate of a card whose PRIMARY question — the design, or a
   // decision — is not answered, approved through a door that is not the primary's own
   // press (Bug MOTIR-5785; `design-result.md` AMENDMENT 6 Q1). The merge FOLLOWS the
@@ -419,6 +424,21 @@ export class ApprovalGateAlreadyRequeuedError extends ApprovalGateError {
   constructor(readonly pullRequestId: string) {
     super(`Pull request ${pullRequestId} was already put back into the merge queue.`);
     this.name = 'ApprovalGateAlreadyRequeuedError';
+  }
+}
+
+/**
+ * APPROVE on a decision gate whose document cannot be named (Story MOTIR-4907 ·
+ * MOTIR-5676; `approval-gates.md` §8's FIFTH AMENDMENT, clause 3). *"We could not find
+ * it"* must never become *"nobody had to accept it"*, so the gate stays open, the merge
+ * stays held, and the refusal says why: `none`, `several` or `unreadable`.
+ */
+export class ApprovalGateDecisionUnresolvableError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_DECISION_UNRESOLVABLE' as const;
+  readonly code = 'APPROVAL_GATE_DECISION_UNRESOLVABLE' as const;
+  constructor(readonly reason: 'none' | 'several' | 'unreadable') {
+    super(`There is no single decision document to approve (${reason}).`);
+    this.name = 'ApprovalGateDecisionUnresolvableError';
   }
 }
 

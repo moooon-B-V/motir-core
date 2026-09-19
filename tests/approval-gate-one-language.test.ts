@@ -237,7 +237,13 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // with a caller nobody calls.
       // MOTIR-5482: the approve-and-merge gate is withdrawn BY CARD, because its subject is
       // the card's whole delivery set — a moved head, a closed member or a set change.
+      // AMENDED ON THE RECORD — MOTIR-5677, 2026-09-19 (`approval-gates.md` §8's FIFTH
+      // AMENDMENT, clause 4): the DECISION gate is withdrawn when a capture shows a push
+      // CHANGED the decision document's blob — `head_moved`, product-written, no actor.
+      // It lives with the capture because that is the only moment the new version is
+      // known; the decision it withdraws is still made only through the door.
       callers: [
+        'lib/services/decisionDocumentCaptureService.ts',
         'lib/services/designEvidenceService.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],

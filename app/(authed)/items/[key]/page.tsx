@@ -196,6 +196,7 @@ export default async function IssueDetailPage({
   const lateReads = readLateSections({
     itemId: item.id,
     itemType: item.type,
+    itemExecutor: item.executor,
     itemStatus: item.status,
     itemKind: item.kind,
     projectId: ctx.projectId,

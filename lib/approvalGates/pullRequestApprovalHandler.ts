@@ -12,6 +12,8 @@ import {
   type WorkItemDeliveryWithChecks,
 } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { designResultHoldsMerge } from '@/lib/services/mergeGates';
 import { ApprovalGatePrimaryPendingError } from '@/lib/approvalGates/errors';
 
@@ -151,6 +153,13 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
     // meets the refusal; Request changes is never refused.
     if (await designResultHoldsMerge(gate.workItemId, tx)) {
       throw new ApprovalGatePrimaryPendingError(gate.workItemId, 'design');
+    }
+    // ⚠️ …AND THE DECISION, the other primary (Story MOTIR-4907 · MOTIR-5677;
+    // `approval-gates.md` §8's FIFTH AMENDMENT, clause 5), refused with the same tag so
+    // the two primaries cannot drift into two differently-worded rules (MOTIR-5785).
+    const item = await workItemRepository.findById(gate.workItemId, tx);
+    if (item && (await decisionHoldsMerge(item, tx))) {
+      throw new ApprovalGatePrimaryPendingError(gate.workItemId, 'decision');
     }
     if (resolvedStatusKey !== PULL_REQUEST_APPROVAL_TARGET.key) {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };

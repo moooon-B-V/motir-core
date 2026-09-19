@@ -44,6 +44,9 @@ export const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   APPROVAL_GATE_STALE_SUBJECT: 409,
   APPROVAL_GATE_ALREADY_AWAITING: 409,
   APPROVAL_GATE_KIND_UNREGISTERED: 501,
+  // The request is well-formed and the gate is live; its SUBJECT is not in a state
+  // that admits Approve until a push fixes the document (MOTIR-5676).
+  APPROVAL_GATE_DECISION_UNRESOLVABLE: 409,
   APPROVAL_GATE_DECIDED_IMMUTABLE: 500,
   // A caller passed `source: 'github'` without a synced reviewer, or the reverse
   // (MOTIR-5596). Like the immutability refusal above it is a DEFECT rather than a

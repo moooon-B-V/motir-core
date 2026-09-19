@@ -331,7 +331,7 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, at BOTH ends, enumerated FROM 
     const expected =
       kind === 'design_result'
         ? 'design port'
-        : kind === 'pull_request_approval'
+        : kind === 'pull_request_approval' || kind === 'decision_approval'
           ? 'the Development block'
           : 'not built yet';
 
@@ -361,7 +361,9 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, at BOTH ends, enumerated FROM 
         SLOW,
       );
 
-      if (kind === 'pull_request_approval') {
+      // ⚠️ `decision_approval` DRAWS THE BLOCK UNTIL MOTIR-5678 draws its document above
+      // it (MOTIR-5676 registered the kind; the route's interim arm says why).
+      if (kind === 'pull_request_approval' || kind === 'decision_approval') {
         const port = within(dialog).getByRole('group', { name: en.approvalGate.port.label });
         expect(within(port).getByText('Change in web')).toBeTruthy();
       } else if (kind === 'design_result') {

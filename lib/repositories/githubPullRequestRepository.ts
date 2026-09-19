@@ -4,6 +4,7 @@ import {
   type GithubInstallation,
   type GithubPullRequest,
   type GithubRepo,
+  type DecisionDocOutcome,
   type MergeAuthority,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
@@ -131,6 +132,17 @@ export interface MergeCaptureInput {
   mergedAt: Date | null;
   changedPaths: string[];
   changedPathsTruncated: boolean;
+}
+
+/** What a head carries under `docs/decisions/` (MOTIR-5674) — the four columns
+ *  `recordDecisionDocCapture` writes as one. */
+export interface DecisionDocCaptureInput {
+  outcome: DecisionDocOutcome;
+  path: string | null;
+  blobSha: string | null;
+  headSha: string | null;
+  /** Every document the head writes (MOTIR-5678). */
+  paths: string[];
 }
 
 /** One open-delivery reconcile candidate (MOTIR-5390): the mirror row, the
@@ -615,6 +627,30 @@ export const githubPullRequestRepository = {
         mergedAt: data.mergedAt,
         changedPaths: data.changedPaths,
         changedPathsTruncated: data.changedPathsTruncated,
+      },
+    });
+    return result.count;
+  },
+
+  /** Stamp what the pull request's HEAD carries under `docs/decisions/` onto its
+   *  row (Story MOTIR-4907 · MOTIR-5674; `approval-gates.md` §8's FIFTH AMENDMENT,
+   *  clause 7). All four columns are written together, every time, so a capture
+   *  never leaves one outcome's path beside another outcome's word. `updateMany`
+   *  for `recordMergeCapture`'s reason: this runs after the host read, outside the
+   *  transaction that found the row, so the row may be gone. Write path → `tx`. */
+  async recordDecisionDocCapture(
+    id: string,
+    data: DecisionDocCaptureInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: { id },
+      data: {
+        decisionDocOutcome: data.outcome,
+        decisionDocPath: data.path,
+        decisionDocBlobSha: data.blobSha,
+        decisionDocHeadSha: data.headSha,
+        decisionDocPaths: data.paths,
       },
     });
     return result.count;

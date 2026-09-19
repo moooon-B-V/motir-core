@@ -15,6 +15,9 @@ import type {
 } from '@/lib/dto/approvalGate';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { howToTestService } from '@/lib/services/howToTestService';
+import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
+import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
+import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import { monitorIssueService } from '@/lib/services/monitorIssueService';
@@ -132,6 +135,20 @@ export interface LateReads {
    * `members` — once the gate is APPROVED — is what a reload still knows about each pull
    * request of its set: whether its merge gate awaits, and whether the press queued it.
    */
+  /**
+   * The card's DECISION gate (`decision_approval`) WHATEVER ITS STATE, and the document it
+   * asks about (Story MOTIR-4907 · Subtask MOTIR-5678; `design/github/design-notes.md`
+   * §27). Read ONLY for a card that asks the decision question — `type: decision` decided
+   * by an agent (clause 10) — so every other card makes neither read.
+   *
+   * ⚠️ THE DOCUMENT IS READ HERE, ON THE SERVER, through the resolver — outside any
+   * transaction, because the production resolver calls the Git host. `document: null` is a
+   * card with nothing captured yet; a failed read degrades to the gate alone, never to an
+   * error across the late stack.
+   */
+  decisionGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
+    document: DecisionDocumentViewDTO | null;
+  };
   mergeGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     members: PullRequestApprovalMemberDTO[];
     /** An `auto` card's standing merge-queue exits, read only when there is no gate
@@ -164,6 +181,9 @@ export interface LateReads {
 export interface LateReadsInput {
   itemId: string;
   itemType: string | null;
+  /** Who decides the card — with `itemType`, whether it asks the decision question.
+   *  Absent is a card that does not: no decision read is made. */
+  itemExecutor?: string | null;
   itemStatus: string;
   itemKind: string;
   projectId: string;
@@ -182,6 +202,42 @@ export interface LateReadsInput {
    * leaf makes no scope read at all.
    */
   hasChildren: boolean;
+}
+
+const NO_DECISION_GATE: LateReads['decisionGate'] = {
+  gate: null,
+  canDecide: false,
+  routedToLabel: null,
+  settingsDoor: null,
+  stamp: null,
+  movedSince: [],
+  document: null,
+};
+
+/** The decision gate and its document (MOTIR-5678) — contained like every late read. */
+async function readDecisionGate(input: LateReadsInput): Promise<LateReads['decisionGate']> {
+  if (
+    !asksTheDecisionQuestion({
+      type: input.itemType as Parameters<typeof asksTheDecisionQuestion>[0]['type'],
+      executor: (input.itemExecutor ?? null) as Parameters<
+        typeof asksTheDecisionQuestion
+      >[0]['executor'],
+    })
+  ) {
+    return NO_DECISION_GATE;
+  }
+  try {
+    const [read, document] = await Promise.all([
+      approvalGatesService.getForWorkItem(
+        { workItemId: input.itemId, kind: 'decision_approval' },
+        input.ctx,
+      ),
+      decisionDocumentService.readViewForWorkItem(input.itemId, input.ctx).catch(() => null),
+    ]);
+    return { ...read, document };
+  } catch {
+    return NO_DECISION_GATE;
+  }
 }
 
 /** One page of a card's run history — the same default the route serves. */
@@ -212,6 +268,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       repair,
       monitorIssueLinks,
       monitorHasConnection,
+      decisionGate,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -386,6 +443,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           return false;
         }
       })(),
+      readDecisionGate(input),
     ]);
 
     return {
@@ -410,6 +468,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       repair,
       monitorIssueLinks,
       monitorHasConnection,
+      decisionGate,
     };
   })();
 }
