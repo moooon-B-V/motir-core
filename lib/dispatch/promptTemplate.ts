@@ -470,13 +470,30 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '4. If the claim is false, say so plainly and log what is actually true. A',
     '   verification that cannot fail has verified nothing.',
   ],
+  // ⚠️ THE PATH, THE COUNT AND THE PULL REQUEST ARE WHAT THE DECISION GATE READS
+  // (Story MOTIR-4907 · MOTIR-5682; `approval-gates.md` §8's FIFTH AMENDMENT). The
+  // gate asks a person about the ONE `docs/decisions/*.md` file the card's pull
+  // request adds or modifies, captured at its head (MOTIR-5674). A document written
+  // anywhere else, or two of them, leaves a gate nobody can approve and a merge
+  // held — on a run that did everything else right. A `human` decision card never
+  // reaches this lane: `isManualReadyItem` sends it to the manual steps.
   decision: [
     '1. Read the card description above for the decision to be made and its',
     '   constraints, and verify each constraint against the shipped code.',
     '2. Lay out the real options with their trade-offs, then DECIDE — a decision card',
     '   ships a decision, not a survey.',
-    '3. Record it as a decision document in the repository docs, capturing the',
-    '   context, the choice, the alternatives rejected, and the consequences.',
+    '3. Record it as EXACTLY ONE markdown file at docs/decisions/<kebab-slug>.md in',
+    "   this card's target repository — added, or modified if the decision amends an",
+    '   existing record. Follow the shape the records there already use (Status →',
+    '   Context → Decision → Consequences), capturing the context, the choice, the',
+    '   alternatives rejected, and the consequences. Change no other file under',
+    '   docs/decisions/: the gate reads exactly one, and two cannot be approved.',
+    '4. Open a pull request carrying that file and link it to this work item, as',
+    '   every lane does. The pull request is REQUIRED — it is how the decision reaches',
+    '   the person who accepts it.',
+    '5. The decision is NOT final when your run ends. A person reads the document in',
+    '   Motir and approves it; only then does the pull request merge. Stop at the',
+    '   pull request.',
   ],
   deploy: [
     '1. Read the card description above for the target environment and the change.',
