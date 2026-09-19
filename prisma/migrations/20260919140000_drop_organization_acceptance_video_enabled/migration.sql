@@ -1,0 +1,49 @@
+-- ===========================================================================
+-- CONTRACT — drop `organization.acceptance_video_enabled` (MOTIR-5195 ·
+-- `docs/decisions/acceptance-video.md` · `docs/decisions/delivery-reader-migration.md`
+-- §6a / §6b).
+--
+-- The acceptance-video switch is `project.acceptance_video_enabled` now
+-- (MOTIR-4925, 20260911170000, which ADDED that column and copied each project's
+-- owning organisation's answer forward in the same migration). This column has
+-- decided nothing since.
+--
+-- ⚠️ THIS IS THE THIRD PHASE OF THREE, AND THE ORDER IS THE WHOLE POINT.
+--
+--   1. EXPAND       (MOTIR-5172) removed every application reader and writer —
+--                   the org settings card, the `PATCH /api/organizations/[orgId]`
+--                   arm, `organizationsService.setAcceptanceVideoEnabled`, and the
+--                   acceptance panel's turn-on action, which now writes the project.
+--   2. SCHEMA-ONLY  (MOTIR-5173) took the field out of the GENERATED CLIENT with
+--                   `@ignore` while leaving the column — and RELEASED it.
+--   3. CONTRACT     (this) drops the column, and deletes the `@ignore`d field in
+--                   the same commit.
+--
+-- The model DECLARATION is itself a reader: `organizationRepository`'s
+-- `findUnique({ where: { id } })` carries no `select`, so it emits every scalar
+-- the model names. `fly.toml`'s `release_command` runs `prisma migrate deploy`
+-- BEFORE any new machine takes traffic, so this drop is safe only because the
+-- still-serving image is one whose client no longer names the column.
+--
+-- The marker below is `tests/contract-phase-guard.test.ts`'s declaration that
+-- phase 2 has SHIPPED AND RELEASED. It was verified against the platform by
+-- MOTIR-5194 before this migration was written:
+-- @client-stopped-selecting: MOTIR-5173
+--
+--   • release v595 `complete`; all 4 machines (app ×2, worker, standby worker)
+--     on it, one image digest `sha256:22ab433f…b954d`;
+--   • that image's `GH_SHA` is `5ce9c84ec`, which contains MOTIR-5173's merge
+--     `651510fe5` (`git merge-base --is-ancestor`), and its `schema.prisma`
+--     declares the field `@ignore`.
+--
+-- NO BACKFILL IS RE-RUN, deliberately — unlike the other CONTRACT migrations in
+-- this tree. 20260911170000's copy-forward was a one-time seed of a column that
+-- has since been written on its own: a project's switch is set on the project
+-- now. Copying the organisation's value forward again here would overwrite those
+-- choices with a value nothing has read since that migration. So there is
+-- nothing to carry over, and dropping the column changes no behaviour: it was a
+-- flag, not a suppressor, and no code path reads its absence.
+-- ===========================================================================
+
+-- AlterTable
+ALTER TABLE "organization" DROP COLUMN "acceptance_video_enabled";

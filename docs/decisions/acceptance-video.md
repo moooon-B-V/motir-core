@@ -392,6 +392,10 @@ field therefore runs the migration under the PREVIOUS image and 500s every read 
 readers first, then `@ignore` the field and RELEASE, then drop the column carrying
 the `-- @client-stopped-selecting:` marker `tests/contract-phase-guard.test.ts`
 requires. `docs/decisions/delivery-reader-migration.md` §6a / §6b is the record.
+The three phases shipped as MOTIR-5172 (readers), MOTIR-5173 (`@ignore`, verified
+deployed on every machine by MOTIR-5194) and MOTIR-5195 (the drop, migration
+`20260919140000_drop_organization_acceptance_video_enabled`). The column no longer
+exists.
 
 **The reversal condition.** This amendment would be wrong if an organisation needed
 to IMPOSE acceptance approval on every project beneath it — a floor a project cannot
