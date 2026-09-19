@@ -6289,6 +6289,7 @@
       "title": "开发",
       "gloss": "拉取请求及其测试方法 · 实时 PR 与 CI 状态",
       "glossWithDesign": "拉取请求、设计及其测试方法 · 实时 PR 与 CI 状态",
+      "glossWithDecision": "决策及其拉取请求 · 实时 PR 与 CI 状态",
       "pullRequestsGroup": "拉取请求",
       "howToTest": {
         "title": "如何测试",
@@ -8363,6 +8364,11 @@
         "set_changed": "Pull Request 集合发生变化，因此该问题已撤回。",
         "pulled_back": "工作已撤回评审，因此该问题已撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
+      },
+      "causeByKind": {
+        "decision_approval": {
+          "head_moved": "推送修改了决策文档，因此该问题已撤回。"
+        }
       }
     },
     "refusal": {
@@ -8585,6 +8591,42 @@
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",
       "movesOnMerge": "合并后变更"
+    },
+    "decision": {
+      "kindLabel": "决策",
+      "portTitle": "决策文档",
+      "meta": "文件版本 <mono>{blob}</mono>，提交 <mono>{head}</mono>",
+      "metaNoHead": "文件版本 <mono>{blob}</mono>",
+      "viewOnHost": "在 GitHub 上查看",
+      "headMeta": {
+        "one": "{path} · {count} 个拉取请求 · 由 {run} 交付",
+        "oneNoRun": "{path} · {count} 个拉取请求",
+        "none": "无决策文档 · {count} 个拉取请求 · 由 {run} 交付",
+        "noneNoRun": "无决策文档 · {count} 个拉取请求",
+        "several": "{docs} 份决策文档 · {count} 个拉取请求 · 由 {run} 交付",
+        "severalNoRun": "{docs} 份决策文档 · {count} 个拉取请求",
+        "withdrawn": "{path} · 文件版本 {blob}"
+      },
+      "consequence": "批准即接受此决策并合并 <b>{prs}</b>，随后将 <b>{key}</b> 移至“已批准”。",
+      "consequenceNoPrs": "批准即接受此决策；其拉取请求在检查通过后合并，随后 <b>{key}</b> 移至“已批准”。",
+      "blocked": "拉取请求中恰好有一份决策文档后才能批准，在此之前不会合并任何内容。",
+      "unresolvable": {
+        "none": "<b>此拉取请求未添加决策文档。</b>一个决策对应 <mono>docs/decisions/</mono> 下的一个文件。请用“要求修改”将其退回给智能体。",
+        "several": "<b>此拉取请求修改了 docs/decisions/ 下的 {count} 个文件</b> — {paths}。一个决策只有一份文档。",
+        "gone_at_head": "<b>决策文档已不在此拉取请求的最新提交中。</b>某次推送删除或重命名了它。",
+        "host_unreachable": "<b>Motir 无法连接 GitHub 以显示决策文档。</b>在能够读取之前无法批准。请稍后再试。",
+        "too_large": "<b>决策文档过大，无法在此显示。</b>请在 GitHub 上打开；无法在 Motir 中批准。",
+        "not_connected": "<b>此仓库未连接到 Motir，</b>因此无法显示决策文档。"
+      },
+      "accepted": "<b>{name}</b> 于 {when} 接受了此决策",
+      "acceptedUnchanged": "<b>{name}</b> 于 {when} 接受了此决策 — 新提交中未改变",
+      "acceptedBlob": "文件版本 <mono>{blob}</mono>",
+      "mergeHeld": "拉取请求在检查通过后自动合并，无需再次点击。",
+      "withdrawnNext": "没有人对它做出决定。新版本已取而代之。",
+      "confirm": {
+        "records": "记录你接受此决策",
+        "moves": "将 {key} 移至“已批准”"
+      }
     }
   },
   "approvalOverlay": {

@@ -23,6 +23,7 @@ const member = (over: Partial<DecisionMember> = {}): DecisionMember => ({
   path: 'docs/decisions/page-model.md',
   blobSha: 'blob-1',
   headSha: 'head-1',
+  paths: ['docs/decisions/page-model.md'],
   ...over,
 });
 
@@ -53,17 +54,36 @@ describe('decisionIdentityOf — one document across the set, or a reason', () =
 
   it('a document in EACH of two pull requests is `several` — the set carries two', () => {
     expect(
-      decisionIdentityOf([member(), member({ number: 2, path: 'docs/decisions/b.md' })]),
-    ).toMatchObject({ resolvable: false, reason: 'several', number: 2 });
+      decisionIdentityOf([
+        member(),
+        member({ number: 2, path: 'docs/decisions/b.md', paths: ['docs/decisions/b.md'] }),
+      ]),
+    ).toMatchObject({
+      resolvable: false,
+      reason: 'several',
+      number: 2,
+      // Both documents are NAMED — what the port lists for a reviewer (MOTIR-5678).
+      paths: ['docs/decisions/b.md', 'docs/decisions/page-model.md'],
+    });
   });
 
   it('`several` on any member wins over everything else', () => {
     expect(
       decisionIdentityOf([
-        member({ outcome: 'unreadable' }),
-        member({ number: 2, outcome: 'several' }),
+        member({ outcome: 'unreadable', path: null, paths: [] }),
+        member({
+          number: 2,
+          outcome: 'several',
+          path: null,
+          paths: ['docs/decisions/a.md', 'docs/decisions/b.md'],
+        }),
       ]),
-    ).toMatchObject({ resolvable: false, reason: 'several', number: 2 });
+    ).toMatchObject({
+      resolvable: false,
+      reason: 'several',
+      number: 2,
+      paths: ['docs/decisions/a.md', 'docs/decisions/b.md'],
+    });
   });
 
   it('an unreadable member makes the set unreadable, even beside a clean document', () => {
@@ -86,7 +106,14 @@ describe('decisionIdentityOf — one document across the set, or a reason', () =
         member({ repo: 'acme/z', outcome: 'none' }),
         member({ repo: 'acme/a', outcome: 'none', headSha: 'head-a' }),
       ]),
-    ).toEqual({ resolvable: false, reason: 'none', repo: 'acme/a', number: 1, headSha: 'head-a' });
+    ).toEqual({
+      resolvable: false,
+      reason: 'none',
+      repo: 'acme/a',
+      number: 1,
+      headSha: 'head-a',
+      paths: [],
+    });
   });
 
   it('a `one` capture missing its path or sha breaks its own invariant and is unreadable', () => {

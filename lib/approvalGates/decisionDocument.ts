@@ -48,6 +48,9 @@ export interface DecisionDocCapture {
   blobSha: string | null;
   /** The head the list was read at; null when the host named none. */
   headSha: string | null;
+  /** Every decision document the head writes — one for `one`, each of them for
+   *  `several`, none otherwise (MOTIR-5678: the port names them). */
+  paths: string[];
 }
 
 /**
@@ -68,19 +71,25 @@ export interface DecisionDocCapture {
  *   about.
  */
 export function classifyDecisionDocuments(files: PullRequestFiles | null): DecisionDocCapture {
-  if (files === null) return { outcome: 'unreadable', path: null, blobSha: null, headSha: null };
+  if (files === null)
+    return { outcome: 'unreadable', path: null, blobSha: null, headSha: null, paths: [] };
   const headSha = files.headSha;
-  if (files.truncated) return { outcome: 'unreadable', path: null, blobSha: null, headSha };
+  if (files.truncated)
+    return { outcome: 'unreadable', path: null, blobSha: null, headSha, paths: [] };
 
   const documents = files.files.filter(
     (file) => isDecisionDocumentPath(file.path) && WRITES_THE_FILE.has(file.status ?? ''),
   );
-  if (documents.length === 0) return { outcome: 'none', path: null, blobSha: null, headSha };
-  if (documents.length > 1) return { outcome: 'several', path: null, blobSha: null, headSha };
+  if (documents.length === 0)
+    return { outcome: 'none', path: null, blobSha: null, headSha, paths: [] };
+  const paths = documents.map((file) => file.path).sort();
+  if (documents.length > 1)
+    return { outcome: 'several', path: null, blobSha: null, headSha, paths };
 
   const [document] = documents as [(typeof documents)[number]];
-  if (!document.sha) return { outcome: 'unreadable', path: null, blobSha: null, headSha };
-  return { outcome: 'one', path: document.path, blobSha: document.sha, headSha };
+  if (!document.sha)
+    return { outcome: 'unreadable', path: null, blobSha: null, headSha, paths: [] };
+  return { outcome: 'one', path: document.path, blobSha: document.sha, headSha, paths };
 }
 
 /**

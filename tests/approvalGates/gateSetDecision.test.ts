@@ -71,6 +71,7 @@ describe('resolveGateSet — the decision question', () => {
       repo: 'acme/web',
       number: 1,
       headSha: 'head-1',
+      paths: [],
     };
     expect(
       resolveGateSet(input({ decision: { identity: unresolvable, latestGate: null } })).awaited[0],
@@ -163,7 +164,14 @@ describe('decisionApprovalStandsForMerge', () => {
     expect(decisionApprovalStandsForMerge(null, gate('approved'))).toBe(false);
     expect(
       decisionApprovalStandsForMerge(
-        { resolvable: false, reason: 'none', repo: 'acme/web', number: 1, headSha: null },
+        {
+          resolvable: false,
+          reason: 'none',
+          repo: 'acme/web',
+          number: 1,
+          headSha: null,
+          paths: [],
+        },
         gate('approved', 'acme/web:unresolvable:none@unknown'),
       ),
     ).toBe(false);

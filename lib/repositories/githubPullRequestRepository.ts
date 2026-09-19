@@ -141,6 +141,8 @@ export interface DecisionDocCaptureInput {
   path: string | null;
   blobSha: string | null;
   headSha: string | null;
+  /** Every document the head writes (MOTIR-5678). */
+  paths: string[];
 }
 
 /** One open-delivery reconcile candidate (MOTIR-5390): the mirror row, the
@@ -648,6 +650,7 @@ export const githubPullRequestRepository = {
         decisionDocPath: data.path,
         decisionDocBlobSha: data.blobSha,
         decisionDocHeadSha: data.headSha,
+        decisionDocPaths: data.paths,
       },
     });
     return result.count;

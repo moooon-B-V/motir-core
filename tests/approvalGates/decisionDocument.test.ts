@@ -43,7 +43,13 @@ describe('classifyDecisionDocuments', () => {
   it('exactly one written document is `one`, with its path, blob sha and the head', () => {
     expect(
       classifyDecisionDocuments(list([doc('docs/decisions/pages.md', 'b1'), doc('lib/a.ts')])),
-    ).toEqual({ outcome: 'one', path: 'docs/decisions/pages.md', blobSha: 'b1', headSha: HEAD });
+    ).toEqual({
+      outcome: 'one',
+      path: 'docs/decisions/pages.md',
+      blobSha: 'b1',
+      headSha: HEAD,
+      paths: ['docs/decisions/pages.md'],
+    });
   });
 
   it.each(['added', 'modified', 'renamed', 'copied', 'changed'])(
@@ -63,16 +69,22 @@ describe('classifyDecisionDocuments', () => {
           doc('docs/decisions/same.md', 'b2', 'unchanged'),
         ]),
       ),
-    ).toEqual({ outcome: 'none', path: null, blobSha: null, headSha: HEAD });
+    ).toEqual({ outcome: 'none', path: null, blobSha: null, headSha: HEAD, paths: [] });
   });
 
-  it('no document is `none`; two are `several`, naming neither', () => {
+  it('no document is `none`; two are `several`, and BOTH are named for the port', () => {
     expect(classifyDecisionDocuments(list([doc('lib/a.ts')])).outcome).toBe('none');
     expect(
       classifyDecisionDocuments(
         list([doc('docs/decisions/a.md'), doc('docs/decisions/b.md', 'b2', 'modified')]),
       ),
-    ).toEqual({ outcome: 'several', path: null, blobSha: null, headSha: HEAD });
+    ).toEqual({
+      outcome: 'several',
+      path: null,
+      blobSha: null,
+      headSha: HEAD,
+      paths: ['docs/decisions/a.md', 'docs/decisions/b.md'],
+    });
   });
 
   it('a list that could not be read is `unreadable`, never `none`', () => {
@@ -81,6 +93,7 @@ describe('classifyDecisionDocuments', () => {
       path: null,
       blobSha: null,
       headSha: null,
+      paths: [],
     });
   });
 

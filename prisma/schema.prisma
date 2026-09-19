@@ -6816,6 +6816,10 @@ model GithubPullRequest {
   /// The head commit the capture was read at, for every outcome; null when the
   /// host named none.
   decisionDocHeadSha    String?             @map("decision_doc_head_sha")
+  /// EVERY decision document the head writes — the one path for `one`, each of them
+  /// for `several` (MOTIR-5678), so the port can name what a reviewer must reduce to
+  /// one. Empty for `none`, `unreadable` and a row never captured.
+  decisionDocPaths      String[]            @default([]) @map("decision_doc_paths")
   createdAt             DateTime            @default(now()) @map("created_at")
   updatedAt             DateTime            @updatedAt @map("updated_at")
 

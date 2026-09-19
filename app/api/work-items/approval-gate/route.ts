@@ -4,6 +4,7 @@ import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
+import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -134,14 +135,19 @@ async function readSubject(
     // because the kind that arm answered for is no longer registered to reach it.
     case 'pull_request_approval':
       return readDevelopmentBlock(gate, item, ctx);
-    // ⚠️ THE DECISION GATE'S DOCUMENT PORT IS MOTIR-5678's (Story MOTIR-4907), drawn
-    // by MOTIR-5673: the decision document as the PRIMARY question ABOVE these rows.
-    // Until it lands the overlay shows what a press on this gate carries — the card's
-    // pull requests — rather than `kind_not_built`, which stopped being true when
-    // MOTIR-5676 registered the kind. No decision gate is raised before MOTIR-5677, so
-    // no reader meets this interim arm in the meantime.
-    case 'decision_approval':
-      return readDevelopmentBlock(gate, item, ctx);
+    // THE DECISION PORT (MOTIR-5678; design §27 Panel 7): the Development block with the
+    // decision document FIRST — read here, on the server, through the resolver — and the
+    // pull requests one press merges beneath it. The document is read beside the block,
+    // never inside a transaction, because the production resolver calls the Git host.
+    case 'decision_approval': {
+      const [block, document] = await Promise.all([
+        readDevelopmentBlock(gate, item, ctx),
+        decisionDocumentService.readViewForWorkItem(gate.workItemId, ctx).catch(() => null),
+      ]);
+      return block.state === 'resolved' && block.kind === 'pull_request_approval'
+        ? { ...block, decision: { document } }
+        : block;
+    }
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error
        here until it has its own arm. */

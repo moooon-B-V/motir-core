@@ -140,6 +140,7 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
         path: pr.decisionDocPath,
         blobSha: pr.decisionDocBlobSha,
         headSha: pr.decisionDocHeadSha,
+        paths: pr.decisionDocPaths,
       };
       const members = membersByItem.get(delivery.workItemId);
       if (members) members.push(member);

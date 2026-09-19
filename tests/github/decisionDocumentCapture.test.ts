@@ -123,6 +123,7 @@ const captured = (id: string) =>
       decisionDocPath: true,
       decisionDocBlobSha: true,
       decisionDocHeadSha: true,
+      decisionDocPaths: true,
       changedPaths: true,
       changedPathsTruncated: true,
     },
@@ -180,6 +181,7 @@ describe('a decision card’s head — the four outcomes', () => {
       decisionDocPath: 'docs/decisions/pages.md',
       decisionDocBlobSha: 'blob-pages',
       decisionDocHeadSha: HEAD,
+      decisionDocPaths: ['docs/decisions/pages.md'],
     });
   });
 
@@ -210,6 +212,8 @@ describe('a decision card’s head — the four outcomes', () => {
       decisionDocOutcome: 'several',
       decisionDocPath: null,
       decisionDocBlobSha: null,
+      // …but BOTH are named, so the port can list what the reviewer must reduce to one.
+      decisionDocPaths: ['docs/decisions/pages-storage.md', 'docs/decisions/pages.md'],
     });
   });
 

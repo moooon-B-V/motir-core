@@ -621,6 +621,8 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
     const calls = [...new Set(code.match(/\w+Service\.\w+/g) ?? [])].sort();
     expect(calls).toEqual([
       'approvalGatesService.getForWorkItem',
+      // The decision port's document (MOTIR-5678) — the same read the item page makes.
+      'decisionDocumentService.readViewForWorkItem',
       'designEvidenceService.getCurrentForWorkItem',
       'designEvidenceService.getForGateSubject',
       'howToTestService.getForWorkItem',
@@ -636,6 +638,7 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
     const page = readFileSync(join(process.cwd(), 'app/(authed)/items/[key]/page.tsx'), 'utf8');
     // The approve-to-merge port's reads, each one the item page already makes.
     for (const call of [
+      'decisionDocumentService.readViewForWorkItem',
       'designEvidenceService.getCurrentForWorkItem',
       'howToTestService.getForWorkItem',
       'pullRequestMergeService.listApprovalMembers',

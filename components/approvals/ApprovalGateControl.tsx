@@ -98,6 +98,15 @@ export interface GateVerb {
    * because a reversible act asked twice is friction rather than care.
    */
   confirms: boolean;
+  /**
+   * DRAWN, BUT NOT PRESSABLE (Story MOTIR-4907 · Subtask MOTIR-5678; design §27 Panels
+   * 3a–3d) — a decision whose document cannot be shown keeps its Approve on screen,
+   * disabled, while Request changes stays live. ⚠️ ONLY with the reason said in words
+   * beside it, as the band's consequence line: the one case a disabled verb is honest is
+   * a reader who may decide, looking at a subject that cannot yet be approved. State `B`
+   * and state `X` still render no verbs at all.
+   */
+  disabled?: boolean;
 }
 
 export interface ApprovalGateControlProps {
@@ -206,6 +215,12 @@ export interface ApprovalGateControlProps {
    * a cause belongs: a kind whose own surface knows why supplies its own two sentences.
    */
   withdrawnPort?: { port: ReactNode; cite: ReactNode };
+  /**
+   * THE RECORD BAND'S LEAD, when a kind says who decided in its own words (MOTIR-5678 —
+   * *Decision accepted by Ada L. · 19 Sep*). Replaces the decider and the date; the rest of
+   * the band is unchanged. Absent, the band is the shipped one.
+   */
+  recordLead?: ReactNode;
   /**
    * Record the decision. Resolves to a refusal the frame draws IN PLACE, or
    * null on success — at which point the caller has already reconciled.
@@ -750,6 +765,7 @@ export function ApprovalGateControl({
   alert,
   recordDetail,
   withdrawnPort,
+  recordLead,
   onDecide,
   onShowCurrentVersion,
   focusPortOnMount = false,
@@ -1000,16 +1016,20 @@ export function ApprovalGateControl({
               GitHub arm is a different SENTENCE rather than a suffix, because the band
               is read as prose and *"Ada Lovelace (@ada-l) · on GitHub"* reads as a
               handle rather than as an account of what happened. */}
-          <span className="font-medium text-(--el-text)">
-            {gate.decisionSource === 'github' && gate.decidedByLabel
-              ? tGithub(
-                  gate.state === 'changes_requested'
-                    ? 'record.changesRequested'
-                    : 'record.approved',
-                  { name: gate.decidedByLabel },
-                )
-              : (gate.decidedByLabel ?? t('record.unattributed'))}
-          </span>
+          {recordLead ? (
+            <span>{recordLead}</span>
+          ) : (
+            <span className="font-medium text-(--el-text)">
+              {gate.decisionSource === 'github' && gate.decidedByLabel
+                ? tGithub(
+                    gate.state === 'changes_requested'
+                      ? 'record.changesRequested'
+                      : 'record.approved',
+                    { name: gate.decidedByLabel },
+                  )
+                : (gate.decidedByLabel ?? t('record.unattributed'))}
+            </span>
+          )}
           {/* ⚠️ A LINE, NEVER A DIMMED NAME (§6b — an unattributable presence must not
               read as nobody). The pair (source `github`, `decidedById` null) is the
               whole of what says *not a Motir member*, and saying it in words is what
@@ -1017,7 +1037,9 @@ export function ApprovalGateControl({
           {gate.decisionSource === 'github' && gate.decidedById === null ? (
             <span>{tGithub('record.notMember')}</span>
           ) : null}
-          {gate.decidedAt ? <span>{new Date(gate.decidedAt).toLocaleString()}</span> : null}
+          {gate.decidedAt && !recordLead ? (
+            <span>{new Date(gate.decidedAt).toLocaleString()}</span>
+          ) : null}
           {/* ⚠️ THE VERSION, FROM THE AUDIT COLUMN — never re-derived from
               whatever design is current now. `subjectVersion` is the immutable
               answer to WHAT was approved (ADR §6a), and it is the reason this
@@ -1119,7 +1141,10 @@ export function ApprovalGateControl({
                   // would be refused again — for a stale one, with the same stamp — so the
                   // refusal's own next action is the only live one. A re-read remounts the
                   // frame, which is what gives the verbs back.
-                  disabled={phase.kind === 'pending' || phase.kind === 'refused'}
+                  disabled={
+                    verb.disabled === true || phase.kind === 'pending' || phase.kind === 'refused'
+                  }
+                  aria-disabled={verb.disabled === true ? true : undefined}
                   onClick={() =>
                     verb.confirms ? setPhase({ kind: 'confirming', verb }) : void run(verb)
                   }

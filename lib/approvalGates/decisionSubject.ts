@@ -27,6 +27,8 @@ export interface DecisionMember {
   path: string | null;
   blobSha: string | null;
   headSha: string | null;
+  /** Every decision document this head writes (MOTIR-5678) — what `several` names. */
+  paths: readonly string[];
 }
 
 /** Why a card's decision cannot be approved (clause 3). */
@@ -49,6 +51,9 @@ export type DecisionIdentity =
       repo: string;
       number: number;
       headSha: string | null;
+      /** For `several`: every document across the set, sorted — what the port names
+       *  (MOTIR-5678). Empty for every other reason. */
+      paths: string[];
     };
 
 /** `owner/name#number` — the delivery set's canonical member order. */
@@ -72,6 +77,13 @@ const memberKey = (member: { repo: string; number: number }) => `${member.repo}#
  *  4. **Exactly one `one` ⇒ resolvable** over that file.
  *  5. **Otherwise every member said `none` ⇒ `none`.**
  */
+/** Every document the captured members write, once each and sorted. A `one` capture
+ *  written before `paths` existed still names its document through `path`. */
+function documentsAcross(members: readonly DecisionMember[]): string[] {
+  const paths = members.flatMap((m) => (m.paths.length > 0 ? m.paths : m.path ? [m.path] : []));
+  return [...new Set(paths)].sort();
+}
+
 export function decisionIdentityOf(members: readonly DecisionMember[]): DecisionIdentity | null {
   const sorted = [...members].sort((a, b) => (memberKey(a) < memberKey(b) ? -1 : 1));
   const captured = sorted.filter((member) => member.outcome !== null);
@@ -86,6 +98,7 @@ export function decisionIdentityOf(members: readonly DecisionMember[]): Decision
     repo: at.repo,
     number: at.number,
     headSha: at.headSha,
+    paths: reason === 'several' ? documentsAcross(captured) : [],
   });
 
   const ones = captured.filter((member) => member.outcome === 'one');

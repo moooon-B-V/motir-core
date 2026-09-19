@@ -5,6 +5,8 @@ import {
   type DecisionDocumentResolver,
 } from '@/lib/approvalGates/decisionDocumentResolver';
 import type { DecisionIdentity } from '@/lib/approvalGates/decisionSubject';
+import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
+import { toDecisionDocumentViewDTO } from '@/lib/mappers/decisionDocumentMappers';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { repoFileReadService } from './repoFileReadService';
@@ -58,5 +60,16 @@ export const decisionDocumentService = {
     const identity = await withWorkspaceContext(ctx, (tx) => loadDecisionIdentity(workItemId, tx));
     if (!identity) return { identity: null, content: null };
     return { identity, content: await activeResolver.resolve(identity, ctx) };
+  },
+
+  /**
+   * The same read, as the decision PORT draws it (MOTIR-5678) — display-ready, with the
+   * file's public host link. `null` when there is nothing to ask about yet.
+   */
+  async readViewForWorkItem(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<DecisionDocumentViewDTO | null> {
+    return toDecisionDocumentViewDTO(await this.readForWorkItem(workItemId, ctx));
   },
 };

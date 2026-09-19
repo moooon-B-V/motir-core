@@ -58,6 +58,7 @@ export function decisionMembersOf(
       path: delivery.pullRequest.decisionDocPath,
       blobSha: delivery.pullRequest.decisionDocBlobSha,
       headSha: delivery.pullRequest.decisionDocHeadSha,
+      paths: delivery.pullRequest.decisionDocPaths,
     }));
 }
 

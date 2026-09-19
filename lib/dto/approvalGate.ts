@@ -1,4 +1,5 @@
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
+import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
 // and this DTO is imported by client components. An `import type` is erased.
 import type { StampComponent } from '@/lib/approvalGates/stamp';
@@ -572,6 +573,13 @@ export type ApprovalGateOverlaySubjectDTO =
        * nothing.
        */
       members: PullRequestApprovalMemberDTO[];
+      /**
+       * THE DECISION PORT (Story MOTIR-4907 · Subtask MOTIR-5678; design §27 Panel 7) —
+       * present exactly when the gate is a `decision_approval`: the document read through
+       * the resolver ON THE SERVER, drawn first in the block with no How to test. `document`
+       * is null when nothing has been captured yet.
+       */
+      decision?: { document: DecisionDocumentViewDTO | null };
     };
 
 /** The overlay's one read. */
