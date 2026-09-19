@@ -225,6 +225,44 @@ describe('GhostAnchor', () => {
       'line-clamp-1',
     );
   });
+
+  // FILED BLOCKER (Bug MOTIR-5710 · MOTIR-5739, design sheet 7): the location line
+  // names the blocker's FOLDER path in place of its parent.
+  it('names a filed blocker’s folder path instead of its parent', () => {
+    render(
+      <GhostAnchor
+        identifier="PROD-42"
+        title="Migrate tokens"
+        parentTitle="Auth hardening"
+        folderPath={['Bugs']}
+      />,
+    );
+    const line = screen.getByTestId('anchor-folder');
+    expect(line.textContent).toContain('Folder: Bugs');
+    expect(screen.queryByText('in Auth hardening ↗')).toBeNull();
+  });
+
+  it('keeps the parent line for an unfiled blocker', () => {
+    render(<GhostAnchor identifier="PROD-42" parentTitle="Auth hardening" folderPath={null} />);
+    expect(screen.queryByTestId('anchor-folder')).toBeNull();
+    expect(screen.getByText('in Auth hardening ↗')).toBeTruthy();
+  });
+
+  it('collapses a path deeper than two to its first and last folder, full path in the title', () => {
+    render(<GhostAnchor identifier="PROD-42" folderPath={['Archive', '2025', 'Q3', 'Imports']} />);
+    const label = screen.getByTestId('folder-path');
+    expect(label.getAttribute('title')).toBe('Archive ▸ 2025 ▸ Q3 ▸ Imports');
+    const shown = label.querySelector('[aria-hidden="true"]:last-child')?.textContent ?? '';
+    expect(shown).toContain('Archive');
+    expect(shown).toContain('…');
+    expect(shown).toContain('Imports');
+    expect(shown).not.toContain('2025');
+  });
+
+  it('sprint scope keeps its own verdict over the folder line', () => {
+    render(<GhostAnchor identifier="PROD-42" folderPath={['Bugs']} outOfSprint />);
+    expect(screen.queryByTestId('anchor-folder')).toBeNull();
+  });
 });
 
 // MANUAL / HUMAN work-type chip (MOTIR-1642 / 8.8.36) — a human-gated node carries

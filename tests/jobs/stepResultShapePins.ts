@@ -269,10 +269,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/monitorIssueReconcile.ts',
     shape: '{ dispatched: number }',
   },
-  poll: {
+  'poll-v2': {
     file: 'lib/jobs/definitions/monitorIssueReconcile.ts',
     shape:
-      '{ filed: number; pages: number; refiled: number; skipped: number; status: "failed" | "ok"; updated: number }',
+      '{ filed: number; pages: number; refiled: number; refreshed: number; skipped: number; status: "failed" | "ok"; updated: number }',
   },
   'resolve-linked-issues': {
     file: 'lib/jobs/definitions/monitorIssueResolve.ts',
@@ -401,6 +401,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  poll: {
+    shape:
+      '{ filed: number; pages: number; refiled: number; skipped: number; status: "failed" | "ok"; updated: number }',
+    supersededBy: 'poll-v2',
+    reason:
+      'MOTIR-5729 added `refreshed` to the monitor poll summary — a hand-linked issue below the minimum level now gets a facts-only refresh, counted apart so `filed` keeps its meaning. A memo written under the old id carries the narrower shape. The step is the RECONCILER: it is keyed on the provider’s issue id under a unique index and a claim-or-lock, so re-executing it under the new id on a resumed run files nothing twice — which is why the answer is a bump rather than a boundary guard on the replayed value.',
+  },
   'reconcile-open-deliveries': {
     shape:
       '{ examined: number; failed: number; gone: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',

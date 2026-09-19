@@ -147,6 +147,13 @@ export const monitorConnectionRepository = {
     });
   },
 
+  /** How many monitored projects a Motir project binds — the Errors section's
+   *  door question (MOTIR-5732, design §14 Decision 5): with none there is nothing
+   *  to search, so no door and no unlink control. A count, never a provider call. */
+  async countForProject(projectId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.monitorConnection.count({ where: { projectId } });
+  },
+
   /** Lock one binding `FOR UPDATE` — the read that guards a minimum-level
    *  change, which decides a REWIND from the level it replaces. The caller
    *  re-reads through {@link findById} inside the same transaction (the

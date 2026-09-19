@@ -1,6 +1,6 @@
 import type { Folder } from '@/generated/prisma/client';
 import type { FolderDto, FolderPickerNodeDto } from '@/lib/dto/folders';
-import type { FolderTreeRowDto } from '@/lib/dto/workItems';
+import type { FolderTreeRowDto, RoadmapFolderDto } from '@/lib/dto/workItems';
 
 /**
  * Prisma `Folder` → wire DTO (Story MOTIR-5308 · MOTIR-5313). Drops the tenancy
@@ -38,6 +38,32 @@ export function toFolderTreeRowDto(row: FolderTreeRow): FolderTreeRowDto {
     name: row.name,
     position: row.position,
     hasChildren: row.hasChildren,
+  };
+}
+
+/** The row `folderRepository.countDirectContents` projects (Bug MOTIR-5710). */
+export interface FolderDirectCountRow {
+  id: string;
+  childFolderCount: number;
+  itemCount: number;
+}
+
+/**
+ * A roadmap level's folder row + its direct counts → the wire DTO the canvas
+ * draws a folder card from (Bug MOTIR-5710 · MOTIR-5738). A folder missing from
+ * `counts` reads as empty rather than being dropped — the door is still drawn.
+ */
+export function toRoadmapFolderDto(
+  row: FolderTreeRow,
+  counts: FolderDirectCountRow | undefined,
+): RoadmapFolderDto {
+  return {
+    id: row.id,
+    parentFolderId: row.parentFolderId,
+    name: row.name,
+    position: row.position,
+    childFolderCount: counts?.childFolderCount ?? 0,
+    itemCount: counts?.itemCount ?? 0,
   };
 }
 

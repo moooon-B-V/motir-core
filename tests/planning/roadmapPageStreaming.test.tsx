@@ -148,6 +148,33 @@ describe('the roadmap paints WITHOUT the pre-plan read (MOTIR-2205 / MOTIR-2069)
     expect(fetchPreplanState).not.toHaveBeenCalled();
   });
 
+  // FOLDERS (Bug MOTIR-5710 · MOTIR-5740): the emptiness check reads the SAME
+  // folder-aware root the canvas draws.
+  it('asks for the folder-aware root, and a project that filed every root row away is NOT empty', async () => {
+    getProjectRoadmap.mockResolvedValue({
+      nodes: [],
+      folders: [{ id: 'f1', childFolderCount: 0, itemCount: 794 }],
+    });
+
+    const element = await RoadmapPage();
+
+    expect(getProjectRoadmap).toHaveBeenCalledWith('p1', null, expect.anything(), {
+      folders: true,
+    });
+    expect(JSON.stringify(element)).not.toContain('emptyTitle');
+  });
+
+  it('a project holding only its seeded, empty Bugs folder keeps the empty state', async () => {
+    getProjectRoadmap.mockResolvedValue({
+      nodes: [],
+      folders: [{ id: 'bugs', childFolderCount: 0, itemCount: 0 }],
+    });
+
+    const element = await RoadmapPage();
+
+    expect(JSON.stringify(element)).toContain('emptyTitle');
+  });
+
   it('a never-onboarded project omits the card, without a pre-plan read either way', async () => {
     getActiveProject.mockResolvedValue({
       ...PROJECT,

@@ -6,12 +6,16 @@ import {
 } from '@/components/planning/PlanningOriginCluster';
 import {
   GhostAnchor,
+  FolderNode,
   LevelGroupNode,
   LevelTruncationTile,
   WorkItemNode,
   type RunLegBadge,
 } from '@/components/planning/WorkItemNode';
 import {
+  FOLDER_NODE_PREFIX,
+  folderIdFromNodeId,
+  folderNodeId,
   workItemCrumbLabel,
   type ProjectCanvasDep,
   type ProjectCanvasNode,
@@ -47,6 +51,10 @@ export const ORIGIN_ID = '__planning_origin__';
 // and `WorkItemRoadmap.loadLevel` intercepts this id to serve what is behind it —
 // so both halves of the drill must name the same id, never two literals.
 export const NOT_IN_EPIC_ID = '__not_in_an_epic__';
+
+// A FOLDER's node id helpers live in the pure canvas model (they are read by the
+// server page too) and are re-exported here beside the other door ids.
+export { FOLDER_NODE_PREFIX, folderIdFromNodeId, folderNodeId };
 
 // The id of the synthetic TRUNCATION tile (MOTIR-3490). Not a door — the consumer
 // intercepts it on ACTIVATION, to re-read this level with the raised ceiling.
@@ -479,6 +487,7 @@ export function buildWorkItemLevel(
             identifier={stub?.identifier ?? '—'}
             title={stub?.title}
             parentTitle={stub?.parentTitle ?? null}
+            folderPath={stub?.folderPath ?? null}
             outOfSprint={scope === 'sprint'}
           />,
         ),
@@ -493,6 +502,7 @@ export function buildWorkItemLevel(
     ? (onLevel.find((i) => i.status === 'in_progress')?.id ?? null)
     : null;
 
+  const kindById = new Map(onLevel.map((item) => [item.id, item.kind]));
   const itemNodes: ProjectCanvasNode[] = onLevel.map((item) => {
     // NOT IN SPRINT (MOTIR-1379 follow-up): only meaningful in sprint scope. The
     // root level shows only in-sprint members, but drilling into a committed root
@@ -636,6 +646,31 @@ export function buildWorkItemLevel(
         ]
       : [];
 
+  // THE LEVEL'S FOLDERS (Bug MOTIR-5710 · MOTIR-5741, design decisions 2–5). Each
+  // is a DOOR to its own level, drawn with no position of its own: a folder takes
+  // part in no edge, so `deterministicLayout` drops it into the loose band below the
+  // flow — and because the band is laid out in node ORDER, where they are emitted
+  // (below) decides where they sit: after the root's epics, ahead of the grouped
+  // node and every other work item, in the position order the read returned. An
+  // empty folder is still drawn: it is a real record, and its card says `Empty`.
+  const folderNodes: ProjectCanvasNode[] = (wi.folders ?? []).map((f) => ({
+    id: folderNodeId(f.id),
+    parentId: null,
+    // ALWAYS a door — even when empty — because the level behind it is a real
+    // place with its own empty state (sheet 6), not a missing one.
+    drillable: true,
+    // NOT viewable: a folder has no peek; what it holds IS the level behind it.
+    viewable: false,
+    // NOT decorative (decision 5): a folder holds real work, so it counts toward
+    // `autoDescendSingleParent`'s "does this level offer a CHOICE?" — a root with
+    // one epic and one folder must not auto-descend into the epic.
+    searchText: f.name,
+    crumbLabel: f.name,
+    content: (
+      <FolderNode name={f.name} childFolderCount={f.childFolderCount} itemCount={f.itemCount} />
+    ),
+  }));
+
   // THE TRUNCATION TILE (MOTIR-3490) — the level read is capped, and this is the
   // only thing that says so. Compared against the rows the READ returned
   // (`wi.items`), never against the rows left after grouping: grouping moves rows,
@@ -660,8 +695,26 @@ export function buildWorkItemLevel(
         ]
       : [];
 
+  // THE ORDER IS THE LOOSE BAND'S ORDER (`deterministicLayout` lays unconnected
+  // nodes out in node order). At the ROOT it is the `/items` root order — EPICS,
+  // then FOLDERS, then the rest (MOTIR-5550; design decision 2 cites it): an epic
+  // with no edge still sits in the band, and a folder drawn ahead of it would push
+  // the project's own road aside for a drawer — every project carries a seeded
+  // Bugs folder, so that would move every roadmap. INSIDE a folder (no grouping)
+  // the folder's child folders lead, then its filed items (design sheet 4).
+  const rootOrder = opts.groupNonEpicRoots === true;
+  const epicNodes = rootOrder ? itemNodes.filter((n) => kindById.get(n.id) === 'epic') : [];
+  const restNodes = rootOrder ? itemNodes.filter((n) => kindById.get(n.id) !== 'epic') : itemNodes;
   return {
-    nodes: [...originNodes, ...itemNodes, ...groupNodes, ...anchorNodes, ...moreNodes],
+    nodes: [
+      ...originNodes,
+      ...epicNodes,
+      ...folderNodes,
+      ...restNodes,
+      ...groupNodes,
+      ...anchorNodes,
+      ...moreNodes,
+    ],
     deps,
   };
 }

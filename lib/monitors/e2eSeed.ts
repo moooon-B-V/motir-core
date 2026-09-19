@@ -1,5 +1,5 @@
-import type { NormalizedMonitorAssignee, NormalizedMonitorIssue } from './types';
-import { fakeMonitorState } from './providers/fake';
+import type { NormalizedMonitorAssignee } from './types';
+import { fakeMonitorState, type FakeMonitorIssue } from './providers/fake';
 
 // THE E2E SEEDING SEAM for the fake monitor provider (Story MOTIR-4929 ·
 // Subtask MOTIR-5584).
@@ -26,6 +26,13 @@ export interface SeedMonitorIssue {
   permalink?: string | null;
   /** The monitor-side assignee the server-side poll reads (MOTIR-5709). */
   assignee?: NormalizedMonitorAssignee | null;
+  /** What a person pastes into the link search (MOTIR-5728). */
+  shortId?: string | null;
+  /** The latest event's environment and release (MOTIR-5728). */
+  environment?: string | null;
+  release?: string | null;
+  /** Scopes the issue to ONE monitored project for a search; absent = every. */
+  externalProjectId?: string | null;
 }
 
 export interface SeedFakeMonitorInput {
@@ -33,13 +40,24 @@ export interface SeedFakeMonitorInput {
   issues?: SeedMonitorIssue[];
   /** Arms ONE failure of the next listing, with a status (and the provider's words). */
   failNextListing?: { status: number; reason?: string };
+  /** Makes every `searchIssues` for ONE monitored project fail (MOTIR-5734) — the
+   *  picker's per-connection failure line. `null` clears it. */
+  failSearchForProject?: { externalProjectId: string; status: number; reason?: string } | null;
+  /** Forget the calls recorded so far — the start of a "no provider call" window. */
+  clearCalls?: boolean;
+}
+
+/** Every provider operation the SERVER's fake has recorded since the last clear
+ *  (MOTIR-5734). */
+export function readFakeMonitorCalls(): string[] {
+  return [...fakeMonitorState().calls];
 }
 
 export function seedFakeMonitor(input: SeedFakeMonitorInput): void {
   const state = fakeMonitorState();
   if (input.issues) {
     state.issues = input.issues.map(
-      (issue): NormalizedMonitorIssue => ({
+      (issue): FakeMonitorIssue => ({
         externalId: issue.externalId,
         title: issue.title,
         culprit: issue.culprit ?? null,
@@ -49,10 +67,21 @@ export function seedFakeMonitor(input: SeedFakeMonitorInput): void {
         lastSeenAt: new Date(issue.lastSeenAt),
         permalink: issue.permalink ?? null,
         assignee: issue.assignee ?? null,
+        shortId: issue.shortId ?? null,
+        environment: issue.environment ?? null,
+        release: issue.release ?? null,
+        externalProjectId: issue.externalProjectId ?? null,
       }),
     );
   }
   if (input.failNextListing) {
     state.failNextStatus.set('listIssuesSince', input.failNextListing);
   }
+  if (input.failSearchForProject === null) {
+    state.failSearchForProject.clear();
+  } else if (input.failSearchForProject) {
+    const { externalProjectId, status, reason } = input.failSearchForProject;
+    state.failSearchForProject.set(externalProjectId, { status, reason });
+  }
+  if (input.clearCalls) state.calls = [];
 }

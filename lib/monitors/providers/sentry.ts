@@ -3,11 +3,14 @@ import {
   MONITOR_GET_ISSUE_TIMEOUT_MS,
   MONITOR_GRANT_EXCHANGE_TIMEOUT_MS,
   MONITOR_HEALTH_TIMEOUT_MS,
+  MONITOR_ISSUE_CONTEXT_TIMEOUT_MS,
   MONITOR_ISSUES_PAGE_LIMIT,
   MONITOR_LIST_ISSUES_TIMEOUT_MS,
   MONITOR_LIST_PROJECTS_TIMEOUT_MS,
   MONITOR_REFRESH_TIMEOUT_MS,
   MONITOR_RESOLVE_ISSUE_TIMEOUT_MS,
+  MONITOR_SEARCH_ISSUES_LIMIT,
+  MONITOR_SEARCH_ISSUES_TIMEOUT_MS,
   MONITOR_VERIFY_INSTALL_TIMEOUT_MS,
   type MonitorProvider,
 } from '../provider';
@@ -17,6 +20,7 @@ import type {
   NormalizedMonitorAssignee,
   NormalizedMonitorHealth,
   NormalizedMonitorIssue,
+  NormalizedMonitorIssueContext,
   NormalizedMonitorIssuePage,
   NormalizedMonitorProject,
 } from '../types';
@@ -376,7 +380,92 @@ export const sentryMonitorProvider: MonitorProvider = {
       id: typeof row['id'] === 'string' ? row['id'] : externalIssueId,
     });
   },
+
+  /**
+   * `GET /organizations/{orgSlug}/issues/?project=…&query=…&shortIdLookup=1&limit=…`
+   * — ONE request, no cursor followed, and deliberately no `is:unresolved` (see
+   * the interface). Rows go through {@link normalizeIssue}, the mapper
+   * `listIssuesSince` uses. Consumed by LINK BY HAND (MOTIR-5731).
+   */
+  async searchIssues({
+    accessToken,
+    orgSlug,
+    externalProjectId,
+    query,
+    limit,
+  }): Promise<NormalizedMonitorIssue[]> {
+    const url = new URL(`${apiBase()}/organizations/${encodeURIComponent(orgSlug)}/issues/`);
+    url.searchParams.set('project', externalProjectId);
+    url.searchParams.set('query', query.trim());
+    url.searchParams.set('shortIdLookup', '1');
+    url.searchParams.set(
+      'limit',
+      String(Math.max(1, Math.min(Math.floor(limit) || 1, MONITOR_SEARCH_ISSUES_LIMIT))),
+    );
+    const res = await call('searchIssues', MONITOR_SEARCH_ISSUES_TIMEOUT_MS, url.toString(), {
+      method: 'GET',
+      headers: jsonHeaders(accessToken),
+    });
+    const rows = (await res.json()) as Record<string, unknown>[];
+    return rows.filter((row) => typeof row['id'] === 'string').map(normalizeIssue);
+  },
+
+  /**
+   * `GET /organizations/{orgSlug}/issues/{issueId}/events/latest/` — the latest
+   * event's `environment` tag and `release.version`. A 404 is the typed
+   * {@link MonitorIssueGoneError}. Consumed by MOTIR-5729 and MOTIR-5731.
+   */
+  async getIssueContext({
+    accessToken,
+    orgSlug,
+    externalIssueId,
+  }): Promise<NormalizedMonitorIssueContext> {
+    let res: Response;
+    try {
+      res = await call(
+        'getIssueContext',
+        MONITOR_ISSUE_CONTEXT_TIMEOUT_MS,
+        `${apiBase()}/organizations/${encodeURIComponent(orgSlug)}/issues/${encodeURIComponent(externalIssueId)}/events/latest/`,
+        { method: 'GET', headers: jsonHeaders(accessToken) },
+      );
+    } catch (err) {
+      if (err instanceof MonitorProviderCallError && err.status === 404) {
+        throw new MonitorIssueGoneError('getIssueContext', externalIssueId, err.providerReason);
+      }
+      throw err;
+    }
+    return normalizeIssueContext((await res.json()) as Record<string, unknown>);
+  },
 };
+
+/**
+ * ONE Sentry event payload → the issue's context. Sentry states an event's tags
+ * as `[{ key, value }]` and its release as `{ version }` (or `null`) — both
+ * DOCUMENTED EXPECTATIONS, read 2026-09-19. Anything else is `null`, never a
+ * guess: "no release" is an ordinary event, and a made-up one is a lie on the
+ * card.
+ */
+export function normalizeIssueContext(
+  event: Record<string, unknown>,
+): NormalizedMonitorIssueContext {
+  const tags = Array.isArray(event['tags']) ? (event['tags'] as unknown[]) : [];
+  let environment: string | null = null;
+  for (const tag of tags) {
+    if (!tag || typeof tag !== 'object') continue;
+    const { key, value } = tag as { key?: unknown; value?: unknown };
+    if (key === 'environment' && typeof value === 'string' && value) {
+      environment = value;
+      break;
+    }
+  }
+  const release = event['release'];
+  const version =
+    release && typeof release === 'object' ? (release as { version?: unknown }).version : null;
+  return {
+    environment,
+    release: typeof version === 'string' && version ? version : null,
+  };
+}
 
 /**
  * ONE Sentry issue payload → the normalized issue. The ONLY place a normalized

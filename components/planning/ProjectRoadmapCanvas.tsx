@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ChevronUp,
   Eye,
+  Folder,
   LocateFixed,
   Maximize,
   Minimize,
@@ -196,6 +197,24 @@ interface ProjectRoadmapCanvasBaseProps {
    * a different statement ("this parent has no children").
    */
   emptyRoot?: ReactNode;
+  /**
+   * Replace a DRILLED empty level's statement, per focus (Bug MOTIR-5710 ·
+   * MOTIR-5741). Given the crumb of the level the canvas is standing on, return what
+   * to say when it is empty, or `null` for the canvas's own `emptyDrilled` copy.
+   * The roadmap passes one for a FOLDER's level: "this node has no children" is
+   * wrong for a place a person files work into. Content-agnostic — the canvas
+   * never learns what a folder is. Absent ⇒ every drilled empty level reads as it
+   * always has.
+   */
+  emptyDrilledFor?: (focus: { id: string; label: string }) => ReactNode | null;
+  /**
+   * Which crumbs are FOLDERS (Bug MOTIR-5710 · MOTIR-5742). A folder crumb is the
+   * shipped `Crumb`, led by the folder glyph and named `Folder: <name>` to a
+   * screen reader, and a run of more than three collapses from the middle with a
+   * navigable `…`. The consumer answers, because only it knows what a crumb id
+   * means — the canvas never learns what a folder is. Absent ⇒ no crumb is one.
+   */
+  isFolderCrumb?: (crumb: CanvasCrumb) => boolean;
   /**
    * ARRIVE ALREADY DRILLED (MOTIR-2070). The breadcrumb trail the canvas OPENS on,
    * root-ancestor first: the LAST crumb is the level it loads, and the whole array
@@ -397,6 +416,8 @@ export function ProjectRoadmapCanvas({
   autoDescendSingleParent = false,
   loadingFallback,
   emptyRoot,
+  emptyDrilledFor,
+  isFolderCrumb,
   initialTrail,
   onLevelChange,
   controlledTrail,
@@ -1104,6 +1125,11 @@ export function ProjectRoadmapCanvas({
   }
 
   const drilled = crumbs.length > 0;
+  const lastCrumb = crumbs[crumbs.length - 1];
+  const drilledEmpty =
+    drilled && emptyDrilledFor && lastCrumb
+      ? emptyDrilledFor({ id: lastCrumb.id, label: lastCrumb.label })
+      : null;
 
   return (
     <div
@@ -1152,19 +1178,43 @@ export function ProjectRoadmapCanvas({
                 </li>
               );
             })()}
-            {crumbs.map((c, i) => (
-              <li key={c.id} className="flex min-w-0 items-center gap-1">
-                <ChevronRight
-                  className="size-3.5 shrink-0 text-(--el-text-faint)"
-                  aria-hidden="true"
-                />
-                <Crumb
-                  label={c.label}
-                  active={i === crumbs.length - 1}
-                  onClick={() => navigate(c.id)}
-                />
-              </li>
-            ))}
+            {breadcrumbSegments(crumbs, isFolderCrumb ?? (() => false)).map((seg) => {
+              if (seg.kind === 'ellipsis') {
+                const target = crumbs[seg.targetIndex]!;
+                const full = seg.path.join(' ▸ ');
+                return (
+                  <li key={`ellipsis:${target.id}`} className="flex min-w-0 items-center gap-1">
+                    <ChevronRight
+                      className="size-3.5 shrink-0 text-(--el-text-faint)"
+                      aria-hidden="true"
+                    />
+                    <Crumb
+                      label="…"
+                      title={full}
+                      ariaLabel={full}
+                      active={false}
+                      onClick={() => navigate(target.id)}
+                    />
+                  </li>
+                );
+              }
+              const c = crumbs[seg.index]!;
+              return (
+                <li key={c.id} className="flex min-w-0 items-center gap-1">
+                  <ChevronRight
+                    className="size-3.5 shrink-0 text-(--el-text-faint)"
+                    aria-hidden="true"
+                  />
+                  <Crumb
+                    label={c.label}
+                    active={seg.index === crumbs.length - 1}
+                    onClick={() => navigate(c.id)}
+                    folder={seg.folder}
+                    srPrefix={seg.folder ? tFolders('breadcrumbFolderLabel') : undefined}
+                  />
+                </li>
+              );
+            })}
           </ol>
         </nav>
       )}
@@ -1506,6 +1556,12 @@ export function ProjectRoadmapCanvas({
           <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
             {emptyRoot}
           </div>
+        ) : drilled && drilledEmpty ? (
+          // The consumer's own statement for THIS drilled level (MOTIR-5741) —
+          // today a folder's, in the same full-size box.
+          <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
+            {drilledEmpty}
+          </div>
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
             <div className="max-w-[24rem] text-center">
@@ -1550,16 +1606,31 @@ function Crumb({
   label,
   active,
   onClick,
+  folder = false,
+  srPrefix,
+  title,
+  ariaLabel,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  /** A FOLDER crumb (Bug MOTIR-5710 · MOTIR-5742): led by the 14px lucide `folder`
+   *  glyph, so it reads as a folder without the reader reading it. */
+  folder?: boolean;
+  /** A visually-hidden word ahead of the label — the folder crumb's `Folder:`. */
+  srPrefix?: string;
+  /** The native tooltip, when it should say more than the label (the `…` crumb's
+   *  full path). Defaults to the label. */
+  title?: string;
+  /** The accessible name, when it is not the label (the `…` crumb's full path). */
+  ariaLabel?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title={label}
+      title={title ?? label}
+      aria-label={ariaLabel}
       aria-current={active ? 'page' : undefined}
       // 18rem (was 12rem) for the `identifier · title` label (MOTIR-1805 DECISION 2).
       // Overflow stays the shipped answer: `truncate` + the native `title` tooltip — a
@@ -1569,9 +1640,55 @@ function Crumb({
         active
           ? 'font-semibold text-(--el-text)'
           : 'text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)'
-      }`}
+      }${folder ? ' inline-flex items-center gap-1' : ''}`}
     >
-      {label}
+      {folder ? <Folder className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+      {srPrefix ? <span className="sr-only">{`${srPrefix} `}</span> : null}
+      {folder ? <span className="truncate">{label}</span> : label}
     </button>
   );
+}
+
+/**
+ * The breadcrumb's crumbs, with every RUN of consecutive FOLDER crumbs longer
+ * than three collapsed FROM THE MIDDLE (Bug MOTIR-5710 · MOTIR-5742; design sheet
+ * 5): `first ▸ … ▸ last`, by the same count rule `collapseFolderPath` states for
+ * every folder path. The `…` is a crumb of its own: it names the folder just
+ * above the last one shown and carries the collapsed path for its tooltip and its
+ * accessible name. Work-item crumbs are never collapsed. Pure, so the rule is
+ * asserted without a render.
+ */
+export type BreadcrumbSegment =
+  | { kind: 'crumb'; index: number; folder: boolean }
+  | { kind: 'ellipsis'; targetIndex: number; path: string[] };
+
+export function breadcrumbSegments(
+  crumbs: readonly { id: string; label: string }[],
+  isFolderCrumb: (crumb: { id: string; label: string }) => boolean,
+): BreadcrumbSegment[] {
+  const out: BreadcrumbSegment[] = [];
+  let i = 0;
+  while (i < crumbs.length) {
+    if (!isFolderCrumb(crumbs[i]!)) {
+      out.push({ kind: 'crumb', index: i, folder: false });
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (end + 1 < crumbs.length && isFolderCrumb(crumbs[end + 1]!)) end += 1;
+    const run = end - i + 1;
+    if (run <= 3) {
+      for (let k = i; k <= end; k += 1) out.push({ kind: 'crumb', index: k, folder: true });
+    } else {
+      out.push({ kind: 'crumb', index: i, folder: true });
+      out.push({
+        kind: 'ellipsis',
+        targetIndex: end - 1,
+        path: crumbs.slice(i, end + 1).map((c) => c.label),
+      });
+      out.push({ kind: 'crumb', index: end, folder: true });
+    }
+    i = end + 1;
+  }
+  return out;
 }

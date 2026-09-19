@@ -541,3 +541,94 @@ describe('RoadmapView — subtitle variants and the unknown-key fallback', () =>
     expect(fetchUrls.every((u) => !u.includes('ancestors'))).toBe(true);
   });
 });
+
+// ── A FOLDER'S LEVEL IS THE URL TOO (Bug MOTIR-5710 · MOTIR-5742) ────────────
+describe('RoadmapView — a folder level is addressed by ?folder=', () => {
+  function serveFolders() {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        fetchUrls.push(u);
+        if (u.includes('folderId=f1')) {
+          return {
+            ok: true,
+            json: async () => ({
+              nodes: [
+                {
+                  id: 'B1',
+                  parentId: null,
+                  kind: 'bug',
+                  identifier: 'MOTIR-9',
+                  title: 'Filed bug',
+                  status: 'todo',
+                  isDone: false,
+                  hasChildren: false,
+                },
+              ],
+              edges: [],
+              folders: [],
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            ...projectRoot,
+            folders: [
+              {
+                id: 'f1',
+                parentFolderId: null,
+                name: 'Parked',
+                position: 'a0',
+                childFolderCount: 0,
+                itemCount: 1,
+              },
+            ],
+          }),
+        };
+      }),
+    );
+  }
+
+  it('drilling a folder WRITES ?folder=<id>, shallowly, and clears ?item=', async () => {
+    serveFolders();
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Parked');
+    fireEvent.keyDown(document.querySelector('[data-node-id="folder:f1"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+
+    await waitFor(() => expect(pushState).toHaveBeenCalled());
+    expect(String(pushState.mock.calls.at(-1)![2])).toBe('/roadmap?folder=f1');
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('browser BACK then FORWARD returns to the folder level from the session cache', async () => {
+    serveFolders();
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Parked');
+    fireEvent.keyDown(document.querySelector('[data-node-id="folder:f1"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('Filed bug');
+
+    window.history.replaceState(null, '', '/roadmap');
+    fireEvent.popState(window);
+    await screen.findByText('Whole-project epic');
+
+    window.history.replaceState(null, '', '/roadmap?folder=f1');
+    fireEvent.popState(window);
+    expect(await screen.findByText('Filed bug')).toBeTruthy();
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(nav).getByRole('button', { name: 'Folder: Parked' })).toBeTruthy();
+  });
+
+  it('opens on a SEEDED folder level and reads that folder, not the root', async () => {
+    serveFolders();
+    sp.current = 'folder=f1';
+    render(
+      <RoadmapView {...baseProps({ initialTrail: [{ id: 'folder:f1', label: 'Parked' }] })} />,
+    );
+    expect(await screen.findByText('Filed bug')).toBeTruthy();
+    expect(fetchUrls.every((u) => u.includes('folderId=f1'))).toBe(true);
+  });
+});

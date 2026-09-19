@@ -9,12 +9,14 @@ import {
 import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
 import {
   buildWorkItemLevel,
+  folderIdFromNodeId,
   isNotInEpicRow,
   LEVEL_MORE_ID,
   NOT_IN_EPIC_ID,
   ORIGIN_ID,
 } from '@/components/planning/workItemLevel';
 import { buildPreplanStationLevel } from '@/components/planning/preplanStationLevel';
+import { FolderEmptyLevel } from '@/components/planning/WorkItemNode';
 import { TierDocModal } from '@/components/planning/TierDocModal';
 import { isDirectionDocKind, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
 import { fetchPreplanState, producedTierKinds } from '@/lib/onboarding/preplanClient';
@@ -236,6 +238,13 @@ export function WorkItemRoadmap({
   // first level is one item's children, not the project's road.
   const rooted = subtreeRootId != null;
   const originEnabled = showPlanningOrigin && scope !== 'sprint' && !rooted;
+  // FOLDERS (Bug MOTIR-5710 · MOTIR-5741, design decisions 1, 6 and 8). This mount
+  // opts into the folder treatment of the level read — the root leaves filed rows
+  // out and draws the root folders, and a folder is its own level — in the WHOLE-
+  // PROJECT scope only (sprint scope ignores placement, decision 6) and never on a
+  // SUBTREE-rooted mount, whose first level is one item's children, which a folder
+  // never is. Every other consumer of the shared read keeps the shipped one.
+  const foldersOn = scope !== 'sprint' && !rooted;
 
   // ONE pre-plan read, shared by the badge and the drilled station level, held as a
   // PROMISE so a drill that lands while the badge's read is still in flight joins it
@@ -322,10 +331,12 @@ export function WorkItemRoadmap({
       scope,
       undefined,
       showAllRef.current.has(key),
+      undefined,
+      foldersOn ? { folders: true } : {},
     );
     cacheRef.current.set(key, wi);
     return wi;
-  }, [projectKey, scope, subtreeRootId, rootCacheKey]);
+  }, [projectKey, scope, subtreeRootId, rootCacheKey, foldersOn]);
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
@@ -388,6 +399,36 @@ export function WorkItemRoadmap({
             { markActive: true, scope },
           );
         }
+        // A FOLDER'S LEVEL (Bug MOTIR-5710 · MOTIR-5741) — a real read, addressed by
+        // the folder rather than a parent: its child folders, then the work items
+        // filed directly in it. No grouped node (decision 2 — inside a folder the
+        // folder is already the drawer) and no origin cluster (a folder is not the
+        // project's road). Cached under its own key, so the refresh generation and
+        // the truncation tile's `all` treat it exactly like any other level.
+        const folderId = folderIdFromNodeId(parentId);
+        if (folderId !== null) {
+          const key = `${projectKey}:${scope}:${ROOT_KEY}:${parentId}`;
+          levelKeyRef.current = key;
+          let wi = cacheRef.current.get(key);
+          if (!wi) {
+            wi = await fetchRoadmapLevel(
+              projectKey,
+              null,
+              scope,
+              undefined,
+              showAllRef.current.has(key),
+              undefined,
+              { folders: true, folderId },
+            );
+            cacheRef.current.set(key, wi);
+          }
+          registerItems(wi);
+          return buildWorkItemLevel(wi, {
+            markActive: true,
+            scope,
+            levelTotal: wi.levelTotal,
+          });
+        }
         // THE SUBTREE ROOT (MOTIR-2287) — the canvas's own root level (`parentId`
         // null) resolves to the ROOTED item's children instead of the project's
         // roots. Every deeper drill already carries a real id and is untouched.
@@ -413,6 +454,10 @@ export function WorkItemRoadmap({
             scope,
             undefined,
             showAllRef.current.has(key),
+            undefined,
+            // The ROOT asks for folders (decision 1); a parent's children never
+            // include one, so every other level keeps the shipped URL.
+            readParentId === null && foldersOn ? { folders: true } : {},
           );
           cacheRef.current.set(key, wi);
         }
@@ -468,8 +513,23 @@ export function WorkItemRoadmap({
       rooted,
       subtreeRootId,
       readRootLevel,
+      foldersOn,
       t,
     ],
+  );
+
+  const isFolderCrumb = useCallback(
+    (crumb: CanvasCrumb) => folderIdFromNodeId(crumb.id) !== null,
+    [],
+  );
+
+  // AN EMPTY FOLDER'S LEVEL (Bug MOTIR-5710 · MOTIR-5741, sheet 6): the folder's own
+  // statement instead of the generic "no children". The crumb's label IS the
+  // folder's name — `buildWorkItemLevel` stamps it when it draws the card.
+  const emptyDrilledFor = useCallback(
+    (focus: { id: string; label: string }) =>
+      folderIdFromNodeId(focus.id) !== null ? <FolderEmptyLevel name={focus.label} /> : null,
+    [],
   );
 
   // THE TRUNCATION TILE'S ACTIVATION (MOTIR-3490). The canvas reports an activated
@@ -520,6 +580,10 @@ export function WorkItemRoadmap({
         fullScreenable={fullScreenable}
         locatable={locatable}
         emptyRoot={emptyRoot}
+        emptyDrilledFor={emptyDrilledFor}
+        // FOLDER CRUMBS (MOTIR-5742): a folder's level is a `folder:<id>` crumb,
+        // drawn with the folder glyph and collapsed from the middle past three.
+        isFolderCrumb={isFolderCrumb}
         // AUTO-DRILL (MOTIR-1807): a level that resolves to exactly ONE drillable node
         // offers no choice, so the canvas descends into it and the roadmap opens on the
         // WORK rather than on one card. Opted in for BOTH scopes, not sprint-only — the

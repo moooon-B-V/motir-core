@@ -476,6 +476,36 @@ export const foldersService = {
     });
   },
 
+  /**
+   * A folder's CHAIN, root first, with ids — the breadcrumb trail the roadmap
+   * opens a `?folder=<id>` arrival on (Bug MOTIR-5710 · MOTIR-5742). Browse-gated
+   * on the project the caller names, and a folder of ANOTHER project is refused
+   * as not found, never named. The chain is walked through `parentFolderId` from
+   * the rows themselves rather than trusted to a recursive read's row order.
+   */
+  async getFolderTrail(
+    projectId: string,
+    folderId: string,
+    ctx: ServiceContext,
+  ): Promise<Array<{ id: string; name: string }>> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      await projectAccessService.assertCanBrowse(projectId, ctx, tx);
+      const folder = await folderRepository.findById(folderId, tx);
+      if (!folder || folder.projectId !== projectId) throw new FolderNotFoundError(folderId);
+      const ids = await folderRepository.findAncestorIds(folderId, tx);
+      const byId = new Map((await folderRepository.findByIds(ids, tx)).map((f) => [f.id, f]));
+      const chain: Array<{ id: string; name: string }> = [];
+      let cursor: string | null = folderId;
+      while (cursor !== null && chain.length <= ids.length) {
+        const row = byId.get(cursor);
+        if (!row) break;
+        chain.push({ id: row.id, name: row.name });
+        cursor = row.parentFolderId;
+      }
+      return chain.reverse();
+    });
+  },
+
   /** One folder by id, with its project key and path. Browse-gated. */
   async getFolder(folderId: string, ctx: ServiceContext): Promise<FolderResourceDto> {
     return withWorkspaceContext(ctx, async (tx) => {

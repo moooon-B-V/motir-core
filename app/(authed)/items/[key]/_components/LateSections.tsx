@@ -24,7 +24,12 @@ import {
   RemovePullRequestLinkButton,
 } from './DevelopmentLinkControl';
 import { HowToTestWriteProvider } from '@/components/howToTest/HowToTestWrite';
-import { loadHowToTestDraftAction, saveHowToTestAction } from '../actions';
+import {
+  loadHowToTestDraftAction,
+  saveHowToTestAction,
+  unlinkMonitorIssueAction,
+} from '../actions';
+import { MonitorErrorsCard } from './MonitorErrorsCard';
 import { RUN_HISTORY_PAGE, type LateReads } from './lateReads';
 
 // The item page's LATE STACK (Subtask MOTIR-3436), allocated by
@@ -112,7 +117,9 @@ export function SectionCardSkeleton({ rows = 2 }: { rows?: number }) {
   );
 }
 
-/** The fallback for the UPPER half — Development, Acceptance, Design result. */
+/** The fallback for the UPPER half — Development, Errors, Acceptance, Design
+ *  result. UNCHANGED by the Errors section (§14 panel 10): most cards have no
+ *  link, so reserving a skeleton for it would draw a card that then vanishes. */
 export function LateUpperFallback() {
   return (
     <>
@@ -317,6 +324,19 @@ export async function LateUpperSections({
           </ContentSectionCard>
         </DevelopmentLinkProvider>
       </HowToTestWrite>
+      {/* ERRORS — directly below Development (§14 access path): the same question,
+          "what outside this tree does this card relate to", from a different source.
+          The host draws NOTHING for a card with no link (the page is unchanged) unless
+          the ⋯ menu's Link an error row asked for it (MOTIR-5744). */}
+      <MonitorErrorsCard
+        links={r.monitorIssueLinks}
+        hasConnection={r.monitorHasConnection}
+        // `work_item:edit` — the key every error-link action asserts (§14 Decision 5).
+        canEdit={canEdit}
+        workItemId={itemId}
+        identifier={itemIdentifier}
+        unlinkAction={unlinkMonitorIssueAction}
+      />
       {r.acceptanceEligibility ? (
         <ContentSectionCard title={tAcceptance('title')} subtitle={tAcceptance('gloss')}>
           <AcceptancePanel

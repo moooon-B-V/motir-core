@@ -197,3 +197,41 @@ export class InvalidMonitorSyncDirectionError extends Error {
     this.name = 'InvalidMonitorSyncDirectionError';
   }
 }
+
+/**
+ * The issue is already linked to a DIFFERENT work item (Story MOTIR-4932 ·
+ * Subtask MOTIR-5731), and the link was not asked to MOVE it.
+ *
+ * One issue belongs to one card — the `monitor_issue` unique index already says
+ * so, and the monitor's own integrations model it the same way. So a link is
+ * REFUSED, naming the card that holds it, and taking it from that card is a
+ * separate, explicit act (`move: true`) a person confirms. Silently re-pointing
+ * it would be a change nobody notices until the wrong card closes.
+ */
+export class MonitorIssueAlreadyLinkedError extends Error {
+  readonly code = 'MONITOR_ISSUE_ALREADY_LINKED' as const;
+  constructor(
+    readonly externalIssueId: string,
+    /** The `KEY-<n>` of the work item that holds the link. */
+    readonly holderIdentifier: string,
+  ) {
+    super(`Monitor issue ${externalIssueId} is already linked to ${holderIdentifier}.`);
+    this.name = 'MonitorIssueAlreadyLinkedError';
+  }
+}
+
+/**
+ * An unlink addressed a link this work item does not hold (Story MOTIR-4932 ·
+ * Subtask MOTIR-5731) — it points at another card, or it is in another project.
+ *
+ * Indistinguishable from a link that does not exist at all, for the
+ * no-existence-leak reason {@link MonitorConnectionNotFoundError} gives, and so
+ * that a stale page can never unlink ANOTHER card's error.
+ */
+export class MonitorIssueLinkNotFoundError extends Error {
+  readonly code = 'MONITOR_ISSUE_LINK_NOT_FOUND' as const;
+  constructor(readonly monitorIssueId: string) {
+    super('That error link does not exist on this work item.');
+    this.name = 'MonitorIssueLinkNotFoundError';
+  }
+}

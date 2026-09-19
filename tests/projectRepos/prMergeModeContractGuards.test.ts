@@ -12,9 +12,12 @@ import zh from '@/messages/zh.json';
 //   1. The provenance comparison has exactly ONE spelling —
 //      `lib/git/hostOwnership.ts`. Two surfaces each spelling "is this owner the
 //      provisioning organisation?" is how bug MOTIR-4892 happened.
-//   2. `Workspace.subtaskPrMergeMode` has NO application reader. This is the
-//      retirement story's (MOTIR-5175) starting evidence: the column can be
-//      `@ignore`d because nothing under `lib/`, `app/` or `components/` names it.
+//   2. `Workspace.subtaskPrMergeMode` has NO application reader. This was the
+//      retirement story's (MOTIR-5175) starting evidence: the column could be
+//      `@ignore`d because nothing under `lib/`, `app/` or `components/` named it.
+//      The column is now DROPPED (MOTIR-5508,
+//      `20260919150000_drop_workspace_subtask_pr_merge_mode`), and the guard stays
+//      so no source reintroduces the name.
 //   3. Every lookup keyed off `PrMergeMode` is TOTAL: the app's value list is the
 //      generated enum's, and the control's copy carries a label and hint for every
 //      member in both locales.

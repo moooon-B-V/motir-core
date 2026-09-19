@@ -48,9 +48,12 @@ export type WorkItemUpdateInput = Prisma.WorkItemUncheckedUpdateInput;
 /**
  * How a lazy tree level treats FOLDERS (Story MOTIR-5308 · MOTIR-5314).
  *
- * OMITTED, a level reads exactly as it always has, and the roadmap and the run
- * canvas omit it: where a filed item appears on THOSE surfaces is decided by the
- * story that owns them, and a filed item is still the root it was for them.
+ * OMITTED, a level reads exactly as it always has. The run canvas, the plan
+ * canvases, onboarding and the item page's Children panel omit it, and a filed
+ * item is still the root it was for them. The ROADMAP passes it when the
+ * `/roadmap` surface opts into folders (Bug MOTIR-5710 · MOTIR-5738): the root
+ * leaves filed items out and a folder is its own level — never under sprint
+ * scope, where placement is ignored.
  *   * `excludeFiled` — the ROOT level leaves out items filed in a folder, because
  *     the /items tree shows them inside their folder instead. Its optional `band`
  *     narrows that root to its EPICS or to every OTHER kind: the /items root reads
@@ -1350,7 +1353,10 @@ export const workItemRepository = {
    * it (two levels can share a parent title, and the root level's is `null`), so the
    * `parentId` SCALAR is selected beside it: the caller compares it against the level's
    * own parent and keeps the members apart from the strangers. It costs nothing —
-   * `parent_id` is already a column on the row this query returns.
+   * `parent_id` is already a column on the row this query returns. `folderId`
+   * rides along for the same reason once folders are levels (Bug MOTIR-5710): a
+   * FILED root has a null parent too, and it is a member of its folder's level,
+   * not of the root's.
    */
   async findRoadmapBlockerStubs(
     ids: string[],
@@ -1361,6 +1367,7 @@ export const workItemRepository = {
       identifier: string;
       title: string;
       parentId: string | null;
+      folderId: string | null;
       parentTitle: string | null;
       status: string;
       sprintId: string | null;
@@ -1377,6 +1384,7 @@ export const workItemRepository = {
         status: true,
         sprintId: true,
         parentId: true,
+        folderId: true,
         parent: { select: { title: true } },
       },
     });
@@ -1385,10 +1393,30 @@ export const workItemRepository = {
       identifier: r.identifier,
       title: r.title,
       parentId: r.parentId,
+      folderId: r.folderId,
       parentTitle: r.parent?.title ?? null,
       status: r.status,
       sprintId: r.sprintId,
     }));
+  },
+
+  /**
+   * The EFFECTIVE folder of each work item in `ids` (Bug MOTIR-5710 ·
+   * MOTIR-5739) — its own `folderId`, else its ROOT ancestor's — so the roadmap
+   * can name the folder an OFF-level blocker is filed in. ONE query for the whole
+   * set, whatever its size, through the same {@link EFFECTIVE_FOLDER_SQL} the
+   * Folder filter compiles to, so the anchor and the filter can never disagree
+   * about where an item lives. An unfiled chain reads `null`.
+   */
+  async findEffectiveFolderIds(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; folderId: string | null }>> {
+    if (ids.length === 0) return [];
+    return tx.$queryRaw<Array<{ id: string; folderId: string | null }>>`
+      SELECT w."id", ${EFFECTIVE_FOLDER_SQL} AS "folderId"
+        FROM "work_item" w
+       WHERE w."id" IN (${Prisma.join([...ids])})`;
   },
 
   /**

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { toItem } from '@/lib/planning/roadmapClient';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fetchRoadmapLevel, isRoadmapRootEmpty, toItem } from '@/lib/planning/roadmapClient';
 
 // Unit — the raw-wire → RoadmapLevelItem mapping (MOTIR-1642 / 8.8.36). Focus:
 // `type` / `executor` thread through, and an unknown / absent value degrades to
@@ -114,5 +114,61 @@ describe('roadmapClient.toItem — the status key (bug MOTIR-3170)', () => {
     for (const key of ['todo', 'in_progress', 'in_review', 'blocked', 'done', 'cancelled']) {
       expect(toItem(wire({ status: key, isDone: key === 'done' })).status).toBe(key);
     }
+  });
+});
+
+// ── FOLDERS on the level read (Bug MOTIR-5710 · MOTIR-5740) ──────────────────
+describe('fetchRoadmapLevel — the folder request', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubFetch(body: unknown) {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => body });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('sends neither param when no folder request is given — the shipped URL', async () => {
+    const fetchMock = stubFetch({ nodes: [], edges: [], offLevelBlockers: [] });
+    const level = await fetchRoadmapLevel('ACME', null);
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/projects/ACME/roadmap');
+    expect(level).not.toHaveProperty('folders');
+  });
+
+  it('sends folders=1 and folderId, and maps the folders through', async () => {
+    const folder = {
+      id: 'f1',
+      parentFolderId: null,
+      name: 'Bugs',
+      position: 'a0',
+      childFolderCount: 0,
+      itemCount: 3,
+    };
+    const fetchMock = stubFetch({ nodes: [], edges: [], offLevelBlockers: [], folders: [folder] });
+    const level = await fetchRoadmapLevel('ACME', null, 'project', undefined, false, undefined, {
+      folders: true,
+      folderId: 'f0',
+    });
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/projects/ACME/roadmap?folders=1&folderId=f0');
+    expect(level.folders).toEqual([folder]);
+  });
+});
+
+describe('isRoadmapRootEmpty — the first-run state, once folders are drawn', () => {
+  const empty = { childFolderCount: 0, itemCount: 0 };
+
+  it('a root with a work item is not empty', () => {
+    expect(isRoadmapRootEmpty({ nodes: [{}], folders: [] })).toBe(false);
+  });
+
+  it('a root holding only the seeded, empty Bugs folder IS empty', () => {
+    expect(isRoadmapRootEmpty({ nodes: [], folders: [empty] })).toBe(true);
+    expect(isRoadmapRootEmpty({ nodes: [] })).toBe(true);
+  });
+
+  it('a root whose every row is filed away is NOT empty — the folder holds the work', () => {
+    expect(isRoadmapRootEmpty({ nodes: [], folders: [{ ...empty, itemCount: 794 }] })).toBe(false);
+    expect(isRoadmapRootEmpty({ nodes: [], folders: [{ ...empty, childFolderCount: 1 }] })).toBe(
+      false,
+    );
   });
 });

@@ -8,10 +8,13 @@ import {
   MONITOR_GET_ISSUE_TIMEOUT_MS,
   MONITOR_GRANT_EXCHANGE_TIMEOUT_MS,
   MONITOR_HEALTH_TIMEOUT_MS,
+  MONITOR_ISSUE_CONTEXT_TIMEOUT_MS,
   MONITOR_LIST_ISSUES_TIMEOUT_MS,
   MONITOR_LIST_PROJECTS_TIMEOUT_MS,
   MONITOR_REFRESH_TIMEOUT_MS,
   MONITOR_RESOLVE_ISSUE_TIMEOUT_MS,
+  MONITOR_SEARCH_ISSUES_LIMIT,
+  MONITOR_SEARCH_ISSUES_TIMEOUT_MS,
   MONITOR_VERIFY_INSTALL_TIMEOUT_MS,
   type MonitorProvider,
 } from '@/lib/monitors/provider';
@@ -23,6 +26,7 @@ import {
 import {
   nextCursorFromLinkHeader,
   normalizeIssue,
+  normalizeIssueContext,
   sentryMonitorProvider,
 } from '@/lib/monitors/providers/sentry';
 import {
@@ -111,6 +115,8 @@ describe('the seam is ONE interface, and every network method bounds itself', ()
       listIssuesSince: MONITOR_LIST_ISSUES_TIMEOUT_MS,
       resolveIssue: MONITOR_RESOLVE_ISSUE_TIMEOUT_MS,
       getIssue: MONITOR_GET_ISSUE_TIMEOUT_MS,
+      searchIssues: MONITOR_SEARCH_ISSUES_TIMEOUT_MS,
+      getIssueContext: MONITOR_ISSUE_CONTEXT_TIMEOUT_MS,
     };
     for (const [operation, ms] of Object.entries(bounds)) {
       expect(ms, operation).toBeGreaterThan(0);
@@ -132,6 +138,8 @@ describe('the seam is ONE interface, and every network method bounds itself', ()
       'listIssuesSince',
       'resolveIssue',
       'getIssue',
+      'searchIssues',
+      'getIssueContext',
     ];
     for (const method of methods) {
       expect(typeof sentryMonitorProvider[method], `sentry.${method}`).toBe('function');
@@ -832,5 +840,260 @@ describe('the ASSIGNEE, ONE-issue read and GONE answer (MOTIR-4931 · MOTIR-5702
     ).rejects.toBeInstanceOf(MonitorIssueGoneError);
     // EVERY resolve call is recorded, a gone one included, so a test can count.
     expect(state.resolvedIssues).toEqual(['fake-issue-1']);
+  });
+});
+
+describe('SEARCH and the latest event’s CONTEXT (MOTIR-4932 · MOTIR-5728)', () => {
+  /** ONE Sentry issue row — the fixture BOTH the search and the poll map, so the
+   *  "one mapper" criterion is asserted by reading the same bytes twice. */
+  const ROW = {
+    id: '4501',
+    title: 'RangeError: Invalid time value',
+    culprit: 'lib/dates.ts in format',
+    level: 'error',
+    count: '40211',
+    firstSeen: '2026-09-01T10:00:00.000Z',
+    lastSeen: '2026-09-18T12:00:00.000Z',
+    permalink: 'https://m.sentry.io/issues/4501/',
+    assignedTo: { type: 'user', id: '7', name: 'Ada', email: 'ada@example.com' },
+  };
+  const searchArgs = { accessToken: 't', orgSlug: 'my org', externalProjectId: '42' };
+
+  it('searchIssues sends ONE request to the organisation issues path — project, shortIdLookup, query, limit, and NO is:unresolved', async () => {
+    stubFetch([{ body: [ROW] }]);
+    await sentryMonitorProvider.searchIssues({ ...searchArgs, query: ' MY-PROJECT-1A ', limit: 5 });
+
+    expect(calls).toHaveLength(1);
+    const url = new URL(calls[0]!.url);
+    expect(url.pathname).toBe('/api/0/organizations/my%20org/issues/');
+    expect(url.searchParams.get('project')).toBe('42');
+    expect(url.searchParams.get('shortIdLookup')).toBe('1');
+    expect(url.searchParams.get('query')).toBe('MY-PROJECT-1A');
+    expect(url.searchParams.get('limit')).toBe('5');
+    // A person may be linking an issue somebody already resolved in the monitor.
+    expect(url.search).not.toContain('is%3Aunresolved');
+    expect(url.search).not.toContain('is:unresolved');
+    expect(url.searchParams.get('cursor')).toBeNull();
+    expect(calls[0]!.headers['authorization']).toBe('Bearer t');
+  });
+
+  it('caps the limit at MONITOR_SEARCH_ISSUES_LIMIT and never asks for fewer than one', async () => {
+    stubFetch([{ body: [] }, { body: [] }]);
+    await sentryMonitorProvider.searchIssues({ ...searchArgs, query: '', limit: 500 });
+    await sentryMonitorProvider.searchIssues({ ...searchArgs, query: '', limit: 0 });
+    expect(new URL(calls[0]!.url).searchParams.get('limit')).toBe(
+      String(MONITOR_SEARCH_ISSUES_LIMIT),
+    );
+    expect(new URL(calls[1]!.url).searchParams.get('limit')).toBe('1');
+  });
+
+  it('an EMPTY query still asks — the picker has rows before the first keystroke', async () => {
+    stubFetch([{ body: [ROW] }]);
+    const found = await sentryMonitorProvider.searchIssues({ ...searchArgs, query: '', limit: 20 });
+    expect(new URL(calls[0]!.url).searchParams.get('query')).toBe('');
+    expect(found.map((issue) => issue.externalId)).toEqual(['4501']);
+  });
+
+  it('maps each result through the SAME mapper listIssuesSince uses', async () => {
+    stubFetch([{ body: [ROW, { title: 'no id — dropped' }] }, { body: [ROW] }]);
+    const searched = await sentryMonitorProvider.searchIssues({
+      ...searchArgs,
+      query: 'range',
+      limit: 20,
+    });
+    const polled = await sentryMonitorProvider.listIssuesSince({
+      ...searchArgs,
+      lastSeenAfter: null,
+      cursor: null,
+    });
+    expect(searched).toEqual([normalizeIssue(ROW)]);
+    expect(searched).toEqual(polled.issues);
+    expect(searched[0]).toMatchObject({ eventCount: 40211, assignee: { kind: 'user' } });
+  });
+
+  it('getIssueContext reads events/latest/ and returns the environment TAG and release.version', async () => {
+    stubFetch([
+      {
+        body: {
+          id: 'e1',
+          tags: [
+            { key: 'level', value: 'error' },
+            { key: 'environment', value: 'production' },
+          ],
+          release: { version: '1.4.2' },
+        },
+      },
+    ]);
+    const context = await sentryMonitorProvider.getIssueContext({
+      accessToken: 't',
+      orgSlug: 'm',
+      externalIssueId: '4501',
+    });
+    expect(calls).toHaveLength(1);
+    expect(new URL(calls[0]!.url).pathname).toBe(
+      '/api/0/organizations/m/issues/4501/events/latest/',
+    );
+    expect(context).toEqual({ environment: 'production', release: '1.4.2' });
+  });
+
+  it('answers NULL for each fact the latest event does not carry', async () => {
+    stubFetch([{ body: { id: 'e1', tags: [{ key: 'level', value: 'error' }], release: null } }]);
+    await expect(
+      sentryMonitorProvider.getIssueContext({
+        accessToken: 't',
+        orgSlug: 'm',
+        externalIssueId: '1',
+      }),
+    ).resolves.toEqual({ environment: null, release: null });
+    // Malformed shapes are absence, never a guess.
+    expect(normalizeIssueContext({})).toEqual({ environment: null, release: null });
+    expect(
+      normalizeIssueContext({
+        tags: [null, 'x', { key: 'environment', value: '' }],
+        release: { version: 7 },
+      }),
+    ).toEqual({ environment: null, release: null });
+  });
+
+  it('a 404 from events/latest/ is the typed GONE answer; a 500 is the provider’s reason verbatim', async () => {
+    stubFetch([
+      { status: 404, body: { detail: 'The requested resource does not exist' } },
+      { status: 500, body: { detail: 'Internal Error' } },
+    ]);
+    const gone = sentryMonitorProvider.getIssueContext({
+      accessToken: 't',
+      orgSlug: 'm',
+      externalIssueId: '9',
+    });
+    await expect(gone).rejects.toBeInstanceOf(MonitorIssueGoneError);
+    await expect(gone).rejects.toMatchObject({
+      operation: 'getIssueContext',
+      externalIssueId: '9',
+      providerReason: 'The requested resource does not exist',
+    });
+    const refused = sentryMonitorProvider.getIssueContext({
+      accessToken: 't',
+      orgSlug: 'm',
+      externalIssueId: '9',
+    });
+    await expect(refused).rejects.toBeInstanceOf(MonitorProviderCallError);
+    await expect(refused).rejects.toMatchObject({ status: 500, providerReason: 'Internal Error' });
+  });
+
+  it('a refused SEARCH is MonitorProviderCallError with the provider’s reason — a 404 there is a refusal, not a gone issue', async () => {
+    // "Gone" is a fact about ONE addressed issue; a search addresses none, so a
+    // 404 on it (an unknown project, say) is an ordinary refusal to show.
+    stubFetch([
+      { status: 500, body: { detail: 'Internal Error' } },
+      { status: 404, body: { detail: 'Project not found' } },
+    ]);
+    for (const [status, reason] of [
+      [500, 'Internal Error'],
+      [404, 'Project not found'],
+    ] as const) {
+      const refused = sentryMonitorProvider.searchIssues({ ...searchArgs, query: 'x', limit: 5 });
+      await expect(refused).rejects.toBeInstanceOf(MonitorProviderCallError);
+      await expect(refused).rejects.not.toBeInstanceOf(MonitorIssueGoneError);
+      await expect(refused).rejects.toMatchObject({ status, providerReason: reason });
+    }
+  });
+
+  it.each([
+    ['searchIssues', MONITOR_SEARCH_ISSUES_TIMEOUT_MS],
+    ['getIssueContext', MONITOR_ISSUE_CONTEXT_TIMEOUT_MS],
+  ] as const)('%s aborts at its NAMED timeout rather than hanging', async (operation, ms) => {
+    vi.useFakeTimers();
+    try {
+      globalThis.fetch = vi.fn(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      ) as unknown as typeof fetch;
+      const pending =
+        operation === 'searchIssues'
+          ? sentryMonitorProvider.searchIssues({ ...searchArgs, query: 'x', limit: 5 })
+          : sentryMonitorProvider.getIssueContext({
+              accessToken: 't',
+              orgSlug: 'm',
+              externalIssueId: 'slow',
+            });
+      const settled = expect(pending).rejects.toMatchObject({
+        operation,
+        status: null,
+        providerReason: `No response within ${ms}ms.`,
+      });
+      await vi.advanceTimersByTimeAsync(ms + 1);
+      await settled;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the FAKE returns seeded context, matches a title substring and a short id, honours limit, records calls and fails when armed', async () => {
+    const state = fakeMonitorState();
+    state.issues = [
+      {
+        ...state.issues[0]!,
+        externalId: 'a',
+        title: 'TypeError: x is undefined',
+        shortId: 'WEB-1A',
+        environment: 'production',
+        release: '1.4.2',
+        lastSeenAt: new Date('2026-09-18T00:00:00.000Z'),
+      },
+      {
+        ...state.issues[0]!,
+        externalId: 'b',
+        title: 'TypeError: y is undefined',
+        lastSeenAt: new Date('2026-09-17T00:00:00.000Z'),
+      },
+      {
+        ...state.issues[0]!,
+        externalId: 'c',
+        title: 'TypeError in the worker',
+        externalProjectId: 'fake-worker',
+        lastSeenAt: new Date('2026-09-19T00:00:00.000Z'),
+      },
+    ];
+    const search = (query: string, limit = 20, externalProjectId = 'fake-web') =>
+      fakeMonitorProvider.searchIssues({
+        accessToken: 'x',
+        orgSlug: 'y',
+        externalProjectId,
+        query,
+        limit,
+      });
+
+    expect((await search('typeerror')).map((issue) => issue.externalId)).toEqual(['a', 'b']);
+    expect((await search('web-1a')).map((issue) => issue.externalId)).toEqual(['a']);
+    expect((await search('', 1)).map((issue) => issue.externalId)).toEqual(['a']);
+    expect((await search('worker', 20, 'fake-worker')).map((i) => i.externalId)).toEqual(['c']);
+    // The fake-only fields never leak through the seam.
+    expect(Object.keys((await search('web-1a'))[0]!)).not.toContain('shortId');
+    expect(state.searches).toHaveLength(5);
+    expect(state.searches[2]).toEqual({ externalProjectId: 'fake-web', query: '', limit: 1 });
+
+    const context = (externalIssueId: string) =>
+      fakeMonitorProvider.getIssueContext({ accessToken: 'x', orgSlug: 'y', externalIssueId });
+    expect(await context('a')).toEqual({ environment: 'production', release: '1.4.2' });
+    expect(await context('b')).toEqual({ environment: null, release: null });
+    await expect(context('nope')).rejects.toBeInstanceOf(MonitorIssueGoneError);
+    state.deletedIssues.add('a');
+    await expect(context('a')).rejects.toBeInstanceOf(MonitorIssueGoneError);
+    expect(state.contextReads).toEqual(['a', 'b', 'nope', 'a']);
+
+    state.failNextStatus.set('getIssueContext', { status: 500, reason: 'down' });
+    await expect(context('b')).rejects.toMatchObject({ status: 500, providerReason: 'down' });
+    state.failNext.add('searchIssues');
+    await expect(search('x')).rejects.toMatchObject({ status: 401 });
+    state.failSearchForProject.set('fake-worker', { status: 503, reason: 'busy' });
+    await expect(search('x', 20, 'fake-worker')).rejects.toMatchObject({
+      status: 503,
+      providerReason: 'busy',
+    });
+    // Not consumed: a fan-out can fail the same project on every call.
+    await expect(search('x', 20, 'fake-worker')).rejects.toMatchObject({ status: 503 });
+    await expect(search('typeerror')).resolves.toHaveLength(1);
   });
 });
