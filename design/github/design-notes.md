@@ -2623,3 +2623,137 @@ sprite provenance (MOTIR-123, 757, 1273–1277, 1595, 2680, 4672, 4882, 4892, 49
 | MOTIR-5463 / MOTIR-5466 / MOTIR-5631 | **nothing either way** — their panels are composed, not redrawn                                                                                                                                                                                                 |
 
 Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
+
+## 27 · The DECISION port — an agent's decision document as the PRIMARY question above the merge (MOTIR-5673, 2026-09-19)
+
+**Asset:** `design/github/approve-and-merge--decision.mock.html` — a NEW delta mock. It amends
+`design/github/approve-and-merge.mock.html` (§ 20, Panels 12p–12w) and is not an edit of it. The
+To-approve row for the same kind is `design/workbench/approvals-row--decision.mock.html`, noted in
+`design/workbench/design-notes.md` § 27.
+
+**Drawn to:** `docs/decisions/approval-gates.md` § 8's FIFTH AMENDMENT (MOTIR-5672), which decides
+every behaviour below. This section decides only what it looks like.
+
+### What the card is
+
+A `type: decision` + `executor: coding_agent` card ships its decision as ONE
+`docs/decisions/<slug>.md` file in its pull request. It holds two questions — _is this decision
+right?_ (PRIMARY, `decision_approval`) and _do these commits land?_ (the approve-to-merge gate) — and
+ONE press answers both. **It is the design card's arrangement with a document where the mock goes.**
+
+### Composed, never redrawn — every surface this asset uses
+
+| card       | asset it composes (published `sourcePath`)                       | what it contributes here                                      |
+| ---------- | ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| MOTIR-5327 | `design/github/github.mock.html`                                 | the Development block as the ONE gate frame (§ 20)            |
+| MOTIR-5480 | `design/github/approve-and-merge.mock.html`                      | band 3's _Approve and merge_ and every decided / refused band |
+| MOTIR-5222 | `design/workbench/approval-overlay.mock.html`                    | the full-screen overlay's container and exit row              |
+| MOTIR-5438 | `design/workbench/approval-overlay--pull-request-gate.mock.html` | band 2 of the overlay = the Development block                 |
+| MOTIR-5228 | `design/work-items/approval-cta.mock.html`                       | the item page's single _Review & approve_ door                |
+| MOTIR-5147 | `design/workbench/approvals-row.mock.html`                       | the To-approve row (drawn in the workbench delta)             |
+| MOTIR-5612 | `design/workbench/approvals-row--one-gate.mock.html`             | one row per decision, never per object                        |
+
+The token block, the lucide sprites and every class are spliced 1:1 from
+`approval-overlay--pull-request-gate.mock.html`. **The only new rules are the decision slot's
+(`.dd-slot`, `.dd-meta`, `.dd-link`, `.dd-held`, `.dd-held-band`) and the disabled verb
+(`.af-btn[disabled]`, the shipped Button's `disabled:opacity-50`).** Three lucide sprites are added,
+extracted from the installed `lucide-react@1.16.0`: `scale` (the decision TYPE's mark,
+`lib/issues/workItemTypeMeta.ts`), `file-x` and `files`.
+
+### The slot, and where it sits
+
+The document sits **FIRST in band 2**, exactly where a design card's result sits — the shipped
+`DevelopmentSection` order for a primary: _the subject, then How to test, then the pull requests_. It
+is composed from the How-to-test part: its head row (`dvb-htt-head`, titled **Decision document**), a
+meta line — the file's path, its short **blob** sha _at_ the short head sha it was read at, and
+**View on GitHub** — and the file rendered as Markdown with the block's own `dvb-md` styles. Band 1's
+kind reads **Decision** and its meta leads with the path; the kind label follows the GATE, exactly as
+`DevelopmentGateFrame` already does for a design (MOTIR-5667).
+
+### Panels — one per state the record defines
+
+| panel             | state                                                              | what is on it                                                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 (+dark, ~400px) | awaiting, routed to you                                            | the document PRIMARY; How to test and the pull request beneath; _Request changes_ · _Approve and merge_                                                                           |
+| 2                 | awaiting, not yours                                                | the same port, live; no verbs; _Waiting on {name}._                                                                                                                               |
+| 3a–3d             | UNRESOLVABLE: none · several · gone at the head · host unreachable | the slot carries the block's missing-state callout with the reason; **Approve disabled** with its reason in words; Request changes enabled; the green pull request does not merge |
+| 4                 | approved, merge held until green                                   | record band: _Decision accepted by …_ and _merges when its checks pass — no second press_; **no verb anywhere**                                                                   |
+| 5a                | superseded by a push that CHANGED the document                     | the frame's withdrawn port with the per-kind cause line, and _Show the current version_                                                                                           |
+| 5b                | a push that did NOT change the document                            | the decision's answer stands (a line in the slot); the merge question, re-asked alone, leads with the plain approve-and-merge band                                                |
+| 6a / 6b           | decided: approved · changes requested                              | the record band — the accepted blob named; the reviewer's note                                                                                                                    |
+| 7                 | the approval overlay                                               | band 2 is Panel 1's block, band 3 its verbs; dialog title _Decision approval for {key}_                                                                                           |
+| 8a                | the ACCESS PATH on the item page                                   | the shipped status-held notice's _Review & approve_ opens Panel 7; the frame's _Expand ⤢_ does too                                                                                |
+
+The To-approve row (the card's Panel 7) and the row's door (Panel 8b) are in the workbench delta.
+
+### Copy — every string, `en` and `zh`
+
+Existing keys are cited, not repeated. New keys are the port's (MOTIR-5678) under
+`approvalGate.decision.*`.
+
+| key                                                  | en                                                                                                                                             | zh                                                                                                        |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `decision.kindLabel`                                 | Decision                                                                                                                                       | 决策                                                                                                      |
+| `decision.portTitle`                                 | Decision document                                                                                                                              | 决策文档                                                                                                  |
+| `decision.meta`                                      | blob {blob} at {head}                                                                                                                          | 文件版本 {blob}，提交 {head}                                                                              |
+| `decision.viewOnHost`                                | View on GitHub                                                                                                                                 | 在 GitHub 上查看                                                                                          |
+| `decision.headMeta.one`                              | {path} · {count, plural, =1 {# pull request} other {# pull requests}} · delivered by {run}                                                     | {path} · {count} 个拉取请求 · 由 {run} 交付                                                               |
+| `decision.headMeta.none`                             | No decision document · {count, plural, =1 {# pull request} other {# pull requests}} · delivered by {run}                                       | 无决策文档 · {count} 个拉取请求 · 由 {run} 交付                                                           |
+| `decision.headMeta.several`                          | {docs} decision documents · {count, plural, =1 {# pull request} other {# pull requests}} · delivered by {run}                                  | {docs} 份决策文档 · {count} 个拉取请求 · 由 {run} 交付                                                    |
+| `decision.consequence`                               | Approving accepts this decision and merges {prs}, then moves {key} to Approved.                                                                | 批准即接受此决策并合并 {prs}，随后将 {key} 移至“已批准”。                                                 |
+| `decision.blocked`                                   | Nothing can be approved until the pull request carries exactly one decision document. Nothing merges until then.                               | 拉取请求中恰好有一份决策文档后才能批准，在此之前不会合并任何内容。                                        |
+| `decision.unresolvable.none`                         | **This pull request adds no decision document.** A decision is one file under docs/decisions/. Send it back to the agent with Request changes. | **此拉取请求未添加决策文档。**一个决策对应 docs/decisions/ 下的一个文件。请用“要求修改”将其退回给智能体。 |
+| `decision.unresolvable.several`                      | **This pull request changes {count} files under docs/decisions/** — {paths}. A decision has exactly one document.                              | **此拉取请求修改了 docs/decisions/ 下的 {count} 个文件** — {paths}。一个决策只有一份文档。                |
+| `decision.unresolvable.gone_at_head`                 | **The decision document is no longer at this pull request's head.** A push removed or renamed it.                                              | **决策文档已不在此拉取请求的最新提交中。**某次推送删除或重命名了它。                                      |
+| `decision.unresolvable.host_unreachable`             | **Motir could not reach GitHub to show the decision document.** Nothing can be approved until it can be read. Try again in a moment.           | **Motir 无法连接 GitHub 以显示决策文档。**在能够读取之前无法批准。请稍后再试。                            |
+| `decision.unresolvable.too_large`                    | **The decision document is too large to show here.** Open it on GitHub; it cannot be approved from Motir.                                      | **决策文档过大，无法在此显示。**请在 GitHub 上打开；无法在 Motir 中批准。                                 |
+| `decision.unresolvable.not_connected`                | **This repository is not connected to Motir,** so the decision document cannot be shown.                                                       | **此仓库未连接到 Motir，**因此无法显示决策文档。                                                          |
+| `decision.accepted`                                  | Decision accepted by {name} · {when}                                                                                                           | {name} 于 {when} 接受了此决策                                                                             |
+| `decision.acceptedUnchanged`                         | Decision accepted by {name} · {when} — unchanged at the new head                                                                               | {name} 于 {when} 接受了此决策 — 新提交中未改变                                                            |
+| `decision.mergeHeld`                                 | The pull request merges when its checks pass — no second press.                                                                                | 拉取请求在检查通过后自动合并，无需再次点击。                                                              |
+| `withdrawn.causeByKind.decision_approval.head_moved` | A push changed the decision document, so this question was withdrawn.                                                                          | 推送修改了决策文档，因此该问题已撤回。                                                                    |
+| `decision.withdrawnNext`                             | Nobody decided it. The new version is asked in its place.                                                                                      | 没有人对它做出决定。新版本已取而代之。                                                                    |
+
+**Reason → copy mapping, total over what can arrive:** the CAPTURE's `none` / `several` /
+`unreadable` (MOTIR-5674) and the READ's `gone_at_head` / `too_large` / `host_unreachable` /
+`not_connected` (`DecisionDocumentReadReason`, MOTIR-5676). `unreadable` renders the
+`host_unreachable` line — both mean _Motir could not look_. The door's own refusal lines
+(`approvalGate.refusal.decisionUnresolvable`, `.decisionPending`, shipped by MOTIR-5676 / MOTIR-5677)
+are unchanged: they render only if a stale page presses anyway.
+
+**Reused, not new:** `approvalGate.waitingOn`, the `Approve and merge` / `Request changes` verbs,
+`approvalGate.withdrawn.record` and `.at`, `approvalOverlay.dialogTitle` (with the kind name
+`workbench.approvals.kind.decision_approval`, _Decision approval_ / _决策审批_), and the status-held
+notice's `workItems.statusHeld.decision` + `decisionNoun.decision_approval` + `reviewAndApprove`.
+
+### Decisions this asset made, with their reason
+
+- **The document LEADS, the pull requests follow.** The shipped order for a primary; a second order
+  would be a second visual language for one act.
+- **Unresolvable is drawn in the slot, not as a refusal.** The reason is a fact about the pull request
+  a reviewer should read before pressing anything; the refusal line is for a press that races a push.
+- **The head names the blob AND the head sha.** The blob is what the gate asks about (clause 4); the
+  head says which commit that blob was read at, so a reviewer can open exactly that file.
+- **5b hands the lead to the merge question.** With the decision answered, the only open question is
+  the commits, so the frame is the plain approve-and-merge frame and the decision is a line, not a
+  second band.
+- **A per-kind withdrawn cause, not a reworded shared one.** The shared `head_moved` line is still true
+  for a code card; the decision kind's writes only when the document changed and says so.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' approve-and-merge--decision.mock.html | sort -u` — 29 keys. Eight are
+this section's own (MOTIR-4907, 5222, 5438, 5480, 5672, 5673, 5678, 5679); the other 21 are the base
+stylesheet and sprite provenance carried verbatim (MOTIR-123, 757, 1273–1277, 1595, 2680, 4672, 4882,
+4892, 4900, 4953, 5007, 5008, 5136, 5327, 5336, 5351, 5494), which GIVE or TAKE nothing.
+
+| key                      | GIVES / TAKES                                                                                                                                                                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| MOTIR-5678               | **GIVES** Panels 1–7 and 8a, the slot, the copy table above. **TAKES** the port's read — `decisionDocumentService.readForWorkItem` (identity in a transaction, content outside it) — and the per-kind withdrawn cause line; both amended onto the card |
+| MOTIR-5679               | **GIVES** nothing from this asset — its row is the workbench delta                                                                                                                                                                                     |
+| MOTIR-5672               | the record every panel draws to; **nothing either way**                                                                                                                                                                                                |
+| MOTIR-5480 / 5438 / 5222 | **nothing either way** — composed, not redrawn                                                                                                                                                                                                         |
+| MOTIR-4907               | the story; its verification recipe's steps 1–3 walk Panels 1, 4 and 3a                                                                                                                                                                                 |
+| MOTIR-5673               | this card                                                                                                                                                                                                                                              |
+
+Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
