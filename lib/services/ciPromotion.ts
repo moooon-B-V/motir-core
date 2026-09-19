@@ -6,9 +6,9 @@ import {
 import type { GithubCheckRun, Prisma, WorkItem } from '@/generated/prisma/client';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import {
-  claimedCompleteSha,
   readReportedCheckSet,
   reconcileRecordedCheckSet,
+  shaToReReadFromHost,
 } from './checkSetReconcile';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { collectDeliveries, classifyDeliveries, standingQueueFailures } from './deliveryVerdict';
@@ -300,6 +300,10 @@ export async function promoteIfCiAlreadyGreen(
    *  one cannot exercise the partial-set case at all. Defaults to the real
    *  read; production callers pass nothing. */
   readCheckSet: typeof readReportedCheckSet = readReportedCheckSet,
+  /** The clock the stale-pending re-read ages rows against, injectable for the
+   *  same reason the reader is: a test must be able to place a row either side
+   *  of the threshold without sleeping for it (MOTIR-5838). */
+  now: Date = new Date(),
 ): Promise<boolean> {
   // ⚠️ THE OTHER DOOR INTO THE PARTIAL-SET DEFECT (MOTIR-4199). Edge 1 reaches
   // this module through the CI-feedback consumer, which has already reconciled
@@ -313,7 +317,7 @@ export async function promoteIfCiAlreadyGreen(
   // paid for on the same terms: only the delivering pull requests whose recorded
   // set CLAIMS to be complete are asked about, so the ordinary card (one pull
   // request, checks still reporting pending rows) pays nothing.
-  await reconcileClaimedCompleteDeliveries(workItemId, ctx, readCheckSet);
+  await reconcileClaimedCompleteDeliveries(workItemId, ctx, readCheckSet, now);
 
   const shouldPromote = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, ctx.workspaceId);
@@ -336,11 +340,13 @@ export async function promoteIfCiAlreadyGreen(
 
 /**
  * Bring the recorded check set of every pull request delivering this card in
- * line with the host's, for the members that claim to be complete (MOTIR-4199).
+ * line with the host's, for the members whose recorded set makes a claim worth
+ * checking — one asserting COMPLETENESS (MOTIR-4199) or one that has asserted
+ * it is still RUNNING for longer than a check plausibly runs (MOTIR-5838).
  *
  * ⚠️ THE NETWORK READ IS OUTSIDE THE TRANSACTION, deliberately and structurally:
- * it is two phases — resolve the members that claim completeness, then ask the
- * host and write what is missing — because a round trip inside
+ * it is two phases — resolve the members to ask about, then ask the host and
+ * write what is missing or unsettled — because a round trip inside
  * `withSystemContext` would hold a connection open on GitHub's latency for every
  * card arriving at Implemented.
  */
@@ -348,6 +354,7 @@ async function reconcileClaimedCompleteDeliveries(
   workItemId: string,
   ctx: { userId: string; workspaceId: string },
   readCheckSet: typeof readReportedCheckSet,
+  now: Date,
 ): Promise<void> {
   try {
     // Phase 1 — WHICH pull requests claim a complete set, and everything needed
@@ -369,11 +376,17 @@ async function reconcileClaimedCompleteDeliveries(
         name: string;
       }[] = [];
       for (const [pullRequestId, pr] of byId) {
-        // Only the members whose own recorded set asserts it is whole. A member
-        // with a live pending row is already `running` and already withholds, so
-        // there is no claim to check — and the sha comes back with the answer
-        // rather than from a second derivation that could disagree with it.
-        const commitSha = claimedCompleteSha(pr.checkRuns);
+        // The members whose own recorded set makes a claim worth checking — it
+        // asserts it is WHOLE (MOTIR-4199), or it has asserted it is STILL
+        // RUNNING for longer than a check plausibly runs (MOTIR-5838). The sha
+        // comes back with the answer rather than from a second derivation that
+        // could disagree with it.
+        //
+        // ⚠️ A FRESH PENDING ROW STILL COSTS NOTHING, which is the property
+        // MOTIR-4199 paid for and this widening keeps: the ordinary pull
+        // request, minutes old with lanes still reporting, qualifies under
+        // neither arm and is not asked about.
+        const commitSha = shaToReReadFromHost(pr.checkRuns, now);
         if (commitSha === null) continue;
         const subject = await githubPullRequestRepository.findByIdWithInstallation(
           pullRequestId,

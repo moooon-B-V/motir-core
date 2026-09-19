@@ -72,6 +72,81 @@ export function claimedCompleteSha(checkRuns: PrCheckRunSlice[]): string | null 
   return atHead.every((row) => row.conclusion !== 'pending') ? atHead[0]!.commitSha : null;
 }
 
+/** A check row with the clock this module ages it by. `updatedAt` rather than
+ *  `createdAt`: a row is written `pending` and REWRITTEN terminal by the
+ *  delivery that settles it, so the question *when did this row last hear
+ *  anything?* is the one that separates a check still running from a check
+ *  whose completion was lost. */
+export interface AgedCheckRunSlice extends PrCheckRunSlice {
+  updatedAt: Date;
+}
+
+/**
+ * How long a `pending` row may sit at the head before the recorded set stops
+ * being believed and the host is asked (MOTIR-5838).
+ *
+ * Deliberately the same TEN MINUTES as
+ * `PULL_REQUEST_RECONCILE_QUIET_MINUTES`, and deliberately its OWN constant.
+ * The two measure different clocks — that one is *nothing has been heard about
+ * this pull request row*, this one is *this check row has claimed to be running*
+ * — and the number agreeing today is a judgement about how long a real check
+ * plausibly runs, not a fact either module may read off the other. A
+ * motir-core pull request's slowest lane finishes well inside it.
+ */
+export const STALE_PENDING_MINUTES = 10;
+export const STALE_PENDING_MS = STALE_PENDING_MINUTES * 60_000;
+
+/**
+ * The commit whose recorded set claims to be STILL RUNNING and has claimed it
+ * for longer than is plausible — or `null` when it makes no such claim
+ * (MOTIR-5838).
+ *
+ * ⚠️ THIS IS `claimedCompleteSha`'s MIRROR, AND THE PAIR IS THE WHOLE POINT.
+ * That one distrusts a set asserting *I am whole*; MOTIR-4199 built it and left
+ * the set asserting *I am incomplete* trusted absolutely. But `running` is
+ * exactly what a LOST completion produces: `derivePrCiState` folds any live
+ * `pending` row to `running`, so a webhook that never arrived is
+ * indistinguishable, for ever, from a lane that is genuinely still going. The
+ * asymmetry was the defect — a green, mergeable pull request held at
+ * `ci: running` with no promotion, no approve-to-merge gate, and nothing on the
+ * card saying why.
+ *
+ * ⚠️ AND THE CLAIM TO DISTRUST IS AGE, NOT SHAPE. A fresh pending row is the
+ * ordinary state of every pull request for its first minutes and is believed
+ * without a call — which is what keeps MOTIR-4199's no-cost property: a set the
+ * host has not had time to settle costs nothing here, exactly as before.
+ */
+export function stalePendingSha(
+  checkRuns: AgedCheckRunSlice[],
+  now: Date,
+  staleAfterMs: number = STALE_PENDING_MS,
+): string | null {
+  const atHead = liveRowsAtLatestSha(checkRuns);
+  if (atHead.length === 0) return null;
+  const cutoff = now.getTime() - staleAfterMs;
+  const stale = atHead.some(
+    (row) => row.conclusion === 'pending' && row.updatedAt.getTime() <= cutoff,
+  );
+  return stale ? atHead[0]!.commitSha : null;
+}
+
+/**
+ * The commit this pull request's recorded set should be RE-READ at, by either
+ * reason — or `null` when it should not be.
+ *
+ * One function so a caller states the question once and cannot ask the two
+ * halves in an order that lets a set qualify under neither: a set is either
+ * claiming completeness it has not earned, or claiming an incompleteness it has
+ * held too long, and both are answered by the same host read at the same sha.
+ */
+export function shaToReReadFromHost(
+  checkRuns: AgedCheckRunSlice[],
+  now: Date,
+  staleAfterMs: number = STALE_PENDING_MS,
+): string | null {
+  return claimedCompleteSha(checkRuns) ?? stalePendingSha(checkRuns, now, staleAfterMs);
+}
+
 /** The same question asked about ONE known sha rather than the latest recorded
  *  one — what the CI-feedback consumer has, since a delivery names its commit. */
 export function shaSetClaimsComplete(
@@ -114,21 +189,39 @@ export async function readReportedCheckSet(args: {
  * leaving a card held at Implemented for ever behind a row nothing will refresh.
  * The webhook's own later delivery upserts the identical value and is a no-op.
  *
- * Returns how many rows it created — zero meaning the recorded set was already
- * whole, which is the answer in the healthy case.
+ * ⚠️ AND SINCE MOTIR-5838 IT ALSO SETTLES A ROW THAT IS RECORDED `pending` AND
+ * THAT THE HOST REPORTS COMPLETE — the case creating-only structurally cannot
+ * reach, because such a row is not missing. A lost completion leaves exactly
+ * this shape: the row exists, it says `pending`, and nothing will ever refresh
+ * it, so `derivePrCiState` folds the pull request to `running` for ever.
+ *
+ * That write is SAFE IN THE ONE DIRECTION IT MOVES, which is why it does not
+ * need the lock `createMissing` avoids. `pending` is the only non-terminal
+ * conclusion, so `pending → terminal` can lose no information; the update is
+ * guarded on the row still READING `pending` in its own statement, so a
+ * delivery that settled it between the snapshot and the write wins exactly as
+ * it does above; and a host still reporting the check pending writes nothing at
+ * all. A terminal row is never overwritten by this path in any case — which
+ * keeps `createMissing`'s stated safety property intact rather than trading it.
+ *
+ * Returns how many rows it created and how many it settled — both zero meaning
+ * the recorded set was already whole and current, the answer in the healthy case.
  */
 export async function reconcileRecordedCheckSet(args: {
   pullRequestId: string;
   commitSha: string;
   reported: ReportedCheckRun[];
-  recorded: { checkName: string; checkSuiteId: string }[];
+  recorded: { checkName: string; checkSuiteId: string; conclusion: string }[];
   tx: Prisma.TransactionClient;
-}): Promise<number> {
-  const have = new Set(args.recorded.map((row) => identity(row.checkName, row.checkSuiteId)));
-  const missing = args.reported.filter(
-    (run) => !have.has(identity(run.checkName, run.checkSuiteId)),
+}): Promise<{ created: number; settled: number }> {
+  const recordedByIdentity = new Map(
+    args.recorded.map((row) => [identity(row.checkName, row.checkSuiteId), row]),
   );
-  return githubCheckRunRepository.createMissing(
+
+  const missing = args.reported.filter(
+    (run) => !recordedByIdentity.has(identity(run.checkName, run.checkSuiteId)),
+  );
+  const created = await githubCheckRunRepository.createMissing(
     missing.map((run) => ({
       pullRequestId: args.pullRequestId,
       commitSha: args.commitSha,
@@ -138,6 +231,28 @@ export async function reconcileRecordedCheckSet(args: {
     })),
     args.tx,
   );
+
+  // A row we hold as `pending` that the host says has finished. The host's own
+  // conclusion is written, exactly as for a created row: the two transports
+  // describe the same check, so a settle here is indistinguishable from the
+  // delivery that was lost.
+  const lostCompletions = args.reported.filter((run) => {
+    if (run.conclusion === 'pending') return false;
+    const row = recordedByIdentity.get(identity(run.checkName, run.checkSuiteId));
+    return row !== undefined && row.conclusion === 'pending';
+  });
+  const settled = await githubCheckRunRepository.settlePending(
+    lostCompletions.map((run) => ({
+      pullRequestId: args.pullRequestId,
+      commitSha: args.commitSha,
+      checkName: run.checkName,
+      checkSuiteId: run.checkSuiteId,
+      conclusion: run.conclusion,
+    })),
+    args.tx,
+  );
+
+  return { created, settled };
 }
 
 /** The ingestion key's own identity, minus the two members that are fixed for
