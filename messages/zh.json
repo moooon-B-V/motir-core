@@ -6211,7 +6211,11 @@
         "empty": "空",
         "aria": "文件夹“{name}”，{contents}。打开以查看其中的内容。",
         "emptyTitle": "此文件夹为空",
-        "emptyDescription": "在“工作项”中归入“{name}”的工作项会显示在这里。"
+        "emptyDescription": "在“工作项”中归入“{name}”的工作项会显示在这里。",
+        "changes": "{count} 项变更",
+        "changesOne": "1 项变更",
+        "changesAria": "内含 {count} 项拟议变更",
+        "changesAriaOne": "内含 1 项拟议变更"
       },
       "more": {
         "label": "还有 {count} 项",

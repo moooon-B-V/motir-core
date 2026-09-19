@@ -6215,7 +6215,11 @@
         "empty": "Empty",
         "aria": "Folder {name}, {contents}. Open to see what is filed in it.",
         "emptyTitle": "This folder is empty",
-        "emptyDescription": "Work items filed into {name} from Work items will show here."
+        "emptyDescription": "Work items filed into {name} from Work items will show here.",
+        "changes": "{count} changes",
+        "changesOne": "1 change",
+        "changesAria": "{count} proposed changes inside",
+        "changesAriaOne": "1 proposed change inside"
       },
       "more": {
         "label": "+ {count} more",

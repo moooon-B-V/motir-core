@@ -1,5 +1,6 @@
 import { proposedParentNodeIds } from '@/lib/planning/planShape';
-import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
+import { folderNodeId } from '@/lib/planning/projectCanvasModel';
+import type { PlanPlacementSideDto, PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 
 // The PROPOSED-PLAN index behind the in-canvas diff (Subtask MOTIR-1730; design
 // `design/ai-chat/plan-change-conversation.mock.html` panel 4). The conversation's
@@ -78,12 +79,33 @@ export interface ProposedAdd {
   hasChildren: boolean;
 }
 
+/**
+ * A `modify` that MOVES its target into or out of a FOLDER (Bug MOTIR-5782; design
+ * Part XVIII decision 4) — drawn ONCE, at its destination level, and taken off its
+ * source level. Levels are canvas focus ids: `folder:<id>` for a folder level, a
+ * work-item id, or null for the project root.
+ */
+export interface FolderRelocation {
+  item: PlanReviewItemDto;
+  fromLevel: string | null;
+  toLevel: string | null;
+}
+
 export interface PlanChangeDiffIndex {
   /** Every `modify` proposal, by its target work-item id. */
   changesById: Map<string, PlanReviewItemDto>;
   /** Every `remove` proposal, by its target work-item id. */
   removalsById: Map<string, PlanReviewItemDto>;
   adds: ProposedAdd[];
+  /**
+   * How many proposals will sit beneath each FOLDER, by folder id — every folder on
+   * each proposal's `folderTrail`, so the count is DEEP (Part XVIII decision 3). A
+   * proposal whose folder was deleted counts nowhere: there is no folder to mark.
+   */
+  folderChanges: Map<string, number>;
+  /** The folder moves (decision 4). A move between two work items is not here: the
+   *  overlay draws those where the committed read carries them, as it always has. */
+  relocations: FolderRelocation[];
   /** The counts the confirm-to-persist bar + the rail both read. */
   counts: { added: number; changed: number; removed: number };
   /** No proposals at all → nothing to draw (an empty plan is a valid no-op). */
@@ -94,6 +116,8 @@ export const EMPTY_DIFF_INDEX: PlanChangeDiffIndex = {
   changesById: new Map(),
   removalsById: new Map(),
   adds: [],
+  folderChanges: new Map(),
+  relocations: [],
   counts: { added: 0, changed: 0, removed: 0 },
   isEmpty: true,
 };
@@ -131,23 +155,67 @@ export function indexPlanReview(review: PlanReviewDto | null | undefined): PlanC
   const canvasNodeId = (nodeId: string) =>
     proposedNodeIds.has(nodeId) ? `${PROPOSED_NODE_PREFIX}${nodeId}` : nodeId;
 
+  // A FOLDER-PLACED proposal is a root in the review model (`parentNodeId: null`)
+  // and sits on its folder's LEVEL on this canvas (Part XVIII decision 2) — the
+  // focus id a folder level already has (`folder:<id>`, MOTIR-5741), so
+  // `proposedAddsForLevel` places it with no second key.
   const adds: ProposedAdd[] = addItems.map((item) => ({
     nodeId: canvasNodeId(item.nodeId),
     item,
-    parentNodeId: item.parentNodeId === null ? null : canvasNodeId(item.parentNodeId),
+    parentNodeId:
+      item.parentNodeId === null ? folderLevelOf(item) : canvasNodeId(item.parentNodeId),
     hasChildren: false,
   }));
 
   const withChildren = proposedParentNodeIds(adds);
   for (const add of adds) add.hasChildren = withChildren.has(add.nodeId);
 
+  const folderChanges = new Map<string, number>();
+  for (const item of review.items) {
+    if (item.folderMissing) continue;
+    // `?? []`: a payload from a server older than MOTIR-5798 carries no trail, and
+    // must read as "no folder" rather than throw while the page renders.
+    for (const crumb of item.folderTrail ?? []) {
+      folderChanges.set(crumb.id, (folderChanges.get(crumb.id) ?? 0) + 1);
+    }
+  }
+
+  const relocations: FolderRelocation[] = [];
+  for (const item of review.items) {
+    if (item.op !== 'modify') continue;
+    const placement = item.changes.find((c) => c.field === 'parent')?.placement;
+    if (!placement) continue;
+    if (placement.from.kind !== 'folder' && placement.to.kind !== 'folder') continue;
+    relocations.push({
+      item,
+      fromLevel: levelOfSide(placement.from),
+      toLevel: levelOfSide(placement.to),
+    });
+  }
+
   return {
     changesById,
     removalsById,
     adds,
+    folderChanges,
+    relocations,
     counts: { added: adds.length, changed: changesById.size, removed: removalsById.size },
     isEmpty: false,
   };
+}
+
+/** The folder LEVEL a root proposal sits on: its folder's canvas id when it is
+ *  filed into one that still exists, else the project root. */
+function folderLevelOf(item: PlanReviewItemDto): string | null {
+  return item.folderId !== null && !item.folderMissing ? folderNodeId(item.folderId) : null;
+}
+
+/** One side of a placement, as the canvas focus id of the level it names. A
+ *  deleted folder has no level, so its side reads as the root (decision 6). */
+function levelOfSide(side: PlanPlacementSideDto): string | null {
+  if (side.kind === 'root') return null;
+  if (side.kind === 'workItem') return side.id;
+  return side.folderMissing ? null : folderNodeId(side.folderId);
 }
 
 /** The diff state an EXISTING level item takes, or null when the proposal doesn't

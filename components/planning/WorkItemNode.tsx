@@ -10,6 +10,7 @@ import {
   Flag,
   Folder,
   FolderOpen,
+  FolderPen,
   Layers,
   MapPin,
 } from 'lucide-react';
@@ -677,29 +678,54 @@ export function useFolderContentsLabel(): (childFolderCount: number, itemCount: 
  * person made, and its card says `Empty` so nobody drills in expecting work.
  *
  * Presentational: the consumer owns the level behind it.
+ *
+ * `changes` is the PLANNING canvases' one addition (Bug MOTIR-5782; design
+ * `design/ai-planning/design-notes.md` Part XVIII decision 3): how many of a
+ * pending plan's proposals will sit anywhere beneath this folder. A proposal is
+ * drawn on the level where it will SIT, so a closed folder can hold changes the
+ * reviewer has not seen; the badge says so, in the top-row slot a folder leaves
+ * empty. `/roadmap` has no plan and never passes it.
  */
 export function FolderNode({
   name,
   childFolderCount,
   itemCount,
+  changes = 0,
 }: {
   name: string;
   childFolderCount: number;
   itemCount: number;
+  changes?: number;
 }) {
   const t = useTranslations('roadmap.canvas.folder');
   const contentsLabel = useFolderContentsLabel();
   const contents = contentsLabel(childFolderCount, itemCount);
+  const changesAria =
+    changes > 0
+      ? changes === 1
+        ? t('changesAriaOne')
+        : t('changesAria', { count: changes })
+      : null;
   return (
     <div
       style={{ width: NODE_W, height: NODE_H }}
       data-node-state="folder"
       data-testid="folder-node"
-      aria-label={t('aria', { name, contents })}
+      aria-label={`${t('aria', { name, contents })}${changesAria ? ` ${changesAria}` : ''}`}
       className="relative flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-3.5 shadow-(--shadow-card)"
     >
-      {/* TOP ROW — no status pill (a folder has none); the drill chevron alone. */}
+      {/* TOP ROW — no status pill (a folder has none); the drill chevron, and on a
+          planning canvas the changes badge (the shipped `add` badge's pair). */}
       <div className="flex shrink-0 items-center gap-2">
+        {changes > 0 ? (
+          <span
+            data-testid="folder-changes"
+            className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-surface) px-1.5 py-0.5 text-[11px] font-semibold text-(--el-accent-on-surface)"
+          >
+            <FolderPen className="size-3" aria-hidden="true" />
+            {changes === 1 ? t('changesOne') : t('changes', { count: changes })}
+          </span>
+        ) : null}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <ChevronRight
             className="size-4 shrink-0 text-(--el-text-muted)"

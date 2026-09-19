@@ -9,7 +9,7 @@ import { PlanProposalList } from '@/components/planning/PlanProposalList';
 import { PlanReviewRail } from '@/components/planning/PlanReviewRail';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import { mergePlanLevel } from '@/components/planning/planLevel';
-import { collapseFolderPath } from '@/components/planning/FolderPlacement';
+import { collapseFolderPath, PlacementLine } from '@/components/planning/FolderPlacement';
 import type { PlanItemChangeDto } from '@/lib/dto/planReview';
 
 // The plan review SHOWS where a card will be filed (Story MOTIR-5310 · MOTIR-5418),
@@ -66,8 +66,20 @@ describe('the count-based collapse rule (Part XVII §17.6)', () => {
 });
 
 describe('panel 1 — a filed add on the canvas', () => {
-  it('spends the bottom slot on where it will be filed, and clamps the title to one line', () => {
+  // ⚠️ RESTATED by Part XVIII decision 2 (Bug MOTIR-5782). Part XVII drew a
+  // filed add AMONG THE ROOTS with a placement line, because no canvas level was a
+  // folder. Both planning canvases now draw it ON its folder's level, where the
+  // breadcrumb says where the reader stands — so the node spends no slot on it and
+  // keeps its two-line title. The line's own contract (path, collapse, copy) still
+  // ships, on `PlacementLine`, and is asserted there below.
+  it('spends NO bottom slot on its folder — the breadcrumb says where it is — and keeps the two-line title', () => {
     renderWithIntl(<PlanItemNode item={filedAdd()} />);
+    expect(screen.queryByTestId('placement-line')).toBeNull();
+    expect(screen.getByText('Importer retries with backoff').className).toContain('line-clamp-2');
+  });
+
+  it('PlacementLine names the folder a card is filed in, destination last', () => {
+    renderWithIntl(<PlacementLine folderPath={['Parked', '2025']} folderMissing={false} />);
     const line = screen.getByTestId('placement-line');
     expect(line?.textContent).toContain('Parked▸2025');
     // The full sentence is the accessible name; the full path is the hover title.
@@ -77,10 +89,6 @@ describe('panel 1 — a filed add on the canvas', () => {
     const segments = within(line).getAllByTestId('folder-path-segment');
     expect(segments.at(-1)?.textContent).toContain('2025');
     expect(segments.at(-1)?.className).toContain('text-(--el-text)');
-    const title = screen.getByText('Importer retries with backoff');
-    expect(title.className).toContain('truncate');
-    expect(title.className).not.toContain('line-clamp-2');
-    expect(title?.getAttribute('title')).toBe('Importer retries with backoff');
   });
 
   it('draws no line for a root add with no folder, and keeps the two-line title', () => {
@@ -90,7 +98,7 @@ describe('panel 1 — a filed add on the canvas', () => {
   });
 
   it('collapses a five-segment path to first ▸ … ▸ last and still reads it whole (panel 5)', () => {
-    renderWithIntl(<PlanItemNode item={filedAdd({ folderPath: DEEP })} />);
+    renderWithIntl(<PlacementLine folderPath={DEEP} folderMissing={false} />);
     const line = screen.getByTestId('placement-line');
     expect(
       within(line)
@@ -106,13 +114,19 @@ describe('panel 1 — a filed add on the canvas', () => {
   });
 
   it('renders the Chinese copy', () => {
-    renderWithIntl(<PlanItemNode item={filedAdd()} />, { locale: 'zh', messages: zhMessages });
+    renderWithIntl(<PlacementLine folderPath={['Parked', '2025']} folderMissing={false} />, {
+      locale: 'zh',
+      messages: zhMessages,
+    });
     expect(screen.getByText('归档于文件夹 Parked ▸ 2025')).toBeTruthy();
   });
 });
 
 describe('panel 2 — mixed placements', () => {
-  it('draws the filed card among the roots on the merged level, with its line — every host builds its level here', () => {
+  // RESTATED by Part XVIII decision 2: the node carries no placement line any
+  // more. WHICH level a filed card is merged onto is MOTIR-5795's (the plan-review
+  // canvas keys it on its folder); this asserts only what the node draws.
+  it('draws the filed card on the merged level with NO placement line — every host builds its level here', () => {
     const plain = planReviewItem({ planItemId: 'pi_plain', nodeId: 'pi_plain', title: 'Plain' });
     const level = mergePlanLevel({ nodes: [], deps: [] }, [filedAdd(), plain], null);
     expect(level.nodes.map((n) => n.id)).toEqual(['pi_filed', 'pi_plain']);
@@ -123,7 +137,7 @@ describe('panel 2 — mixed placements', () => {
         ))}
       </>,
     );
-    expect(screen.getAllByTestId('placement-line')).toHaveLength(1);
+    expect(screen.queryAllByTestId('placement-line')).toHaveLength(0);
   });
 
   it('puts the folder where `under {parent}` sits on the list row, and keeps a parented row unchanged', () => {
