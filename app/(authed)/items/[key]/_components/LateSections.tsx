@@ -13,6 +13,7 @@ import {
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
+import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
 import { DesignResultPanel } from './DesignResultPanel';
 import { RunSection } from './RunSection';
 import { formatRunTimes } from './runTimes';
@@ -194,6 +195,17 @@ export async function LateUpperSections({
     r.designGate.gate !== null &&
     hasOpenPullRequest(r.pullRequests, deliveries ?? []);
   const showDesignResult = !designInDevelopment && (r.designEvidence !== null || r.isDesignCard);
+  // THE STORY RUN (Story MOTIR-4949 · Subtask MOTIR-5790; the MOTIR-5787 amendment, point
+  // 2). A story holding an acceptance question AND an open pull request of its own was
+  // run as a whole: the receipt LEADS the Development block exactly as a design does,
+  // and the pull requests beneath it are what the one press merges. The standalone
+  // Acceptance section is then not drawn — one question, one place. A story with no
+  // pull request of its own (a single-card run) keeps the section, alone (point 3).
+  const acceptanceInDevelopment =
+    r.acceptanceEvidence !== null &&
+    r.acceptanceGate.gate !== null &&
+    hasOpenPullRequest(r.pullRequests, deliveries ?? []);
+  const acceptanceLeads = acceptanceInDevelopment && r.acceptanceGate.gate?.state === 'awaiting';
   return (
     <>
       {/* THE RUN — above Development, because the run is what produced it. It
@@ -226,7 +238,11 @@ export async function LateUpperSections({
           <ContentSectionCard
             title={tGithub('development.title')}
             subtitle={tGithub(
-              designInDevelopment ? 'development.glossWithDesign' : 'development.gloss',
+              designInDevelopment
+                ? 'development.glossWithDesign'
+                : acceptanceInDevelopment
+                  ? 'development.glossWithAcceptance'
+                  : 'development.gloss',
             )}
             headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
           >
@@ -272,6 +288,12 @@ export async function LateUpperSections({
                     isDesignCard={r.isDesignCard}
                     placement="development"
                   />
+                ) : acceptanceInDevelopment && r.acceptanceEvidence && r.acceptanceGate.gate ? (
+                  <AcceptanceDevelopmentSlot
+                    evidence={r.acceptanceEvidence}
+                    gate={r.acceptanceGate.gate}
+                    mergeAwaiting={r.mergeGate.gate?.state === 'awaiting'}
+                  />
                 ) : undefined
               }
               // ⚠️ WHICH GATE THE FRAME IS A PORT FOR (MOTIR-5667). When the card's
@@ -287,24 +309,36 @@ export async function LateUpperSections({
               // about the commits, and the design shows as decided rather than as a
               // second thing to answer.
               mergeGate={
-                r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate
+                // THE STORY RUN'S PRIMARY (MOTIR-5790): the acceptance gate is what the
+                // frame names and the press addresses while it awaits — its stamp covers
+                // the pull requests beneath it, and the members are the merge gate's.
+                acceptanceLeads && r.mergeGate.gate && r.acceptanceGate.gate
                   ? {
-                      gate: r.designGate.gate,
-                      canDecide: r.designGate.canDecide,
-                      routedToLabel: r.designGate.routedToLabel,
-                      // The DESIGN gate's stamp — it covers the pull requests beneath it too.
-                      stamp: r.designGate.stamp,
+                      gate: r.acceptanceGate.gate,
+                      canDecide: r.acceptanceGate.canDecide,
+                      routedToLabel: r.acceptanceGate.routedToLabel,
+                      stamp: r.acceptanceGate.stamp,
                       members: r.mergeGate.members,
+                      mergeSubjectVersion: r.mergeGate.gate.subjectVersion,
                     }
-                  : r.mergeGate.gate
+                  : r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate
                     ? {
-                        gate: r.mergeGate.gate,
-                        canDecide: r.mergeGate.canDecide,
-                        routedToLabel: r.mergeGate.routedToLabel,
-                        stamp: r.mergeGate.stamp,
+                        gate: r.designGate.gate,
+                        canDecide: r.designGate.canDecide,
+                        routedToLabel: r.designGate.routedToLabel,
+                        // The DESIGN gate's stamp — it covers the pull requests beneath it too.
+                        stamp: r.designGate.stamp,
                         members: r.mergeGate.members,
                       }
-                    : null
+                    : r.mergeGate.gate
+                      ? {
+                          gate: r.mergeGate.gate,
+                          canDecide: r.mergeGate.canDecide,
+                          routedToLabel: r.mergeGate.routedToLabel,
+                          stamp: r.mergeGate.stamp,
+                          members: r.mergeGate.members,
+                        }
+                      : null
               }
               // THE FRAME'S VERBS (MOTIR-5484): server actions, handed down as references
               // so the shared block — also the read-only peek's — imports none of them.
@@ -337,7 +371,7 @@ export async function LateUpperSections({
         identifier={itemIdentifier}
         unlinkAction={unlinkMonitorIssueAction}
       />
-      {r.acceptanceEligibility ? (
+      {r.acceptanceEligibility && r.showAcceptance && !acceptanceInDevelopment ? (
         <ContentSectionCard title={tAcceptance('title')} subtitle={tAcceptance('gloss')}>
           <AcceptancePanel
             workItemId={itemId}
@@ -346,8 +380,12 @@ export async function LateUpperSections({
             eligibility={r.acceptanceEligibility}
             initialEvidence={r.acceptanceEvidence}
             gate={r.acceptanceGate.gate}
-            stamp={r.acceptanceGate.stamp}
             canDecide={r.acceptanceGate.canDecide}
+            routedElsewhereName={
+              r.acceptanceGate.gate?.routedToId === currentUserId
+                ? null
+                : r.acceptanceGate.routedToLabel
+            }
           />
         </ContentSectionCard>
       ) : null}

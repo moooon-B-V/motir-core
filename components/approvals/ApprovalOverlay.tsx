@@ -19,6 +19,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from '@/app/(authed)/items/[key]/_components/DesignResultPanel';
+import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
 import {
   AcceptanceReceiptPlayer,
   AcceptanceReceiptProvenance,
@@ -570,6 +571,13 @@ export function ApprovalOverlay() {
                   evidence={subject.designEvidence}
                   isDesignCard={subject.isDesignCard}
                   placement="development"
+                />
+              ) : subject.acceptanceEvidence && subject.acceptanceGate ? (
+                // A STORY RUN (MOTIR-5790): the receipt leads, the pull requests beneath it.
+                <AcceptanceDevelopmentSlot
+                  evidence={subject.acceptanceEvidence}
+                  gate={subject.acceptanceGate}
+                  mergeAwaiting={gate.kind === 'pull_request_approval' && !decidedState}
                 />
               ) : undefined
             }

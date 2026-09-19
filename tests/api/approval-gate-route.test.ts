@@ -622,6 +622,9 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
     expect(calls).toEqual([
       // MOTIR-4950 — the acceptance port's read, the receipt twin of
       // `designEvidenceService.getForGateSubject`: read by the gate's own subject id.
+      // MOTIR-5790 — a story run's receipt, the Development block's subject when acceptance
+      // leads; the same read the item page's late stack makes.
+      'acceptanceEvidenceService.getCurrentForStory',
       'acceptanceEvidenceService.getForGateSubject',
       'approvalGatesService.getForWorkItem',
       'designEvidenceService.getCurrentForWorkItem',

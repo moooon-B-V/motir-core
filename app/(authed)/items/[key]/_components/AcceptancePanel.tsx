@@ -4,31 +4,20 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import {
-  Check,
-  CircleAlert,
-  CircleCheck,
-  Clock,
-  RotateCcw,
-  Settings,
-  Sparkles,
-  VideoOff,
-} from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/Button';
+import { Check, CircleAlert, CircleCheck, Clock, Settings, Sparkles, VideoOff } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/Button';
 import {
   AcceptanceReceiptPlayer,
   AcceptanceReceiptProvenance,
 } from '@/components/acceptance/AcceptanceReceiptPlayer';
 import { Switch } from '@/components/ui/Switch';
 import { Pill } from '@/components/ui/Pill';
-import { useToast } from '@/components/ui/Toast';
 import { BILLING_PLANS_PATH } from '@/components/ai/AiPaywall';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEligibility';
 import { turnOnAcceptanceVideoAction } from '@/app/(authed)/items/[key]/acceptanceActions';
-import { decideApprovalGateAction } from '@/app/(authed)/items/[key]/approvalGateActions';
-import { useRefusalCopy } from '@/components/approvals/ApprovalGateControl';
-import type { GateRefusal } from '@/lib/approvalGates/refusals';
+import { GateCallToActionBand } from '@/components/approvals/GateCallToActionBand';
+import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
 // The acceptance panel body (Story MOTIR-1627 · Subtask MOTIR-1634), built to
 // design/work-items/acceptance-panel.png. Rendered inside a ContentSectionCard
@@ -53,16 +42,18 @@ export interface AcceptancePanelProps {
   eligibility: AcceptanceVideoEligibilityDTO;
   initialEvidence: AcceptanceEvidenceDTO | null;
   /**
-   * The story's AWAITING `acceptance_result` gate — the question the verbs answer
-   * (MOTIR-4950), or null when there is none. The verbs decide THIS gate through the
-   * contract's one decide door; there is no acceptance-specific decide path any more.
+   * The story's `acceptance_result` gate in whatever state, or null (MOTIR-4950).
+   *
+   * ⚠️ THIS PANEL DOES NOT DECIDE IT (Story MOTIR-4949 · Subtask MOTIR-5790; § *The
+   * item page HANDS THE DECISION OVER*, MOTIR-5228). An awaiting question this
+   * reader may answer renders the shared call-to-action band, which opens the
+   * approval overlay; the overlay is the one place a `GateDecision` is submitted.
    */
-  gate: { id: string } | null;
-  /** What the gate read handed this reader (MOTIR-5234) — pressed back with the
-   *  decision, so a press against a recording that has since moved is refused. */
-  stamp: string | null;
+  gate: ApprovalGateDTO | null;
   /** The gate read's AUTHORITY answer — never re-derived here. */
   canDecide: boolean;
+  /** Who the gate is routed to, when that is not this reader. */
+  routedElsewhereName: string | null;
 }
 
 /**
@@ -86,64 +77,16 @@ export function AcceptancePanel({
   eligibility,
   initialEvidence,
   gate,
-  stamp,
   canDecide,
+  routedElsewhereName,
 }: AcceptancePanelProps) {
   const t = useTranslations('acceptance');
+  const tGate = useTranslations('approvalGate.acceptanceResult');
   const router = useRouter();
-  const { toast } = useToast();
-  const [evidence, setEvidence] = useState(initialEvidence);
+  // The receipt as the server rendered it — the panel no longer changes it (MOTIR-5790).
+  const evidence = initialEvidence;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [refusal, setRefusal] = useState<GateRefusal | null>(null);
-
-  function decide(decision: 'approve' | 'request_changes') {
-    if (!gate) return;
-    setError(null);
-    setRefusal(null);
-    startTransition(async () => {
-      // THE CONTRACT'S DECIDE DOOR (MOTIR-4950) — the same action every other gate
-      // kind is pressed through. The acceptance handler stamps the receipt and
-      // writes whatever status the decision owns; the panel only reflects it.
-      const res = await decideApprovalGateAction({
-        gateId: gate.id,
-        decision,
-        identifier: itemIdentifier,
-        stamp: stamp ?? '',
-      });
-      if (!res.ok) {
-        setRefusal(res.refusal);
-        return;
-      }
-      // Reconcile from the authoritative answer: the decision the door recorded is
-      // the receipt's new status (the handler stamps exactly this).
-      setEvidence((current) =>
-        current
-          ? {
-              ...current,
-              status: res.gate.state === 'approved' ? 'approved' : 'changes_requested',
-            }
-          : current,
-      );
-      // The story's status pill is server-rendered elsewhere on the page → refresh
-      // THAT surface (never the panel's own optimistic state).
-      //
-      // ⚠️ KEPT DELIBERATELY, BESIDE THE ACTION'S OWN `revalidatePath` (Bug
-      // MOTIR-5160). Both halves ship: the action puts the fresh tree on its own
-      // response where nothing can race it, and this reaches the surfaces a
-      // server tree does not cover. Removing it is a SEPARATE claim nobody has
-      // tested — and on the design gate one tier over it was measured NECESSARY,
-      // so it is not a line to tidy away. It is also what this card's guard
-      // breaks to prove itself able to go red: deleting it fails both tests in
-      // `tests/e2e/cloud-acceptance-repaint.spec.ts` at the status-rail
-      // assertion (23.4 s / 22.7 s, measured 2026-09-11).
-      router.refresh();
-      toast({
-        variant: 'success',
-        title: decision === 'approve' ? t('toast.approved') : t('toast.changesRequested'),
-      });
-    });
-  }
 
   function turnOn() {
     setError(null);
@@ -290,26 +233,20 @@ export function AcceptancePanel({
           <Check className="h-3 w-3" aria-hidden />
           {t('status.approved')}
         </Pill>
-      ) : canDecide ? (
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            leftIcon={<Check className="h-3.5 w-3.5" aria-hidden />}
-            onClick={() => decide('approve')}
-            disabled={pending}
-          >
-            {t('actions.approve')}
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            leftIcon={<RotateCcw className="h-3.5 w-3.5" aria-hidden />}
-            onClick={() => decide('request_changes')}
-            disabled={pending}
-          >
-            {t('actions.requestChanges')}
-          </Button>
-        </div>
+      ) : gate?.state === 'awaiting' && canDecide ? (
+        // THE DOOR, NOT THE VERBS (MOTIR-5790): the question is answered in the
+        // approval overlay, which renders this recording in the acceptance port.
+        <GateCallToActionBand
+          kind="acceptance_result"
+          subjectLabel={
+            gate.subjectVersion
+              ? tGate('meta.withVersion', { version: gate.subjectVersion.slice(0, 8) })
+              : tGate('meta.plain')
+          }
+          askedAt={gate.createdAt}
+          itemIdentifier={itemIdentifier}
+          routedElsewhereName={routedElsewhereName}
+        />
       ) : evidence.status === 'changes_requested' ? (
         <Pill severity="warning">
           <CircleAlert className="h-3 w-3" aria-hidden />
@@ -317,19 +254,7 @@ export function AcceptancePanel({
         </Pill>
       ) : null}
 
-      {refusal ? <RefusalLine refusal={refusal} /> : null}
       {error ? <p className="mt-2 text-[13px] text-(--el-danger)">{error}</p> : null}
     </div>
-  );
-}
-
-/** A refused press, in the approval frame's own words (`useRefusalCopy`) — one
- *  vocabulary for every gate kind, never a second copy of it here. */
-function RefusalLine({ refusal }: { refusal: GateRefusal }) {
-  const { headline, nextAction } = useRefusalCopy(refusal);
-  return (
-    <p role="alert" className="mt-2 text-[13px] text-(--el-text-secondary)">
-      <span className="font-semibold text-(--el-text)">{headline}</span> {nextAction}
-    </p>
   );
 }

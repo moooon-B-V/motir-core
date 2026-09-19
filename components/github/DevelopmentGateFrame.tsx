@@ -77,6 +77,14 @@ export interface DevelopmentGateRead {
    * gate still awaits and whether the press queued it (MOTIR-5484). Empty before that.
    */
   members?: PullRequestApprovalMemberDTO[];
+  /**
+   * The approve-to-merge gate's version — its delivery SET — when the frame is handed a
+   * PRIMARY gate whose own version is not a set (MOTIR-5790). A story run's acceptance
+   * gate is versioned by its recording's commit, so without this the frame would count no
+   * members and could not name what its one press merges (panel A's consequence). Absent
+   * for every other host, which keeps each shipped frame byte-for-byte as it was.
+   */
+  mergeSubjectVersion?: string | null;
 }
 
 /** The item page's server actions this frame presses. */
@@ -174,6 +182,7 @@ export function DevelopmentGateFrame({
   const t = useTranslations('approvalGate.pullRequestApproval');
   const tGate = useTranslations('approvalGate');
   const tDesign = useTranslations('approvalGate.designResult');
+  const tAcceptance = useTranslations('approvalGate.acceptanceResult');
   const router = useRouter();
   // The in-browser path to the status rail (Bug MOTIR-5212) — a no-op outside the item page.
   const { applyOptimisticStatus, clearOptimisticStatus } = useOptimisticStatusWriter();
@@ -193,7 +202,7 @@ export function DevelopmentGateFrame({
   // what words their progress line and a refusal's title.
   const [requeued, setRequeued] = useState<ReadonlySet<string>>(new Set());
 
-  const members = membersOf(gate.subjectVersion);
+  const members = membersOf(read.mergeSubjectVersion ?? gate.subjectVersion);
   const count = members.length;
   const nameOf = (member: Pick<MemberVersion, 'repo' | 'number'>) =>
     `${member.repo} · #${member.number}`;
@@ -422,18 +431,32 @@ export function DevelopmentGateFrame({
     : [];
   // One or two pull requests are NAMED; three or more are COUNTED, because band 3 is one line
   // and an unbounded list pushes the verbs off the frame. The confirm step names every one.
+  // ⚠️ A STORY RUN'S ACCEPTANCE LEADS WITH ITS OWN WORDS (Story MOTIR-4949 · Subtask
+  // MOTIR-5790; `acceptance-panel--approve-and-merge.mock.html` panel A). The press accepts
+  // the story AND merges its code, and the sentence says in words that the video is NOT
+  // merged — it is an uploaded receipt, never a file in any of these pull requests.
+  const acceptanceLeads = gate.kind === 'acceptance_result';
+  const prsNamed = nameList(members.map(nameOf));
   const consequence =
     actions && count > 0
-      ? count <= 2
-        ? t('consequence.named', { prs: nameList(members.map(nameOf)), key: itemIdentifier })
-        : t('consequence.counted', { count, key: itemIdentifier })
+      ? acceptanceLeads
+        ? tAcceptance('consequenceMerges', { key: itemIdentifier, prs: prsNamed })
+        : count <= 2
+          ? t('consequence.named', { prs: prsNamed, key: itemIdentifier })
+          : t('consequence.counted', { count, key: itemIdentifier })
       : null;
   const confirmConsequences = actions
-    ? [
-        t('confirm.records', { count }),
-        ...members.map((member) => t('confirm.mergeOrQueue', { pr: nameOf(member) })),
-        t('confirm.movesToApproved', { key: itemIdentifier }),
-      ]
+    ? acceptanceLeads
+      ? [
+          tAcceptance('confirm.records'),
+          tAcceptance('confirm.freezes'),
+          tAcceptance('confirm.merges', { prs: prsNamed }),
+        ]
+      : [
+          t('confirm.records', { count }),
+          ...members.map((member) => t('confirm.mergeOrQueue', { pr: nameOf(member) })),
+          t('confirm.movesToApproved', { key: itemIdentifier }),
+        ]
     : [];
 
   // State `H` for a MEMBER: the approval stands, and the refusal is named in place.
@@ -556,7 +579,13 @@ export function DevelopmentGateFrame({
           // shipped approve-and-merge wording, because one press is what merges the
           // set (MOTIR-5664), and a second visual language for the same act would be
           // the duplication this level exists to remove.
-          kindLabel={gate.kind === 'design_result' ? tDesign('kindLabel') : t('kindLabel')}
+          kindLabel={
+            gate.kind === 'design_result'
+              ? tDesign('kindLabel')
+              : acceptanceLeads
+                ? tAcceptance('kindLabel')
+                : t('kindLabel')
+          }
           subjectMeta={subjectMeta}
           // `data-port` lifts the block's code surfaces to `--el-card` on the port's
           // `--el-surface` (§20 Decisions: the same fill would leave only the edge).

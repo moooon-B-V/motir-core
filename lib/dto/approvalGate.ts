@@ -562,6 +562,13 @@ export type ApprovalGateOverlaySubjectDTO =
       /** The block's second part. `record_missing` is an ANSWER here, not an error. */
       howToTest: HowToTestDto;
       /**
+       * A STORY RUN's receipt and its gate (MOTIR-5790), or null — the Development block's
+       * SUBJECT when the story's acceptance leads, exactly as `designEvidence` is a design
+       * card's. Read for every card and null for any card with no receipt.
+       */
+      acceptanceEvidence: AcceptanceEvidenceDTO | null;
+      acceptanceGate: ApprovalGateDTO | null;
+      /**
        * The card's CURRENT design result, or null. On a card with an open linked pull
        * request the result renders inside this block rather than as its own section
        * (`design-result.md` AMENDMENT 4 Q8), so the port needs it.

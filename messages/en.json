@@ -6293,6 +6293,7 @@
       "title": "Development",
       "gloss": "Pull requests and how to test them · live PR and CI status",
       "glossWithDesign": "Pull requests, the design and how to test them · live PR and CI status",
+      "glossWithAcceptance": "The acceptance video, the pull requests and how to test them · live PR and CI status",
       "pullRequestsGroup": "Pull requests",
       "howToTest": {
         "title": "How to test",
@@ -8486,8 +8487,13 @@
       "confirm": {
         "records": "record that you accepted it, with the time and this recording;",
         "freezes": "lock this recording, so a later run cannot replace it;",
-        "movesToDone": "move {key} to Done once nothing under it is still open."
-      }
+        "movesToDone": "move {key} to Done once nothing under it is still open.",
+        "merges": "merge {prs} — the video is not part of it."
+      },
+      "consequenceMerges": "Approving accepts {key} and merges {prs}, then moves {key} to Approved. The video is not merged — it is evidence and is never committed.",
+      "accepted": "Acceptance approved by {name} · {when}",
+      "stands": "Acceptance approved by {name} · {when} — the video stands",
+      "mergeHeld": "The pull request merges when its checks pass — no second press."
     },
     "pullRequestApproval": {
       "kindLabel": "Pull requests",

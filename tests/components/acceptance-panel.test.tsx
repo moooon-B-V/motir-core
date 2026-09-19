@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
+import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEligibility';
 
 // AcceptancePanel (Story MOTIR-1627 · Subtask MOTIR-1634) — the three eligibility
@@ -11,19 +12,17 @@ import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEli
 // are mocked; the panel's branching + the optimistic reconcile are under test.
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
-const { decideApprovalGateAction, turnOnAcceptanceVideoAction } = vi.hoisted(() => ({
-  decideApprovalGateAction: vi.fn(),
+const { turnOnAcceptanceVideoAction } = vi.hoisted(() => ({
   turnOnAcceptanceVideoAction: vi.fn(async () => ({ ok: true })),
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh }),
+  usePathname: () => '/items/MOTIR-1',
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock('@/app/(authed)/items/[key]/acceptanceActions', () => ({
   turnOnAcceptanceVideoAction,
-}));
-// MOTIR-4950 — the panel's verbs press the story's `acceptance_result` gate through the
-// contract's one decide action; the bespoke acceptance action is retired.
-vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
-  decideApprovalGateAction,
 }));
 
 const { AcceptancePanel } = await import('@/app/(authed)/items/[key]/_components/AcceptancePanel');
@@ -80,16 +79,23 @@ const baseProps = {
   // the eligibility DTO's `organizationId`, so a panel that went back to passing
   // the organisation fails the call assertion below rather than coinciding.
   projectId: 'proj_1',
-  // The story's awaiting `acceptance_result` gate and the stamp its read handed the
-  // reader (MOTIR-4950) — what the verbs press back.
-  gate: { id: 'gate_1' },
-  stamp: 'stamp_1',
+  // The story's awaiting `acceptance_result` gate (MOTIR-4950). The panel does not
+  // decide it (MOTIR-5790): it opens the approval overlay on it.
+  gate: {
+    id: 'gate_1',
+    kind: 'acceptance_result',
+    state: 'awaiting',
+    subjectVersion: 'a981c09abc',
+    createdAt: '2026-09-19T10:00:00.000Z',
+    routedToId: 'u_1',
+  } as unknown as ApprovalGateDTO,
+  routedElsewhereName: null,
 };
 
 afterEach(cleanup);
 
 describe('AcceptancePanel', () => {
-  it('eligible + evidence → player, chapters, provenance, and the gate buttons', () => {
+  it('eligible + evidence + a question this reader may answer → player, provenance, and the Review & approve DOOR — no verbs (MOTIR-5790)', () => {
     renderPanel({
       ...baseProps,
       eligibility: eligibility({}),
@@ -98,40 +104,25 @@ describe('AcceptancePanel', () => {
     });
     expect(screen.getByText('Open the story')).toBeTruthy();
     expect(screen.getByText('a981c09')).toBeTruthy(); // short commit
-    expect(screen.getByRole('button', { name: /approve/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /request changes/i })).toBeTruthy();
+    // § *The item page HANDS THE DECISION OVER*: the door opens the overlay on THIS
+    // gate's kind, and the overlay is the one place a decision is submitted.
+    const door = screen.getByRole('link', { name: /review & approve/i });
+    const href = door.getAttribute('href') ?? '';
+    expect(href).toContain('approval=MOTIR-1');
+    expect(href).toContain('approvalKind=acceptance_result');
+    expect(screen.queryByRole('button', { name: /^approve$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /request changes/i })).toBeNull();
   });
 
-  it('Approve presses the GATE through the one decide action + reconciles from the response (no self-refresh of state)', async () => {
-    decideApprovalGateAction.mockResolvedValueOnce({
-      ok: true,
-      gate: { id: 'gate_1', state: 'approved' },
-      filesKept: null,
-    });
+  it('a reader who may NOT decide gets no door, and an approved receipt shows its pill', () => {
     renderPanel({
       ...baseProps,
       eligibility: eligibility({}),
-      initialEvidence: evidence(),
-      canDecide: true,
+      initialEvidence: evidence({ status: 'approved', approvedById: 'Yue' }),
+      canDecide: false,
     });
-    fireEvent.click(screen.getByRole('button', { name: /approve/i }));
-    // ⚠️ THE IDENTIFIER IS PART OF THE CONTRACT NOW, so it is asserted rather
-    // than spread past (Bug MOTIR-5160). The action revalidates the card's path
-    // on its success branch, and the path comes from THIS argument — a panel
-    // that stopped passing it would still approve, still reconcile, and silently
-    // stop repainting the page.
-    await waitFor(() =>
-      expect(decideApprovalGateAction).toHaveBeenCalledWith({
-        gateId: 'gate_1',
-        decision: 'approve',
-        identifier: 'MOTIR-1',
-        stamp: 'stamp_1',
-      }),
-    );
-    // After approval the buttons are gone and the Approved pill shows.
-    await waitFor(() => expect(screen.getByText('Approved')).toBeTruthy());
-    expect(screen.queryByRole('button', { name: /request changes/i })).toBeNull();
-    expect(refresh).toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: /review & approve/i })).toBeNull();
+    expect(screen.getByText('Approved')).toBeTruthy();
   });
 
   it('pending (eligible, no evidence) → the waiting state', () => {
