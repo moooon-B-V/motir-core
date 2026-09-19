@@ -685,7 +685,7 @@ export function isSubsumptionCheckExempt(md: string | null | undefined): boolean
 // family, and the only one that reads no prose at all.
 //
 // The planner's estimation gate (`plan-rules/kind-leaf-deepen.md`) puts two
-// ceilings on a `coding_agent` LEAF: `storyPoints >= 13` is its literal SPLIT
+// ceilings on a `coding_agent` LEAF: `storyPoints >= 8` is its literal SPLIT
 // signal, and the agent run must be ≤ 60 minutes. Nothing in the product checked
 // either, and four cards have now been sealed over it by an author who
 // understood the gate perfectly and wrote the correct remedy into the card's own
@@ -703,7 +703,7 @@ export function isSubsumptionCheckExempt(md: string | null | undefined): boolean
 // ⚠️ CORRECTED BY MOTIR-3271. This paragraph used to end "…and no false-positive
 // class needing a `reason` discriminator". That was true of the POINTS arm and
 // false of the MINUTES one, and the half that was right is what lent the other
-// half its confidence. `13+` is the gate's own literal split signal, read off
+// half its confidence. `8+` is the gate's own literal split signal, read off
 // the card's own points column. The minutes arm reads `estimateMinutes`, which
 // the same pack DEFINES as agent run time PLUS CI time, against a ceiling the
 // gate places on the agent run ALONE ("EXCLUDING CI … NOT the PR's CI pipeline
@@ -714,12 +714,25 @@ export function isSubsumptionCheckExempt(md: string | null | undefined): boolean
 
 /**
  * The estimation gate's SPLIT signal: a `coding_agent` leaf at or above this
- * many story points is asking to be split (`plan-rules/kind-leaf-deepen.md` —
- * *"reserve `13+` for a subtask that should be split"*).
+ * many story points is asking to be split.
  *
- * At-or-above, not above: 13 is the signal itself, not the first value past it.
+ * At-or-above, not above: 8 is the signal itself, not the first value past it.
+ *
+ * ⚠️ 13 → 8, AND THE POINTS ARM WAS DEAD UNTIL IT (MOTIR-5588 · PRODECT_FINDINGS
+ * #106). The planner is given the Fibonacci deck `1 / 2 / 3 / 5 / 8` and told
+ * that **8 IS the split signal for a subtask** — so a planner-authored leaf can
+ * never reach 13, and this arm fired only on a hand-entered number. The one
+ * value the rule calls a split signal produced no advisory at all.
+ *
+ * ⚠️ AND THE CITATION IT CARRIED WAS TWICE STALE. It quoted
+ * the estimation gate — *"reserve the top of the deck for a subtask that should
+ * be split"* — and that pack is RETIRED, and neither rule home contains that
+ * sentence any more. Both now say `8`. A threshold pinned to a corpus sentence
+ * is a threshold that goes stale silently when the sentence moves, so this
+ * comment states the RULE rather than quoting a file: the deck tops out at 8,
+ * and the top of the deck is the split signal.
  */
-export const ESTIMATION_GATE_STORY_POINTS = 13;
+export const ESTIMATION_GATE_STORY_POINTS = 8;
 
 /**
  * The estimation gate's minutes threshold — the value `estimateMinutes` must
@@ -782,7 +795,7 @@ export const ESTIMATION_GATE_ESTIMATE_MINUTES = 70;
  * WHICH of the two ceilings a card crossed — one advisory says both.
  *
  * The two arms do NOT carry the same authority, and a renderer must not present
- * them as if they did (MOTIR-3271). `story_points` IS the rule: `13+` is the
+ * them as if they did (MOTIR-3271). `story_points` IS the rule: `8+` is the
  * gate's literal split signal. `estimate_minutes` is a PROXY for it — see
  * {@link ESTIMATION_GATE_ESTIMATE_MINUTES}.
  */

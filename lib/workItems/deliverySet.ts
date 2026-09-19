@@ -376,6 +376,62 @@ export function deliveryStateForPromotion(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// A FINISHED PULL REQUEST THAT NEVER REPORTED (MOTIR-5786)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One member of a delivery set, in the shape the verdict rule below reads. */
+export interface VerdictMember {
+  /** `derivePrCiState` at the pull request's latest recorded sha. */
+  state: string | null;
+  /** Its repository cannot report a check at all ({@link repoCannotReportChecks}). */
+  cannotReport: boolean;
+  /** A standing merge-queue failure holds it ({@link queueExitHoldsAtHead}). */
+  queueFailure: boolean;
+  /** The pull request's lifecycle — {@link deliveryMemberState}'s collapse. */
+  lifecycle: DeliveryMember['state'];
+}
+
+/**
+ * The members of a delivery set that carry, or are still WAITING FOR, a
+ * verdict — the set BOTH readings are taken over (MOTIR-5786).
+ *
+ * ── The one member it drops ────────────────────────────────────────────────
+ * A pull request that is already MERGED or CLOSED, has no check rows, and sits
+ * in a repository that CAN report checks. The `running` arm of
+ * {@link deliveryStateForCard} was written for a pull request opened seconds ago
+ * (MOTIR-5470), whose silence means *not yet*. A finished one's silence means
+ * *never*: it will emit no further check, so reading it as `running` pinned the
+ * card at `running` for ever. On production that was 212 finished cards, nearly
+ * all of them old merges from before checks were recorded or merges that skipped
+ * CI. It is not waiting on anything, so it says nothing about the card.
+ *
+ * ── Why it is a FILTER over the set, not a cell in either mapper ───────────
+ * The card could have mapped the member to `null`, which its fold ignores. The
+ * promotion cannot: `deliverySetIsGreen` reads `null` as NOT PASSING, so one
+ * silent merged pull request beside a green one would still hold the card at
+ * `implemented`, and `foldCardCiState` would say `passing` about a card the
+ * promotion refuses. The equivalence those two must keep (`passing` exactly when
+ * the promotion would promote) holds only if both read the SAME members. So the
+ * member leaves the set before either mapper sees it, and the equivalence stays a
+ * property instead of a coincidence.
+ *
+ * ── What it keeps, deliberately ───────────────────────────────────────────
+ *   - an OPEN member with no checks: still `running`, the just-opened case;
+ *   - a finished member in a repository that CANNOT report: still `passing`
+ *     (MOTIR-3823 decided a CI-less repository is green);
+ *   - a finished member that DID report: its verdict stands;
+ *   - a member held by a queue failure: never dropped, whatever else is true.
+ *
+ * A set of only dropped members becomes EMPTY, which folds to `null` and does
+ * not promote: the empty-set rule decides it, with no special case here.
+ */
+export function membersWithAVerdict<M extends VerdictMember>(members: readonly M[]): M[] {
+  return members.filter(
+    (m) => m.state !== null || m.cannotReport || m.queueFailure || m.lifecycle === 'open',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // The CARD's own verdict (Story MOTIR-5469 · MOTIR-5470)
 // ─────────────────────────────────────────────────────────────────────────────
 

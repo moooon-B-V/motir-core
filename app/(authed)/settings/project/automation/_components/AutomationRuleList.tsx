@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
+import { Switch } from '@/components/ui/Switch';
 import { AUTOMATION_RULES_PER_PROJECT_CAP } from '@/lib/automation/constants';
 import type { AutomationRuleDto, AutomationRuleSummaryDto } from '@/lib/dto/automationRules';
-import { AutoDisabledBanner, MemberAvatar, RuleSwitch } from './AutomationParts';
+import { AutoDisabledBanner, MemberAvatar } from './AutomationParts';
 import { AutomationRuleActionsMenu } from './AutomationRuleActionsMenu';
 
 // The rule list (Story 6.6 · Subtask 6.6.5), per
@@ -152,10 +153,10 @@ function RuleRow({
         rule.enabled ? '' : 'opacity-70'
       }`}
     >
-      <RuleSwitch
+      <Switch
         checked={rule.enabled}
-        onChange={onToggleEnabled}
-        label={t('row.enabledAria', { name: rule.name })}
+        onCheckedChange={onToggleEnabled}
+        aria-label={t('row.enabledAria', { name: rule.name })}
       />
       <div className="min-w-0 flex-1">
         <span className="block truncate font-sans text-sm font-medium text-(--el-text)">

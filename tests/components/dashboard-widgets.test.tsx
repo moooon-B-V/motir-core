@@ -122,6 +122,27 @@ describe('WidgetConfigModal — registry-driven editor kinds + the data-source X
     expect(screen.getByText('Cumulative')).toBeTruthy();
   });
 
+  it('the cumulative switch is the design-system Switch, named and toggled by its visible label (MOTIR-5735)', () => {
+    withToast(
+      configModal({
+        type: 'created_vs_resolved',
+        editorKind: 'created_vs_resolved_editor',
+      }),
+    );
+    // The accessible name comes from the visible label, not from text inside
+    // the button (the old hand-rolled Toggle rendered the label inside it).
+    const toggle = screen.getByRole('switch', { name: 'Cumulative' });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    // The primitive paints the Switch-scoped tokens the contrast suite measures.
+    expect(toggle.className).toContain('bg-(--el-muted)');
+    expect(toggle.className).toContain('border-(--el-switch-off-border)');
+    // The label stays a click target for the switch.
+    fireEvent.click(screen.getByText('Cumulative'));
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+  });
+
   it('renders the filter-results editor kind (rows per page)', () => {
     withToast(configModal({ type: 'filter_results', editorKind: 'filter_results_editor' }));
     expect(screen.getByText('Rows per page')).toBeTruthy();

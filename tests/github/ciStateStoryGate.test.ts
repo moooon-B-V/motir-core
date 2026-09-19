@@ -397,6 +397,36 @@ describe('§2 the column and the promotion agree (MOTIR-5477)', () => {
     expect(await storedCiState(item.id)).toBe('passing');
     expect(await statusOf(item.id)).toBe('in_review');
   });
+
+  it('a member that MERGED without checks is dropped from BOTH readings, so they still agree (MOTIR-5786)', async () => {
+    // Before MOTIR-5786 the silent merged member read `running` on the column and
+    // "not passing" on the promotion: the card sat at `implemented` for ever and
+    // the Checks filter listed it as still waiting. It is waiting on nothing, so
+    // both readings drop it — and the green member alone decides, on both sides.
+    const s = await makeScenario('agree-finished@example.com', 'AGF');
+    const item = await makeCard(s, 'A change with an old silent merge', 'implemented');
+
+    for (const number of [41, 42]) {
+      await linkPrByIdentifier({
+        identifier: item.identifier,
+        owner: 'moooon',
+        name: 'acme',
+        number,
+        headRef: `subtask/${item.identifier}-${number}`,
+        title: `A change (subtask/${item.identifier}-${number})`,
+      });
+      await openPrIn(REPO_PROVIDER_ID, `subtask/${item.identifier}-${number}`, number);
+    }
+    // #41 merged without a single check row — an old merge, or one that skipped CI.
+    await adminDb.githubPullRequest.updateMany({
+      where: { number: 41, repo: { name: 'acme' } },
+      data: { state: 'closed', merged: true },
+    });
+
+    await ci({ conclusion: 'success', headSha: 'sha-42', prNumbers: [42] });
+    expect(await storedCiState(item.id)).toBe('passing');
+    expect(await statusOf(item.id)).toBe('in_review');
+  });
 });
 
 // ── §3 ─────────────────────────────────────────────────────────────────────
