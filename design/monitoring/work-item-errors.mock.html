@@ -1,0 +1,2429 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · the Errors section on the work-item page (MOTIR-5727)</title>
+    <!--
+      NEW SURFACE — MOTIR-5727 (Story MOTIR-4932). Built by MOTIR-5732, which is
+      blocked_by this card. design/monitoring/design-notes.md §14 is its spec.
+
+      SHIPPED REALITY FIRST. The section is the shipped ContentSectionCard
+      (app/(authed)/items/[key]/_components/ContentSectionCard.tsx) and its rows
+      mirror the shipped PullRequestRow (components/github/DevelopmentSection.tsx)
+      class for class: a bordered row on the section surface, a 17px muted glyph,
+      a 13.5px medium title over a 12px identifier line, the pill group, the 16px
+      out-link, then the 24px remove control LAST. The door and picker are the
+      shipped DevelopmentLinkControl.tsx grammar; the confirmations are the
+      RemoveLinkButton popover. Rendered from those real class strings with the
+      real theme tokens before this mock was drawn.
+
+      PANELS (review every one):
+        1  · one linked error, and the access path (below Development);
+        2  · several, from two monitored projects;
+        3  · every resolve_state value, gone included;
+        4  · both assignee notes;
+        5  · no link: no section, and the ⋯-menu door; 5c the section mounting;
+        6a · the header door and picker; 6b its states;
+        7  · linked elsewhere (the move), linked here;
+        8  · unlink;
+        9  · who sees the door;
+        10 · loading and a failed read.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-fill: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-link: #0070d2;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-md: 16px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-sm: 32px;
+        --height-control: 36px;
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-card: var(--color-background);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-input-border: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      button {
+        color: inherit;
+        font: inherit;
+        background: none;
+        border: 0;
+        padding: 0;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      .sr {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .board {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+      .board-title {
+        margin: 0 0 6px;
+        font: 600 24px/1.2 var(--font-serif);
+      }
+      .board-subtitle {
+        max-width: 72rem;
+        margin: 0 0 30px;
+        color: var(--el-text-secondary);
+      }
+      .panel-block {
+        margin: 0 0 40px;
+      }
+      .panel-label {
+        margin: 0 0 6px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .panel-note {
+        max-width: 72rem;
+        margin: 0 0 12px;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        max-width: 760px;
+        padding: 20px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .panel-wide {
+        max-width: none;
+      }
+      .sub-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        gap: 20px;
+        align-items: start;
+      }
+      .sub-grid + .sub-grid {
+        margin-top: 20px;
+      }
+      .panel-cell {
+        min-width: 0;
+      }
+      /* ── The work-item page frame (the access path) ───────────────────── */
+      .page {
+        min-width: 0;
+      }
+      .page-head {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 14px;
+      }
+      .page-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .page-title {
+        font: 600 20px/1.25 var(--font-serif);
+      }
+      .page-actions {
+        position: relative;
+        margin-left: auto;
+      }
+      .menu-trigger {
+        display: inline-flex;
+        width: 28px;
+        height: 28px;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+      }
+      .menu {
+        position: absolute;
+        top: 32px;
+        right: 0;
+        z-index: 2;
+        width: 232px;
+        padding: 4px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+      }
+      .menu-item {
+        display: flex;
+        width: 100%;
+        height: var(--height-control);
+        align-items: center;
+        gap: 8px;
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+        font-size: 14px;
+        text-align: left;
+      }
+      .menu-item.is-active {
+        background: var(--el-surface);
+      }
+      .menu-glyph {
+        color: var(--el-icon-muted);
+      }
+      .tier-label {
+        margin: 0 0 8px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .next-section {
+        padding: 12px 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      /* ── ContentSectionCard ───────────────────────────────────────────── */
+      .card {
+        position: relative;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 var(--spacing-md);
+      }
+      .card-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-gloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .card-head-right {
+        display: flex;
+        align-items: center;
+        margin-left: auto;
+      }
+      .link-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        border-radius: var(--radius-control);
+        color: var(--el-link);
+        font-size: 14px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      /* ── The row (PullRequestRow grammar) ─────────────────────────────── */
+      .rows {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .pr-row,
+      .err-main {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .pr-row,
+      .err-row {
+        margin-top: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
+      }
+      .err-row.is-gone {
+        background: var(--el-surface-soft);
+      }
+      .err-text {
+        min-width: 0;
+        flex: 1;
+        padding: 4px 0;
+      }
+      .err-title {
+        display: block;
+        overflow: hidden;
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--el-text);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .err-title-link:hover {
+        text-decoration: underline;
+      }
+      .is-gone .err-title {
+        color: var(--el-text-secondary);
+      }
+      .err-meta {
+        overflow: hidden;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .err-facts {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 10px;
+      }
+      .err-count {
+        min-width: 118px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        text-align: right;
+        white-space: nowrap;
+      }
+      .num {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .err-seen {
+        min-width: 112px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .t {
+        text-decoration: underline dotted;
+      }
+      .err-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin: 2px 0 4px 27px;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .note-quiet {
+        color: var(--el-text-secondary);
+      }
+      .note-warn {
+        padding: 6px 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .note-warn .gl-14 {
+        color: var(--el-warning);
+      }
+      .ext {
+        display: inline-flex;
+        flex-shrink: 0;
+        padding: 4px;
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+      }
+      .row-remove {
+        display: inline-flex;
+        width: 24px;
+        height: 24px;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+      }
+      .row-remove.is-hover {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      /* ── Pill ─────────────────────────────────────────────────────────── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border: 1px solid transparent;
+        border-radius: var(--radius-badge);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+      }
+      .pill-warning {
+        background: var(--el-tint-peach);
+      }
+      .pill-info {
+        background: var(--el-tint-sky);
+      }
+      .pill-success {
+        background: var(--el-tint-mint);
+      }
+      .pill-neutral {
+        border-color: var(--el-chip-border);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+      }
+      /* ── The picker (DevelopmentLinkControl grammar) ──────────────────── */
+      .link-form {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 0 0 12px;
+        padding: 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .f-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .combo-input {
+        display: flex;
+        height: var(--height-control);
+        align-items: center;
+        gap: 6px;
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-card);
+        color: var(--el-icon-muted);
+      }
+      .combo-input span {
+        color: var(--el-text);
+      }
+      .combo-input .ph {
+        color: var(--el-text-secondary);
+      }
+      .caret {
+        width: 1px;
+        height: 16px;
+        background: var(--el-text);
+      }
+      .combo-pop {
+        padding: 4px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+      }
+      .opt.is-active {
+        background: var(--el-surface);
+      }
+      .opt.is-disabled .opt-title {
+        color: var(--el-text-secondary);
+      }
+      .opt-text {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+      }
+      .opt-title {
+        overflow: hidden;
+        font-size: 13.5px;
+        color: var(--el-text);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .opt-sub {
+        overflow: hidden;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .combo-empty {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .hint {
+        color: var(--el-text-identifier);
+      }
+      .search-fail {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin: 0 0 4px;
+        padding: 6px 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+        font-size: 12px;
+      }
+      .warn-glyph {
+        color: var(--el-warning);
+      }
+      .form-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .form-error {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+        font-size: 13px;
+      }
+      .danger-glyph {
+        color: var(--el-danger);
+      }
+      .empty-line {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      /* ── Button ───────────────────────────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        border-radius: var(--radius-btn);
+        font-weight: 500;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 13px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        border-color: var(--el-border-strong);
+        background: var(--el-card);
+        color: var(--el-text);
+      }
+      .btn-ghost {
+        color: var(--el-text);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      /* ── The confirm popovers (RemoveLinkButton grammar) ──────────────── */
+      .confirm-wrap {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+      .confirm {
+        display: flex;
+        width: 300px;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+        font-size: 14px;
+        line-height: 1.35;
+      }
+      .confirm-move {
+        width: 340px;
+      }
+      .confirm-sub {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .confirm-id {
+        color: var(--el-text);
+      }
+      .key-link {
+        color: var(--el-link);
+        font-family: var(--font-mono);
+        font-size: 13px;
+      }
+      .confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      /* ── Loading and ErrorState ───────────────────────────────────────── */
+      .skel {
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .skel-title {
+        width: 144px;
+        height: 20px;
+        margin: 0 0 var(--spacing-md);
+      }
+      .skel-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .skel-a {
+        width: 66%;
+        height: 12px;
+      }
+      .skel-b {
+        width: 50%;
+        height: 12px;
+      }
+      .error-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        text-align: center;
+      }
+      .error-title {
+        font: 400 20px/1.3 var(--font-serif);
+        color: var(--el-text);
+      }
+      .error-desc {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      /* ── Glyph sizes ──────────────────────────────────────────────────── */
+      .gl-14,
+      .gl-15,
+      .gl-16,
+      .gl-17,
+      .gl-32 {
+        flex-shrink: 0;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .gl-14 {
+        width: 14px;
+        height: 14px;
+        margin-top: 1px;
+      }
+      .gl-15 {
+        width: 15px;
+        height: 15px;
+      }
+      .gl-16 {
+        width: 16px;
+        height: 16px;
+      }
+      .gl-17 {
+        width: 17px;
+        height: 17px;
+        color: var(--el-icon-muted);
+      }
+      .gl-32 {
+        width: 32px;
+        height: 32px;
+      }
+      .ext-spacer {
+        width: 24px;
+        flex-shrink: 0;
+      }
+      .col-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .combo-loading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .confirm-error {
+        padding: 6px 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+        font-size: 12px;
+      }
+      .sub-caption {
+        margin: 16px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sr" aria-hidden="true">
+      <defs>
+        <!-- lucide `activity` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-activity" viewBox="0 0 24 24">
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </symbol>
+        <!-- lucide `plus` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </symbol>
+        <!-- lucide `x` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-x" viewBox="0 0 24 24">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </symbol>
+        <!-- lucide `external-link` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-external-link" viewBox="0 0 24 24">
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </symbol>
+        <!-- lucide `triangle-alert` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <!-- lucide `circle-check-big` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-circle-check-big" viewBox="0 0 24 24">
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </symbol>
+        <!-- lucide `loader-circle` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-loader-circle" viewBox="0 0 24 24">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </symbol>
+        <!-- lucide `circle-alert` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-circle-alert" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </symbol>
+        <!-- lucide `git-merge` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-git-merge" viewBox="0 0 24 24">
+          <circle cx="18" cy="18" r="3" />
+          <circle cx="6" cy="6" r="3" />
+          <path d="M6 21V9a9 9 0 0 0 9 9" />
+        </symbol>
+        <!-- lucide `user-round` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-user-round" viewBox="0 0 24 24">
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 0 0-16 0" />
+        </symbol>
+        <!-- lucide `users-round` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-users-round" viewBox="0 0 24 24">
+          <path d="M18 21a8 8 0 0 0-16 0" />
+          <circle cx="10" cy="8" r="5" />
+          <path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3" />
+        </symbol>
+        <!-- lucide `search` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </symbol>
+        <!-- lucide `ellipsis` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-ellipsis" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </symbol>
+        <!-- lucide `pencil` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-pencil" viewBox="0 0 24 24">
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </symbol>
+        <!-- lucide `goal` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-goal" viewBox="0 0 24 24">
+          <path d="M12 13V2l8 4-8 4" />
+          <path d="M20.561 10.222a9 9 0 1 1-12.55-5.29" />
+          <path d="M8.002 9.997a5 5 0 1 0 8.9 2.02" />
+        </symbol>
+        <!-- lucide `copy` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-copy" viewBox="0 0 24 24">
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </symbol>
+        <!-- lucide `circle-off` — EXTRACTED from the installed `lucide-react@1.16.0` -->
+        <symbol id="i-circle-off" viewBox="0 0 24 24">
+          <path d="m2 2 20 20" />
+          <path d="M8.35 2.69A10 10 0 0 1 21.3 15.65" />
+          <path d="M19.08 19.08A10 10 0 1 1 4.92 4.92" />
+        </symbol>
+      </defs>
+    </svg>
+    <main class="board">
+      <h1 class="board-title">The Errors section on the work-item page</h1>
+      <p class="board-subtitle">
+        MOTIR-5727 draws what a work item linked to monitor issues shows, the door a person uses to
+        link an existing work item to an issue by hand, and the way to take the link back. It is the
+        Development section&rsquo;s card grammar with a different source.
+      </p>
+
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 1 · One linked error — and the ACCESS PATH: opening a work item, the late upper
+          tier, directly below Development
+        </div>
+        <p class="panel-note">
+          The ordinary monitor-filed bug. The row is the shipped
+          <span class="mono">PullRequestRow</span> grammar with a different source: title (links out
+          to the issue in Sentry), the connection plus environment · release on the identifier line,
+          then the level pill, <b>Seen N times</b> and <b>last seen</b> (absolute time on hover). No
+          provider call: every fact is the stored <span class="mono">monitor_issue</span> row.
+        </p>
+        <div class="panel panel-wide">
+          <div class="page">
+            <div class="page-head">
+              <span class="page-key">ACME-812</span>
+              <h1 class="page-title">Checkout fails with a 502 on large carts</h1>
+              <div class="page-actions">
+                <button class="menu-trigger" aria-label="Actions for ACME-812">
+                  <svg class="gl-16" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="tier-label">Late upper tier</div>
+            <div class="stack">
+              <div class="card" data-surface="card">
+                <div class="card-head">
+                  <h2 class="card-title">Development</h2>
+                  <span class="card-gloss"
+                    >— Pull requests and how to test them · live PR and CI status</span
+                  >
+                  <div class="card-head-right">
+                    <button type="button" class="link-cta">
+                      <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link pull
+                      request
+                    </button>
+                  </div>
+                </div>
+                <ul class="rows">
+                  <li class="pr-row">
+                    <svg class="gl-17" aria-hidden="true"><use href="#i-git-merge" /></svg>
+                    <div class="err-text">
+                      <span class="err-title">Retry the payment call on a gateway 502</span>
+                      <div class="err-meta">acme/checkout-api · #412</div>
+                    </div>
+                    <span class="err-facts"><span class="pill pill-success">Merged</span></span
+                    ><a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg
+                    ></a>
+                  </li>
+                </ul>
+              </div>
+              <div class="card" data-surface="card">
+                <div class="card-head">
+                  <h2 class="card-title">Errors</h2>
+                  <span class="card-gloss"
+                    >— Linked Sentry errors · counts as of the last check</span
+                  >
+                  <div class="card-head-right">
+                    <button type="button" class="link-cta">
+                      <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link error
+                    </button>
+                  </div>
+                </div>
+                <ul class="rows">
+                  <li class="err-row">
+                    <div class="err-main">
+                      <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                      <div class="err-text">
+                        <a
+                          class="err-title err-title-link"
+                          href="#"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          >Timeout on POST /cart/checkout</a
+                        >
+                        <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                      </div>
+                      <span class="err-facts">
+                        <span class="pill pill-danger">error</span>
+                        <span class="err-count">Seen <b class="num">1,284</b> times</span>
+                        <span class="err-seen" title="18 Sep 2026, 14:02"
+                          >last seen 12 min ago</span
+                        >
+                      </span>
+                      <a
+                        class="ext"
+                        href="#"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Open in Sentry"
+                        ><svg class="gl-16" aria-hidden="true">
+                          <use href="#i-external-link" /></svg></a
+                      ><button
+                        class="row-remove"
+                        aria-label="Remove the link to Timeout on POST /cart/checkout"
+                      >
+                        <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 2 · Several linked errors, from two monitored projects — most recently seen first
+        </div>
+        <p class="panel-note">
+          Three rows, two connections: the identifier line names each row&rsquo;s
+          <span class="mono">&lt;org&gt; / &lt;monitored project&gt;</span> first, so rows from
+          different projects are told apart before anything else.
+          <b>Recurrence reads by WIDTH:</b> the count is full-precision with digit grouping, in
+          tabular figures, in a right-aligned slot of its own — <b>40,112</b> is visibly five digits
+          against <b>4</b>. No chart, no bar, no compaction to &ldquo;40k&rdquo;. Row 2 has no
+          release, row 3 neither environment nor release: the parts are simply absent, never
+          &ldquo;unknown&rdquo;.
+        </p>
+        <div class="panel panel-wide">
+          <div class="card" data-surface="card">
+            <div class="card-head">
+              <h2 class="card-title">Errors</h2>
+              <span class="card-gloss">— Linked Sentry errors · counts as of the last check</span>
+              <div class="card-head-right">
+                <button type="button" class="link-cta">
+                  <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link error
+                </button>
+              </div>
+            </div>
+            <ul class="rows">
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Payment provider returned 502 Bad Gateway</a
+                    >
+                    <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">fatal</span>
+                    <span class="err-count">Seen <b class="num">40,112</b> times</span>
+                    <span class="err-seen" title="18 Sep 2026, 14:11">last seen 3 min ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Payment provider returned 502 Bad Gateway"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+              </li>
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Timeout on POST /cart/checkout</a
+                    >
+                    <div class="err-meta">acme / checkout-api · production</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">error</span>
+                    <span class="err-count">Seen <b class="num">1,284</b> times</span>
+                    <span class="err-seen" title="18 Sep 2026, 14:02">last seen 12 min ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Timeout on POST /cart/checkout"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+              </li>
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Cannot read properties of undefined (reading &#x27;total&#x27;)</a
+                    >
+                    <div class="err-meta">acme / storefront-web</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-warning">warning</span>
+                    <span class="err-count">Seen <b class="num">4</b> times</span>
+                    <span class="err-seen" title="16 Sep 2026, 09:40">last seen 2 days ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Cannot read properties of undefined (reading &#x27;total&#x27;)"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 3 · The resolve-back state on a row — one per value of
+          <span class="mono">resolve_state</span>
+        </div>
+        <p class="panel-note">
+          Top to bottom: <span class="mono">null</span> (nothing drawn — the ordinary row),
+          <span class="mono">pending</span>, <span class="mono">resolved</span> (with
+          <span class="mono">resolved_by_motir_at</span>), <span class="mono">failed</span> (the
+          stored <span class="mono">resolve_error</span> VERBATIM, in the filled warning line the
+          room already uses) and <b><span class="mono">gone</span></b
+          >: the row stays listed, drawn quiet on the soft surface, title no longer a link and no
+          out-link, with the standing statement. The resolve-back comment said it once in the
+          activity stream; this row keeps saying it.
+        </p>
+        <div class="panel panel-wide">
+          <div class="card" data-surface="card">
+            <div class="card-head">
+              <h2 class="card-title">Errors</h2>
+              <span class="card-gloss">— Linked Sentry errors · counts as of the last check</span>
+              <div class="card-head-right">
+                <button type="button" class="link-cta">
+                  <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link error
+                </button>
+              </div>
+            </div>
+            <ul class="rows">
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Coupon lookup returned no discount</a
+                    >
+                    <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">error</span>
+                    <span class="err-count">Seen <b class="num">17</b> times</span>
+                    <span class="err-seen" title="18 Sep 2026, 13:14">last seen 1 h ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Coupon lookup returned no discount"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+              </li>
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Payment provider returned 502 Bad Gateway</a
+                    >
+                    <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">fatal</span>
+                    <span class="err-count">Seen <b class="num">40,112</b> times</span>
+                    <span class="err-seen" title="18 Sep 2026, 14:11">last seen 3 min ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Payment provider returned 502 Bad Gateway"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+                <div class="err-note note-quiet">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-loader-circle" /></svg
+                  ><span>Resolving in Sentry…</span>
+                </div>
+              </li>
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Timeout on POST /cart/checkout</a
+                    >
+                    <div class="err-meta">acme / checkout-api · production</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">error</span>
+                    <span class="err-count">Seen <b class="num">1,284</b> times</span>
+                    <span class="err-seen" title="18 Sep 2026, 14:02">last seen 12 min ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Timeout on POST /cart/checkout"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+                <div class="err-note note-quiet">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-circle-check-big" /></svg
+                  ><span
+                    >Resolved in Sentry by Motir
+                    <span class="t" title="18 Sep 2026, 14:20">4 min ago</span></span
+                  >
+                </div>
+              </li>
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Webhook signature mismatch</a
+                    >
+                    <div class="err-meta">acme / checkout-api · staging · 2026.09.17-3</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">error</span>
+                    <span class="err-count">Seen <b class="num">88</b> times</span>
+                    <span class="err-seen" title="18 Sep 2026, 13:34">last seen 40 min ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Webhook signature mismatch"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+                <div class="err-note note-warn">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-triangle-alert" /></svg
+                  ><span
+                    ><b>Couldn&rsquo;t resolve this in Sentry:</b> 403 You do not have permission to
+                    perform this action. Tried
+                    <span class="t" title="18 Sep 2026, 14:05">9 min ago</span> — Motir tries again
+                    at the next check.</span
+                  >
+                </div>
+              </li>
+              <li class="err-row is-gone">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <span class="err-title">Legacy cart migration crashed</span>
+                    <div class="err-meta">acme / storefront-web · production · 2026.09.06-2</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">error</span>
+                    <span class="err-count">Seen <b class="num">2,301</b> times</span>
+                    <span class="err-seen" title="7 Sep 2026, 22:18">last seen 11 days ago</span>
+                  </span>
+                  <span class="ext-spacer" aria-hidden="true"></span
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Legacy cart migration crashed"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+                <div class="err-note note-quiet">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-circle-off" /></svg
+                  ><span
+                    >Sentry no longer has this error. Its facts are as they were last seen.</span
+                  >
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 4 · The assignee note — <span class="mono">team_assignee</span> and
+          <span class="mono">no_matching_member</span>
+        </div>
+        <p class="panel-note">
+          A quiet secondary line under the row, never a warning: nothing is broken, Motir chose not
+          to act. <span class="mono">null</span> draws nothing. The note and a resolve-back line
+          stack in that order (resolve first) when both apply.
+        </p>
+        <div class="panel panel-wide">
+          <div class="card" data-surface="card">
+            <div class="card-head">
+              <h2 class="card-title">Errors</h2>
+              <span class="card-gloss">— Linked Sentry errors · counts as of the last check</span>
+              <div class="card-head-right">
+                <button type="button" class="link-cta">
+                  <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link error
+                </button>
+              </div>
+            </div>
+            <ul class="rows">
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Payment provider returned 502 Bad Gateway</a
+                    >
+                    <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">fatal</span>
+                    <span class="err-count">Seen <b class="num">40,112</b> times</span>
+                    <span class="err-seen" title="18 Sep 2026, 14:11">last seen 3 min ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Payment provider returned 502 Bad Gateway"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+                <div class="err-note note-quiet">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-users-round" /></svg
+                  ><span
+                    >Assigned to a team in Sentry, so this work item&rsquo;s assignee was left as it
+                    is.</span
+                  >
+                </div>
+              </li>
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Timeout on POST /cart/checkout</a
+                    >
+                    <div class="err-meta">acme / checkout-api · production</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">error</span>
+                    <span class="err-count">Seen <b class="num">1,284</b> times</span>
+                    <span class="err-seen" title="18 Sep 2026, 14:02">last seen 12 min ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove"
+                    aria-label="Remove the link to Timeout on POST /cart/checkout"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+                <div class="err-note note-quiet">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-user-round" /></svg
+                  ><span
+                    >Assigned in Sentry to someone who isn&rsquo;t a member here, so this work
+                    item&rsquo;s assignee was left as it is.</span
+                  >
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 5 · No link: NO SECTION AT ALL — and where the door lives when there is nothing to
+          show
+        </div>
+        <p class="panel-note">
+          <b>5a</b> (left): a work item with no linked error renders no Errors card, no heading and
+          no empty state — the page is the page it is today. <b>5b</b> (right): the only change a
+          no-link work item carries is ONE row in its detail-page <b>⋯</b> menu,
+          <b>Link an error</b>, shown only to a reader holding
+          <span class="mono">work_item:edit</span> in a project with a monitoring connection (panel
+          9). This is the door for the case the story is FOR: a customer-reported work item that has
+          never had an error.
+        </p>
+        <div class="panel panel-wide">
+          <div class="sub-grid">
+            <div class="page">
+              <div class="page-head">
+                <span class="page-key">ACME-431</span>
+                <h1 class="page-title">Customers see a blank page after paying</h1>
+                <div class="page-actions">
+                  <button class="menu-trigger" aria-label="Actions for ACME-431">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="tier-label">Late upper tier</div>
+              <div class="stack">
+                <div class="card" data-surface="card">
+                  <div class="card-head">
+                    <h2 class="card-title">Development</h2>
+                    <span class="card-gloss"
+                      >— Pull requests and how to test them · live PR and CI status</span
+                    >
+                    <div class="card-head-right">
+                      <button type="button" class="link-cta">
+                        <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link pull
+                        request
+                      </button>
+                    </div>
+                  </div>
+                  <ul class="rows">
+                    <li class="pr-row">
+                      <svg class="gl-17" aria-hidden="true"><use href="#i-git-merge" /></svg>
+                      <div class="err-text">
+                        <span class="err-title">Retry the payment call on a gateway 502</span>
+                        <div class="err-meta">acme/checkout-api · #412</div>
+                      </div>
+                      <span class="err-facts"><span class="pill pill-success">Merged</span></span
+                      ><a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg
+                      ></a>
+                    </li>
+                  </ul>
+                </div>
+                <div class="next-section">Children · Attachments · Activity continue as today</div>
+              </div>
+            </div>
+            <div class="page">
+              <div class="page-head">
+                <span class="page-key">ACME-431</span>
+                <h1 class="page-title">Customers see a blank page after paying</h1>
+                <div class="page-actions">
+                  <button class="menu-trigger" aria-label="Actions for ACME-431">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                  </button>
+                  <div class="menu" role="menu" aria-label="Actions for ACME-431">
+                    <a class="menu-item" role="menuitem" href="#"
+                      ><svg class="gl-16 menu-glyph" aria-hidden="true">
+                        <use href="#i-pencil" /></svg
+                      >Edit details</a
+                    >
+                    <button class="menu-item" role="menuitem">
+                      <svg class="gl-16 menu-glyph" aria-hidden="true"><use href="#i-goal" /></svg
+                      >Add to active sprint
+                    </button>
+                    <button class="menu-item is-active" role="menuitem">
+                      <svg class="gl-16 menu-glyph" aria-hidden="true">
+                        <use href="#i-activity" /></svg
+                      >Link an error
+                    </button>
+                    <button class="menu-item" role="menuitem">
+                      <svg class="gl-16 menu-glyph" aria-hidden="true"><use href="#i-copy" /></svg
+                      >Copy link
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="tier-label">Late upper tier</div>
+              <div class="stack">
+                <div class="card" data-surface="card">
+                  <div class="card-head">
+                    <h2 class="card-title">Development</h2>
+                    <span class="card-gloss"
+                      >— Pull requests and how to test them · live PR and CI status</span
+                    >
+                    <div class="card-head-right">
+                      <button type="button" class="link-cta">
+                        <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link pull
+                        request
+                      </button>
+                    </div>
+                  </div>
+                  <ul class="rows">
+                    <li class="pr-row">
+                      <svg class="gl-17" aria-hidden="true"><use href="#i-git-merge" /></svg>
+                      <div class="err-text">
+                        <span class="err-title">Retry the payment call on a gateway 502</span>
+                        <div class="err-meta">acme/checkout-api · #412</div>
+                      </div>
+                      <span class="err-facts"><span class="pill pill-success">Merged</span></span
+                      ><a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg
+                      ></a>
+                    </li>
+                  </ul>
+                </div>
+                <div class="next-section">Children · Attachments · Activity continue as today</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 5c · Choosing <b>Link an error</b> mounts the section in its slot with the picker
+          OPEN
+        </div>
+        <p class="panel-note">
+          The section appears below Development with the picker already open and a one-line body.
+          Cancel with nothing linked takes the section away again; a link keeps it, now with its
+          row. Once a work item has a link, the header door (<b>+ Link error</b>) is the way in and
+          the menu row goes away.
+        </p>
+        <div class="panel panel-wide">
+          <div class="page">
+            <div class="page-head">
+              <span class="page-key">ACME-431</span>
+              <h1 class="page-title">Customers see a blank page after paying</h1>
+              <div class="page-actions">
+                <button class="menu-trigger" aria-label="Actions for ACME-431">
+                  <svg class="gl-16" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="tier-label">Late upper tier</div>
+            <div class="stack">
+              <div class="card" data-surface="card">
+                <div class="card-head">
+                  <h2 class="card-title">Development</h2>
+                  <span class="card-gloss"
+                    >— Pull requests and how to test them · live PR and CI status</span
+                  >
+                  <div class="card-head-right">
+                    <button type="button" class="link-cta">
+                      <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link pull
+                      request
+                    </button>
+                  </div>
+                </div>
+                <ul class="rows">
+                  <li class="pr-row">
+                    <svg class="gl-17" aria-hidden="true"><use href="#i-git-merge" /></svg>
+                    <div class="err-text">
+                      <span class="err-title">Retry the payment call on a gateway 502</span>
+                      <div class="err-meta">acme/checkout-api · #412</div>
+                    </div>
+                    <span class="err-facts"><span class="pill pill-success">Merged</span></span
+                    ><a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg
+                    ></a>
+                  </li>
+                </ul>
+              </div>
+              <div class="card" data-surface="card">
+                <div class="card-head">
+                  <h2 class="card-title">Errors</h2>
+                  <span class="card-gloss"
+                    >— Linked Sentry errors · counts as of the last check</span
+                  >
+                  <div class="card-head-right"></div>
+                </div>
+                <div class="link-form">
+                  <span class="f-label">Error to link</span>
+                  <div class="combo-input">
+                    <svg class="gl-14" aria-hidden="true"><use href="#i-search" /></svg
+                    ><span class="ph">Search errors, or paste a short id…</span>
+                  </div>
+                  <div class="combo-pop" role="listbox">
+                    <div class="opt is-active" role="option">
+                      <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                      ><span class="opt-text"
+                        ><span class="opt-title">Payment provider returned 502 Bad Gateway</span
+                        ><span class="opt-sub"
+                          >acme / checkout-api · Seen 40,112 times · 3 min ago</span
+                        ></span
+                      ><span class="pill pill-danger">fatal</span>
+                    </div>
+                    <div class="opt" role="option">
+                      <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                      ><span class="opt-text"
+                        ><span class="opt-title">Timeout on POST /cart/checkout</span
+                        ><span class="opt-sub"
+                          >acme / checkout-api · Seen 1,284 times · 12 min ago</span
+                        ></span
+                      ><span class="pill pill-danger">error</span>
+                    </div>
+                    <div class="opt" role="option">
+                      <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                      ><span class="opt-text"
+                        ><span class="opt-title">Blank confirmation page after 3-D Secure</span
+                        ><span class="opt-sub"
+                          >acme / storefront-web · Seen 61 times · 25 min ago</span
+                        ></span
+                      ><span class="pill pill-warning">warning</span>
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button class="btn btn-primary btn-sm">Link</button
+                    ><button class="btn btn-ghost btn-sm">Cancel</button>
+                  </div>
+                </div>
+                <p class="empty-line">No errors linked to this work item yet.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 6a · The Link door and the picker — before typing, and results across two monitored
+          projects
+        </div>
+        <p class="panel-note">
+          The door is <b>+ Link error</b>, header-right, exactly where Development puts
+          <b>+ Link pull request</b>. The form is the shipped inline picker:
+          <span class="mono">Combobox</span> in the surface-soft
+          <span class="mono">link-form</span>, Link + Cancel. Before a keystroke it lists the most
+          recently seen issues; the placeholder says a short id can be pasted. Each option: title,
+          then <span class="mono">&lt;org&gt; / &lt;project&gt; · Seen N times · last seen</span> in
+          the secondary slot, the level pill trailing. The project leads the secondary line whenever
+          the work item&rsquo;s project monitors more than one.
+        </p>
+        <div class="panel panel-wide">
+          <div class="col-stack">
+            <div class="card" data-surface="card">
+              <div class="card-head">
+                <h2 class="card-title">Errors</h2>
+                <span class="card-gloss">— Linked Sentry errors · counts as of the last check</span>
+                <div class="card-head-right">
+                  <button type="button" class="link-cta">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link error
+                  </button>
+                </div>
+              </div>
+              <div class="link-form">
+                <span class="f-label">Error to link</span>
+                <div class="combo-input">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-search" /></svg
+                  ><span class="ph">Search errors, or paste a short id…</span>
+                </div>
+                <div class="combo-pop" role="listbox">
+                  <div class="opt is-active" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Payment provider returned 502 Bad Gateway</span
+                      ><span class="opt-sub"
+                        >acme / checkout-api · Seen 40,112 times · 3 min ago</span
+                      ></span
+                    ><span class="pill pill-danger">fatal</span>
+                  </div>
+                  <div class="opt" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Timeout on POST /cart/checkout</span
+                      ><span class="opt-sub"
+                        >acme / checkout-api · Seen 1,284 times · 12 min ago</span
+                      ></span
+                    ><span class="pill pill-danger">error</span>
+                  </div>
+                  <div class="opt" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Blank confirmation page after 3-D Secure</span
+                      ><span class="opt-sub"
+                        >acme / storefront-web · Seen 61 times · 25 min ago</span
+                      ></span
+                    ><span class="pill pill-warning">warning</span>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm">Link</button
+                  ><button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
+              <ul class="rows">
+                <li class="err-row">
+                  <div class="err-main">
+                    <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                    <div class="err-text">
+                      <a
+                        class="err-title err-title-link"
+                        href="#"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Timeout on POST /cart/checkout</a
+                      >
+                      <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                    </div>
+                    <span class="err-facts">
+                      <span class="pill pill-danger">error</span>
+                      <span class="err-count">Seen <b class="num">1,284</b> times</span>
+                      <span class="err-seen" title="18 Sep 2026, 14:02">last seen 12 min ago</span>
+                    </span>
+                    <a
+                      class="ext"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open in Sentry"
+                      ><svg class="gl-16" aria-hidden="true">
+                        <use href="#i-external-link" /></svg></a
+                    ><button
+                      class="row-remove"
+                      aria-label="Remove the link to Timeout on POST /cart/checkout"
+                    >
+                      <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            <div class="card" data-surface="card">
+              <div class="card-head">
+                <h2 class="card-title">Errors</h2>
+                <span class="card-gloss">— Linked Sentry errors · counts as of the last check</span>
+                <div class="card-head-right">
+                  <button type="button" class="link-cta">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link error
+                  </button>
+                </div>
+              </div>
+              <div class="link-form">
+                <span class="f-label">Error to link</span>
+                <div class="combo-input">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-search" /></svg
+                  ><span>blank page</span><span class="caret"></span>
+                </div>
+                <div class="combo-pop" role="listbox">
+                  <div class="opt is-active" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Blank confirmation page after 3-D Secure</span
+                      ><span class="opt-sub"
+                        >acme / storefront-web · Seen 61 times · 25 min ago</span
+                      ></span
+                    ><span class="pill pill-warning">warning</span>
+                  </div>
+                  <div class="opt" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Blank page on /checkout/complete in Safari</span
+                      ><span class="opt-sub"
+                        >acme / storefront-web · Seen 9 times · 3 h ago</span
+                      ></span
+                    ><span class="pill pill-danger">error</span>
+                  </div>
+                  <div class="opt" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Confirmation page render timed out</span
+                      ><span class="opt-sub"
+                        >acme / checkout-api · Seen 1 time · 6 days ago</span
+                      ></span
+                    ><span class="pill pill-info">info</span>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm">Link</button
+                  ><button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
+              <ul class="rows">
+                <li class="err-row">
+                  <div class="err-main">
+                    <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                    <div class="err-text">
+                      <a
+                        class="err-title err-title-link"
+                        href="#"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Timeout on POST /cart/checkout</a
+                      >
+                      <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                    </div>
+                    <span class="err-facts">
+                      <span class="pill pill-danger">error</span>
+                      <span class="err-count">Seen <b class="num">1,284</b> times</span>
+                      <span class="err-seen" title="18 Sep 2026, 14:02">last seen 12 min ago</span>
+                    </span>
+                    <a
+                      class="ext"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open in Sentry"
+                      ><svg class="gl-16" aria-hidden="true">
+                        <use href="#i-external-link" /></svg></a
+                    ><button
+                      class="row-remove"
+                      aria-label="Remove the link to Timeout on POST /cart/checkout"
+                    >
+                      <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 6b · Picker states — searching · no results · one connection&rsquo;s search failed ·
+          a refused link
+        </div>
+        <p class="panel-note">
+          Left to right, top to bottom. <b>Searching</b>: the Combobox loading row.
+          <b>No results</b>: the empty text and its hint. <b>A failed connection</b>: its reason
+          VERBATIM on a status line inside the results, and the other connection&rsquo;s results
+          still listed beneath it. <b>A refused link</b> (<span class="mono">issue_gone</span>
+          drawn; <span class="mono">not_found</span> and <span class="mono">forbidden</span> take
+          the same banner with their own sentence, §14 copy table): the shipped rose banner under
+          the list.
+        </p>
+        <div class="panel panel-wide">
+          <div class="sub-grid">
+            <div class="panel-cell">
+              <div class="link-form">
+                <span class="f-label">Error to link</span>
+                <div class="combo-input">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-search" /></svg
+                  ><span>blank pa</span><span class="caret"></span>
+                </div>
+                <div class="combo-pop" role="listbox">
+                  <div class="combo-loading">
+                    <svg class="gl-14" aria-hidden="true"><use href="#i-loader-circle" /></svg
+                    ><span>Searching…</span>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm">Link</button
+                  ><button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel-cell">
+              <div class="link-form">
+                <span class="f-label">Error to link</span>
+                <div class="combo-input">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-search" /></svg
+                  ><span>payment tokenizer</span><span class="caret"></span>
+                </div>
+                <div class="combo-pop" role="listbox">
+                  <div class="combo-empty">
+                    No matching errors
+                    <div class="hint">
+                      Search words from the error&rsquo;s title, or paste its short id from Sentry.
+                    </div>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm">Link</button
+                  ><button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel-cell">
+              <div class="link-form">
+                <span class="f-label">Error to link</span>
+                <div class="combo-input">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-search" /></svg
+                  ><span>blank page</span><span class="caret"></span>
+                </div>
+                <div class="combo-pop" role="listbox">
+                  <div class="search-fail" role="status">
+                    <svg class="gl-14 warn-glyph" aria-hidden="true">
+                      <use href="#i-triangle-alert" /></svg
+                    ><span
+                      ><b>Couldn&rsquo;t search acme / storefront-web:</b> 401 Invalid token</span
+                    >
+                  </div>
+                  <div class="opt is-active" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Confirmation page render timed out</span
+                      ><span class="opt-sub"
+                        >acme / checkout-api · Seen 1 time · 6 days ago</span
+                      ></span
+                    ><span class="pill pill-info">info</span>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm">Link</button
+                  ><button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel-cell">
+              <div class="link-form">
+                <span class="f-label">Error to link</span>
+                <div class="combo-input">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-search" /></svg
+                  ><span>blank page</span><span class="caret"></span>
+                </div>
+                <div class="combo-pop" role="listbox">
+                  <div class="opt is-active" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Blank confirmation page after 3-D Secure</span
+                      ><span class="opt-sub"
+                        >acme / storefront-web · Seen 61 times · 25 min ago</span
+                      ></span
+                    ><span class="pill pill-warning">warning</span>
+                  </div>
+                </div>
+                <div class="form-error" role="alert">
+                  <svg class="gl-16 danger-glyph" aria-hidden="true">
+                    <use href="#i-circle-alert" /></svg
+                  ><span>Sentry no longer has this error, so it can&rsquo;t be linked.</span>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm">Link</button
+                  ><button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 7 · An error already linked to a DIFFERENT work item — the move confirmation; and
+          one linked HERE
+        </div>
+        <p class="panel-note">
+          Left: the candidate says <b>Linked to ACME-812</b> where its level pill would be (the
+          shipped <span class="mono">Linked to {key}</span> chip). An error already linked to THIS
+          work item says <b>Linked here</b> and cannot be picked. Right: picking the ACME-812 one
+          does NOT link — Link opens the confirmation, which names the work item the link LEAVES
+          (the key links to it) and says it keeps its other links and history.
+          <b>Move link</b> moves it; <b>Cancel</b> leaves both work items as they were.
+        </p>
+        <div class="panel panel-wide">
+          <div class="col-stack">
+            <div class="card" data-surface="card">
+              <div class="card-head">
+                <h2 class="card-title">Errors</h2>
+                <span class="card-gloss">— Linked Sentry errors · counts as of the last check</span>
+                <div class="card-head-right">
+                  <button type="button" class="link-cta">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link error
+                  </button>
+                </div>
+              </div>
+              <div class="link-form">
+                <span class="f-label">Error to link</span>
+                <div class="combo-input">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-search" /></svg
+                  ><span>502</span><span class="caret"></span>
+                </div>
+                <div class="combo-pop" role="listbox">
+                  <div class="opt is-active" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Payment provider returned 502 Bad Gateway</span
+                      ><span class="opt-sub"
+                        >acme / checkout-api · Seen 40,112 times · 3 min ago</span
+                      ></span
+                    ><span class="pill pill-neutral">Linked to ACME-812</span>
+                  </div>
+                  <div class="opt is-disabled" role="option" aria-disabled="true">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Timeout on POST /cart/checkout</span
+                      ><span class="opt-sub"
+                        >acme / checkout-api · Seen 1,284 times · 12 min ago</span
+                      ></span
+                    ><span class="pill pill-neutral">Linked here</span>
+                  </div>
+                  <div class="opt" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Payment page 502 after retry</span
+                      ><span class="opt-sub"
+                        >acme / storefront-web · Seen 3 times · 1 h ago</span
+                      ></span
+                    ><span class="pill pill-danger">error</span>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm">Link</button
+                  ><button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
+              <ul class="rows">
+                <li class="err-row">
+                  <div class="err-main">
+                    <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                    <div class="err-text">
+                      <a
+                        class="err-title err-title-link"
+                        href="#"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Timeout on POST /cart/checkout</a
+                      >
+                      <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                    </div>
+                    <span class="err-facts">
+                      <span class="pill pill-danger">error</span>
+                      <span class="err-count">Seen <b class="num">1,284</b> times</span>
+                      <span class="err-seen" title="18 Sep 2026, 14:02">last seen 12 min ago</span>
+                    </span>
+                    <a
+                      class="ext"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open in Sentry"
+                      ><svg class="gl-16" aria-hidden="true">
+                        <use href="#i-external-link" /></svg></a
+                    ><button
+                      class="row-remove"
+                      aria-label="Remove the link to Timeout on POST /cart/checkout"
+                    >
+                      <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            <div class="card" data-surface="card">
+              <div class="card-head">
+                <h2 class="card-title">Errors</h2>
+                <span class="card-gloss">— Linked Sentry errors · counts as of the last check</span>
+                <div class="card-head-right">
+                  <button type="button" class="link-cta">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link error
+                  </button>
+                </div>
+              </div>
+              <div class="link-form">
+                <span class="f-label">Error to link</span>
+                <div class="combo-input">
+                  <svg class="gl-14" aria-hidden="true"><use href="#i-search" /></svg
+                  ><span>502</span><span class="caret"></span>
+                </div>
+                <div class="combo-pop" role="listbox">
+                  <div class="opt is-active" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Payment provider returned 502 Bad Gateway</span
+                      ><span class="opt-sub"
+                        >acme / checkout-api · Seen 40,112 times · 3 min ago</span
+                      ></span
+                    ><span class="pill pill-neutral">Linked to ACME-812</span>
+                  </div>
+                  <div class="opt is-disabled" role="option" aria-disabled="true">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Timeout on POST /cart/checkout</span
+                      ><span class="opt-sub"
+                        >acme / checkout-api · Seen 1,284 times · 12 min ago</span
+                      ></span
+                    ><span class="pill pill-neutral">Linked here</span>
+                  </div>
+                  <div class="opt" role="option">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-activity" /></svg
+                    ><span class="opt-text"
+                      ><span class="opt-title">Payment page 502 after retry</span
+                      ><span class="opt-sub"
+                        >acme / storefront-web · Seen 3 times · 1 h ago</span
+                      ></span
+                    ><span class="pill pill-danger">error</span>
+                  </div>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary btn-sm">Link</button
+                ><button class="btn btn-ghost btn-sm">Cancel</button>
+              </div>
+              <div
+                class="confirm confirm-move"
+                role="dialog"
+                aria-label="Move this error&rsquo;s link"
+              >
+                <p>
+                  Move this error&rsquo;s link from <a class="key-link" href="#">ACME-812</a> to
+                  this work item?
+                </p>
+                <p class="confirm-sub">
+                  ACME-812 keeps its other links and its history. From the next check, this
+                  error&rsquo;s count and resolve-back follow this work item.
+                </p>
+                <div class="confirm-actions">
+                  <button class="btn btn-ghost btn-sm">Cancel</button
+                  ><button class="btn btn-primary btn-sm">Move link</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">
+          Panel 8 · Unlink — the row&rsquo;s quiet × and its confirmation popover
+        </div>
+        <p class="panel-note">
+          The shipped <span class="mono">RemoveLinkButton</span> grammar: a 24px × LAST in the row,
+          after the out-link, drawn hovered (rose tint, danger ink); a 300px popover aligned to its
+          edge; ghost Cancel + danger <b>Remove link</b>. The sentence says the consequence plainly:
+          an untracked error is one the next check files a NEW bug for. Nothing is touched in
+          Sentry.
+        </p>
+        <div class="panel panel-wide">
+          <div class="card" data-surface="card">
+            <div class="card-head">
+              <h2 class="card-title">Errors</h2>
+              <span class="card-gloss">— Linked Sentry errors · counts as of the last check</span>
+              <div class="card-head-right">
+                <button type="button" class="link-cta">
+                  <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link error
+                </button>
+              </div>
+            </div>
+            <ul class="rows">
+              <li class="err-row">
+                <div class="err-main">
+                  <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                  <div class="err-text">
+                    <a
+                      class="err-title err-title-link"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Timeout on POST /cart/checkout</a
+                    >
+                    <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                  </div>
+                  <span class="err-facts">
+                    <span class="pill pill-danger">error</span>
+                    <span class="err-count">Seen <b class="num">1,284</b> times</span>
+                    <span class="err-seen" title="18 Sep 2026, 14:02">last seen 12 min ago</span>
+                  </span>
+                  <a
+                    class="ext"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open in Sentry"
+                    ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg></a
+                  ><button
+                    class="row-remove is-hover"
+                    aria-label="Remove the link to Timeout on POST /cart/checkout"
+                  >
+                    <svg class="gl-15" aria-hidden="true"><use href="#i-x" /></svg>
+                  </button>
+                </div>
+              </li>
+            </ul>
+            <div class="confirm-wrap">
+              <div class="confirm" role="dialog" aria-label="Remove the link">
+                <p>
+                  Remove the link to
+                  <span class="mono confirm-id">Timeout on POST /cart/checkout</span>? If this error
+                  happens again, a new bug will be filed for it.
+                </p>
+                <div class="confirm-actions">
+                  <button class="btn btn-ghost btn-sm">Cancel</button
+                  ><button class="btn btn-danger btn-sm">Remove link</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="sub-caption">
+            …and when the link was already gone (<span class="mono">removed: false</span>): the
+            popover says so rather than reporting a success that did nothing.
+          </div>
+          <div class="confirm-wrap">
+            <div class="confirm" role="dialog" aria-label="Remove the link">
+              <p>
+                Remove the link to
+                <span class="mono confirm-id">Timeout on POST /cart/checkout</span>? If this error
+                happens again, a new bug will be filed for it.
+              </p>
+              <p class="confirm-error" role="alert">
+                There was nothing to unlink — the link had already been removed.
+              </p>
+              <div class="confirm-actions">
+                <button class="btn btn-ghost btn-sm">Cancel</button
+                ><button class="btn btn-danger btn-sm">Remove link</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">Panel 9 · Who sees the door</div>
+        <p class="panel-note">
+          Left: a reader who can SEE the work item but not edit it — the rows show in full, with no
+          header door and no ×; nothing else moves (the shipped Development rule). Right: a project
+          with NO monitoring connection — its ⋯ menu carries no Link-an-error row, and no work item
+          in it can have a link (a link is deleted with its connection), so the section never
+          appears. No disabled door and no &ldquo;connect a monitor&rdquo; prompt: the Monitoring
+          room is gated on <span class="mono">integration:manage</span>, so a prompt would lead most
+          readers to a refusal.
+        </p>
+        <div class="panel panel-wide">
+          <div class="col-stack">
+            <div class="card" data-surface="card">
+              <div class="card-head">
+                <h2 class="card-title">Errors</h2>
+                <span class="card-gloss">— Linked Sentry errors · counts as of the last check</span>
+                <div class="card-head-right"></div>
+              </div>
+              <ul class="rows">
+                <li class="err-row">
+                  <div class="err-main">
+                    <svg class="gl-17" aria-hidden="true"><use href="#i-activity" /></svg>
+                    <div class="err-text">
+                      <a
+                        class="err-title err-title-link"
+                        href="#"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Timeout on POST /cart/checkout</a
+                      >
+                      <div class="err-meta">acme / checkout-api · production · 2026.09.18-1</div>
+                    </div>
+                    <span class="err-facts">
+                      <span class="pill pill-danger">error</span>
+                      <span class="err-count">Seen <b class="num">1,284</b> times</span>
+                      <span class="err-seen" title="18 Sep 2026, 14:02">last seen 12 min ago</span>
+                    </span>
+                    <a
+                      class="ext"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open in Sentry"
+                      ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg
+                    ></a>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            <div class="page">
+              <div class="page-head">
+                <span class="page-key">ACME-431</span>
+                <h1 class="page-title">Customers see a blank page after paying</h1>
+                <div class="page-actions">
+                  <button class="menu-trigger" aria-label="Actions for ACME-431">
+                    <svg class="gl-16" aria-hidden="true"><use href="#i-ellipsis" /></svg>
+                  </button>
+                  <div class="menu" role="menu" aria-label="Actions for ACME-431">
+                    <a class="menu-item" role="menuitem" href="#"
+                      ><svg class="gl-16 menu-glyph" aria-hidden="true">
+                        <use href="#i-pencil" /></svg
+                      >Edit details</a
+                    >
+                    <button class="menu-item" role="menuitem">
+                      <svg class="gl-16 menu-glyph" aria-hidden="true"><use href="#i-goal" /></svg
+                      >Add to active sprint
+                    </button>
+                    <button class="menu-item" role="menuitem">
+                      <svg class="gl-16 menu-glyph" aria-hidden="true"><use href="#i-copy" /></svg
+                      >Copy link
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="tier-label">Late upper tier</div>
+              <div class="stack">
+                <div class="card" data-surface="card">
+                  <div class="card-head">
+                    <h2 class="card-title">Development</h2>
+                    <span class="card-gloss"
+                      >— Pull requests and how to test them · live PR and CI status</span
+                    >
+                    <div class="card-head-right">
+                      <button type="button" class="link-cta">
+                        <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link pull
+                        request
+                      </button>
+                    </div>
+                  </div>
+                  <ul class="rows">
+                    <li class="pr-row">
+                      <svg class="gl-17" aria-hidden="true"><use href="#i-git-merge" /></svg>
+                      <div class="err-text">
+                        <span class="err-title">Retry the payment call on a gateway 502</span>
+                        <div class="err-meta">acme/checkout-api · #412</div>
+                      </div>
+                      <span class="err-facts"><span class="pill pill-success">Merged</span></span
+                      ><a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg
+                      ></a>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel-block">
+        <div class="panel-label">Panel 10 · Loading, and a failed read</div>
+        <p class="panel-note">
+          Left: while the late tier streams, the section is covered by the shared
+          <span class="mono">LateUpperFallback</span>, UNCHANGED — the shipped
+          <span class="mono">SectionCardSkeleton</span> cards, chrome over pulse blocks. The
+          fallback does not guess whether an Errors card is coming, because most work items have
+          none. Right: a failed read renders the shipped <span class="mono">ErrorState</span> INSIDE
+          the card, Development above and every later section unaffected. A failed read shows only
+          in a project that has a monitoring connection; without one there is nothing it could have
+          found.
+        </p>
+        <div class="panel panel-wide">
+          <div class="sub-grid">
+            <div class="stack">
+              <div class="card" data-surface="card" aria-busy="true">
+                <div class="skel skel-title"></div>
+                <div class="skel-rows">
+                  <div class="skel skel-a"></div>
+                  <div class="skel skel-b"></div>
+                </div>
+              </div>
+              <div class="card" data-surface="card" aria-busy="true">
+                <div class="skel skel-title"></div>
+                <div class="skel-rows">
+                  <div class="skel skel-a"></div>
+                  <div class="skel skel-a"></div>
+                </div>
+              </div>
+            </div>
+            <div class="stack">
+              <div class="card" data-surface="card">
+                <div class="card-head">
+                  <h2 class="card-title">Development</h2>
+                  <span class="card-gloss"
+                    >— Pull requests and how to test them · live PR and CI status</span
+                  >
+                  <div class="card-head-right">
+                    <button type="button" class="link-cta">
+                      <svg class="gl-16" aria-hidden="true"><use href="#i-plus" /></svg>Link pull
+                      request
+                    </button>
+                  </div>
+                </div>
+                <ul class="rows">
+                  <li class="pr-row">
+                    <svg class="gl-17" aria-hidden="true"><use href="#i-git-merge" /></svg>
+                    <div class="err-text">
+                      <span class="err-title">Retry the payment call on a gateway 502</span>
+                      <div class="err-meta">acme/checkout-api · #412</div>
+                    </div>
+                    <span class="err-facts"><span class="pill pill-success">Merged</span></span
+                    ><a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg class="gl-16" aria-hidden="true"><use href="#i-external-link" /></svg
+                    ></a>
+                  </li>
+                </ul>
+              </div>
+              <div class="card" data-surface="card">
+                <div class="card-head">
+                  <h2 class="card-title">Errors</h2>
+                  <span class="card-gloss"
+                    >— Linked Sentry errors · counts as of the last check</span
+                  >
+                </div>
+                <div class="error-state" role="alert">
+                  <svg class="gl-32 danger-glyph" aria-hidden="true">
+                    <use href="#i-triangle-alert" />
+                  </svg>
+                  <h3 class="error-title">Couldn&rsquo;t load this work item&rsquo;s errors</h3>
+                  <p class="error-desc">
+                    The rest of the page is unaffected. Try again in a moment.
+                  </p>
+                  <button class="btn btn-secondary btn-sm">Try again</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
