@@ -2771,3 +2771,127 @@ stylesheet and sprite provenance carried verbatim (MOTIR-123, 757, 1273–1277, 
 | MOTIR-5673               | this card                                                                                                                                                                                                                                                                                    |
 
 Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
+
+## 28 · The merge question RE-ASKED after a merge-queue ejection — _Left the queue_ above a standing-alone approve that re-queues, `motir fix` beside it on the page AND in the overlay, and the card at In Review (MOTIR-5801, 2026-09-19)
+
+**AMENDS § 22** (Panels **E1–E3** and **E7** of
+[`approve-and-merge--ejected.mock.html`](./approve-and-merge--ejected.mock.html) — the _Queue
+again on the same approval_ panels) **and § 26** (the _which one to use_ line of
+[`github--fix-callout--ejected.mock.html`](./github--fix-callout--ejected.mock.html), Panels
+X1–X5), **for a `manual`-mode FAILURE ejection only.** The delta is
+**[`approve-and-merge--ejected--reasked.mock.html`](./approve-and-merge--ejected--reasked.mock.html)**,
+Panels **1–6**, each in light and dark. Card MOTIR-5801, Story MOTIR-5799. **No existing mock is
+edited.** The behaviour drawn is `docs/decisions/approval-gates.md` § 4 **FOURTH AMENDMENT**
+(MOTIR-5800), which reverses the THIRD AMENDMENT's decisions 5–7; each panel cites its point. The
+component that builds every panel is **MOTIR-5806**.
+
+**Why it is owed.** § 22 was drawn around one idea: nothing changed, so press _Queue again_ and
+nobody is asked. The owner reversed it (Yue, 2026-09-19): the queue said the approved commits did
+not land, so the yes about them landing has not been honoured and must be given again — with the
+failure in front of the person, and `motir fix` beside the approve because the failure can be
+flaky or real.
+
+### Access path
+
+- **The item page → the Development block** (§ 20), reached from any board card, list row or
+  Workbench row that opens the card. The re-asked gate is the frame's own gate; no new entry
+  point.
+- **Workbench → To approve → _Review_ → the full-screen approval overlay** (MOTIR-5437;
+  `design/workbench/design-notes.md` § 24). **This SUPERSEDES § 22's _"An ejected card is NOT in
+  To approve"_**: the re-asked gate is an **awaiting** gate, so the card is listed again, by the
+  shipped ONE-gate row (`approvals-row--one-gate.mock.html`, Panel 1), unchanged. Panel 3 draws
+  that row above the overlay it opens.
+
+### Composed from what shipped, not redrawn
+
+The stylesheets and sprite are carried verbatim from the three approved mocks the delta composes:
+`github--fix-callout--ejected.mock.html` (the item page's Development frame, § 22's `ej-` exit
+lines and § 21's fix part), `approval-overlay--pull-request-gate.mock.html` (the overlay's `ov-`
+chrome and its `fill` port) and `approvals-row--one-gate.mock.html` (the To-approve row). The
+only new rules are the `rq-` block — the rail wrapper, the re-ask sentence's ink and the decided
+design strip — each naming the class string MOTIR-5806 builds. The frame is the shipped
+`DevelopmentGateFrame` over `ApprovalGateControl`; the row slot is `MergeOutcomeSlot`'s shipped
+`leftQueue` kind; the exit is `QueueExitLine`; the command is `RepairFixPart`.
+
+### The panels
+
+| panel | state                                                                                                                                                                                                                                                                                                                                                                                                                                         | rail      | point      |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------- |
+| 1     | **Failure ejection, `manual`** — ONE **awaiting** approve-to-merge gate over the SAME commits, standing alone: band 1 _Awaiting you_; the ejected row reads **Left the queue** with **no _Queue again_**; the record band keeps the earlier approval as history (_Approved earlier by … — not merged_), the reason, the failing check as a link, and _why it is asked again_; the fix part with `motir fix ACME-12`; band 3 the shipped verbs | In Review | 1, 2, 4, 5 |
+| 2     | **The same on a DESIGN card** — the design result reads **Design approved**, decided, with no verbs (MOTIR-5667's treatment of a merge gate re-opened beside a decided design); only the merge awaits                                                                                                                                                                                                                                         | In Review | 2          |
+| 3     | **The approval overlay** — the To-approve row that opens it (the access path), then panel 1's block at the overlay's `fill` box, **`motir fix` included** (today the overlay composes the block without it)                                                                                                                                                                                                                                   | In Review | 5          |
+| 4a    | **Confirm** — the approve verb's confirm band says approving puts the pull request back in the merge queue and moves the card to Approved                                                                                                                                                                                                                                                                                                     | In Review | 3          |
+| 4b    | **Pending** — the press in flight, verbs disabled, the progress line                                                                                                                                                                                                                                                                                                                                                                          | In Review | 3          |
+| 4c    | **Done** — the row reads **Queued to merge**, the rail **Approved**; the fix part leaves with the failure                                                                                                                                                                                                                                                                                                                                     | Approved  | 3          |
+| 4d    | **A stale-stamp refusal** — the shipped MOTIR-5232 refusal, drawn once in this context; nothing was queued and the gate still awaits                                                                                                                                                                                                                                                                                                          | In Review | 3          |
+| 5     | **A push after the ejection** — the re-asked gate is superseded `head_moved`, the row reads **New commits since approval**, no verbs; the next green raises ONE gate over the new commits                                                                                                                                                                                                                                                     | In Review | 5          |
+| 6     | **Unchanged, for contrast** — a NEUTRAL removal still reads **Removed from the queue** and offers **Queue again** on the standing approval; the card never left Approved. Auto mode is unchanged: § 22's Panel E5 is its whole surface                                                                                                                                                                                                        | Approved  | 4          |
+
+### What changes on § 22's slot table
+
+| kind        | pill                    | offers                                                                                                                    |
+| ----------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `leftQueue` | _Left the queue_ (rose) | **nothing on the row** for a manual failure — the gate's own **Approve and merge** re-queues (§ 22 offered _Queue again_) |
+
+`requeueable` stays the one predicate for drawing _Queue again_; the server now answers `false` for
+a manual failure exit given before the approval (MOTIR-5802), and `exitAtApprovedHead` — not
+`requeueable` — tells _Left the queue_ from _New commits since approval_.
+
+### Tone and tokens
+
+`--el-*` colour and element-semantic shape tokens only. The re-ask sentence (`rq-why`) is
+`--el-text-secondary`, § 22's follow-on grammar. The decided design strip (`rq-design`):
+`border-(--el-border-soft)`, `bg-(--el-surface)`, `rounded-(--radius-card)`, control padding;
+its sub-line `--el-text-secondary`. Pills ride the shipped `Pill` axes; no new variant. The rail is
+the shipped status pill. No new sprite symbol: every `<use>` resolves inside the carried sprite.
+
+### Copy — `en` + `zh`
+
+New or changed strings only; everything else is § 22's, § 26's and the shipped frame's, unchanged.
+Under **`approvalGate.pullRequestApproval`** unless named.
+
+| key                                              | en                                                                                                                                                                                                  | zh                                                                                                                               |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `reasked.meta`                                   | Asked again after the merge queue                                                                                                                                                                   | 合并队列退回后再次征求批准                                                                                                       |
+| `reasked.earlier`                                | Approved earlier by {name} · {date} · {count} commits — not merged                                                                                                                                  | {name} 曾于 {date} 批准 · {count} 个提交 — 未合并                                                                                |
+| `exit.reasked`                                   | These commits did not land, so Motir is asking you again. **Approve** puts them back in the merge queue.                                                                                            | 这些提交未能合并，因此 Motir 再次征求你的批准。**批准**后会把它们放回合并队列。                                                  |
+| `reasked.why`                                    | Approving puts {pr} back in its repository’s merge queue, which merges it when the queue’s checks pass, then moves {key} to Approved.                                                               | 批准后会把 {pr} 放回其仓库的合并队列，队列检查通过后即合并，并将 {key} 移至“已批准”。                                            |
+| `reasked.confirm.requeue`                        | add {pr} back to its repository’s merge queue, which merges it when the queue’s checks pass;                                                                                                        | 将 {pr} 重新加入其仓库的合并队列，队列检查通过后即合并；                                                                         |
+| `reasked.progress`                               | Adding {pr} back to its merge queue…                                                                                                                                                                | 正在将 {pr} 放回合并队列…                                                                                                        |
+| `repair.fix.whichToUse` (§ 26, **amended**)      | Nothing changed on your side? **Approve** puts the same commits back in the merge queue. If the failing check points at real code, `motir fix` hands it to an agent.                                | 你这边没有改动？**批准**会把相同的提交放回合并队列。如果未通过的检查指向真实的代码问题，`motir fix` 会把它交给代理处理。         |
+| `approvalGate.refusal.mergeRequeueNeedsApproval` | This pull request left the merge queue because it failed, so it needs a fresh approval. — _Approve the work item again to put it back in the merge queue, or run motir fix if the failure is real._ | 这个拉取请求因失败离开了合并队列，需要重新批准。— _再次批准该工作项即可把它放回合并队列；如果失败是真实问题，请运行 motir fix。_ |
+
+The last row is the refusal MOTIR-5802 shipped for a stale _Queue again_ press on a failure exit;
+it is listed so the frame card renders it, not re-keyed.
+
+**_Queue again_ is withdrawn for a manual FAILURE exit only.** A neutral removal keeps it on the
+standing approval (panel 6), and auto mode keeps § 22's Panel E5.
+
+### Scope
+
+**Drawn:** the re-asked gate on the page and in the overlay, the To-approve row that reaches it,
+confirm / pending / done, the stale-stamp refusal, a push after the ejection, and the unchanged
+neutral case — each in light and dark. **Not drawn, and whose it is:** the re-ask itself and the
+approve-to-re-queue — MOTIR-5805; retiring _Queue again_ for a failure — MOTIR-5802; `motir fix`'s
+claim at In Review — MOTIR-5803; the component — MOTIR-5806. How to test is unchanged and
+abbreviated on the sheet.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' approve-and-merge--ejected--reasked.mock.html design-notes.md § 28 | sort -u`.
+The mock's own keys (outside the carried stylesheets and sprite, which carry the three base mocks'
+provenance verbatim and GIVE or TAKE nothing here): MOTIR-5232, 5437, 5664, 5667, 5801, 5806.
+
+| key                             | GIVES / TAKES                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5806                      | **GIVES** every panel, the copy and the tokens above — it builds them, in the item page's frame AND in the overlay's port. Its estimate (65 min / 5 points) was re-read against nine panels: they are compositions of shipped parts plus one new pass-through (the overlay's fix part) and one copy change, so it fits and is not amended |
+| MOTIR-5805                      | **TAKES** that the card is at In Review with ONE awaiting gate over the same commits, and that approving it re-queues                                                                                                                                                                                                                     |
+| MOTIR-5802                      | **TAKES** that `requeueable` is `false` for a manual failure exit, and that `exitAtApprovedHead` separates _Left the queue_ from _New commits since approval_                                                                                                                                                                             |
+| MOTIR-5803                      | **TAKES** that `motir fix` claims the card at In Review, so the fix part's command works where it is shown                                                                                                                                                                                                                                |
+| MOTIR-5631 · 5635 · 5718 · 5721 | **TAKES** their frame, row slot, exit lines and fix part — `done` cards, history, not re-opened. Their mocks stay as records; this section supersedes E1–E3, E7 and the which-to-use line for a manual failure                                                                                                                            |
+| MOTIR-5667 · 5664               | **TAKES** the decided-design treatment beside a standing-alone merge gate (panel 2), and the one-press carry the re-ask also covers                                                                                                                                                                                                       |
+| MOTIR-5437                      | **TAKES** the overlay's `fill` port composing `DevelopmentSectionBody` (panel 3)                                                                                                                                                                                                                                                          |
+| MOTIR-5232                      | **TAKES** the stale-stamp refusal, drawn once (panel 4d)                                                                                                                                                                                                                                                                                  |
+| MOTIR-5801                      | this card                                                                                                                                                                                                                                                                                                                                 |
+
+Fixture items use `ACME-n` keys, so they link to nothing.
