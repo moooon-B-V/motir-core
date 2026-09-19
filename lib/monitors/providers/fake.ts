@@ -101,6 +101,12 @@ export interface FakeMonitorState {
    * operation armed only through {@link failNext} keeps the 401 default.
    */
   failNextStatus: Map<string, { status: number; reason?: string }>;
+  /**
+   * EVERY operation the fake was asked for, in order (MOTIR-5734) — the one list
+   * that answers "did anything call the monitor?" across all methods, so an E2E
+   * can assert that opening a page asked the provider NOTHING.
+   */
+  calls: string[];
   /** How many issues one `listIssuesSince` page holds — small in a test that
    *  drives the poll across several pages. */
   pageSize: number;
@@ -143,20 +149,34 @@ const freshState = (): FakeMonitorState => ({
   searches: [],
   contextReads: [],
   failSearchForProject: new Map(),
+  calls: [],
   refreshCount: 0,
   failNext: new Set(),
   failNextStatus: new Map(),
   pageSize: 100,
 });
 
-let state: FakeMonitorState = freshState();
+/**
+ * ⚠️ ONE STATE PER PROCESS, NOT PER MODULE INSTANCE (MOTIR-5734). A production
+ * Next build compiles route handlers and the pages' server actions into SEPARATE
+ * bundles, and each bundle evaluates this module on its own — so a module-level
+ * `let` gave the `_test` seed door one fake and the page's link picker another.
+ * The E2E seeded an issue, the picker searched a different, empty fake, and the
+ * "opening the page asked the monitor nothing" measurement read the door's own
+ * untouched record and passed without measuring anything. The state therefore
+ * lives on `globalThis` under a registered symbol, and a reset MUTATES it in place
+ * rather than reassigning it, so no bundle is ever left holding a stale object.
+ */
+const STATE_KEY = Symbol.for('motir.fakeMonitorState');
+const globalHolder = globalThis as unknown as Record<symbol, FakeMonitorState | undefined>;
+const state: FakeMonitorState = (globalHolder[STATE_KEY] ??= freshState());
 
 /** The fake's state, for a test to seed or assert against. */
 export const fakeMonitorState = (): FakeMonitorState => state;
 
 /** Put the fake back to its initial state — a test's `beforeEach`. */
 export function resetFakeMonitorProvider(): void {
-  state = freshState();
+  Object.assign(state, freshState());
 }
 
 /** A seeded issue as the SEAM returns it — the fake-only fields stripped, so a
@@ -176,6 +196,7 @@ function normalized(issue: FakeMonitorIssue): NormalizedMonitorIssue {
 }
 
 function guard(operation: string): void {
+  state.calls.push(operation);
   const withStatus = state.failNextStatus.get(operation);
   if (state.failNext.has(operation) || withStatus) {
     state.failNext.delete(operation);
@@ -225,6 +246,7 @@ export const fakeMonitorProvider: MonitorProvider = {
   },
 
   async describeHealth(): Promise<NormalizedMonitorHealth> {
+    state.calls.push('describeHealth');
     // Deliberately NOT guarded: the real adapter turns a failed probe into a
     // `degraded` VERDICT rather than a throw, so the fake's unhealthy path is a
     // seeded verdict. `state.health` is what a test sets to drive the degraded

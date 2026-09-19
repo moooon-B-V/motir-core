@@ -40,6 +40,17 @@ export interface SeedFakeMonitorInput {
   issues?: SeedMonitorIssue[];
   /** Arms ONE failure of the next listing, with a status (and the provider's words). */
   failNextListing?: { status: number; reason?: string };
+  /** Makes every `searchIssues` for ONE monitored project fail (MOTIR-5734) — the
+   *  picker's per-connection failure line. `null` clears it. */
+  failSearchForProject?: { externalProjectId: string; status: number; reason?: string } | null;
+  /** Forget the calls recorded so far — the start of a "no provider call" window. */
+  clearCalls?: boolean;
+}
+
+/** Every provider operation the SERVER's fake has recorded since the last clear
+ *  (MOTIR-5734). */
+export function readFakeMonitorCalls(): string[] {
+  return [...fakeMonitorState().calls];
 }
 
 export function seedFakeMonitor(input: SeedFakeMonitorInput): void {
@@ -66,4 +77,11 @@ export function seedFakeMonitor(input: SeedFakeMonitorInput): void {
   if (input.failNextListing) {
     state.failNextStatus.set('listIssuesSince', input.failNextListing);
   }
+  if (input.failSearchForProject === null) {
+    state.failSearchForProject.clear();
+  } else if (input.failSearchForProject) {
+    const { externalProjectId, status, reason } = input.failSearchForProject;
+    state.failSearchForProject.set(externalProjectId, { status, reason });
+  }
+  if (input.clearCalls) state.calls = [];
 }
