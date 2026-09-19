@@ -164,6 +164,61 @@ describe('GET /api/monitors/sentry/oauth/start', () => {
     expect(res.cookies.get(MONITOR_CONNECT_STATE_COOKIE)).toBeUndefined();
   });
 
+  it('REFUSES BEFORE THE REDIRECT when a declared variable is missing — no nonce, no cookie (MOTIR-5831)', async () => {
+    // ⚠️ THE CARD'S USER-FACING HALF. `SENTRY_APP_CLIENT_SECRET` was absent from
+    // production for seven days and this route did not care: it built the
+    // install URL from the SLUG alone, so Connect worked, Sentry's consent
+    // screen rendered, and the person approved an install in their OWN Sentry
+    // organisation before anything failed. Everything up to that point was their
+    // work.
+    //
+    // The REAL adapter is registered here on purpose: the rest of this file runs
+    // against the fake, which declares NO required environment (that is what
+    // keeps every acceptance run green), so only the real declaration exercises
+    // the refusal. `afterEach` restores it either way.
+    registerMonitorProvider(sentryMonitorProvider, 'sentry');
+    process.env['SENTRY_APP_CLIENT_ID'] = 'id';
+    // SENTRY_APP_SLUG is set by `beforeEach`. SENTRY_APP_CLIENT_SECRET is not —
+    // the seven-day fixture, three of four names present.
+    delete process.env['SENTRY_APP_CLIENT_SECRET'];
+    const fx = await makeWorkItemFixture({ name: 'Partial', identifier: 'PRTL' });
+    signIn(fx);
+
+    const res = await START(
+      req(`http://localhost/api/monitors/sentry/oauth/start?project=${fx.projectIdentifier}`),
+    );
+
+    expect(res.headers.get('location')).toContain('monitor=not_configured');
+    // The whole point: nothing was minted and nobody was sent anywhere. A state
+    // cookie is what a redirect to the provider leaves behind, so its ABSENCE is
+    // the evidence that the refusal happened before the mint.
+    expect(res.cookies.get(MONITOR_CONNECT_STATE_COOKIE)).toBeUndefined();
+    expect(res.headers.get('location')).not.toContain('sentry-apps');
+    expect(res.headers.get('location')).not.toContain('external-install');
+
+    delete process.env['SENTRY_APP_CLIENT_ID'];
+  });
+
+  it('redirects to the provider UNCHANGED when every declared variable is present', async () => {
+    // The control for the test above — without it, a refusal that fired
+    // unconditionally would pass it. Same registration, every name set.
+    registerMonitorProvider(sentryMonitorProvider, 'sentry');
+    process.env['SENTRY_APP_CLIENT_ID'] = 'id';
+    process.env['SENTRY_APP_CLIENT_SECRET'] = 'secret';
+    const fx = await makeWorkItemFixture({ name: 'Whole', identifier: 'WHOL' });
+    signIn(fx);
+
+    const res = await START(
+      req(`http://localhost/api/monitors/sentry/oauth/start?project=${fx.projectIdentifier}`),
+    );
+
+    expect(res.headers.get('location')).toContain('external-install');
+    expect(res.cookies.get(MONITOR_CONNECT_STATE_COOKIE)).toBeDefined();
+
+    delete process.env['SENTRY_APP_CLIENT_ID'];
+    delete process.env['SENTRY_APP_CLIENT_SECRET'];
+  });
+
   it('says `not_configured` when the integration was never registered', async () => {
     delete process.env['SENTRY_APP_SLUG'];
     const fx = await makeWorkItemFixture({ name: 'Unconf', identifier: 'UNCF' });
