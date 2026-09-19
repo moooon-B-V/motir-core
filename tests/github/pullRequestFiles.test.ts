@@ -58,7 +58,12 @@ describe('listPullRequestFiles — the endpoint and the credential', () => {
 
     const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
 
-    expect(result).toEqual({ paths: ['lib/services/workflowsService.ts'], truncated: false });
+    expect(result).toEqual({
+      paths: ['lib/services/workflowsService.ts'],
+      truncated: false,
+      files: [{ path: 'lib/services/workflowsService.ts', sha: null, status: 'modified' }],
+      headSha: null,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe(
@@ -92,7 +97,73 @@ describe('listPullRequestFiles — the endpoint and the credential', () => {
 
     const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
 
-    expect(result).toEqual({ paths: ['a.ts', 'b.ts'], truncated: false });
+    expect(result.paths).toEqual(['a.ts', 'b.ts']);
+    expect(result.truncated).toBe(false);
+    expect(result.files.map((file) => file.path)).toEqual(['a.ts', 'b.ts']);
+  });
+});
+
+describe('listPullRequestFiles — each file at the HEAD (MOTIR-5674)', () => {
+  const HEAD = '3f1c0de5a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4';
+  const contentsUrl = (path: string, ref: string) =>
+    `https://api.github.com/repos/${OWNER}/${NAME}/contents/${path}?ref=${ref}`;
+
+  it('carries each row’s blob sha and status beside the unchanged paths', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonPage([
+        { filename: 'docs/decisions/pages.md', status: 'added', sha: 'blob-1' },
+        { filename: 'lib/a.ts', status: 'modified', sha: 'blob-2' },
+        { filename: 'lib/gone.ts', status: 'removed', sha: 'blob-3' },
+      ]),
+    );
+
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+
+    expect(result.paths).toEqual(['docs/decisions/pages.md', 'lib/a.ts', 'lib/gone.ts']);
+    expect(result.files).toEqual([
+      { path: 'docs/decisions/pages.md', sha: 'blob-1', status: 'added' },
+      { path: 'lib/a.ts', sha: 'blob-2', status: 'modified' },
+      { path: 'lib/gone.ts', sha: 'blob-3', status: 'removed' },
+    ]);
+  });
+
+  it('reads the HEAD off a surviving row’s contents_url, never off a removed one', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonPage([
+        {
+          filename: 'lib/gone.ts',
+          status: 'removed',
+          contents_url: contentsUrl('lib/gone.ts', 'base-sha'),
+        },
+        { filename: 'lib/a.ts', status: 'modified', contents_url: contentsUrl('lib/a.ts', HEAD) },
+      ]),
+    );
+
+    expect((await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER)).headSha).toBe(HEAD);
+  });
+
+  it('a contents_url that is missing, unparseable or refless names no head', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonPage([
+        { filename: 'a.ts', status: 'added' },
+        { filename: 'b.ts', status: 'added', contents_url: 'not a url' },
+        { filename: 'c.ts', status: 'added', contents_url: 'https://api.github.com/x' },
+      ]),
+    );
+
+    expect((await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER)).headSha).toBeNull();
+  });
+
+  it('a truncated walk still reports the files it kept, in step with the paths', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonPage(ghFiles(100)))
+      .mockResolvedValueOnce(jsonPage(ghFiles(100, 100)))
+      .mockResolvedValueOnce(jsonPage(ghFiles(100, 200)));
+
+    const result = await listPullRequestFiles(TOKEN, OWNER, NAME, NUMBER);
+
+    expect(result.truncated).toBe(true);
+    expect(result.files.map((file) => file.path)).toEqual(result.paths);
   });
 });
 
