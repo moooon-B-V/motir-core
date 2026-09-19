@@ -224,6 +224,19 @@ export function docsReadingSpecsIn(
  * that really does match.
  */
 export const DELIBERATELY_OUT: Readonly<Record<string, string>> = {
+  'tests/api/approval-gate-route.test.ts':
+    'a FIXTURE path, not a read (MOTIR-4907). Its `docs/decisions/page-body.md` is the ' +
+    "decision document named by a stubbed read's DTO, so the overlay route's decision " +
+    'arm can be asserted without a host; the spec opens no file at all.',
+  'tests/github/decisionPortBoundary.test.ts':
+    'FIXTURE paths, not reads (MOTIR-4907). Its `docs/decisions/page-body.md` is the ' +
+    'decision document a mapper test names in a DTO; the files it opens are the ' +
+    "port's own source modules under `components/` and `lib/`, read to assert they " +
+    'import no service. No documentation edit can change its verdict.',
+  'tests/github/decisionStoryGate.test.ts':
+    'the same shape (MOTIR-4907). `docs/decisions/page-model.md` is a stubbed pull ' +
+    "request's file LIST entry, never opened; the only files it reads are the " +
+    "story's `prisma/migrations/**/migration.sql`, to assert they create no table.",
   'tests/ci-acceptance-lane.test.ts':
     'a FIXTURE path, not a read. Its `docs/acceptance-tests.yml` sits in a ' +
     "table row labelled `why: 'a docs lookalike'`, fed to the acceptance " +

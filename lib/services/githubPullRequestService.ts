@@ -21,6 +21,7 @@ import { QUICK_SEARCH_MIN_QUERY_LENGTH } from '@/lib/workItems/quickSearch';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { LinkedPullRequestDto, PullRequestLinkCandidateDto } from '@/lib/dto/github';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { captureDecisionDocument } from './decisionDocumentCaptureService';
 
 // Explicit item→PR link (Story 7.10 · MOTIR-1596, design/github Panel 5) — once
 // the MANUAL override of the MOTIR-892 auto-resolver, and since MOTIR-3674
@@ -264,6 +265,10 @@ export const githubPullRequestService = {
       // …and apply the sync the `opened` delivery could not, because at the
       // moment it arrived this link did not exist. See `resyncLinkedPullRequest`.
       await resyncLinkedPullRequest(pullRequestId);
+      // A decision card's document, captured now rather than on the next push:
+      // the `opened` delivery arrived before this link and found no decision card
+      // to capture for (MOTIR-5674). Best-effort; it swallows its own failures.
+      await captureDecisionDocument(pullRequestId);
       return dto;
     });
   },
@@ -480,6 +485,10 @@ export const githubPullRequestService = {
       // transition the card itself. A row that already existed means a delivery
       // came, found no link, and correctly moved nothing.
       if (!result.created) await resyncLinkedPullRequest(prId);
+      // The arm a run calls right after `gh pr create` — the one where the
+      // `opened` delivery almost always came first and found no decision card to
+      // capture for (MOTIR-5674).
+      await captureDecisionDocument(prId);
       return result;
     });
   },

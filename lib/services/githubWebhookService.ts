@@ -16,6 +16,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { githubInstallationService } from './githubInstallationService';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
 import { listPullRequestFiles, type PullRequestFiles } from '@/lib/github/pullRequestFiles';
+import { captureDecisionDocument } from './decisionDocumentCaptureService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import {
   syncChangeRequestStatus,
@@ -634,6 +635,11 @@ export const githubWebhookService = {
     // previous head (MOTIR-5482). Above the action gate for the link check's reason:
     // `synchronize` is exactly the action `HANDLED_PR_ACTIONS` leaves out.
     await withdrawGatesOnSynchronize(body);
+    // A NEW HEAD may carry a different decision document (MOTIR-5674). Above the
+    // action gate for the same reason as the withdraw: `synchronize` is not in
+    // `HANDLED_PR_ACTIONS`. `opened` / `reopened` capture below, AFTER the sync,
+    // because on `opened` the mirror row does not exist until the sync writes it.
+    if (body['action'] === 'synchronize') await captureDecisionDocumentOnHead(body);
 
     // A MERGE QUEUE REMOVED IT (MOTIR-5632; `approval-gates.md` §4 THIRD AMENDMENT).
     // Dispatched BEFORE the lifecycle mapping, because `dequeued` is not a lifecycle:
@@ -712,6 +718,9 @@ export const githubWebhookService = {
     // right now* — an opening snapshot is the right granularity, and a partial
     // answer during the window beats a complete one after it.
     await capturePullRequestFiles(body, cr);
+    if (body['action'] === 'opened' || body['action'] === 'reopened') {
+      await captureDecisionDocumentOnHead(body);
+    }
 
     return result;
   },
@@ -1138,6 +1147,45 @@ async function withdrawGatesOnSynchronize(body: Record<string, unknown>): Promis
   }
 }
 
+/**
+ * Capture what the delivery's pull request carries under `docs/decisions/` (Story
+ * MOTIR-4907 · MOTIR-5674) — resolved to the mirror row the same way the withdraw
+ * above resolves it, then handed to the capture, which decides for itself whether
+ * the pull request delivers a decision card at all. SWALLOWS EVERYTHING, for the
+ * link check's reason: the delivery's load-bearing effect is the status sync.
+ */
+async function captureDecisionDocumentOnHead(body: Record<string, unknown>): Promise<void> {
+  try {
+    const installationId = readInstallationId(body);
+    const pr = asRecord(body['pull_request']);
+    const providerRepoId = readId(asRecord(body['repository'])?.['id']);
+    const number = typeof pr?.['number'] === 'number' ? pr['number'] : null;
+    if (!installationId || !providerRepoId || number === null) return;
+
+    const rowId = await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        installationId,
+        tx,
+      );
+      if (!installation) return null;
+      const repo = await githubRepoRepository.findByInstallationAndRepoId(
+        installation.id,
+        providerRepoId,
+        tx,
+      );
+      if (!repo) return null;
+      return (
+        (await githubPullRequestRepository.findByRepoAndNumber(repo.id, number, tx))?.id ?? null
+      );
+    });
+    if (rowId) await captureDecisionDocument(rowId);
+  } catch (err) {
+    console.warn('[githubWebhookService] could not capture the decision document', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 const LINK_CHECK_PR_ACTIONS = new Set([
   'opened',
   'reopened',
@@ -1270,7 +1318,7 @@ export async function capturePullRequestFiles(
     const { repo } = resolved;
     const mergedAt = readMergedAt(body);
 
-    let files: PullRequestFiles = { paths: [], truncated: false };
+    let files: PullRequestFiles = { paths: [], truncated: false, files: [], headSha: null };
     try {
       const { token } = await getGitProvider(PROVIDER).mintInstallationToken(installationId);
       files = await listPullRequestFiles(token, repo.owner, repo.name, cr.number);

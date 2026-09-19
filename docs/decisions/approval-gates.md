@@ -57,6 +57,14 @@
   and who may press. Row 4a's _"ONE transaction"_ is struck and replaced;
   nothing else in §8 changes.
 
+- **AMENDED 2026-09-19 (MOTIR-5672), at §1, §8 and _Deliberately NOT decided
+  here_ — THE DECISION GATE.** A `coding_agent` decision card's subject is the
+  `docs/decisions/*.md` file in its MANDATORY pull request; the gate is PRIMARY
+  over the merge like the design gate, and one press accepts it and merges.
+  §1's _"a decision with no pull request"_ cell and §8 Workflow A's
+  `decision_approval` are struck in place, §1's handler table gains its third
+  column, and the rest is **§8's FIFTH AMENDMENT**, after the FOURTH.
+
 - **AMENDED 2026-09-19 (MOTIR-5787), at §1, additively.** A fourth kind,
   `acceptance_result`: it hangs on the STORY whatever the run target; on a story
   run it is the PRIMARY of two gates whose one press also merges the story's code
@@ -145,15 +153,18 @@ half-wired.
 **The registry** is `Record<ApprovalGateKind, GateHandler>`. **What a third kind
 must supply to register — the table this record exists to make re-usable:**
 
-| a handler supplies                                 | for `design_result`                              | for `pull_request_merge`                          |
-| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
-| **how to resolve the SUBJECT** from the gate row   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  |
-| **who it ROUTES to**                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          |
-| **which PERMISSION authorises a decision**         | `work_item:edit`                                 | `work_item:merge_pull_request`                    |
-| **which STATUS TRANSITION the gate owns**, or none | the move into the project's `done` category      | none — the webhook moves the card (§4)            |
-| **what `approve` DOES**                            | §3                                               | §4                                                |
-| **what `request_changes` DOES**                    | records the decision, moves nothing              | records the decision, moves nothing               |
-| **what to RETAIN on approval**, or nothing         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host |
+| a handler supplies                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 |
+| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **how to resolve the SUBJECT** from the gate row   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) |
+| **who it ROUTES to**                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    |
+| **which PERMISSION authorises a decision**         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            |
+| **which STATUS TRANSITION the gate owns**, or none | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  |
+| **what `approve` DOES**                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  |
+| **what `request_changes` DOES**                    | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 |
+| **what to RETAIN on approval**, or nothing         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              |
+
+_The third column is added by §8's FIFTH AMENDMENT (MOTIR-5672, 2026-09-19); the
+first two are unchanged._
 
 A third kind is then a row in the enum, a handler, and a renderer for its
 subject body. **No second vocabulary, no second control, no second decide door.**
@@ -174,12 +185,12 @@ subject body. **No second vocabulary, no second control, no second decide door.*
 >
 > **The KIND axis, in full, after this amendment:**
 >
-> | kind                    | the port shows                                                            | fires when                           |
-> | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------ |
-> | `design_result`         | the changed mock(s), the note as a link — `design-result.md` AMENDMENT 4  | a design with **no pull request**    |
-> | `decision_approval`     | the decision **document**                                                 | a decision with **no pull request**  |
-> | `pull_request_approval` | what the card produced — design assets, or **what changed + how to test** | **any** card **with a pull request** |
-> | `pull_request_merge`    | the same port; it is the second decision on the same subject (§8, row 4b) | **any** card **with a pull request** |
+> | kind                    | the port shows                                                            | fires when                                                                                                                                       |
+> | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | `design_result`         | the changed mock(s), the note as a link — `design-result.md` AMENDMENT 4  | a design with **no pull request**                                                                                                                |
+> | `decision_approval`     | the decision **document**                                                 | ~~a decision with **no pull request**~~ **a `coding_agent` decision whose pull request carries the document** (§8's FIFTH AMENDMENT, MOTIR-5672) |
+> | `pull_request_approval` | what the card produced — design assets, or **what changed + how to test** | **any** card **with a pull request**                                                                                                             |
+> | `pull_request_merge`    | the same port; it is the second decision on the same subject (§8, row 4b) | **any** card **with a pull request**                                                                                                             |
 >
 > **The kind decides the VERBS and the EFFECT; the PORT decides what you LOOK
 > at, and the port is chosen by what the card PRODUCED, not by the kind.** That
@@ -2198,9 +2209,15 @@ decides it. `auto` still merges, so `done` still comes from the merge.)_
 #### WORKFLOW A — no pull request
 
 ```
-implemented → in_review → [ design_result | decision_approval ] → done
+implemented → in_review → [ design_result ] → done
                            approve is TERMINAL
 ```
+
+~~`implemented → in_review → [ design_result | decision_approval ] → done`~~
+**AMENDED (MOTIR-5672, 2026-09-19): a decision never takes Workflow A.** Its
+pull request is MANDATORY, so a merge always writes its `done` (§8's FIFTH
+AMENDMENT, clause 2). The diagram above is the struck line with
+`decision_approval` removed and nothing else changed.
 
 | #   | event                             | actor      | status        |
 | --- | --------------------------------- | ---------- | ------------- |
@@ -2707,6 +2724,268 @@ ApprovalGateAuthority` is `assignee | reporter | admin`,
 > to MOTIR-5593 by key. GitLab's approval model is not GitHub's — it has approval
 > RULES with counts — and nothing here is written to generalise to it.
 
+> ### §8 — FIFTH AMENDMENT (MOTIR-5672, 2026-09-19): the DECISION gate — its subject is the `docs/decisions/*.md` file in the card's MANDATORY pull request, it is PRIMARY over the merge like the design gate, and one press accepts it and merges
+>
+> **What was OPEN, and what was WRONG.** §1's MOTIR-4911 amendment named
+> `decision_approval` and gave it _"a decision with **no pull request**"_; §8's
+> Workflow A listed it as a terminal `done` writer; and _Deliberately NOT decided
+> here_ left its HANDLER open — _"the resolver for a decision document, and where
+> that document lives before the `pages` domain hosts it"_. **This block decides
+> the handler and reverses the first two.** Each is struck in place above, and
+> Story MOTIR-4907's seven other children build against the clauses below.
+>
+> **The requester decision it records (Yue, 2026-09-19, rung 3).** A
+> `type: decision` + `executor: coding_agent` card ships its decision document as
+> a FILE in a PULL REQUEST, and **the pull request is MANDATORY**. Motir builds
+> **no document store and no document API** for it — no table, no asset, no
+> upload door — because the lasting home for documents is a pages domain
+> (Epic MOTIR-5746), and a document API built now would be thrown away. The
+> decision gate works like the design gate: approval-gated, PRIMARY over the
+> approve-to-merge gate, one press. Decision documents are Motir's own, at its
+> ADR convention `docs/decisions/*.md`; Motir hosts no customer project whose
+> layout this has to guess.
+>
+> **Read at base `5ce9c84ec`.** It strikes text in §1's MOTIR-4911 amendment
+> table, §8's Workflow A and _Deliberately NOT decided here_, and fills §1's
+> handler table's third column. It changes nothing for a design card or a code
+> card: every rule MOTIR-5609, MOTIR-5479, MOTIR-5590 and `design-result.md`
+> AMENDMENT 6 set stands, and this block reuses them rather than restating them.
+>
+> **1. THE SUBJECT — the decision document in the card's pull request** (rung 3:
+> the requester decision). For a `type: decision` + `executor: coding_agent`
+> card, the subject is the markdown file under `docs/decisions/` that the card's
+> delivering pull request ADDS or MODIFIES, read at that pull request's HEAD.
+> **Motir keeps no copy of it** — not its text, not a render, not an excerpt on
+> the gate row. What Motir stores is only the file's IDENTITY at the head
+> (clause 7), which is a fact about the host, not a copy of the document.
+>
+> **2. THE PULL REQUEST IS MANDATORY — there is no Workflow A for a decision**
+> (rung 3). A decision card with no delivering pull request has nothing to
+> accept, and raises no decision gate. It reaches `done` **only by a merge**,
+> exactly like a code card; §8's _`done` has exactly ONE writer_ is the merge
+> webhook for every decision card, always. The agent's side of this — the
+> dispatch prompt telling a decision card's agent to write ONE
+> `docs/decisions/<slug>.md` and open a pull request carrying it — is
+> MOTIR-5682's.
+>
+> **3. EXACTLY ONE DOCUMENT, OR UNRESOLVABLE — and an unresolvable gate still
+> HOLDS the merge** (rung 3: the principle §6c and §8 already rest on — a merge
+> ships what a person said yes to). The document is the ONE `docs/decisions/*.md`
+> file added or modified across the card's delivery SET (every open pull
+> request the card's `work_item_delivery` rows name). Any other count still
+> RAISES the decision gate, in a state that cannot be approved:
+>
+> | captured outcome (clause 7)           | the gate                  | Approve     | Request changes | the merge            |
+> | ------------------------------------- | ------------------------- | ----------- | --------------- | -------------------- |
+> | `one`                                 | resolvable over that file | allowed     | allowed         | follows the approval |
+> | `none` — no such file                 | UNRESOLVABLE, says so     | **refused** | allowed         | **HELD**             |
+> | `several` — two or more               | UNRESOLVABLE, names them  | **refused** | allowed         | **HELD**             |
+> | `unreadable` — the host could not say | UNRESOLVABLE, says so     | **refused** | allowed         | **HELD**             |
+>
+> **Why a missing document does not simply raise nothing:** a decision card
+> must not merge without a person accepting a decision, and _"we could not find
+> it"_ must never become _"nobody had to accept it"_. A gate with no Approve and a
+> held merge is the loud version of that state; no gate at all is the silent one.
+> The same UNRESOLVABLE answer covers a document that the resolver (clause 8)
+> cannot fetch when the port renders it — the file is gone at the head, the host
+> is unreachable — and there the surface disables Approve because nothing was
+> rendered to approve; the door's own refusal keys on the CAPTURED outcome, which
+> it can read inside its transaction. Request changes is allowed in every row,
+> because _"there is no document here"_ is exactly the answer it exists to give.
+>
+> **4. IDENTITY AND VERSION — `subjectId` is the CARD, `subjectVersion` is the
+> document's BLOB** (rung 2: MOTIR-5479's amendment, decision 2 — the
+> approve-to-merge gate's precedent for `subjectId`).
+>
+> - **`subjectId` = the work item's own id.** The partial unique index
+>   `approval_gate_one_awaiting_per_subject` over
+>   `(work_item_id, kind, subject_id) WHERE state = 'awaiting'` then enforces
+>   _one awaiting decision gate per card_ with no new index — the same reuse the
+>   approve-to-merge gate made.
+> - **`subjectVersion` = `<owner/name>:<path>@<blobSha>`** for a resolvable
+>   document — the repository, the file's path, and the git BLOB sha the host
+>   reports for that file at the head. For an UNRESOLVABLE outcome it is
+>   `<owner/name>:unresolvable:<outcome>@<headSha>` (the head of the member that
+>   produced the outcome), so each unresolvable head is its own question and a
+>   push that fixes it raises a resolvable one.
+>
+> **Why the BLOB sha and not the head sha — the rule this clause exists for.**
+> A head sha changes on EVERY push, including a push that only fixes a test or
+> a typo in code next to the document. Keyed on the head, an accepted decision
+> would be re-asked after every unrelated commit, and a person would be asked to
+> accept the same text again and again until they stopped reading it. The blob
+> sha is git's content address for exactly that file's bytes: it changes when,
+> and only when, the document changes. So:
+>
+> - **a push that leaves the blob unchanged keeps the decision question AND its
+>   answer** — an awaiting decision gate stays awaiting over the same version, a
+>   decided one stays decided — and only the merge question moves (MOTIR-5479's
+>   decision 4 withdraws the approve-to-merge gate on a moved head, unchanged);
+> - **a push that changes the blob SUPERSEDES the decision gate** and raises a
+>   fresh one over the new version. The supersede records the cause
+>   `head_moved` (`design-result.md` AMENDMENT 6 Q5): the writing path is the head
+>   move, and for this kind that path writes only when the head move changed the
+>   document, so a surface can render it truthfully as _"a push changed the
+>   decision document"_. No new cause is minted — Q5's rule is one value per
+>   writing PATH, and this is an existing path.
+>
+> **5. TWO GATES, ONE PRESS, THE DECISION PRIMARY — `design-result.md`
+> AMENDMENT 6, clause by clause** (rung 2: the shipped design arm, MOTIR-5658 /
+> MOTIR-5664 / MOTIR-5666). A decision card whose delivery set is green in a
+> `manual` project holds two questions, and they have different lifetimes
+> exactly as a design card's do:
+>
+> | gate                              | the question              | lifetime    |
+> | --------------------------------- | ------------------------- | ----------- |
+> | `decision_approval` — **PRIMARY** | _is this decision right?_ | **durable** |
+> | the approve-to-merge gate         | _do these commits land?_  | per attempt |
+>
+> - **The decision gate is PRIMARY** (AMENDMENT 6 Q1): presented as the thing
+>   being decided, with the pull requests beneath it as what the approval will
+>   merge. `resolveGateSet`'s `primary` prefers it the way it prefers the design
+>   gate.
+> - **One press accepts the decision AND authorises the merge**, carried ONCE,
+>   and only while the card has had no approve-to-merge gate at all — the
+>   MOTIR-5666 clause `resolveGateSet` already applies to the design carry
+>   (`lib/approvalGates/gateSet.ts:258-265`). Once a merge gate has existed, a
+>   later push is a new question about new commits, and the decision approval
+>   does not authorise it.
+> - **The merge is HELD until green** (Q4): the press is never refused for CI,
+>   the decision stands, and the merge follows on the next green verdict with no
+>   second press — the arm `settleGreenVerdict` already carries for a design
+>   approval (`lib/services/mergeGates.ts:110-122`).
+> - **A failed merge re-opens ONLY the merge question** (Q2): an ejection, a
+>   conflict or a refusal leaves the decision gate decided, and the routes back
+>   are MOTIR-5461's _Queue again_ and a push — neither touches the decision.
+>   (Q3's _a decided design gate closes the design_ has no analogue to build here:
+>   the document lives in the pull request, so the only way to change it is a
+>   push, and clause 4 already makes a push that changes it a new question.)
+> - **`done` has exactly one writer, the merge webhook.**
+>
+> **Which STATUS the decision press writes: NONE.** Its `approve` returns
+> `{ statusWritten: null, statusDeferredReason: 'merge_writes_done' }` — the
+> arm `designResultGateHandler.approve` takes when a pull request is open
+> (`lib/approvalGates/designResultHandler.ts:176-182`), and for this kind a pull
+> request is always open while the gate is live. **The `approved` work-item status
+> MOTIR-4905 shipped is written by the COMPANION decision** — the approve-to-merge
+> gate the same press decides, through `pullRequestApprovalGateHandler.approve`
+> (`PULL_REQUEST_APPROVAL_TARGET`, `lib/approvalGates/pullRequestApprovalHandler.ts:32`)
+> — exactly as for a design card. When the press lands before green, no companion
+> exists yet, nothing writes `approved`, and the card waits in the review band
+> until the held merge follows. Request changes records the decision and moves
+> nothing.
+>
+> **And the merge follows ONLY the decision.** While a card's decision gate is
+> awaiting or unresolvable, approving its approve-to-merge gate through a door
+> that is not the decision press — the REST decide route on that gate alone, or
+> the GitHub review sync of §8's FOURTH AMENDMENT — merges nothing. The GitHub
+> reviews are still RECORDED (FOURTH AMENDMENT decision 8), so nobody is asked
+> twice; they are carried out when the decision is accepted. Built by MOTIR-5677
+> with the gate set, because it is the gate set's question: _does anything still
+> hold this merge?_
+>
+> **6. `auto` MERGE MODE — an unanswered decision HOLDS the automatic merge**
+> (rung 3: §7a says `auto` means no MERGE gate; it never said no decision). In an
+> `auto` project no approve-to-merge gate is raised (§7a), and the decision gate
+> is raised exactly as in `manual`. **An awaiting or unresolvable decision gate
+> holds the automatic merge**, and so does a decision card whose document has not
+> yet been captured (clause 7's `null`), because the safe reading of _"not known
+> yet"_ is _"not accepted"_. The automatic merge follows the decision's approval
+> on the next green verdict. Built by MOTIR-5677, in `settleGreenVerdict`.
+>
+> **What the `auto` arm does TODAY for an awaiting DESIGN gate — read, and then
+> reproduced:** it MERGES over it. `settleGreenVerdict`'s `auto` arm
+> (`lib/services/mergeGates.ts:123-135` at `5ce9c84ec`) checks only the run
+> target and returns an `AutoMergeRequest` for every merge candidate; it never
+> reads the `design_result` gate, and `pullRequestAutoMergeService` checks no gate
+> either. A real-Postgres spec — an `auto` project, a green design card, its
+> design gate `awaiting` — got a merge back. **That is a defect, filed as
+> [MOTIR-5762](motir:cmu8fyt3h007phvoi9s2sz9i6)**, and it is out of this record's
+> scope: the rule for the design arm is AMENDMENT 6's, and this clause states only
+> the decision arm's. The two holds are the same rule for two kinds, so whichever
+> card lands second extends the first.
+>
+> **7. WHERE THE IDENTITY COMES FROM — CAPTURED at the head, never fetched in a
+> gate transaction** (rung 2: `lib/services/gateSetFor.ts` reads every input on
+> its caller's transaction and makes no network call). Which `docs/decisions/*.md`
+> file a head carries is known only to the host, so it is CAPTURED onto the
+> pull-request mirror when the head is observed, and the gate set and the handler
+> read the captured value. Four nullable columns on `github_pull_request`,
+> expand-only:
+>
+> | column                  | holds                                                            |
+> | ----------------------- | ---------------------------------------------------------------- |
+> | `decision_doc_outcome`  | `one` · `none` · `several` · `unreadable`; null = never captured |
+> | `decision_doc_path`     | the file's path, for `one`                                       |
+> | `decision_doc_blob_sha` | the file's git blob sha at that head, for `one`                  |
+> | `decision_doc_head_sha` | the head the capture was read at, for every outcome              |
+>
+> **When it is captured:** on `opened`, `synchronize` and `reopened` for a pull
+> request delivering a `decision` + `coding_agent` card, **and when a delivery
+> row is written for such a card** (`link_pull_request`) — because a run links its
+> pull request right after opening it, so the `opened` delivery routinely arrives
+> before the link and would find no decision card to capture for. The read runs
+> OUTSIDE any transaction (the file list is a host call), filters the head's file
+> list to `docs/decisions/*.md` with an added or modified status, and writes the
+> outcome. A failed read writes `unreadable` and never fails the webhook.
+>
+> **`changedPaths` / `changedPathsTruncated` stay what MOTIR-2922 made them: the
+> MERGE's file list**, captured once at merge for the subsumption question. The
+> decision columns are a separate HEAD-time fact; one column meaning two
+> different moments would make both answers wrong. Built by MOTIR-5674, which also
+> extends `lib/github/pullRequestFiles.ts` to return each file's `sha` and
+> `status`.
+>
+> **8. THE RESOLVER — content is read through an interface, and its one
+> implementation reads the host** (rung 3: the requester decision; rung 2: §1's
+> MOTIR-4911 amendment, _the subject is a document with a resolver_). The handler
+> resolves the document's CONTENT through a `DecisionDocumentResolver`. Its one
+> production implementation reads the file at the captured head through the
+> shipped core-owned read, `repoFileReadService.readFile`
+> (`lib/services/repoFileReadService.ts`), whose outcomes are all NAMED
+> (`RepoFileServiceResult`: `found`, `not_found`, `ref_not_found`, `too_large`,
+> `unauthorized`, `invalid_path`, `unreachable`, plus `repo_not_connected` and
+> `provider_unavailable`). `found` is content; every other outcome maps to a named
+> UNRESOLVABLE reason, and the mapping is total. **The interface is the seam a
+> later pages domain replaces** — a decision document that moves into a page is a
+> new resolver and a new renderer, never a migration on the gate table, which is
+> the whole reason §1's amendment made the subject opaque. **No Motir-side
+> document store exists until then**, by the requester decision above. Built by
+> MOTIR-5676, whose second-resolver test is what proves the seam.
+>
+> **9. RETENTION — NOTHING is pinned** (rung 2: §6c; the retired merge kind's
+> answer). The approved version is the blob sha on the decided gate's
+> `subjectVersion` plus the merge commit on `github_pull_request.merge_outcome_ref`,
+> and both are durable on the host: a merged blob is reachable from the trunk for
+> as long as the repository exists. Motir holds no bytes to pin, so §6c's row for
+> this kind is _nothing_, the same answer the retired `pull_request_merge` gave.
+>
+> **10. THE EXECUTOR DISCRIMINATOR** (rung 2: §1's MOTIR-4911 amendment).
+> `decision` + **`coding_agent`** raises `decision_approval`. `decision` +
+> **`human`** raises NONE here: a person picking one of N options is
+> `decision_choice`, which Story MOTIR-4914 owns. A card whose `type` is not
+> `decision` never raises this kind, whatever files its pull request touches — a
+> code card that also edits an ADR is a code card.
+>
+> **11. §1's HANDLER TABLE gains a `decision_approval` column**, filled from
+> clauses 1–10 above; it is marked there as this amendment's.
+>
+> **Which card builds which clause:**
+>
+> | clauses                        | card                                                                                                        |
+> | ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+> | 7                              | MOTIR-5674 — the head capture and its columns                                                               |
+> | 1, 3, 4, 8, 9, 10, 5's verbs   | MOTIR-5676 — the handler, the resolver and the subject summary                                              |
+> | 3's raise, 4's supersede, 5, 6 | MOTIR-5677 — the gate set, the one-time carry and both merge holds                                          |
+> | 2                              | MOTIR-5682 — the agent's decision lane in the dispatch prompt                                               |
+> | the surfaces                   | MOTIR-5673 (design) · MOTIR-5678 (the port, and `docs/approval-gates.md`) · MOTIR-5679 (the To-approve row) |
+>
+> **Not decided here:** how a pages domain later imports these documents
+> (Epic MOTIR-5746, Story MOTIR-5761); what the `decision` TYPE means in the
+> taxonomy (MOTIR-4155, which owns `work-item-type-taxonomy.md`); how a planner
+> chooses a decision card's executor (MOTIR-4915); the `human` decision path
+> (MOTIR-4914); and the design arm's `auto` hold (MOTIR-5762).
+
 #### What the two workflows settle, in one line each
 
 - **`done` has exactly ONE writer, in both workflows.** In A it is the approval,
@@ -3040,9 +3319,13 @@ owed there.
 - **The decision gate.** ⚠️ **AMENDED (MOTIR-4911, 2026-09-08): the KIND is now
   decided — `decision_approval` is in §1's enum, with its port and its verbs.**
   ~~named by the requester as a future kind. §1's table says how it registers;
-  this record ships none.~~ What is still not decided is its **HANDLER** — the
+  this record ships none.~~ ~~What is still not decided is its **HANDLER** — the
   resolver for a decision document, and where that document lives before the
-  `pages` domain hosts it. `decision_choice`, the N-option verb set, is named in
+  `pages` domain hosts it.~~ **AMENDED (MOTIR-5672, 2026-09-19): the HANDLER is
+  now decided too — §8's FIFTH AMENDMENT.** The document lives in the card's
+  mandatory pull request, at `docs/decisions/*.md`; Motir stores only its
+  identity at the head, and reads its content through a resolver the `pages`
+  domain will later replace. `decision_choice`, the N-option verb set, is named in
   §1 and likewise ships nothing here.
 - **Re-homing the ACCEPTANCE gate.** `AcceptancePanel` is the language §1
   generalises from and is deliberately left where it is; folding it onto the

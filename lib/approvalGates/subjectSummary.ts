@@ -1,6 +1,7 @@
 import type { ApprovalGateKind, Prisma } from '@/generated/prisma/client';
 import type {
   ApprovalGateSubjectSummaryDTO,
+  DecisionApprovalSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
   UnregisteredSubjectSummaryDTO,
@@ -8,8 +9,12 @@ import type {
 import type { RegisteredGateKind, UnregisteredGateKind } from '@/lib/approvalGates/registry';
 import { isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import {
+  workItemDeliveryRepository,
+  type WorkItemDeliveryWithChecks,
+} from '@/lib/repositories/workItemDeliveryRepository';
 import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { decisionIdentityOf, titleFromDecisionPath } from '@/lib/approvalGates/decisionSubject';
 
 // THE SUBJECT SUMMARY — what a QUEUE ROW says about the thing being decided,
 // resolved per KIND (Story MOTIR-4879 · Subtask MOTIR-4791; ADR
@@ -70,7 +75,43 @@ type AssertEqual<A, B> =
 type SummaryLoader = (
   subjectIds: string[],
   tx: Prisma.TransactionClient,
+  shared: SharedReads,
 ) => Promise<Map<string, ApprovalGateSubjectSummaryDTO>>;
+
+/**
+ * READS TWO KINDS SHARE, made ONCE per page (MOTIR-5679). The approve-and-merge row and
+ * the decision row both read the card's delivery set by the work item's id, so a page
+ * holding both reads it in one round trip for the union of their cards — a decision row
+ * joining a queue that already lists a pull-request row costs no query at all.
+ */
+interface SharedReads {
+  deliveries(subjectIds: readonly string[]): Promise<WorkItemDeliveryWithChecks[]>;
+}
+
+/** The kinds whose subject IS the card and whose summary reads its delivery set. */
+const DELIVERY_KINDS: ReadonlySet<RegisteredGateKind> = new Set([
+  'pull_request_approval',
+  'decision_approval',
+]);
+
+function sharedReadsFor(
+  byKind: ReadonlyMap<RegisteredGateKind, string[]>,
+  tx: Prisma.TransactionClient,
+): SharedReads {
+  const ids = [
+    ...new Set(
+      [...byKind].flatMap(([kind, subjectIds]) => (DELIVERY_KINDS.has(kind) ? subjectIds : [])),
+    ),
+  ];
+  let all: Promise<WorkItemDeliveryWithChecks[]> | null = null;
+  return {
+    async deliveries(subjectIds) {
+      all ??= workItemDeliveryRepository.listByWorkItemsWithChecks(ids, tx);
+      const wanted = new Set(subjectIds);
+      return (await all).filter((delivery) => wanted.has(delivery.workItemId));
+    },
+  };
+}
 
 /** How much of a design note a ROW carries. A lead, not the note. */
 const NOTE_EXCERPT_CHARS = 180;
@@ -121,6 +162,58 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
     }
     return out;
   },
+  // MOTIR-5676 — a decision row names the DOCUMENT from the capture on the card's pull
+  // requests: `subjectId` is the card, so one batched delivery read answers every
+  // decision gate on the page, and no host is called. A card with no captured open pull
+  // request is absent, and its row says the subject no longer resolves.
+  async decision_approval(subjectIds, _tx, shared) {
+    const deliveries = await shared.deliveries(subjectIds);
+    const membersByItem = new Map<string, Parameters<typeof decisionIdentityOf>[0][number][]>();
+    for (const delivery of deliveries) {
+      const pr = delivery.pullRequest;
+      if (pr.state !== 'open' || pr.merged) continue;
+      const member = {
+        repo: `${delivery.repo.owner}/${delivery.repo.name}`,
+        number: pr.number,
+        outcome: pr.decisionDocOutcome,
+        path: pr.decisionDocPath,
+        blobSha: pr.decisionDocBlobSha,
+        headSha: pr.decisionDocHeadSha,
+        paths: pr.decisionDocPaths,
+      };
+      const members = membersByItem.get(delivery.workItemId);
+      if (members) members.push(member);
+      else membersByItem.set(delivery.workItemId, [member]);
+    }
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const [workItemId, members] of membersByItem) {
+      const identity = decisionIdentityOf(members);
+      if (!identity) continue;
+      const summary: DecisionApprovalSubjectSummaryDTO = identity.resolvable
+        ? {
+            kind: 'decision_approval',
+            outcome: 'one',
+            repo: identity.repo,
+            number: identity.number,
+            path: identity.path,
+            title: titleFromDecisionPath(identity.path),
+            blobSha: identity.blobSha,
+            documentCount: 1,
+          }
+        : {
+            kind: 'decision_approval',
+            outcome: identity.reason,
+            repo: identity.repo,
+            number: identity.number,
+            path: null,
+            title: null,
+            blobSha: null,
+            documentCount: identity.paths.length,
+          };
+      out.set(workItemId, summary);
+    }
+    return out;
+  },
   // ⚠️ THE `pull_request_merge` LOADER WAS HERE (MOTIR-4793) and retired with its kind
   // (MOTIR-5616). Its rows are superseded and unregistered now, so they take the
   // not-built-yet summary below with every other kind this build does not render.
@@ -128,8 +221,8 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
   // delivery set. `subjectId` is the work item's own id, so one batched delivery read
   // answers every gate of the kind on the page; a card that delivers nothing is absent,
   // and its row says the subject no longer resolves.
-  async pull_request_approval(subjectIds, tx) {
-    const deliveries = await workItemDeliveryRepository.listByWorkItemsWithChecks(subjectIds, tx);
+  async pull_request_approval(subjectIds, _tx, shared) {
+    const deliveries = await shared.deliveries(subjectIds);
     const membersByItem = new Map<string, PullRequestApprovalSubjectSummaryDTO['members']>();
     for (const delivery of deliveries) {
       const pr = delivery.pullRequest;
@@ -180,8 +273,9 @@ export async function summarizeGateSubjects(
   }
 
   const loaded = new Map<RegisteredGateKind, Map<string, ApprovalGateSubjectSummaryDTO>>();
+  const shared = sharedReadsFor(byKind, tx);
   for (const [kind, subjectIds] of byKind) {
-    loaded.set(kind, await SUMMARY_LOADERS[kind](subjectIds, tx));
+    loaded.set(kind, await SUMMARY_LOADERS[kind](subjectIds, tx, shared));
   }
 
   const out = new Map<string, ApprovalGateSubjectSummaryDTO | null>();

@@ -8,6 +8,8 @@ import {
   type GithubPullRequestWithInstallation,
 } from '@/lib/repositories/githubPullRequestRepository';
 import { designApprovalStandsForMerge, designHoldsMerge } from '@/lib/approvalGates/gateSet';
+import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
+import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -88,15 +90,42 @@ async function designApprovalHolds(
   workItemId: string,
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
-  const [currentDesign, latestDesignGate, latestMergeGate] = await Promise.all([
+  const [currentDesign, latestDesignGate] = await Promise.all([
     designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
     approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
-    approvalGateRepository.findLatestByWorkItem(workItemId, 'pull_request_approval', tx),
   ]);
-  // The same ONE-TIME clause the predicate applies: once a merge gate has existed,
-  // the commits are the merge gate's question and a later green is not this
-  // approval's to carry (MOTIR-5666).
-  return latestMergeGate === null && designApprovalStandsForMerge(currentDesign, latestDesignGate);
+  return designApprovalStandsForMerge(currentDesign, latestDesignGate);
+}
+
+/**
+ * Does a standing DECISION approval authorise this card's merge — `false` for a card
+ * that does not ask the decision question at all (Story MOTIR-4907 · MOTIR-5677;
+ * `approval-gates.md` §8's FIFTH AMENDMENT, clause 5).
+ */
+async function decisionApprovalHolds(
+  item: WorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  return asksTheDecisionQuestion(item) && !(await decisionHoldsMerge(item, tx));
+}
+
+/**
+ * Does a PRIMARY approval — the design's or the decision's — carry this card's merge?
+ * The same ONE-TIME clause the predicate applies: once a merge gate has existed, the
+ * commits are the merge gate's question and a later green is not the primary's to carry
+ * (MOTIR-5666).
+ */
+async function primaryApprovalCarries(
+  item: WorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const latestMergeGate = await approvalGateRepository.findLatestByWorkItem(
+    item.id,
+    'pull_request_approval',
+    tx,
+  );
+  if (latestMergeGate !== null) return false;
+  return (await designApprovalHolds(item.id, tx)) || (await decisionApprovalHolds(item, tx));
 }
 
 /**
@@ -134,8 +163,9 @@ export async function settleGreenVerdict(
     // The predicate has already answered *no merge gate is owed* for the same
     // reason, so without this arm the card would go green holding an approval
     // nobody carried out. Both readers ask the one question, in
-    // `designApprovalStandsForMerge`.
-    if (!(await designApprovalHolds(args.item.id, tx))) return [];
+    // `designApprovalStandsForMerge` — and, for a DECISION card, in
+    // `decisionApprovalStandsForMerge` (MOTIR-5677, clause 5).
+    if (!(await primaryApprovalCarries(args.item, tx))) return [];
   } else if (mode?.prMergeMode !== 'auto') {
     return [];
   } else if ((await resolveRunTargetFor(args.item, tx)).kind === 'ancestor') {
@@ -147,6 +177,13 @@ export async function settleGreenVerdict(
     // follows. Awaiting, sent back, or approved for a result since superseded all hold.
     // The merge follows the approval: on the next green verdict, or at once when the press
     // lands on a set that is already green (`pullRequestMergeService`).
+    return [];
+  } else if (await decisionHoldsMerge(args.item, tx)) {
+    // ⚠️ …AND SO DOES AN UNANSWERED DECISION (MOTIR-5677; `approval-gates.md` §8's FIFTH
+    // AMENDMENT, clause 6). `auto` means no MERGE gate (§7a) — never that a decision nobody
+    // accepted may ship. Awaiting, unresolvable and not-yet-captured all hold: the safe
+    // reading of *"not known yet"* is *"not accepted"*. The merge follows the approval the
+    // same way the design's does.
     return [];
   }
 

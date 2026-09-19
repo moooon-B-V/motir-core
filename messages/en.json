@@ -6293,6 +6293,7 @@
       "title": "Development",
       "gloss": "Pull requests and how to test them · live PR and CI status",
       "glossWithDesign": "Pull requests, the design and how to test them · live PR and CI status",
+      "glossWithDecision": "The decision and its pull request · live PR and CI status",
       "pullRequestsGroup": "Pull requests",
       "howToTest": {
         "title": "How to test",
@@ -7534,6 +7535,15 @@
       "live": {
         "new": "New",
         "decidedElsewhere": "Decided elsewhere"
+      },
+      "rowKind": {
+        "decision_approval": "Decision"
+      },
+      "decisionSubject": {
+        "none": "No decision document · {pr}",
+        "several": "{count} decision documents · {pr}",
+        "unreadable": "Decision document not read yet · {pr}",
+        "title": "{path} at blob {blob}"
       }
     },
     "live": {
@@ -8367,6 +8377,11 @@
         "set_changed": "The pull requests changed, so this question was withdrawn.",
         "pulled_back": "The work was pulled back out of review, so this question was withdrawn.",
         "unknown": "This question was withdrawn. The reason was not recorded."
+      },
+      "causeByKind": {
+        "decision_approval": {
+          "head_moved": "A push changed the decision document, so this question was withdrawn."
+        }
       }
     },
     "refusal": {
@@ -8403,6 +8418,10 @@
       "kindUnregistered": {
         "title": "Motir cannot decide this kind of approval yet.",
         "next": "The work to support it is planned. Nothing you did caused this."
+      },
+      "decisionUnresolvable": {
+        "title": "There is no single decision document to approve.",
+        "next": "The pull request has to add or change exactly one file under docs/decisions/. Request changes to send it back."
       },
       "primaryPending": {
         "design": {
@@ -8591,6 +8610,42 @@
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",
       "movesOnMerge": "moves on merge"
+    },
+    "decision": {
+      "kindLabel": "Decision",
+      "portTitle": "Decision document",
+      "meta": "blob <mono>{blob}</mono> at <mono>{head}</mono>",
+      "metaNoHead": "blob <mono>{blob}</mono>",
+      "viewOnHost": "View on GitHub",
+      "headMeta": {
+        "one": "{path} · {count, plural, =1 {# pull request} other {# pull requests}} · delivered by {run}",
+        "oneNoRun": "{path} · {count, plural, =1 {# pull request} other {# pull requests}}",
+        "none": "No decision document · {count, plural, =1 {# pull request} other {# pull requests}} · delivered by {run}",
+        "noneNoRun": "No decision document · {count, plural, =1 {# pull request} other {# pull requests}}",
+        "several": "{docs} decision documents · {count, plural, =1 {# pull request} other {# pull requests}} · delivered by {run}",
+        "severalNoRun": "{docs} decision documents · {count, plural, =1 {# pull request} other {# pull requests}}",
+        "withdrawn": "{path} · blob {blob}"
+      },
+      "consequence": "Approving accepts this decision and merges <b>{prs}</b>, then moves <b>{key}</b> to Approved.",
+      "consequenceNoPrs": "Approving accepts this decision; its pull request merges when its checks pass, then <b>{key}</b> moves to Approved.",
+      "blocked": "Nothing can be approved until the pull request carries exactly one decision document. Nothing merges until then.",
+      "unresolvable": {
+        "none": "<b>This pull request adds no decision document.</b> A decision is one file under <mono>docs/decisions/</mono>. Send it back to the agent with Request changes.",
+        "several": "<b>This pull request changes {count} files under docs/decisions/</b> — {paths}. A decision has exactly one document.",
+        "gone_at_head": "<b>The decision document is no longer at this pull request's head.</b> A push removed or renamed it.",
+        "host_unreachable": "<b>Motir could not reach GitHub to show the decision document.</b> Nothing can be approved until it can be read. Try again in a moment.",
+        "too_large": "<b>The decision document is too large to show here.</b> Open it on GitHub; it cannot be approved from Motir.",
+        "not_connected": "<b>This repository is not connected to Motir,</b> so the decision document cannot be shown."
+      },
+      "accepted": "Decision accepted by <b>{name}</b> · {when}",
+      "acceptedUnchanged": "Decision accepted by <b>{name}</b> · {when} — unchanged at the new head",
+      "acceptedBlob": "blob <mono>{blob}</mono>",
+      "mergeHeld": "The pull request merges when its checks pass — no second press.",
+      "withdrawnNext": "Nobody decided it. The new version is asked in its place.",
+      "confirm": {
+        "records": "Records that you accept this decision",
+        "moves": "Moves {key} to Approved"
+      }
     }
   },
   "approvalOverlay": {
