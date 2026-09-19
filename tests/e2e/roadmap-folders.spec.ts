@@ -55,7 +55,8 @@ const crumbs = (page: Page) => page.getByRole('navigation', { name: 'Breadcrumb'
 async function drill(page: Page, card: Locator, folderId: string, fetches = true) {
   const level = fetches ? folderLoad(page, folderId) : null;
   await card.click();
-  await page.getByTestId('drill-button').click();
+  // Scoped to the LIVE canvas — never page-rooted (MOTIR-5037).
+  await canvasOf(page).getByTestId('drill-button').click();
   if (level) await level;
 }
 

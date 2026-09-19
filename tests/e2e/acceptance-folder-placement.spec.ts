@@ -315,7 +315,8 @@ test('a filed work item is placed correctly on its page, in a saved view and on 
             res.ok(),
         );
         await card.click();
-        await page.getByTestId('drill-button').click();
+        // Scoped to the LIVE canvas — never page-rooted (MOTIR-5037).
+        await canvas.getByTestId('drill-button').click();
         await level;
       };
       await drillFolder(parked.id, parkedCard);

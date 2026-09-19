@@ -232,6 +232,9 @@ describe('workItemsService.getProjectRoadmap — dependency edges (per level)', 
         identifier: 'PROD-6',
         title: 'Subtask B1',
         parentTitle: 'Story B',
+        // Where a FILED blocker lives (Bug MOTIR-5710 · MOTIR-5739) — null for an
+        // unfiled chain, so the anchor keeps its parent line.
+        folderPath: null,
         // Enriched for the sprint-validity signal (MOTIR-1379); in project scope
         // `inActiveSprint` is always false (no sprint resolved).
         isDone: true,
