@@ -18,14 +18,14 @@ import {
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
 
-// THE CONVERGENCE OF CARDS EJECTED BEFORE THE RE-ASK SHIPPED (Story MOTIR-5799 ·
-// MOTIR-5809; `approval-gates.md` §4 FOURTH AMENDMENT, point 7), on a REAL Postgres.
+// THE CONVERGENCE OF THE CARDS THE OLD RULES LEFT STRANDED (Story MOTIR-5799 ·
+// MOTIR-5809; `approval-gates.md` §4 FOURTH AMENDMENT, point 9), on a REAL Postgres.
 //
-// Each card is built in the shape the OLD ejection arm left it — a person approved it,
-// the queue threw a pull request out for a failure, and the card was moved to
-// `implemented` with no gate — plus the four shapes the sweep must leave alone and one
-// it must not even look at. The sweep is asserted to converge exactly one, and to
-// converge it through the re-ask entry point rather than a copy of it.
+// One card is built per POPULATION — A: Implemented with a retryable exit · B:
+// Implemented with a conflict (already right) · C: Approved with a neutral removal ·
+// D: Approved with a member that never landed and carries no outcome, under an old
+// approval — plus the shapes the sweep must leave alone. The sweep is asserted to move
+// A, C and D, to count B, and to do it through the one entry point rather than a copy.
 
 const HEAD = 'c'.repeat(40);
 const KIND = 'pull_request_approval';
@@ -41,13 +41,13 @@ afterAll(async () => {
 
 async function exitOn(
   pullRequestId: string,
-  opts: { disposition?: 'failure' | 'neutral'; headSha?: string } = {},
+  opts: { disposition?: 'failure' | 'neutral'; headSha?: string; rawReason?: string } = {},
 ) {
   return adminDb.githubPullRequestQueueExit.create({
     data: {
       pullRequestId,
       deliveryId: `guid-${randomToken(8)}`,
-      rawReason: opts.disposition === 'neutral' ? 'MANUAL' : 'CI_FAILURE',
+      rawReason: opts.rawReason ?? (opts.disposition === 'neutral' ? 'MANUAL' : 'CI_FAILURE'),
       disposition: opts.disposition ?? 'failure',
       headSha: opts.headSha ?? HEAD,
       exitedAt: new Date(Date.now() + 60_000),
@@ -104,19 +104,58 @@ const statusOf = async (id: string) =>
 const awaiting = (workItemId: string) =>
   adminDb.approvalGate.findMany({ where: { workItemId, kind: KIND, state: 'awaiting' } });
 
-async function fiveCards() {
+/** An `approved` card whose gate was decided LONG ago, with one open member carrying no
+ *  outcome at all — what a host refusal looked like before MOTIR-5833 recorded one. */
+async function unrecordedRefusalCard(fx: WorkItemFixture, title: string, decidedMinutesAgo = 30) {
+  const card = await createTestWorkItem(fx, { kind: 'task', title });
+  const repo = await connectRepairRepo(fx, `web-${randomToken(4)}`);
+  const pr = await deliveredPr(fx, card.id, repo, {
+    headRef: `subtask/${title}`,
+    checks: { Vitest: 'success' },
+  });
+  await setStatus(card.id, 'in_review');
+  // Created already-decided: a decided gate is immutable, so its `decidedAt` cannot be
+  // aged afterwards.
+  const gate = await adminDb.approvalGate.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      workItemId: card.id,
+      kind: KIND,
+      subjectId: card.id,
+      subjectVersion: `acme/${repo.name}#${pr.number}@${HEAD}`,
+      routedToId: fx.ownerId,
+      state: 'approved',
+      decidedById: fx.ownerId,
+      decidedAt: new Date(Date.now() - decidedMinutesAgo * 60_000),
+    },
+  });
+  await setStatus(card.id, 'approved');
+  return { card, pr, gate };
+}
+
+async function theFixture() {
   const manual = await makeWorkItemFixture({ name: 'Manual', identifier: 'MAN' });
   await setMode(manual, 'manual');
   const auto = await makeWorkItemFixture({ name: 'Auto', identifier: 'AUT' });
   await setMode(auto, 'auto');
 
+  // A · implemented, a RETRYABLE exit standing at the head.
   const atHead = await strandedCard(manual, 'at-head');
-  const moved = await strandedCard(manual, 'head-moved', 'a'.repeat(40));
-  const inAuto = await strandedCard(auto, 'auto-mode');
-  // A NEUTRAL exit: somebody took it out. Not a failure, so not a candidate at all.
+  // B · implemented, a CONFLICT: already where the new rules put it.
+  const conflict = await greenCard(manual, 'conflict');
+  await exitOn(conflict.pr.id, { rawReason: 'MERGE_CONFLICT' });
+  await setStatus(conflict.card.id, 'implemented');
+  // C · approved, a NEUTRAL removal standing: the removal spent the approval.
   const neutral = await greenCard(manual, 'neutral');
   await exitOn(neutral.pr.id, { disposition: 'neutral' });
-  // What a live ejection now leaves: in_review, asking, with the failure standing.
+  await setStatus(neutral.card.id, 'approved');
+  // D · approved, an un-landed member with NO outcome under an old approval.
+  const unrecorded = await unrecordedRefusalCard(manual, 'unrecorded');
+
+  // …and the shapes the sweep must leave alone.
+  const moved = await strandedCard(manual, 'head-moved', 'a'.repeat(40));
+  const inAuto = await strandedCard(auto, 'auto-mode');
   const alreadyAsked = await greenCard(manual, 'already-in-review');
   await exitOn(alreadyAsked.pr.id);
   await adminDb.approvalGate.create({
@@ -135,42 +174,62 @@ async function fiveCards() {
   const unapproved = await greenCard(manual, 'no-approved-gate', false);
   await exitOn(unapproved.pr.id);
   await setStatus(unapproved.card.id, 'implemented');
+  // A press that may still be in flight: approved a minute ago.
+  const tooRecent = await unrecordedRefusalCard(manual, 'too-recent', 1);
 
-  return { atHead, moved, inAuto, neutral, alreadyAsked, unapproved };
+  return {
+    atHead,
+    conflict,
+    neutral,
+    unrecorded,
+    moved,
+    inAuto,
+    alreadyAsked,
+    unapproved,
+    tooRecent,
+  };
 }
 
 describe('ejectedCardConvergenceService.converge', () => {
-  it('the DRY RUN classifies the fixture — 1 converged and one skip per reason — and changes no row', async () => {
-    const cards = await fiveCards();
+  it('the DRY RUN classifies all four populations — and changes no row', async () => {
+    const cards = await theFixture();
     const before = {
       statuses: await adminDb.workItem.findMany({ orderBy: { id: 'asc' } }),
       gates: await adminDb.approvalGate.findMany({ orderBy: { id: 'asc' } }),
       exits: await adminDb.githubPullRequestQueueExit.findMany({ orderBy: { id: 'asc' } }),
+      refusals: await adminDb.githubPullRequestMergeRefusal.findMany({ orderBy: { id: 'asc' } }),
     };
 
     const report = await ejectedCardConvergenceService.converge({ dryRun: true });
 
     expect(report.dryRun).toBe(true);
     expect(report.failed).toEqual([]);
-    expect(report.converged.map((c) => c.workItemId)).toEqual([cards.atHead.card.id]);
+    const converged = new Set(report.converged.map((c) => c.workItemId));
+    // A, C and D are moved; B is counted where it already is.
+    expect(converged.has(cards.atHead.card.id)).toBe(true);
+    expect(converged.has(cards.neutral.card.id)).toBe(true);
+    expect(converged.has(cards.unrecorded.card.id)).toBe(true);
+    expect(converged.has(cards.conflict.card.id)).toBe(false);
     const reasonOf = (id: string) => report.skipped.find((s) => s.workItemId === id)?.reason;
+    expect(reasonOf(cards.conflict.card.id)).toBe('cant_land_held');
     expect(reasonOf(cards.moved.card.id)).toBe('head_moved');
     expect(reasonOf(cards.inAuto.card.id)).toBe('auto_mode');
     expect(reasonOf(cards.alreadyAsked.card.id)).toBe('already_in_review');
     expect(reasonOf(cards.unapproved.card.id)).toBe('no_approved_gate');
-    // The neutral card is not a candidate: its only exit is not a failure.
-    expect(reasonOf(cards.neutral.card.id)).toBeUndefined();
-    expect(report.scanned).toBe(5);
+    expect(reasonOf(cards.tooRecent.card.id)).toBe('too_recent');
 
     expect(await adminDb.workItem.findMany({ orderBy: { id: 'asc' } })).toEqual(before.statuses);
     expect(await adminDb.approvalGate.findMany({ orderBy: { id: 'asc' } })).toEqual(before.gates);
     expect(await adminDb.githubPullRequestQueueExit.findMany({ orderBy: { id: 'asc' } })).toEqual(
       before.exits,
     );
+    expect(
+      await adminDb.githubPullRequestMergeRefusal.findMany({ orderBy: { id: 'asc' } }),
+    ).toEqual(before.refusals);
   });
 
-  it('APPLY converges exactly the one card — in_review, ONE awaiting gate, the old gate unchanged — and a second apply converges 0', async () => {
-    const cards = await fiveCards();
+  it('APPLY moves A, C and D, leaves B where it is, and a second apply converges 0', async () => {
+    const cards = await theFixture();
     const oldGate = await adminDb.approvalGate.findUniqueOrThrow({
       where: { id: cards.atHead.gate.id },
     });
@@ -178,7 +237,7 @@ describe('ejectedCardConvergenceService.converge', () => {
     const report = await ejectedCardConvergenceService.converge({ dryRun: false });
 
     expect(report.failed).toEqual([]);
-    expect(report.converged.map((c) => c.workItemId)).toEqual([cards.atHead.card.id]);
+    // A — asked again, with ONE fresh gate over the same commits.
     expect(await statusOf(cards.atHead.card.id)).toBe('in_review');
     const [fresh, ...more] = await awaiting(cards.atHead.card.id);
     expect(more).toEqual([]);
@@ -186,10 +245,25 @@ describe('ejectedCardConvergenceService.converge', () => {
     expect(
       await adminDb.approvalGate.findUniqueOrThrow({ where: { id: cards.atHead.gate.id } }),
     ).toEqual(oldGate);
+    // B — the conflict holds it at Implemented, and nothing is asked.
+    expect(await statusOf(cards.conflict.card.id)).toBe('implemented');
+    expect(await awaiting(cards.conflict.card.id)).toEqual([]);
+    // C — the neutral removal spent the approval, so the card asks again.
+    expect(await statusOf(cards.neutral.card.id)).toBe('in_review');
+    expect(await awaiting(cards.neutral.card.id)).toHaveLength(1);
+    // D — the refusal nobody recorded becomes a row, classed retryable, and asks again.
+    expect(await statusOf(cards.unrecorded.card.id)).toBe('in_review');
+    expect(await awaiting(cards.unrecorded.card.id)).toHaveLength(1);
+    expect(
+      await adminDb.githubPullRequestMergeRefusal.findMany({
+        where: { pullRequestId: cards.unrecorded.pr.id },
+      }),
+    ).toEqual([expect.objectContaining({ code: 'unrecorded', supersededAt: null })]);
     // The skipped cards are exactly where they were.
     expect(await statusOf(cards.moved.card.id)).toBe('implemented');
     expect(await statusOf(cards.inAuto.card.id)).toBe('implemented');
     expect(await statusOf(cards.unapproved.card.id)).toBe('implemented');
+    expect(await statusOf(cards.tooRecent.card.id)).toBe('approved');
     expect(await awaiting(cards.alreadyAsked.card.id)).toHaveLength(1);
 
     const again = await ejectedCardConvergenceService.converge({ dryRun: false });
@@ -221,6 +295,6 @@ describe('ejectedCardConvergenceService.converge', () => {
     );
     expect(yml).toMatch(/workflow_dispatch:\s*\n\s*inputs:\s*\n\s*dry_run:/);
     expect(yml).toMatch(/dry_run:[\s\S]*?default: true/);
-    expect(yml).toContain('pnpm db:converge:ejected-cards --dry-run');
+    expect(yml).toContain('pnpm db:converge:unlanded-cards --dry-run');
   });
 });

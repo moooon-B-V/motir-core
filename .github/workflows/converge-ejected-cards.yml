@@ -1,10 +1,18 @@
-name: Converge ejected cards
+name: Converge un-landed cards
 
 # Manual operator action (Story MOTIR-5799 · MOTIR-5809; `docs/decisions/approval-gates.md`
-# §4 FOURTH AMENDMENT, point 7): move each `manual` card the merge queue ejected BEFORE
-# the re-ask shipped — stranded at `implemented` with a standing failure exit at its head
-# and an approved merge gate — to `in_review` with ONE fresh approve-to-merge gate,
-# through `reaskMergeAfterEjection`, the SAME entry point a live ejection runs.
+# §4 FOURTH AMENDMENT, point 9): put every `manual` card the OLD rules left holding a
+# SPENT approval where the amendment now puts it — four populations:
+#
+#   A. `implemented` with a standing retryable or setting exit  → `in_review` + ONE gate
+#   B. `implemented` with a standing conflict                   → already right, COUNTED
+#   C. `approved` with a standing neutral removal               → `in_review` + ONE gate
+#   D. `approved` with a member that never landed and carries no outcome, under an
+#      approval older than ten minutes                          → a refusal row is
+#      written (`unrecorded`, classed retryable) and the card asks again
+#
+# Every move goes through `settleUnlandedOutcome`, the SAME entry point a live queue exit
+# and a live host refusal run.
 #
 # IDEMPOTENT + SAFE TO RE-RUN: a converged card is at `in_review`, so a second apply
 # converges 0. A card whose head moved is skipped and re-arms on its next green, as
@@ -69,8 +77,8 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           if [ "$DRY_RUN" = "false" ]; then
-            echo "::warning::Applying the ejected-card convergence — this WRITES."
-            pnpm db:converge:ejected-cards
+            echo "::warning::Applying the un-landed-card convergence — this WRITES."
+            pnpm db:converge:unlanded-cards
           else
-            pnpm db:converge:ejected-cards --dry-run
+            pnpm db:converge:unlanded-cards --dry-run
           fi
