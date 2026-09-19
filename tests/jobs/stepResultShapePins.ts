@@ -226,6 +226,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/mentionNotify.ts',
     shape: '{ notifiedUserIds: Array<string> }',
   },
+  // The monitor-configuration probe (MOTIR-5831). Its result is a VERDICT the
+  // handler branches on, so a replayed shape from an older revision would decide
+  // whether the run goes red — which is exactly what this pin exists to catch.
+  'monitor-config-preflight': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ blindSpot: string; detail: string; offenders: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; providers: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; verdict: "incomplete" } | { blindSpot: string; detail: string; providers: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; verdict: "complete" } | { blindSpot: string; detail: string; providers: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; verdict: "not_applicable" }',
+  },
   'notification-fan-in': {
     file: 'lib/jobs/definitions/notificationFanIn.ts',
     shape: '{ writtenUserIds: Array<string> }',
