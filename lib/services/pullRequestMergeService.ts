@@ -51,6 +51,7 @@ import {
   type DecideGateInput,
   type DecideGateResult,
 } from './approvalGatesService';
+import { settleAfterPrimaryApproval } from './ciPromotion';
 
 // THE MERGE ENTRY POINT (Story MOTIR-4882 · MOTIR-5517 · MOTIR-5613; `approval-gates.md`
 // §8's SECOND AMENDMENT, decisions 4 and 6) — the one path by which an approved card's
@@ -666,7 +667,15 @@ async function approveDesignAndMerge(
       (row) => row.kind === APPROVAL_KIND,
     ),
   );
-  if (!merge) return { approval, members: [] };
+  if (!merge) {
+    // ⚠️ NO COMPANION — THE MERGE IS HELD, AND IT MAY ALREADY BE OWED (Bug MOTIR-5762).
+    // In `manual` the set is simply not green yet and the next green carries this approval
+    // (Q4). In `auto` no approve-to-merge gate is ever raised, so a design approved over a
+    // set that is ALREADY green would wait for a verdict that never comes: settle the card
+    // now, the same way a green verdict would. A request for changes never reaches here.
+    await settleAfterPrimaryApproval(approval.gate.workItemId, ctx);
+    return { approval, members: [] };
+  }
   // ⚠️ ONLY THE MERGE GATE THE READER WAS SHOWN (Story MOTIR-5232 · MOTIR-5234). The
   // design decision's stamp covered the companion's version AS THE DOOR READ IT UNDER
   // ITS LOCK, and that transaction has committed. A push since then supersedes the
