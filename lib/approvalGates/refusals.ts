@@ -70,6 +70,11 @@ export type GateRefusal =
   | { tag: 'APPROVAL_GATE_NOT_AUTHORISED' }
   | { tag: 'APPROVAL_GATE_NOT_FOUND' }
   | { tag: 'APPROVAL_GATE_KIND_UNREGISTERED' }
+  // No single decision document to approve (MOTIR-5676). Its reason is drawn by the
+  // port (MOTIR-5678), not by the refusal line, so the refusal carries none.
+  | { tag: 'APPROVAL_GATE_DECISION_UNRESOLVABLE' }
+  // The merge follows only the decision (MOTIR-5677).
+  | { tag: 'APPROVAL_GATE_DECISION_PENDING' }
   | { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }
   | { tag: 'APPROVAL_GATE_DECIDED_IMMUTABLE' }
   | { tag: 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH' }
@@ -156,6 +161,8 @@ export function toGateRefusal(
     case 'APPROVAL_GATE_NOT_AUTHORISED':
     case 'APPROVAL_GATE_NOT_FOUND':
     case 'APPROVAL_GATE_KIND_UNREGISTERED':
+    case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
+    case 'APPROVAL_GATE_DECISION_PENDING':
     case 'APPROVAL_GATE_ALREADY_AWAITING':
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':

@@ -62,6 +62,15 @@ export type ApprovalGateErrorTag =
   | 'APPROVAL_GATE_NOT_AUTHORISED'
   | 'APPROVAL_GATE_KIND_UNREGISTERED'
   | 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH'
+  // A DECISION gate whose card's pull requests carry no single decision document —
+  // none, several, or one the host could not name (Story MOTIR-4907 · MOTIR-5676;
+  // `approval-gates.md` §8's FIFTH AMENDMENT, clause 3). Approve is refused;
+  // Request changes is not.
+  | 'APPROVAL_GATE_DECISION_UNRESOLVABLE'
+  // The approve-to-merge gate of a DECISION card, approved through any door but the
+  // decision press while the decision is not accepted (MOTIR-5677; §8's FIFTH
+  // AMENDMENT, clause 5): the merge follows only the decision.
+  | 'APPROVAL_GATE_DECISION_PENDING'
   // The question is still live and what the reader was shown MOVED under them
   // (Story MOTIR-5232 · MOTIR-5234) — the stamp they pressed with no longer matches.
   | 'APPROVAL_GATE_STALE_SUBJECT'
@@ -414,6 +423,36 @@ export class ApprovalGateAlreadyRequeuedError extends ApprovalGateError {
   constructor(readonly pullRequestId: string) {
     super(`Pull request ${pullRequestId} was already put back into the merge queue.`);
     this.name = 'ApprovalGateAlreadyRequeuedError';
+  }
+}
+
+/**
+ * APPROVE on a decision gate whose document cannot be named (Story MOTIR-4907 ·
+ * MOTIR-5676; `approval-gates.md` §8's FIFTH AMENDMENT, clause 3). *"We could not find
+ * it"* must never become *"nobody had to accept it"*, so the gate stays open, the merge
+ * stays held, and the refusal says why: `none`, `several` or `unreadable`.
+ */
+export class ApprovalGateDecisionUnresolvableError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_DECISION_UNRESOLVABLE' as const;
+  readonly code = 'APPROVAL_GATE_DECISION_UNRESOLVABLE' as const;
+  constructor(readonly reason: 'none' | 'several' | 'unreadable') {
+    super(`There is no single decision document to approve (${reason}).`);
+    this.name = 'ApprovalGateDecisionUnresolvableError';
+  }
+}
+
+/**
+ * APPROVE on a decision card's approve-to-merge gate while its decision is not accepted
+ * over the current document (Story MOTIR-4907 · MOTIR-5677; `approval-gates.md` §8's
+ * FIFTH AMENDMENT, clause 5). The decision is the PRIMARY question; one press on it
+ * answers both, and no other door may merge the commits of a decision nobody accepted.
+ */
+export class ApprovalGateDecisionPendingError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_DECISION_PENDING' as const;
+  readonly code = 'APPROVAL_GATE_DECISION_PENDING' as const;
+  constructor(readonly workItemId: string) {
+    super(`The decision on work item ${workItemId} has to be accepted before it can merge.`);
+    this.name = 'ApprovalGateDecisionPendingError';
   }
 }
 

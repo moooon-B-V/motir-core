@@ -22,6 +22,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { approvalGatesService } from './approvalGatesService';
 import { resolveRunTargetFor } from './runTarget';
 import { runSyncedMerge } from './syncedMergeRunner';
+import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 
 // A REVIEW DECIDES THE SET (Story MOTIR-4910 · MOTIR-5597;
 // `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT, decisions 1, 2, 3 and 8).
@@ -60,7 +61,12 @@ export type ReviewEvaluationOutcome =
   /** Somebody — or some earlier review — already answered it. First decision stands. */
   | 'already_decided'
   /** The set changed under the question, so it was withdrawn. */
-  | 'superseded';
+  | 'superseded'
+  /** Every member is approved on GitHub, and the card is a DECISION card whose decision
+   *  nobody has accepted yet (MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT,
+   *  clause 5). The reviews stay recorded; the decision's own press merges the set, and
+   *  nobody is asked twice. */
+  | 'held_by_decision';
 
 export interface ReviewEvaluation {
   workItemId: string;
@@ -174,13 +180,23 @@ async function evaluateOne(workItemId: string, workspaceId: string): Promise<Rev
     const set = await readGateReviewSet(workItemId, tx);
     if (!set) return null;
     const verdict = setVerdict(set.members);
-    if (verdict.verdict === 'pending') return { set, verdict, actors: null };
+    if (verdict.verdict === 'pending') return { set, verdict, actors: null, held: false };
+    // ⚠️ AN APPROVAL ON GITHUB DOES NOT MERGE A DECISION NOBODY ACCEPTED (MOTIR-5677). The
+    // approve-to-merge gate's own `approve` would refuse it under the door's lock; asking
+    // here first turns that into an outcome rather than a thrown error on a webhook.
+    if (verdict.verdict === 'approved') {
+      const item = await workItemRepository.findById(workItemId, tx);
+      if (item && (await decisionHoldsMerge(item, tx))) {
+        return { set, verdict, actors: null, held: true };
+      }
+    }
     const actors = await resolveActors(verdict.decider.reviewerGithubUserId, set.workspaceId, tx);
-    return { set, verdict, actors };
+    return { set, verdict, actors, held: false };
   });
 
   if (!read) return { workItemId, gateId: null, outcome: 'no_awaiting_gate' };
-  const { set, verdict, actors } = read;
+  const { set, verdict, actors, held } = read;
+  if (held) return { workItemId, gateId: set.gateId, outcome: 'held_by_decision' };
   if (verdict.verdict === 'pending') {
     return { workItemId, gateId: set.gateId, outcome: 'pending' };
   }

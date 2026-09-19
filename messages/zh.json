@@ -8400,6 +8400,14 @@
         "title": "Motir 尚不支持此类审批。",
         "next": "相关工作已在计划中。这不是你操作导致的。"
       },
+      "decisionUnresolvable": {
+        "title": "没有可批准的唯一决策文档。",
+        "next": "拉取请求必须在 docs/decisions/ 下新增或修改且仅修改一个文件。请点击“要求修改”将其退回。"
+      },
+      "decisionPending": {
+        "title": "请先接受决策，这些拉取请求才能合并。",
+        "next": "请批准上方的决策文档。一次点击即可接受决策并合并它们。"
+      },
       "alreadyAwaiting": {
         "title": "该对象已有另一项决定在等待处理。",
         "next": "请重新加载页面以查看。"

@@ -1,6 +1,7 @@
 import type { ApprovalGateKind, Prisma } from '@/generated/prisma/client';
 import type {
   ApprovalGateSubjectSummaryDTO,
+  DecisionApprovalSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
   UnregisteredSubjectSummaryDTO,
@@ -10,6 +11,7 @@ import { isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { decisionIdentityOf, titleFromDecisionPath } from '@/lib/approvalGates/decisionSubject';
 
 // THE SUBJECT SUMMARY — what a QUEUE ROW says about the thing being decided,
 // resolved per KIND (Story MOTIR-4879 · Subtask MOTIR-4791; ADR
@@ -118,6 +120,53 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
         noteExcerpt: excerptNote(row.noteMd),
       };
       out.set(id, summary);
+    }
+    return out;
+  },
+  // MOTIR-5676 — a decision row names the DOCUMENT from the capture on the card's pull
+  // requests: `subjectId` is the card, so one batched delivery read answers every
+  // decision gate on the page, and no host is called. A card with no captured open pull
+  // request is absent, and its row says the subject no longer resolves.
+  async decision_approval(subjectIds, tx) {
+    const deliveries = await workItemDeliveryRepository.listByWorkItemsWithChecks(subjectIds, tx);
+    const membersByItem = new Map<string, Parameters<typeof decisionIdentityOf>[0][number][]>();
+    for (const delivery of deliveries) {
+      const pr = delivery.pullRequest;
+      if (pr.state !== 'open' || pr.merged) continue;
+      const member = {
+        repo: `${delivery.repo.owner}/${delivery.repo.name}`,
+        number: pr.number,
+        outcome: pr.decisionDocOutcome,
+        path: pr.decisionDocPath,
+        blobSha: pr.decisionDocBlobSha,
+        headSha: pr.decisionDocHeadSha,
+      };
+      const members = membersByItem.get(delivery.workItemId);
+      if (members) members.push(member);
+      else membersByItem.set(delivery.workItemId, [member]);
+    }
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const [workItemId, members] of membersByItem) {
+      const identity = decisionIdentityOf(members);
+      if (!identity) continue;
+      const summary: DecisionApprovalSubjectSummaryDTO = identity.resolvable
+        ? {
+            kind: 'decision_approval',
+            outcome: 'one',
+            repo: identity.repo,
+            number: identity.number,
+            path: identity.path,
+            title: titleFromDecisionPath(identity.path),
+          }
+        : {
+            kind: 'decision_approval',
+            outcome: identity.reason,
+            repo: identity.repo,
+            number: identity.number,
+            path: null,
+            title: null,
+          };
+      out.set(workItemId, summary);
     }
     return out;
   },

@@ -51,6 +51,7 @@ import {
   type DecideGateInput,
   type DecideGateResult,
 } from './approvalGatesService';
+import { settleAfterPrimaryApproval } from './ciPromotion';
 
 // THE MERGE ENTRY POINT (Story MOTIR-4882 · MOTIR-5517 · MOTIR-5613; `approval-gates.md`
 // §8's SECOND AMENDMENT, decisions 4 and 6) — the one path by which an approved card's
@@ -328,7 +329,7 @@ export const pullRequestMergeService = {
         const { approval, members } = await approveAndMergeGate(input, ctx);
         return { ...approval, members };
       }
-      if (gate?.kind === 'design_result') {
+      if (gate && isPrimaryKind(gate.kind)) {
         const { approval, members } = await approveDesignAndMerge(input, ctx);
         return { ...approval, members };
       }
@@ -428,7 +429,9 @@ export const pullRequestMergeService = {
     // stops a gate of some future kind merging things by accident, and a kind admitted
     // by name is a decision somebody made — a guard deleted is a decision nobody will
     // remember making.
-    if (gate && gate.kind === 'design_result') return approveDesignAndMerge(input, ctx);
+    // `decision_approval` is admitted the same way, by name, for the same reason (Story
+    // MOTIR-4907 · MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT, clause 5).
+    if (gate && isPrimaryKind(gate.kind)) return approveDesignAndMerge(input, ctx);
     if (gate && gate.kind !== APPROVAL_KIND) {
       throw new Error(`approveAndMerge was handed a ${gate.kind} gate (${input.gateId})`);
     }
@@ -655,6 +658,17 @@ async function approveAndMergeGate(
  * next green verdict with no second press — `settleGreenVerdict` carries it, because
  * the predicate has answered *no merge gate is owed* for the same reason.
  */
+/**
+ * The PRIMARY kinds — a question a person answers ABOVE the merge, whose one press also
+ * decides the approve-to-merge gate beside it: the design (`design-result.md` AMENDMENT
+ * 6) and the decision (`approval-gates.md` §8's FIFTH AMENDMENT). Named, never inferred.
+ */
+const PRIMARY_KINDS: ReadonlySet<string> = new Set(['design_result', 'decision_approval']);
+
+function isPrimaryKind(kind: string): boolean {
+  return PRIMARY_KINDS.has(kind);
+}
+
 async function approveDesignAndMerge(
   input: Omit<DecideGateInput, 'decision'>,
   ctx: ServiceContext,
@@ -666,7 +680,17 @@ async function approveDesignAndMerge(
       (row) => row.kind === APPROVAL_KIND,
     ),
   );
-  if (!merge) return { approval, members: [] };
+  if (!merge) {
+    // ⚠️ NO COMPANION — THE MERGE IS HELD, AND FOR A DECISION IT MAY ALREADY BE OWED
+    // (MOTIR-5677, clause 6). In `manual` the set is simply not green yet and the next
+    // green carries this approval (Q4). In `auto` no approve-to-merge gate is ever raised,
+    // so a decision approved over a set that is ALREADY green would wait for a verdict that
+    // never comes: settle the card now, the same way a green verdict would.
+    if (approval.gate.kind === 'decision_approval') {
+      await settleAfterPrimaryApproval(approval.gate.workItemId, ctx);
+    }
+    return { approval, members: [] };
+  }
   // ⚠️ ONLY THE MERGE GATE THE READER WAS SHOWN (Story MOTIR-5232 · MOTIR-5234). The
   // design decision's stamp covered the companion's version AS THE DOOR READ IT UNDER
   // ITS LOCK, and that transaction has committed. A push since then supersedes the

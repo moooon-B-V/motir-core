@@ -494,6 +494,24 @@ async function dispatchAutoMerges(
 }
 
 /**
+ * SETTLE ONE CARD AFTER ITS PRIMARY WAS APPROVED WITH NO COMPANION TO DECIDE (Story
+ * MOTIR-4907 · MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT, clause 6).
+ *
+ * In an `auto` project a decision card's green verdict was HELD — `settleGreenVerdict`
+ * dispatches nothing while the decision is unanswered — and no approve-to-merge gate
+ * exists for the press to carry. Without this, a decision approved over a set that was
+ * already green would wait for a verdict that never comes. It is the re-raise below,
+ * for one card: under the card's row lock, only for a card in review whose whole set is
+ * green, so a card that is not there yet settles nothing and waits for its green.
+ */
+export async function settleAfterPrimaryApproval(
+  workItemId: string,
+  ctx: { userId: string; workspaceId: string },
+): Promise<void> {
+  await reRaiseMergeGates([workItemId], ctx);
+}
+
+/**
  * RE-RAISE for cards already in review (MOTIR-5515): under the card's row lock — the
  * same lock the promotion's status write takes, so two green events for one card
  * serialise and the second finds the first's gates — re-judge the whole set and raise
