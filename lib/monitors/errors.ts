@@ -158,3 +158,42 @@ export class InvalidMonitorLevelError extends Error {
     this.name = 'InvalidMonitorLevelError';
   }
 }
+
+/**
+ * The provider NO LONGER HAS the issue (Story MOTIR-4931 · Subtask MOTIR-5702) —
+ * a 404 on a write addressed to one issue.
+ *
+ * A distinct type from {@link MonitorProviderCallError} because the remedy is
+ * OPPOSITE: a refusal is a failure to show and retry, a deleted issue is a fact
+ * to state ONCE, on the card, and never retry. Collapsing the two would force the
+ * resolve-back to guess from a status code, which is how a deleted issue ends up
+ * retried every half hour for ever.
+ */
+export class MonitorIssueGoneError extends Error {
+  readonly code = 'MONITOR_ISSUE_GONE' as const;
+  constructor(
+    readonly operation: string,
+    readonly externalIssueId: string,
+    /** The provider's OWN words for the 404, passed through unaltered. */
+    readonly providerReason: string,
+  ) {
+    super(`Monitor issue ${externalIssueId} no longer exists at the provider: ${providerReason}`);
+    this.name = 'MonitorIssueGoneError';
+  }
+}
+
+/**
+ * A direction-switch write that carries no switch, or a non-boolean value
+ * (Story MOTIR-4931 · Subtask MOTIR-5706). Refused rather than coerced: a
+ * `"false"` string read as truthy would turn a switch ON that a person asked to
+ * turn OFF.
+ */
+export class InvalidMonitorSyncDirectionError extends Error {
+  readonly code = 'INVALID_MONITOR_SYNC_DIRECTION' as const;
+  constructor(readonly value: unknown) {
+    super(
+      'Set resolveOnDone and/or syncAssignee to true or false — at least one, and nothing else.',
+    );
+    this.name = 'InvalidMonitorSyncDirectionError';
+  }
+}

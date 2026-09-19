@@ -14,6 +14,7 @@ import { monitorInstallationRepository } from '@/lib/repositories/monitorInstall
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
 import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
+import { monitorSyncService } from '@/lib/services/monitorSyncService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { DuplicateLinkError } from '@/lib/workItems/linkErrors';
@@ -187,6 +188,93 @@ async function recordOutcome(
   );
 }
 
+/**
+ * RESOLVE BACK's BACKSTOP (Story MOTIR-4931 · MOTIR-5703), at the end of a
+ * successful poll: every claimable link on this connection whose bug is done is
+ * resolved, capped. The event is the fast path; this is what makes the loop
+ * self-healing — a failed resolve, a crashed one, and a done bug whose status
+ * writer emitted no event are all caught here.
+ *
+ * ⚠️ A SWEEP FAILURE NEVER FAILS THE POLL. The ingestion outcome is already
+ * recorded; an unexpected sweep error is caught and recorded on the connection's
+ * SYNC failure, where the room shows it, and the poll's summary stands.
+ */
+async function sweepResolveBack(connectionId: string, resolveOnDone: boolean): Promise<void> {
+  if (!resolveOnDone) return;
+  try {
+    await monitorSyncService.sweepConnection(connectionId);
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    await withSystemContext((tx) =>
+      monitorConnectionRepository.recordSyncFailure(
+        connectionId,
+        {
+          reason: `Resolving done bugs in the monitor stopped: ${why}`,
+          workItemIdentifier: null,
+          at: new Date(),
+        },
+        tx,
+      ),
+    );
+  }
+}
+
+async function doneKeysOf(projectId: string, workspaceId: string): Promise<Set<string>> {
+  const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
+  return new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
+}
+
+/** Record an unexpected assignee-sync error on the connection's SYNC failure —
+ *  never on the poll's ingestion outcome, which stands. */
+async function recordAssigneeError(connectionId: string, err: unknown): Promise<void> {
+  const why = err instanceof Error ? err.message : String(err);
+  await withSystemContext((tx) =>
+    monitorConnectionRepository.recordSyncFailure(
+      connectionId,
+      {
+        reason: `Taking assignees from the monitor stopped: ${why}`,
+        workItemIdentifier: null,
+        at: new Date(),
+      },
+      tx,
+    ),
+  );
+}
+
+/** One reconcile visit's assignee (MOTIR-5705). A failure here never turns a
+ *  filed issue into a failed one. */
+async function applyAssigneeQuietly(
+  target: MonitorReconcileConnection,
+  issue: NormalizedMonitorIssue,
+  doneKeys: ReadonlySet<string>,
+): Promise<void> {
+  try {
+    await monitorSyncService.applyAssignee(target, issue.externalId, issue.assignee, doneKeys);
+  } catch (err) {
+    await recordAssigneeError(target.id, err);
+  }
+}
+
+/** The bounded assignee refresh at the end of a successful poll (MOTIR-5705).
+ *  One link's refusal is absorbed inside the refresh; an unexpected error is
+ *  recorded on the connection and the poll's outcome stands. */
+async function refreshAssigneesQuietly(
+  connection: {
+    id: string;
+    projectId: string;
+    workspaceId: string;
+    boundByUserId: string | null;
+    installationId: string;
+  },
+  doneKeys: ReadonlySet<string>,
+): Promise<void> {
+  try {
+    await monitorSyncService.refreshAssignees(connection, doneKeys);
+  } catch (err) {
+    await recordAssigneeError(connection.id, err);
+  }
+}
+
 export const monitorIngestionService = {
   /**
    * Bring Motir into agreement with ONE provider issue for ONE binding.
@@ -198,6 +286,8 @@ export const monitorIngestionService = {
    * |-------------------------------------------------|--------------------------------|
    * | no bug ever filed                               | `filed`                        |
    * | bug live (not done-category; ARCHIVED counts)   | `updated` — facts only         |
+   * | bug done, and MOTIR resolved the issue with no   | `updated` — facts only (the     |
+   * |   sighting since (MOTIR-5704's loop guard)       |   loop guard)                   |
    * | bug in a done-category status                   | `refiled`, `relates_to` the old |
    * | bug deleted (null pointer, key remembered)      | `refiled`, body names the key  |
    *
@@ -294,6 +384,42 @@ export const monitorIngestionService = {
           relatesTo: null,
         };
       }
+      // ── THE LOOP GUARD (Story MOTIR-4931 · Subtask MOTIR-5704) ──────────────
+      // A done bug whose issue MOTIR ITSELF resolved, and which nobody has seen
+      // since, is already reconciled — not a recurrence. Two orderings reach
+      // this branch with no recurrence at all: a STALE PAGE (fetched while the
+      // issue was unresolved, reconciled after the bug completed and the resolve
+      // landed) and an IN-FLIGHT resolve (claimed `pending`, provider call not
+      // yet returned). Both carry a resolve attempt and a `lastSeenAt` at or
+      // before Motir's write, so both take `updated` — facts only, no work item
+      // written. The guard reads MOTIR-side state only: on a shared credential
+      // "we resolved it" and "they resolved it" are one identity to the
+      // provider, so the provider's actor cannot tell them apart.
+      //
+      // ⚠️ THE ONE WINDOW IT ACCEPTS: the provider's `lastSeen` and Motir's clock
+      // are different clocks. A regression whose ONLY event lands within the
+      // clock skew of Motir's resolve reads as settled until its next event, and
+      // that event then re-files normally.
+      //
+      // `updated` rather than a new outcome member, deliberately: it already
+      // means "facts only, no card", and a new member would thread through the
+      // poll summary and the room's poll line for no difference a person sees.
+      if (bug && row.resolveAttemptedAt !== null) {
+        const motirWrite = Math.max(
+          row.resolveAttemptedAt.getTime(),
+          row.resolvedByMotirAt?.getTime() ?? 0,
+        );
+        if (issue.lastSeenAt.getTime() <= motirWrite) {
+          await monitorIssueRepository.updateFacts(row.id, facts, tx);
+          return {
+            outcome: 'updated' as const,
+            workItemId: bug.id,
+            identifier: bug.identifier,
+            relatesTo: null,
+          };
+        }
+      }
+
       const previous: PreviousBug | null = bug
         ? { identifier: bug.identifier, workItemId: bug.id, reason: 'completed' }
         : row.filedWorkItemIdentifier
@@ -441,6 +567,11 @@ export const monitorIngestionService = {
     // ── 3–4. FILTER + RECONCILE ──────────────────────────────────────────────
     const summary: MonitorPollSummary = { ...NOTHING_POLLED, pages };
     const failures: string[] = [];
+    // The project's done category, read once — only when the assignee direction
+    // is on, so a switched-off connection makes no read on its behalf.
+    const assigneeDoneKeys = connection.syncAssignee
+      ? await doneKeysOf(connection.projectId, connection.workspaceId)
+      : null;
     const target: MonitorReconcileConnection = {
       id: connection.id,
       projectId: connection.projectId,
@@ -456,6 +587,12 @@ export const monitorIngestionService = {
       try {
         const result = await monitorIngestionService.reconcileIssue(target, issue);
         summary[result.outcome] += 1;
+        // ASSIGNEE FROM THE MONITOR (MOTIR-4931 · MOTIR-5705), on every reconcile
+        // visit, with the assignee the page already carried. A hook BESIDE
+        // `reconcileIssue`, never inside it (the loop guard edits that method).
+        if (assigneeDoneKeys) {
+          await applyAssigneeQuietly(target, issue, assigneeDoneKeys);
+        }
       } catch (err) {
         const why =
           err instanceof MonitorBinderUnavailableError
@@ -500,6 +637,10 @@ export const monitorIngestionService = {
         tx,
       ),
     );
+    await sweepResolveBack(connection.id, connection.resolveOnDone);
+    if (assigneeDoneKeys) {
+      await refreshAssigneesQuietly(connection, assigneeDoneKeys);
+    }
     return summary;
   },
 

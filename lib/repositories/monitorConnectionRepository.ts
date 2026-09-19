@@ -269,4 +269,46 @@ export const monitorConnectionRepository = {
     const result = await tx.monitorConnection.deleteMany({ where: { id } });
     return result.count;
   },
+  // ── SYNC (Story MOTIR-4931 · Subtask MOTIR-5701) ───────────────────────────
+
+  /** Set either direction switch. SPARSE: an omitted key is left unchanged. */
+  async setSyncDirections(
+    id: string,
+    input: { resolveOnDone?: boolean; syncAssignee?: boolean },
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorConnection> {
+    return tx.monitorConnection.update({
+      where: { id },
+      data: {
+        ...(input.resolveOnDone !== undefined ? { resolveOnDone: input.resolveOnDone } : {}),
+        ...(input.syncAssignee !== undefined ? { syncAssignee: input.syncAssignee } : {}),
+      },
+    });
+  },
+
+  /** Record the most recent FAILED sync — the provider's reason verbatim, and
+   *  the bug it was for — replacing any earlier one. */
+  async recordSyncFailure(
+    id: string,
+    input: { reason: string; workItemIdentifier: string | null; at: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorConnection> {
+    return tx.monitorConnection.update({
+      where: { id },
+      data: {
+        lastSyncError: input.reason,
+        lastSyncErrorAt: input.at,
+        lastSyncErrorWorkItemIdentifier: input.workItemIdentifier,
+      },
+    });
+  },
+
+  /** Clear the recorded sync failure — a later resolve succeeded. `updateMany`
+   *  so a connection deleted meanwhile is a no-op rather than a throw. */
+  async clearSyncFailure(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.monitorConnection.updateMany({
+      where: { id, lastSyncError: { not: null } },
+      data: { lastSyncError: null, lastSyncErrorAt: null, lastSyncErrorWorkItemIdentifier: null },
+    });
+  },
 };

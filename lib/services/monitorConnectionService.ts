@@ -4,12 +4,14 @@ import type {
   BindMonitorProjectInput,
   MonitorConnectionDto,
   MonitorConnectionViewDto,
+  SetMonitorSyncDirectionsInput,
 } from '@/lib/dto/monitors';
 import { toMonitorConnectionDto, readOrgSlug } from '@/lib/mappers/monitorMappers';
 import { getMonitorProvider } from '@/lib/monitors';
 import { isLowerThan, isMonitorLevel } from '@/lib/monitors/levels';
 import {
   InvalidMonitorLevelError,
+  InvalidMonitorSyncDirectionError,
   MonitorConnectionNotFoundError,
   MonitorGrantNotFoundError,
   MonitorProviderCallError,
@@ -50,6 +52,57 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 
 /** Assert the actor may manage this project's integrations, then run `fn` inside
  *  one project-scoped RLS transaction. */
+/** The switches a body carries, validated: each supplied key must be a boolean,
+ *  and at least one must be supplied. Anything else is
+ *  {@link InvalidMonitorSyncDirectionError}. */
+function readSyncDirections(input: unknown): SetMonitorSyncDirectionsInput {
+  if (typeof input !== 'object' || input === null) {
+    throw new InvalidMonitorSyncDirectionError(input);
+  }
+  const body = input as Record<string, unknown>;
+  const out: SetMonitorSyncDirectionsInput = {};
+  for (const key of ['resolveOnDone', 'syncAssignee'] as const) {
+    if (!(key in body) || body[key] === undefined) continue;
+    const value = body[key];
+    if (typeof value !== 'boolean') throw new InvalidMonitorSyncDirectionError(value);
+    out[key] = value;
+  }
+  if (out.resolveOnDone === undefined && out.syncAssignee === undefined) {
+    throw new InvalidMonitorSyncDirectionError(input);
+  }
+  return out;
+}
+
+/** Lock ONE binding of THIS project, or refuse with a not-found — a binding in
+ *  another project (or, through RLS, another workspace) is indistinguishable
+ *  from one that does not exist. */
+async function lockOwnBinding(
+  projectId: string,
+  connectionId: string,
+  tx: Prisma.TransactionClient,
+): Promise<{ minimumLevel: string | null }> {
+  await monitorConnectionRepository.lockById(connectionId, tx);
+  const existing = await monitorConnectionRepository.findById(connectionId, tx);
+  if (!existing || existing.projectId !== projectId) {
+    throw new MonitorConnectionNotFoundError(connectionId);
+  }
+  return existing;
+}
+
+/** The binding as the room renders it, re-read inside the write's transaction. */
+async function bindingDto(
+  projectId: string,
+  connectionId: string,
+  tx: Prisma.TransactionClient,
+): Promise<MonitorConnectionDto> {
+  const rows = await monitorConnectionRepository.listForProject(projectId, tx);
+  const updated = rows.find((row) => row.id === connectionId);
+  /* v8 ignore next -- unreachable: the row was locked and written in this
+     transaction, under the same binding. */
+  if (!updated) throw new MonitorConnectionNotFoundError(connectionId);
+  return toMonitorConnectionDto(updated);
+}
+
 async function inProject<T>(
   projectId: string,
   ctx: ServiceContext,
@@ -283,22 +336,77 @@ export const monitorConnectionService = {
   ): Promise<MonitorConnectionDto> {
     return inProject(projectId, ctx, async (tx) => {
       if (level !== null && !isMonitorLevel(level)) throw new InvalidMonitorLevelError(level);
-
-      await monitorConnectionRepository.lockById(connectionId, tx);
-      const existing = await monitorConnectionRepository.findById(connectionId, tx);
-      if (!existing || existing.projectId !== projectId) {
-        throw new MonitorConnectionNotFoundError(connectionId);
-      }
-
+      const existing = await lockOwnBinding(projectId, connectionId, tx);
       const rewind = isLowerThan(level, existing.minimumLevel);
       await monitorConnectionRepository.setMinimumLevel(connectionId, level, rewind, tx);
+      return bindingDto(projectId, connectionId, tx);
+    });
+  },
 
-      const rows = await monitorConnectionRepository.listForProject(projectId, tx);
-      const updated = rows.find((row) => row.id === connectionId);
-      /* v8 ignore next -- unreachable: the row was locked and written in this
-         transaction, under the same binding. */
-      if (!updated) throw new MonitorConnectionNotFoundError(connectionId);
-      return toMonitorConnectionDto(updated);
+  /**
+   * Set one binding's DIRECTION SWITCHES (Story MOTIR-4931 · Subtask MOTIR-5706)
+   * — `resolveOnDone` (Motir → monitor) and `syncAssignee` (monitor → Motir).
+   *
+   * SPARSE: an omitted key is left unchanged. Each supplied key must be a
+   * boolean, and at least one must be supplied — otherwise
+   * {@link InvalidMonitorSyncDirectionError} (400). Same gate, same not-found
+   * posture and same answer as {@link setMinimumLevel}: the room renders the
+   * write's own DTO. The switches govern nothing here — RESOLVE BACK
+   * (MOTIR-5703) and ASSIGNEE FROM THE MONITOR (MOTIR-5705) read the columns.
+   */
+  async setSyncDirections(
+    projectId: string,
+    connectionId: string,
+    input: unknown,
+    ctx: ServiceContext,
+  ): Promise<MonitorConnectionDto> {
+    return inProject(projectId, ctx, async (tx) => {
+      const directions = readSyncDirections(input);
+      await lockOwnBinding(projectId, connectionId, tx);
+      await monitorConnectionRepository.setSyncDirections(connectionId, directions, tx);
+      return bindingDto(projectId, connectionId, tx);
+    });
+  },
+
+  /**
+   * The connection PATCH (MOTIR-5579 + MOTIR-5706): any non-empty subset of
+   * `minimumLevel`, `resolveOnDone`, `syncAssignee`, applied in ONE transaction
+   * so a combined body is all-or-nothing.
+   *
+   * A body with none of the three keys is refused as an invalid LEVEL — the
+   * answer the route gave before the switches existed, kept so a client that
+   * sends `{}` still hears the same code.
+   */
+  async updateConnection(
+    projectId: string,
+    connectionId: string,
+    body: unknown,
+    ctx: ServiceContext,
+  ): Promise<MonitorConnectionDto> {
+    const fields = (typeof body === 'object' && body !== null ? body : {}) as Record<
+      string,
+      unknown
+    >;
+    const hasLevel = 'minimumLevel' in fields;
+    const hasSwitch = 'resolveOnDone' in fields || 'syncAssignee' in fields;
+    if (!hasLevel && !hasSwitch) throw new InvalidMonitorLevelError(undefined);
+
+    return inProject(projectId, ctx, async (tx) => {
+      const level = fields['minimumLevel'];
+      if (hasLevel && level !== null && !isMonitorLevel(level)) {
+        throw new InvalidMonitorLevelError(level);
+      }
+      const directions = hasSwitch ? readSyncDirections(fields) : null;
+      const existing = await lockOwnBinding(projectId, connectionId, tx);
+      if (hasLevel) {
+        const next = level as string | null;
+        const rewind = isLowerThan(next, existing.minimumLevel);
+        await monitorConnectionRepository.setMinimumLevel(connectionId, next, rewind, tx);
+      }
+      if (directions) {
+        await monitorConnectionRepository.setSyncDirections(connectionId, directions, tx);
+      }
+      return bindingDto(projectId, connectionId, tx);
     });
   },
 

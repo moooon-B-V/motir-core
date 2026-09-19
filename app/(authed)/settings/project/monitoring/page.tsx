@@ -174,6 +174,13 @@ async function MonitoringPaneBody({
       view={view}
       banner={banner}
       pollLines={pollLines}
+      // The last FAILED resolve-back's time per row (MOTIR-5707, §13 decision 3),
+      // formatted against the same server `now` as every other time here.
+      syncErrorLabels={Object.fromEntries(
+        view.connections.flatMap((c) =>
+          c.lastSyncErrorAt ? [[c.id, format.relativeTime(new Date(c.lastSyncErrorAt), now)]] : [],
+        ),
+      )}
       checkedLabel={
         view.healthCheckedAt
           ? t('grant.checked', { when: format.relativeTime(new Date(view.healthCheckedAt), now) })

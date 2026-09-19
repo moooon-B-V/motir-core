@@ -1,4 +1,4 @@
-import type { NormalizedMonitorIssue } from './types';
+import type { NormalizedMonitorAssignee, NormalizedMonitorIssue } from './types';
 import { fakeMonitorState } from './providers/fake';
 
 // THE E2E SEEDING SEAM for the fake monitor provider (Story MOTIR-4929 ·
@@ -24,6 +24,8 @@ export interface SeedMonitorIssue {
   firstSeenAt: string;
   lastSeenAt: string;
   permalink?: string | null;
+  /** The monitor-side assignee the server-side poll reads (MOTIR-5709). */
+  assignee?: NormalizedMonitorAssignee | null;
 }
 
 export interface SeedFakeMonitorInput {
@@ -46,6 +48,7 @@ export function seedFakeMonitor(input: SeedFakeMonitorInput): void {
         firstSeenAt: new Date(issue.firstSeenAt),
         lastSeenAt: new Date(issue.lastSeenAt),
         permalink: issue.permalink ?? null,
+        assignee: issue.assignee ?? null,
       }),
     );
   }

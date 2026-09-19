@@ -1,4 +1,5 @@
 import type { MonitorIssue, Prisma } from '@/generated/prisma/client';
+import type { MonitorAssigneeSyncNote } from '@/lib/monitors/syncStates';
 
 // Monitor-issue repository — single Prisma operations on the `monitor_issue`
 // table (Story MOTIR-4929 · Subtask MOTIR-5576): the link between ONE provider
@@ -112,5 +113,165 @@ export const monitorIssueRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<MonitorIssue> {
     return tx.monitorIssue.update({ where: { id }, data: facts });
+  },
+
+  // ── SYNC (Story MOTIR-4931 · Subtask MOTIR-5701) ───────────────────────────
+  // The resolve-back record and the assignee sync record. The sync service owns
+  // WHEN each is written; these leaves own only the single statements.
+
+  /** Every link pointing at one bug. A bug may carry more than one issue — the
+   *  `work_item_id` index is not unique. Ordered by id so a fan-out is stable. */
+  async listByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<MonitorIssue[]> {
+    return tx.monitorIssue.findMany({ where: { workItemId }, orderBy: { id: 'asc' } });
+  },
+
+  /**
+   * CLAIM one link's resolve-back — the read-derived write this store owns.
+   * Returns whether THIS caller won.
+   *
+   * ⚠️ ONE CONDITIONAL `UPDATE`, never a read-then-write. The same completion can
+   * reach the resolver twice (an at-least-once event plus the backstop sweep),
+   * and "resolving twice calls the provider once" is only true if exactly one
+   * caller wins. Postgres re-evaluates the `WHERE` against the committed row when
+   * a concurrent claimant made it wait, so the loser sees `pending` and matches
+   * nothing — it neither throws nor claims.
+   *
+   * Claimable: never attempted (`NULL`), `failed` (the sweep's retry), or a
+   * `pending` taken before `staleBefore` (a crashed attempt). `resolved` and
+   * `gone` are terminal and never match.
+   */
+  async claimResolve(
+    id: string,
+    now: Date,
+    staleBefore: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      UPDATE monitor_issue
+         SET resolve_state = 'pending', resolve_attempted_at = ${now}, updated_at = ${now}
+       WHERE id = ${id}
+         AND (resolve_state IS NULL
+              OR resolve_state = 'failed'
+              OR (resolve_state = 'pending' AND resolve_attempted_at < ${staleBefore}))
+      RETURNING id`;
+    return rows.length === 1;
+  },
+
+  /** The provider accepted the resolve: the link is `resolved`, and `at` is the
+   *  loop guard's input. */
+  async recordResolved(id: string, at: Date, tx: Prisma.TransactionClient): Promise<MonitorIssue> {
+    return tx.monitorIssue.update({
+      where: { id },
+      data: { resolveState: 'resolved', resolvedByMotirAt: at, resolveError: null },
+    });
+  },
+
+  /** The provider refused: `failed` with its reason verbatim — the sweep retries. */
+  async recordResolveFailed(
+    id: string,
+    reason: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorIssue> {
+    return tx.monitorIssue.update({
+      where: { id },
+      data: { resolveState: 'failed', resolveError: reason },
+    });
+  },
+
+  /** The provider no longer has the issue: `gone`, terminal, never retried. */
+  async recordGone(id: string, tx: Prisma.TransactionClient): Promise<MonitorIssue> {
+    return tx.monitorIssue.update({
+      where: { id },
+      data: { resolveState: 'gone', resolveError: null },
+    });
+  },
+
+  /**
+   * The links the backstop sweep should resolve: the bug is in one of
+   * `doneStatusKeys` (the project's OWN done category — the caller reads it from
+   * the workflow, exactly as `reconcileIssue` does) and the resolve is claimable
+   * by {@link claimResolve}'s rule. Oldest first, capped at `limit`.
+   */
+  async listResolvableForConnection(
+    connectionId: string,
+    doneStatusKeys: readonly string[],
+    staleBefore: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorIssue[]> {
+    if (doneStatusKeys.length === 0) return [];
+    return tx.monitorIssue.findMany({
+      where: {
+        connectionId,
+        workItem: { is: { status: { in: [...doneStatusKeys] } } },
+        OR: [
+          { resolveState: null },
+          { resolveState: 'failed' },
+          { resolveState: 'pending', resolveAttemptedAt: { lt: staleBefore } },
+        ],
+      },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+  },
+
+  /**
+   * The links the assignee refresh should re-read: the bug still exists and is
+   * NOT in one of `doneStatusKeys`. Oldest `assigneeCheckedAt` first, never-
+   * checked (`null`) before all, capped at `limit`.
+   */
+  async listForAssigneeRefresh(
+    connectionId: string,
+    doneStatusKeys: readonly string[],
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorIssue[]> {
+    return tx.monitorIssue.findMany({
+      where: {
+        connectionId,
+        workItem: { is: { status: { notIn: [...doneStatusKeys] } } },
+      },
+      orderBy: [{ assigneeCheckedAt: { sort: 'asc', nulls: 'first' } }, { id: 'asc' }],
+      take: limit,
+    });
+  },
+
+  /** Record what the assignee sync last took (or declined) from the provider. */
+  async recordAssigneeSync(
+    id: string,
+    input: {
+      externalAssigneeId: string | null;
+      note: MonitorAssigneeSyncNote | null;
+      checkedAt: Date;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorIssue> {
+    return tx.monitorIssue.update({
+      where: { id },
+      data: {
+        syncedAssigneeExternalId: input.externalAssigneeId,
+        assigneeSyncNote: input.note,
+        assigneeCheckedAt: input.checkedAt,
+      },
+    });
+  },
+
+  /** Stamp that the refresh read this link, changing nothing else (the issue
+   *  came back gone, or unchanged). */
+  async markAssigneeChecked(
+    id: string,
+    checkedAt: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorIssue> {
+    return tx.monitorIssue.update({ where: { id }, data: { assigneeCheckedAt: checkedAt } });
+  },
+
+  /** Lock one link by id `FOR UPDATE` — the assignee decision's serialisation
+   *  point. Returns null when there is none (or RLS hides it). */
+  async lockById(id: string, tx: Prisma.TransactionClient): Promise<MonitorIssue | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM monitor_issue WHERE id = ${id} FOR UPDATE`;
+    if (rows.length === 0) return null;
+    return tx.monitorIssue.findUnique({ where: { id } });
   },
 };

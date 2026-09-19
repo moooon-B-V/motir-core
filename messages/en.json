@@ -8702,6 +8702,21 @@
         "overdue": "<b>No check since {since}.</b> Two scheduled checks were missed.",
         "failed": "<b>Couldn't check for new errors:</b> {reason}",
         "lastSuccess": "Last successful check {when}."
+      },
+      "sync": {
+        "label": "Sync with Sentry",
+        "resolve": {
+          "label": "Resolve in Sentry when the bug is done",
+          "hint": "Turn off to leave Sentry issues as they are when their bugs are done."
+        },
+        "assignee": {
+          "label": "Take the assignee from Sentry",
+          "hint": "Turn off to ignore assignments made in Sentry."
+        },
+        "saving": "Saving…",
+        "failed": "<b>Couldn't change this setting.</b> Nothing changed — try again.",
+        "resolveFailed": "<b>Couldn't resolve Sentry's issue for <link>{key}</link>:</b> {reason}",
+        "resolveFailedWhen": "Tried {when}."
       }
     },
     "confirm": {

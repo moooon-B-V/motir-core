@@ -39,5 +39,10 @@ export function toMonitorConnectionDto(row: MonitorConnectionWithGrant): Monitor
     lastPollError: row.lastPollError,
     lastPollFiledCount: row.lastPollFiledCount,
     lastPollSucceededAt: row.lastPollSucceededAt?.toISOString() ?? null,
+    resolveOnDone: row.resolveOnDone,
+    syncAssignee: row.syncAssignee,
+    lastSyncError: row.lastSyncError,
+    lastSyncErrorAt: row.lastSyncErrorAt?.toISOString() ?? null,
+    lastSyncErrorWorkItemIdentifier: row.lastSyncErrorWorkItemIdentifier,
   };
 }

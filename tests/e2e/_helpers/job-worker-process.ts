@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { E2E_GITHUB_TOKEN_ENCRYPTION_KEY } from './github-const';
 
 // The Postgres job engine's WORKER, running inside the E2E lane
 // (Story MOTIR-3414 · Subtask MOTIR-3427).
@@ -27,6 +28,30 @@ import path from 'node:path';
 // standalone tree's module resolution live.
 
 const WORKER_BUNDLE = path.resolve('.worker/worker.mjs');
+/**
+ * THE FAKE ERROR MONITOR, mirrored into the worker (Story MOTIR-4931 · MOTIR-5709).
+ *
+ * The acceptance lane selects the fake monitor provider with
+ * `MOTIR_MONITOR_FAKE_PROVIDER=1` on its **webServer** only, and encrypts the
+ * grant's token with `E2E_GITHUB_TOKEN_ENCRYPTION_KEY` there too (the monitor
+ * crypto falls back to the GitHub key). The resolve-back is a JOB, so it runs
+ * HERE — and without both, this process registers the REAL Sentry adapter and
+ * cannot decrypt the grant: every `monitor-issue-resolve` run throws before it
+ * reaches a provider, retries, and dead-letters. The MOTIR-3498 shape again:
+ * a webServer-only variable a job handler reads.
+ *
+ * Opt-in (`E2E_JOB_WORKER_MONITOR_FAKE=1`, set by `playwright.acceptance.config.ts`)
+ * because the main lane's server does not select the fake, and the two processes
+ * must agree about which provider is `sentry`.
+ */
+function monitorFakeEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_MONITOR_FAKE'] !== '1') return {};
+  return {
+    MOTIR_MONITOR_FAKE_PROVIDER: '1',
+    GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  };
+}
+
 /**
  * ⚠️ THE INDEX-WRITER SEAM'S ENVIRONMENT — WORKER ONLY, and the "only" is the
  * decision (Story MOTIR-3417 · MOTIR-3564).
@@ -197,6 +222,8 @@ export async function startJobWorker(): Promise<void> {
       // The index-writer seam — see `indexWriterSeamEnv` for why it is here and
       // nowhere else.
       ...indexWriterSeamEnv(),
+      // The fake error monitor — see `monitorFakeEnv`.
+      ...monitorFakeEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -311,6 +338,8 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       // The private view of the cutover switch — the whole point of this worker.
       MOTIR_POSTGRES_JOB_IDS_FILE: routingFile,
       ...indexWriterSeamEnv(),
+      // The fake error monitor — see `monitorFakeEnv`.
+      ...monitorFakeEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

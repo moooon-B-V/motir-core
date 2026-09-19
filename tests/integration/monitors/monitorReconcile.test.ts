@@ -81,6 +81,7 @@ function issue(overrides: Partial<NormalizedMonitorIssue> = {}): NormalizedMonit
     firstSeenAt: new Date('2026-09-18T08:00:00.000Z'),
     lastSeenAt: new Date('2026-09-18T09:00:00.000Z'),
     permalink: 'https://sentry.example/issues/1/',
+    assignee: null,
     ...overrides,
   };
 }
@@ -282,3 +283,118 @@ describe('the title', () => {
     expect(monitorBugTitle('  short  ')).toBe('short');
   });
 });
+
+// ── THE LOOP GUARD (Story MOTIR-4931 · Subtask MOTIR-5704) ───────────────────
+// resolve → poll must never re-file or mutate the bug. The link's resolve fields
+// are set directly (through the store's shape) — this card does not need the
+// resolve job to exist; the end-to-end version is the story's vitest gate.
+describe('the loop guard — an issue MOTIR resolved and nobody has seen since', () => {
+  const T = new Date('2026-09-18T10:00:00.000Z');
+
+  /** File a bug for the issue, then complete it — the state a resolve follows. */
+  async function doneBug() {
+    const seeded = await seedConnection();
+    const first = await monitorIngestionService.reconcileIssue(seeded.connection, issue());
+    await adminDb.workItem.update({ where: { id: first.workItemId }, data: { status: 'done' } });
+    return { ...seeded, first };
+  }
+
+  /** Everything on the done bug a reconcile could have touched. */
+  async function bugSnapshot(workItemId: string) {
+    const bug = await adminDb.workItem.findUniqueOrThrow({ where: { id: workItemId } });
+    return {
+      status: bug.status,
+      updatedAt: bug.updatedAt.toISOString(),
+      revisions: await adminDb.workItemRevision.count({ where: { workItemId } }),
+    };
+  }
+
+  it('STALE PAGE: a resolved link with lastSeen ≤ Motir’s resolve is `updated`, writes no work item', async () => {
+    const { fx, first } = await doneBug();
+    await adminDb.monitorIssue.updateMany({
+      data: { resolveState: 'resolved', resolveAttemptedAt: T, resolvedByMotirAt: T },
+    });
+    const before = await bugSnapshot(first.workItemId);
+
+    const result = await monitorIngestionService.reconcileIssue(
+      (await seedAgain(fx)).connection,
+      issue({ lastSeenAt: T, eventCount: 9 }),
+    );
+
+    expect(result).toEqual({ ...first, outcome: 'updated' });
+    expect(await bugsIn(fx.projectId)).toHaveLength(1);
+    expect(await bugSnapshot(first.workItemId)).toEqual(before);
+    // Facts still move — only the work item is left alone.
+    expect((await adminDb.monitorIssue.findFirstOrThrow()).eventCount).toBe(9);
+  });
+
+  it('IN FLIGHT: a pending claim with no resolvedByMotirAt yet is `updated` too', async () => {
+    const { fx, first } = await doneBug();
+    await adminDb.monitorIssue.updateMany({
+      data: { resolveState: 'pending', resolveAttemptedAt: T, resolvedByMotirAt: null },
+    });
+    const before = await bugSnapshot(first.workItemId);
+
+    const result = await monitorIngestionService.reconcileIssue(
+      (await seedAgain(fx)).connection,
+      issue({ lastSeenAt: new Date(T.getTime() - 60_000) }),
+    );
+
+    expect(result.outcome).toBe('updated');
+    expect(await bugsIn(fx.projectId)).toHaveLength(1);
+    expect(await bugSnapshot(first.workItemId)).toEqual(before);
+  });
+
+  it('a REAL recurrence — lastSeen after Motir’s resolve — still re-files relates_to the done bug', async () => {
+    const { fx, first } = await doneBug();
+    await adminDb.monitorIssue.updateMany({
+      data: { resolveState: 'resolved', resolveAttemptedAt: T, resolvedByMotirAt: T },
+    });
+    const before = await bugSnapshot(first.workItemId);
+
+    const result = await monitorIngestionService.reconcileIssue(
+      (await seedAgain(fx)).connection,
+      issue({ lastSeenAt: new Date(T.getTime() + 1) }),
+    );
+
+    expect(result.outcome).toBe('refiled');
+    expect(result.workItemId).not.toBe(first.workItemId);
+    expect(await bugsIn(fx.projectId)).toHaveLength(2);
+    expect((await bugSnapshot(first.workItemId)).status).toBe(before.status);
+    const link = await adminDb.workItemLink.findFirst({
+      where: {
+        OR: [
+          { fromId: result.workItemId, toId: first.workItemId },
+          { fromId: first.workItemId, toId: result.workItemId },
+        ],
+      },
+    });
+    expect(link).not.toBeNull();
+  });
+
+  it('SWITCH OFF: a done bug whose link carries no resolve attempt re-files exactly as before', async () => {
+    const { fx, first } = await doneBug();
+    const result = await monitorIngestionService.reconcileIssue(
+      (await seedAgain(fx)).connection,
+      issue({ lastSeenAt: new Date('2026-09-18T08:30:00.000Z') }),
+    );
+    expect(result.outcome).toBe('refiled');
+    expect(result.workItemId).not.toBe(first.workItemId);
+  });
+});
+
+/** The SAME connection, re-read — the guard reads the link row, not the input. */
+async function seedAgain(fx: WorkItemFixture): Promise<{ connection: MonitorReconcileConnection }> {
+  const row = await adminDb.monitorConnection.findFirstOrThrow({
+    where: { projectId: fx.projectId },
+  });
+  return {
+    connection: {
+      id: row.id,
+      projectId: row.projectId,
+      workspaceId: row.workspaceId,
+      boundByUserId: row.boundByUserId,
+      externalProjectSlug: row.externalProjectSlug,
+    },
+  };
+}

@@ -28,6 +28,11 @@ function connection(overrides: Partial<MonitorConnectionDto> = {}): MonitorConne
     lastPollError: null,
     lastPollFiledCount: null,
     lastPollSucceededAt: null,
+    resolveOnDone: true,
+    syncAssignee: true,
+    lastSyncError: null,
+    lastSyncErrorAt: null,
+    lastSyncErrorWorkItemIdentifier: null,
     ...overrides,
   };
 }

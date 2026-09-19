@@ -39,6 +39,8 @@ import { manifestJobs, manifestSubscribers, manifestScheduledJobs } from './mani
  *  is idempotent, but memoising the PROMISE means concurrent first emits await
  *  one load rather than racing several. */
 let loading: Promise<void> | null = null;
+/** Set once `lib/jobs/registry.ts` has resolved in THIS module layer. */
+let registryLoaded = false;
 
 /**
  * Ensure the job manifest is populated in THIS process.
@@ -51,19 +53,26 @@ let loading: Promise<void> | null = null;
  * nothing consumes.
  */
 export async function ensureJobManifestLoaded(): Promise<void> {
-  // ⚠️ SHORT-CIRCUIT ON AN ALREADY-POPULATED MANIFEST. The worker and nineteen
-  // test files import `lib/jobs/registry.ts` for their own reasons and have
-  // already paid for this; the `import()` would resolve from
-  // the module cache anyway, and returning first makes that a branch rather than
-  // a microtask.
-  if (manifestJobs().length > 0) return;
-  loading ??= import('@/lib/jobs/registry').then(() => undefined);
+  // ⚠️ SHORT-CIRCUIT ON THE REGISTRY HAVING LOADED — NEVER ON A NON-EMPTY
+  // MANIFEST (Bug MOTIR-5716). "Some job is registered" is true the moment ANY
+  // module imports ONE job definition — the Monitoring page imports a constant
+  // from `monitorIssueReconcile` — and the old `manifestJobs().length > 0` test
+  // then skipped the registry for the life of that module layer: every event
+  // whose consumers had not been imported resolved to ZERO subscribers and was
+  // dropped with no row, no log and no dead letter. A process that has already
+  // imported the registry pays one microtask here, since the `import()`
+  // resolves from the module cache.
+  if (registryLoaded) return;
+  loading ??= import('@/lib/jobs/registry').then(() => {
+    registryLoaded = true;
+  });
   await loading;
 }
 
 /** TEST SEAM — forget the cached load so a spec can prove the cold path. */
 export function resetJobManifestLoadForTests(): void {
   loading = null;
+  registryLoaded = false;
 }
 
 export { manifestJobs, manifestSubscribers, manifestScheduledJobs };

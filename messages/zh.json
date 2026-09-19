@@ -8698,6 +8698,21 @@
         "overdue": "<b>自 {since} 起未检查。</b>已错过两次计划检查。",
         "failed": "<b>无法检查新错误：</b>{reason}",
         "lastSuccess": "上次成功检查：{when}。"
+      },
+      "sync": {
+        "label": "与 Sentry 同步",
+        "resolve": {
+          "label": "缺陷完成时，在 Sentry 中将问题标记为已解决",
+          "hint": "关闭后，缺陷完成时 Sentry 中的问题将保持原状。"
+        },
+        "assignee": {
+          "label": "从 Sentry 获取负责人",
+          "hint": "关闭后，将忽略在 Sentry 中进行的分配。"
+        },
+        "saving": "正在保存…",
+        "failed": "<b>无法更改此设置。</b>未做任何更改——请重试。",
+        "resolveFailed": "<b>无法在 Sentry 中解决 <link>{key}</link> 对应的问题：</b>{reason}",
+        "resolveFailedWhen": "尝试时间：{when}。"
       }
     },
     "confirm": {

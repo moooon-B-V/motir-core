@@ -505,6 +505,16 @@ export const jobQueueRepository = {
     return tx.jobQueueRun.findUnique({ where: { id } });
   },
 
+  /** The ONE run a given job holds for a given event, or null when none was
+   *  enqueued (Story MOTIR-4931 · MOTIR-5709). */
+  async findForEventAndJob(
+    eventId: string,
+    jobId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<JobQueueRun | null> {
+    return tx.jobQueueRun.findFirst({ where: { eventId, jobId }, orderBy: { runAt: 'desc' } });
+  },
+
   /**
    * The NEWEST fire instant already enqueued for one job, or null when none has
    * been (MOTIR-3471). The watermark an `all` catch-up walks back to.

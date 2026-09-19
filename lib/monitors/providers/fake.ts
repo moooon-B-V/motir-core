@@ -1,4 +1,4 @@
-import { MonitorProviderCallError } from '../errors';
+import { MonitorIssueGoneError, MonitorProviderCallError } from '../errors';
 import type { MonitorProvider } from '../provider';
 import { registerMonitorProvider } from '../registry';
 import type {
@@ -42,8 +42,15 @@ export interface FakeMonitorState {
   /** Installation ids passed to `verifyInstall`, in order — what proves the
    *  CONNECT card verified rather than only exchanged. */
   verifiedInstallations: string[];
-  /** Issue ids passed to `resolveIssue`, in order (MOTIR-4931's consumer). */
+  /** Issue ids passed to `resolveIssue`, in order — EVERY call, a gone one
+   *  included, so a test can count calls (MOTIR-4931's consumer). */
   resolvedIssues: string[];
+  /** Issue ids passed to `getIssue`, in order — how a test asserts a switched-off
+   *  connection made ZERO reads (MOTIR-5705). */
+  readIssues: string[];
+  /** Issue ids the provider NO LONGER HAS: `getIssue` answers `null` and
+   *  `resolveIssue` throws `MonitorIssueGoneError` (MOTIR-5702). */
+  deletedIssues: Set<string>;
   /** How many refreshes have been asked for, and what the next one returns. */
   refreshCount: number;
   /** Set to make the next call of that operation fail — how a test drives the
@@ -88,12 +95,15 @@ const freshState = (): FakeMonitorState => ({
       firstSeenAt: new Date('2026-09-01T00:00:00.000Z'),
       lastSeenAt: new Date('2026-09-10T00:00:00.000Z'),
       permalink: 'https://fake.invalid/issues/fake-issue-1',
+      assignee: null,
     },
   ],
   health: { status: 'connected', reason: null, checkedAt: new Date() },
   orgSlug: 'fake-org',
   verifiedInstallations: [],
   resolvedIssues: [],
+  readIssues: [],
+  deletedIssues: new Set(),
   refreshCount: 0,
   failNext: new Set(),
   failNextStatus: new Map(),
@@ -195,6 +205,23 @@ export const fakeMonitorProvider: MonitorProvider = {
   async resolveIssue({ externalIssueId }): Promise<void> {
     guard('resolveIssue');
     state.resolvedIssues.push(externalIssueId);
+    if (state.deletedIssues.has(externalIssueId)) {
+      throw new MonitorIssueGoneError(
+        'resolveIssue',
+        externalIssueId,
+        'The requested resource does not exist',
+      );
+    }
+  },
+
+  /** The seeded issue by id — its CURRENT assignee, so a test that changes it
+   *  between two reads sees the change — or `null` for a deleted or unknown id. */
+  async getIssue({ externalIssueId }): Promise<NormalizedMonitorIssue | null> {
+    guard('getIssue');
+    state.readIssues.push(externalIssueId);
+    if (state.deletedIssues.has(externalIssueId)) return null;
+    const issue = state.issues.find((candidate) => candidate.externalId === externalIssueId);
+    return issue ? { ...issue, assignee: issue.assignee ? { ...issue.assignee } : null } : null;
   },
 };
 

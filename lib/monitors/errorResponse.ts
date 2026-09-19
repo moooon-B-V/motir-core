@@ -7,6 +7,7 @@ import {
 } from '@/lib/projects/errors';
 import {
   InvalidMonitorLevelError,
+  InvalidMonitorSyncDirectionError,
   MonitorConnectionAlreadyExistsError,
   MonitorConnectionNotFoundError,
   MonitorGrantNotFoundError,
@@ -48,8 +49,9 @@ export function mapMonitorError(err: unknown): NextResponse | null {
   if (err instanceof NotProjectAdminError || err instanceof ProjectAccessDeniedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
   }
-  if (err instanceof InvalidMonitorLevelError) {
-    // 400: the body named a level the vocabulary does not have (MOTIR-5579).
+  if (err instanceof InvalidMonitorLevelError || err instanceof InvalidMonitorSyncDirectionError) {
+    // 400: the body named a level the vocabulary does not have (MOTIR-5579), or a
+    // direction switch that is not a boolean / no switch at all (MOTIR-5706).
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
   }
   if (err instanceof MonitorConnectionNotFoundError) {

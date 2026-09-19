@@ -59,6 +59,22 @@ export interface NormalizedMonitorIssue {
   firstSeenAt: Date;
   lastSeenAt: Date;
   permalink: string | null;
+  /**
+   * Who the issue is assigned to IN THE MONITOR (Story MOTIR-4931 · Subtask
+   * MOTIR-5702), or `null` when unassigned. The assignee sync (MOTIR-5705) maps a
+   * `user` to a Motir member by email; a `team` is recorded and never applied.
+   */
+  assignee: NormalizedMonitorAssignee | null;
+}
+
+/** A monitor-side assignee. `externalId` is the provider's own id for the user
+ *  or team — unique only WITHIN its `kind`, so a comparison keys on both.
+ *  `email` is `null` for a team, or wherever the provider omits it. */
+export interface NormalizedMonitorAssignee {
+  kind: 'user' | 'team';
+  externalId: string;
+  email: string | null;
+  name: string | null;
 }
 
 /** A page of issues plus the cursor to resume from — the poll's own bookkeeping,
