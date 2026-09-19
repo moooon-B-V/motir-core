@@ -10924,36 +10924,42 @@
       </defs>
     </svg>
     <div class="review-head">
-      <h1>Approve and merge — the merge question RE-ASKED after an ejection</h1>
+      <h1>Approve and merge — the merge question RE-ASKED, by the REASON the merge did not land</h1>
       <p>
         <b
           >AMENDS approve-and-merge--ejected.mock.html (§ 22) and
           github--fix-callout--ejected.mock.html (§ 26) — MOTIR-5801, 2026-09-19.</b
         >
         Where it lives: the <b>item page → Development card</b>, and the same block in the
-        full-screen approval overlay opened from <b>Workbench → To approve → Review</b> (panel 3
-        draws that row). Fixture: the story <b>ACME-12</b>, approved and merged into two
-        repositories — <span class="mono">moooon/motir-core · #131</span> merged, and
-        <span class="mono">moooon/motir-ai · #88</span> was queued, then thrown out for a failure.
-        The contract is <span class="mono">docs/decisions/approval-gates.md</span> § 4 FOURTH
-        AMENDMENT. Every state is drawn in light and dark.
+        full-screen approval overlay opened from <b>Workbench → To approve → Review</b> (panel 7
+        draws that row). Fixture: the story <b>ACME-12</b>, approved into two repositories —
+        <span class="mono">moooon/motir-core · #131</span> merged, and
+        <span class="mono">moooon/motir-ai · #88</span> did not land. The contract is
+        <span class="mono">docs/decisions/approval-gates.md</span> § 4 FOURTH AMENDMENT
+        (MOTIR-5800); every panel cites the point it discharges. Every state is drawn in light and
+        dark, and every panel is a <b>manual</b>-mode project unless it says otherwise.
       </p>
     </div>
     <div class="ej-note-card">
-      <b>One question, asked again.</b> The queue said the approved commits did not land, so the
-      card returns to In Review with ONE fresh awaiting approve-to-merge gate over the same commits.
-      The earlier approval is history, not a standing yes. <b>Approve</b> re-queues;
-      <span class="mono">motir fix</span> is the answer when the failure is real.
-      <i>Queue again</i> is gone for a failure, and kept for a neutral removal (panel 6).
+      <b>ONE APPROVAL AUTHORIZES ONE MERGE OR ENQUEUE ACTION.</b> Once that action has been
+      attempted and has not landed, the approval is spent — so what the surface offers is decided by
+      the REASON, not by whether the removal looked harmless. <b>RETRYABLE</b> (a failed or
+      timed-out queue run, and every neutral removal): the card returns to <b>In Review</b> with ONE
+      fresh awaiting gate, and <i>Queue again</i> on the pull request's own row IS that approval
+      (panels 1, 2, 6). <b>CAN'T LAND AS IT STANDS</b> (a conflict, or checks that are not green):
+      the card drops to <b>Implemented</b>, nothing is asked and no verb is offered —
+      <span class="mono">motir fix</span> alone (panel 3). <b>BLOCKED BY A SETTING</b> (branch
+      protection, a missing App permission): one fresh gate, the setting NAMED, and
+      <i>Retry merge</i> is the approval (panel 4). <b>LANDED</b> leaves the card alone.
+      <i>Retry merge</i> and <i>Queue again</i> never reuse an approval — pressing one decides the
+      fresh gate.
     </div>
-
     <div class="panel-board">
       <div class="amr-state">
         <div class="dvb-col">
           <div class="panel-label">
-            Panel 1 · FAILURE EJECTION, <b>manual</b> — the card is back at <b>In Review</b>; ONE
-            fresh gate asks again, with <b>Left the queue</b>, the reason and the failing check
-            above it, and <b>motir fix</b> beside the approve
+            Panel 1 · RETRYABLE, a queue <b>FAILURE</b> (<span class="mono">CI_FAILURE</span>) — In
+            Review, ONE fresh gate, and <b>Queue again</b> on the row IS that approval
           </div>
           <div class="panel">
             <div class="card-body" style="padding-bottom: 0">
@@ -11023,12 +11029,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="fx-part" role="group" aria-label="Fix the checks">
                       <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                       <p class="fx-line">
@@ -11050,9 +11062,9 @@
                         again.
                       </p>
                       <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
+                        Nothing changed on your side? <b>Queue again</b> approves these same commits
+                        once more and puts them back in the merge queue. If the failing check points
+                        at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                       </p>
                     </div>
                     <div class="dvb-htt" role="group" aria-label="How to test">
@@ -11087,8 +11099,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -11109,19 +11123,21 @@
             </div>
           </div>
           <p class="panel-note">
-            The rail reads <b>In Review</b> (§ 4 FOURTH AMENDMENT, point 1). The frame is an
-            <b>awaiting</b> approve-to-merge gate standing alone (point 2) — band 1
-            <i>Awaiting you</i>, band 3 the shipped verbs — over the SAME two commits the earlier
-            approval named. The ejected row reads <b>Left the queue</b> and offers
-            <b>no Queue again</b> (point 4). The record band keeps the earlier approval as history
-            and says why it is asked again; the failing check links to itself. § 21's fix part sits
-            where the shipped body renders it, and its which-to-use line now compares
-            <b>Approve</b> with <span class="mono">motir fix</span> (§ 26 amended). Built by
-            MOTIR-5806.
+            <b>RETRYABLE</b> — the queue's exit reason is <span class="mono">CI_FAILURE</span>, so
+            re-running the SAME commits can succeed and the question is worth asking again (point
+            2). The rail reads <b>In Review</b>; the frame is ONE fresh
+            <b>awaiting</b> approve-to-merge gate standing alone over the same two commits (point
+            3), and the earlier approval stays in the record band as history, never edited. What
+            changed since the first cut: the ejected row carries <b>Queue again</b> again — but
+            pressing it now <b>DECIDES this gate</b> with your stamp and then enqueues, which is the
+            requester's <i>"retry merge can be on the work item link PR"</i> (point 4). The frame's
+            <b>Approve and merge</b> runs the same service path; there is one approval and one
+            enqueue either way. § 21's fix part stays beside it, and its which-to-use line compares
+            the two (§ 26 amended, point 6). Built by MOTIR-5806.
           </p>
         </div>
         <div class="dvb-col">
-          <div class="panel-label">Panel 1 · FAILURE EJECTION, <b>manual</b> · <b>dark</b></div>
+          <div class="panel-label">Panel 1 · RETRYABLE, a queue <b>FAILURE</b> · <b>dark</b></div>
           <div class="panel" data-theme="dark" data-appearance-scope>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
@@ -11190,12 +11206,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="fx-part" role="group" aria-label="Fix the checks">
                       <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                       <p class="fx-line">
@@ -11217,9 +11239,9 @@
                         again.
                       </p>
                       <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
+                        Nothing changed on your side? <b>Queue again</b> approves these same commits
+                        once more and puts them back in the merge queue. If the failing check points
+                        at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                       </p>
                     </div>
                     <div class="dvb-htt" role="group" aria-label="How to test">
@@ -11254,8 +11276,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -11282,8 +11306,1478 @@
       <div class="amr-state">
         <div class="dvb-col">
           <div class="panel-label">
-            Panel 2 · the same on a <b>DESIGN card</b> — the design result shows DECIDED; only the
-            merge awaits
+            Panel 2 · RETRYABLE, a <b>NEUTRAL removal</b> (<span class="mono">MANUAL</span> /
+            <span class="mono">QUEUE_CLEARED</span>) — re-asked the same way, worded neutrally, and
+            <b>no motir fix</b>
+          </div>
+          <div class="panel">
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>In Review</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body af-host">
+                <div class="af-frame">
+                  <div class="af-head">
+                    <div class="af-what">
+                      <span class="af-kind">Pull requests</span
+                      ><span class="af-meta"
+                        >Asked again after the merge queue · 2 pull requests</span
+                      >
+                    </div>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
+                  </div>
+                  <div
+                    class="af-port dvb-in-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Rate-limit the public API per key</div>
+                        <div class="pr-meta">moooon/motir-core · #131</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Honour Retry-After in the planner client</div>
+                        <div class="pr-meta">moooon/motir-ai · #88</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-neutral"
+                          ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg>Removed from
+                          the queue</span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
+                      <div class="dvb-htt-head">
+                        <h4 class="dvb-htt-title">How to test</h4>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                        >
+                      </div>
+                      <p class="dvb-abbrev">
+                        The body, each repository's facts and earlier runs, as Panel 12b draws them
+                        — unchanged, and abbreviated on this sheet.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="af-record">
+                    <span
+                      >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                      merged</span
+                    >
+                    <span class="ej-exit">
+                      <span class="ej-line"
+                        ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> was taken out of the merge queue by
+                          hand.</span
+                        ></span
+                      >
+                      <span class="ej-sub"
+                        >Nothing was learned about the commits — the queue never finished with
+                        them.</span
+                      >
+                      <span class="ej-sub rq-why"
+                        >They still did not land, so that approval is spent and Motir is asking you
+                        again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
+                      >
+                    </span>
+                  </div>
+                  <div class="af-foot">
+                    <span class="af-why"
+                      >Approving puts <b>moooon/motir-ai · #88</b> back in its repository's merge
+                      queue, which merges it when the queue's checks pass, then moves
+                      <b>ACME-12</b> to Approved.</span
+                    ><span class="af-verbs"
+                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="panel-note">
+            <b>RETRYABLE too</b> — the requester's answer for a neutral removal was
+            <i>"re-ask too"</i>, so <span class="mono">MANUAL</span>,
+            <span class="mono">QUEUE_CLEARED</span>, <span class="mono">ROLL_BACK</span> and an
+            unmapped reason all class here (point 2). The shape is panel 1's: In Review, ONE fresh
+            awaiting gate, <b>Queue again</b> as the approval (point 4). Two things differ. The
+            wording is NEUTRAL — the pull request was <i>taken out of the merge queue by hand</i>,
+            not thrown out — because nothing was learned about the commits and the sentence must not
+            imply a fault. And there is <b>no fix part</b>: no code change is implied, so
+            <span class="mono">motir fix</span> is not offered and refuses this card by name if it
+            is typed (point 6). <b>This replaces the first cut's contrast panel</b>, which showed a
+            neutral removal keeping <i>Queue again</i> on the standing approval — the standing
+            approval is what point 1 removed.
+          </p>
+        </div>
+        <div class="dvb-col">
+          <div class="panel-label">Panel 2 · RETRYABLE, a <b>NEUTRAL removal</b> · <b>dark</b></div>
+          <div class="panel" data-theme="dark" data-appearance-scope>
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>In Review</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body af-host">
+                <div class="af-frame">
+                  <div class="af-head">
+                    <div class="af-what">
+                      <span class="af-kind">Pull requests</span
+                      ><span class="af-meta"
+                        >Asked again after the merge queue · 2 pull requests</span
+                      >
+                    </div>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
+                  </div>
+                  <div
+                    class="af-port dvb-in-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Rate-limit the public API per key</div>
+                        <div class="pr-meta">moooon/motir-core · #131</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Honour Retry-After in the planner client</div>
+                        <div class="pr-meta">moooon/motir-ai · #88</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-neutral"
+                          ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg>Removed from
+                          the queue</span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
+                      <div class="dvb-htt-head">
+                        <h4 class="dvb-htt-title">How to test</h4>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                        >
+                      </div>
+                      <p class="dvb-abbrev">
+                        The body, each repository's facts and earlier runs, as Panel 12b draws them
+                        — unchanged, and abbreviated on this sheet.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="af-record">
+                    <span
+                      >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                      merged</span
+                    >
+                    <span class="ej-exit">
+                      <span class="ej-line"
+                        ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> was taken out of the merge queue by
+                          hand.</span
+                        ></span
+                      >
+                      <span class="ej-sub"
+                        >Nothing was learned about the commits — the queue never finished with
+                        them.</span
+                      >
+                      <span class="ej-sub rq-why"
+                        >They still did not land, so that approval is spent and Motir is asking you
+                        again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
+                      >
+                    </span>
+                  </div>
+                  <div class="af-foot">
+                    <span class="af-why"
+                      >Approving puts <b>moooon/motir-ai · #88</b> back in its repository's merge
+                      queue, which merges it when the queue's checks pass, then moves
+                      <b>ACME-12</b> to Approved.</span
+                    ><span class="af-verbs"
+                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-board">
+      <div class="amr-state">
+        <div class="dvb-col">
+          <div class="panel-label">
+            Panel 3 · CAN'T LAND AS IT STANDS (<span class="mono">MERGE_CONFLICT</span> · host
+            <span class="mono">conflict</span> / <span class="mono">checks_not_green</span>) —
+            <b>Implemented</b>, nothing asked, <b>motir fix</b> alone
+          </div>
+          <div class="panel">
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>Implemented</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body">
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Rate-limit the public API per key</div>
+                    <div class="pr-meta">moooon/motir-core · #131</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="pill pill-mint"
+                      ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Honour Retry-After in the planner client</div>
+                    <div class="pr-meta">moooon/motir-ai · #88</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="pill pill-sky"
+                      ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                    ><span class="pill pill-rose"
+                      ><svg aria-hidden="true"><use href="#i-circle-slash" /></svg>Cannot be
+                      merged</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <p class="dvb-caption">
+                  Link with + Link pull request here, or with
+                  <span class="dvb-mono">link_pull_request</span> over the MCP.
+                </p>
+                <div class="ej-part">
+                  <span class="ej-line"
+                    ><svg class="ej-ic-danger" aria-hidden="true">
+                      <use href="#i-circle-slash" /></svg
+                    ><span
+                      ><b>moooon/motir-ai · #88</b> cannot be merged as it stands: it conflicts with
+                      <span class="dvb-mono">main</span>.</span
+                    ></span
+                  >
+                  <span class="ej-sub"
+                    >The same commits cannot land however many times anyone says yes, so Motir is
+                    not asking again. <b>ACME-12</b> is held at Implemented, at this head.</span
+                  >
+                  <span class="ej-sub"
+                    >The host refusing a press reads the same way:
+                    <span class="dvb-mono">conflict</span>, and
+                    <span class="dvb-mono">checks_not_green</span> when the pull request's own
+                    required checks have not passed.</span
+                  >
+                </div>
+                <div class="fx-part" role="group" aria-label="Fix the checks">
+                  <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
+                  <p class="fx-line">
+                    <svg class="fx-ic-danger" aria-hidden="true"><use href="#i-circle-slash" /></svg
+                    ><span
+                      ><b>moooon/motir-ai · #88</b> conflicts with
+                      <span class="dvb-mono">main</span> and cannot be merged.</span
+                    >
+                  </p>
+                  <p class="fx-note">Hand the repair to an agent from your terminal:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">shell</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>motir fix ACME-12</pre>
+                  </div>
+                  <p class="fx-note">
+                    An agent rebases or resolves on the pull request's own branch, pushes, and the
+                    checks run again.
+                  </p>
+                  <p class="fx-note">
+                    There is nothing to approve here. A push moves the head, which re-arms the
+                    question, and the next green raises the merge gate once — over the new commits.
+                  </p>
+                </div>
+                <div class="dvb-htt" role="group" aria-label="How to test">
+                  <div class="dvb-htt-head">
+                    <h4 class="dvb-htt-title">How to test</h4>
+                    <span class="dvb-htt-by"
+                      >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                    >
+                  </div>
+                  <p class="dvb-abbrev">
+                    The body, each repository's facts and earlier runs, as Panel 12b draws them —
+                    unchanged, and abbreviated on this sheet.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="panel-note">
+            <b>CAN'T LAND AS IT STANDS</b> — queue <span class="mono">MERGE_CONFLICT</span>, and the
+            host codes <span class="mono">conflict</span> and
+            <span class="mono">checks_not_green</span> (point 2). The requester's reason, in their
+            words: <i>"if it's conflict the PR really can't be merged, retry is useless"</i>, and
+            their question <i>"should we flip the status back to implemented?"</i> is answered yes —
+            the rail reads <b>Implemented</b> and the promotion is HELD at that head. So this is the
+            one class with <b>no approval surface at all</b>: no gate frame, no <i>Queue again</i>,
+            no <i>Retry merge</i>, no verbs, and no row in <i>To approve</i> (point 3's last bullet,
+            point 4's last sentence). The row says what is wrong and
+            <span class="mono">motir fix ACME-12</span> is the only call to action — which is where
+            <span class="mono">motir fix</span> already claimed a card (point 6). The last line is
+            how the card leaves the hold: a push, then the next green, MOTIR-5604's unchanged path.
+            Built by MOTIR-5806.
+          </p>
+        </div>
+        <div class="dvb-col">
+          <div class="panel-label">Panel 3 · CAN'T LAND AS IT STANDS · <b>dark</b></div>
+          <div class="panel" data-theme="dark" data-appearance-scope>
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>Implemented</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body">
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Rate-limit the public API per key</div>
+                    <div class="pr-meta">moooon/motir-core · #131</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="pill pill-mint"
+                      ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Honour Retry-After in the planner client</div>
+                    <div class="pr-meta">moooon/motir-ai · #88</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="pill pill-sky"
+                      ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                    ><span class="pill pill-rose"
+                      ><svg aria-hidden="true"><use href="#i-circle-slash" /></svg>Cannot be
+                      merged</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <p class="dvb-caption">
+                  Link with + Link pull request here, or with
+                  <span class="dvb-mono">link_pull_request</span> over the MCP.
+                </p>
+                <div class="ej-part">
+                  <span class="ej-line"
+                    ><svg class="ej-ic-danger" aria-hidden="true">
+                      <use href="#i-circle-slash" /></svg
+                    ><span
+                      ><b>moooon/motir-ai · #88</b> cannot be merged as it stands: it conflicts with
+                      <span class="dvb-mono">main</span>.</span
+                    ></span
+                  >
+                  <span class="ej-sub"
+                    >The same commits cannot land however many times anyone says yes, so Motir is
+                    not asking again. <b>ACME-12</b> is held at Implemented, at this head.</span
+                  >
+                  <span class="ej-sub"
+                    >The host refusing a press reads the same way:
+                    <span class="dvb-mono">conflict</span>, and
+                    <span class="dvb-mono">checks_not_green</span> when the pull request's own
+                    required checks have not passed.</span
+                  >
+                </div>
+                <div class="fx-part" role="group" aria-label="Fix the checks">
+                  <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
+                  <p class="fx-line">
+                    <svg class="fx-ic-danger" aria-hidden="true"><use href="#i-circle-slash" /></svg
+                    ><span
+                      ><b>moooon/motir-ai · #88</b> conflicts with
+                      <span class="dvb-mono">main</span> and cannot be merged.</span
+                    >
+                  </p>
+                  <p class="fx-note">Hand the repair to an agent from your terminal:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">shell</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>motir fix ACME-12</pre>
+                  </div>
+                  <p class="fx-note">
+                    An agent rebases or resolves on the pull request's own branch, pushes, and the
+                    checks run again.
+                  </p>
+                  <p class="fx-note">
+                    There is nothing to approve here. A push moves the head, which re-arms the
+                    question, and the next green raises the merge gate once — over the new commits.
+                  </p>
+                </div>
+                <div class="dvb-htt" role="group" aria-label="How to test">
+                  <div class="dvb-htt-head">
+                    <h4 class="dvb-htt-title">How to test</h4>
+                    <span class="dvb-htt-by"
+                      >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                    >
+                  </div>
+                  <p class="dvb-abbrev">
+                    The body, each repository's facts and earlier runs, as Panel 12b draws them —
+                    unchanged, and abbreviated on this sheet.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-board">
+      <div class="amr-state">
+        <div class="dvb-col">
+          <div class="panel-label">
+            Panel 4 · BLOCKED BY A SETTING (<span class="mono">BRANCH_PROTECTIONS</span> ·
+            <span class="mono">branch_protected</span> /
+            <span class="mono">app_permission_missing</span>) — one fresh gate, the setting NAMED,
+            <b>Retry merge</b> is the approval
+          </div>
+          <div class="panel">
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>In Review</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body af-host">
+                <div class="af-frame">
+                  <div class="af-head">
+                    <div class="af-what">
+                      <span class="af-kind">Pull requests</span
+                      ><span class="af-meta"
+                        >Asked again after the merge queue · 2 pull requests</span
+                      >
+                    </div>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
+                  </div>
+                  <div
+                    class="af-port dvb-in-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Rate-limit the public API per key</div>
+                        <div class="pr-meta">moooon/motir-core · #131</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Honour Retry-After in the planner client</div>
+                        <div class="pr-meta">moooon/motir-ai · #88</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-peach"
+                          ><svg aria-hidden="true"><use href="#i-shield" /></svg>Blocked by a
+                          setting</span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Retry merge
+                        </button></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
+                      <div class="dvb-htt-head">
+                        <h4 class="dvb-htt-title">How to test</h4>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                        >
+                      </div>
+                      <p class="dvb-abbrev">
+                        The body, each repository's facts and earlier runs, as Panel 12b draws them
+                        — unchanged, and abbreviated on this sheet.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="af-record">
+                    <span
+                      >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                      merged</span
+                    >
+                    <span class="ej-exit">
+                      <span class="ej-line"
+                        ><svg aria-hidden="true"><use href="#i-shield" /></svg
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> left the merge queue:
+                          <b>branch protection on <span class="dvb-mono">main</span></b> blocked the
+                          merge.</span
+                        ></span
+                      >
+                      <span class="ej-sub"
+                        >The rule that blocked it: <b>Require review from Code Owners</b> — no code
+                        owner has approved this pull request.</span
+                      >
+                      <span class="ej-sub"
+                        >Where the host refuses a press instead, the setting is named the same way:
+                        <span class="dvb-mono">branch_protected</span>, or
+                        <span class="dvb-mono">app_permission_missing</span> —
+                        <i
+                          >the Motir GitHub App is missing
+                          <span class="dvb-mono">contents: write</span> on moooon/motir-ai</i
+                        >.</span
+                      >
+                      <span class="ej-sub rq-why"
+                        >Change the setting, then <b>Retry merge</b> on the pull request — or
+                        <b>Approve and merge</b> below. Either press is the new approval and merges
+                        the same commits. <span class="dvb-mono">motir fix</span> is not offered:
+                        there is no code for an agent to change.</span
+                      >
+                    </span>
+                  </div>
+                  <div class="af-foot">
+                    <span class="af-why"
+                      >Approving merges <b>moooon/motir-ai · #88</b> into <b>main</b> once the
+                      setting allows it, then moves <b>ACME-12</b> to Approved.</span
+                    ><span class="af-verbs"
+                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="panel-note">
+            <b>BLOCKED BY A SETTING</b> — queue <span class="mono">BRANCH_PROTECTIONS</span>, host
+            <span class="mono">branch_protected</span> and
+            <span class="mono">app_permission_missing</span> (point 2). A person can change the
+            setting and the same commits then land, so the question IS asked: In Review, ONE fresh
+            awaiting gate, and the surface <b>NAMES the setting</b> rather than saying only that the
+            merge failed — a branch-protection rule by its GitHub name, or the missing App
+            permission by its scope. The verb is <b>Retry merge</b>, not <i>Queue again</i>, because
+            the queue is not what refused; pressing it decides this gate and merges (point 4).
+            <b>No <span class="mono">motir fix</span></b
+            >: it refuses this class by name, since an agent has nothing to change (point 6).
+          </p>
+        </div>
+        <div class="dvb-col">
+          <div class="panel-label">Panel 4 · BLOCKED BY A SETTING · <b>dark</b></div>
+          <div class="panel" data-theme="dark" data-appearance-scope>
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>In Review</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body af-host">
+                <div class="af-frame">
+                  <div class="af-head">
+                    <div class="af-what">
+                      <span class="af-kind">Pull requests</span
+                      ><span class="af-meta"
+                        >Asked again after the merge queue · 2 pull requests</span
+                      >
+                    </div>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
+                  </div>
+                  <div
+                    class="af-port dvb-in-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Rate-limit the public API per key</div>
+                        <div class="pr-meta">moooon/motir-core · #131</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Honour Retry-After in the planner client</div>
+                        <div class="pr-meta">moooon/motir-ai · #88</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-peach"
+                          ><svg aria-hidden="true"><use href="#i-shield" /></svg>Blocked by a
+                          setting</span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Retry merge
+                        </button></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
+                      <div class="dvb-htt-head">
+                        <h4 class="dvb-htt-title">How to test</h4>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                        >
+                      </div>
+                      <p class="dvb-abbrev">
+                        The body, each repository's facts and earlier runs, as Panel 12b draws them
+                        — unchanged, and abbreviated on this sheet.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="af-record">
+                    <span
+                      >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                      merged</span
+                    >
+                    <span class="ej-exit">
+                      <span class="ej-line"
+                        ><svg aria-hidden="true"><use href="#i-shield" /></svg
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> left the merge queue:
+                          <b>branch protection on <span class="dvb-mono">main</span></b> blocked the
+                          merge.</span
+                        ></span
+                      >
+                      <span class="ej-sub"
+                        >The rule that blocked it: <b>Require review from Code Owners</b> — no code
+                        owner has approved this pull request.</span
+                      >
+                      <span class="ej-sub"
+                        >Where the host refuses a press instead, the setting is named the same way:
+                        <span class="dvb-mono">branch_protected</span>, or
+                        <span class="dvb-mono">app_permission_missing</span> —
+                        <i
+                          >the Motir GitHub App is missing
+                          <span class="dvb-mono">contents: write</span> on moooon/motir-ai</i
+                        >.</span
+                      >
+                      <span class="ej-sub rq-why"
+                        >Change the setting, then <b>Retry merge</b> on the pull request — or
+                        <b>Approve and merge</b> below. Either press is the new approval and merges
+                        the same commits. <span class="dvb-mono">motir fix</span> is not offered:
+                        there is no code for an agent to change.</span
+                      >
+                    </span>
+                  </div>
+                  <div class="af-foot">
+                    <span class="af-why"
+                      >Approving merges <b>moooon/motir-ai · #88</b> into <b>main</b> once the
+                      setting allows it, then moves <b>ACME-12</b> to Approved.</span
+                    ><span class="af-verbs"
+                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-board">
+      <div class="amr-state">
+        <div class="dvb-col">
+          <div class="panel-label">
+            Panel 5a · A HOST REFUSAL <b>AT THE PRESS</b> — the refusal inline on the row, the gate
+            still awaiting
+          </div>
+          <div class="panel">
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>In Review</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body af-host">
+                <div class="af-frame">
+                  <div class="af-head">
+                    <div class="af-what">
+                      <span class="af-kind">Pull requests</span
+                      ><span class="af-meta"
+                        >Asked again after the merge queue · 2 pull requests</span
+                      >
+                    </div>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
+                  </div>
+                  <div
+                    class="af-port dvb-in-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Rate-limit the public API per key</div>
+                        <div class="pr-meta">moooon/motir-core · #131</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Honour Retry-After in the planner client</div>
+                        <div class="pr-meta">moooon/motir-ai · #88</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-rose"
+                          ><svg aria-hidden="true"><use href="#i-x" /></svg>Merge refused</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
+                      <div class="dvb-htt-head">
+                        <h4 class="dvb-htt-title">How to test</h4>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                        >
+                      </div>
+                      <p class="dvb-abbrev">
+                        The body, each repository's facts and earlier runs, as Panel 12b draws them
+                        — unchanged, and abbreviated on this sheet.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="af-alert" role="alert">
+                    <svg aria-hidden="true"><use href="#i-alert" /></svg
+                    ><span class="af-alert-body"
+                      ><b>GitHub would not merge this pull request.</b
+                      ><span class="af-slot"
+                        ><span class="af-slot-label"
+                          >refusal copy · MergeRefusalCode:
+                          <span class="dvb-mono">conflict</span></span
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> conflicts with
+                          <span class="dvb-mono">main</span>, so nothing was merged. Your approval
+                          was spent on this attempt and no decision was written on this gate.</span
+                        ></span
+                      ><span class="af-alert-next"
+                        >Reload to see what Motir is asking now — the refusal has been recorded
+                        against this pull request.</span
+                      ></span
+                    >
+                  </div>
+                  <div class="af-record">
+                    <span
+                      >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                      merged</span
+                    >
+                    <span class="ej-exit">
+                      <span class="ej-line"
+                        ><svg class="ej-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> was refused by GitHub at 10:12 today, at
+                          this head.</span
+                        ></span
+                      >
+                      <span class="ej-sub rq-why"
+                        >The refusal is recorded, not only shown: a reload lands this card in the
+                        state its reason class decides.</span
+                      >
+                    </span>
+                  </div>
+                  <div class="af-foot">
+                    <span class="af-why"
+                      >Approving merges <b>moooon/motir-ai · #88</b> into <b>main</b>, then moves
+                      <b>ACME-12</b> to Approved.</span
+                    ><span class="af-verbs"
+                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="panel-note">
+            <b>Before</b> — the moment after pressing <b>Approve and merge</b> (or
+            <i>Retry merge</i> on the row; the same service path). The merge transaction rolled
+            back, so no decision is written on the gate and the frame still awaits — § 8's rule,
+            unchanged by point 8. What IS new is that the refusal is now <b>recorded</b> on the pull
+            request rather than living only in the press's HTTP response (point 5): before this, a
+            reload showed a card reading <b>Approved</b> with nothing anywhere saying the merge had
+            been refused or why. The refusal rides the shipped inline alert, with the host's
+            <span class="mono">MergeRefusalCode</span> in the slot label.
+          </p>
+        </div>
+        <div class="dvb-col">
+          <div class="panel-label">Panel 5a · A HOST REFUSAL <b>AT THE PRESS</b> · <b>dark</b></div>
+          <div class="panel" data-theme="dark" data-appearance-scope>
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>In Review</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body af-host">
+                <div class="af-frame">
+                  <div class="af-head">
+                    <div class="af-what">
+                      <span class="af-kind">Pull requests</span
+                      ><span class="af-meta"
+                        >Asked again after the merge queue · 2 pull requests</span
+                      >
+                    </div>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
+                  </div>
+                  <div
+                    class="af-port dvb-in-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Rate-limit the public API per key</div>
+                        <div class="pr-meta">moooon/motir-core · #131</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Honour Retry-After in the planner client</div>
+                        <div class="pr-meta">moooon/motir-ai · #88</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-rose"
+                          ><svg aria-hidden="true"><use href="#i-x" /></svg>Merge refused</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
+                      <div class="dvb-htt-head">
+                        <h4 class="dvb-htt-title">How to test</h4>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                        >
+                      </div>
+                      <p class="dvb-abbrev">
+                        The body, each repository's facts and earlier runs, as Panel 12b draws them
+                        — unchanged, and abbreviated on this sheet.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="af-alert" role="alert">
+                    <svg aria-hidden="true"><use href="#i-alert" /></svg
+                    ><span class="af-alert-body"
+                      ><b>GitHub would not merge this pull request.</b
+                      ><span class="af-slot"
+                        ><span class="af-slot-label"
+                          >refusal copy · MergeRefusalCode:
+                          <span class="dvb-mono">conflict</span></span
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> conflicts with
+                          <span class="dvb-mono">main</span>, so nothing was merged. Your approval
+                          was spent on this attempt and no decision was written on this gate.</span
+                        ></span
+                      ><span class="af-alert-next"
+                        >Reload to see what Motir is asking now — the refusal has been recorded
+                        against this pull request.</span
+                      ></span
+                    >
+                  </div>
+                  <div class="af-record">
+                    <span
+                      >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                      merged</span
+                    >
+                    <span class="ej-exit">
+                      <span class="ej-line"
+                        ><svg class="ej-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> was refused by GitHub at 10:12 today, at
+                          this head.</span
+                        ></span
+                      >
+                      <span class="ej-sub rq-why"
+                        >The refusal is recorded, not only shown: a reload lands this card in the
+                        state its reason class decides.</span
+                      >
+                    </span>
+                  </div>
+                  <div class="af-foot">
+                    <span class="af-why"
+                      >Approving merges <b>moooon/motir-ai · #88</b> into <b>main</b>, then moves
+                      <b>ACME-12</b> to Approved.</span
+                    ><span class="af-verbs"
+                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="amr-state">
+        <div class="dvb-col">
+          <div class="panel-label">
+            Panel 5b · <b>the same card after a reload</b> — classed by its reason;
+            <span class="mono">conflict</span> lands in panel 3's state
+          </div>
+          <div class="panel">
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>Implemented</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body">
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Rate-limit the public API per key</div>
+                    <div class="pr-meta">moooon/motir-core · #131</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="pill pill-mint"
+                      ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Honour Retry-After in the planner client</div>
+                    <div class="pr-meta">moooon/motir-ai · #88</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="pill pill-sky"
+                      ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                    ><span class="pill pill-rose"
+                      ><svg aria-hidden="true"><use href="#i-circle-slash" /></svg>Cannot be
+                      merged</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <p class="dvb-caption">
+                  Link with + Link pull request here, or with
+                  <span class="dvb-mono">link_pull_request</span> over the MCP.
+                </p>
+                <div class="ej-part">
+                  <span class="ej-line"
+                    ><svg class="ej-ic-danger" aria-hidden="true">
+                      <use href="#i-circle-slash" /></svg
+                    ><span
+                      >GitHub refused the merge: <b>moooon/motir-ai · #88</b> conflicts with
+                      <span class="dvb-mono">main</span>.</span
+                    ></span
+                  >
+                  <span class="ej-sub"
+                    >Refused at 10:12 today, at this head. The approval it spent is recorded against
+                    that attempt.</span
+                  >
+                  <span class="ej-sub"
+                    >The same commits cannot land however many times anyone says yes, so Motir is
+                    not asking again. <b>ACME-12</b> is held at Implemented.</span
+                  >
+                </div>
+                <div class="fx-part" role="group" aria-label="Fix the checks">
+                  <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
+                  <p class="fx-line">
+                    <svg class="fx-ic-danger" aria-hidden="true"><use href="#i-circle-slash" /></svg
+                    ><span
+                      ><b>moooon/motir-ai · #88</b> conflicts with
+                      <span class="dvb-mono">main</span> and cannot be merged.</span
+                    >
+                  </p>
+                  <p class="fx-note">Hand the repair to an agent from your terminal:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">shell</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>motir fix ACME-12</pre>
+                  </div>
+                  <p class="fx-note">
+                    An agent rebases or resolves on the pull request's own branch, pushes, and the
+                    checks run again.
+                  </p>
+                  <p class="fx-note">
+                    There is nothing to approve here. A push moves the head, and the next green
+                    raises the merge gate once, over the new commits.
+                  </p>
+                </div>
+                <div class="dvb-htt" role="group" aria-label="How to test">
+                  <div class="dvb-htt-head">
+                    <h4 class="dvb-htt-title">How to test</h4>
+                    <span class="dvb-htt-by"
+                      >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                    >
+                  </div>
+                  <p class="dvb-abbrev">
+                    The body, each repository's facts and earlier runs, as Panel 12b draws them —
+                    unchanged, and abbreviated on this sheet.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="panel-note">
+            <b>After the reload</b> — the recorded refusal is classed, and the card lands where its
+            class says (point 2). <span class="mono">conflict</span> is CAN'T LAND, so this is panel
+            3's state exactly: rail <b>Implemented</b>, no gate, no verb,
+            <span class="mono">motir fix</span> alone. A
+            <span class="mono">branch_protected</span> or
+            <span class="mono">app_permission_missing</span> refusal lands in <b>panel 4's</b> state
+            instead — In Review, one fresh gate, the setting named, <i>Retry merge</i>. An
+            <span class="mono">already_merged</span> refusal is LANDED: the pull request is merged,
+            so nothing is asked and nothing is offered. This is the only panel drawn as a before and
+            an after, because the press and the reload are two different surfaces for one event.
+          </p>
+        </div>
+        <div class="dvb-col">
+          <div class="panel-label">
+            Panel 5b · <b>the same card after a reload</b> · <b>dark</b>
+          </div>
+          <div class="panel" data-theme="dark" data-appearance-scope>
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>Implemented</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body">
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Rate-limit the public API per key</div>
+                    <div class="pr-meta">moooon/motir-core · #131</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="pill pill-mint"
+                      ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Honour Retry-After in the planner client</div>
+                    <div class="pr-meta">moooon/motir-ai · #88</div>
+                  </div>
+                  <span class="pr-states"
+                    ><span class="pill pill-sky"
+                      ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                    ><span class="pill pill-rose"
+                      ><svg aria-hidden="true"><use href="#i-circle-slash" /></svg>Cannot be
+                      merged</span
+                    ></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <p class="dvb-caption">
+                  Link with + Link pull request here, or with
+                  <span class="dvb-mono">link_pull_request</span> over the MCP.
+                </p>
+                <div class="ej-part">
+                  <span class="ej-line"
+                    ><svg class="ej-ic-danger" aria-hidden="true">
+                      <use href="#i-circle-slash" /></svg
+                    ><span
+                      >GitHub refused the merge: <b>moooon/motir-ai · #88</b> conflicts with
+                      <span class="dvb-mono">main</span>.</span
+                    ></span
+                  >
+                  <span class="ej-sub"
+                    >Refused at 10:12 today, at this head. The approval it spent is recorded against
+                    that attempt.</span
+                  >
+                  <span class="ej-sub"
+                    >The same commits cannot land however many times anyone says yes, so Motir is
+                    not asking again. <b>ACME-12</b> is held at Implemented.</span
+                  >
+                </div>
+                <div class="fx-part" role="group" aria-label="Fix the checks">
+                  <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
+                  <p class="fx-line">
+                    <svg class="fx-ic-danger" aria-hidden="true"><use href="#i-circle-slash" /></svg
+                    ><span
+                      ><b>moooon/motir-ai · #88</b> conflicts with
+                      <span class="dvb-mono">main</span> and cannot be merged.</span
+                    >
+                  </p>
+                  <p class="fx-note">Hand the repair to an agent from your terminal:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">shell</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>motir fix ACME-12</pre>
+                  </div>
+                  <p class="fx-note">
+                    An agent rebases or resolves on the pull request's own branch, pushes, and the
+                    checks run again.
+                  </p>
+                  <p class="fx-note">
+                    There is nothing to approve here. A push moves the head, and the next green
+                    raises the merge gate once, over the new commits.
+                  </p>
+                </div>
+                <div class="dvb-htt" role="group" aria-label="How to test">
+                  <div class="dvb-htt-head">
+                    <h4 class="dvb-htt-title">How to test</h4>
+                    <span class="dvb-htt-by"
+                      >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                    >
+                  </div>
+                  <p class="dvb-abbrev">
+                    The body, each repository's facts and earlier runs, as Panel 12b draws them —
+                    unchanged, and abbreviated on this sheet.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-board">
+      <div class="amr-state">
+        <div class="dvb-col">
+          <div class="panel-label">
+            Panel 6 · the <b>DESIGN card</b> in the RETRYABLE state — the design result stays
+            DECIDED; only the merge is asked again
           </div>
           <div class="panel">
             <div class="card-body" style="padding-bottom: 0">
@@ -11331,10 +12825,12 @@
                       <span class="pill pill-mint"
                         ><svg aria-hidden="true"><use href="#i-check" /></svg>Design approved</span
                       >
-                      <span><b>Retry-After banner</b> · v2</span>
                       <span class="rq-design-sub"
-                        >Decided by Ada L. · 15 Sep 2026, 14:22 — not asked again</span
-                      >
+                        >Decided by <b>Ada L.</b> · 15 Sep 2026, 14:22 ·
+                        <a class="ej-check" href="#"
+                          >Open the design result<svg aria-hidden="true">
+                            <use href="#i-external" /></svg></a
+                      ></span>
                     </div>
                     <div class="pr-row">
                       <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
@@ -11362,12 +12858,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="fx-part" role="group" aria-label="Fix the checks">
                       <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                       <p class="fx-line">
@@ -11389,9 +12891,9 @@
                         again.
                       </p>
                       <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
+                        Nothing changed on your side? <b>Queue again</b> approves these same commits
+                        once more and puts them back in the merge queue. If the failing check points
+                        at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                       </p>
                     </div>
                     <div class="dvb-htt" role="group" aria-label="How to test">
@@ -11426,8 +12928,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -11448,15 +12952,19 @@
             </div>
           </div>
           <p class="panel-note">
-            The design was never the problem, so it is not re-asked (point 2): its result reads
-            <b>Design approved</b>, decided, with no verbs — MOTIR-5667's treatment of a merge gate
-            re-opened beside a decided design. Band 1 is the MERGE gate's kind label,
-            <i>Pull requests</i>, because only the merge awaits. This holds also where the ejected
-            merge had been carried by the design approval's one press (MOTIR-5664).
+            The design was never the problem, so it is <b>not</b> re-asked (point 3): its result
+            reads <b>Design approved</b>, decided, with no verbs — MOTIR-5667's treatment of a merge
+            gate re-opened beside a decided design. Band 1 is the MERGE gate's kind label,
+            <i>Pull requests</i>, because only the merge awaits. This holds also where the un-landed
+            merge had been carried by the design approval's one press (MOTIR-5664): the carry is
+            spent with the attempt, and what comes back is a merge gate alone. The row's
+            <b>Queue again</b> decides that merge gate and nothing else.
           </p>
         </div>
         <div class="dvb-col">
-          <div class="panel-label">Panel 2 · the same on a <b>DESIGN card</b> · <b>dark</b></div>
+          <div class="panel-label">
+            Panel 6 · the <b>DESIGN card</b> in the RETRYABLE state · <b>dark</b>
+          </div>
           <div class="panel" data-theme="dark" data-appearance-scope>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
@@ -11503,10 +13011,12 @@
                       <span class="pill pill-mint"
                         ><svg aria-hidden="true"><use href="#i-check" /></svg>Design approved</span
                       >
-                      <span><b>Retry-After banner</b> · v2</span>
                       <span class="rq-design-sub"
-                        >Decided by Ada L. · 15 Sep 2026, 14:22 — not asked again</span
-                      >
+                        >Decided by <b>Ada L.</b> · 15 Sep 2026, 14:22 ·
+                        <a class="ej-check" href="#"
+                          >Open the design result<svg aria-hidden="true">
+                            <use href="#i-external" /></svg></a
+                      ></span>
                     </div>
                     <div class="pr-row">
                       <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
@@ -11534,12 +13044,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="fx-part" role="group" aria-label="Fix the checks">
                       <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                       <p class="fx-line">
@@ -11561,9 +13077,9 @@
                         again.
                       </p>
                       <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
+                        Nothing changed on your side? <b>Queue again</b> approves these same commits
+                        once more and puts them back in the merge queue. If the failing check points
+                        at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                       </p>
                     </div>
                     <div class="dvb-htt" role="group" aria-label="How to test">
@@ -11598,8 +13114,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -11624,9 +13142,9 @@
     </div>
     <section class="ov-group">
       <div class="panel-label">
-        Panel 3 · the <b>approval overlay</b>, opened from <b>To approve</b> — the ACCESS PATH
-        first, then panel 1's content inside the overlay,
-        <span class="mono">motir fix</span> included
+        Panel 7 · the <b>approval overlay</b>, opened from <b>To approve</b> — the ACCESS PATH
+        first, then panel 1's content inside the overlay (<span class="mono">motir fix</span>
+        included), then panel 4's SETTING state in the same box
       </div>
       <div class="vp-wrap">
         <div class="bar">Workbench → To approve · the row that opens the overlay</div>
@@ -11647,11 +13165,14 @@
         </div>
       </div>
       <p class="rq-board-note">
-        The re-asked gate is an <b>awaiting</b> gate, so the card is back in <i>To approve</i> (§ 22
-        said an ejected card was NOT, because its gate stayed decided — superseded here). The row is
-        the shipped ONE-gate row, unchanged: kind <i>Pull requests</i>, the whole set as its
-        subject, <b>Review</b> opens the overlay.
+        A RETRYABLE or SETTING outcome raises an <b>awaiting</b> gate, so the card is back in
+        <i>To approve</i> (§ 22 said an ejected card was NOT, because its gate stayed decided —
+        superseded here). The row is the shipped ONE-gate row, unchanged: kind <i>Pull requests</i>,
+        the whole set as its subject, <b>Review</b> opens the overlay.
+        <b>A CAN'T-LAND card has no row here at all</b> — it raises no gate, so there is nothing to
+        approve and nothing to list (point 3).
       </p>
+      <div class="panel-label">Panel 7a · the RETRYABLE state in the overlay · <b>light</b></div>
       <div class="ov-vp-wrap" style="width: 1136px">
         <div class="ov-bar">
           viewport 1136 × 720 · Modal size="full" · ApprovalGateControl layout="fill"
@@ -11719,12 +13240,18 @@
                         ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                       ><span class="pill pill-rose"
                         ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                      ></span
+                      ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                        Queue again
+                      </button></span
                     >
                     <a class="ext" href="#" aria-label="Open on GitHub"
                       ><svg aria-hidden="true"><use href="#i-external" /></svg
                     ></a>
                   </div>
+                  <p class="dvb-caption">
+                    Link with + Link pull request here, or with
+                    <span class="dvb-mono">link_pull_request</span> over the MCP.
+                  </p>
                   <div class="fx-part" role="group" aria-label="Fix the checks">
                     <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                     <p class="fx-line">
@@ -11746,9 +13273,9 @@
                       again.
                     </p>
                     <p class="fx-note">
-                      Nothing changed on your side? <b>Approve</b> puts the same commits back in the
-                      merge queue. If the failing check points at real code,
-                      <span class="dvb-mono">motir fix</span> hands it to an agent.
+                      Nothing changed on your side? <b>Queue again</b> approves these same commits
+                      once more and puts them back in the merge queue. If the failing check points
+                      at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                     </p>
                   </div>
                   <div class="dvb-htt" role="group" aria-label="How to test">
@@ -11783,8 +13310,10 @@
                         >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                     ></span>
                     <span class="ej-sub rq-why"
-                      >These commits did not land, so Motir is asking you again. <b>Approve</b> puts
-                      them back in the merge queue.</span
+                      >These commits did not land, so that approval is spent and Motir is asking you
+                      again. <b>Queue again</b> on the pull request — or
+                      <b>Approve and merge</b> below — is the new approval, and puts them back in
+                      the merge queue.</span
                     >
                   </span>
                 </div>
@@ -11808,11 +13337,13 @@
       <p class="panel-note">
         Band 2 is the item page's Development block (<span class="mono">DevelopmentSectionBody</span
         >) at the overlay's <span class="mono">fill</span> box — the SAME rows, exit, fix part and
-        How to test as panel 1, not a second layout. What is new is that the overlay passes the fix
-        part through: today it composes the block WITHOUT <span class="mono">motir fix</span>, so a
-        person deciding here saw the failure and one button that re-queues. Built by MOTIR-5806.
+        How to test as panel 1, not a second layout, and the row's <b>Queue again</b> decides the
+        gate from here too. What is new is that the overlay passes the fix part through: today it
+        composes the block WITHOUT <span class="mono">motir fix</span>, so a person deciding here
+        saw the failure and one button. Point 6 requires it wherever the re-asked gate is decided.
+        Built by MOTIR-5806.
       </p>
-      <div class="panel-label">Panel 3 · <b>dark</b></div>
+      <div class="panel-label">Panel 7a · <b>dark</b></div>
       <div class="panel ov-dark-stage" data-theme="dark" data-appearance-scope>
         <div class="ov-vp-wrap" style="width: 1136px">
           <div class="ov-bar">
@@ -11881,12 +13412,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="fx-part" role="group" aria-label="Fix the checks">
                       <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                       <p class="fx-line">
@@ -11908,9 +13445,9 @@
                         again.
                       </p>
                       <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
+                        Nothing changed on your side? <b>Queue again</b> approves these same commits
+                        once more and puts them back in the merge queue. If the failing check points
+                        at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                       </p>
                     </div>
                     <div class="dvb-htt" role="group" aria-label="How to test">
@@ -11945,8 +13482,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -11968,13 +13507,313 @@
           </div>
         </div>
       </div>
+      <div class="panel-label">
+        Panel 7b · the <b>SETTING</b> state in the overlay · <b>light</b>
+      </div>
+      <div class="ov-vp-wrap" style="width: 1136px">
+        <div class="ov-bar">
+          viewport 1136 × 720 · Modal size="full" · ApprovalGateControl layout="fill"
+        </div>
+        <div class="ov-vp" style="height: 720px">
+          <div role="dialog" aria-modal="true" class="ov-dialog">
+            <div class="ov-exit">
+              <button type="button" class="ov-exit-btn">
+                <svg class="ov-ic" aria-hidden="true"><use href="#i-x-plain" /></svg>Close<kbd
+                  class="ov-kbd"
+                  >Esc</kbd
+                >
+              </button>
+              <span class="ov-item"
+                ><span class="ov-key">ACME-12</span
+                ><span class="ov-title">Throttle the public API end to end</span></span
+              >
+              <a href="/items/ACME-12" class="ov-exit-btn ov-open"
+                >Open work item<svg class="ov-ic" aria-hidden="true">
+                  <use href="#i-arrow-up-right" /></svg
+              ></a>
+            </div>
+            <div class="ov-body">
+              <div class="af-frame ov-fill">
+                <div class="af-head">
+                  <div class="af-what">
+                    <span class="af-kind">Pull requests</span
+                    ><span class="af-meta"
+                      >Asked again after the merge queue · 2 pull requests</span
+                    >
+                  </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port ov-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Rate-limit the public API per key</div>
+                      <div class="pr-meta">moooon/motir-core · #131</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Honour Retry-After in the planner client</div>
+                      <div class="pr-meta">moooon/motir-ai · #88</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-peach"
+                        ><svg aria-hidden="true"><use href="#i-shield" /></svg>Blocked by a
+                        setting</span
+                      ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                        Retry merge
+                      </button></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                  <p class="dvb-caption">
+                    Link with + Link pull request here, or with
+                    <span class="dvb-mono">link_pull_request</span> over the MCP.
+                  </p>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The body, each repository's facts and earlier runs, as Panel 12b draws them —
+                      unchanged, and abbreviated on this sheet.
+                    </p>
+                  </div>
+                </div>
+                <div class="af-record">
+                  <span
+                    >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                    merged</span
+                  >
+                  <span class="ej-exit">
+                    <span class="ej-line"
+                      ><svg aria-hidden="true"><use href="#i-shield" /></svg
+                      ><span
+                        ><b>moooon/motir-ai · #88</b> left the merge queue:
+                        <b>branch protection on <span class="dvb-mono">main</span></b> blocked the
+                        merge.</span
+                      ></span
+                    >
+                    <span class="ej-sub"
+                      >The rule that blocked it: <b>Require review from Code Owners</b> — no code
+                      owner has approved this pull request.</span
+                    >
+                    <span class="ej-sub"
+                      >Where the host refuses a press instead, the setting is named the same way:
+                      <span class="dvb-mono">branch_protected</span>, or
+                      <span class="dvb-mono">app_permission_missing</span> —
+                      <i
+                        >the Motir GitHub App is missing
+                        <span class="dvb-mono">contents: write</span> on moooon/motir-ai</i
+                      >.</span
+                    >
+                    <span class="ej-sub rq-why"
+                      >Change the setting, then <b>Retry merge</b> on the pull request — or
+                      <b>Approve and merge</b> below. Either press is the new approval and merges
+                      the same commits. <span class="dvb-mono">motir fix</span> is not offered:
+                      there is no code for an agent to change.</span
+                    >
+                  </span>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Approving merges <b>moooon/motir-ai · #88</b> into <b>main</b> once the setting
+                    allows it, then moves <b>ACME-12</b> to Approved.</span
+                  ><span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button class="af-btn af-btn-primary" type="button">
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        The same box for BLOCKED BY A SETTING: the row carries <b>Retry merge</b>, the record band
+        names the branch-protection rule and the App-permission alternative, and there is
+        <b>no fix part</b> — the overlay's pass-through is conditional on the class, exactly as the
+        page's is (point 6). The overlay never offers a verb the page would not.
+      </p>
+      <div class="panel-label">Panel 7b · <b>dark</b></div>
+      <div class="panel ov-dark-stage" data-theme="dark" data-appearance-scope>
+        <div class="ov-vp-wrap" style="width: 1136px">
+          <div class="ov-bar">
+            viewport 1136 × 720 · Modal size="full" · ApprovalGateControl layout="fill"
+          </div>
+          <div class="ov-vp" style="height: 720px">
+            <div role="dialog" aria-modal="true" class="ov-dialog">
+              <div class="ov-exit">
+                <button type="button" class="ov-exit-btn">
+                  <svg class="ov-ic" aria-hidden="true"><use href="#i-x-plain" /></svg>Close<kbd
+                    class="ov-kbd"
+                    >Esc</kbd
+                  >
+                </button>
+                <span class="ov-item"
+                  ><span class="ov-key">ACME-12</span
+                  ><span class="ov-title">Throttle the public API end to end</span></span
+                >
+                <a href="/items/ACME-12" class="ov-exit-btn ov-open"
+                  >Open work item<svg class="ov-ic" aria-hidden="true">
+                    <use href="#i-arrow-up-right" /></svg
+                ></a>
+              </div>
+              <div class="ov-body">
+                <div class="af-frame ov-fill">
+                  <div class="af-head">
+                    <div class="af-what">
+                      <span class="af-kind">Pull requests</span
+                      ><span class="af-meta"
+                        >Asked again after the merge queue · 2 pull requests</span
+                      >
+                    </div>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
+                  </div>
+                  <div
+                    class="af-port dvb-in-port ov-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Rate-limit the public API per key</div>
+                        <div class="pr-meta">moooon/motir-core · #131</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Honour Retry-After in the planner client</div>
+                        <div class="pr-meta">moooon/motir-ai · #88</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-peach"
+                          ><svg aria-hidden="true"><use href="#i-shield" /></svg>Blocked by a
+                          setting</span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Retry merge
+                        </button></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
+                      <div class="dvb-htt-head">
+                        <h4 class="dvb-htt-title">How to test</h4>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                        >
+                      </div>
+                      <p class="dvb-abbrev">
+                        The body, each repository's facts and earlier runs, as Panel 12b draws them
+                        — unchanged, and abbreviated on this sheet.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="af-record">
+                    <span
+                      >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                      merged</span
+                    >
+                    <span class="ej-exit">
+                      <span class="ej-line"
+                        ><svg aria-hidden="true"><use href="#i-shield" /></svg
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> left the merge queue:
+                          <b>branch protection on <span class="dvb-mono">main</span></b> blocked the
+                          merge.</span
+                        ></span
+                      >
+                      <span class="ej-sub"
+                        >The rule that blocked it: <b>Require review from Code Owners</b> — no code
+                        owner has approved this pull request.</span
+                      >
+                      <span class="ej-sub"
+                        >Where the host refuses a press instead, the setting is named the same way:
+                        <span class="dvb-mono">branch_protected</span>, or
+                        <span class="dvb-mono">app_permission_missing</span> —
+                        <i
+                          >the Motir GitHub App is missing
+                          <span class="dvb-mono">contents: write</span> on moooon/motir-ai</i
+                        >.</span
+                      >
+                      <span class="ej-sub rq-why"
+                        >Change the setting, then <b>Retry merge</b> on the pull request — or
+                        <b>Approve and merge</b> below. Either press is the new approval and merges
+                        the same commits. <span class="dvb-mono">motir fix</span> is not offered:
+                        there is no code for an agent to change.</span
+                      >
+                    </span>
+                  </div>
+                  <div class="af-foot">
+                    <span class="af-why"
+                      >Approving merges <b>moooon/motir-ai · #88</b> into <b>main</b> once the
+                      setting allows it, then moves <b>ACME-12</b> to Approved.</span
+                    ><span class="af-verbs"
+                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
     <div class="panel-board">
       <div class="amr-state">
         <div class="dvb-col">
           <div class="panel-label">
-            Panel 4a · <b>confirm</b> — the approve verb's confirm step says approving puts the pull
-            request back in the merge queue
+            Panel 8a · <b>confirm</b> — the same band whether it is opened by <b>Queue again</b> on
+            the row or by <b>Approve and merge</b>
           </div>
           <div class="panel">
             <div class="card-body" style="padding-bottom: 0">
@@ -12044,12 +13883,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="fx-part" role="group" aria-label="Fix the checks">
                       <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                       <p class="fx-line">
@@ -12071,9 +13916,9 @@
                         again.
                       </p>
                       <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
+                        Nothing changed on your side? <b>Queue again</b> approves these same commits
+                        once more and puts them back in the merge queue. If the failing check points
+                        at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                       </p>
                     </div>
                     <div class="dvb-htt" role="group" aria-label="How to test">
@@ -12108,8 +13953,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -12117,7 +13964,10 @@
                     <div>
                       <strong>Approving this will:</strong>
                       <ul>
-                        <li>record that you approved these 2 commits again, with the time;</li>
+                        <li>
+                          record that you approved these 2 commits again, with the time — a new
+                          approval, not the spent one;
+                        </li>
                         <li>
                           add <b>moooon/motir-ai · #88</b> back to its repository's merge queue,
                           which merges it when the queue's checks pass;
@@ -12140,12 +13990,14 @@
           </div>
           <p class="panel-note">
             An inline band over the verbs, state C of
-            <span class="mono">approval-control.mock.html</span>, worded for a RE-QUEUE: the
-            consequence names the queue, and the card's move to Approved.
+            <span class="mono">approval-control.mock.html</span>, worded for a RE-QUEUE.
+            <b>Queue again on the row opens this same band</b> — it is one confirm for one approval,
+            wherever it is pressed (point 4), and its first line says so in as many words: a new
+            approval, not the spent one.
           </p>
         </div>
         <div class="dvb-col">
-          <div class="panel-label">Panel 4a · <b>confirm</b> · <b>dark</b></div>
+          <div class="panel-label">Panel 8a · <b>confirm</b> · <b>dark</b></div>
           <div class="panel" data-theme="dark" data-appearance-scope>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
@@ -12214,12 +14066,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="fx-part" role="group" aria-label="Fix the checks">
                       <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                       <p class="fx-line">
@@ -12241,9 +14099,9 @@
                         again.
                       </p>
                       <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
+                        Nothing changed on your side? <b>Queue again</b> approves these same commits
+                        once more and puts them back in the merge queue. If the failing check points
+                        at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                       </p>
                     </div>
                     <div class="dvb-htt" role="group" aria-label="How to test">
@@ -12278,8 +14136,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -12287,7 +14147,10 @@
                     <div>
                       <strong>Approving this will:</strong>
                       <ul>
-                        <li>record that you approved these 2 commits again, with the time;</li>
+                        <li>
+                          record that you approved these 2 commits again, with the time — a new
+                          approval, not the spent one;
+                        </li>
                         <li>
                           add <b>moooon/motir-ai · #88</b> back to its repository's merge queue,
                           which merges it when the queue's checks pass;
@@ -12315,8 +14178,8 @@
       <div class="amr-state">
         <div class="dvb-col">
           <div class="panel-label">
-            Panel 4b · <b>pending</b> — the press in flight: verbs disabled, the progress line in
-            band 3
+            Panel 8b · <b>pending</b> — the press in flight: every verb disabled, the row's
+            <b>Queue again</b> with them
           </div>
           <div class="panel">
             <div class="card-body" style="padding-bottom: 0">
@@ -12386,12 +14249,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button" disabled>
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="fx-part" role="group" aria-label="Fix the checks">
                       <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                       <p class="fx-line">
@@ -12413,9 +14282,9 @@
                         again.
                       </p>
                       <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
+                        Nothing changed on your side? <b>Queue again</b> approves these same commits
+                        once more and puts them back in the merge queue. If the failing check points
+                        at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                       </p>
                     </div>
                     <div class="dvb-htt" role="group" aria-label="How to test">
@@ -12450,8 +14319,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -12471,12 +14342,13 @@
             </div>
           </div>
           <p class="panel-note">
-            The shipped pending treatment (<span class="mono">disabled:opacity-50</span>); nothing
-            new.
+            The shipped pending treatment (<span class="mono">disabled:opacity-50</span>), widened
+            to the row verb: one approval is in flight, so neither door may start a second (point
+            1).
           </p>
         </div>
         <div class="dvb-col">
-          <div class="panel-label">Panel 4b · <b>pending</b> · <b>dark</b></div>
+          <div class="panel-label">Panel 8b · <b>pending</b> · <b>dark</b></div>
           <div class="panel" data-theme="dark" data-appearance-scope>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
@@ -12545,12 +14417,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button" disabled>
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="fx-part" role="group" aria-label="Fix the checks">
                       <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
                       <p class="fx-line">
@@ -12572,9 +14450,9 @@
                         again.
                       </p>
                       <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
+                        Nothing changed on your side? <b>Queue again</b> approves these same commits
+                        once more and puts them back in the merge queue. If the failing check points
+                        at real code, <span class="dvb-mono">motir fix</span> hands it to an agent.
                       </p>
                     </div>
                     <div class="dvb-htt" role="group" aria-label="How to test">
@@ -12609,8 +14487,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -12636,7 +14516,7 @@
       <div class="amr-state">
         <div class="dvb-col">
           <div class="panel-label">
-            Panel 4c · <b>done</b> — the row reads <b>Queued to merge</b> and the rail reads
+            Panel 8c · <b>done</b> — the row reads <b>Queued to merge</b> and the rail reads
             <b>Approved</b>
           </div>
           <div class="panel">
@@ -12712,6 +14592,10 @@
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="dvb-htt" role="group" aria-label="How to test">
                       <div class="dvb-htt-head">
                         <h4 class="dvb-htt-title">How to test</h4>
@@ -12738,12 +14622,15 @@
           </div>
           <p class="panel-note">
             The exit is re-queued (<span class="mono">requeuedAt</span>), so the row falls back to
-            its ordinary outcome, 12s (point 3). The fix part leaves with the failure. The earlier
-            approval stays in the gate history; band 1 is the NEW decision.
+            its ordinary outcome, 12s, and the fix part leaves with the failure. The card moves
+            <span class="mono">in_review → approved</span> under THIS gate's
+            <span class="mono">decidingGateId</span> (point 4) — the earlier approval stays in the
+            gate history untouched, and band 1 names the new decision. This new approval now
+            authorizes exactly one enqueue, and is spent if that one does not land.
           </p>
         </div>
         <div class="dvb-col">
-          <div class="panel-label">Panel 4c · <b>done</b> · <b>dark</b></div>
+          <div class="panel-label">Panel 8c · <b>done</b> · <b>dark</b></div>
           <div class="panel" data-theme="dark" data-appearance-scope>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
@@ -12817,6 +14704,10 @@
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="dvb-htt" role="group" aria-label="How to test">
                       <div class="dvb-htt-head">
                         <h4 class="dvb-htt-title">How to test</h4>
@@ -12848,8 +14739,8 @@
       <div class="amr-state">
         <div class="dvb-col">
           <div class="panel-label">
-            Panel 4d · a <b>stale-stamp refusal</b> in this context — the shipped MOTIR-5232
-            refusal, drawn once
+            Panel 8d · a <b>stale-stamp refusal</b> in this context — the set moved under the
+            reader; nothing was queued
           </div>
           <div class="panel">
             <div class="card-body" style="padding-bottom: 0">
@@ -12919,38 +14810,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
-                    <div class="fx-part" role="group" aria-label="Fix the checks">
-                      <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
-                      <p class="fx-line">
-                        <svg class="fx-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
-                        ><span><b>moooon/motir-ai · #88</b> left the merge queue.</span>
-                      </p>
-                      <p class="fx-note">Hand the repair to an agent from your terminal:</p>
-                      <div class="dvb-code">
-                        <div class="dvb-code-bar">
-                          <span class="dvb-code-lang">shell</span
-                          ><button class="dvb-copy" type="button" aria-label="Copy code">
-                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
-                          </button>
-                        </div>
-                        <pre>motir fix ACME-12</pre>
-                      </div>
-                      <p class="fx-note">
-                        An agent works on the pull request's own branch, pushes, and the checks run
-                        again.
-                      </p>
-                      <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
-                      </p>
-                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="dvb-htt" role="group" aria-label="How to test">
                       <div class="dvb-htt-head">
                         <h4 class="dvb-htt-title">How to test</h4>
@@ -12970,7 +14841,8 @@
                       ><b>What you were shown has changed.</b
                       ><span class="af-slot"
                         ><span class="af-slot-label"
-                          >refusal copy · MOTIR-5232 · shown: APPROVAL_GATE_STALE_SUBJECT</span
+                          >refusal copy · MOTIR-5232 · shown:
+                          <span class="dvb-mono">APPROVAL_GATE_STALE_SUBJECT</span></span
                         ><span
                           >The pull requests changed while you were reading. Nothing was
                           queued.</span
@@ -12999,8 +14871,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -13022,12 +14896,340 @@
           </div>
           <p class="panel-note">
             The press carried a stamp of what the reader was shown; the set moved under them, so the
-            door refused and nothing was queued. The gate still awaits.
+            door refused and nothing was queued. The gate still awaits, and nothing was spent —
+            <span class="mono">subject_changed</span> is not an outcome and writes no row (point 2's
+            last bullet).
+          </p>
+        </div>
+        <div class="dvb-col">
+          <div class="panel-label">Panel 8d · a <b>stale-stamp refusal</b> · <b>dark</b></div>
+          <div class="panel" data-theme="dark" data-appearance-scope>
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>In Review</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body af-host">
+                <div class="af-frame">
+                  <div class="af-head">
+                    <div class="af-what">
+                      <span class="af-kind">Pull requests</span
+                      ><span class="af-meta"
+                        >Asked again after the merge queue · 2 pull requests</span
+                      >
+                    </div>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
+                  </div>
+                  <div
+                    class="af-port dvb-in-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Rate-limit the public API per key</div>
+                        <div class="pr-meta">moooon/motir-core · #131</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Honour Retry-After in the planner client</div>
+                        <div class="pr-meta">moooon/motir-ai · #88</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-rose"
+                          ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
+                      <div class="dvb-htt-head">
+                        <h4 class="dvb-htt-title">How to test</h4>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                        >
+                      </div>
+                      <p class="dvb-abbrev">
+                        The body, each repository's facts and earlier runs, as Panel 12b draws them
+                        — unchanged, and abbreviated on this sheet.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="af-alert" role="alert">
+                    <svg aria-hidden="true"><use href="#i-alert" /></svg
+                    ><span class="af-alert-body"
+                      ><b>What you were shown has changed.</b
+                      ><span class="af-slot"
+                        ><span class="af-slot-label"
+                          >refusal copy · MOTIR-5232 · shown:
+                          <span class="dvb-mono">APPROVAL_GATE_STALE_SUBJECT</span></span
+                        ><span
+                          >The pull requests changed while you were reading. Nothing was
+                          queued.</span
+                        ></span
+                      ><span class="af-alert-next"
+                        >Reload to see what is being asked now, then decide again.</span
+                      ></span
+                    >
+                  </div>
+                  <div class="af-record">
+                    <span
+                      >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                      merged</span
+                    >
+                    <span class="ej-exit">
+                      <span class="ej-line"
+                        ><svg class="ej-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> left the merge queue: its checks failed in
+                          the merge queue.</span
+                        ></span
+                      >
+                      <span class="ej-sub"
+                        >Failing check:
+                        <a class="ej-check" href="#"
+                          >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                      ></span>
+                      <span class="ej-sub rq-why"
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
+                      >
+                    </span>
+                  </div>
+                  <div class="af-foot">
+                    <span class="af-why"
+                      >Approving puts <b>moooon/motir-ai · #88</b> back in its repository's merge
+                      queue, which merges it when the queue's checks pass, then moves
+                      <b>ACME-12</b> to Approved.</span
+                    ><span class="af-verbs"
+                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-board">
+      <div class="amr-state">
+        <div class="dvb-col">
+          <div class="panel-label">
+            Panel 8e · <b>Queue again with no awaiting gate</b> — a stale tab pressing it after the
+            gate was decided elsewhere
+          </div>
+          <div class="panel">
+            <div class="card-body" style="padding-bottom: 0">
+              <div class="dvb-cap">ACME-12</div>
+              <div class="detail-title">Throttle the public API end to end</div>
+              <div class="dvb-status">
+                Status
+                <span class="rq-rail"
+                  ><span class="pill pill-sky"
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>In Review</span
+                  ></span
+                >
+              </div>
+            </div>
+            <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+              <div class="card-head">
+                <div>
+                  <h3>Development</h3>
+                  <p class="hsub">Pull requests and how to test them · live PR and CI status</p>
+                </div>
+                <button class="link-cta">
+                  <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
+                </button>
+              </div>
+              <div class="card-body af-host">
+                <div class="af-frame">
+                  <div class="af-head">
+                    <div class="af-what">
+                      <span class="af-kind">Pull requests</span
+                      ><span class="af-meta"
+                        >Asked again after the merge queue · 2 pull requests</span
+                      >
+                    </div>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
+                  </div>
+                  <div
+                    class="af-port dvb-in-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Rate-limit the public API per key</div>
+                        <div class="pr-meta">moooon/motir-core · #131</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Honour Retry-After in the planner client</div>
+                        <div class="pr-meta">moooon/motir-ai · #88</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-rose"
+                          ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
+                      >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
+                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
+                      <div class="dvb-htt-head">
+                        <h4 class="dvb-htt-title">How to test</h4>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
+                        >
+                      </div>
+                      <p class="dvb-abbrev">
+                        The body, each repository's facts and earlier runs, as Panel 12b draws them
+                        — unchanged, and abbreviated on this sheet.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="af-alert" role="alert">
+                    <svg aria-hidden="true"><use href="#i-alert" /></svg
+                    ><span class="af-alert-body"
+                      ><b>This pull request needs a fresh approval.</b
+                      ><span class="af-slot"
+                        ><span class="af-slot-label"
+                          >refusal copy · shown:
+                          <span class="dvb-mono">MERGE_REQUEUE_NEEDS_APPROVAL</span></span
+                        ><span
+                          >The approval this tab was showing has already been answered, so
+                          <b>Queue again</b> had nothing to decide. Nothing was queued.</span
+                        ></span
+                      ><span class="af-alert-next"
+                        >Reload — someone has already answered this question.</span
+                      ></span
+                    >
+                  </div>
+                  <div class="af-record">
+                    <span
+                      >Approved earlier by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits — not
+                      merged</span
+                    >
+                    <span class="ej-exit">
+                      <span class="ej-line"
+                        ><svg class="ej-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
+                        ><span
+                          ><b>moooon/motir-ai · #88</b> left the merge queue: its checks failed in
+                          the merge queue.</span
+                        ></span
+                      >
+                      <span class="ej-sub"
+                        >Failing check:
+                        <a class="ej-check" href="#"
+                          >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                      ></span>
+                      <span class="ej-sub rq-why"
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
+                      >
+                    </span>
+                  </div>
+                  <div class="af-foot">
+                    <span class="af-why"
+                      >Approving puts <b>moooon/motir-ai · #88</b> back in its repository's merge
+                      queue, which merges it when the queue's checks pass, then moves
+                      <b>ACME-12</b> to Approved.</span
+                    ><span class="af-verbs"
+                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="panel-note">
+            The new state this cut adds. <i>Queue again</i> and <i>Retry merge</i> are approvals, so
+            with <b>no awaiting gate</b> they refuse by name —
+            <span class="mono">MERGE_REQUEUE_NEEDS_APPROVAL</span> — and press nothing (point 4).
+            This is what a stale tab hits when someone answered the gate in the overlay a moment
+            earlier: the row still draws the verb because this tab still believes the gate awaits,
+            and the door, not the button, is what holds the rule. Told apart from panel 8d by the
+            code: 8d's subject moved, 8e's gate is gone.
           </p>
         </div>
         <div class="dvb-col">
           <div class="panel-label">
-            Panel 4d · a <b>stale-stamp refusal</b> in this context · <b>dark</b>
+            Panel 8e · <b>Queue again with no awaiting gate</b> · <b>dark</b>
           </div>
           <div class="panel" data-theme="dark" data-appearance-scope>
             <div class="card-body" style="padding-bottom: 0">
@@ -13097,38 +15299,18 @@
                           ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
                         ><span class="pill pill-rose"
                           ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
-                        ></span
+                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                          Queue again
+                        </button></span
                       >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
-                    <div class="fx-part" role="group" aria-label="Fix the checks">
-                      <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
-                      <p class="fx-line">
-                        <svg class="fx-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
-                        ><span><b>moooon/motir-ai · #88</b> left the merge queue.</span>
-                      </p>
-                      <p class="fx-note">Hand the repair to an agent from your terminal:</p>
-                      <div class="dvb-code">
-                        <div class="dvb-code-bar">
-                          <span class="dvb-code-lang">shell</span
-                          ><button class="dvb-copy" type="button" aria-label="Copy code">
-                            <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
-                          </button>
-                        </div>
-                        <pre>motir fix ACME-12</pre>
-                      </div>
-                      <p class="fx-note">
-                        An agent works on the pull request's own branch, pushes, and the checks run
-                        again.
-                      </p>
-                      <p class="fx-note">
-                        Nothing changed on your side? <b>Approve</b> puts the same commits back in
-                        the merge queue. If the failing check points at real code,
-                        <span class="dvb-mono">motir fix</span> hands it to an agent.
-                      </p>
-                    </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="dvb-htt" role="group" aria-label="How to test">
                       <div class="dvb-htt-head">
                         <h4 class="dvb-htt-title">How to test</h4>
@@ -13145,16 +15327,17 @@
                   <div class="af-alert" role="alert">
                     <svg aria-hidden="true"><use href="#i-alert" /></svg
                     ><span class="af-alert-body"
-                      ><b>What you were shown has changed.</b
+                      ><b>This pull request needs a fresh approval.</b
                       ><span class="af-slot"
                         ><span class="af-slot-label"
-                          >refusal copy · MOTIR-5232 · shown: APPROVAL_GATE_STALE_SUBJECT</span
+                          >refusal copy · shown:
+                          <span class="dvb-mono">MERGE_REQUEUE_NEEDS_APPROVAL</span></span
                         ><span
-                          >The pull requests changed while you were reading. Nothing was
-                          queued.</span
+                          >The approval this tab was showing has already been answered, so
+                          <b>Queue again</b> had nothing to decide. Nothing was queued.</span
                         ></span
                       ><span class="af-alert-next"
-                        >Reload to see what is being asked now, then decide again.</span
+                        >Reload — someone has already answered this question.</span
                       ></span
                     >
                   </div>
@@ -13177,8 +15360,10 @@
                           >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
                       ></span>
                       <span class="ej-sub rq-why"
-                        >These commits did not land, so Motir is asking you again.
-                        <b>Approve</b> puts them back in the merge queue.</span
+                        >These commits did not land, so that approval is spent and Motir is asking
+                        you again. <b>Queue again</b> on the pull request — or
+                        <b>Approve and merge</b> below — is the new approval, and puts them back in
+                        the merge queue.</span
                       >
                     </span>
                   </div>
@@ -13205,8 +15390,8 @@
       <div class="amr-state">
         <div class="dvb-col">
           <div class="panel-label">
-            Panel 5 · a <b>push after the ejection</b> — the re-asked gate is superseded
-            <i>New commits since approval</i>; no approve until the next green
+            Panel 9 · a <b>push after an un-landed outcome</b> — the re-asked gate is superseded
+            <i>New commits since approval</i>; the next green asks once, over the new commits
           </div>
           <div class="panel">
             <div class="card-body" style="padding-bottom: 0">
@@ -13281,6 +15466,10 @@
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="dvb-htt" role="group" aria-label="How to test">
                       <div class="dvb-htt-head">
                         <h4 class="dvb-htt-title">How to test</h4>
@@ -13308,16 +15497,20 @@
             </div>
           </div>
           <p class="panel-note">
-            The shipped withdrawn state (12v): a push moved the head, so the question about the
-            ejected commits is withdrawn (<span class="mono">head_moved</span>) and no verbs are
-            drawn. The next green raises exactly ONE gate over the new commits (MOTIR-5604,
-            unchanged). The fix part leaves with the exit: the failure no longer stands at the pull
-            request's head, so there is nothing for <span class="mono">motir fix</span> to claim
-            until a new check fails.
+            The shipped withdrawn state (12v): a push moved the head, so the re-asked question about
+            the ejected commits is superseded <span class="mono">head_moved</span> and no verbs are
+            drawn — the row's <b>Queue again</b> goes with them, because the commits it would have
+            approved are no longer the head. The next green raises exactly ONE gate over the new
+            commits (MOTIR-5604, unchanged), and the fix part leaves with the exit.
+            <b>This is also how a CAN'T-LAND card leaves its hold</b> (point 6): panel 3 draws no
+            gate at that head, a push re-arms the card, and the next green asks the merge question
+            once, over what the push produced. Same path, two starting states.
           </p>
         </div>
         <div class="dvb-col">
-          <div class="panel-label">Panel 5 · a <b>push after the ejection</b> · <b>dark</b></div>
+          <div class="panel-label">
+            Panel 9 · a <b>push after an un-landed outcome</b> · <b>dark</b>
+          </div>
           <div class="panel" data-theme="dark" data-appearance-scope>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
@@ -13391,6 +15584,10 @@
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
+                    <p class="dvb-caption">
+                      Link with + Link pull request here, or with
+                      <span class="dvb-mono">link_pull_request</span> over the MCP.
+                    </p>
                     <div class="dvb-htt" role="group" aria-label="How to test">
                       <div class="dvb-htt-head">
                         <h4 class="dvb-htt-title">How to test</h4>
@@ -13424,8 +15621,8 @@
       <div class="amr-state">
         <div class="dvb-col">
           <div class="panel-label">
-            Panel 6 · <b>unchanged, for contrast</b> — a NEUTRAL removal still offers
-            <b>Queue again</b> on the standing approval; the card never left Approved
+            Panel 10 · <b>auto mode, unchanged</b> — no gate, no approval, and
+            <i>Queue again</i> still re-dispatches the same head
           </div>
           <div class="panel">
             <div class="card-body" style="padding-bottom: 0">
@@ -13435,7 +15632,7 @@
                 Status
                 <span class="rq-rail"
                   ><span class="pill pill-sky"
-                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>Approved</span
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>Implemented</span
                   ></span
                 >
               </div>
@@ -13450,95 +15647,113 @@
                   <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
                 </button>
               </div>
-              <div class="card-body af-host">
-                <div class="af-frame">
-                  <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Pull requests</span
-                      ><span class="af-meta">Approved by Ada L. · 2 pull requests</span>
-                    </div>
-                    <span class="af-pill-state af-pill-ok"
-                      ><span class="af-dot" aria-hidden="true"></span>Approved</span
-                    >
+              <div class="card-body">
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Rate-limit the public API per key</div>
+                    <div class="pr-meta">moooon/motir-core · #131</div>
                   </div>
-                  <div
-                    class="af-port dvb-in-port"
-                    role="group"
-                    aria-label="What is being decided"
-                    tabindex="0"
+                  <span class="pr-states"
+                    ><span class="pill pill-mint"
+                      ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                    ></span
                   >
-                    <div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Rate-limit the public API per key</div>
-                        <div class="pr-meta">moooon/motir-core · #131</div>
-                      </div>
-                      <span class="pr-states"
-                        ><span class="pill pill-mint"
-                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
-                        ></span
-                      >
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                    <div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Honour Retry-After in the planner client</div>
-                        <div class="pr-meta">moooon/motir-ai · #88</div>
-                      </div>
-                      <span class="pr-states"
-                        ><span class="pill pill-sky"
-                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                        ><span class="pill pill-neutral"
-                          ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg>Removed from
-                          the queue</span
-                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
-                          Queue again
-                        </button></span
-                      >
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                    <div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by"
-                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
-                        >
-                      </div>
-                      <p class="dvb-abbrev">
-                        The body, each repository's facts and earlier runs, as Panel 12b draws them
-                        — unchanged, and abbreviated on this sheet.
-                      </p>
-                    </div>
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Honour Retry-After in the planner client</div>
+                    <div class="pr-meta">moooon/motir-ai · #88</div>
                   </div>
-                  <div class="af-record">
-                    <span>Approved by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits</span>
-                    <span class="ej-exit"
-                      ><span class="ej-line"
-                        ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg
-                        ><span
-                          ><b>moooon/motir-ai · #88</b> was removed from the merge queue: someone
-                          took it out.</span
-                        ></span
-                      ></span
+                  <span class="pr-states"
+                    ><span class="pill pill-sky"
+                      ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                    ><span class="pill pill-rose"
+                      ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
+                    ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                      Queue again
+                    </button></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <p class="dvb-caption">
+                  Link with + Link pull request here, or with
+                  <span class="dvb-mono">link_pull_request</span> over the MCP.
+                </p>
+                <div class="ej-part">
+                  <span class="ej-line"
+                    ><svg class="ej-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
+                    ><span
+                      ><b>moooon/motir-ai · #88</b> left the merge queue: its checks failed in the
+                      merge queue.</span
+                    ></span
+                  >
+                  <span class="ej-sub"
+                    >Failing check:
+                    <a class="ej-check" href="#"
+                      >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                  ></span>
+                  <span class="ej-sub"
+                    ><b>Queue again</b> re-dispatches the same head. Nobody is asked, because in
+                    auto mode nobody was asked in the first place.</span
+                  >
+                </div>
+                <div class="fx-part" role="group" aria-label="Fix the checks">
+                  <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
+                  <p class="fx-line">
+                    <svg class="fx-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
+                    ><span><b>moooon/motir-ai · #88</b> left the merge queue.</span>
+                  </p>
+                  <p class="fx-note">Hand the repair to an agent from your terminal:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">shell</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>motir fix ACME-12</pre>
+                  </div>
+                  <p class="fx-note">
+                    An agent works on the pull request's own branch, pushes, and the checks run
+                    again.
+                  </p>
+                </div>
+                <div class="dvb-htt" role="group" aria-label="How to test">
+                  <div class="dvb-htt-head">
+                    <h4 class="dvb-htt-title">How to test</h4>
+                    <span class="dvb-htt-by"
+                      >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
                     >
                   </div>
+                  <p class="dvb-abbrev">
+                    The body, each repository's facts and earlier runs, as Panel 12b draws them —
+                    unchanged, and abbreviated on this sheet.
+                  </p>
                 </div>
               </div>
             </div>
           </div>
           <p class="panel-note">
-            Nothing was learned about the commits, so the earlier yes still stands (point 4).
-            <b>Auto mode is also unchanged</b>: no gate, the card goes to Implemented, and § 22's
-            Panel E5 flush part with <b>Queue again</b> is the whole surface — not redrawn here.
+            <b>auto mode is UNCHANGED, and this panel exists to say so</b> (point 10). No gate is
+            raised, a failure exit still writes <span class="mono">in_review → implemented</span>,
+            and <i>Queue again</i> still re-dispatches the same head on a person's press (<span
+              class="mono"
+              >requeueAutoMember</span
+            >, MOTIR-5634) — there is no approval in auto mode to spend, so point 1 has nothing to
+            bind and none of the four classes changes anything here. § 22's Panel E5 flush part
+            stays the whole surface for it; this is its one-line restatement in the new sheet, not a
+            redraw.
           </p>
         </div>
         <div class="dvb-col">
-          <div class="panel-label">Panel 6 · <b>unchanged, for contrast</b> · <b>dark</b></div>
+          <div class="panel-label">Panel 10 · <b>auto mode, unchanged</b> · <b>dark</b></div>
           <div class="panel" data-theme="dark" data-appearance-scope>
             <div class="card-body" style="padding-bottom: 0">
               <div class="dvb-cap">ACME-12</div>
@@ -13547,7 +15762,7 @@
                 Status
                 <span class="rq-rail"
                   ><span class="pill pill-sky"
-                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>Approved</span
+                    ><svg aria-hidden="true"><use href="#i-activity" /></svg>Implemented</span
                   ></span
                 >
               </div>
@@ -13562,83 +15777,95 @@
                   <svg aria-hidden="true"><use href="#i-plus" /></svg>Link pull request
                 </button>
               </div>
-              <div class="card-body af-host">
-                <div class="af-frame">
-                  <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Pull requests</span
-                      ><span class="af-meta">Approved by Ada L. · 2 pull requests</span>
-                    </div>
-                    <span class="af-pill-state af-pill-ok"
-                      ><span class="af-dot" aria-hidden="true"></span>Approved</span
-                    >
+              <div class="card-body">
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Rate-limit the public API per key</div>
+                    <div class="pr-meta">moooon/motir-core · #131</div>
                   </div>
-                  <div
-                    class="af-port dvb-in-port"
-                    role="group"
-                    aria-label="What is being decided"
-                    tabindex="0"
+                  <span class="pr-states"
+                    ><span class="pill pill-mint"
+                      ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                    ></span
                   >
-                    <div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Rate-limit the public API per key</div>
-                        <div class="pr-meta">moooon/motir-core · #131</div>
-                      </div>
-                      <span class="pr-states"
-                        ><span class="pill pill-mint"
-                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
-                        ></span
-                      >
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                    <div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Honour Retry-After in the planner client</div>
-                        <div class="pr-meta">moooon/motir-ai · #88</div>
-                      </div>
-                      <span class="pr-states"
-                        ><span class="pill pill-sky"
-                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                        ><span class="pill pill-neutral"
-                          ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg>Removed from
-                          the queue</span
-                        ><button class="af-btn af-btn-secondary af-btn-row" type="button">
-                          Queue again
-                        </button></span
-                      >
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                    <div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by"
-                          >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
-                        >
-                      </div>
-                      <p class="dvb-abbrev">
-                        The body, each repository's facts and earlier runs, as Panel 12b draws them
-                        — unchanged, and abbreviated on this sheet.
-                      </p>
-                    </div>
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <div class="pr-row">
+                  <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                  <div class="pr-text">
+                    <div class="pr-title">Honour Retry-After in the planner client</div>
+                    <div class="pr-meta">moooon/motir-ai · #88</div>
                   </div>
-                  <div class="af-record">
-                    <span>Approved by <b>Ada L.</b> · 15 Sep 2026, 14:22 · 2 commits</span>
-                    <span class="ej-exit"
-                      ><span class="ej-line"
-                        ><svg aria-hidden="true"><use href="#i-circle-minus" /></svg
-                        ><span
-                          ><b>moooon/motir-ai · #88</b> was removed from the merge queue: someone
-                          took it out.</span
-                        ></span
-                      ></span
+                  <span class="pr-states"
+                    ><span class="pill pill-sky"
+                      ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                    ><span class="pill pill-rose"
+                      ><svg aria-hidden="true"><use href="#i-x" /></svg>Left the queue</span
+                    ><button class="af-btn af-btn-secondary af-btn-row" type="button">
+                      Queue again
+                    </button></span
+                  >
+                  <a class="ext" href="#" aria-label="Open on GitHub"
+                    ><svg aria-hidden="true"><use href="#i-external" /></svg
+                  ></a>
+                </div>
+                <p class="dvb-caption">
+                  Link with + Link pull request here, or with
+                  <span class="dvb-mono">link_pull_request</span> over the MCP.
+                </p>
+                <div class="ej-part">
+                  <span class="ej-line"
+                    ><svg class="ej-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
+                    ><span
+                      ><b>moooon/motir-ai · #88</b> left the merge queue: its checks failed in the
+                      merge queue.</span
+                    ></span
+                  >
+                  <span class="ej-sub"
+                    >Failing check:
+                    <a class="ej-check" href="#"
+                      >CI complete<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                  ></span>
+                  <span class="ej-sub"
+                    ><b>Queue again</b> re-dispatches the same head. Nobody is asked, because in
+                    auto mode nobody was asked in the first place.</span
+                  >
+                </div>
+                <div class="fx-part" role="group" aria-label="Fix the checks">
+                  <div class="dvb-htt-head"><h4 class="dvb-htt-title">Fix the checks</h4></div>
+                  <p class="fx-line">
+                    <svg class="fx-ic-danger" aria-hidden="true"><use href="#i-x" /></svg
+                    ><span><b>moooon/motir-ai · #88</b> left the merge queue.</span>
+                  </p>
+                  <p class="fx-note">Hand the repair to an agent from your terminal:</p>
+                  <div class="dvb-code">
+                    <div class="dvb-code-bar">
+                      <span class="dvb-code-lang">shell</span
+                      ><button class="dvb-copy" type="button" aria-label="Copy code">
+                        <svg aria-hidden="true"><use href="#i-copy" /></svg>Copy
+                      </button>
+                    </div>
+                    <pre>motir fix ACME-12</pre>
+                  </div>
+                  <p class="fx-note">
+                    An agent works on the pull request's own branch, pushes, and the checks run
+                    again.
+                  </p>
+                </div>
+                <div class="dvb-htt" role="group" aria-label="How to test">
+                  <div class="dvb-htt-head">
+                    <h4 class="dvb-htt-title">How to test</h4>
+                    <span class="dvb-htt-by"
+                      >Written by <b>Parent run #318</b> · 15 Sep 2026, 13:40</span
                     >
                   </div>
+                  <p class="dvb-abbrev">
+                    The body, each repository's facts and earlier runs, as Panel 12b draws them —
+                    unchanged, and abbreviated on this sheet.
+                  </p>
                 </div>
               </div>
             </div>
