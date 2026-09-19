@@ -108,6 +108,20 @@
  *   one, because it carries no `criterionIndex` and making that field optional
  *   would be a nullability change §8 forbids. Every existing member is
  *   byte-identical.
+ *
+ *   ⚠️ ITS POINTS THRESHOLD IS `8` NOW, AND THE VERSION DOES NOT MOVE FOR IT
+ *   (MOTIR-5588, PRODECT_FINDINGS #106). The entry above says *13+ story
+ *   points*, which is what 1.13.0 shipped and is left standing as the record of
+ *   it. The planner's deck is `1 / 2 / 3 / 5 / 8` and **8 IS the split signal**,
+ *   so the points arm could never fire on planner output and the one value the
+ *   rule calls a split signal produced no advisory at all. **No §8 clause
+ *   moves:** no field is removed, renamed or retyped, no error `code` is
+ *   repurposed, no existing condition changes status, and nothing is REFUSED —
+ *   an advisory is a report, so a threshold is not a limit in §8's sense. What
+ *   changes is how often an existing member of an existing union appears, on a
+ *   field clients already tolerate unknown members of. Stated here rather than
+ *   buried, on the same terms as the `ai:decide_plan` note below: a client that
+ *   counted on `13` was reading a number this contract never promised.
  * - `1.14.0` — MOTIR-3157 records `uploadWorkItemAttachment`, the
  *   `POST /api/v1/work-items/{key}/attachments` operation MOTIR-3000 shipped
  *   WITHOUT moving this number. Additive: a new endpoint, §8's first allowed

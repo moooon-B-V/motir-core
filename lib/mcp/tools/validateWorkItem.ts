@@ -152,7 +152,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
     lines.push(
       '',
       `Advisory (${unaffected}): these cards are sized OVER the estimation gate — a ` +
-        'coding_agent leaf splits at 13+ story points and its run must fit in 60 minutes (the ' +
+        'coding_agent leaf splits at 8+ story points and its run must fit in 60 minutes (the ' +
         'MINUTES reading is a PROXY: the estimate column sums agent time and CI time, while the ' +
         'ceiling is on the agent run alone, so the threshold is 70 total minutes):',
       ...oversized.map(
@@ -161,7 +161,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
           `(over: ${a.threshold === 'both' ? 'both ceilings' : a.threshold === 'story_points' ? 'story points' : 'estimate minutes'})` +
           ` (${a.severity})`,
       ),
-      "SPLIT the card before it is dispatched — 13+ is the gate's literal split signal, and a " +
+      "SPLIT the card before it is dispatched — 8+ is the gate's literal split signal, and a " +
         'run longer than an hour is a card doing more than one thing. Writing "expect this to ' +
         'split" into the description is NOT the remedy: that is the exact shape this check ' +
         'exists to catch, four times over. A card with CHILDREN is sized by rollup and is never ' +
@@ -358,7 +358,7 @@ export function registerValidateWorkItem(
         '`reason: "contradiction"`, or `"unpinnable"` when the card pins no repo and its criteria ' +
         'name two or more) — both with the 1-based criterion index to cut at — ' +
         '`likely-over-gate-sizing` when a CHILDLESS coding_agent card is sized over the estimation ' +
-        'gate, at 13+ story points or more than 70 estimated minutes — the points arm is the ' +
+        'gate, at 8+ story points or more than 70 estimated minutes — the points arm is the ' +
         "gate's own literal SPLIT signal, the minutes arm is a PROXY for its run ceiling, because " +
         '`estimateMinutes` sums agent time and CI time while the gate ceilings the agent run ' +
         'alone (with `threshold`, the observed `storyPoints` and `estimateMinutes`, and no ' +

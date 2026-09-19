@@ -125,7 +125,7 @@ const criterionShapeAdvisorySchema = z.object({
  *
  * ⚠️ **The two arms do not carry the same authority, and a client rendering this
  * must not present them as if they did (MOTIR-3271).** `story_points` IS the
- * gate's rule — `13+` is its literal split signal. `estimate_minutes` is a
+ * gate's rule — `8+` is its literal split signal. `estimate_minutes` is a
  * PROXY: the column sums agent run time and CI time while the gate's ceiling is
  * on the agent run alone, so the finding means *probably over the hour*, at a
  * threshold (70 total minutes) derived from the top of the calibration band the
