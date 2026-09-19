@@ -134,6 +134,14 @@ async function readSubject(
     // because the kind that arm answered for is no longer registered to reach it.
     case 'pull_request_approval':
       return readDevelopmentBlock(gate, item, ctx);
+    // ⚠️ THE DECISION GATE'S DOCUMENT PORT IS MOTIR-5678's (Story MOTIR-4907), drawn
+    // by MOTIR-5673: the decision document as the PRIMARY question ABOVE these rows.
+    // Until it lands the overlay shows what a press on this gate carries — the card's
+    // pull requests — rather than `kind_not_built`, which stopped being true when
+    // MOTIR-5676 registered the kind. No decision gate is raised before MOTIR-5677, so
+    // no reader meets this interim arm in the meantime.
+    case 'decision_approval':
+      return readDevelopmentBlock(gate, item, ctx);
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error
        here until it has its own arm. */

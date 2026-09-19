@@ -8392,6 +8392,10 @@
         "title": "Motir cannot decide this kind of approval yet.",
         "next": "The work to support it is planned. Nothing you did caused this."
       },
+      "decisionUnresolvable": {
+        "title": "There is no single decision document to approve.",
+        "next": "The pull request has to add or change exactly one file under docs/decisions/. Request changes to send it back."
+      },
       "alreadyAwaiting": {
         "title": "Another decision on this subject is already waiting.",
         "next": "Reload the page to see it."

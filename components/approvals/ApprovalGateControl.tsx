@@ -571,6 +571,9 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
     case 'APPROVAL_GATE_KIND_UNREGISTERED':
       headline = t('kindUnregistered.title');
       break;
+    case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
+      headline = t('decisionUnresolvable.title');
+      break;
     case 'APPROVAL_GATE_ALREADY_AWAITING':
       headline = t('alreadyAwaiting.title');
       break;
@@ -703,6 +706,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'notFound';
     case 'APPROVAL_GATE_KIND_UNREGISTERED':
       return 'kindUnregistered';
+    case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
+      return 'decisionUnresolvable';
     case 'APPROVAL_GATE_ALREADY_AWAITING':
       return 'alreadyAwaiting';
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
