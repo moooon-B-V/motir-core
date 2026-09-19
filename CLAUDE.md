@@ -817,12 +817,15 @@ decision record.
    card. Nothing you do raises it and nothing you do avoids it — it is written by
    the publish path itself (`designEvidenceService`), so it exists whether or not
    you were expecting it.
-   **The one exception: a card with an OPEN linked pull request — one or many, in
-   any repositories — raises NO design gate.** Its pull requests carry the
-   decision: the result shows inside the card's Development block, with How to test,
-   above them, and approving that one gate merges them all. Linking an open pull
-   request later retires a design gate that was still awaiting
-   (`docs/decisions/design-result.md` AMENDMENT 4 Q8).
+   **A card with an OPEN linked pull request holds TWO gates and asks ONE
+   question** (`docs/decisions/design-result.md` AMENDMENT 6, which reverses
+   AMENDMENT 4 Q8's "no design gate"). The design gate is the PRIMARY; the
+   approve-to-merge gate rides on it. The result shows inside the card's
+   Development block, with its pull requests and How to test beneath it, and ONE
+   press on the design decides both and merges them all — from the item page,
+   the full-screen overlay or the REST decide route alike. The To approve queue
+   lists such a card ONCE, by its design gate (MOTIR-5712); once the design is
+   decided, a merge gate that is still awaiting is asked alone (Q2).
 2. **Who it waits on.** The card's **assignee**, or its **reporter** when there
    is no assignee. They press **Approve** — or **Request changes**, which records
    a note and moves nothing. **What Approve MOVES depends on whether a merge is

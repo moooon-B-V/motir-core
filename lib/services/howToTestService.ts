@@ -2,33 +2,46 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { testInstructionsRepository } from '@/lib/repositories/testInstructionsRepository';
-import { repoDeploymentRepository } from '@/lib/repositories/repoDeploymentRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
-import { assembleHowToTestRepo, liveHeadSha, pickPullRequest } from '@/lib/howToTest/assemble';
+import { staleSections } from '@/lib/howToTest/assemble';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import type { HowToTestDto, HowToTestRunDto } from '@/lib/dto/howToTest';
+import type { HowToTestDto } from '@/lib/dto/howToTest';
+import { authorOf, dispatchRunLabel } from '@/lib/howToTest/author';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { resolveRunTarget } from './runTarget';
+
+// `dispatchRunLabel` moved to `@/lib/howToTest/author` when the v1 read needed it
+// too (MOTIR-5454). Re-exported here so its existing importers are unchanged.
+export { dispatchRunLabel } from '@/lib/howToTest/author';
 
 /**
  * The HOW TO TEST read (Story MOTIR-4906 · Subtask MOTIR-5333) — per RUN TARGET
  * (`docs/decisions/approval-gates.md` §9's 2026-09-13 amendment): the item's
- * current run record, and per repository section its pull request, preview and
- * checks, each path filled or saying why it is not. A child of a container run
- * that carries no record of its own answers `tested_via_ancestor`, naming the
- * nearest ancestor that does.
+ * current record, and which of its repository sections were written for a commit
+ * the bound pull request has since moved past (`design/github/design-notes.md`
+ * § 25). A child of a container run that carries no record of its own answers
+ * `tested_via_ancestor`, naming the nearest ancestor that does.
+ *
+ * ⚠️ IT NO LONGER DERIVES PER-REPOSITORY FACTS (MOTIR-5691). The preview, the
+ * fetch line and the checks went with the sub-block that drew them, and so did
+ * the two deployment reads that fed the preview. The deliveries and the project's
+ * repositories stay, because STALE needs each section's bound pull request and
+ * the repository's name.
  *
  * Called from the server-rendered item page (MOTIR-5336). It adds no HTTP route,
  * writes nothing, calls no host API, and only IMPORTS `prCiState`'s head rule.
  *
  * ⚠️ BOUNDED QUERIES, independent of how many repositories or pull requests: the
  * ancestors (1), the subtree (1), the item's record history (1), the ancestors'
- * current records (1), the latest leg run and scope run (2), the project's
- * repositories (1), the deliveries of the item and its descendants with their
- * check rows (1), and the deployments by head commit and by head ref (≤ 2).
+ * current records (1), the latest leg run and scope run (2), the PUBLISHERS of
+ * the current record and every history row TOGETHER (1 — MOTIR-5454), the
+ * project's repositories (1), and the deliveries of the item and its descendants
+ * with their check rows (1). The subtree, the repositories and the deliveries are
+ * read only for a record that HAS sections.
  */
 export const howToTestService = {
   async getForWorkItem(workItemId: string, ctx: ServiceContext): Promise<HowToTestDto> {
@@ -54,9 +67,23 @@ export const howToTestService = {
 
       const current = history.find((row) => row.isCurrent) ?? null;
       const earlier = history.filter((row) => !row.isCurrent);
+
+      // ONE query for every publisher on this item — the current record and all
+      // its history together. `history` already holds both, so the id set is
+      // known before any of them is mapped; resolving per row would make the
+      // query count grow with the number of versions.
+      const publisherIds = [
+        ...new Set(
+          history.flatMap((row) => (row.publishedById !== null ? [row.publishedById] : [])),
+        ),
+      ];
+      const publishers =
+        publisherIds.length > 0 ? await userRepository.findByIds(publisherIds) : [];
+      const nameById = new Map(publishers.map((user) => [user.id, user.name] as const));
+
       const historyDto = earlier.map((row) => ({
         recordId: row.id,
-        run: runOf(row.dispatchRunId, row.dispatchRun),
+        author: authorOf(row, nameById),
         createdAt: row.createdAt.toISOString(),
       }));
 
@@ -73,7 +100,7 @@ export const howToTestService = {
             runTarget: { key: target.holder.identifier },
             owedBy: null,
             record: null,
-            repos: [],
+            stale: [],
             history: historyDto,
           };
         }
@@ -90,12 +117,34 @@ export const howToTestService = {
             ? { runId: latest.id, label: dispatchRunLabel(latest.command, latest.startedAt) }
             : null,
           record: null,
-          repos: [],
+          stale: [],
           history: historyDto,
         };
       }
 
       const record = toTestInstructionsDto(current);
+      const recordDto = {
+        id: record.id,
+        author: authorOf(current, nameById),
+        createdAt: record.createdAt,
+        bodyMd: record.bodyMd,
+        previewPath: record.previewPath,
+      };
+      // A record with NO sections — every person's save (§ 25), and an agent's that
+      // named no repository — can never be stale: there is no commit for a head to
+      // have moved past. So the three reads below, which exist only to answer
+      // that, are not made.
+      if (record.repos.length === 0) {
+        return {
+          state: 'record',
+          runTarget: null,
+          owedBy: null,
+          record: recordDto,
+          stale: [],
+          history: historyDto,
+        };
+      }
+
       const [subtree, projectRepos] = await Promise.all([
         workItemRepository.findSubtree(item.id, tx),
         projectRepoRepository.listByProject(item.projectId, ctx.workspaceId, tx),
@@ -108,33 +157,11 @@ export const howToTestService = {
       const toPr = (delivery: (typeof deliveries)[number]) => ({
         id: delivery.pullRequest.id,
         repoId: delivery.pullRequest.repoId,
-        headRef: delivery.pullRequest.headRef,
         state: delivery.pullRequest.state,
-        merged: delivery.pullRequest.merged,
         checkRuns: delivery.pullRequest.checkRuns,
       });
       const own = deliveries.filter((d) => d.workItemId === item.id).map(toPr);
       const descendants = deliveries.filter((d) => d.workItemId !== item.id).map(toPr);
-
-      const bound = record.repos.map((section) => ({
-        section,
-        pr: pickPullRequest(section.repoId, own, descendants),
-      }));
-
-      // One deployment read per KIND of key, however many sections.
-      const byCommit: Array<{ repoId: string; commitSha: string }> = [];
-      const byRef: Array<{ repoId: string; ref: string }> = [];
-      for (const { pr } of bound) {
-        if (!pr) continue;
-        const headSha = liveHeadSha(pr.checkRuns);
-        if (headSha) byCommit.push({ repoId: pr.repoId, commitSha: headSha });
-        else byRef.push({ repoId: pr.repoId, ref: pr.headRef });
-      }
-      const [commitDeployments, refDeployments] = await Promise.all([
-        repoDeploymentRepository.listLatestByCommits(byCommit, tx),
-        repoDeploymentRepository.listLatestByRefs(byRef, tx),
-      ]);
-      const deployments = [...commitDeployments, ...refDeployments];
 
       const nameOf = new Map<string, string>();
       for (const row of projectRepos) {
@@ -147,43 +174,10 @@ export const howToTestService = {
         state: 'record',
         runTarget: null,
         owedBy: null,
-        record: {
-          id: record.id,
-          run: runOf(current.dispatchRunId, current.dispatchRun),
-          createdAt: record.createdAt,
-          bodyMd: record.bodyMd,
-          previewPath: record.previewPath,
-        },
-        repos: bound.map(({ section, pr }) =>
-          assembleHowToTestRepo(
-            section,
-            nameOf.get(section.repoId) ?? section.repoId,
-            pr,
-            deployments,
-            record.previewPath,
-          ),
-        ),
+        record: recordDto,
+        stale: staleSections(record.repos, own, descendants, (id) => nameOf.get(id) ?? id),
         history: historyDto,
       };
     });
   },
 };
-
-function runOf(
-  runId: string | null,
-  run: { command: string; startedAt: Date } | null,
-): HowToTestRunDto | null {
-  if (!runId || !run) return null;
-  return { runId, label: dispatchRunLabel(run.command, run.startedAt) };
-}
-
-/**
- * How a run is named in the block — the command a person would have typed and
- * when it started, e.g. `motir run · 2026-09-13 12:04 UTC`. A scoped run is
- * `motir run` too; that is what its operator typed.
- */
-export function dispatchRunLabel(command: string, startedAt: Date): string {
-  const typed = command === 'run_scope' ? 'run' : command;
-  const when = startedAt.toISOString().slice(0, 16).replace('T', ' ');
-  return `motir ${typed} · ${when} UTC`;
-}

@@ -455,12 +455,28 @@ export function isReferenceAdvisory(a: DispatchAdvisory): a is DispatchReference
  */
 export interface HowToTestRecord {
   dispatchRunId: string | null;
+  /**
+   * WHO wrote it (MOTIR-5454) — a dispatch RUN, or a PERSON who wrote it from
+   * the item page (`approval-gates.md` § 9's 2026-09-17 amendment: two author
+   * kinds, one record, one writer).
+   *
+   * REQUIRED, because the response always carries it — `dispatchRunId` alone
+   * cannot tell a person's record from a run's whose run row was pruned.
+   * `userId` is null when that account has since been deleted, and `label` is
+   * never blank.
+   */
+  author: HowToTestAuthor;
   createdAt: string;
-  /** The run's How to test as rich text (Markdown), exactly as the agent wrote it. */
+  /** The record's How to test as rich text (Markdown), exactly as its author wrote it. */
   bodyMd: string;
   previewPath: string | null;
   repos: { repo: string | null; commitSha: string }[];
 }
+
+/** The author of a {@link HowToTestRecord} — a run, or a person. */
+export type HowToTestAuthor =
+  | { kind: 'run'; runId: string; label: string }
+  | { kind: 'person'; userId: string | null; label: string };
 
 /** The `dispatch_prompt` payload (`DispatchPromptDto`) — the canonical prompt
  * text plus the facts the CLI routes on before it runs the agent. */

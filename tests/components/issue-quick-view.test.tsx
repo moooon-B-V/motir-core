@@ -122,6 +122,7 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           number: 131,
           state: 'merged',
           ci: 'passing',
+          headSha: null,
           url: 'https://github.com/moooon/motir-core/pull/131',
           githubReview: null,
         },
@@ -132,6 +133,7 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           number: 57,
           state: 'open',
           ci: 'running',
+          headSha: null,
           url: 'https://github.com/moooon/motir-gateway/pull/57',
           githubReview: null,
         },
@@ -142,6 +144,7 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           number: 119,
           state: 'closed',
           ci: null, // no CI recorded → NO CI pill
+          headSha: null,
           url: 'https://github.com/moooon/motir-core/pull/119',
           githubReview: null,
         },

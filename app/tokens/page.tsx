@@ -129,6 +129,7 @@ const ICON_TEXT_SURFACE_GROUPS: { heading: string; tokens: [string, string][] }[
       ['--el-tooltip-text', 'tooltip text'],
       ['--el-switch-on', 'switch on'],
       ['--el-switch-knob', 'switch knob'],
+      ['--el-switch-knob-off', 'switch knob off'],
       ['--el-option-active-bg', 'option active bg'],
       ['--el-overlay-scrim', 'overlay scrim'],
       ['--el-chip-bg', 'chip bg'],

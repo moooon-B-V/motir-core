@@ -25,6 +25,7 @@ const webhookPr: LinkedPullRequestDto = {
   number: 11,
   state: 'open',
   ci: null,
+  headSha: null,
   url: 'https://github.com/moooon/motir-core/pull/11',
   githubReview: null,
 };
@@ -35,6 +36,7 @@ const pickerPr: LinkedPullRequestDto = {
   number: 57,
   state: 'merged',
   ci: null,
+  headSha: null,
   url: 'https://github.com/moooon/motir-gateway/pull/57',
   githubReview: null,
 };

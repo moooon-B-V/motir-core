@@ -147,7 +147,8 @@
     "mentionWorkItems": "Work items",
     "mentionTypeToSearch": "Keep typing to search work items…",
     "mentionSearching": "Searching…",
-    "mentionNoResults": "No work items match “{query}”."
+    "mentionNoResults": "No work items match “{query}”.",
+    "codeLanguage": "Language"
   },
   "common": {
     "close": "Close",
@@ -6292,49 +6293,7 @@
         },
         "stale": {
           "title": "Written for <sha>{recordSha}</sha> — {repo} is now at <sha>{headSha}</sha>.",
-          "body": "The instructions below may be out of date. The preview and CI follow the new head.",
           "pill": "Stale"
-        },
-        "preview": {
-          "title": "In the preview",
-          "state": {
-            "success": "Ready",
-            "queued": "Queued",
-            "pending": "Pending",
-            "in_progress": "Deploying",
-            "failure": "Deploy failed",
-            "error": "Deploy errored",
-            "inactive": "Inactive",
-            "canceled": "Canceled"
-          },
-          "notReady": "The {environment} deployment for this head is {state}. Its link appears here when it succeeds.",
-          "failed": "The {environment} deployment for this head did not succeed, so there is no preview to open. Test it locally, or wait for the next push.",
-          "inactive": "The {environment} deployment for this head is no longer active — a newer deployment replaced it.",
-          "canceled": "The {environment} deployment for this head was canceled before it finished.",
-          "none": "No preview reported",
-          "noneBody": "This repository's CI reported no deployment for this head. Motir does not create previews."
-        },
-        "local": {
-          "title": "Locally",
-          "noBranch": "No branch to fetch",
-          "noBranchBody": "No pull request carries this repository's branch yet, so there is nothing to fetch."
-        },
-        "ci": {
-          "title": "What CI proved",
-          "summary": "{passed} of {total} checks passed",
-          "conclusion": {
-            "success": "Passed",
-            "failure": "Failed",
-            "pending": "Running",
-            "neutral": "Neutral"
-          },
-          "none": "No checks reported",
-          "noneBody": "No checks have reported for this head yet, so CI has proven nothing here."
-        },
-        "noSection": {
-          "title": "Not in this run's record",
-          "pill": "No section",
-          "body": "{run} wrote no section for this repository, so its pull request is not covered by the instructions above. Its row still carries its PR and CI status."
         },
         "missing": {
           "title": "No run has written how to test this item.",
@@ -6342,12 +6301,26 @@
           "noRun": "No run is recorded for this item."
         },
         "earlier": {
-          "toggle": "Earlier runs ({count})"
+          "versions": "Earlier versions ({count})"
         },
         "child": {
           "pointer": "Tested as part of <link>{key}</link>"
         },
-        "unknownState": "Unrecognised How to test state: {value}"
+        "unknownState": "Unrecognised How to test state: {value}",
+        "add": "Add how to test",
+        "edit": "Edit",
+        "writtenByPerson": "Written by <b>{name}</b> · {time}",
+        "form": {
+          "label": "How to test",
+          "body": "Body",
+          "previewPath": "Preview path",
+          "optional": "optional",
+          "previewPathHint": "a path such as /items/ACME-7",
+          "dirty": "Unsaved changes",
+          "saving": "Saving…",
+          "save": "Save",
+          "cancel": "Cancel"
+        }
       },
       "fix": {
         "title": "Fix the checks",

@@ -65,7 +65,14 @@ export class TestInstructionsInvalidFieldError extends TestInstructionsError {
   readonly status = 422;
   constructor(
     readonly field: string,
-    detail: string,
+    /**
+     * WHAT to do about it, without the `"field" is invalid:` frame — kept as its
+     * own property (Subtask MOTIR-5455) because a person's form renders the
+     * refusal BESIDE the field it is about, where naming the field again is
+     * noise. Recovering it by string surgery on `message` would make the
+     * sentence's punctuation load-bearing.
+     */
+    readonly detail: string,
   ) {
     super(`"${field}" is invalid: ${detail}`);
     this.name = 'TestInstructionsInvalidFieldError';

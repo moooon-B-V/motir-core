@@ -1,9 +1,14 @@
 import type { LinkedPullRequestDto } from '@/lib/dto/github';
-import type { HowToTestDto, HowToTestRepoDto } from '@/lib/dto/howToTest';
+import type { HowToTestDto, HowToTestStaleDto } from '@/lib/dto/howToTest';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
 // Fixtures for the Development block (MOTIR-5336) — the design board's own
-// `ACME-n` shapes (design/github §20, Panels 12a–12o), so they link to nothing.
+// `ACME-n` shapes (design/github §20, Panels 12a–12o; § 25 for How to test since
+// MOTIR-5691), so they link to nothing.
+
+/** The heads the two rows are at — the record below was written for CORE_HEAD. */
+export const CORE_HEAD = '3f2a91c0000000000000000000000000000000aa';
+export const GATEWAY_HEAD = 'aa11bb2000000000000000000000000000000000';
 
 export const CORE_PR: LinkedPullRequestDto = {
   id: 'pr-core-131',
@@ -12,6 +17,7 @@ export const CORE_PR: LinkedPullRequestDto = {
   number: 131,
   state: 'open',
   ci: 'passing',
+  headSha: CORE_HEAD,
   url: 'https://github.com/moooon/motir-core/pull/131',
   githubReview: null,
 };
@@ -23,14 +29,10 @@ export const GATEWAY_PR: LinkedPullRequestDto = {
   number: 57,
   state: 'open',
   ci: 'running',
+  headSha: GATEWAY_HEAD,
   url: 'https://github.com/moooon/motir-gateway/pull/57',
   githubReview: null,
 };
-
-export const CORE_FETCH =
-  "git fetch origin 'acme-31-rate-limit' && git checkout 'acme-31-rate-limit'";
-export const GATEWAY_FETCH =
-  "git fetch origin 'acme-12-gateway-throttle' && git checkout 'acme-12-gateway-throttle'";
 
 export const SECTIONED_BODY = [
   '## Precondition',
@@ -53,54 +55,12 @@ export const SECTIONED_BODY = [
   '2. Send 61 requests — the 61st answers `429`.',
 ].join('\n');
 
-export function coreRepo(over: Partial<HowToTestRepoDto> = {}): HowToTestRepoDto {
+/** § 25 Panel 12g — the core section, written for an earlier push than the row's head. */
+export function coreStale(over: Partial<HowToTestStaleDto> = {}): HowToTestStaleDto {
   return {
-    repoId: 'repo-core',
     repoName: 'moooon/motir-core',
-    commitSha: '3f2a91c0000000000000000000000000000000aa',
-    pullRequest: {
-      id: CORE_PR.id,
-      headRef: 'acme-31-rate-limit',
-      headSha: '3f2a91c0000000000000000000000000000000aa',
-      state: 'open',
-      merged: false,
-    },
-    stale: false,
-    fetchCommand: CORE_FETCH,
-    preview: {
-      status: 'available',
-      url: 'https://pr-131.motir-core.preview.moooon.dev/settings/api-keys',
-      environment: 'preview',
-      state: 'success',
-      deployedSha: '3f2a91c0000000000000000000000000000000aa',
-    },
-    ci: {
-      status: 'available',
-      checks: [
-        { name: 'build', conclusion: 'success', rawConclusion: null },
-        { name: 'lint', conclusion: 'success', rawConclusion: null },
-      ],
-    },
-    ...over,
-  };
-}
-
-export function gatewayRepo(over: Partial<HowToTestRepoDto> = {}): HowToTestRepoDto {
-  return {
-    repoId: 'repo-gateway',
-    repoName: 'moooon/motir-gateway',
-    commitSha: 'aa11bb2000000000000000000000000000000000',
-    pullRequest: {
-      id: GATEWAY_PR.id,
-      headRef: 'acme-12-gateway-throttle',
-      headSha: 'aa11bb2000000000000000000000000000000000',
-      state: 'open',
-      merged: false,
-    },
-    stale: false,
-    fetchCommand: GATEWAY_FETCH,
-    preview: { status: 'no_deployment_reported' },
-    ci: { status: 'no_checks_reported' },
+    recordSha: 'a1b2c3d000000000000000000000000000000000',
+    headSha: 'e4f5a6b000000000000000000000000000000000',
     ...over,
   };
 }
@@ -112,12 +72,12 @@ export function recordDto(over: Partial<HowToTestDto> = {}): HowToTestDto {
     owedBy: null,
     record: {
       id: 'rec-1',
-      run: { runId: 'run-318', label: 'Parent run #318' },
+      author: { kind: 'run', runId: 'run-318', label: 'Parent run #318' },
       createdAt: '2026-09-13T14:05:00.000Z',
       bodyMd: SECTIONED_BODY,
       previewPath: '/settings/api-keys',
     },
-    repos: [coreRepo()],
+    stale: [],
     history: [],
     ...over,
   };

@@ -43,8 +43,9 @@ import {
 // publishes through the service, the prompt suites assert text, the ingestion
 // suites stop at a `repo_deployment` row. All of them can be green while the
 // feature is broken BETWEEN them — a run id the publish does not attribute, a
-// section the read binds to the wrong pull request, a hook that stores a row the
-// read never matches, a trigger that drifts from the runbook.
+// section the read binds to the wrong pull request, a trigger that drifts from
+// the runbook. (A hook storing a row the read never matches USED to be on this
+// list; since MOTIR-5691 it is the design — seam 7.)
 //
 // So each seam below drives one card's REAL output into the next card's REAL
 // consumer, on real Postgres: the close-out ROUTE the CLI calls, the `/api/mcp`
@@ -114,8 +115,6 @@ async function getCliRecord(token: string, key: string) {
   return currentTestInstructionsSchema.parse(await res.json());
 }
 
-const fetchLine = (ref: string) => `git fetch origin ${ref} && git checkout ${ref}`;
-
 beforeEach(async () => {
   await truncateAuthTables();
   resetRateLimitStore();
@@ -170,30 +169,31 @@ describe('seam 1 — a scoped story run: close-out prompt → MCP publish → th
     expect(dto.state).toBe('record');
     // Byte for byte — sections and both fences as the agent wrote them.
     expect(dto.record!.bodyMd).toBe(RUN_BODY);
-    expect(dto.record!.run?.runId).toBe(s.runId);
+    expect(dto.record!.author).toMatchObject({ kind: 'run', runId: s.runId });
     expect(dto.record!.previewPath).toBe(`/items/${s.story.identifier}`);
 
-    expect(dto.repos).toHaveLength(2);
-    const [web, api] = dto.repos;
-    expect(web).toMatchObject({
-      repoId: s.webRepo.id,
-      repoName: 'acme/web',
-      commitSha: WEB_HEAD,
-      stale: false,
-      pullRequest: { id: s.webPr.id, headRef: WEB_BRANCH, headSha: WEB_HEAD, state: 'open' },
-      fetchCommand: fetchLine(WEB_BRANCH),
-      ci: { status: 'available', checks: [{ name: 'Vitest', conclusion: 'success' }] },
+    // Both sections were written at their pull requests' heads: nothing is stale.
+    expect(dto.stale).toEqual([]);
+
+    // A push to the story's web pull request moves its head past the section — and
+    // the read names THAT pull request's repository, which is how the binding shows
+    // (MOTIR-5691: the per-repository preview, fetch line and checks are retired,
+    // design/github § 25; stale is what remains derived).
+    const MOVED = 'f'.repeat(40);
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: s.webPr.id,
+        commitSha: MOVED,
+        checkName: 'Vitest',
+        conclusion: 'success',
+      },
     });
-    expect(api).toMatchObject({
-      repoId: s.apiRepo.id,
-      repoName: 'acme-gl/api',
-      commitSha: API_HEAD,
-      stale: false,
-      pullRequest: { id: s.apiPr.id, headRef: API_BRANCH, headSha: API_HEAD, state: 'open' },
-      fetchCommand: fetchLine(API_BRANCH),
-    });
-    // The agent was told not to write the fetch; Motir composed it.
+    const moved = await howToTestService.getForWorkItem(s.story.id, s.fx.ctx);
+    expect(moved.stale).toEqual([{ repoName: 'acme/web', recordSha: WEB_HEAD, headSha: MOVED }]);
+    // The agent was told not to write the fetch — and Motir no longer composes one:
+    // the pull request's row links out to the host, which shows its own checkout.
     expect(RUN_BODY).not.toContain('git fetch');
+    expect(JSON.stringify(moved)).not.toContain('git fetch');
   });
 
   it('a child of the run reads tested_via_ancestor, naming the story', async () => {
@@ -203,7 +203,7 @@ describe('seam 1 — a scoped story run: close-out prompt → MCP publish → th
         state: 'tested_via_ancestor',
         runTarget: { key: s.story.identifier },
         record: null,
-        repos: [],
+        stale: [],
       });
     }
   });
@@ -271,8 +271,9 @@ describe('seam 2 — a single-card run: the per-item prompt → a publish on the
     const dto = await howToTestService.getForWorkItem(card.id, s.fx.ctx);
     expect(dto).toMatchObject({
       state: 'record',
-      record: { bodyMd: body, run: { runId: run.id } },
-      repos: [{ repoId: s.webRepo.id, commitSha: WEB_HEAD, pullRequest: null, fetchCommand: null }],
+      record: { bodyMd: body, author: { kind: 'run', runId: run.id } },
+      // The card's section has no pull request bound, so there is no head to move.
+      stale: [],
     });
     // The single-card record is the card's own — the story's page is untouched.
     expect((await howToTestService.getForWorkItem(s.story.id, s.fx.ctx)).state).toBe(
@@ -330,10 +331,11 @@ describe('seam 4 — a later run supersedes; history lists the earlier run', () 
     const dto = await howToTestService.getForWorkItem(s.story.id, s.fx.ctx);
     expect(dto.record).toMatchObject({
       bodyMd: laterBody,
-      run: { runId: laterRunId, label: 'motir run · 2026-09-14 09:30 UTC' },
+      author: { kind: 'run', runId: laterRunId, label: 'motir run · 2026-09-14 09:30 UTC' },
     });
     expect(dto.history).toHaveLength(1);
-    expect(dto.history[0]!.run).toEqual({
+    expect(dto.history[0]!.author).toEqual({
+      kind: 'run',
       runId: s.runId,
       label: 'motir run · 2026-09-13 12:00 UTC',
     });
@@ -509,17 +511,17 @@ function gitlabDeployment(sha: string, ref: string) {
   });
 }
 
-describe('seam 7 — a delivered deployment surfaces in the read as preview.available', () => {
-  it('a GitHub deployment_status and a GitLab deployment hook each become their section’s preview', async () => {
+// ⚠️ SEAM 7 WAS INVERTED BY MOTIR-5691. It used to prove a delivered deployment
+// SURFACED in the read as a section's `preview.available`; design/github § 25
+// retired the per-repository preview (a preview is per SYSTEM, not per head), so it
+// now proves the opposite half of the same seam: both hosts' hooks are still
+// RECORDED — ingestion is unchanged — and the How to test read carries none of it.
+describe('seam 7 — a delivered deployment is recorded, and How to test does not surface it', () => {
+  it('a GitHub deployment_status and a GitLab deployment hook are each recorded; the read is unchanged by them', async () => {
     const s = await buildStoryRun();
     await publishOverMcp(s.cliToken, storyPublishArgs(s));
 
-    // Before any host reports, neither section has a preview.
     const before = await howToTestService.getForWorkItem(s.story.id, s.fx.ctx);
-    expect(before.repos.map((r) => r.preview.status)).toEqual([
-      'no_deployment_reported',
-      'no_deployment_reported',
-    ]);
 
     vi.stubEnv('GITHUB_WEBHOOK_SECRET', GITHUB_SECRET);
     vi.stubEnv('GITLAB_WEBHOOK_SECRET', GITLAB_SECRET);
@@ -543,22 +545,12 @@ describe('seam 7 — a delivered deployment surfaces in the read as preview.avai
     expect(outbound).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
 
-    const dto = await howToTestService.getForWorkItem(s.story.id, s.fx.ctx);
-    const path = `/items/${s.story.identifier}`;
-    expect(dto.repos[0]!.preview).toEqual({
-      status: 'available',
-      url: `https://web-git-run.vercel.app${path}`,
-      environment: 'Preview',
-      state: 'success',
-      deployedSha: WEB_HEAD,
-    });
-    expect(dto.repos[1]!.preview).toEqual({
-      status: 'available',
-      url: `https://run.review.acme-gl.dev${path}`,
-      environment: 'review/run',
-      state: 'success',
-      deployedSha: API_HEAD,
-    });
+    expect(await adminDb.repoDeployment.count({ where: { workspaceId: s.fx.workspaceId } })).toBe(
+      2,
+    );
+    const after = await howToTestService.getForWorkItem(s.story.id, s.fx.ctx);
+    expect(after).toEqual(before);
+    expect(JSON.stringify(after)).not.toMatch(/vercel\.app|acme-gl\.dev|"preview"/);
   });
 });
 

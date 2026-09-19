@@ -820,8 +820,37 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
     workItem: {
       OR: [{ assigneeId: scope.userId }, { assigneeId: null, reporterId: scope.userId }],
     },
+    ...CARRIED_MERGE_GATE_EXCLUDED,
   };
 }
+
+/**
+ * ONE ROW PER QUESTION A PERSON IS ASKED, not one per gate (Bug MOTIR-5712;
+ * `design-result.md` AMENDMENT 6 Q1 and Q4).
+ *
+ * A design card with an open pull request holds TWO `awaiting` gates, and
+ * `resolveGateSet` names the design gate PRIMARY: one press on it decides the
+ * design AND the merge (`approveDesignAndMerge`). The merge gate is still a real
+ * row — its lifecycle is its own (Q2) — but while the design question is open it
+ * is CARRIED by that press, not asked beside it. Q4: *"not a second question."*
+ *
+ * So a queue lists the primary only. Listing both put the card on To approve
+ * twice, counted it twice, and offered the merge row as a press of its own —
+ * which merges the commits and leaves the design question awaiting, the exact
+ * outcome MOTIR-5667 re-shaped the item page's frame to prevent.
+ *
+ * ⚠️ IN THE PREDICATE, NEVER AFTER THE READ — the list, its count, the home
+ * count and the room all call a builder that spreads this, so none of them can
+ * disagree, and a page is never shortened by a post-read filter. When the design
+ * is decided the merge gate stops being carried and appears alone (Q2), with no
+ * change here.
+ */
+const CARRIED_MERGE_GATE_EXCLUDED = {
+  NOT: {
+    kind: 'pull_request_approval',
+    workItem: { approvalGates: { some: { kind: 'design_result', state: 'awaiting' } } },
+  },
+} as const satisfies Prisma.ApprovalGateWhereInput;
 
 /**
  * WHAT the Approvals room's read may see (MOTIR-5301).
@@ -844,7 +873,7 @@ export interface ApprovalRecordsScope extends AwaitingRoutingScope {
  */
 function recordsAwaitingWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWhereInput {
   if (!scope.fullView) return awaitingRoutedToWhere(scope);
-  return { projectId: { in: scope.projectIds }, state: 'awaiting' };
+  return { projectId: { in: scope.projectIds }, state: 'awaiting', ...CARRIED_MERGE_GATE_EXCLUDED };
 }
 
 /**

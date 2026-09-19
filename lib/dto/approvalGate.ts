@@ -514,6 +514,11 @@ export type ApprovalGateOverlaySubjectDTO =
        * `LateUpperSections` hands `DevelopmentSectionBody`, from the same services.
        * Two surfaces reading one block from two different reads could disagree about
        * which pull requests exist; these cannot.
+       *
+       * ⚠️ `kind` NAMES THE PORT, NOT THE GATE. A DESIGN gate that carries an awaiting
+       * merge gate is answered with this arm too, because one press on it merges the
+       * set and the reader must see what it merges (Bug MOTIR-5712; `design-result.md`
+       * AMENDMENT 6 Q1). The gate itself is the read's `gate`, which is what is pressed.
        */
       pullRequests: LinkedPullRequestDto[];
       /** `workItemsService.getDeliveryView(…).repos` — the item's repository set,

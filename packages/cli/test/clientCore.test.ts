@@ -736,6 +736,9 @@ describe('typed wrappers — each names its operation and forwards its arguments
     const client = connected();
     const record = {
       dispatchRunId: 'run-1',
+      // WHO wrote it (MOTIR-5454) — a run here; a person's record carries
+      // `{ kind: 'person', userId, label }` and a null `dispatchRunId`.
+      author: { kind: 'run', runId: 'run-1', label: 'motir run · 2026-09-13 12:00 UTC' },
       createdAt: '2026-09-13T12:00:00.000Z',
       bodyMd: '## Run it\n\n```sh\npnpm dev\n```\n',
       previewPath: '/items/PROD-1',

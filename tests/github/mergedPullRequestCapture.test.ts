@@ -556,8 +556,12 @@ describe('no shipped consumer of GithubPullRequest changes shape', () => {
     // takes that cuid, so the remove control could not call the service the
     // service was written for. A key GAINED is as observable as one lost, which
     // is why it is edited here deliberately rather than discovered in CI.
+    // MOTIR-5691 ADDS `headSha` — the head the `ci` pill is formed over. The
+    // approve-to-merge frame names the member a push moved by it, and used to
+    // borrow it from How to test's per-repository read, which design/github § 25
+    // retired: a pull request's head is the pull request's fact, so it rides the row.
     expect(Object.keys(dto).sort()).toEqual(
-      ['ci', 'githubReview', 'id', 'number', 'repo', 'state', 'title', 'url'].sort(),
+      ['ci', 'githubReview', 'headSha', 'id', 'number', 'repo', 'state', 'title', 'url'].sort(),
     );
     expect(dto).toMatchObject({ state: 'merged', number: 11, repo: 'moooon-B-V/motir-core' });
   });

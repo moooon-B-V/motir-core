@@ -31,7 +31,9 @@ import {
 // A person about to approve a story's merge has ONE place to look: the
 // Development block. It holds the story's pull requests and, in the same card,
 // the run's How to test — the instructions as rich text with commands a click
-// copies, and per repository the preview, the fetch line and what CI proved.
+// copies. (It also carried, per repository, the preview, the fetch line and what
+// CI proved, until design/github § 25 retired that sub-block — MOTIR-5691. Those
+// are the pull request's facts, and its row carries or links to every one.)
 // When the approve-to-merge question is open, that whole block is the gate's
 // port under ONE frame (design/github/design-notes.md §20), the way Design
 // result is for a design. A child card does not repeat it; it points at the
@@ -95,8 +97,8 @@ test.describe('a story is tested from one Development block', () => {
         card.getByText('Rate-limit the public API — api', { exact: true }),
       ).toBeVisible();
 
-      // … and How to test is INSIDE the same card: the run, the rich-text body
-      // with its sections, and one sub-block per repository.
+      // … and How to test is INSIDE the same card: the run and the rich-text body
+      // with its sections — and nothing per repository (§ 25).
       const part = howToTest(page);
       await expect(part).toHaveCount(1);
       await expect(part.getByText(`Written by ${seed.runLabel}`, { exact: false })).toBeVisible();
@@ -104,24 +106,21 @@ test.describe('a story is tested from one Development block', () => {
         await expect(part.getByRole('heading', { name, exact: true })).toBeVisible();
       }
 
-      const web = part.getByRole('group', { name: `${seed.webPr.repo} · #${seed.webPr.number}` });
-      const api = part.getByRole('group', { name: `${seed.apiPr.repo} · #${seed.apiPr.number}` });
-      await expect(web).toHaveCount(1);
-      await expect(api).toHaveCount(1);
-      // One repository reported a preview; the link opens the record's
-      // `previewPath` on that deployment's URL.
-      const previewHref = `${PREVIEW_URL}/items/${seed.story.identifier}`;
-      await expect(web.getByRole('link', { name: previewHref })).toHaveAttribute(
-        'href',
-        previewHref,
-      );
-      await expect(web.getByText('No preview reported')).toHaveCount(0);
-      // The other reported none, and says so.
-      await expect(api.getByText('No preview reported', { exact: true })).toBeVisible();
-      await expect(api.getByRole('link', { name: previewHref })).toHaveCount(0);
+      // No sub-block: nothing inside the part is a group of its own, and neither
+      // the seeded preview deployment nor a fetch line reaches the instructions.
+      await expect(part.getByRole('group')).toHaveCount(0);
+      await expect(part.locator(`a[href^="${PREVIEW_URL}"]`)).toHaveCount(0);
+      for (const retired of [
+        'In the preview',
+        'What CI proved',
+        'No preview reported',
+        'git fetch',
+      ]) {
+        await expect(part.getByText(retired, { exact: false })).toHaveCount(0);
+      }
     });
 
-    await test.step('Click to copy: a command in the body, then a repository fetch line', async () => {
+    await test.step('Click to copy: each command in the body copies exactly', async () => {
       const part = howToTest(page);
       const body = part.locator('.motir-how-to-test');
       const bodyControls = body.getByRole('button', { name: 'Copy code', exact: true });
@@ -132,13 +131,8 @@ test.describe('a story is tested from one Development block', () => {
       expect(await copyVia(page, bodyControls.nth(1))).toBe(COMMAND_RUN);
       expect(await copyVia(page, bodyControls.nth(0))).toBe(COMMAND_SETUP);
 
-      const web = part.getByRole('group', { name: `${seed.webPr.repo} · #${seed.webPr.number}` });
-      const fetchControl = web.getByRole('button', { name: 'Copy code', exact: true });
-      await expect(fetchControl).toHaveCount(1);
-      await fetchControl.scrollIntoViewIfNeeded();
-      expect(await copyVia(page, fetchControl)).toBe(
-        'git fetch origin motir/run-20260913-120000 && git checkout motir/run-20260913-120000',
-      );
+      // Those two are the part's ONLY copy controls — the fetch block is retired.
+      await expect(part.getByRole('button', { name: 'Copy code', exact: true })).toHaveCount(2);
     });
 
     await test.step('The one gate: both pull requests and How to test under one frame', async () => {
@@ -159,13 +153,26 @@ test.describe('a story is tested from one Development block', () => {
       await expect(port.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
       await expect(card.getByText('Awaiting you', { exact: true })).toBeVisible();
 
-      // How to test carries NO control of its own: every button in it is a copy
-      // control.
+      // ⚠️ AMENDED BY MOTIR-5455, which is the change and not a drift. This
+      // step used to assert that How to test carries NO control of its own —
+      // every button in it a copy control. It carries exactly ONE now: the
+      // **Edit** door, in the part head, offered to an actor holding
+      // `work_item:edit` on the run target (§24 panel 13a, decision 3). A
+      // person may edit a RUN's record, which is what this seeded record is.
+      //
+      // Asserted as a SET rather than as a count, so the next control to appear
+      // here names itself instead of moving a number: the body's two copy controls
+      // plus Edit, and nothing else (the two fetch blocks that made it four were
+      // retired by MOTIR-5691).
       const part = howToTest(page);
       const buttons = part.getByRole('button');
       const copies = part.getByRole('button', { name: 'Copy code', exact: true });
-      await expect(copies).toHaveCount(4);
-      await expect(buttons).toHaveCount(4);
+      await expect(copies).toHaveCount(2);
+      await expect(part.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(1);
+      await expect(buttons).toHaveCount(3);
+      // And the door is the only one: no repository or commit control reached
+      // this part with it (§24, decision 8b).
+      await expect(part.getByRole('combobox')).toHaveCount(0);
       // The decision verbs belong to the FRAME, once each, for the person it is
       // routed to (MOTIR-4909 registered the kind). Until then this read "no
       // decision verb exists anywhere in the card"; that is the one assertion
@@ -221,8 +228,8 @@ test.describe('a story is tested from one Development block', () => {
       await expect(missing).toContainText(
         `Owed by ${seed.owedRunLabel}. The pull requests above still carry their own status.`,
       );
-      // It reads differently from a repository that reported no deployment.
-      await expect(part.getByText('No preview reported')).toHaveCount(0);
+      // Nothing derived is drawn under it.
+      await expect(part.getByRole('group')).toHaveCount(0);
     });
   });
 });

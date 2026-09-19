@@ -4,13 +4,7 @@ import { cleanup, screen, within } from '@testing-library/react';
 import { createTranslator } from 'next-intl';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import messages from '@/messages/en.json';
-import {
-  CORE_PR,
-  GATEWAY_PR,
-  coreRepo,
-  gatewayRepo,
-  recordDto,
-} from '../helpers/howToTestFixtures';
+import { CORE_PR, GATEWAY_PR, recordDto } from '../helpers/howToTestFixtures';
 
 // THE LATE STACK GAINS NO HOW TO TEST SECTION (Story MOTIR-4906 · Subtask
 // MOTIR-5336, design/github §20). How to test renders INSIDE the Development
@@ -18,6 +12,21 @@ import {
 // own". This renders the item page's real `LateUpperSections` over a fixture
 // read, so a second `ContentSectionCard` for it anywhere in the stack fails here.
 
+// The How-to-test write doors mount a provider that calls `useRouter` for the
+// save's refresh (MOTIR-5455), and happy-dom has no app router. Only the router
+// is stubbed — the REAL provider and its doors still render, so a door that
+// stopped appearing would fail here rather than be mocked out of view.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({
+    refresh: vi.fn(),
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+  }),
+}));
 vi.mock('next-intl/server', () => ({
   getTranslations: async (namespace: string) =>
     createTranslator({ locale: 'en', messages, namespace: namespace as never }),
@@ -83,7 +92,7 @@ function reads(): LateReads {
     // No scoped run on this fixture's item (MOTIR-5363) — the Run section is
     // mocked here, and `null` is what the read answers for such an item.
     scopeRun: null,
-    howToTest: recordDto({ repos: [coreRepo(), gatewayRepo()] }),
+    howToTest: recordDto(),
     mergeGate: {
       gate: null,
       canDecide: false,

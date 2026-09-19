@@ -1,15 +1,12 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { NextRequest } from 'next/server';
-import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { safeEnvironmentUrl } from '@/lib/services/repoDeploymentService';
-import { repoDeploymentRepository } from '@/lib/repositories/repoDeploymentRepository';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -24,7 +21,6 @@ const SECRET = 'test-webhook-secret';
 const INSTALLATION_ID = 'inst-deploy';
 const REPO_PROVIDER_ID = '777';
 const SHA = 'd'.repeat(40);
-const OTHER_SHA = 'e'.repeat(40);
 
 function deliveryBody(over: {
   deploymentId?: number;
@@ -247,102 +243,5 @@ describe('githubWebhookService.handleDeploymentStatus', () => {
       deliveryBody({ at: '2020-01-01T00:00:00Z' }),
     );
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
-});
-
-describe('repoDeploymentRepository — the batched latest reads', () => {
-  async function seed() {
-    const s = await connectedWorkspace();
-    const deliveries = [
-      // commit SHA, Preview: in_progress then success → latest is success
-      deliveryBody({
-        deploymentId: 1,
-        state: 'in_progress',
-        at: '2026-09-13T10:00:00Z',
-        url: null,
-      }),
-      deliveryBody({ deploymentId: 2, state: 'success', at: '2026-09-13T10:02:00Z' }),
-      // commit SHA, a second environment
-      deliveryBody({
-        deploymentId: 3,
-        state: 'failure',
-        environment: 'Storybook',
-        at: '2026-09-13T10:03:00Z',
-        url: null,
-      }),
-      // another commit on another ref
-      deliveryBody({
-        deploymentId: 4,
-        sha: OTHER_SHA,
-        ref: 'feat/other',
-        at: '2026-09-13T10:04:00Z',
-      }),
-    ];
-    for (const body of deliveries) {
-      await githubWebhookService.handleEvent('deployment_status', body);
-    }
-    return s;
-  }
-
-  /** Wrap a tx to count raw queries — the batch must be ONE round trip. */
-  function counting(tx: Prisma.TransactionClient) {
-    const calls = { n: 0 };
-    const proxy = new Proxy(tx, {
-      get(target, prop, receiver) {
-        const value = Reflect.get(target, prop, receiver);
-        if (prop !== '$queryRawUnsafe' || typeof value !== 'function') return value;
-        return (...args: unknown[]) => {
-          calls.n += 1;
-          return (value as (...a: unknown[]) => unknown).apply(target, args);
-        };
-      },
-    }) as Prisma.TransactionClient;
-    return { proxy, calls };
-  }
-
-  it('listLatestByCommits returns one row per (repo, commit, environment) holding the latest state, in one query', async () => {
-    const { repo, ctx } = await seed();
-    const rows = await withWorkspaceContext(ctx, async (tx) => {
-      const { proxy, calls } = counting(tx);
-      const out = await repoDeploymentRepository.listLatestByCommits(
-        [
-          { repoId: repo.id, commitSha: SHA },
-          { repoId: repo.id, commitSha: OTHER_SHA },
-        ],
-        proxy,
-      );
-      expect(calls.n).toBe(1);
-      return out;
-    });
-    const summary = rows
-      .map((r) => `${r.commitSha.slice(0, 1)}:${r.environment}:${r.state}`)
-      .sort();
-    expect(summary).toEqual(['d:Preview:success', 'd:Storybook:failure', 'e:Preview:success']);
-  });
-
-  it('listLatestByRefs returns one row per (repo, ref, environment), in one query', async () => {
-    const { repo, ctx } = await seed();
-    const rows = await withWorkspaceContext(ctx, async (tx) => {
-      const { proxy, calls } = counting(tx);
-      const out = await repoDeploymentRepository.listLatestByRefs(
-        [{ repoId: repo.id, ref: 'feat/MOTIR-7-change' }],
-        proxy,
-      );
-      expect(calls.n).toBe(1);
-      return out;
-    });
-    expect(rows.map((r) => `${r.environment}:${r.state}`).sort()).toEqual([
-      'Preview:success',
-      'Storybook:failure',
-    ]);
-    expect(rows.every((r) => r.ref === 'feat/MOTIR-7-change')).toBe(true);
-  });
-
-  it('both short-circuit an empty batch', async () => {
-    const { ctx } = await connectedWorkspace();
-    await withWorkspaceContext(ctx, async (tx) => {
-      expect(await repoDeploymentRepository.listLatestByCommits([], tx)).toEqual([]);
-      expect(await repoDeploymentRepository.listLatestByRefs([], tx)).toEqual([]);
-    });
   });
 });

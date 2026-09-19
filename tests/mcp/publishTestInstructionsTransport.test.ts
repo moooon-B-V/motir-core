@@ -141,13 +141,22 @@ describe('publish_test_instructions over /api/mcp', () => {
     for (const field of ['key', 'bodyMd', 'repos', 'previewPath']) {
       expect(schema.properties, `tools/list omits \`${field}\``).toHaveProperty(field);
     }
-    expect(schema.required).toEqual(expect.arrayContaining(['key', 'bodyMd', 'repos']));
+    // ⚠️ `repos` is NOT required (MOTIR-5689) — a person's form names no
+    // repository — and the schema must say so, or an agent's SDK refuses the
+    // body-only call before it reaches the door. Asserted in BOTH directions so
+    // a required list cannot creep back in and a required BODY cannot fall out.
+    expect(schema.required).toEqual(expect.arrayContaining(['key', 'bodyMd']));
+    expect(schema.required).not.toContain('repos');
     const body = schema.properties.bodyMd!.description ?? '';
     expect(body).toContain('SECTIONS');
     expect(body).toContain('fenced code block');
     expect(body).toContain('click-to-copy');
     expect(body).toContain(String(TEST_INSTRUCTIONS_MAX_BODY_BYTES / 1024));
-    expect(schema.properties.repos!.description).toContain(String(TEST_INSTRUCTIONS_MAX_REPOS));
+    const repos = schema.properties.repos!.description ?? '';
+    expect(repos).toContain(String(TEST_INSTRUCTIONS_MAX_REPOS));
+    // Optional to the SCHEMA, mandatory to an AGENT — the description is the
+    // only place that distinction can be made, so it is asserted.
+    expect(repos).toContain('SEND ONE PER REPOSITORY YOU PUSHED TO');
     await client.close();
   });
 

@@ -237,18 +237,19 @@ apart from body copy. All map to existing neutrals → zero-change defaults.
 
 ### F. Component-surface primitives → **MOTIR-1275 (1266.4)**
 
-| Token                       | base                                                  | current source                      | note                                                             |
-| --------------------------- | ----------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
-| `--el-tooltip-bg` / `-text` | `--color-foreground` / `--color-background`           | `Tooltip.tsx:44-52`                 | matches shipped (inverted)                                       |
-| `--el-switch-on`            | `--color-primary-fill`                                | `Switch.tsx:55-66` (`--el-accent`)  | checked track                                                    |
-| `--el-switch-knob`          | `--color-surface`                                     | `Switch.tsx` knob                   | the thumb                                                        |
-| `--el-option-active-bg`     | `--color-muted`                                       | `Combobox.tsx:479` (`--el-surface`) | highlighted option                                               |
-| `--el-overlay-scrim`        | **concrete** `#00000066` (light) / `#000000a6` (dark) | `Modal.tsx:131` `bg-black/40`       | the lone non-`--color-*` token here; carries explicit dark value |
-| `--el-chip-bg` / `-border`  | `--color-surface` / `--color-border`                  | `Pill.tsx` neutral tone             | neutral chip (tinted chips keep their tint)                      |
-| `--el-card`                 | `--color-background`                                  | `Card.tsx:23` (`--el-page-bg`)      | untinted card surface                                            |
-| `--el-input-border`         | `--color-hairline-strong`                             | `Input.tsx:65`                      | input outline                                                    |
-| `--el-button-border`        | `--color-hairline-strong`                             | `Button.tsx:41`                     | secondary-button outline                                         |
-| `--el-count-bg` / `-text`   | `--color-surface` / `--color-slate`                   | `Sidebar.tsx:62`, `Pill.tsx:76`     | numeric count badge                                              |
+| Token                       | base                                                  | current source                      | note                                                                  |
+| --------------------------- | ----------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------- |
+| `--el-tooltip-bg` / `-text` | `--color-foreground` / `--color-background`           | `Tooltip.tsx:44-52`                 | matches shipped (inverted)                                            |
+| `--el-switch-on`            | `--color-primary-fill`                                | `Switch.tsx:55-66` (`--el-accent`)  | checked track                                                         |
+| `--el-switch-knob`          | `--color-primary-foreground`                          | `Switch.tsx` knob, ON               | the ON thumb — the fill's own ink (was `--color-surface`, MOTIR-5711) |
+| `--el-switch-knob-off`      | `--color-muted-foreground`                            | `Switch.tsx` knob, OFF              | the OFF thumb on `--el-muted` — ≥ 3:1 in all 20 pairs (MOTIR-5711)    |
+| `--el-option-active-bg`     | `--color-muted`                                       | `Combobox.tsx:479` (`--el-surface`) | highlighted option                                                    |
+| `--el-overlay-scrim`        | **concrete** `#00000066` (light) / `#000000a6` (dark) | `Modal.tsx:131` `bg-black/40`       | the lone non-`--color-*` token here; carries explicit dark value      |
+| `--el-chip-bg` / `-border`  | `--color-surface` / `--color-border`                  | `Pill.tsx` neutral tone             | neutral chip (tinted chips keep their tint)                           |
+| `--el-card`                 | `--color-background`                                  | `Card.tsx:23` (`--el-page-bg`)      | untinted card surface                                                 |
+| `--el-input-border`         | `--color-hairline-strong`                             | `Input.tsx:65`                      | input outline                                                         |
+| `--el-button-border`        | `--color-hairline-strong`                             | `Button.tsx:41`                     | secondary-button outline                                              |
+| `--el-count-bg` / `-text`   | `--color-surface` / `--color-slate`                   | `Sidebar.tsx:62`, `Pill.tsx:76`     | numeric count badge                                                   |
 
 ### G. Interaction / agile surfaces → **MOTIR-1276 (1266.5)**
 

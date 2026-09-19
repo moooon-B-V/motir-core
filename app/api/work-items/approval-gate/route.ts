@@ -100,6 +100,20 @@ async function readSubject(
   if (!isRegisteredGateKind(kind)) return { state: 'kind_not_built' };
   switch (kind) {
     case 'design_result': {
+      // ⚠️ A DESIGN GATE THAT CARRIES A MERGE GATE IS PORTED BY THE DEVELOPMENT BLOCK
+      // (Bug MOTIR-5712; `design-result.md` AMENDMENT 6 Q1). While the design question
+      // is open on a card whose pull requests await a merge decision, one press answers
+      // both — so the reader must see what that press MERGES, exactly as the item page's
+      // frame shows it (MOTIR-5667): the design result first, its pull requests and How
+      // to test beneath. The To-approve queue lists such a card by this gate only, so
+      // this port is the one place the queue's reader meets those pull requests.
+      if (gate.state === 'awaiting') {
+        const merge = await approvalGatesService.getForWorkItem(
+          { workItemId: gate.workItemId, kind: 'pull_request_approval' },
+          ctx,
+        );
+        if (merge.gate?.state === 'awaiting') return readDevelopmentBlock(gate, item, ctx);
+      }
       const { evidence, filesKept } = await designEvidenceService.getForGateSubject(
         { workItemId: gate.workItemId, subjectId: gate.subjectId },
         ctx,
@@ -118,38 +132,8 @@ async function readSubject(
     // gave `pull_request_approval` the real port below, while keeping a merge arm that
     // returned `kind_not_built`. Both halves are kept — 5437's port, and no merge arm —
     // because the kind that arm answered for is no longer registered to reach it.
-    case 'pull_request_approval': {
-      // THE DEVELOPMENT BLOCK as the port (Story MOTIR-5437 · MOTIR-5439). The subject
-      // is the card's DELIVERY SET (`pullRequestApprovalHandler.resolveSubject`), so a
-      // set that has emptied — every pull request unlinked — is GONE, exactly as the
-      // handler answers null for it. Nothing is read by `subjectId` beyond that: the
-      // gate's `subjectId` IS the work item's id.
-      const [pullRequests, deliveryView, howToTest, designEvidence, members] = await Promise.all([
-        workItemsService.listLinkedPullRequests(gate.workItemId, ctx),
-        workItemsService.getDeliveryView(gate.workItemId, item.targetRepos, ctx),
-        howToTestService.getForWorkItem(gate.workItemId, ctx),
-        designEvidenceService.getCurrentForWorkItem(gate.workItemId, ctx),
-        // Read ONLY for an approved gate, as the item page reads it.
-        gate.state === 'approved'
-          ? pullRequestMergeService.listApprovalMembers(
-              { workItemId: gate.workItemId, approvalGateId: gate.id },
-              ctx,
-            )
-          : Promise.resolve([]),
-      ]);
-      if (deliveryView.deliveries.length === 0) return { state: 'gone' };
-      return {
-        state: 'resolved',
-        kind: 'pull_request_approval',
-        pullRequests,
-        repoDelivery: deliveryView.repos,
-        deliveries: deliveryView.deliveries,
-        howToTest,
-        designEvidence,
-        isDesignCard: item.type === 'design',
-        members,
-      };
-    }
+    case 'pull_request_approval':
+      return readDevelopmentBlock(gate, item, ctx);
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error
        here until it has its own arm. */
@@ -158,6 +142,50 @@ async function readSubject(
       return unhandled;
     }
   }
+}
+
+/**
+ * THE DEVELOPMENT BLOCK as a port — the approve-to-merge gate's own, and a design
+ * gate's while it carries one (see the `design_result` arm).
+ *
+ * ⚠️ `members` is read against the gate HANDED IN, and only once it is approved — a
+ * design gate still awaiting has merged nothing, exactly like an awaiting merge gate.
+ */
+async function readDevelopmentBlock(
+  gate: ApprovalGateDTO,
+  item: { id: string; type: string | null; targetRepos: readonly string[] },
+  ctx: ServiceContext,
+): Promise<ApprovalGateOverlaySubjectDTO> {
+  // THE DEVELOPMENT BLOCK as the port (Story MOTIR-5437 · MOTIR-5439). The subject
+  // is the card's DELIVERY SET (`pullRequestApprovalHandler.resolveSubject`), so a
+  // set that has emptied — every pull request unlinked — is GONE, exactly as the
+  // handler answers null for it. Nothing is read by `subjectId` beyond that: the
+  // gate's `subjectId` IS the work item's id.
+  const [pullRequests, deliveryView, howToTest, designEvidence, members] = await Promise.all([
+    workItemsService.listLinkedPullRequests(gate.workItemId, ctx),
+    workItemsService.getDeliveryView(gate.workItemId, item.targetRepos, ctx),
+    howToTestService.getForWorkItem(gate.workItemId, ctx),
+    designEvidenceService.getCurrentForWorkItem(gate.workItemId, ctx),
+    // Read ONLY for an approved gate, as the item page reads it.
+    gate.state === 'approved'
+      ? pullRequestMergeService.listApprovalMembers(
+          { workItemId: gate.workItemId, approvalGateId: gate.id },
+          ctx,
+        )
+      : Promise.resolve([]),
+  ]);
+  if (deliveryView.deliveries.length === 0) return { state: 'gone' };
+  return {
+    state: 'resolved',
+    kind: 'pull_request_approval',
+    pullRequests,
+    repoDelivery: deliveryView.repos,
+    deliveries: deliveryView.deliveries,
+    howToTest,
+    designEvidence,
+    isDesignCard: item.type === 'design',
+    members,
+  };
 }
 
 export async function GET(req: Request): Promise<Response> {

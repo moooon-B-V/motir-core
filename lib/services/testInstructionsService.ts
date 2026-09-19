@@ -11,9 +11,12 @@ import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository'
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { normalizeCommitSha } from '@/lib/git/commitSha';
+import { authorOf } from '@/lib/howToTest/author';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
 import type {
   CurrentTestInstructionsDTO,
+  HowToTestDraftDTO,
   PublishTestInstructionsResultDTO,
   TestInstructionsDTO,
 } from '@/lib/dto/testInstructions';
@@ -63,8 +66,14 @@ export interface PublishTestInstructionsInput {
   /** The run's HOW TO TEST as rich text (Markdown). Stored as written, trimmed. */
   bodyMd: string;
   previewPath?: string | null;
-  /** One entry per repository the run pushed to — at least one. */
-  repos: readonly PublishTestInstructionsRepoInput[];
+  /**
+   * One entry per repository the run pushed to. OPTIONAL since MOTIR-5689: a
+   * PERSON writing from the form names no repository (they are derived from the
+   * card's linked pull requests), so an absent or empty list is a legal record.
+   * An AGENT should still send one per repository it pushed to — its record is
+   * the evidence for a delivery set.
+   */
+  repos?: readonly PublishTestInstructionsRepoInput[];
   /**
    * Attribute the record to the newest RUNNING dispatch run targeting or
    * carrying this item (the MCP door sets it; MOTIR-5331). Never an id the
@@ -137,13 +146,20 @@ export function normalizeTestInstructionsContent(
     assertChars('previewPath', previewPath, TEST_INSTRUCTIONS_MAX_SHORT_TEXT_CHARS);
   }
 
+  // ⚠️ AN EMPTY SECTION LIST IS LEGAL (Subtask MOTIR-5689; `approval-gates.md`
+  // §9's 2026-09-17 amendment, point 3). This used to refuse `repos: []` with
+  // *at least one*, which was right while an agent was the only author: a run
+  // knows what it pushed to. A PERSON's form has no repository control — the
+  // repositories are DERIVED from the card's linked pull requests — so on a card
+  // with nothing linked there is nothing to put here, and the refusal made the
+  // form unsaveable for exactly the team the amendment protects: one that keeps
+  // its pull requests on the host and its work items in Motir.
+  //
+  // Every other refusal below stands. They govern the entries that ARE given,
+  // and an agent's contract is unchanged: the dispatch prompt still asks for one
+  // entry per repository it pushed to, because its record is the evidence for a
+  // delivery set.
   const rawRepos = input.repos ?? [];
-  if (rawRepos.length === 0) {
-    throw new TestInstructionsInvalidFieldError(
-      'repos',
-      'give one entry per repository the run pushed to — at least one.',
-    );
-  }
   if (rawRepos.length > TEST_INSTRUCTIONS_MAX_REPOS) {
     throw new TestInstructionsCapExceededError('repos', TEST_INSTRUCTIONS_MAX_REPOS, 'items');
   }
@@ -341,6 +357,47 @@ export const testInstructionsService = {
   },
 
   /**
+   * The DRAFT a PERSON's How-to-test form opens on (Story MOTIR-5450 · Subtask
+   * MOTIR-5453; `approval-gates.md` §9's 2026-09-17 amendment, point 2).
+   *
+   * `publish` above is already the one writer for both author kinds — a person
+   * calls it with `attributeToRunningDispatch` left false, which is what records
+   * `dispatchRunId: null` and `publishedById` the person. What a person is
+   * missing is not a write path, it is a FILLED-IN FORM, and that is all this is.
+   *
+   * On **Edit** it returns the current record's body and preview path; on **Add**
+   * there is no record, so it returns `''` and `null`.
+   *
+   * ⚠️ IT READS NO REPOSITORY DATA. The form has no repository control — a
+   * repository enters a record by having its pull request LINKED
+   * (`design-notes.md` §24, decisions 8 and 8b) — so there is no section list to
+   * suggest and no project-repository set to offer. That is why this is ONE
+   * query: an earlier shape walked the subtree, the deliveries with their check
+   * rows and the project's repositories to fill a picker that no longer exists.
+   *
+   * Asserts **`work_item:edit`** rather than `project:browse`: the draft exists
+   * only for somebody who may save it, and it is the permission `publish` and
+   * the explicit pull-request link both assert.
+   */
+  async getDraftForWorkItem(workItemId: string, ctx: ServiceContext): Promise<HowToTestDraftDTO> {
+    const binding = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+
+    const item = await withWorkspaceContext(binding, (tx) =>
+      workItemRepository.findById(workItemId, tx),
+    );
+    if (!item) throw new TestInstructionsWorkItemNotFoundError(workItemId);
+    await projectAccessService.assertPermission(item.projectId, ctx, 'work_item:edit');
+
+    const current = await withWorkspaceContext(binding, (tx) =>
+      testInstructionsRepository.findCurrentForWorkItem(item.id, tx),
+    );
+    if (!current) return { bodyMd: '', previewPath: null };
+
+    const record = toTestInstructionsDto(current);
+    return { bodyMd: record.bodyMd, previewPath: record.previewPath };
+  },
+
+  /**
    * The CURRENT record for a run target named by its KEY, with each section's
    * repository `owner/name` — the public read a CLI renders into a session pull
    * request body (MOTIR-5358). `record: null` when no run has written one.
@@ -352,17 +409,26 @@ export const testInstructionsService = {
     ctx: ServiceContext,
   ): Promise<CurrentTestInstructionsDTO> {
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
-    const record = await this.getCurrentForWorkItem(item.id, ctx);
-    if (!record) return { workItemKey: item.identifier, record: null };
-    const repos = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) => projectRepoRepository.listByProject(item.projectId, ctx.workspaceId, tx),
+    await projectAccessService.assertPermission(item.projectId, ctx, 'project:browse');
+    const binding = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+
+    // WITH its run (MOTIR-5454): this response names the AUTHOR, and a run is
+    // named by the command and start time its row carries, not by its id.
+    const row = await withWorkspaceContext(binding, (tx) =>
+      testInstructionsRepository.findCurrentForWorkItemWithRun(item.id, tx),
     );
+    if (!row) return { workItemKey: item.identifier, record: null };
+    const record = toTestInstructionsDto(row);
+
+    const [repos, publishers] = await Promise.all([
+      withWorkspaceContext(binding, (tx) =>
+        projectRepoRepository.listByProject(item.projectId, ctx.workspaceId, tx),
+      ),
+      row.publishedById !== null ? userRepository.findByIds([row.publishedById]) : [],
+    ]);
     const nameOf = new Map(
-      repos.flatMap((row) =>
-        row.githubRepo
-          ? [[row.githubRepo.id, `${row.githubRepo.owner}/${row.githubRepo.name}`]]
-          : [],
+      repos.flatMap((r) =>
+        r.githubRepo ? [[r.githubRepo.id, `${r.githubRepo.owner}/${r.githubRepo.name}`]] : [],
       ),
     );
     return {
@@ -373,6 +439,7 @@ export const testInstructionsService = {
           ...section,
           repoName: nameOf.get(section.repoId) ?? null,
         })),
+        author: authorOf(row, new Map(publishers.map((user) => [user.id, user.name] as const))),
       },
     };
   },

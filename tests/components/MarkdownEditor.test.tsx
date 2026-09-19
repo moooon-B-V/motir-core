@@ -103,6 +103,143 @@ describe('Markdown round-trip fidelity (storage invariant)', () => {
   });
 });
 
+// ── The code block's LANGUAGE (Story MOTIR-5450 · Subtask MOTIR-5458) ───────
+//
+// The rendered block prints each fence's language above the code, so an agent's
+// ```` ```sh ```` becomes a labelled, copyable command. A person writing the
+// same instructions must be able to set one, and — the part nobody had checked —
+// a language on a LOADED fence must survive load → edit → save.
+//
+// The round-trip arm runs the SAME cases through both extension sets. That is
+// the claim the prop rests on: the field adds a node VIEW, not a node, so a
+// document must serialize identically with it on or off. An implementation that
+// registered a second code-block node, or configured the attribute away, fails
+// the `with the field` column while the `without` column stays green.
+function roundTripWithLanguageField(markdown: string): string {
+  const element = document.createElement('div');
+  const editor = new Editor({
+    element,
+    extensions: buildEditorExtensions({ codeLanguageLabel: 'Language' }),
+    content: markdown,
+  });
+  const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+    getMarkdown: () => string;
+  };
+  const out = storage.getMarkdown();
+  editor.destroy();
+  return out.trim();
+}
+
+describe("A code block's language round-trips (MOTIR-5458)", () => {
+  const fences: Array<[name: string, markdown: string]> = [
+    ['a KNOWN language', '```sh\necho hi\n```'],
+    // Nothing keeps a list of languages, and nothing should: the rendered block
+    // prints what was written. A fence the editor has never heard of survives.
+    ['an UNKNOWN language', '```nushell\nls | length\n```'],
+    ['NO language (a bare fence)', '```\nconst x = 1;\n```'],
+  ];
+
+  it.each(fences)('%s survives load → serialize, with the field OFF', (_name, markdown) => {
+    expect(roundTrip(markdown)).toBe(markdown);
+  });
+
+  it.each(fences)('%s survives load → serialize, with the field ON', (_name, markdown) => {
+    expect(roundTripWithLanguageField(markdown)).toBe(markdown);
+  });
+
+  it('CHANGING the language serializes the new fence — sh becomes bash', () => {
+    const element = document.createElement('div');
+    const editor = new Editor({
+      element,
+      extensions: buildEditorExtensions({ codeLanguageLabel: 'Language' }),
+      content: '```sh\necho hi\n```',
+    });
+    // What the field's `input` handler does, at the same altitude: set the
+    // attribute on the block at that position.
+    editor.commands.updateAttributes('codeBlock', { language: 'bash' });
+    const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+      getMarkdown: () => string;
+    };
+    const out = storage.getMarkdown().trim();
+    editor.destroy();
+    expect(out).toBe('```bash\necho hi\n```');
+  });
+
+  it('CLEARING the language serializes a bare fence', () => {
+    const element = document.createElement('div');
+    const editor = new Editor({
+      element,
+      extensions: buildEditorExtensions({ codeLanguageLabel: 'Language' }),
+      content: '```sh\necho hi\n```',
+    });
+    editor.commands.updateAttributes('codeBlock', { language: null });
+    const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+      getMarkdown: () => string;
+    };
+    const out = storage.getMarkdown().trim();
+    editor.destroy();
+    expect(out).toBe('```\necho hi\n```');
+  });
+
+  it('TYPING ```sh then a space makes a code block whose fence carries `sh`', () => {
+    const element = document.createElement('div');
+    const editor = new Editor({
+      element,
+      extensions: buildEditorExtensions({ codeLanguageLabel: 'Language' }),
+      content: '',
+    });
+    // The input rule fires on the text INSERTION, which is what a keystroke is;
+    // `setContent` would parse the backticks as Markdown and prove nothing.
+    editor.commands.insertContent('```sh ');
+    editor.commands.insertContent('echo hi');
+    const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+      getMarkdown: () => string;
+    };
+    const out = storage.getMarkdown().trim();
+    editor.destroy();
+    expect(out).toBe('```sh\necho hi\n```');
+  });
+});
+
+describe("The code block's language FIELD (component, MOTIR-5458)", () => {
+  it("renders the field on a code block, reading the fence's language", async () => {
+    renderWithIntl(
+      <MarkdownEditor
+        label="How to test"
+        value={'```sh\necho hi\n```'}
+        onChange={() => {}}
+        codeLanguage
+      />,
+    );
+    const field = (await screen.findByLabelText('Language')) as HTMLInputElement;
+    expect(field.value).toBe('sh');
+  });
+
+  it('typing in the field writes the fence — the editor reports the new Markdown', async () => {
+    const onChange = vi.fn();
+    renderWithIntl(
+      <MarkdownEditor
+        label="How to test"
+        value={'```sh\necho hi\n```'}
+        onChange={onChange}
+        codeLanguage
+      />,
+    );
+    const field = (await screen.findByLabelText('Language')) as HTMLInputElement;
+    fireEvent.input(field, { target: { value: 'bash' } });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(onChange.mock.calls.at(-1)?.[0].trim()).toBe('```bash\necho hi\n```');
+  });
+
+  it('WITHOUT the prop there is no field — every other editor surface is untouched', async () => {
+    renderWithIntl(
+      <MarkdownEditor label="Description" value={'```sh\necho hi\n```'} onChange={() => {}} />,
+    );
+    await waitFor(() => expect(screen.getByLabelText('Description')).toBeTruthy());
+    expect(screen.queryByLabelText('Language')).toBeNull();
+  });
+});
+
 // ── Component wiring ────────────────────────────────────────────────────────
 describe('MarkdownEditor (component)', () => {
   it('renders a labelled, editable textbox with a formatting toolbar', async () => {

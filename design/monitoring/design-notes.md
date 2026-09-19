@@ -8,6 +8,7 @@ project, sees the connection's health, and disconnects one.
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------- |
 | **The `Monitoring` room** and its settings-rail entry | [`monitoring-room.mock.html`](./monitoring-room.mock.html) + [`monitoring-room.png`](./monitoring-room.png) | MOTIR-5256 (design) · **MOTIR-5288** (revision) → **MOTIR-5262** (surface + locales) | §1–§11   |
 | **Ingestion on each connection row**                  | [`monitoring-room--ingestion.mock.html`](./monitoring-room--ingestion.mock.html)                            | **MOTIR-5575** (delta) → **MOTIR-5582** (surface + locales)                          | §12      |
+| **Sync on each connection row**                       | [`monitoring-room--sync.mock.html`](./monitoring-room--sync.mock.html)                                      | **MOTIR-5700** (delta) → **MOTIR-5707** (surface + locales)                          | §13      |
 
 **Story MOTIR-4926 · subtask MOTIR-5256 (design gate, Principle #13).** This is the layout source
 of truth for **MOTIR-5262**, which builds the room, the rail entry and both locales, and the surface
@@ -449,3 +450,181 @@ scope boundary above.
 | **MOTIR-5581** | **GIVES** the overdue treatment derived from its half-hourly cadence. **No TAKES:** no schedule control is drawn.                                                                                                                                                                                      |
 | **MOTIR-4932** | Nothing drawn. **No TAKES:** the issue provenance panel is explicitly excluded.                                                                                                                                                                                                                        |
 | **MOTIR-5575** | This is the producing design card, not a consumer allocation. No self-edge is introduced.                                                                                                                                                                                                              |
+
+---
+
+## §13 · REVISION — sync: two direction switches, and a failed resolve-back on the row
+
+_Amends the connection row of `design/monitoring/monitoring-room--ingestion.mock.html` (§12) through
+the delta `design/monitoring/monitoring-room--sync.mock.html`, drawn by MOTIR-5700 for Story
+MOTIR-4931. Built by **MOTIR-5707** (surface + both locales), which is `blocked_by` this card._
+
+### What it composes, and redraws none of
+
+| Composed                                   | Design card                            | `sourcePath`                                             | What it still owns                                                                                                                                      |
+| ------------------------------------------ | -------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The room, grant card, rows, degraded state | **MOTIR-5256**, revised **MOTIR-5288** | `design/monitoring/monitoring-room.mock.html`            | The rail entry (General, below Repositories), the pane head, the grant card and its `degraded` banner, the picker, disconnect, loading, return banners. |
+| The row's ingestion strip                  | **MOTIR-5575**                         | `design/monitoring/monitoring-room--ingestion.mock.html` | The **Minimum level** control, its saving/refused states, and the poll-outcome line with its state table.                                               |
+
+Neither file changes in this diff. **The access path is unchanged and is DRAWN, not re-decided:**
+panel 1 shows the settings rail's `General` group with **Monitoring** active, and the switches on the
+row in the room it opens — the whole path from the rail to the control in one panel.
+
+**Shipped reality.** The row here mirrors the SHIPPED `ConnectionRow` in
+`app/(authed)/settings/project/monitoring/_components/MonitoringRoom.tsx` (as of `origin/main`
+`3c80c945a`), class for class — not the ingestion mock's stylisation of it. The two differ in one
+visible way: the shipped row writes **Minimum level** as a quiet inline label to the LEFT of the
+`Combobox` trigger, where the §12 mock stacked an uppercase label above it. This delta draws what
+ships. The switch is the design system's `Switch` (`packages/design-system/src/components/ui/Switch.tsx`,
+re-exported as `@/components/ui/Switch`): a 36×20 track on `--el-switch-on` / `--el-muted`, a 14px
+knob on `--el-switch-knob`, `role="switch"`, named by its visible label through `aria-labelledby`.
+No new control is drawn.
+
+### Decision 1 · The grouping — a SYNC band under the row's top line, not beside Minimum level
+
+The two switches sit in their **own band inside the same row card**, beneath the top line and
+separated from it by an `--el-border-soft` hairline. The top line keeps exactly what it has shipped
+since §12: the slug, `Bound …`, the poll line, **Minimum level**, and Disconnect.
+
+**Why, in order of weight:**
+
+1. **Direction.** Minimum level governs what comes **IN** — which of the monitor's issues become bugs.
+   The switches govern what goes **OUT** to the monitor and what Motir **takes back** from it after a
+   bug exists. Putting all three in one control cluster would read as three filters on ingestion;
+   splitting them by a hairline says there are two questions on this row.
+2. **Room.** The top line is already at capacity at the 46rem pane: a two-line identity column, a
+   `9rem` trigger and an icon button. Two switches, each with a label and a one-line hint, cannot
+   join it without wrapping the row into a form.
+3. **Ownership.** Both switches are per CONNECTION (`monitor_connection.resolve_on_done`,
+   `.sync_assignee` — MOTIR-5701), exactly the scope the row already is, so they stay ON the row. A
+   room-level "sync settings" section would claim they apply to every binding at once, which is false.
+
+The band opens with a quiet label, **Sync with Sentry**, in the row's secondary text treatment
+(`text-xs`, `--el-text-secondary`) — the same register as `Minimum level`, so neither shouts.
+
+### Decision 2 · Labels name the OUTCOME, and each hint says what OFF means
+
+| Switch          | Label                                      | Hint (always shown, under the label)                                  | Stored as       |
+| --------------- | ------------------------------------------ | --------------------------------------------------------------------- | --------------- |
+| Motir → monitor | **Resolve in Sentry when the bug is done** | Turn off to leave Sentry issues as they are when their bugs are done. | `resolveOnDone` |
+| monitor → Motir | **Take the assignee from Sentry**          | Turn off to ignore assignments made in Sentry.                        | `syncAssignee`  |
+
+**Both default ON** — the story's shipped default (MOTIR-4931: "the shipped default resolves"), and
+the store's `DEFAULT true` on both columns (MOTIR-5701). Panel 1 draws the default; panel 2 draws
+each switch off, one per row. A switch that is off keeps its hint unchanged: the hint describes the
+switch, not the current value, so it never flips wording under a person's cursor.
+
+### Decision 3 · A failed resolve-back, per value of the sync outcome
+
+The state set is the checklist. The row reads the connection's `lastSyncError` /
+`lastSyncErrorAt` / `lastSyncErrorWorkItemIdentifier` (MOTIR-5706's DTO), and nothing else:
+
+| Sync outcome                          | What the row shows                                                                                                                                                                                                                                                                                                                                                                   | Defined by             |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- |
+| **none yet** (nothing resolved)       | No line.                                                                                                                                                                                                                                                                                                                                                                             | MOTIR-5701             |
+| **last resolve succeeded**            | No line. A success is not news on this surface — and a success CLEARS the connection's failure (`clearSyncFailure`), so a line that was showing goes away on its own.                                                                                                                                                                                                                | MOTIR-5703             |
+| **last resolve failed**               | A filled warning line **inside the sync band, directly under the `Resolve in Sentry…` switch it belongs to**: `TriangleAlert` on `--el-warning`, fill `--el-warning-surface`, ink `--el-warning-text`. It reads **Couldn't resolve Sentry's issue for `<KEY-n>`:** `<the provider's reason, verbatim>` then **Tried `<relative time>`.** The key is a link to the bug (`--el-link`). | MOTIR-5703, MOTIR-5706 |
+| **the issue is gone at the provider** | **Not drawn on the room.** It is said once, on the bug itself, by the comment the resolve-back posts as the connection's binder; the link is recorded `gone` and never retried, so there is nothing to fix here and no room state for it.                                                                                                                                            | MOTIR-5703             |
+
+The line sits under the resolve switch rather than beside the poll line because it is about the
+OUTBOUND direction: the poll line reports what the last check for NEW errors did (§12), and a person
+reading "Couldn't check…" and "Couldn't resolve…" side by side should be able to tell which way each
+one failed from where it sits. It is the connection's LAST failure only — a per-issue sync log is out
+of scope (below).
+
+**The assignee direction draws no line on the room.** Its no-ops (`team_assignee`,
+`no_matching_member`) are recorded per link on `monitor_issue.assignee_sync_note` (MOTIR-5705) and
+are facts about one bug, so they belong on that bug's provenance panel (MOTIR-4932). A missing binder
+on the assignee path writes the same connection failure the resolve path writes (MOTIR-5705), and
+then it renders in this same line.
+
+### Decision 4 · On a `degraded` grant the switches stay OPERABLE
+
+Panel 4 draws the degraded grant of the base mock's panel 4, and the switches on its row are enabled.
+**A switch is a Motir-side preference; toggling it makes no call to Sentry** (MOTIR-5706 writes two
+columns and nothing else). Disabling it would only take away the one useful act available while the
+credential is broken: a team that would rather NOT be written to can turn resolve-back off BEFORE it
+reconnects, so the first sweep after reconnecting resolves nothing. The failure line may appear on a
+degraded row too — a resolve attempted while the credential was revoked records Sentry's refusal —
+and the two states stack in the order of §12: the grant banner stays loudest, the row lines beneath it.
+
+### Decision 5 · Saving: write on toggle, pending → saved → failed, like Minimum level
+
+- **On toggle** the switch moves at once and the request goes out carrying only the key that changed
+  (MOTIR-5706's PATCH is sparse). **While it is in flight** the switch is disabled and a
+  `LoaderCircle` spinner with **Saving…** sits after its label; the row's Disconnect is disabled for the
+  same interval, exactly as §12 does for the level. The OTHER switch stays operable — the writes are
+  independent keys.
+- **Saved** is the response DTO's value rendered in place — no toast, no banner.
+- **Failed:** the switch returns to the stored value, and a filled warning line appears under the band:
+  **Couldn't change this setting.** Nothing changed — try again. It is local to the row, like the
+  level's refusal, and never turns the grant `degraded`. Panel 5 draws both.
+
+### Copy — every new string, both locales
+
+Namespace: `monitoring.row.sync.*` in `messages/en.json` / `messages/zh.json`, beside the shipped
+`monitoring.row.level.*` and `monitoring.row.poll.*`. The `zh` register follows the shipped room's
+(`最低级别`, `正在保存…`, `未做任何更改——请重试。`).
+
+| Key                                     | `en`                                                                  | `zh`                                                     |
+| --------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------- |
+| `monitoring.row.sync.label`             | Sync with Sentry                                                      | 与 Sentry 同步                                           |
+| `monitoring.row.sync.resolve.label`     | Resolve in Sentry when the bug is done                                | 缺陷完成时，在 Sentry 中将问题标记为已解决               |
+| `monitoring.row.sync.resolve.hint`      | Turn off to leave Sentry issues as they are when their bugs are done. | 关闭后，缺陷完成时 Sentry 中的问题将保持原状。           |
+| `monitoring.row.sync.assignee.label`    | Take the assignee from Sentry                                         | 从 Sentry 获取负责人                                     |
+| `monitoring.row.sync.assignee.hint`     | Turn off to ignore assignments made in Sentry.                        | 关闭后，将忽略在 Sentry 中进行的分配。                   |
+| `monitoring.row.sync.saving`            | Saving…                                                               | 正在保存…                                                |
+| `monitoring.row.sync.failed`            | `<b>Couldn't change this setting.</b> Nothing changed — try again.`   | `<b>无法更改此设置。</b>未做任何更改——请重试。`          |
+| `monitoring.row.sync.resolveFailed`     | `<b>Couldn't resolve Sentry's issue for {key}:</b> {reason}`          | `<b>无法在 Sentry 中解决 {key} 对应的问题：</b>{reason}` |
+| `monitoring.row.sync.resolveFailedWhen` | Tried {when}.                                                         | 尝试时间：{when}。                                       |
+
+`{key}` renders as a link to the bug; `{reason}` is `lastSyncError` verbatim — the component never
+words or summarises it (§4's rule, applied outward); `{when}` is `lastSyncErrorAt` formatted as a
+relative time, like every other time on the row. Both switches are named by their visible label
+(`aria-labelledby`), so no separate accessible-name string exists.
+
+### Which behaviour came from which card
+
+| Drawn behaviour                                                                                                                               | Defining card                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Both switches exist per connection, both default on                                                                                           | **MOTIR-5701** (the columns, `DEFAULT true`), **MOTIR-4931** (the default) |
+| A switch writes only its own key and returns the DTO the row renders; `integration:manage` gates it                                           | **MOTIR-5706**                                                             |
+| Resolve fires when a bug reaches a done-category status; a refusal is recorded on the connection with the provider's reason and the bug's key | **MOTIR-5703**                                                             |
+| A success clears the connection's failure (the line disappears)                                                                               | **MOTIR-5703** (`clearSyncFailure`)                                        |
+| A gone issue is said on the card, never on the room, and never retried                                                                        | **MOTIR-5703**                                                             |
+| Assignee is taken only on a provider-side CHANGE; team / unmatched are recorded no-ops                                                        | **MOTIR-5705**                                                             |
+| The DTO carries `resolveOnDone`, `syncAssignee`, `lastSyncError*`                                                                             | **MOTIR-5706**                                                             |
+
+These are `relates_to` specifications, not build prerequisites: those cards are `blocked_by` nothing
+here, and the consumer, MOTIR-5707, is `blocked_by` this card.
+
+### Scope boundary
+
+- **The work-item page** — provenance, recurrence, the gone-issue presentation and any assignee no-op
+  note on a bug — is MOTIR-4932's panel.
+- **No per-issue sync log**, and no count of resolved issues. The row shows the LAST failure only.
+- **No Motir → Sentry assignee control.** The story ships monitor → Motir only.
+- **No change** to the rail entry, the grant card, the picker, disconnect, Minimum level or the poll
+  line. `monitoring-room.mock.html` and `monitoring-room--ingestion.mock.html` remain their design of
+  record.
+
+### Tokens and primitives
+
+Colour only through `--el-*` (`--el-switch-on`, `--el-switch-knob`, `--el-muted`,
+`--el-border-strong`, `--el-border-soft`, `--el-warning*`, `--el-link`, `--el-text*`); shape only
+through `--radius-*`, `--spacing-*` and `--height-*`. Primitives: `Switch`, `Combobox` (unchanged
+level trigger), the row card, the icon button and the filled warning line the shipped row already
+renders for a refused level. Icons (`activity`, `sliders-horizontal`, `folder-git-2`, `bug`,
+`circle-check-big`, `triangle-alert`, `refresh-cw`, `trash-2`, `chevron-down`, `loader-circle`) are
+extracted from the installed `lucide-react`, each with its provenance comment.
+
+### GIVES / TAKES sweep
+
+| Key            | GIVES / TAKES                                                                                                                                                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-5707** | **GIVES** the complete build spec: band placement, labels, hints, pending/failed-save, degraded-operable, the failure line and its placement, every `en`/`zh` string and key. **No TAKES** — its criteria already assign the surface and both locales. |
+| **MOTIR-5706** | **GIVES** a visible consumer for all five DTO fields. **No TAKES:** the row needs nothing the card does not already expose.                                                                                                                            |
+| **MOTIR-5703** | **GIVES** where its recorded failure is read. **No TAKES:** the gone comment stays its own, on the card.                                                                                                                                               |
+| **MOTIR-5705** | **GIVES** the switch that gates it. **No TAKES:** its no-op notes are not drawn here.                                                                                                                                                                  |
+| **MOTIR-5701** | **GIVES** a reader for both switches and the failure columns. **No TAKES.**                                                                                                                                                                            |
+| **MOTIR-4932** | Nothing drawn. Named only to hold the scope boundary above.                                                                                                                                                                                            |

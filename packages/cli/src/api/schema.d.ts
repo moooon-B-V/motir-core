@@ -1070,7 +1070,7 @@ export interface paths {
         };
         /**
          * Get a run target’s current How to test
-         * @description The CURRENT How-to-test record on a work item — the one the newest run published onto its run target: its rich-text Markdown body (sections, commands in fenced code blocks), the preview path, and a section per repository with its commit. `record` is `null` when no run has written one. A CLI renders it into the `## How to test` section of each session pull request body, so the body and the item page show one record. A read.
+         * @description The CURRENT How-to-test record on a work item — the one the newest run published onto its run target: its rich-text Markdown body (sections, commands in fenced code blocks), the preview path, and a section per repository with its commit. `repos` may be EMPTY: a person writing from the item page names no repository, because Motir derives them from the linked pull requests. `record` is `null` when no run has written one. A CLI renders it into the `## How to test` section of each session pull request body, so the body and the item page show one record. A read.
          *
          *     Requires the `project:browse` permission.
          */
@@ -2249,6 +2249,17 @@ export interface components {
             key: string;
             record: {
                 dispatchRunId: string | null;
+                author: {
+                    /** @constant */
+                    kind: "run";
+                    runId: string;
+                    label: string;
+                } | {
+                    /** @constant */
+                    kind: "person";
+                    userId: string | null;
+                    label: string;
+                };
                 createdAt: string;
                 bodyMd: string;
                 previewPath: string | null;

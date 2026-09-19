@@ -1565,7 +1565,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           additionalProperties: false,
         },
         description:
-          'One entry per repository the run pushed to, at most 8, each with its pushed head commit.',
+          'One entry per repository the run pushed to, at most 8, each with its pushed head commit. Optional only because a PERSON writing from the form names no repository; SEND ONE PER REPOSITORY YOU PUSHED TO — your record is the evidence for the delivery set a person approves.',
       },
       previewPath: {
         type: 'string',
@@ -1573,7 +1573,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           'The path to open on the preview deployment, starting with "/" — e.g. "/items/ACME-7". A path, never a URL: Motir joins it onto the preview the host reported. At most 500 characters.',
       },
     },
-    required: ['key', 'bodyMd', 'repos'],
+    required: ['key', 'bodyMd'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

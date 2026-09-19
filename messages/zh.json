@@ -147,7 +147,8 @@
     "mentionWorkItems": "工作项",
     "mentionTypeToSearch": "继续输入以搜索工作项…",
     "mentionSearching": "搜索中…",
-    "mentionNoResults": "没有与「{query}」匹配的工作项。"
+    "mentionNoResults": "没有与「{query}」匹配的工作项。",
+    "codeLanguage": "语言"
   },
   "common": {
     "close": "关闭",
@@ -6288,49 +6289,7 @@
         },
         "stale": {
           "title": "针对 <sha>{recordSha}</sha> 编写——{repo} 现在位于 <sha>{headSha}</sha>。",
-          "body": "以下说明可能已过时。预览和 CI 跟随最新提交。",
           "pill": "已过时"
-        },
-        "preview": {
-          "title": "在预览环境中",
-          "state": {
-            "success": "就绪",
-            "queued": "排队中",
-            "pending": "等待中",
-            "in_progress": "部署中",
-            "failure": "部署失败",
-            "error": "部署出错",
-            "inactive": "已停用",
-            "canceled": "已取消"
-          },
-          "notReady": "此提交的 {environment} 部署状态为{state}。部署成功后，链接会显示在这里。",
-          "failed": "此提交的 {environment} 部署未成功，因此没有可打开的预览。请在本地测试，或等待下一次推送。",
-          "inactive": "此提交的 {environment} 部署已不再活跃——已被更新的部署取代。",
-          "canceled": "此提交的 {environment} 部署在完成前已被取消。",
-          "none": "未报告预览",
-          "noneBody": "此仓库的 CI 未为此提交报告任何部署。Motir 不会创建预览。"
-        },
-        "local": {
-          "title": "在本地",
-          "noBranch": "没有可获取的分支",
-          "noBranchBody": "尚无拉取请求包含此仓库的分支，因此没有可获取的内容。"
-        },
-        "ci": {
-          "title": "CI 已验证的内容",
-          "summary": "{total} 项检查中 {passed} 项通过",
-          "conclusion": {
-            "success": "通过",
-            "failure": "失败",
-            "pending": "运行中",
-            "neutral": "中性"
-          },
-          "none": "未报告检查",
-          "noneBody": "此提交尚未报告任何检查，因此 CI 尚未验证任何内容。"
-        },
-        "noSection": {
-          "title": "不在本次运行的记录中",
-          "pill": "无对应部分",
-          "body": "{run} 未为此仓库编写对应部分，因此上方说明不涵盖其拉取请求。其行仍显示 PR 与 CI 状态。"
         },
         "missing": {
           "title": "尚无运行为此工作项编写测试说明。",
@@ -6338,12 +6297,26 @@
           "noRun": "此工作项没有记录的运行。"
         },
         "earlier": {
-          "toggle": "更早的运行（{count}）"
+          "versions": "早前版本（{count}）"
         },
         "child": {
           "pointer": "作为 <link>{key}</link> 的一部分进行测试"
         },
-        "unknownState": "无法识别的测试说明状态：{value}"
+        "unknownState": "无法识别的测试说明状态：{value}",
+        "add": "添加测试方法",
+        "edit": "编辑",
+        "writtenByPerson": "由 <b>{name}</b> 编写 · {time}",
+        "form": {
+          "label": "测试方法",
+          "body": "正文",
+          "previewPath": "预览路径",
+          "optional": "可选",
+          "previewPathHint": "形如 /items/ACME-7 的路径",
+          "dirty": "有未保存的更改",
+          "saving": "保存中…",
+          "save": "保存",
+          "cancel": "取消"
+        }
       },
       "fix": {
         "title": "修复检查",
