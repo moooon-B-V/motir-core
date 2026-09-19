@@ -57,6 +57,12 @@
   and who may press. Row 4a's _"ONE transaction"_ is struck and replaced;
   nothing else in §8 changes.
 
+- **AMENDED 2026-09-19 (MOTIR-5800), at §4, by Yue.** §4's FOURTH AMENDMENT
+  reverses the THIRD's decisions 5–7 for a manual-mode FAILURE ejection: the
+  card returns to `in_review` with ONE fresh approve-to-merge gate, approving it
+  re-queues, _Queue again_ is retired for that case, and `implemented → approved`
+  leaves the workflow. Decisions 5–7 are struck in place, still readable.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -842,8 +848,14 @@ An approval that does not merge is a note, not a gate.
 > removal writes nothing and moves nothing: the merge webhook already owns
 > `done` (§4 amendment).
 >
-> **5. THE CARD'S ONE DECIDED GATE STANDS, AND _QUEUE AGAIN_ REUSES IT WHILE THE
-> HEADS ARE UNCHANGED** (rung 1: GitHub; rung 3: MOTIR-5603's record).
+> **⚠️ SUPERSEDED by the FOURTH AMENDMENT below (MOTIR-5800, 2026-09-19)** for a
+> FAILURE removal in a `manual` project: the merge question is asked AGAIN on ONE
+> fresh gate, approving it re-queues, and _Queue again_ is retired for that case.
+> It still holds for a NEUTRAL removal and for `auto` mode. Kept visible as the
+> record.
+>
+> ~~**5. THE CARD'S ONE DECIDED GATE STANDS, AND _QUEUE AGAIN_ REUSES IT WHILE THE
+> HEADS ARE UNCHANGED**~~ (rung 1: GitHub; rung 3: MOTIR-5603's record).
 >
 > - **An ejection neither supersedes nor re-opens the decided
 >   `pull_request_approval` gate.** A decided gate is a record (§6a), and the
@@ -877,7 +889,13 @@ An approval that does not merge is a note, not a gate.
 > - **Two presses on one exit enqueue once.** The card's row lock plus a
 >   `requeuedAt IS NULL` predicate decide it; the loser gets a named refusal.
 >
-> **6. NO SECOND GATE OVER THE SAME COMMITS, AND A PUSH RE-ARMS** (rung 2: the
+> **⚠️ SUPERSEDED by the FOURTH AMENDMENT below (MOTIR-5800, 2026-09-19)** in its
+> first half: a manual FAILURE removal now moves the card to `in_review` and
+> DOES raise ONE fresh gate over the same commits, computed from the standing
+> failure exit rather than from the promotion. The promotion hold and the
+> push re-arm below are unchanged. Kept visible as the record.
+>
+> ~~**6. NO SECOND GATE OVER THE SAME COMMITS, AND A PUSH RE-ARMS**~~ (rung 2: the
 > shipped promotion). **This is the rule the story turns on, because the shipped
 > latch would otherwise break decision 5 by itself.** After a failure exit the
 > card is `implemented` while its members' OWN checks are still green: only the
@@ -912,7 +930,11 @@ An approval that does not merge is a note, not a gate.
 > as merge candidates was the alternative, and it was rejected: a card with one
 > member re-pushed and another still queued would then never be asked again.)
 >
-> **7. THE WORKFLOW EDGES** (rung 2: `DEFAULT_TRANSITIONS`, which carries 33
+> **⚠️ SUPERSEDED by the FOURTH AMENDMENT below (MOTIR-5800, 2026-09-19)** at its
+> second bullet: `implemented → approved` is REMOVED and `approved → in_review`
+> is DECLARED. The first and third bullets stand. Kept visible as the record.
+>
+> ~~**7. THE WORKFLOW EDGES**~~ (rung 2: `DEFAULT_TRANSITIONS`, which carries 33
 > edges at this base).
 >
 > - `approved → implemented` and `in_review → implemented` are declared
@@ -995,6 +1017,126 @@ An approval that does not merge is a note, not a gate.
 > | 7            | MOTIR-5630 — the edges and their backfill                   |
 > | 8            | MOTIR-5633 — the failing check · MOTIR-5638 — the App grant |
 > | the surface  | MOTIR-5631 — the design delta · MOTIR-5635 — the frame      |
+
+> ### §4 — FOURTH AMENDMENT (MOTIR-5800, 2026-09-19): a FAILURE ejection in a `manual` project RE-ASKS the merge question — the card returns to `in_review` with ONE fresh approve-to-merge gate over the same commits, approving it re-queues, _Queue again_ is retired for failures, and `implemented → approved` leaves the workflow
+>
+> **DECIDED BY THE REQUESTER (Yue, 2026-09-19)**, answering MOTIR-5144's open
+> criterion. `implemented → approved` must be ABSENT, as MOTIR-5139 first declared
+> it. The requester's reasoning, in their terms: `approved` serves two gates, the
+> DESIGN gate and the MERGE gate. The design gate never rolls back. The merge gate
+> does: a pull request the queue throws out did not merge, so the yes a person gave
+> about those commits landing has not been honoured, and the question is open again.
+> After an ejection the approval collapses to ONE gate, the merge-PR gate. It shows
+> the failure, a person **approves to re-queue**, and because the failure can be
+> flaky, the approval surface also offers `motir fix`.
+>
+> **What this reverses.** The THIRD AMENDMENT's decisions 5, 6 (first half) and 7
+> (second bullet), struck in place above. Its decisions 1–4, 8 and 9 stand
+> unchanged: the event, the reason map, the exit row, the failing check and the
+> delivery-GUID idempotency. **Every rule below is for a `manual`-mode project and a
+> FAILURE removal.** A NEUTRAL removal and `auto` mode keep the THIRD AMENDMENT's
+> behaviour exactly.
+>
+> **1. A FAILURE removal moves the card `approved → in_review`, not to
+> `implemented`.** A FAILURE removal is any disposition
+> `lib/mergeQueue/queueExit.ts` classifies `failure` (the THIRD AMENDMENT's
+> decision 2 table). _Why:_ `in_review` is the status for "CI spoke and a person
+> must decide", and once the edge in point 6 is gone it is the only status from
+> which a fresh approval can reach `approved`.
+>
+> **2. The merge question is asked AGAIN, on ONE fresh awaiting
+> `pull_request_approval` gate over the SAME delivery-set version, standing
+> alone.**
+>
+> - **The decided gate row is never edited.** It is a record (§6a), and
+>   `trg_approval_gate_decided_immutable` refuses the write anyway. _Why:_ the
+>   first yes happened and stays true as history; what changed is that it did not
+>   land.
+> - **The re-ask is COMPUTED from the standing failure exit**: a
+>   `GithubPullRequestQueueExit` row whose disposition is `failure`, whose
+>   `requeuedAt` is null, and whose head SHA is the member's CURRENT head.
+>   `resolveGateSet` treats such an exit as making the merge question OWED even
+>   though the latest merge gate is `approved` at the same set version. _Why:_ the
+>   old row cannot carry the change, so the only honest input is the ejection
+>   record.
+> - **A decided `design_result` gate stays decided and is not re-asked**, also
+>   where the ejected merge had been carried by the design approval (MOTIR-5664's
+>   one-press carry). _Why:_ the design was never the problem, only the merge.
+>   The new gate stands alone, drawn the way MOTIR-5667's state 2 draws a merge
+>   gate re-opened beside a decided design.
+> - **Exactly one.** A redelivered `dequeued` (the same delivery GUID, decision 9)
+>   raises nothing new, and the partial unique index on `awaiting` still holds.
+>   _Why:_ asking twice about one set of commits is the thing MOTIR-5603 retired.
+>
+> **3. Approving that gate RE-QUEUES.** It goes through the shipped
+> merge-or-enqueue path (`approveAndMergeGate` → `mergeApprovedSetMembers`),
+> records each outcome with `recordMotirMerge`, stamps each standing failure
+> exit's `requeuedAt`, and moves the card `in_review → approved` under the gate's
+> `decidingGateId`, exactly as a first approval does. **No other door re-queues a
+> failure exit in manual mode.** _Why:_ the fresh yes is the decision, and the
+> re-queue is the act that rides on it — a person is never shown a mechanical
+> retry in place of the question.
+>
+> **4. _Queue again_ is RETIRED for a manual FAILURE exit.**
+> `retryApproveAndMergeMember` refuses one by name, the member reads
+> `requeueable: false`, and the frame offers no _Queue again_ for it. It STAYS for
+> a NEUTRAL removal, where the card never left `approved` and nothing was learned
+> about the commits, and for `auto` mode (`requeueAutoMember`, unchanged), where
+> no gate exists to re-ask. _Why:_ the shortcut reused the old yes, which is
+> precisely what this amendment says no longer stands after a failure.
+>
+> **5. `motir fix` claims the ejected card at `in_review`,** and is offered
+> wherever the re-asked gate is decided: the item page's Development block AND the
+> full-screen approval overlay. The claim admits an `in_review` card only while it
+> holds a standing failure exit at a member's head, and it moves nothing. A push
+> after an ejection supersedes the fresh gate `head moved`, and the next green
+> raises exactly one gate over the new commits (MOTIR-5604's path, unchanged).
+> _Why:_ a flaky failure wants Approve and a real one wants a repair, and the
+> person deciding needs both in front of them in whichever surface they decide in.
+>
+> **6. THE EDGES.** After this amendment the ejection edges in the default
+> workflow read:
+>
+> | edge                      | state        | writer                                                  |
+> | ------------------------- | ------------ | ------------------------------------------------------- |
+> | `approved → in_review`    | **DECLARED** | a manual FAILURE removal (point 1)                      |
+> | `implemented → approved`  | **ABSENT**   | none — an approval is only ever given from `in_review`  |
+> | `in_review → implemented` | kept         | an `auto` FAILURE removal (THIRD AMENDMENT, decision 3) |
+> | `approved → implemented`  | kept         | no system writer; a legal hand move                     |
+>
+> _Why:_ the absence of `implemented → approved` is what guarantees a card only
+> becomes Approved where CI has spoken and a person has said yes, and its only
+> product writer was _Queue again_, which point 4 retires. Existing default
+> workflows are converged by a KEY-joined migration that inserts
+> `approved → in_review` behind a `NOT EXISTS` guard and deletes only the
+> `implemented → approved` rows Motir's own backfill wrote, never a transition a
+> person added in the workflow editor.
+>
+> **7. Cards already ejected are CONVERGED, by an operator, after deploy.** A card
+> at `implemented` holding a decided gate and a standing manual failure exit at its
+> head would be stranded once _Queue again_ is retired. So an idempotent
+> dry-run/apply script moves each such card to the state a new ejection produces
+> (`in_review` plus one fresh gate) through the same service entry point a live
+> ejection runs, and a person runs it on production once the release is live. A
+> card whose head has moved is skipped: it re-arms on its next green, as today.
+> _Why:_ changing a rule going forward must not leave the cards caught under the
+> old one with no way back. Production held 6 standing failure exits on
+> 2026-09-19; the dry run, not this record, says how many qualify.
+>
+> **Not decided here:** GitLab merge trains (MOTIR-4608); the design-card
+> direct-merge defect (MOTIR-5785), which touches the same approve path and keeps
+> its design-hold refusal ahead of the re-queue; any notification.
+>
+> **Which card builds which point** (Story MOTIR-5799):
+>
+> | points      | card                                                            |
+> | ----------- | --------------------------------------------------------------- |
+> | 1, 2, 3     | MOTIR-5805 — the ejection re-asks, and approving re-queues      |
+> | 4           | MOTIR-5802 — _Queue again_ retired for a manual failure exit    |
+> | 5 (claim)   | MOTIR-5803 — `motir fix` claims an ejected card at `in_review`  |
+> | 5 (surface) | MOTIR-5801 — the design delta · MOTIR-5806 — the frame, overlay |
+> | 6           | MOTIR-5804 — the edges and their migration                      |
+> | 7           | MOTIR-5809 — the script · MOTIR-5810 — its production run       |
 
 ### 5. The line against Story 9.2 — DECIDED BY THE PLANNER (rung 3, and it re-scopes existing cards)
 
