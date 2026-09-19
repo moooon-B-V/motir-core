@@ -2663,8 +2663,9 @@ extracted from the installed `lucide-react@1.16.0`: `scale` (the decision TYPE's
 ### The slot, and where it sits
 
 The document sits **FIRST in band 2**, exactly where a design card's result sits — the shipped
-`DevelopmentSection` order for a primary: _the subject, then How to test, then the pull requests_. It
-is composed from the How-to-test part: its head row (`dvb-htt-head`, titled **Decision document**), a
+`DevelopmentSection` order for a primary: _the subject first, the pull requests beneath it_ behind the
+block's soft rule (`.ds-prs`). **There is NO How to test in a decision port** — see _Revised on review_
+below. The slot is composed from the How-to-test part's pieces: its head row (`dvb-htt-head`, titled **Decision document**), a
 meta line — the file's path, its short **blob** sha _at_ the short head sha it was read at, and
 **View on GitHub** — and the file rendered as Markdown with the block's own `dvb-md` styles. Band 1's
 kind reads **Decision** and its meta leads with the path; the kind label follows the GATE, exactly as
@@ -2674,7 +2675,7 @@ kind reads **Decision** and its meta leads with the path; the kind label follows
 
 | panel             | state                                                              | what is on it                                                                                                                                                                     |
 | ----------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 (+dark, ~400px) | awaiting, routed to you                                            | the document PRIMARY; How to test and the pull request beneath; _Request changes_ · _Approve and merge_                                                                           |
+| 1 (+dark, ~400px) | awaiting, routed to you                                            | the document PRIMARY; the pull request beneath (no How to test); _Request changes_ · _Approve and merge_                                                                          |
 | 2                 | awaiting, not yours                                                | the same port, live; no verbs; _Waiting on {name}._                                                                                                                               |
 | 3a–3d             | UNRESOLVABLE: none · several · gone at the head · host unreachable | the slot carries the block's missing-state callout with the reason; **Approve disabled** with its reason in words; Request changes enabled; the green pull request does not merge |
 | 4                 | approved, merge held until green                                   | record band: _Decision accepted by …_ and _merges when its checks pass — no second press_; **no verb anywhere**                                                                   |
@@ -2728,6 +2729,9 @@ notice's `workItems.statusHeld.decision` + `decisionNoun.decision_approval` + `r
 
 ### Decisions this asset made, with their reason
 
+- **No How to test.** A decision card ships a document, not something to run, so the port has
+  nothing to test and the How-to-test part is left out of every panel — the document, then the pull
+  request. (Revised on review — below.)
 - **The document LEADS, the pull requests follow.** The shipped order for a primary; a second order
   would be a second visual language for one act.
 - **Unresolvable is drawn in the slot, not as a refusal.** The reason is a fact about the pull request
@@ -2740,6 +2744,16 @@ notice's `workItems.statusHeld.decision` + `decisionNoun.decision_approval` + `r
 - **A per-kind withdrawn cause, not a reworded shared one.** The shared `head_moved` line is still true
   for a code card; the decision kind's writes only when the document changed and says so.
 
+### Revised on review — 2026-09-19 (Yue): How to test is NOT part of the decision gate
+
+The first version of this asset drew the port in a design card's full order — the document, How to
+test, then the pull requests. The review asked for How to test to be removed. **A decision card's
+deliverable is the document itself: there is no surface to run, so a How-to-test part would be an
+empty or invented section standing between the reader and the question.** Every panel now draws the
+document with the pull request directly beneath it (`.ds-prs`, the block's own soft rule), and the
+port for MOTIR-5678 renders no How-to-test part for a `decision_approval` gate, in any state, on the
+item page or in the overlay. The published result was republished after this change.
+
 ### GIVES / TAKES
 
 Scope: `grep -o 'MOTIR-[0-9]*' approve-and-merge--decision.mock.html | sort -u` — 29 keys. Eight are
@@ -2747,13 +2761,13 @@ this section's own (MOTIR-4907, 5222, 5438, 5480, 5672, 5673, 5678, 5679); the o
 stylesheet and sprite provenance carried verbatim (MOTIR-123, 757, 1273–1277, 1595, 2680, 4672, 4882,
 4892, 4900, 4953, 5007, 5008, 5136, 5327, 5336, 5351, 5494), which GIVE or TAKE nothing.
 
-| key                      | GIVES / TAKES                                                                                                                                                                                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| MOTIR-5678               | **GIVES** Panels 1–7 and 8a, the slot, the copy table above. **TAKES** the port's read — `decisionDocumentService.readForWorkItem` (identity in a transaction, content outside it) — and the per-kind withdrawn cause line; both amended onto the card |
-| MOTIR-5679               | **GIVES** nothing from this asset — its row is the workbench delta                                                                                                                                                                                     |
-| MOTIR-5672               | the record every panel draws to; **nothing either way**                                                                                                                                                                                                |
-| MOTIR-5480 / 5438 / 5222 | **nothing either way** — composed, not redrawn                                                                                                                                                                                                         |
-| MOTIR-4907               | the story; its verification recipe's steps 1–3 walk Panels 1, 4 and 3a                                                                                                                                                                                 |
-| MOTIR-5673               | this card                                                                                                                                                                                                                                              |
+| key                      | GIVES / TAKES                                                                                                                                                                                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5678               | **GIVES** Panels 1–7 and 8a, the slot, the copy table above, and NO How-to-test part in this port. **TAKES** the port's read — `decisionDocumentService.readForWorkItem` (identity in a transaction, content outside it) — and the per-kind withdrawn cause line; both amended onto the card |
+| MOTIR-5679               | **GIVES** nothing from this asset — its row is the workbench delta                                                                                                                                                                                                                           |
+| MOTIR-5672               | the record every panel draws to; **nothing either way**                                                                                                                                                                                                                                      |
+| MOTIR-5480 / 5438 / 5222 | **nothing either way** — composed, not redrawn                                                                                                                                                                                                                                               |
+| MOTIR-4907               | the story; its verification recipe's steps 1–3 walk Panels 1, 4 and 3a                                                                                                                                                                                                                       |
+| MOTIR-5673               | this card                                                                                                                                                                                                                                                                                    |
 
 Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.

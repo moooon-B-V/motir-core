@@ -20,8 +20,8 @@
       are spliced 1:1 from approval-overlay--pull-request-gate.mock.html; the only new rules
       are the decision slot's (.dd-*) and the disabled verb, each named in the notes.
 
-      RENDERED FIRST: the shipped DevelopmentSection order (design result, How to test, pull
-      requests — components/github/DevelopmentSection.tsx) and DevelopmentGateFrame's kind label
+      RENDERED FIRST: the shipped DevelopmentSection order (the subject first, the pull requests
+      beneath; How to test is deliberately left OUT for a decision — design review 2026-09-19 — components/github/DevelopmentSection.tsx) and DevelopmentGateFrame's kind label
       follow-the-gate rule are what the slot is placed by.
     -->
     <style>
@@ -3454,7 +3454,8 @@
       /* ── MOTIR-5673 · the DECISION document's slot (the one new element) ─────────────────
          Composed from the How-to-test part: its head row (dvb-htt-head) and its rendered
          markdown (dvb-md). It sits FIRST in the port, where a design card's result sits
-         (DevelopmentSection's design order: result, How to test, pull requests). */
+         (DevelopmentSection's design order), with the pull requests beneath it and NO How to test —
+         a decision ships a document, and there is nothing to run (design review 2026-09-19). */
       .dd-slot {
         display: flex;
         flex-direction: column;
@@ -4447,7 +4448,7 @@
       <section class="ov-group">
         <div class="panel-label">
           Panel 1 · <b>awaiting, routed to you</b> — the decision document is the PRIMARY question;
-          How to test and the pull request sit beneath it; ONE Approve and merge
+          the pull request sits beneath it; ONE Approve and merge
         </div>
         <div class="panel">
           <div class="card-body" style="padding-bottom: 0">
@@ -4458,9 +4459,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -4519,34 +4518,24 @@
                       </ul>
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-foot">
@@ -4566,13 +4555,13 @@
         </div>
         <p class="panel-note">
           Band 1 names the kind <b>Decision</b> and the document's path. Band 2 is the Development
-          block in the design card's order — the subject first, then How to test, then the pull
-          requests (<span class="mono">DevelopmentSection</span>). The document is the file at the
-          pull request's head, rendered as Markdown with the block's own
-          <span class="mono">dvb-md</span> styles; its path, its blob and the head it was read at
-          are in the slot's meta line, with <i>View on GitHub</i>. Band 3 is the shipped
-          approve-and-merge band: one press accepts the decision AND merges (§8's FIFTH AMENDMENT,
-          clause 5).
+          block with the subject first and the pull request beneath it. There is
+          <b>no How to test</b>: a decision card ships a document, not something to run (design
+          review, 2026-09-19). The document is the file at the pull request's head, rendered as
+          Markdown with the block's own <span class="mono">dvb-md</span> styles; its path, its blob
+          and the head it was read at are in the slot's meta line, with <i>View on GitHub</i>. Band
+          3 is the shipped approve-and-merge band: one press accepts the decision AND merges (§8's
+          FIFTH AMENDMENT, clause 5).
         </p>
       </section>
       <section class="ov-group">
@@ -4586,9 +4575,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -4647,34 +4634,24 @@
                       </ul>
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-foot">
@@ -4708,9 +4685,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -4769,34 +4744,24 @@
                       </ul>
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-foot">
@@ -4833,9 +4798,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -4894,34 +4857,24 @@
                       </ul>
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-foot">
@@ -4950,9 +4903,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -4990,34 +4941,24 @@
                       >
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-foot">
@@ -5061,9 +5002,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -5102,34 +5041,24 @@
                       >
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-foot">
@@ -5173,9 +5102,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -5212,34 +5139,24 @@
                       >
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-foot">
@@ -5282,9 +5199,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -5321,34 +5236,24 @@
                       >
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-foot">
@@ -5393,9 +5298,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -5454,34 +5357,24 @@
                       </ul>
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-peach"
+                          ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-peach"
-                        ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-record">
@@ -5516,9 +5409,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -5568,9 +5459,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -5631,34 +5520,24 @@
                       </ul>
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-foot">
@@ -5697,9 +5576,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -5758,32 +5635,22 @@
                       </ul>
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-record">
@@ -5817,9 +5684,7 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">
-                  The decision, how to test it and its pull request · live PR and CI status
-                </p>
+                <p class="hsub">The decision and its pull request · live PR and CI status</p>
               </div>
             </div>
             <div class="card-body af-host">
@@ -5878,34 +5743,24 @@
                       </ul>
                     </div>
                   </div>
-                  <div class="dvb-htt" role="group" aria-label="How to test">
-                    <div class="dvb-htt-head">
-                      <h4 class="dvb-htt-title">How to test</h4>
-                      <span class="dvb-htt-by"
-                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                  <div class="ds-prs" role="group" aria-label="Pull requests">
+                    <div class="pr-row">
+                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                      <div class="pr-text">
+                        <div class="pr-title">Record the page-body decision</div>
+                        <div class="pr-meta">moooon/motir-core · #214</div>
+                      </div>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
                       >
+                      <a class="ext" href="#" aria-label="Open on GitHub"
+                        ><svg aria-hidden="true"><use href="#i-external" /></svg
+                      ></a>
                     </div>
-                    <p class="dvb-abbrev">
-                      The run's How to test, as the Development block draws it — unchanged, and
-                      abbreviated on this sheet.
-                    </p>
-                  </div>
-                  <div class="pr-row">
-                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                    <div class="pr-text">
-                      <div class="pr-title">Record the page-body decision</div>
-                      <div class="pr-meta">moooon/motir-core · #214</div>
-                    </div>
-                    <span class="pr-states"
-                      ><span class="pill pill-sky"
-                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                      ><span class="pill pill-mint"
-                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                      ></span
-                    >
-                    <a class="ext" href="#" aria-label="Open on GitHub"
-                      ><svg aria-hidden="true"><use href="#i-external" /></svg
-                    ></a>
                   </div>
                 </div>
                 <div class="af-record">
@@ -6002,34 +5857,25 @@
                         </ul>
                       </div>
                     </div>
-                    <div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by"
-                          >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                    <div class="ds-prs" role="group" aria-label="Pull requests">
+                      <div class="pr-row">
+                        <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                        <div class="pr-text">
+                          <div class="pr-title">Record the page-body decision</div>
+                          <div class="pr-meta">moooon/motir-core · #214</div>
+                        </div>
+                        <span class="pr-states"
+                          ><span class="pill pill-sky"
+                            ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                          ><span class="pill pill-mint"
+                            ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks
+                            passing</span
+                          ></span
                         >
+                        <a class="ext" href="#" aria-label="Open on GitHub"
+                          ><svg aria-hidden="true"><use href="#i-external" /></svg
+                        ></a>
                       </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div>
-                    <div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"
-                        ><span class="pill pill-sky"
-                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
-                        ><span class="pill pill-mint"
-                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
-                        ></span
-                      >
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
                     </div>
                   </div>
                   <div class="af-foot">
@@ -6051,8 +5897,8 @@
         <p class="panel-note">
           The overlay (MOTIR-5222, band 2 per MOTIR-5438) opens on
           <span class="mono">approvalKind=decision_approval</span> and its port is the same block,
-          so the reader has the document, How to test and the pull request before pressing anything.
-          Nothing in the container is redrawn; the dialog's title is
+          so the reader has the document and the pull request before pressing anything. Nothing in
+          the container is redrawn; the dialog's title is
           <span class="mono">approvalOverlay.dialogTitle</span> with the kind's name.
         </p>
       </section>
