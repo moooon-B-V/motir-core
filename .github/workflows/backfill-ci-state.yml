@@ -49,14 +49,18 @@ jobs:
   backfill:
     name: Recompute WorkItem.ciState for every card with pull requests
     runs-on: ubuntu-latest
-    # No healthy run on record — this workflow is `workflow_dispatch`-only and
-    # has never been run. Takes the short-job floor of 10 min that
-    # `backfill-boards.yml` uses, on the same reasoning: install + generate +
-    # migrate dominate, and the sweep itself makes NO host calls (unlike
-    # `db:backfill:pr-base-ref`, which mints installation tokens), so its work is
-    # database round-trips that scale with the number of cards that have pull
-    # requests. Raise it from a measured run rather than pre-emptively.
-    timeout-minutes: 10
+    # MEASURED (MOTIR-5765): the first production run — run 35447518741, a dry
+    # run, 2026-09-19 — was CANCELLED by the old 10-minute ceiling. Setup took
+    # ~1.5 min; the sweep then ran ~9 min over ~1,957 candidate cards (one
+    # transaction per card, runner → Neon) and had not finished. That is a FLOOR
+    # on the sweep, not a reading of it: a cancelled unit measures the ceiling
+    # that stopped it. So 60 min is headroom over an unknown, not a margin over
+    # a known duration — the script now prints a progress line every 100 cards,
+    # so the next run IS the measurement; tighten this from its `progress` lines
+    # rather than guessing again. If it is ever hit, the script prints the
+    # PARTIAL report (SIGINT/SIGTERM stop it between cards), and a re-run resumes
+    # cheaply because every already-correct card is a no-op.
+    timeout-minutes: 60
     env:
       # The production (unpooled) Neon connection string — the SAME secret the
       # reseed and board backfills use. Empty when unset; the guard step skips.
