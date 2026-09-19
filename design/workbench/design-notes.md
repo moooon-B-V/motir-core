@@ -2258,3 +2258,59 @@ the story's SUBTREE. Axes: ELEMENT (what is drawn), STRUCTURE (where it sits), P
    rule and the chip are the same, and **MOTIR-5242** should assert the chip on at
    least one `updatedAt desc` tab so the treatment is not accidentally
    approvals-only.
+
+## 27 · The To-approve ROW for a DECISION — MOTIR-5673
+
+**Asset:** `design/workbench/approvals-row--decision.mock.html` — a NEW delta mock. It amends
+`design/workbench/approvals-row.mock.html` (MOTIR-5147, § 23) as amended by
+`design/workbench/approvals-row--one-gate.mock.html` (MOTIR-5612, § 25), and composes the row exactly
+as `design/workbench/approval-overlay--pull-request-gate.mock.html` (MOTIR-5438) Panel 10 draws it,
+whose token block, sprites and `rw-*` rules are spliced 1:1. None of them is edited. The port the row
+opens is `design/github/approve-and-merge--decision.mock.html`, noted in `design/github/design-notes.md`
+§ 27, with the full copy table for the kind. Drawn to `docs/decisions/approval-gates.md` § 8's FIFTH
+AMENDMENT (MOTIR-5672).
+
+### The row
+
+- **Glyph:** the decision TYPE's own mark — lucide `scale` in `--el-type-decision`
+  (`lib/issues/workItemTypeMeta.ts`), exactly as a design row takes the design type's pencil in
+  `--el-type-design`. `aria-hidden`; the words carry the meaning. The only new CSS rule is that hue.
+- **Kind:** _Decision_ / _决策_ — the short row label, as _Pull requests_ is for the approve-to-merge
+  row.
+- **Subject line:** the document's first `#` heading (a leading `ADR:` dropped) · its path, truncated as
+  every subject line is; the cell's `title` carries the path and the blob. **When the heading is not
+  available**, the title from the file name (`titleFromDecisionPath`: `page-body.md` → _Page body_) — never an
+  empty cell, and the row never waits on GitHub to draw (Panel 7b).
+- **Unresolvable decisions list too** (Panel 7c): _No decision document · {pr}_ / _无决策文档 · {pr}_,
+  and _{count} decision documents · {pr}_ / _{count} 份决策文档 · {pr}_. They are real questions —
+  their Request changes is live — so they list and they open the overlay.
+- **_Not built yet_ is gone for this kind** (Panel 7d, before / after).
+- **The ACCESS PATH** (Panel 8b): the whole row is the door, as every live row —
+  `?approval={key}&approvalKind=decision_approval` by `shallowPush`, opening the overlay over the tab.
+
+### Copy — new strings, `en` and `zh`
+
+| key                                             | en                                | zh                        |
+| ----------------------------------------------- | --------------------------------- | ------------------------- |
+| `workbench.approvals.rowKind.decision_approval` | Decision                          | 决策                      |
+| `workbench.approvals.decisionSubject.none`      | No decision document · {pr}       | 无决策文档 · {pr}         |
+| `workbench.approvals.decisionSubject.several`   | {count} decision documents · {pr} | {count} 份决策文档 · {pr} |
+| `workbench.approvals.decisionSubject.title`     | {path} at blob {blob}             | {path}，文件版本 {blob}   |
+
+The resolvable subject is data (heading or file-name title, and the path) and needs no key.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' approvals-row--decision.mock.html | sort -u` — 29 keys. Eight are this
+section's own (MOTIR-4907, 5147, 5438, 5612, 5673, 5676, 5679 and the base's 5480); the other 21 are the
+base stylesheet and sprite provenance carried verbatim, which GIVE or TAKE nothing.
+
+| key                             | GIVES / TAKES                                                                                                                                                                                                                                  |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5679                      | **GIVES** Panels 7a–7d and 8b, the glyph, the subject rule and the copy above. **TAKES** `DecisionApprovalSubjectSummaryDTO` (shipped by MOTIR-5676) and, for the heading, one resolver read per row it chooses to make; amended onto the card |
+| MOTIR-5676                      | **nothing either way** — the summary DTO the row reads already ships                                                                                                                                                                           |
+| MOTIR-5147 / 5612 / 5438 / 5480 | **nothing either way** — composed, not redrawn                                                                                                                                                                                                 |
+| MOTIR-4907                      | the story; its verification recipe's step 4 walks Panel 7a                                                                                                                                                                                     |
+| MOTIR-5673                      | this card                                                                                                                                                                                                                                      |
+
+Fixture items use `ACME-n` keys, so they link to nothing.

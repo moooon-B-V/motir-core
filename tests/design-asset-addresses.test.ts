@@ -1506,6 +1506,23 @@ const reconcilablePath = (finding: PathFinding): Reconcilable => ({
 // inherited: the run that finds a class is not the run that clears it.
 // MOTIR-2369 cleared all six, so the table holds no STALE row today.
 const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
+  // ── A DRAWN DOCUMENT'S PATH, not a citation (Story MOTIR-4907 · MOTIR-5673) ──
+  //  The decision port draws an agent's decision document as a pull request carries
+  //  it, and its meta line and the To-approve row NAME that file. The path is the
+  //  CONTENT of the thing being drawn — a fixture ADR in a fixture pull request — not a
+  //  file the asset tells the next agent to mirror, exactly as the run modal's sample
+  //  log lines above. `page-body.md` was chosen because no card plans a record of that
+  //  name, so these rows are permanent rather than waiting on a file to land.
+  {
+    file: 'design/github/approve-and-merge--decision.mock.html',
+    path: 'docs/decisions/page-body.md',
+    why: 'the fixture decision document the port DRAWS (MOTIR-5673) — drawn content, not a citation',
+  },
+  {
+    file: 'design/workbench/approvals-row--decision.mock.html',
+    path: 'docs/decisions/page-body.md',
+    why: 'the fixture decision document the row NAMES (MOTIR-5673) — drawn content, not a citation',
+  },
   // ── ✅ RETIRED 2026-09-11 (MOTIR-5170, under Bug MOTIR-4925) ──────────────
   //  One FORWARD-LOOKING row stood here: `design/projects/design-notes.md` names
   //  `app/(authed)/settings/project/approvals/page.tsx`, the file MOTIR-4942's
