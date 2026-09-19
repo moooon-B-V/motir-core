@@ -335,7 +335,11 @@ describe('partial success', () => {
     expect(await prRecord(web.prId)).toEqual({ mergeAuthority: null, mergeOutcomeRef: null });
   });
 
-  it('RETRY merges only that member, under the approval that already stands', async () => {
+  // REPLACES "RETRY merges only that member, under the approval that already stands"
+  // (MOTIR-5613): §8's retry-on-the-standing-approval is struck (MOTIR-5834; §4 FOURTH
+  // AMENDMENT, point 8). A host refusal SPENDS the approval, so the row's verb may not
+  // re-press it — and `checks_not_green` is CAN'T LAND, which no approval can land.
+  it('RETRY is REFUSED on the approval the refusal already spent, and merges nothing', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
       7: { outcome: 'merged', commitSha: 'merge-web' },
@@ -359,26 +363,26 @@ describe('partial success', () => {
       fx.ctx,
     );
 
-    expect(retried).toEqual({
+    expect(retried).toMatchObject({
       subjectVersion: api.version,
       pullRequestId: api.prId,
-      outcome: 'merged',
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_CHECKS_NOT_GREEN' },
     });
-    // ONLY that one: one host call, and the sibling's record is the first press's.
-    expect(seam).toHaveBeenCalledTimes(1);
-    expect(await prRecord(api.prId)).toEqual({
-      mergeAuthority: 'gate',
-      mergeOutcomeRef: 'merge-api',
-    });
+    // No host was called, and the sibling's record is still the first press's.
+    expect(seam).not.toHaveBeenCalled();
+    expect(await prRecord(api.prId)).toEqual({ mergeAuthority: null, mergeOutcomeRef: null });
     expect(await prRecord(web.prId)).toEqual({
       mergeAuthority: 'gate',
       mergeOutcomeRef: 'merge-web',
     });
     // ⚠️ AND NOTHING WAS DECIDED AGAIN: the card's one gate still carries the instant of
-    // the original press, and there is still exactly one of it.
+    // the original press, and there is still exactly one of it. The card itself is held
+    // at `implemented`, where `motir fix` claims it.
     const gates = await adminDb.approvalGate.findMany({ where: { workItemId: item.id } });
     expect(gates).toHaveLength(1);
     expect(gates[0]!.decidedAt?.toISOString()).toBe(decidedAt);
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 });
 

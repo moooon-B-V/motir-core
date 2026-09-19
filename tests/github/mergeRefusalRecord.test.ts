@@ -319,3 +319,80 @@ describe('auto mode records nothing', () => {
     expect(s.ctx.workspaceId).toBeTruthy();
   });
 });
+
+describe('§8’s Retry merge on the standing approval is CLOSED (MOTIR-5834)', () => {
+  const retry = (s: Scenario, approvalGateId: string, pullRequestId: string) =>
+    pullRequestMergeService.retryApproveAndMergeMember(
+      {
+        approvalGateId,
+        pullRequestId,
+        noteMd: null,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      s.ctx,
+    );
+
+  it('a SETTING refusal refuses the retry on the spent approval, and the FRESH gate merges it', async () => {
+    const { s, item, gate } = await approvedCard('retry-setting@example.com');
+    stubHost({ outcome: 'refused', refusal: { code: 'branch_protected' } });
+    await press(s, gate!.id);
+    const prId = (await prRow(41)).id;
+    // ⚠️ The spy survives a second `stubHost` (vi.spyOn returns the one already
+    // installed), so clear the press's own call before counting this one's.
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+    host.mockClear();
+
+    // The approval that made the refused press cannot make a second one.
+    const refused = await retry(s, gate!.id, prId);
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
+    });
+    expect(host).not.toHaveBeenCalled();
+
+    // The re-asked gate IS the new approval, and the row's verb decides it.
+    const [reasked] = await awaitingGates(item.id);
+    const landed = await retry(s, reasked!.id, prId);
+
+    expect(landed).toMatchObject({ outcome: 'merged' });
+    expect(host).toHaveBeenCalledTimes(1);
+    expect(await statusOf(item.id)).toBe('approved');
+    expect((await refusalsOf(41))[0]!.supersededAt).not.toBeNull();
+  });
+
+  it('a CAN’T-LAND refusal offers no retry at all — the commits have to change', async () => {
+    const { s, item, gate } = await approvedCard('retry-conflict@example.com');
+    stubHost({ outcome: 'refused', refusal: { code: 'conflict' } });
+    await press(s, gate!.id);
+    const prId = (await prRow(41)).id;
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+    host.mockClear();
+
+    const refused = await retry(s, gate!.id, prId);
+
+    expect(refused).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
+    expect(host).not.toHaveBeenCalled();
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaitingGates(item.id)).toEqual([]);
+  });
+
+  it('a member with NO standing refusal still retries under its approval — the shipped path', async () => {
+    const { s, gate } = await approvedCard('retry-plain@example.com');
+    // The host fails to answer at all: nothing is recorded, and the member is simply
+    // unmerged (MOTIR-5613's case, which this card does not touch).
+    vi.spyOn(github, 'mergeChangeRequest').mockRejectedValueOnce(
+      Object.assign(new Error('boom'), { name: 'MergeChangeRequestError' }),
+    );
+    await press(s, gate!.id).catch(() => {});
+    const prId = (await prRow(41)).id;
+    expect(await refusalsOf(41)).toEqual([]);
+
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+    host.mockClear();
+    const outcome = await retry(s, gate!.id, prId);
+
+    expect(outcome).toMatchObject({ outcome: 'merged' });
+    expect(host).toHaveBeenCalledTimes(1);
+  });
+});
