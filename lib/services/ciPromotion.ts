@@ -494,15 +494,17 @@ async function dispatchAutoMerges(
 }
 
 /**
- * SETTLE ONE CARD AFTER ITS PRIMARY WAS APPROVED WITH NO COMPANION TO DECIDE (Story
+ * SETTLE ONE CARD AFTER ITS PRIMARY WAS APPROVED WITH NO COMPANION TO DECIDE (Bug
+ * MOTIR-5762; `design-result.md` AMENDMENT 6 Q1 and Q4 — and, for a decision card, Story
  * MOTIR-4907 · MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT, clause 6).
  *
- * In an `auto` project a decision card's green verdict was HELD — `settleGreenVerdict`
- * dispatches nothing while the decision is unanswered — and no approve-to-merge gate
- * exists for the press to carry. Without this, a decision approved over a set that was
- * already green would wait for a verdict that never comes. It is the re-raise below,
- * for one card: under the card's row lock, only for a card in review whose whole set is
- * green, so a card that is not there yet settles nothing and waits for its green.
+ * In an `auto` project a design or decision card's green verdict was HELD —
+ * `settleGreenVerdict` dispatches nothing while the primary is unanswered — and no
+ * approve-to-merge gate exists for the press to carry. Without this, a primary approved
+ * over a set that was already green would wait for a verdict that never comes. It is the
+ * re-raise below, for one card: under the card's row lock, only for a card in review
+ * whose whole set is green, so a card that is not there yet settles nothing and waits
+ * for its green.
  */
 export async function settleAfterPrimaryApproval(
   workItemId: string,

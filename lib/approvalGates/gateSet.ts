@@ -224,6 +224,27 @@ export function designApprovalStandsForMerge(
 }
 
 /**
+ * Does the card's DESIGN hold its merge (Bug MOTIR-5762; AMENDMENT 6 Q1)? True whenever
+ * the card carries a current design result that no approval over THAT result has
+ * answered — awaiting, decided `changes_requested`, or approved for a result since
+ * superseded. A card with no design result is never held.
+ *
+ * ⚠️ IT IS NOT "A DESIGN GATE IS AWAITING". A design sent back is not an open question
+ * — `resolveGateSet` rightly asks nothing about it — and it still must not merge. The
+ * merge FOLLOWS an approval; anything short of one holds it, in either mode.
+ *
+ * ⚠️ AND IT IS THE MERGE PATHS THAT DO NOT GO THROUGH THE DESIGN'S OWN PRESS that ask
+ * it: `settleGreenVerdict`'s `auto` arm and the GitHub review sync. The press decides
+ * the design first and carries the merge after, so it never meets a hold.
+ */
+export function designHoldsMerge(
+  currentDesign: { id: string } | null,
+  latestDesignGate: { state: string; subjectId: string } | null,
+): boolean {
+  return currentDesign !== null && !designApprovalStandsForMerge(currentDesign, latestDesignGate);
+}
+
+/**
  * Does a decided DECISION approval already authorise this card's merge (clause 5, the
  * design gate's Q4 carry one kind over)? True only when the card's latest decision
  * gate is `approved` over the version the card's pull requests carry NOW.

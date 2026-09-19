@@ -22,6 +22,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { approvalGatesService } from './approvalGatesService';
 import { resolveRunTargetFor } from './runTarget';
 import { runSyncedMerge } from './syncedMergeRunner';
+import { designResultHoldsMerge } from './mergeGates';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 
 // A REVIEW DECIDES THE SET (Story MOTIR-4910 · MOTIR-5597;
@@ -62,6 +63,11 @@ export type ReviewEvaluationOutcome =
   | 'already_decided'
   /** The set changed under the question, so it was withdrawn. */
   | 'superseded'
+  /** Every member is approved on GitHub, and the card carries a design result nobody has
+   *  approved (Bug MOTIR-5762; `design-result.md` AMENDMENT 6 Q1). The reviews stay
+   *  recorded and the merge gate stays open: the design's own press merges the set, or a
+   *  later evaluation applies the reviews once the design is approved alone. */
+  | 'held_by_design'
   /** Every member is approved on GitHub, and the card is a DECISION card whose decision
    *  nobody has accepted yet (MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT,
    *  clause 5). The reviews stay recorded; the decision's own press merges the set, and
@@ -180,23 +186,30 @@ async function evaluateOne(workItemId: string, workspaceId: string): Promise<Rev
     const set = await readGateReviewSet(workItemId, tx);
     if (!set) return null;
     const verdict = setVerdict(set.members);
-    if (verdict.verdict === 'pending') return { set, verdict, actors: null, held: false };
-    // ⚠️ AN APPROVAL ON GITHUB DOES NOT MERGE A DECISION NOBODY ACCEPTED (MOTIR-5677). The
-    // approve-to-merge gate's own `approve` would refuse it under the door's lock; asking
-    // here first turns that into an outcome rather than a thrown error on a webhook.
+    if (verdict.verdict === 'pending') return { set, verdict, actors: null, held: false as const };
+    // ⚠️ AN APPROVAL ON GITHUB DOES NOT MERGE OVER AN UNANSWERED DESIGN (Bug MOTIR-5762).
+    // The design is the PRIMARY question and the merge follows it; deciding the merge gate
+    // from reviews alone would merge a design nobody approved. A request for changes is
+    // still applied — it merges nothing.
+    if (verdict.verdict === 'approved' && (await designResultHoldsMerge(workItemId, tx))) {
+      return { set, verdict, actors: null, held: 'held_by_design' as const };
+    }
+    // ⚠️ …NOR A DECISION NOBODY ACCEPTED (MOTIR-5677) — the same rule for the other primary
+    // kind. The approve-to-merge gate's own `approve` would refuse it under the door's lock;
+    // asking here first turns that into an outcome rather than a thrown error on a webhook.
     if (verdict.verdict === 'approved') {
       const item = await workItemRepository.findById(workItemId, tx);
       if (item && (await decisionHoldsMerge(item, tx))) {
-        return { set, verdict, actors: null, held: true };
+        return { set, verdict, actors: null, held: 'held_by_decision' as const };
       }
     }
     const actors = await resolveActors(verdict.decider.reviewerGithubUserId, set.workspaceId, tx);
-    return { set, verdict, actors, held: false };
+    return { set, verdict, actors, held: false as const };
   });
 
   if (!read) return { workItemId, gateId: null, outcome: 'no_awaiting_gate' };
   const { set, verdict, actors, held } = read;
-  if (held) return { workItemId, gateId: set.gateId, outcome: 'held_by_decision' };
+  if (held) return { workItemId, gateId: set.gateId, outcome: held };
   if (verdict.verdict === 'pending') {
     return { workItemId, gateId: set.gateId, outcome: 'pending' };
   }

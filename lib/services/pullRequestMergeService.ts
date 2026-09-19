@@ -681,14 +681,13 @@ async function approveDesignAndMerge(
     ),
   );
   if (!merge) {
-    // ⚠️ NO COMPANION — THE MERGE IS HELD, AND FOR A DECISION IT MAY ALREADY BE OWED
-    // (MOTIR-5677, clause 6). In `manual` the set is simply not green yet and the next
-    // green carries this approval (Q4). In `auto` no approve-to-merge gate is ever raised,
-    // so a decision approved over a set that is ALREADY green would wait for a verdict that
-    // never comes: settle the card now, the same way a green verdict would.
-    if (approval.gate.kind === 'decision_approval') {
-      await settleAfterPrimaryApproval(approval.gate.workItemId, ctx);
-    }
+    // ⚠️ NO COMPANION — THE MERGE IS HELD, AND IT MAY ALREADY BE OWED (Bug MOTIR-5762;
+    // for a decision, MOTIR-5677 clause 6). In `manual` the set is simply not green yet and
+    // the next green carries this approval (Q4). In `auto` no approve-to-merge gate is ever
+    // raised, so a primary approved over a set that is ALREADY green would wait for a
+    // verdict that never comes: settle the card now, the same way a green verdict would. A
+    // request for changes never reaches here.
+    await settleAfterPrimaryApproval(approval.gate.workItemId, ctx);
     return { approval, members: [] };
   }
   // ⚠️ ONLY THE MERGE GATE THE READER WAS SHOWN (Story MOTIR-5232 · MOTIR-5234). The

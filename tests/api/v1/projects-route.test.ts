@@ -49,6 +49,11 @@ async function memberCaller(workspace: Workspace) {
   return withTokenFor(user, workspace, { scopes: ['read'] });
 }
 
+/** An UNBOUND read token for the same owner — the device-credential shape. */
+function unboundCaller(caller: Awaited<ReturnType<typeof createV1ProjectCaller>>) {
+  return withTokenFor(caller.user, caller.workspace, { scopes: ['read'] });
+}
+
 interface Page {
   items: V1Project[];
   nextCursor: string | null;
@@ -143,13 +148,15 @@ describe('GET /api/v1/projects', () => {
         identifier,
       });
     }
+    // UNBOUND: a project-bound token lists only its own project (MOTIR-5763).
+    const unbound = await unboundCaller(caller);
 
-    const first = await fetchPage(caller.headers, '?limit=2');
+    const first = await fetchPage(unbound.headers, '?limit=2');
     expect(first.items).toHaveLength(2);
     expect(first.nextCursor).not.toBeNull();
 
     const second = await fetchPage(
-      caller.headers,
+      unbound.headers,
       `?limit=2&cursor=${encodeURIComponent(first.nextCursor as string)}`,
     );
     expect(second.items).toHaveLength(1);
@@ -170,7 +177,7 @@ describe('GET /api/v1/projects', () => {
       keys.push(created.identifier);
     }
 
-    const seen = await walkAll(caller.headers, 2);
+    const seen = await walkAll((await unboundCaller(caller)).headers, 2);
 
     expect(seen).toHaveLength(5);
     expect(new Set(seen).size).toBe(5);
@@ -239,9 +246,57 @@ describe('GET /api/v1/projects', () => {
     });
     await adminDb.project.update({ where: { id: gone.id }, data: { archivedAt: new Date() } });
 
-    const page = await fetchPage(caller.headers);
+    // UNBOUND, or the bound token's own filter would hide GONE for the wrong reason.
+    const page = await fetchPage((await unboundCaller(caller)).headers);
 
     expect(page.items.map((p) => p.key)).toEqual(['LIVE']);
+  });
+
+  // MOTIR-5763 — the project binding (MOTIR-2607) narrows the LIST too. Every
+  // per-key read already refused a bound token's other projects as not-found,
+  // so listing them told the client about projects it could not open.
+  describe('the token project binding', () => {
+    async function twoProjects() {
+      const caller = await createV1ProjectCaller({ scopes: ['read'], identifier: 'BOUND' });
+      const other = await createTestProject({
+        workspaceId: caller.workspace.id,
+        actorUserId: caller.user.id,
+        identifier: 'OTHER',
+      });
+      // The service de-dupes an identifier collision by suffixing, so assert
+      // against the key it ASSIGNED.
+      return { caller, otherKey: other.identifier };
+    }
+
+    it('lists ONLY the bound project, with nextCursor: null', async () => {
+      // The caller is the workspace OWNER, who may browse both — so only the
+      // binding can be what removes OTHER.
+      const { caller } = await twoProjects();
+
+      const page = await fetchPage(caller.headers);
+
+      expect(page.items.map((p) => p.key)).toEqual(['BOUND']);
+      expect(page.nextCursor).toBeNull();
+    });
+
+    it('lists the same set the per-key read opens', async () => {
+      const { caller, otherKey } = await twoProjects();
+
+      const page = await fetchPage(caller.headers);
+      for (const { key } of page.items) {
+        expect((await GET_ONE(oneReq(caller.headers, key), params(key))).status).toBe(200);
+      }
+      expect((await GET_ONE(oneReq(caller.headers, otherKey), params(otherKey))).status).toBe(404);
+    });
+
+    it('leaves an UNBOUND token listing every browsable project', async () => {
+      const { caller, otherKey } = await twoProjects();
+
+      const page = await fetchPage((await unboundCaller(caller)).headers);
+
+      expect(page.items.map((p) => p.key)).toEqual(['BOUND', otherKey].sort());
+      expect(page.nextCursor).toBeNull();
+    });
   });
 });
 

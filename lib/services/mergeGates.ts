@@ -7,7 +7,7 @@ import {
   githubPullRequestRepository,
   type GithubPullRequestWithInstallation,
 } from '@/lib/repositories/githubPullRequestRepository';
-import { designApprovalStandsForMerge } from '@/lib/approvalGates/gateSet';
+import { designApprovalStandsForMerge, designHoldsMerge } from '@/lib/approvalGates/gateSet';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -128,6 +128,22 @@ async function primaryApprovalCarries(
   return (await designApprovalHolds(item.id, tx)) || (await decisionApprovalHolds(item, tx));
 }
 
+/**
+ * {@link designHoldsMerge}, read from the card's own rows — whether an unanswered design
+ * holds this card's merge (Bug MOTIR-5762). Exported for the review sync, the other merge
+ * path that does not go through the design's own press.
+ */
+export async function designResultHoldsMerge(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const [currentDesign, latestDesignGate] = await Promise.all([
+    designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
+    approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
+  ]);
+  return designHoldsMerge(currentDesign, latestDesignGate);
+}
+
 export async function settleGreenVerdict(
   args: { item: WorkItem; pullRequestIds: readonly string[] },
   ctx: ServiceContext,
@@ -154,16 +170,20 @@ export async function settleGreenVerdict(
     return [];
   } else if ((await resolveRunTargetFor(args.item, tx)).kind === 'ancestor') {
     return [];
+  } else if (await designResultHoldsMerge(args.item.id, tx)) {
+    // ⚠️ AN UNANSWERED DESIGN HOLDS AN AUTOMATIC MERGE (Bug MOTIR-5762; `design-result.md`
+    // AMENDMENT 6 Q1). §7a's *"`auto` means no gate"* is about the MERGE gate — the design
+    // gate is raised at publish in both modes, and it is the PRIMARY question the merge
+    // follows. Awaiting, sent back, or approved for a result since superseded all hold.
+    // The merge follows the approval: on the next green verdict, or at once when the press
+    // lands on a set that is already green (`pullRequestMergeService`).
+    return [];
   } else if (await decisionHoldsMerge(args.item, tx)) {
-    // ⚠️ AN UNANSWERED DECISION HOLDS AN AUTOMATIC MERGE (MOTIR-5677; `approval-gates.md`
-    // §8's FIFTH AMENDMENT, clause 6). `auto` means no MERGE gate (§7a) — never that a
-    // decision nobody accepted may ship. Awaiting, unresolvable and not-yet-captured all
-    // hold: the safe reading of *"not known yet"* is *"not accepted"*. The merge follows
-    // the approval on the next green verdict, or at once when the press lands on a set
-    // that is already green (`pullRequestMergeService`).
-    //
-    // ⚠️ THE DESIGN ARM IS NOT HELD HERE, and that is a known defect with its own card:
-    // MOTIR-5762. This clause states only the decision kind's rule, as the record does.
+    // ⚠️ …AND SO DOES AN UNANSWERED DECISION (MOTIR-5677; `approval-gates.md` §8's FIFTH
+    // AMENDMENT, clause 6). `auto` means no MERGE gate (§7a) — never that a decision nobody
+    // accepted may ship. Awaiting, unresolvable and not-yet-captured all hold: the safe
+    // reading of *"not known yet"* is *"not accepted"*. The merge follows the approval the
+    // same way the design's does.
     return [];
   }
 

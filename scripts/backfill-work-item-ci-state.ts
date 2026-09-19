@@ -51,12 +51,22 @@
  *   DATABASE_URL='<neon non-pooling url>' pnpm db:backfill:ci-state --dry-run
  *
  * Do the dry run first, read the `from → to` counts, and only then apply.
+ *
+ * A LONG SWEEP REPORTS AS IT GOES (MOTIR-5765). Production holds ~1,957
+ * candidates and the first run was cancelled by its job timeout having printed
+ * nothing: the report was only ever written at the end. So a progress line is
+ * printed every `CI_STATE_BACKFILL_PROGRESS_EVERY` cards, and SIGINT / SIGTERM —
+ * what GitHub Actions sends on a timeout or a Cancel — stop the sweep between two
+ * cards and print the PARTIAL report, marked INTERRUPTED, before exiting non-zero.
  */
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
 import { db } from '@/lib/db';
 import { workItemCiStateBackfillService } from '@/lib/services/workItemCiStateBackfillService';
-import type { CiStateBackfillReport } from '@/lib/services/workItemCiStateBackfillService';
+import type {
+  CiStateBackfillProgress,
+  CiStateBackfillReport,
+} from '@/lib/services/workItemCiStateBackfillService';
 
 const TAG = '[backfill-ci-state]';
 
@@ -81,6 +91,14 @@ function parseArgs(argv: string[]): Args {
  *  `from → to` pair is unreadable, and "no checks" is a real verdict. */
 function show(state: string | null): string {
   return state ?? 'none';
+}
+
+function printProgress(p: CiStateBackfillProgress): void {
+  console.log(
+    `${TAG} progress ${p.examined}/${p.total} — scanned ${p.scanned}, ` +
+      `changed ${p.changed}, unchanged ${p.unchanged}, ` +
+      `archived ${p.skippedArchived}, failed ${p.failed}`,
+  );
 }
 
 function printReport(report: CiStateBackfillReport): void {
@@ -118,14 +136,43 @@ async function main() {
     `${TAG} scope: ${args.workspaceId ? `workspace ${args.workspaceId}` : 'every workspace'}.`,
   );
 
+  // A timeout or a Cancel in GitHub Actions arrives as SIGINT, then SIGTERM a few
+  // seconds later. Either one ABORTS rather than exits, so the loop stops at the
+  // next card boundary and the partial report below still gets printed.
+  const controller = new AbortController();
+  const stop = (signal: NodeJS.Signals) => {
+    if (controller.signal.aborted) return;
+    console.error(`${TAG} ${signal} received — stopping after the card in flight.`);
+    controller.abort();
+  };
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
+
   const report = await workItemCiStateBackfillService.backfillCiState({
     dryRun: args.dryRun,
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
+    onProgress: printProgress,
+    signal: controller.signal,
   });
   printReport(report);
 
+  if (report.interrupted) {
+    // The counts are REAL but PARTIAL: say so on the summary line itself, so
+    // nobody pastes them as the whole sweep. A re-run resumes cheaply — every
+    // card already correct is a no-op.
+    console.error(
+      `${TAG} INTERRUPTED after ${report.scanned} of ${report.total} card(s) — ` +
+        `${report.changed.length} ${args.dryRun ? 'would change' : 'changed'}, ` +
+        `${report.unchanged} already correct, ` +
+        `${report.skippedArchived} archived (skipped), ` +
+        `${report.failed.length} failed. The rest were NOT examined.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   console.log(
-    `${TAG} done — ${report.scanned} card(s) with pull requests scanned, ` +
+    `${TAG} done — ${report.scanned} of ${report.total} card(s) with pull requests scanned, ` +
       `${report.changed.length} ${args.dryRun ? 'would change' : 'changed'}, ` +
       `${report.unchanged} already correct, ` +
       `${report.skippedArchived} archived (skipped), ` +
