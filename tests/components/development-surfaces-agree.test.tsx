@@ -64,6 +64,7 @@ const OPEN_PR: LinkedPullRequestDto = {
   number: 2120,
   state: 'open',
   ci: 'running',
+  headSha: null,
   url: 'https://github.com/moooon-B-V/motir-core/pull/2120',
   githubReview: null,
 };

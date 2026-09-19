@@ -4,14 +4,7 @@ import { cleanup, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
-import {
-  AWAITING_MERGE_GATE,
-  CORE_PR,
-  GATEWAY_PR,
-  coreRepo,
-  gatewayRepo,
-  recordDto,
-} from '../helpers/howToTestFixtures';
+import { AWAITING_MERGE_GATE, CORE_PR, GATEWAY_PR, recordDto } from '../helpers/howToTestFixtures';
 import messages from '@/messages/en.json';
 
 // THE DEVELOPMENT BLOCK IS THE ONE APPROVE-TO-MERGE GATE (Story MOTIR-4906 ·
@@ -31,7 +24,7 @@ afterEach(cleanup);
 const htt = messages.github.development.howToTest;
 const PORT_LABEL = messages.approvalGate.port.label;
 
-const TWO_REPO_STORY = recordDto({ repos: [coreRepo(), gatewayRepo()] });
+const TWO_REPO_STORY = recordDto();
 
 function renderBlock(mergeGate: { gate: ApprovalGateDTO; canDecide: boolean } | null) {
   return render(

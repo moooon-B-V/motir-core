@@ -5,14 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import { APPROVAL_GATE_KINDS, withoutApprovalOverlay } from '@/lib/approvals/overlayAddress';
-import {
-  CORE_PR,
-  GATEWAY_FETCH,
-  GATEWAY_PR,
-  coreRepo,
-  gatewayRepo,
-  recordDto,
-} from '../helpers/howToTestFixtures';
+import { CORE_PR, GATEWAY_PR, recordDto } from '../helpers/howToTestFixtures';
 import type {
   ApprovalGateDTO,
   ApprovalGateKindDTO,
@@ -605,7 +598,7 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
         pullRequests: [CORE_PR, GATEWAY_PR],
         repoDelivery: [],
         deliveries: [],
-        howToTest: over.howToTest ?? recordDto({ repos: [coreRepo(), gatewayRepo()] }),
+        howToTest: over.howToTest ?? recordDto(),
         designEvidence: (over.designEvidence ?? null) as never,
         isDesignCard: over.isDesignCard ?? false,
         members: [],
@@ -657,21 +650,23 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     const dialog = await openPullRequestGate();
 
-    // The FIRST fenced command in the run's body, and then the core repository's own
-    // fetch block — each copies its own text, inside the overlay exactly as on the
-    // item page (`how-to-test-block.test.tsx` asserts the same two).
+    // The run's two fenced commands — each copies its own text, inside the overlay
+    // exactly as on the item page (`how-to-test-block.test.tsx` asserts the same two).
+    // They are the ONLY copy controls: the per-repository fetch block is retired
+    // (MOTIR-5691, design/github § 25).
     const controls = within(dialog).getAllByRole('button', {
       name: en.github.development.howToTest.code.copyAria,
     });
+    expect(controls).toHaveLength(2);
     await act(async () => {
       fireEvent.click(controls[0]!);
     });
     expect(writeText).toHaveBeenLastCalledWith('pnpm install --frozen-lockfile && pnpm db:seed');
 
     await act(async () => {
-      fireEvent.click(controls.at(-1)!);
+      fireEvent.click(controls[1]!);
     });
-    expect(writeText).toHaveBeenLastCalledWith(GATEWAY_FETCH);
+    expect(writeText).toHaveBeenLastCalledWith('pnpm dev');
   });
 
   it('a STALE Request changes re-reads through the SAME overlay read, and the fresh stamp lands (MOTIR-5235)', async () => {
@@ -734,7 +729,7 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
 
   it('a record-missing item shows the block’s own missing state INSIDE the port, verbs intact', async () => {
     const dialog = await openPullRequestGate({
-      howToTest: recordDto({ state: 'record_missing', record: null, repos: [] }),
+      howToTest: recordDto({ state: 'record_missing', record: null }),
     });
 
     const port = within(dialog).getByRole('group', { name: en.approvalGate.port.label });

@@ -24,6 +24,7 @@ function pr(githubReview: LinkedPullRequestDto['githubReview']): LinkedPullReque
     number: 131,
     state: 'open',
     ci: 'passing',
+    headSha: null,
     url: 'https://github.com/moooon/motir-core/pull/131',
     githubReview,
   };

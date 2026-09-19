@@ -188,6 +188,9 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         number: 41,
         state: 'open',
         ci: 'running',
+        // MOTIR-5691: the head the CI pill is formed over — the approve-to-merge frame
+        // names a moved member by it. Both checks reported at `sha1`.
+        headSha: 'sha1',
         url: 'https://github.com/moooon/acme/pull/41',
         // MOTIR-5602: what this pull request's review on GitHub says. Null here because
         // nobody has reviewed it — absence of a countable review is not a state, exactly
@@ -246,6 +249,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         number: 7,
         state: 'merged',
         ci: null, // no check rows → no CI pill
+        headSha: null, // …and no check rows → no known head (MOTIR-5691)
         url: 'https://github.com/moooon/acme/pull/7',
         githubReview: null, // MOTIR-5602 — nobody reviewed it
       },

@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -8,21 +7,17 @@ import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefiniti
 import { howToTestService, dispatchRunLabel } from '@/lib/services/howToTestService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import { repoDeploymentRepository } from '@/lib/repositories/repoDeploymentRepository';
 import { testInstructionsRepository } from '@/lib/repositories/testInstructionsRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { ERASED_USER_NAME } from '@/lib/users/accountErasure';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import {
-  assembleHowToTestRepo,
-  fetchCommandFor,
-  joinPreviewUrl,
-  pickDeployment,
+  liveHeadSha,
   pickPullRequest,
-  shellQuote,
-  toCheckConclusion,
-  toDeploymentState,
+  staleSections,
+  type HowToTestPullRequestInput,
 } from '@/lib/howToTest/assemble';
 import type { TestInstructionsRepoDTO } from '@/lib/dto/testInstructions';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
@@ -34,11 +29,17 @@ import { randomToken } from '../helpers/random';
 
 // The HOW TO TEST read (Story MOTIR-4906 · MOTIR-5333 — per RUN TARGET). Two halves:
 //
-//   - the PURE assembly, where every "why a path is missing" arm is enumerated;
+//   - the PURE assembly — since MOTIR-5691 only STALE is derived (design/github
+//     § 25), so this is the binding and the head rule it rests on;
 //   - the SERVICE on real Postgres, where a story's sections must bind to the
 //     story's own session pull requests before a child's, a child with no record
 //     must point at its run target, the head must be the one `prCiState` names,
 //     and the query count must not grow with the number of repositories.
+//
+// ⚠️ THE PREVIEW, THE FETCH LINE AND THE CHECKS ARE GONE, with the sub-block that
+// drew them. So is `repoDeploymentRepository`'s read pair: a read of How to test
+// touches no deployment row, and the query-count case below would catch one that
+// came back.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -74,174 +75,66 @@ function check(
   return { checkName: name, conclusion, commitSha, createdAt: new Date(at), checkSuiteId: suite };
 }
 
-function pr(over: Partial<NonNullable<Parameters<typeof assembleHowToTestRepo>[2]>> = {}) {
+function pr(over: Partial<HowToTestPullRequestInput> = {}): HowToTestPullRequestInput {
   return {
     id: 'pr-1',
     repoId: 'repo-1',
-    headRef: 'feat/MOTIR-7-change',
     state: 'open',
-    merged: false,
     checkRuns: [check('Vitest', 'success'), check('Lint', 'failure')],
     ...over,
   };
 }
 
-function deployment(over: Record<string, unknown> = {}) {
-  return {
-    repoId: 'repo-1',
-    commitSha: HEAD,
-    ref: 'feat/MOTIR-7-change',
-    environment: 'Preview',
-    state: 'success',
-    environmentUrl: 'https://acme-preview.vercel.app/',
-    occurredAt: new Date('2026-09-13T10:01:00Z'),
-    ...over,
-  };
-}
+const nameOf = (id: string) => (id === 'repo-1' ? 'acme/web' : `name-of-${id}`);
 
-const assemble = (
-  prInput: ReturnType<typeof pr> | null,
-  deployments: ReturnType<typeof deployment>[] = [],
-  over: Partial<TestInstructionsRepoDTO> = {},
-  previewPath: string | null = '/items/ACME-1',
-) => assembleHowToTestRepo(section(over), 'acme/web', prInput, deployments, previewPath);
-
-describe('assembleHowToTestRepo — the pure arms', () => {
-  it('fills all three paths when the section, its pull request, a success deployment and checks exist', () => {
-    const dto = assemble(pr(), [deployment()]);
-    expect(dto).toMatchObject({
-      repoId: 'repo-1',
-      repoName: 'acme/web',
-      commitSha: HEAD,
-      pullRequest: {
-        id: 'pr-1',
-        headRef: 'feat/MOTIR-7-change',
-        headSha: HEAD,
-        state: 'open',
-        merged: false,
-      },
-      stale: false,
-      fetchCommand: 'git fetch origin feat/MOTIR-7-change && git checkout feat/MOTIR-7-change',
-      preview: {
-        status: 'available',
-        url: 'https://acme-preview.vercel.app/items/ACME-1',
-        environment: 'Preview',
-        state: 'success',
-        deployedSha: HEAD,
-      },
-      ci: {
-        status: 'available',
-        checks: [
-          { name: 'Lint', conclusion: 'failure', rawConclusion: null },
-          { name: 'Vitest', conclusion: 'success', rawConclusion: null },
-        ],
-      },
-    });
-    expect(JSON.stringify(dto)).not.toContain('github.com');
+describe('staleSections — the one derived fact (design/github § 25, Panel 12g)', () => {
+  it('a section written for the head is not stale', () => {
+    expect(staleSections([section()], [pr()], [], nameOf)).toEqual([]);
   });
 
-  it.each(['queued', 'pending', 'in_progress', 'failure', 'error', 'inactive', 'canceled'])(
-    'a %s deployment is deployment_not_ready with its state',
-    (state) => {
-      const dto = assemble(pr(), [deployment({ state, environmentUrl: null })]);
-      expect(dto.preview).toEqual({
-        status: 'deployment_not_ready',
-        state,
-        rawState: null,
-        environment: 'Preview',
-      });
-    },
-  );
-
-  it('an unknown stored state maps to the unknown arm, raw value kept', () => {
-    const dto = assemble(pr(), [deployment({ state: 'exploded' })]);
-    expect(dto.preview).toEqual({
-      status: 'deployment_not_ready',
-      state: 'unknown',
-      rawState: 'exploded',
-      environment: 'Preview',
-    });
-    expect(toDeploymentState('exploded')).toEqual({ state: 'unknown', rawState: 'exploded' });
-    expect(toCheckConclusion('cancelled')).toEqual({
-      conclusion: 'unknown',
-      rawConclusion: 'cancelled',
-    });
-  });
-
-  it('no deployment for the head commit is no_deployment_reported', () => {
-    const dto = assemble(pr(), [deployment({ commitSha: OLD })]);
-    expect(dto.preview).toEqual({ status: 'no_deployment_reported' });
-  });
-
-  it('with NO head sha, a deployment matched by headRef is used, and the section cannot be stale', () => {
-    const dto = assemble(pr({ checkRuns: [] }), [deployment({ commitSha: OLD })], {
-      commitSha: OLD,
-    });
-    expect(dto.pullRequest?.headSha).toBeNull();
-    expect(dto.preview).toMatchObject({ status: 'available', deployedSha: OLD });
-    expect(dto.ci).toEqual({ status: 'no_checks_reported' });
-    expect(dto.stale).toBe(false);
-  });
-
-  it('a deployment in ANOTHER repository never matches', () => {
-    const dto = assemble(pr({ checkRuns: [] }), [deployment({ repoId: 'repo-2' })]);
-    expect(dto.preview).toEqual({ status: 'no_deployment_reported' });
-  });
-
-  it('prefers a success WITH a URL over a newer failure in another environment', () => {
-    const chosen = pickDeployment([
-      deployment({ environment: 'Storybook', state: 'failure', occurredAt: new Date(2e12) }),
-      deployment({ occurredAt: new Date(1e12) }),
+  it('a section written for an older commit is stale, named by repository and both commits', () => {
+    expect(staleSections([section({ commitSha: OLD })], [pr()], [], nameOf)).toEqual([
+      { repoName: 'acme/web', recordSha: OLD, headSha: HEAD },
     ]);
-    expect(chosen?.environment).toBe('Preview');
-    expect(pickDeployment([])).toBeNull();
   });
 
-  it('a section with NO pull request says so on every path', () => {
-    const dto = assemble(null, [deployment()]);
-    expect(dto).toMatchObject({
-      pullRequest: null,
-      stale: false,
-      fetchCommand: null,
-      preview: { status: 'no_deployment_reported' },
-      ci: { status: 'no_checks_reported' },
-    });
+  it('a section written against an ABBREVIATED sha of the head is not stale', () => {
+    expect(staleSections([section({ commitSha: HEAD.slice(0, 7) })], [pr()], [], nameOf)).toEqual(
+      [],
+    );
   });
 
-  it('a section for an older commit is stale; an abbreviated head sha is not', () => {
-    expect(assemble(pr(), [], { commitSha: OLD }).stale).toBe(true);
-    expect(assemble(pr(), [], { commitSha: HEAD.slice(0, 7) }).stale).toBe(false);
+  it('a section with no bound pull request, or one with no reported head, cannot be stale', () => {
+    expect(staleSections([section({ commitSha: OLD })], [], [], nameOf)).toEqual([]);
+    expect(
+      staleSections([section({ commitSha: OLD })], [pr({ checkRuns: [] })], [], nameOf),
+    ).toEqual([]);
   });
 
-  it('with no previewPath the preview is the bare deployment URL', () => {
-    const dto = assemble(pr(), [deployment()], {}, null);
-    expect(dto.preview).toMatchObject({ url: 'https://acme-preview.vercel.app/' });
+  it("binds the run target's OWN pull request before a descendant's, per repository, in the record's order", () => {
+    const sections = [section({ repoId: 'repo-2', commitSha: OLD }), section({ commitSha: OLD })];
+    const own = [pr({ id: 'own-web', checkRuns: [check('A', 'success', OLD)] })];
+    const descendants = [
+      pr({ id: 'child-web', checkRuns: [check('A', 'success', HEAD)] }),
+      pr({ id: 'child-api', repoId: 'repo-2', checkRuns: [check('A', 'success', HEAD)] }),
+    ];
+    // web binds to the target's own pull request, which is AT the section's commit —
+    // so it is not stale although a descendant's pull request in web moved on. api
+    // falls back to the child's, which did move.
+    expect(staleSections(sections, own, descendants, nameOf)).toEqual([
+      { repoName: 'name-of-repo-2', recordSha: OLD, headSha: HEAD },
+    ]);
   });
 
-  it('a merged pull request reports closed + merged, for the collapsed state', () => {
-    const dto = assemble(pr({ state: 'closed', merged: true }));
-    expect(dto.pullRequest).toMatchObject({ state: 'closed', merged: true });
-  });
-
-  it('ci.checks are the live rows at the head — the rows prCiState judges — across a re-run and an older sha', () => {
+  it('the head is the one prCiState judges — across a re-run and an older sha', () => {
     const rows = [
       check('Vitest', 'failure', OLD, '2026-09-13T09:00:00Z', 'old'),
-      // The head has two runs; the later run supersedes the cancelled one.
       check('Vitest', 'failure', HEAD, '2026-09-13T10:00:00Z', 'run-1'),
       check('Vitest', 'success', HEAD, '2026-09-13T10:05:00Z', 'run-2'),
-      check('Lint', 'success', HEAD, '2026-09-13T10:05:30Z', 'run-2'),
     ];
-    const dto = assemble(pr({ checkRuns: rows }));
-    expect(dto.pullRequest?.headSha).toBe(HEAD);
-    expect(dto.ci).toEqual({
-      status: 'available',
-      checks: [
-        { name: 'Lint', conclusion: 'success', rawConclusion: null },
-        { name: 'Vitest', conclusion: 'success', rawConclusion: null },
-      ],
-    });
-    // The pill over the same rows agrees: everything live at the head passed.
+    expect(liveHeadSha(rows)).toBe(HEAD);
     expect(derivePrCiState(rows)).toBe('passing');
+    expect(liveHeadSha([])).toBeNull();
   });
 });
 
@@ -272,27 +165,7 @@ describe('pickPullRequest — the run target first, then its descendants', () =>
   });
 });
 
-describe('the fetch line and the preview URL', () => {
-  it.each([
-    'feat/MOTIR-7-change',
-    "it's-a-branch",
-    'has space',
-    'semi;rm -rf ~',
-    '$(whoami)',
-    'back`tick`',
-  ])('shell-quotes %s so it round-trips through sh', (ref) => {
-    const quoted = shellQuote(ref);
-    const echoed = execFileSync('sh', ['-c', `printf %s ${quoted}`], { encoding: 'utf8' });
-    expect(echoed).toBe(ref);
-    expect(fetchCommandFor(ref)).toBe(`git fetch origin ${quoted} && git checkout ${quoted}`);
-  });
-
-  it('joins a URL and a path without doubling the slash', () => {
-    expect(joinPreviewUrl('https://x.app/', '/items/A-1')).toBe('https://x.app/items/A-1');
-    expect(joinPreviewUrl('https://x.app', '/items/A-1')).toBe('https://x.app/items/A-1');
-    expect(joinPreviewUrl('https://x.app', null)).toBe('https://x.app');
-  });
-
+describe('dispatchRunLabel', () => {
   it('labels a run as its operator typed it', () => {
     const at = new Date('2026-09-13T12:04:33Z');
     expect(dispatchRunLabel('run', at)).toBe('motir run · 2026-09-13 12:04 UTC');
@@ -382,7 +255,7 @@ describe('howToTestService.getForWorkItem', () => {
       runTarget: null,
       owedBy: null,
       record: null,
-      repos: [],
+      stale: [],
       history: [],
     });
   });
@@ -392,7 +265,7 @@ describe('howToTestService.getForWorkItem', () => {
   // this pins that: the card is given a CONNECTED repository and a LINKED pull
   // request, so an implementation that answered `record_missing` on an empty
   // section list — or that filled the list from the deliveries — fails here.
-  it('a record with NO repository sections is `record`, with an empty `repos` — not `record_missing`', async () => {
+  it('a record with NO repository sections is `record`, with an empty `stale` — not `record_missing`', async () => {
     const fx = await makeWorkItemFixture();
     const card = await createTestWorkItem(fx, { kind: 'task', title: 'Body only' });
     const web = await connectRepo(fx, 'web');
@@ -404,14 +277,20 @@ describe('howToTestService.getForWorkItem', () => {
       fx.ctx,
     );
 
+    // A record with no sections can never be stale, so the three reads that only
+    // exist to answer that are not made (MOTIR-5691).
+    const deliveries = vi.spyOn(workItemDeliveryRepository, 'listByWorkItemsWithChecks');
+    const projectRepos = vi.spyOn(projectRepoRepository, 'listByProject');
     const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
     expect(dto.state).toBe('record');
-    expect(dto.repos).toEqual([]);
+    expect(dto.stale).toEqual([]);
     expect(dto.record?.bodyMd).toBe(BODY);
     expect(dto.record?.previewPath).toBe('/items/ACME-1');
+    expect(deliveries).not.toHaveBeenCalled();
+    expect(projectRepos).not.toHaveBeenCalled();
   });
 
-  it("a STORY run: two repository sections bound to the story's own session pull requests, with preview and checks", async () => {
+  it("a STORY run: sections bind to the story's own session pull requests first, and only a MOVED one is stale", async () => {
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story run' });
     const child = await createTestWorkItem(fx, {
@@ -421,15 +300,19 @@ describe('howToTestService.getForWorkItem', () => {
     });
     const web = await connectRepo(fx, 'web');
     const api = await connectRepo(fx, 'api');
-    // A child's own per-card pull request in web, which must NOT win over the story's.
+    // A child's own per-card pull request in web, at an OLDER head — it must NOT win
+    // over the story's, or web would read stale.
     await linkedPr(fx, child.id, web.id, 'subtask/child-web', [
       { name: 'Vitest', conclusion: 'failure', sha: OLD },
     ]);
-    const storyWeb = await linkedPr(fx, story.id, web.id, 'parent/story-web', [
+    await linkedPr(fx, story.id, web.id, 'parent/story-web', [
       { name: 'Vitest', conclusion: 'success', sha: HEAD },
     ]);
-    // api has no pull request on the story — the child's is the fallback.
-    const childApi = await linkedPr(fx, child.id, api.id, 'subtask/child-api');
+    // api has no pull request on the story — the child's is the fallback, and it has
+    // moved past the commit the api section was written for.
+    await linkedPr(fx, child.id, api.id, 'subtask/child-api', [
+      { name: 'Vitest', conclusion: 'success', sha: HEAD },
+    ]);
     await testInstructionsService.publish(
       {
         workItemId: story.id,
@@ -442,20 +325,6 @@ describe('howToTestService.getForWorkItem', () => {
       },
       fx.ctx,
     );
-    await adminDb.repoDeployment.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        repoId: web.id,
-        provider: 'github',
-        providerDeploymentId: '1',
-        commitSha: HEAD,
-        ref: 'parent/story-web',
-        environment: 'Preview',
-        state: 'success',
-        environmentUrl: 'https://web-preview.example',
-        occurredAt: new Date(),
-      },
-    });
 
     const dto = await howToTestService.getForWorkItem(story.id, fx.ctx);
     expect(dto.state).toBe('record');
@@ -466,23 +335,12 @@ describe('howToTestService.getForWorkItem', () => {
       bodyMd: BODY,
       previewPath: '/items/ACME-1',
     });
-    expect(dto.repos.map((r) => r.repoId)).toEqual([web.id, api.id]);
-    const [webSection, apiSection] = dto.repos;
-    expect(webSection).toMatchObject({
-      repoName: 'acme/web',
-      pullRequest: { id: storyWeb.id, headRef: 'parent/story-web', headSha: HEAD },
-      stale: false,
-      fetchCommand: 'git fetch origin parent/story-web && git checkout parent/story-web',
-      preview: { status: 'available', url: 'https://web-preview.example/items/ACME-1' },
-      ci: { status: 'available' },
-    });
-    expect(apiSection).toMatchObject({
-      repoName: 'acme/api',
-      pullRequest: { id: childApi.id, headRef: 'subtask/child-api', headSha: null },
-      fetchCommand: 'git fetch origin subtask/child-api && git checkout subtask/child-api',
-      preview: { status: 'no_deployment_reported' },
-      ci: { status: 'no_checks_reported' },
-    });
+    expect(dto.stale).toEqual([{ repoName: 'acme/api', recordSha: OLD, headSha: HEAD }]);
+    // The retired per-repository shape is not on the wire in any form.
+    expect(Object.keys(dto).sort()).toEqual(
+      ['history', 'owedBy', 'record', 'runTarget', 'stale', 'state'].sort(),
+    );
+    expect(JSON.stringify(dto)).not.toMatch(/fetchCommand|preview"|"ci"|git fetch/);
   });
 
   it('a section whose repository has no pull request anywhere reads no_pull_request', async () => {
@@ -501,7 +359,8 @@ describe('howToTestService.getForWorkItem', () => {
     expect(dto.record).toMatchObject({
       bodyMd: 'A service only — no rendered surface.',
     });
-    expect(dto.repos[0]).toMatchObject({ pullRequest: null, fetchCommand: null });
+    // A section no pull request carries has no head to have moved past.
+    expect(dto.stale).toEqual([]);
   });
 
   it('a CHILD with no record of its own answers tested_via_ancestor, naming the nearest ancestor that has one', async () => {
@@ -524,7 +383,7 @@ describe('howToTestService.getForWorkItem', () => {
       state: 'tested_via_ancestor',
       runTarget: { key: story.identifier },
       record: null,
-      repos: [],
+      stale: [],
     });
     await publish(task.id);
     expect((await howToTestService.getForWorkItem(leaf.id, fx.ctx)).runTarget).toEqual({
@@ -739,8 +598,7 @@ describe('howToTestService.getForWorkItem', () => {
       vi.spyOn(workItemDeliveryRepository, 'listByWorkItemsWithChecks'),
       vi.spyOn(testInstructionsRepository, 'listHistoryForWorkItem'),
       vi.spyOn(testInstructionsRepository, 'listCurrentByWorkItems'),
-      vi.spyOn(repoDeploymentRepository, 'listLatestByCommits'),
-      vi.spyOn(repoDeploymentRepository, 'listLatestByRefs'),
+      vi.spyOn(projectRepoRepository, 'listByProject'),
       vi.spyOn(dispatchRunRepository, 'listByWorkItem'),
       vi.spyOn(dispatchRunRepository, 'listByScope'),
     ];
@@ -752,7 +610,8 @@ describe('howToTestService.getForWorkItem', () => {
     const dto = await howToTestService.getForWorkItem(three.id, fx.ctx);
     const forThree = count();
 
-    expect(dto.repos).toHaveLength(3);
+    // Every one of the three moved past HEAD — and still no extra read.
+    expect(dto.stale).toHaveLength(3);
     expect(forThree).toBe(forOne);
   });
 });
