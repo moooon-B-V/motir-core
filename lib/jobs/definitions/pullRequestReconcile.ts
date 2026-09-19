@@ -38,14 +38,21 @@ export const pullRequestReconcile = defineJob(
     // The summary IS the return value, persisted on the run's `job_run` ledger
     // row — the durable record of a replay, and of a row that failed, since a
     // per-row failure is counted rather than thrown.
-    // ⚠️ THE ID IS `-v2` BECAUSE THE RESULT SHAPE CHANGED (Story MOTIR-5652 ·
-    // Subtask MOTIR-5671): the summary gained `gatesRaised`. A memo written under
-    // the old id carries the narrower shape, and a run resuming across this deploy
-    // would replay it into a reader that expects the field. The step is a READ and
-    // an idempotent repair — `reconcileGatesFor` only raises what is missing — so
-    // re-executing it under the new id on a resumed run is safe, which is what
-    // makes the bump the right answer rather than a boundary guard.
-    return ctx.step.run('reconcile-open-deliveries-v2', () =>
+    // ⚠️ THE ID IS `-v3` BECAUSE THE RESULT SHAPE CHANGED AGAIN (Bug
+    // MOTIR-5838): the summary gained `promoted`. It was `-v2` for exactly the
+    // same reason one repair earlier (MOTIR-5671 added `gatesRaised`), and the
+    // argument is unchanged — a memo written under the old id carries the
+    // narrower shape, and a run resuming across this deploy would replay it into
+    // a reader that expects the field.
+    //
+    // Re-executing under the new id on a resumed run is safe, which is what makes
+    // the bump the right answer rather than a boundary guard on the replayed
+    // value. Every limb of the step is a read or an idempotent repair:
+    // `reconcileGatesFor` only raises what is missing; the host check-set read is
+    // a read; `settlePending` is guarded on the row still reading `pending`, so a
+    // second pass matches nothing; and `promoteIfCiAlreadyGreen` moves only a card
+    // at `implemented`, so a card the first pass promoted is no longer a candidate.
+    return ctx.step.run('reconcile-open-deliveries-v3', () =>
       services.pullRequestReconcile.reconcileOpenDeliveries(),
     );
   },
