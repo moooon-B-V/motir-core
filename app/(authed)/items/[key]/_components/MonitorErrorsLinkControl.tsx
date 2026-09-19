@@ -360,9 +360,9 @@ export function LinkErrorForm() {
       <div className="flex items-center gap-2">
         <Popover
           open={moveFrom !== null}
-          onOpenChange={(o) => {
-            if (!o) dismissMove();
-          }}
+          // An ANCHOR, not a trigger: nothing but an `already_linked` answer opens
+          // this popover, so Radix only ever reports a CLOSE (Escape, outside).
+          onOpenChange={() => dismissMove()}
         >
           <Popover.Anchor asChild>
             <span className="inline-flex">

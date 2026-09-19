@@ -375,3 +375,58 @@ describe('locales', () => {
     expect(screen.getByTestId('error-row').textContent).toContain('出现 40,112 次');
   });
 });
+
+describe('the remaining row arms', () => {
+  it('a live issue with no permalink: the title is plain text and the out-link is a spacer', () => {
+    renderRow(link({ permalink: null }));
+    const row = screen.getByTestId('error-row');
+    expect(within(row).queryByRole('link')).toBeNull();
+    expect(within(row).getByText('Payment provider returned 502 Bad Gateway').className).toContain(
+      'text-(--el-text)',
+    );
+  });
+
+  it('resolve lines written without their timestamps (none is) still read as sentences', () => {
+    renderRow(
+      link({ resolve: { state: 'resolved', attemptedAt: null, resolvedAt: null, error: null } }),
+    );
+    expect(document.querySelector('[data-note="resolve-resolved"]')?.textContent).toBe(
+      'Resolved in Sentry by Motir ',
+    );
+    cleanup();
+    renderRow(
+      link({ resolve: { state: 'failed', attemptedAt: null, resolvedAt: null, error: null } }),
+    );
+    expect(document.querySelector('[data-note="resolve-failed"]')?.textContent).toBe(
+      "Couldn't resolve this in Sentry:  Tried  — Motir tries again at the next check.",
+    );
+  });
+
+  it('unlink: Cancel and Escape both close the confirm without unlinking', async () => {
+    const unlinkAction = vi.fn();
+    render(
+      <MonitorErrorsList
+        links={[link()]}
+        canWrite
+        unlinkAction={unlinkAction}
+        workItemId="wi-1"
+        identifier="ACME-1"
+      />,
+      { now: NOW },
+    );
+    const aria = m.unlink.aria.replace('{title}', 'Payment provider returned 502 Bad Gateway');
+    fireEvent.click(screen.getByRole('button', { name: aria }));
+    fireEvent.click(await screen.findByRole('button', { name: en.common.cancel }));
+    await vi.waitFor(() =>
+      expect(screen.queryByRole('button', { name: m.unlink.action })).toBeNull(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: aria }));
+    fireEvent.keyDown(await screen.findByRole('button', { name: m.unlink.action }), {
+      key: 'Escape',
+    });
+    await vi.waitFor(() =>
+      expect(screen.queryByRole('button', { name: m.unlink.action })).toBeNull(),
+    );
+    expect(unlinkAction).not.toHaveBeenCalled();
+  });
+});

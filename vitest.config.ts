@@ -2298,6 +2298,23 @@ export default defineConfig({
         'lib/services/monitorSyncService.ts',
         'lib/jobs/definitions/monitorIssueResolve.ts',
         'lib/monitors/syncStates.ts',
+        // Story MOTIR-4932 · Subtask MOTIR-5733 — the error-link surface (the read,
+        // the hand-made link, and the work-item page's Errors section). MEASURED on
+        // the parent branch before being pinned, over the story's own suites: every
+        // file below at 100 on all four axes. The files this story CHANGED that were
+        // already listed above stay pinned where they are (`monitorIssueRepository.ts`
+        // and `monitorIngestionService.ts` measure 100/100/100/100 again; the two
+        // provider files keep their pre-existing arms, fake 97.8 / sentry 99.2
+        // branches). `lib/dto/monitorIssueLink.ts` declares types only and is not here;
+        // nor is `actions.ts`, a shared module this story widened by three actions —
+        // gating the whole file on them is the `changeRequestCiFeedback.ts` trap —
+        // whose arms `monitorIssueLinkActions.test.ts` covers.
+        'lib/services/monitorIssueService.ts',
+        'lib/services/monitorIssueLinkService.ts',
+        'lib/mappers/monitorIssueLinkMappers.ts',
+        'app/**/items/[key]/_components/MonitorErrorsSection.tsx',
+        'app/**/items/[key]/_components/MonitorErrorsLinkControl.tsx',
+        'app/**/items/[key]/_components/MonitorErrorsCard.tsx',
         // ── Story MOTIR-4906 · HOW TO TEST per RUN ─────────────────────────────
         // Its story gate (MOTIR-5337). Every file the story ADDED that compiles to
         // something, MEASURED on the parent branch before being pinned below, over
@@ -4798,6 +4815,43 @@ export default defineConfig({
           statements: 90,
         },
         'lib/monitors/syncStates.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        // Story MOTIR-4932 · Subtask MOTIR-5733 — measured at 100 on all four.
+        'lib/services/monitorIssueService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/monitorIssueLinkService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/monitorIssueLinkMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/items/[key]/_components/MonitorErrorsSection.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/items/[key]/_components/MonitorErrorsLinkControl.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/items/[key]/_components/MonitorErrorsCard.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'app/**/settings/project/monitoring/_components/MonitoringRoom.tsx': {
           lines: 90,
           functions: 90,

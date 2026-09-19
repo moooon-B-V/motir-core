@@ -45,9 +45,12 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 //
 // ⚠️ CONSEQUENCES OF "A MANUAL LINK IS A LINK", stated rather than guarded:
 // linking a card ALREADY in a done-category status makes MOTIR-5703's backstop
-// sweep resolve the issue at the next poll; and with the assignee direction on,
-// the monitor's assignee may overwrite the card's (MOTIR-5705). The design draws
-// neither as a warning, and neither is a defect.
+// sweep resolve the issue at the next poll — UNLESS that poll lists the issue as
+// seen after its watermark, in which case the reconciler reads a recurrence on a
+// completed bug and re-files, exactly as it would for a monitor-filed one; and
+// with the assignee direction on, the monitor's assignee may overwrite the card's
+// (MOTIR-5705). The design draws none of these as a warning, and none is a defect
+// (`monitorErrorLinkStoryGate.test.ts` › "link → done → resolve").
 //
 // Every door asserts `work_item:edit` on the card's project — a SEARCH too,
 // because it spends provider calls on the caller's behalf.
@@ -278,9 +281,15 @@ export const monitorIssueLinkService = {
           input.externalIssueId,
           tx,
         );
-        const row = lockedId ? await monitorIssueRepository.findById(lockedId, tx) : null;
         /* v8 ignore next 3 -- unreachable: the row was inserted (or already present)
-           in THIS transaction under the same binding, so the lock finds it. */
+           in THIS transaction under the same binding, so the lock finds it. Asserted
+           by `tests/monitors/monitor-issue-store.test.ts` › "two simultaneous claims of
+           one issue leave ONE row, and the loser reads the winner’s". */
+        if (lockedId === null) {
+          throw new Error(`monitor_issue row for ${input.externalIssueId} vanished under its lock`);
+        }
+        const row = await monitorIssueRepository.findById(lockedId, tx);
+        /* v8 ignore next 3 -- unreachable for the same reason: it was just locked. */
         if (!row) {
           throw new Error(`monitor_issue row for ${input.externalIssueId} vanished under its lock`);
         }
@@ -289,9 +298,16 @@ export const monitorIssueLinkService = {
 
         if (row.workItemId !== null) {
           if (!input.move) {
+            // The holder's CURRENT key (a project key change renames it), read live
+            // rather than trusted from `filed_work_item_identifier`.
             const holder = await workItemRepository.findById(row.workItemId, tx);
             throw new MonitorIssueAlreadyLinkedError(
               input.externalIssueId,
+              /* v8 ignore next -- unreachable fallback: the pointer is an
+                 `ON DELETE SET NULL` FK, so a non-null `workItemId` names a live row,
+                 and that row is in this transaction's own project (the connection is
+                 the item's — "a connection from ANOTHER project … is not-found" in
+                 `monitorIssueLinkByHand.test.ts`), so the bound read sees it. */
               holder?.identifier ?? row.filedWorkItemIdentifier ?? row.workItemId,
             );
           }

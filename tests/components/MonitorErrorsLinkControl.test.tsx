@@ -344,3 +344,55 @@ describe('the ⋯-menu door on a work item with NO link (§14 Decision 1)', () =
     expect(menuRow()).toBeNull();
   });
 });
+
+describe('the remaining picker arms', () => {
+  it('a refused SEARCH shows its code’s line in the banner', async () => {
+    searchMonitorIssuesAction.mockResolvedValueOnce({ ok: false, code: 'forbidden' });
+    renderCard({});
+    await openPicker();
+    expect((await screen.findByRole('alert')).textContent).toBe(m.error.forbidden);
+  });
+
+  it('a search refused for any other reason reads as not-found', async () => {
+    searchMonitorIssuesAction.mockResolvedValueOnce({ ok: false, code: 'not_found' });
+    renderCard({});
+    await openPicker();
+    expect((await screen.findByRole('alert')).textContent).toBe(m.error.notFound);
+  });
+
+  it('a candidate with no organisation and no level: the project alone, and no pill', async () => {
+    searchMonitorIssuesAction.mockResolvedValue(
+      searchResult([candidate('bare', { orgSlug: null, level: null })]),
+    );
+    renderCard({});
+    await openPicker();
+    const option = await screen.findByRole('option', { name: /Error bare/ });
+    expect(option.textContent).toContain('web · Seen 1,284 times');
+    expect(option.textContent).not.toContain('acme');
+    expect(within(option).queryByText('error')).toBeNull();
+  });
+
+  it('Escape closes the move confirmation without moving', async () => {
+    searchMonitorIssuesAction.mockResolvedValue(
+      searchResult([candidate('t', { linkedTo: { identifier: 'ACME-9' } })]),
+    );
+    linkMonitorIssueAction.mockResolvedValue({
+      ok: false,
+      code: 'already_linked',
+      holderIdentifier: 'ACME-9',
+    });
+    renderCard({});
+    await openPicker();
+    await pickAndLink(/Error t/);
+    fireEvent.keyDown(await screen.findByTestId('move-confirm'), { key: 'Escape' });
+    await vi.waitFor(() => expect(screen.queryByTestId('move-confirm')).toBeNull());
+    expect(linkMonitorIssueAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('the door outside its provider is a programming error, named', async () => {
+    const { LinkErrorDoor } =
+      await import('@/app/(authed)/items/[key]/_components/MonitorErrorsLinkControl');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => render(<LinkErrorDoor />)).toThrow(/MonitorErrorsLinkProvider/);
+  });
+});
