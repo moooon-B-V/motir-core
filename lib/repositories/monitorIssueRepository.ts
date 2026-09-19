@@ -146,7 +146,6 @@ export const monitorIssueRepository = {
     externalIssueIds: readonly string[],
     tx: Prisma.TransactionClient,
   ): Promise<Array<{ externalIssueId: string; workItemId: string }>> {
-    if (externalIssueIds.length === 0) return [];
     const rows = await tx.monitorIssue.findMany({
       where: {
         connectionId,
@@ -155,8 +154,8 @@ export const monitorIssueRepository = {
       },
       select: { externalIssueId: true, workItemId: true },
     });
-    return rows.flatMap((row) =>
-      row.workItemId ? [{ externalIssueId: row.externalIssueId, workItemId: row.workItemId }] : [],
+    return rows.filter(
+      (row): row is { externalIssueId: string; workItemId: string } => row.workItemId !== null,
     );
   },
 
@@ -221,7 +220,6 @@ export const monitorIssueRepository = {
       workItem: { identifier: string } | null;
     }>
   > {
-    if (connectionIds.length === 0 || externalIssueIds.length === 0) return [];
     return tx.monitorIssue.findMany({
       where: {
         connectionId: { in: [...connectionIds] },

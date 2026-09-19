@@ -337,6 +337,60 @@ describe('a LINKED issue below the minimum level still refreshes', () => {
     expect(row.lastSeenAt.toISOString()).toBe(later.lastSeenAt.toISOString());
   });
 
+  it('a refresh that FAILS records a failed poll naming the issue, and holds the watermark', async () => {
+    const { connectionId } = await linkedBelowMinimum();
+    const before = await adminDb.monitorConnection.findUniqueOrThrow({
+      where: { id: connectionId },
+    });
+    fakeMonitorState().issues = [issue('low', 60, { level: 'warning', eventCount: 88 })];
+    vi.spyOn(monitorIngestionService, 'refreshLinkedFacts').mockRejectedValueOnce(
+      new Error('lock timeout'),
+    );
+
+    const summary = await monitorIngestionService.pollConnection(connectionId);
+
+    expect(summary).toMatchObject({ status: 'failed', refreshed: 0 });
+    const after = await adminDb.monitorConnection.findUniqueOrThrow({
+      where: { id: connectionId },
+    });
+    expect(after.lastPollStatus).toBe('failed');
+    expect(after.lastPollError).toContain('Issue low');
+    expect(after.lastPollError).toContain('was not refreshed: lock timeout');
+    expect(after.lastSeenWatermark?.toISOString()).toBe(before.lastSeenWatermark?.toISOString());
+    expect((await rowOf('low')).eventCount).toBe(1);
+  });
+
+  it('the lock re-check writes nothing when the row vanished or lost its card since the pre-read', async () => {
+    const { fx, connectionId, workItemId } = await linkedBelowMinimum();
+    const target = { id: connectionId, projectId: fx.projectId, workspaceId: fx.workspaceId };
+    const later = issue('low', 60, { level: 'warning', eventCount: 88 });
+
+    // The pointer was cleared (its card deleted) between the read and the lock.
+    await adminDb.monitorIssue.updateMany({
+      where: { externalIssueId: 'low' },
+      data: { workItemId: null },
+    });
+    expect(await monitorIngestionService.refreshLinkedFacts(target, later)).toBe(false);
+    // The row itself is gone (unlinked) by the time the lock is taken.
+    await adminDb.monitorIssue.deleteMany({ where: { externalIssueId: 'low' } });
+    expect(await monitorIngestionService.refreshLinkedFacts(target, later)).toBe(false);
+    expect(await adminDb.workItem.count({ where: { id: workItemId } })).toBe(1);
+  });
+
+  it('a refresh that throws a NON-Error still names the issue', async () => {
+    const { connectionId } = await linkedBelowMinimum();
+    fakeMonitorState().issues = [issue('low', 60, { level: 'warning' })];
+    vi.spyOn(monitorIngestionService, 'refreshLinkedFacts').mockRejectedValueOnce('boom');
+
+    const summary = await monitorIngestionService.pollConnection(connectionId);
+
+    expect(summary.status).toBe('failed');
+    const after = await adminDb.monitorConnection.findUniqueOrThrow({
+      where: { id: connectionId },
+    });
+    expect(after.lastPollError).toContain('was not refreshed: boom');
+  });
+
   it('the same issue linked to a DONE card is skipped and files nothing', async () => {
     const { fx, connectionId, workItemId } = await linkedBelowMinimum();
     await complete(workItemId);

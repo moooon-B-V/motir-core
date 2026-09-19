@@ -106,7 +106,9 @@ export const monitorConnectionPoll = defineJob(
   async (ctx, services) => {
     const { connectionId } = ctx.event.data as MonitorConnectionPollRequestedData;
     try {
-      return await ctx.step.run('poll', () =>
+      // `poll-v2` since MOTIR-5729 added `refreshed` to the summary; the old id
+      // is retired in `tests/jobs/stepResultShapePins.ts` with its reason.
+      return await ctx.step.run('poll-v2', () =>
         services.monitorIngestion.pollConnection(connectionId),
       );
     } catch (err) {
