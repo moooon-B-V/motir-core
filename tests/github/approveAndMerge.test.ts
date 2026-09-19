@@ -247,7 +247,7 @@ describe('one press: the approval, then every member', () => {
 });
 
 describe('partial success', () => {
-  it('a REFUSED member leaves the approval, the card and the other member standing, and names its refusal', async () => {
+  it('a REFUSED member leaves the approval and the other member standing, records the refusal, and settles the card by its class', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
       7: { outcome: 'merged', commitSha: 'merge-web' },
@@ -268,11 +268,21 @@ describe('partial success', () => {
       },
       { subjectVersion: web.version, pullRequestId: web.prId, outcome: 'merged' },
     ]);
-    // ⚠️ THE APPROVAL IS NOT UNDONE BY A REFUSED MERGE, and the refusal is recorded
-    // NOWHERE: the refused pull request simply has no outcome yet, which is what makes it
-    // retryable.
+    // ⚠️ THE APPROVAL IS NOT UNDONE BY A REFUSED MERGE — the decision happened and the
+    // row stays as history. What DID change (MOTIR-5833): the refusal is RECORDED on the
+    // pull request, and the card is settled by its class. `conflict` is CAN'T LAND, so
+    // the card is held at `implemented` with `motir fix` and asks nothing.
     expect((await gateRow(approval.id)).state).toBe('approved');
-    expect(await statusOf(item.id)).toBe('approved');
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(
+      await adminDb.githubPullRequestMergeRefusal.findMany({ where: { pullRequestId: api.prId } }),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'conflict',
+        supersededAt: null,
+        approvalGateId: approval.id,
+      }),
+    ]);
     expect(await prRecord(api.prId)).toEqual({ mergeAuthority: null, mergeOutcomeRef: null });
     expect(await prRecord(web.prId)).toEqual({
       mergeAuthority: 'gate',
@@ -444,7 +454,7 @@ describe('boundaries', () => {
 });
 
 describe('the members read — what a reload still knows (MOTIR-5484)', () => {
-  it('reads a queued member as queued, and a refused one as retryable — with no reason', async () => {
+  it('reads a queued member as queued, and a refused one with the refusal the host gave', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
       7: { outcome: 'enqueued', entryId: 'MQE_9' },
@@ -459,7 +469,9 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
       { workItemId: item.id, approvalGateId: approval.id },
       fx.ctx,
     );
-    // In the set's own order, and nothing a refusal said survives into the read.
+    // In the set's own order. ⚠️ THE REFUSAL NOW SURVIVES THE PRESS (MOTIR-5833): the
+    // row reads it back with its class, which is what lets a RELOAD say why the merge
+    // did not land. `cant_land` offers no verb — the commits cannot combine.
     expect(members).toEqual([
       {
         subjectVersion: api.version,
@@ -467,8 +479,14 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
         queued: false,
         retryable: true,
         exit: null,
-        exitAtApprovedHead: false,
+        exitAtApprovedHead: true,
         requeueable: false,
+        refusal: {
+          code: 'conflict',
+          landingClass: 'cant_land',
+          permission: null,
+          refusedAt: expect.any(String),
+        },
         retryDecidesGateId: null,
       },
       {
@@ -479,6 +497,7 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
         exit: null,
         exitAtApprovedHead: false,
         requeueable: false,
+        refusal: null,
         retryDecidesGateId: null,
       },
     ]);
@@ -552,15 +571,22 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
 
     const view = await peek(item.identifier);
     expect(view.mergeMembers).toEqual([
-      // No merge-queue exit on either (MOTIR-5634 / MOTIR-5635 carry it on the same read).
+      // No merge-queue exit on either (MOTIR-5634 / MOTIR-5635 carry it on the same read)
+      // — and the quick view reads the host's refusal exactly as the frame does.
       {
         subjectVersion: api.version,
         pullRequestId: api.prId,
         queued: false,
         retryable: true,
         exit: null,
-        exitAtApprovedHead: false,
+        exitAtApprovedHead: true,
         requeueable: false,
+        refusal: {
+          code: 'conflict',
+          landingClass: 'cant_land',
+          permission: null,
+          refusedAt: expect.any(String),
+        },
         retryDecidesGateId: null,
       },
       {
@@ -571,6 +597,7 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
         exit: null,
         exitAtApprovedHead: false,
         requeueable: false,
+        refusal: null,
         retryDecidesGateId: null,
       },
     ]);
@@ -770,6 +797,7 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
         exit: null,
         exitAtApprovedHead: false,
         requeueable: false,
+        refusal: null,
         retryDecidesGateId: null,
       },
       {
@@ -780,6 +808,7 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
         exit: null,
         exitAtApprovedHead: false,
         requeueable: false,
+        refusal: null,
         retryDecidesGateId: null,
       },
     ]);

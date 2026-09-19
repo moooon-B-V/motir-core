@@ -15,8 +15,13 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
 import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
-import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
+import {
+  classOfMergeRefusal,
+  classOfQueueExit,
+  type LandingClass,
+} from '@/lib/mergeQueue/queueExit';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
+import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import { mergeCandidateHead } from './mergeGates';
 import { workflowsService } from './workflowsService';
 
@@ -138,14 +143,37 @@ export async function gateSetFor(
     deliveries.map((delivery) => delivery.githubPullRequestId),
     tx,
   );
+  // ⚠️ AND A HOST REFUSAL IS THE OTHER SOURCE (MOTIR-5833). The queue's removal and the
+  // refusal at the press are two ways the SAME approval fails to land, so both feed the
+  // one predicate; a refusal stands while nothing superseded it and the head it names is
+  // still the member's.
+  const latestRefusals = await githubPullRequestMergeRefusalRepository.findLatestByPullRequests(
+    deliveries.map((delivery) => delivery.githubPullRequestId),
+    tx,
+  );
   const standingOutcomes = deliveries.flatMap((delivery) => {
-    const exit = latestExits.get(delivery.githubPullRequestId);
     const head = liveRowsAtLatestSha([...delivery.pullRequest.checkRuns])[0]?.commitSha;
+    const outcomes: { at: Date; landingClass: LandingClass }[] = [];
+    const exit = latestExits.get(delivery.githubPullRequestId);
     // The RULE is `deliverySet.ts`'s `queueExitStandsAtHead` — the promotion hold's own
     // twin, one disposition wider — so the two readers cannot disagree about which exit
     // still describes the code.
-    if (!queueExitStandsAtHead(exit, head)) return [];
-    return [{ at: exit!.exitedAt, landingClass: classOfQueueExit(exit!.rawReason) }];
+    if (queueExitStandsAtHead(exit, head)) {
+      outcomes.push({ at: exit!.exitedAt, landingClass: classOfQueueExit(exit!.rawReason) });
+    }
+    const refusal = latestRefusals.get(delivery.githubPullRequestId);
+    const refusalClass = refusal ? classOfMergeRefusal(refusal.code) : null;
+    if (
+      refusal &&
+      refusalClass !== null &&
+      refusal.supersededAt === null &&
+      head &&
+      refusal.headSha === head &&
+      !delivery.pullRequest.merged
+    ) {
+      outcomes.push({ at: refusal.refusedAt, landingClass: refusalClass });
+    }
+    return outcomes;
   });
   // The LATEST outcome is the one the question is about; an older one is history.
   const standingUnlandedOutcome =

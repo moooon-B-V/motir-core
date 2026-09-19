@@ -6,7 +6,9 @@ import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubP
 import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { deliveryMemberVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
-import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
+import { classOfMergeRefusal, classOfQueueExit } from '@/lib/mergeQueue/queueExit';
+import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import type { PullRequestApprovalMemberDTO, PullRequestQueueExitDTO } from '@/lib/dto/approvalGate';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -58,6 +60,12 @@ async function approvedMembers(
     deliveries.map((row) => row.pullRequest.id),
     tx,
   );
+  // The other way a merge fails to land, read the same way (MOTIR-5833): the host's
+  // refusal at the press, which a reload would otherwise know nothing about.
+  const refusals = await githubPullRequestMergeRefusalRepository.findLatestByPullRequests(
+    deliveries.map((row) => row.pullRequest.id),
+    tx,
+  );
   return membersOf(approval.subjectVersion).map((member) => {
     const row = deliveries.find(
       (candidate) =>
@@ -77,17 +85,42 @@ async function approvedMembers(
     // been used, so this gate offers no verb: the card is asked again on a fresh gate,
     // and it is THAT gate the row's press decides. On the re-asked (`awaiting`) gate
     // nothing has been spent, so the verb is offered and carries the gate's id.
+    const open = pr !== undefined && pr.state === 'open' && !pr.merged;
+    // A refusal STANDS while nothing superseded it, the head it names is still the
+    // pull request's, and the pull request has not merged — the same shape an exit's
+    // standing has, one source over (MOTIR-5833).
+    const refusalRow = pr ? (refusals.get(pr.id) ?? null) : null;
+    const refusalClass = refusalRow ? classOfMergeRefusal(refusalRow.code) : null;
+    const headNow = pr ? liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha : undefined;
+    const standingRefusal =
+      refusalRow !== null &&
+      refusalClass !== null &&
+      refusalRow.supersededAt === null &&
+      headNow !== undefined &&
+      refusalRow.headSha === headNow &&
+      open;
     const spentOnThisOutcome =
       !awaitingReask &&
-      standingExit &&
-      unlandedOutcomeOutranksApproval({ at: exit.exitedAt }, approval.decidedAt ?? null);
-    // ⚠️ AND A CAN'T-LAND EXIT OFFERS NO VERB AT ALL (§4 FOURTH AMENDMENT, point 2): the
-    // same commits cannot land however many times anyone says yes, so a button that
-    // re-queues them is a button guaranteed to fail. `motir fix` is the way forward.
-    const cantLand = standingExit && classOfQueueExit(exit.rawReason) === 'cant_land';
+      ((standingExit &&
+        unlandedOutcomeOutranksApproval({ at: exit.exitedAt }, approval.decidedAt ?? null)) ||
+        (standingRefusal &&
+          unlandedOutcomeOutranksApproval(
+            { at: refusalRow.refusedAt },
+            approval.decidedAt ?? null,
+          )));
+    // ⚠️ AND A CAN'T-LAND OUTCOME OFFERS NO VERB AT ALL (§4 FOURTH AMENDMENT, point 2):
+    // the same commits cannot land however many times anyone says yes, so a button that
+    // acts on them is a button guaranteed to fail. `motir fix` is the way forward.
+    const cantLand =
+      (standingExit && classOfQueueExit(exit.rawReason) === 'cant_land') ||
+      (standingRefusal && refusalClass === 'cant_land');
+    // A member the row's verb can act on is one carrying a standing outcome at the head
+    // the gate names — an exit put back by *Queue again*, a refusal retried by *Retry
+    // merge* (MOTIR-5834).
     const atApprovedHead =
-      standingExit && row !== undefined && deliveryMemberVersion(row) === member.subjectVersion;
-    const open = pr !== undefined && pr.state === 'open' && !pr.merged;
+      (standingExit || standingRefusal) &&
+      row !== undefined &&
+      deliveryMemberVersion(row) === member.subjectVersion;
     return {
       subjectVersion: member.subjectVersion,
       pullRequestId: pr?.id ?? null,
@@ -100,6 +133,15 @@ async function approvedMembers(
       exit: exit ? toQueueExitDto(exit) : null,
       exitAtApprovedHead: atApprovedHead,
       requeueable: open && atApprovedHead && !spentOnThisOutcome && !cantLand,
+      refusal:
+        standingRefusal && refusalRow && refusalClass
+          ? {
+              code: refusalRow.code,
+              landingClass: refusalClass,
+              refusedAt: refusalRow.refusedAt.toISOString(),
+              permission: refusalRow.permission,
+            }
+          : null,
       // Which gate the row's press DECIDES — the re-asked one, or null on the decided
       // gate, where the press carries out a decision already made.
       retryDecidesGateId: awaitingReask ? approval.id : null,

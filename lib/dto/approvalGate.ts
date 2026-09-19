@@ -611,6 +611,21 @@ export interface PullRequestApprovalMemberDTO {
    *  the verb rides on the re-asked gate, whose id is {@link retryDecidesGateId}. The
    *  frame reads `exit.disposition` to word the row, never to decide this. */
   requeueable: boolean;
+  /** The HOST's latest refusal of this member, while it still STANDS — nothing
+   *  superseded it and the head it names is still the pull request's (MOTIR-5833;
+   *  §4 FOURTH AMENDMENT, point 5). Null when the host has refused nothing, or when a
+   *  push or a later successful press has retired it. It is what lets a RELOAD say why
+   *  the merge did not land: before this the refusal lived only in the press's
+   *  response. `landingClass` is the shared class map's answer, so the row can say
+   *  whether anything can be done about it. */
+  refusal: {
+    /** The host's own code, verbatim (`MergeRefusalCode`). */
+    code: string;
+    landingClass: 'retryable' | 'cant_land' | 'setting' | 'landed';
+    refusedAt: string;
+    /** `app_permission_missing` only — the permission the host said it needed. */
+    permission: string | null;
+  } | null;
   /** WHICH GATE the row's press DECIDES (MOTIR-5802; §4 FOURTH AMENDMENT, point 4) — the
    *  re-asked `awaiting` gate, so pressing *Queue again* / *Retry merge* IS the new
    *  approval. Null on a decided gate, where a press carries out a decision already made

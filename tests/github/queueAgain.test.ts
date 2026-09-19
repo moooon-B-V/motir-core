@@ -370,16 +370,19 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
 
     expect(outcome).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
     expect((await latestExit(11)).requeuedAt).toBeNull();
-    expect(await statusOf(item.id)).toBe('approved');
-    // The exit PRE-DATES this approval, which is what makes the row's verb honest: the
-    // press was the yes for THIS exit, the host refused the enqueue, and the exit is
-    // offered again under it. (A host refusal spends the approval too — but nothing
-    // RECORDS one yet, which is MOTIR-5833's row and MOTIR-5834's refusal.)
+    // ⚠️ THE REFUSAL IS ITSELF AN UN-LANDED OUTCOME (MOTIR-5833): it is recorded on the
+    // pull request and settled by its class, and `conflict` is CAN'T LAND — so the press
+    // that was just made is spent, the card is held at Implemented, and the row offers
+    // no verb at all. `motir fix` is the way forward.
+    expect(await statusOf(item.id)).toBe('implemented');
     const members = await pullRequestMergeService.listApprovalMembers(
       { workItemId: item.id, approvalGateId: reasked.id },
       s.ctx,
     );
-    expect(members.find((m) => m.pullRequestId === prId)).toMatchObject({ requeueable: true });
+    expect(members.find((m) => m.pullRequestId === prId)).toMatchObject({
+      requeueable: false,
+      refusal: { code: 'conflict', landingClass: 'cant_land' },
+    });
   });
 
   it('a host FAULT releases the claim and is rethrown, not dressed as a refusal', async () => {

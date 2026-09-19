@@ -21,6 +21,7 @@ import {
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
+import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -28,7 +29,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
 import { unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
-import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
+import { classOfMergeRefusal, classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
 import type {
   ApproveAndMergeMemberOutcomeDTO,
@@ -42,7 +43,7 @@ import type { GithubPullRequestQueueExit } from '@/generated/prisma/client';
 import type { PullRequestStandingExitDTO } from '@/lib/dto/approvalGate';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { projectAccessService } from './projectAccessService';
-import { queueExitCardMoves } from './mergeQueueExitService';
+import { queueExitCardMoves, settleUnlandedOutcome } from './mergeQueueExitService';
 import {
   pullRequestApprovalMembersService,
   toQueueExitDto,
@@ -264,10 +265,16 @@ async function mergeOrEnqueue(
 
   if (result.outcome === 'refused') {
     // A head that moved between the check and the merge (the host's 409) is the same
-    // withdrawn question step 1 would have found.
+    // withdrawn question step 1 would have found. NOTHING is recorded: the approval
+    // was never acted on, so it was not spent (§4 FOURTH AMENDMENT, point 2).
     if (result.refusal.code === 'subject_changed') {
       throw new ApprovalGateSupersededError(approvalGateId);
     }
+    // ⚠️ THE REFUSAL IS RECORDED, AND THE CARD IS SETTLED BY ITS CLASS (point 5;
+    // MOTIR-5833). One approval authorizes ONE attempt, and this one did not land —
+    // so the fact has to outlive this response, and the card must stop claiming an
+    // approval it has already spent.
+    await recordMergeRefusal(approvalGateId, target, result.refusal, ctx);
     throw new ApprovalGateMergeRefusedError(approvalGateId, REFUSAL_TAG[result.refusal.code], {
       permission: result.refusal.permission ?? null,
       reason: result.refusal.reason ?? null,
@@ -275,16 +282,23 @@ async function mergeOrEnqueue(
   }
 
   // STEP 3 — the outcome, on the PULL REQUEST. No gate is decided by a merge any more.
-  await withWorkspaceContext(ctx, (tx) =>
-    githubPullRequestRepository.recordMotirMerge(
+  await withWorkspaceContext(ctx, async (tx) => {
+    await githubPullRequestRepository.recordMotirMerge(
       target.pullRequestId,
       {
         mergeAuthority: 'gate',
         mergeOutcomeRef: result.outcome === 'merged' ? result.commitSha : `queue:${result.entryId}`,
       },
       tx,
-    ),
-  );
+    );
+    // This press LANDED, so any refusal the pull request still carried is history —
+    // the head is unchanged, so nothing else would retire it (MOTIR-5833).
+    await githubPullRequestMergeRefusalRepository.supersedeStanding(
+      target.pullRequestId,
+      new Date(),
+      tx,
+    );
+  });
   return result.outcome;
 }
 
@@ -974,6 +988,64 @@ async function queueAgainUnderApproval(
   }
 
   return { subjectVersion: member.subjectVersion, pullRequestId: target.pullRequestId, outcome };
+}
+
+/**
+ * RECORD A HOST REFUSAL, AND SETTLE THE CARD BY ITS CLASS (§4 FOURTH AMENDMENT,
+ * point 5; MOTIR-5833).
+ *
+ * ⚠️ IN ITS OWN TRANSACTION, AFTER THE PRESS'S HAS COMMITTED. The approval committed
+ * in step 1 and the host call happened outside any transaction, so this write has
+ * nothing to roll back with — which is the point: the refusal must survive the press
+ * that was refused.
+ *
+ * The CLASS then decides what happens to the card, through the one entry point every
+ * source shares ({@link settleUnlandedOutcome}): a conflict or red checks hold it at
+ * `implemented` with `motir fix`, a setting sends it back to `in_review` with ONE
+ * fresh question naming that setting. `already_merged` settles nothing — the merge
+ * webhook owns that card — and `subject_changed` never reaches here at all.
+ *
+ * A failure to record is LOGGED AND SWALLOWED: the caller is about to throw the
+ * refusal a person is waiting to read, and losing that message to a bookkeeping
+ * error would be the worse outcome.
+ */
+async function recordMergeRefusal(
+  approvalGateId: string,
+  target: MergeTarget,
+  refusal: { code: MergeRefusalCode; permission?: string; reason?: string },
+  ctx: ServiceContext,
+): Promise<void> {
+  try {
+    await withWorkspaceContext(ctx, async (tx) => {
+      await queueExitCardMoves.lockCard(target.workItemId, tx);
+      await githubPullRequestMergeRefusalRepository.create(
+        {
+          pullRequestId: target.pullRequestId,
+          code: refusal.code,
+          headSha: target.expectedHeadSha,
+          approvalGateId,
+          permission: refusal.permission ?? null,
+          refusedAt: new Date(),
+        },
+        tx,
+      );
+      const landingClass = classOfMergeRefusal(refusal.code);
+      if (landingClass === null) return;
+      const item = await workItemRepository.findById(target.workItemId, tx);
+      if (!item) return;
+      const mode = (await projectRepository.findPrMergeMode(item.projectId, tx))?.prMergeMode;
+      // `auto` has no approval to spend and no person to ask, so it records nothing.
+      if (mode !== 'manual') return;
+      await settleUnlandedOutcome(item, landingClass, ctx, tx);
+    });
+  } catch (err) {
+    console.error('[pullRequestMergeService] the refusal could not be recorded', {
+      approvalGateId,
+      pullRequestId: target.pullRequestId,
+      code: refusal.code,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /** A member's refusal in the frame's own vocabulary — the mapping the decide action uses. */

@@ -1,3 +1,4 @@
+import type { MergeRefusalCode } from '@/lib/git/types';
 // WHAT A MERGE-QUEUE REMOVAL MEANS (Story MOTIR-5461 · MOTIR-5632).
 //
 // `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 2 — the reason
@@ -111,6 +112,36 @@ const QUEUE_EXIT_CLASSES = {
 export function classOfQueueExit(rawReason: string | null | undefined): LandingClass {
   if (rawReason && Object.hasOwn(QUEUE_EXIT_CLASSES, rawReason)) {
     return QUEUE_EXIT_CLASSES[rawReason as KnownQueueExitReason];
+  }
+  return 'retryable';
+}
+
+/**
+ * The HOST's own refusal codes, classed by the same question (§4 FOURTH AMENDMENT,
+ * point 2; MOTIR-5833). ONE map answers for both sources, so the card cannot be
+ * settled one way by the queue and another way by the press.
+ *
+ * ⚠️ `subject_changed` IS NOT AN OUTCOME and answers `null`. It means the head moved
+ * under the press, so nothing was attempted and no approval was spent — the
+ * stale-stamp path (MOTIR-5232), not a failed landing.
+ */
+const MERGE_REFUSAL_CLASSES: Record<MergeRefusalCode, LandingClass | null> = {
+  checks_not_green: 'cant_land',
+  conflict: 'cant_land',
+  branch_protected: 'setting',
+  app_permission_missing: 'setting',
+  already_merged: 'landed',
+  subject_changed: null,
+};
+
+/**
+ * Classify one host refusal. TOTAL over `MergeRefusalCode`, and `retryable` for any
+ * string outside it — a second host may name a refusal this deployment has never
+ * seen, and the safe default is to ask a person rather than to offer them nothing.
+ */
+export function classOfMergeRefusal(code: string): LandingClass | null {
+  if (Object.hasOwn(MERGE_REFUSAL_CLASSES, code)) {
+    return MERGE_REFUSAL_CLASSES[code as MergeRefusalCode];
   }
   return 'retryable';
 }
