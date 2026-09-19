@@ -16,7 +16,9 @@
 //   - GET  /repos/{owner}/{name}/rules/branches/{base}  → does the base require a merge queue?
 //   - PUT  /repos/{owner}/{name}/pulls/{number}/merge   → the merge, or the host's refusal
 //   - POST /graphql (`enqueuePullRequest`)              → the queue entry
-//   - GET  /repos/{owner}/{name}/pulls/{number}/files   → the merged pull request's paths (empty)
+//   - GET  /repos/{owner}/{name}/pulls/{number}/files   → the pull request's paths (empty, or
+//                                                         the head's files the control names)
+//   - GET  /repos/{owner}/{name}/contents/{path}?ref=   → a file's raw text (MOTIR-5681)
 //   - GET  /repos/{owner}/{name}/collaborators/{login}/permission
 //                                                       → whether a REVIEWER can write (MOTIR-5595)
 //   - POST /app/installations/{id}/access_tokens        → ONLY when E2E_TEST_GITHUB_REPOS is
@@ -87,6 +89,13 @@ export interface GithubMergeControl {
    *  provider maps to `none`; `'403'` and `'500'` drive the `ProviderPermissionReadError`
    *  path a consumer records as `unknown`. */
   reviewerPermissions?: Record<string, GithubReviewerPermission>;
+  /** `owner/name#number` → the files the pull request's HEAD writes (Story MOTIR-4907 ·
+   *  MOTIR-5681). What the decision capture reads to find a `docs/decisions/*.md` file.
+   *  Omitted, the list is empty — the merge webhook's paths capture, as before. */
+  pullRequestFiles?: Record<string, { path: string; sha: string; status?: string }[]>;
+  /** `owner/name:path` → the file's text, served RAW at any ref (MOTIR-5681) — what the
+   *  decision port reads through the resolver. A path with no entry is GitHub's 404. */
+  fileContents?: Record<string, string>;
 }
 
 /** What the fake host says about one reviewer. The six real permissions, plus the two
@@ -180,6 +189,7 @@ const PULL_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/;
 const MERGE_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/merge$/;
 const RULES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/rules\/branches\/[^?]+$/;
 const FILES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files(?:\?.*)?$/;
+const CONTENTS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/contents\/([^?]+)(?:\?.*)?$/;
 const PERMISSION_PATH = /^\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/?]+)\/permission(?:\?.*)?$/;
 
 /** A permission path's repository and username, when this seam answers for that repository. */
@@ -352,7 +362,42 @@ export function installGithubMergeMock(agent: MockAgent): void {
       const path = String(req.path);
       const { key } = scoped(FILES_PATH, path)!;
       journal({ method: 'GET', path, body: null, pullRequest: key });
-      return reply(200, []);
+      // The HEAD's files, when the spec names them (MOTIR-5681) — each row with the
+      // `contents_url` whose `ref` is the head, which is how the capture learns it.
+      const control = readControl();
+      const files =
+        Object.entries(control.pullRequestFiles ?? {}).find(([k]) => same(k, key!))?.[1] ?? [];
+      const head = answerFor(control, key!).headSha ?? 'e2e-head';
+      const { repository } = scoped(FILES_PATH, path)!;
+      return reply(
+        200,
+        files.map((file) => ({
+          filename: file.path,
+          sha: file.sha,
+          status: file.status ?? 'added',
+          contents_url: `${GITHUB_ORIGIN}/repos/${repository}/contents/${file.path}?ref=${head}`,
+        })),
+      );
+    })
+    .persist();
+
+  // ── A file's contents at a ref, RAW (Story MOTIR-4907 · MOTIR-5681) ─────────
+  // The decision port reads the document through `readFileAtRef`, which asks for the raw
+  // media type. Scoped like every intercept here; a path the control does not name is the
+  // host's own 404 for a missing path.
+  pool
+    .intercept({ path: (p) => scoped(CONTENTS_PATH, p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const m = CONTENTS_PATH.exec(path)!;
+      const file = `${m[1]}/${m[2]}:${decodeURIComponent(m[3]!)}`;
+      journal({ method: 'GET', path, body: null, pullRequest: null });
+      const text = Object.entries(readControl().fileContents ?? {}).find(([k]) =>
+        same(k, file),
+      )?.[1];
+      return text === undefined
+        ? reply(404, { message: 'Not Found' })
+        : reply(200, text, { 'content-type': 'text/plain; charset=utf-8' });
     })
     .persist();
 

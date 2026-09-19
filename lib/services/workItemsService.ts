@@ -5690,7 +5690,8 @@ export const workItemsService = {
   // (MOTIR-2201 removed `getFirstChildOfKind` — the planner-bug-home resolution
   // was its only caller, and reading "the first child of kind X" as if it were a
   // stable handle is the bug that card exists to remove. The home EPIC is now
-  // the parent itself; see `lib/ai/plannerBugHome.ts`.)
+  // the parent itself; see `lib/ai/plannerBugHome.ts` — since MOTIR-5822 the
+  // marker resolves to a FOLDER and no work item is a parent at all.)
 
   /**
    * Is a work item FINISHABLE? (Subtask 7.8.23) — the single-item analogue of

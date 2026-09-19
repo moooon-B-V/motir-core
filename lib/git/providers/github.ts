@@ -366,8 +366,13 @@ async function githubEnqueue(
 export const githubProvider: GitProvider = {
   id: 'github',
 
-  mintInstallationToken(installationId: string): Promise<InstallationToken> {
-    return mintInstallationToken(installationId);
+  mintInstallationToken(
+    installationId: string,
+    forRepo?: { owner: string },
+  ): Promise<InstallationToken> {
+    return forRepo
+      ? mintInstallationToken(installationId, githubAppRoleForRepo(forRepo, provisioningOrgLogin()))
+      : mintInstallationToken(installationId);
   },
 
   async fetchInstallationRepos(installationId: string): Promise<NormalizedRepo[]> {
@@ -655,7 +660,11 @@ export const githubProvider: GitProvider = {
     const guarded = normalizeRepoFilePath(path);
     if (!guarded.ok) return { outcome: 'invalid_path', path, reason: guarded.reason };
 
-    const { token } = await mintInstallationToken(installationId);
+    // ⚠️ THE APP IS CHOSEN BY PROVENANCE, as the merge's is (MOTIR-5681 found this read
+    // minting through the user-facing App for a HOSTED repository, which that App is not
+    // installed on — so a decision document there could never be shown).
+    const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+    const { token } = await mintInstallationToken(installationId, role);
     const url =
       `${GITHUB_API}/repos/${owner}/${name}/contents/` +
       `${guarded.path.split('/').map(encodeURIComponent).join('/')}` +

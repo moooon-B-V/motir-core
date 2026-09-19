@@ -82,6 +82,31 @@ export const bugDestinationService = {
     return { folderId: project?.bugDestinationFolderId ?? null };
   },
 
+  /**
+   * Where a PLANNER bug goes — the `@planner-bug-home` marker's answer (Story
+   * MOTIR-5818 · MOTIR-5822). A LADDER, and every rung is a legal answer, so
+   * filing never fails for want of a destination:
+   *
+   *   1. the project's planner-bug destination (`plannerBugDestinationFolderId`);
+   *   2. unset ⇒ wherever PRODUCT bugs go (`bugDestinationFolderId`);
+   *   3. that unset too ⇒ the project root.
+   *
+   * Rung 2 is a real fallback, unlike `resolve` above, because `null` means
+   * something different on each pointer: on the product pointer it is *the root,
+   * chosen*; on this one it is *not set, use the product answer*. Neither
+   * pointer can dangle — `foldersService.deleteFolder` carries both up
+   * (MOTIR-5821) — so no rung is reached because a folder vanished.
+   */
+  async resolvePlannerBug(
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<BugDestination> {
+    const project = await projectRepository.findById(projectId, tx);
+    return {
+      folderId: project?.plannerBugDestinationFolderId ?? project?.bugDestinationFolderId ?? null,
+    };
+  },
+
   /** The Bugs room's view of the destination, for someone who may administer the project. */
   async getSettings(projectId: string, ctx: ServiceContext): Promise<BugDestinationDto> {
     await projectAccessService.assertPermission(projectId, ctx, 'project:administer');

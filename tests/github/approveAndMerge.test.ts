@@ -648,15 +648,16 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
 
   it('approveAndMerge handed a gate of another KIND is a programming error, and decides nothing', async () => {
     const { item } = await pressable();
-    // ⚠️ `decision_approval`, not `design_result` — MOTIR-5664 ADMITS the design kind
-    // by name, because pressing the primary design gate is what merges the set. The
-    // guard is still the guard: a kind it does not know is still a programming error.
+    // ⚠️ `pull_request_merge`, not a PRIMARY kind — MOTIR-5664 ADMITS the design kind
+    // by name, and MOTIR-5677 the decision kind, because pressing a primary is what
+    // merges the set. The guard is still the guard: a kind it does not know is still a
+    // programming error. (`decision_approval` stood here until MOTIR-5677.)
     const foreign = await adminDb.approvalGate.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         workItemId: item.id,
-        kind: 'decision_approval',
+        kind: 'pull_request_merge',
         subjectId: 'ev-1',
       },
     });
@@ -665,7 +666,7 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
         { stamp: DECIDED_WITHOUT_A_READER, gateId: foreign.id, source: 'ui' },
         fx.ctx,
       ),
-    ).rejects.toThrow(/handed a decision_approval gate/);
+    ).rejects.toThrow(/handed a pull_request_merge gate/);
     expect((await gateRow(foreign.id)).state).toBe('awaiting');
   });
 

@@ -106,7 +106,14 @@ export interface GitProvider {
    * until near expiry and re-minted; NEVER persisted. `installationId` is the
    * host's own installation id (GitHub's numeric id as a string).
    */
-  mintInstallationToken(installationId: string): Promise<InstallationToken>;
+  mintInstallationToken(
+    installationId: string,
+    /** The repository the token is FOR, when the caller knows it (MOTIR-5681). A host
+     *  that runs more than one App chooses by the repository's provenance — GitHub mints
+     *  a hosted repository's token through the provisioning App — and one that does not
+     *  ignores it. Omitted, the host's default credential. */
+    forRepo?: { owner: string },
+  ): Promise<InstallationToken>;
 
   /**
    * Fetch the repositories reachable on an installation, normalized. Uses a

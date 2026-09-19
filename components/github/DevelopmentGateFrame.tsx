@@ -32,6 +32,8 @@ import {
   type RowMergeOutcome,
 } from './MergeOutcomeSlot';
 import { QueueExitLine } from './QueueExitLine';
+import { decisionDocumentShown } from './DecisionDocumentSlot';
+import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 
 // THE DEVELOPMENT BLOCK'S FRAME ARM (Story MOTIR-4906 · Subtask MOTIR-5336),
 // `design/github/design-notes.md` §20 · Panel 12c — AND ITS VERBS (Story MOTIR-4909 ·
@@ -77,6 +79,29 @@ export interface DevelopmentGateRead {
    * gate still awaits and whether the press queued it (MOTIR-5484). Empty before that.
    */
   members?: PullRequestApprovalMemberDTO[];
+}
+
+/**
+ * THE DECISION PORT'S FACTS (Story MOTIR-4907 · Subtask MOTIR-5678; design §27) — what the
+ * frame needs when the gate it asks is a `decision_approval`: the document the slot drew,
+ * and the pull requests one press on it will merge. A decision gate's own version names a
+ * FILE, not a set, so the pull requests cannot be read out of it the way a merge gate's are.
+ */
+export interface DecisionPortFacts {
+  document: DecisionDocumentViewDTO | null;
+  /** `owner/name · #n` of every open pull request delivering the card, in row order. */
+  openPullRequests: string[];
+}
+
+/** `owner/name:path@blob` → its path and blob; null for an unresolvable version. */
+function parseDecisionVersion(version: string | null): { path: string; blob: string } | null {
+  if (!version) return null;
+  const colon = version.indexOf(':');
+  const at = version.lastIndexOf('@');
+  if (colon <= 0 || at <= colon) return null;
+  const path = version.slice(colon + 1, at);
+  if (path.startsWith('unresolvable:')) return null;
+  return { path, blob: version.slice(at + 1) };
 }
 
 /** The item page's server actions this frame presses. */
@@ -136,6 +161,7 @@ export function DevelopmentGateFrame({
   layout = 'flush',
   onShowCurrentVersion,
   gateKey = 0,
+  decision = null,
   children,
 }: {
   read: DevelopmentGateRead;
@@ -169,11 +195,14 @@ export function DevelopmentGateFrame({
   onShowCurrentVersion?: () => void;
   /** Bumped by a host whose re-read does not change `read.stamp`'s identity on its own. */
   gateKey?: number;
+  /** The decision port's facts — read only when the gate asked is `decision_approval`. */
+  decision?: DecisionPortFacts | null;
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
   const tGate = useTranslations('approvalGate');
   const tDesign = useTranslations('approvalGate.designResult');
+  const tDecision = useTranslations('approvalGate.decision');
   const router = useRouter();
   // The in-browser path to the status rail (Bug MOTIR-5212) — a no-op outside the item page.
   const { applyOptimisticStatus, clearOptimisticStatus } = useOptimisticStatusWriter();
@@ -403,6 +432,48 @@ export function DevelopmentGateFrame({
             ? t('meta.delivered', { count, run: runLabel })
             : t('meta.count', { count });
 
+  // ── THE DECISION PORT (MOTIR-5678; design §27) ──────────────────────────────────
+  // A decision gate LEADS the frame the way a design gate does, and every band says so in
+  // its own words: band 1 names the document, band 3 what accepting it merges — or, when
+  // there is no one document to accept, why Approve is disabled.
+  const isDecision = gate.kind === 'decision_approval';
+  const decisionDoc = decision?.document ?? null;
+  const decisionPrs = decision?.openPullRequests ?? [];
+  const decisionShown = decisionDocumentShown(decisionDoc);
+  const b = (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>;
+  const monoSpan = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
+  function decisionMeta(): ReactNode {
+    const prCount = decisionPrs.length;
+    const withRun = <K extends string>(key: K) => (runLabel ? key : (`${key}NoRun` as const));
+    if (gate.state === 'superseded') {
+      const asked = parseDecisionVersion(gate.subjectVersion);
+      return asked
+        ? tDecision('headMeta.withdrawn', { path: asked.path, blob: asked.blob.slice(0, 7) })
+        : t('meta.withdrawnSet', { count: prCount });
+    }
+    const run = runLabel ?? '';
+    if (
+      decisionDoc?.outcome === 'resolved' ||
+      (decisionDoc?.outcome === 'unresolvable' && decisionDoc.path)
+    ) {
+      const path = decisionDoc.outcome === 'resolved' ? decisionDoc.path : decisionDoc.path!;
+      return tDecision(`headMeta.${withRun('one')}`, { path, count: prCount, run });
+    }
+    if (decisionDoc?.outcome === 'unresolvable' && decisionDoc.reason === 'none') {
+      return tDecision(`headMeta.${withRun('none')}`, { count: prCount, run });
+    }
+    if (decisionDoc?.outcome === 'unresolvable' && decisionDoc.reason === 'several') {
+      return tDecision(`headMeta.${withRun('several')}`, {
+        docs: decisionDoc.paths.length,
+        count: prCount,
+        run,
+      });
+    }
+    return runLabel
+      ? t('meta.delivered', { count: prCount, run: runLabel })
+      : t('meta.count', { count: prCount });
+  }
+
   // ── Band 3 ────────────────────────────────────────────────────────────────────
   const verbs: GateVerb[] = actions
     ? [
@@ -420,24 +491,44 @@ export function DevelopmentGateFrame({
           variant: 'primary',
           // Merging is not reversible from here, which is what the confirm step says aloud.
           confirms: true,
+          // A decision with no one document on screen cannot be accepted (§27 Panels 3a–3d):
+          // Approve stays drawn and disabled, with the reason as band 3's line.
+          disabled: isDecision && !decisionShown,
         },
       ]
     : [];
   // One or two pull requests are NAMED; three or more are COUNTED, because band 3 is one line
   // and an unbounded list pushes the verbs off the frame. The confirm step names every one.
-  const consequence =
-    actions && count > 0
+  const consequence = isDecision
+    ? actions
+      ? decisionShown
+        ? decisionPrs.length > 0
+          ? tDecision.rich('consequence', {
+              prs: nameList(decisionPrs),
+              key: itemIdentifier,
+              b,
+            })
+          : tDecision.rich('consequenceNoPrs', { key: itemIdentifier, b })
+        : tDecision('blocked')
+      : null
+    : actions && count > 0
       ? count <= 2
         ? t('consequence.named', { prs: nameList(members.map(nameOf)), key: itemIdentifier })
         : t('consequence.counted', { count, key: itemIdentifier })
       : null;
-  const confirmConsequences = actions
+  const confirmConsequences = isDecision
     ? [
-        t('confirm.records', { count }),
-        ...members.map((member) => t('confirm.mergeOrQueue', { pr: nameOf(member) })),
-        t('confirm.movesToApproved', { key: itemIdentifier }),
+        tDecision('confirm.records'),
+        ...decisionPrs.map((pr) => t('confirm.mergeOrQueue', { pr })),
+        tDecision('confirm.moves', { key: itemIdentifier }),
       ]
-    : [];
+    : actions
+      ? [
+          t('confirm.records', { count }),
+          ...members.map((member) => t('confirm.mergeOrQueue', { pr: nameOf(member) })),
+          t('confirm.movesToApproved', { key: itemIdentifier }),
+        ]
+      : [];
 
   // State `H` for a MEMBER: the approval stands, and the refusal is named in place.
   const refused = members.flatMap((member) => {
@@ -513,14 +604,28 @@ export function DevelopmentGateFrame({
       />,
     ];
   });
-  const recordDetail =
-    gate.state === 'approved' && count > 0 ? (
-      <>
-        <span>{t('record.commits', { count })}</span>
-        {why ? <span>{why}</span> : null}
-        {exitParts}
-      </>
-    ) : null;
+  const decisionAccepted = isDecision && gate.state === 'approved';
+  const acceptedBlob = decisionAccepted ? parseDecisionVersion(gate.subjectVersion)?.blob : null;
+  const recordDetail = decisionAccepted ? (
+    // Panels 4 and 6a: the accepted BLOB named, then — while a pull request is still open —
+    // that it merges on its own once its checks pass. No verb: a second press would ask a
+    // question whose answer is already on the record.
+    <>
+      {acceptedBlob ? (
+        <span>
+          {tDecision.rich('acceptedBlob', { blob: acceptedBlob.slice(0, 7), mono: monoSpan })}
+        </span>
+      ) : null}
+      {decisionPrs.length > 0 ? <span>{tDecision('mergeHeld')}</span> : null}
+      {why ? <span>{why}</span> : null}
+    </>
+  ) : gate.state === 'approved' && count > 0 ? (
+    <>
+      <span>{t('record.commits', { count })}</span>
+      {why ? <span>{why}</span> : null}
+      {exitParts}
+    </>
+  ) : null;
 
   // The item page's frame steps out of its card's padding so the bands meet the
   // card's edges; the overlay HAS no card — the dialog is the container — so it
@@ -559,8 +664,14 @@ export function DevelopmentGateFrame({
           // shipped approve-and-merge wording, because one press is what merges the
           // set (MOTIR-5664), and a second visual language for the same act would be
           // the duplication this level exists to remove.
-          kindLabel={gate.kind === 'design_result' ? tDesign('kindLabel') : t('kindLabel')}
-          subjectMeta={subjectMeta}
+          kindLabel={
+            gate.kind === 'design_result'
+              ? tDesign('kindLabel')
+              : isDecision
+                ? tDecision('kindLabel')
+                : t('kindLabel')
+          }
+          subjectMeta={isDecision ? decisionMeta() : subjectMeta}
           // `data-port` lifts the block's code surfaces to `--el-card` on the port's
           // `--el-surface` (§20 Decisions: the same fill would leave only the edge).
           port={
@@ -574,13 +685,35 @@ export function DevelopmentGateFrame({
           routedToLabel={read.routedToLabel}
           alert={alert}
           recordDetail={recordDetail}
-          withdrawnPort={{
-            port:
-              moved.length > 0
-                ? t('withdrawn.port', { pr: nameList(moved.map(nameOf)) })
-                : t('withdrawn.portSet'),
-            cite: t('withdrawn.portCite'),
-          }}
+          recordLead={
+            decisionAccepted && gate.decidedByLabel && gate.decisionSource !== 'github'
+              ? tDecision.rich('accepted', {
+                  name: gate.decidedByLabel,
+                  when: gate.decidedAt ? new Date(gate.decidedAt).toLocaleString() : '',
+                  b,
+                })
+              : undefined
+          }
+          withdrawnPort={
+            isDecision
+              ? {
+                  // A PER-KIND cause (§27): the shared `head_moved` line stays true for every
+                  // other kind; the decision kind is withdrawn by a push only when the push
+                  // changed the DOCUMENT, and says so.
+                  port:
+                    gate.supersededCause === 'head_moved'
+                      ? tGate('withdrawn.causeByKind.decision_approval.head_moved')
+                      : tGate(`withdrawn.cause.${gate.supersededCause ?? 'unknown'}`),
+                  cite: tDecision('withdrawnNext'),
+                }
+              : {
+                  port:
+                    moved.length > 0
+                      ? t('withdrawn.port', { pr: nameList(moved.map(nameOf)) })
+                      : t('withdrawn.portSet'),
+                  cite: t('withdrawn.portCite'),
+                }
+          }
           onDecide={onDecide}
           onShowCurrentVersion={() => {
             setRereadAsked(true);
