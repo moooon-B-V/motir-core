@@ -94,6 +94,27 @@ export interface RoadmapLevelMemberBlocker {
   isDone: boolean;
 }
 
+/** A FOLDER on a roadmap level (Bug MOTIR-5710 · MOTIR-5740) — a place, not a
+ *  unit of work: a name, a position and its DIRECT contents, nothing else. */
+export interface RoadmapLevelFolder {
+  id: string;
+  parentFolderId: string | null;
+  name: string;
+  position: string;
+  childFolderCount: number;
+  itemCount: number;
+}
+
+/** How a level read treats FOLDERS (Bug MOTIR-5710 · MOTIR-5740). Absent, the
+ *  read is the shipped one; only `/roadmap` asks. */
+export interface RoadmapFolderRequest {
+  /** Opt into the folder treatment: the root leaves filed rows out and the
+   *  level's folders come back. */
+  folders?: boolean;
+  /** The folder whose level to read — never together with a `parentId`. */
+  folderId?: string;
+}
+
 export interface RoadmapLevelData {
   items: RoadmapLevelItem[];
   edges: RoadmapEdge[];
@@ -110,6 +131,9 @@ export interface RoadmapLevelData {
    *  level) degrades to "no tile", which is the pre-MOTIR-3490 behaviour and
    *  never a false claim that the level is complete. */
   levelTotal?: number;
+  /** The level's FOLDERS, in position order — present only when the read asked
+   *  for them (`RoadmapFolderRequest.folders`) and they apply (Bug MOTIR-5710). */
+  folders?: RoadmapLevelFolder[];
 }
 
 /** The per-level node shape `GET …/roadmap?parentId=` returns (RoadmapNodeDto). */
@@ -221,10 +245,17 @@ export async function fetchRoadmapLevel(
    * predicate; absent, this call is byte-for-byte the shipped read.
    */
   ids?: readonly string[],
+  /**
+   * FOLDERS (Bug MOTIR-5710 · MOTIR-5740) — an options object, so this list stops
+   * growing positionally. Absent, the call is byte-for-byte the shipped read.
+   */
+  folderRequest: RoadmapFolderRequest = {},
 ): Promise<RoadmapLevelData> {
   const params = new URLSearchParams();
   if (parentId) params.set('parentId', parentId);
   if (ids !== undefined) params.set('ids', ids.join(','));
+  if (folderRequest.folders) params.set('folders', '1');
+  if (folderRequest.folderId) params.set('folderId', folderRequest.folderId);
   if (scope === 'sprint') params.set('scope', 'sprint');
   // Only ever set after the reader has asked for it (MOTIR-3490) — the default
   // read stays the capped one, so nothing gets slower for the levels that fit.
@@ -242,6 +273,7 @@ export async function fetchRoadmapLevel(
       offLevelBlockers?: RoadmapBlockerStub[];
       levelMemberBlockers?: RoadmapLevelMemberBlocker[];
       levelTotal?: number;
+      folders?: RoadmapLevelFolder[];
     };
     return {
       items: (body.nodes ?? []).map(toItem),
@@ -249,8 +281,29 @@ export async function fetchRoadmapLevel(
       offLevelBlockers: body.offLevelBlockers ?? [],
       levelMemberBlockers: body.levelMemberBlockers ?? [],
       levelTotal: typeof body.levelTotal === 'number' ? body.levelTotal : undefined,
+      ...(Array.isArray(body.folders) ? { folders: body.folders } : {}),
     };
   } catch {
     return { items: [], edges: [], offLevelBlockers: [] };
   }
+}
+
+/**
+ * Is the roadmap ROOT empty — the first-run state with the Plan-with-AI call to
+ * action — once folders are drawn (Bug MOTIR-5710 · MOTIR-5740)?
+ *
+ * Not "no nodes": with folders on, a project that has filed every root row away
+ * has no root NODES and is anything but empty. And not "no nodes and no folders"
+ * either: every project is created with a seeded, empty Bugs folder
+ * (`projectsService`), so that rule would retire the empty state for every
+ * project ever made. EMPTY is therefore: no root work item, and no root folder
+ * holding anything directly — a folder with content is a door to work, an empty
+ * one is furniture.
+ */
+export function isRoadmapRootEmpty(level: {
+  nodes: readonly unknown[];
+  folders?: readonly { childFolderCount: number; itemCount: number }[];
+}): boolean {
+  if (level.nodes.length > 0) return false;
+  return (level.folders ?? []).every((f) => f.childFolderCount === 0 && f.itemCount === 0);
 }

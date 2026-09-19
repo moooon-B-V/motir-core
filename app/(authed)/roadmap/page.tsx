@@ -11,6 +11,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { RoadmapView } from '@/components/planning/RoadmapView';
 import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import { isRoadmapRootEmpty } from '@/lib/planning/roadmapClient';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 
 // The project Roadmap VIEW (Story 7.20 · Subtask 7.20.5 / MOTIR-1011) — the route
@@ -132,8 +133,14 @@ export default async function RoadmapPage({
   // design's empty state with the Plan-with-AI CTA, rather than mounting the canvas
   // to show its bare "nothing here" panel. The canvas re-reads the roots itself
   // (cached client-side) when it mounts for the populated case.
-  const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx);
-  const isEmpty = roots.nodes.length === 0;
+  // FOLDER-AWARE (Bug MOTIR-5710 · MOTIR-5740): the canvas asks for folders, so the
+  // emptiness check must read the same root it will draw. A project that filed
+  // every root row into a folder is NOT empty; one holding only its seeded, empty
+  // Bugs folder still is (`isRoadmapRootEmpty`).
+  const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx, {
+    folders: true,
+  });
+  const isEmpty = isRoadmapRootEmpty(roots);
   const aiConfigured = isMotirAiConfigured();
 
   // An empty PROJECT keeps the server empty state (the canvas never mounts). A
