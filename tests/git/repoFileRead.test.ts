@@ -172,6 +172,27 @@ describe('github.readFileAtRef', () => {
     expect(init.signal).toBeDefined();
   });
 
+  it('mints a HOSTED repository’s token through the PROVISIONING App — by provenance, as the merge does (MOTIR-5681)', async () => {
+    // Only the provisioning App is configured: a read that minted through the user-facing
+    // App would throw `GithubAppNotConfiguredError` before any request, which is exactly how
+    // a decision document on a hosted repository used to be unreadable.
+    vi.stubEnv('GITHUB_APP_ID', '');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', '');
+    vi.stubEnv('GITHUB_STUDIO_APP_ID', '1001');
+    vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-hosted');
+    stubFetch(() => new Response('# ADR\n', { status: 200 }));
+
+    const result = await github.readFileAtRef(
+      'inst-hosted',
+      'motir-hosted',
+      'pages',
+      'docs/decisions/page-body.md',
+      'main',
+    );
+    expect(result).toMatchObject({ outcome: 'found', text: '# ADR\n' });
+  });
+
   it('encodes each path segment without encoding the separators', async () => {
     const fetchMock = stubFetch(() => new Response('x', { status: 200 }));
     await github.readFileAtRef('inst-1', 'moooon', 'acme', 'a b/c+d.ts', 'feat/x y');

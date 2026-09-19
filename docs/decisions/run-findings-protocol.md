@@ -302,9 +302,11 @@ to choose, and nothing to invent — which is the whole requirement.
 
 ### Why not the planner-bug home
 
-`lib/ai/plannerBugHome.ts` resolves `PLANNER_BUG_HOME_MARKER` to the project's
-`story` titled `Captured planning-mistake bugs`, and `aiWorkItemsService.fileBug`
-files there. That home is for **PLANNING** defects — telemetry about the planner,
+`lib/ai/plannerBugHome.ts` resolves `PLANNER_BUG_HOME_MARKER`, and
+`aiWorkItemsService.fileBug` files there. (Since MOTIR-5822 the home is a FOLDER
+— the project's planner-bug destination, falling back to its bug destination and
+then its root — and the bug is filed into it with no parent; it was a `story`
+titled `Captured planning-mistake bugs` when this record was written.) That home is for **PLANNING** defects — telemetry about the planner,
 whose fix is the plan or the rule that would have prevented it.
 
 A dispatched agent cannot produce one through this branch, by construction: a

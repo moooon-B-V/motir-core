@@ -234,16 +234,17 @@ describe('the merge ENTRY POINT refuses before it reaches a host', () => {
   });
 
   it('a gate of ANOTHER kind is a programming error for the press, and decideGate hands it to the door', async () => {
-    // ⚠️ `decision_approval`, not `design_result` — MOTIR-5664 ADMITS the design kind
-    // by name, because pressing the primary design gate is what merges the set. The
-    // guard is still the guard: a kind it does not know is still a programming error.
+    // ⚠️ `pull_request_merge`, not a PRIMARY kind — MOTIR-5664 ADMITS the design kind
+    // by name, and MOTIR-5677 the decision kind, because pressing a primary is what
+    // merges the set. The guard is still the guard: a kind it does not know is still a
+    // programming error. (`decision_approval` stood here until MOTIR-5677.)
     const bare = await bareItem();
     const foreign = await adminDb.approvalGate.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         workItemId: bare.id,
-        kind: 'decision_approval',
+        kind: 'pull_request_merge',
         subjectId: 'ev-1',
       },
     });
@@ -252,7 +253,7 @@ describe('the merge ENTRY POINT refuses before it reaches a host', () => {
         { stamp: DECIDED_WITHOUT_A_READER, gateId: foreign.id, source: 'ui' },
         fx.ctx,
       ),
-    ).rejects.toThrow(/handed a decision_approval gate/);
+    ).rejects.toThrow(/handed a pull_request_merge gate/);
     // …and a retry addressed at it is simply not a gate this path knows.
     await expect(retry(foreign.id, 'no-such-pull-request')).rejects.toBeInstanceOf(
       ApprovalGateNotFoundError,

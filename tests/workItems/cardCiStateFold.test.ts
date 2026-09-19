@@ -166,8 +166,12 @@ describe('membersWithAVerdict — a finished pull request that never reported (M
     expect(membersWithAVerdict([open])).toEqual([open]);
   });
 
-  it('keeps a finished member that DID report, whatever it reported', () => {
-    for (const state of ['passing', 'failing', 'running'] as const) {
+  it('keeps a finished member that reported a SETTLED verdict', () => {
+    // ⚠️ `running` used to be in this loop, and that is the defect MOTIR-5817
+    // closes: a finished member's `running` is a check that will never report,
+    // which is the same "waiting on nothing" this describe block is about. The
+    // block below owns that case now.
+    for (const state of ['passing', 'failing'] as const) {
       for (const lifecycle of ['merged', 'closed'] as const) {
         const m = member({ state, lifecycle });
         expect(membersWithAVerdict([m])).toEqual([m]);
@@ -190,6 +194,59 @@ describe('membersWithAVerdict — a finished pull request that never reported (M
     const silentMerged = member({ lifecycle: 'merged' });
     const silentOpen = member({ lifecycle: 'open' });
     expect(membersWithAVerdict([passing, silentMerged, silentOpen])).toEqual([passing, silentOpen]);
+  });
+});
+
+describe('membersWithAVerdict — a finished pull request STUCK AT PENDING (MOTIR-5817)', () => {
+  // MOTIR-5786 dropped the no-rows arm: a finished member whose `state` is
+  // `null`. This is the SAME rule through the other arm. A merged or closed
+  // pull request whose last check rows still say `pending` derives `running`,
+  // not `null`, so it survived that filter and pinned the card at `running` for
+  // ever. Those checks cannot settle: a completion event was lost, or the check
+  // was abandoned when the pull request merged.
+  //
+  // On production this was the whole of the backfill's `passing → running`
+  // column — 40 cards, every one of them `done`.
+  const member = (over: Partial<VerdictMember>): VerdictMember => ({
+    state: null,
+    cannotReport: false,
+    queueFailure: false,
+    lifecycle: 'open',
+    ...over,
+  });
+
+  it('drops a MERGED or CLOSED member whose verdict is `running`', () => {
+    expect(membersWithAVerdict([member({ state: 'running', lifecycle: 'merged' })])).toEqual([]);
+    expect(membersWithAVerdict([member({ state: 'running', lifecycle: 'closed' })])).toEqual([]);
+  });
+
+  it('keeps an OPEN member stuck at `running` — it is still genuinely waiting', () => {
+    const open = member({ state: 'running', lifecycle: 'open' });
+    expect(membersWithAVerdict([open])).toEqual([open]);
+  });
+
+  it('keeps a finished member whose checks FAILED — a red merged pull request is still red', () => {
+    for (const lifecycle of ['merged', 'closed'] as const) {
+      const m = member({ state: 'failing', lifecycle });
+      expect(membersWithAVerdict([m])).toEqual([m]);
+    }
+  });
+
+  it('never drops a finished `running` member a standing queue failure holds', () => {
+    // MOTIR-5717's invariant outranks this rule exactly as it outranks
+    // MOTIR-5786's: a queue-held member is never dropped, whatever else is true.
+    const m = member({ state: 'running', lifecycle: 'merged', queueFailure: true });
+    expect(membersWithAVerdict([m])).toEqual([m]);
+  });
+
+  it('drops only the finished pending member out of a mixed set, preserving order', () => {
+    const passing = member({ state: 'passing', lifecycle: 'merged' });
+    const pendingMerged = member({ state: 'running', lifecycle: 'merged' });
+    const pendingOpen = member({ state: 'running', lifecycle: 'open' });
+    expect(membersWithAVerdict([passing, pendingMerged, pendingOpen])).toEqual([
+      passing,
+      pendingOpen,
+    ]);
   });
 });
 
@@ -218,6 +275,27 @@ describe('the card verdict and the promotion still agree once finished silent me
     [
       { state: 'failing', cannotReport: false, lifecycle: 'merged' },
       { state: null, cannotReport: false, lifecycle: 'merged' },
+    ],
+    // MOTIR-5817 — the same biconditional over the PENDING arm. The card's
+    // mapper sends `running` through untouched and the promotion's sends it to
+    // `'running'` too (neither maps a non-null state), so a finished member
+    // stuck at pending would hold BOTH readings if it were not dropped; these
+    // pin that the drop keeps them agreeing rather than merely making the card
+    // greener.
+    [{ state: 'running', cannotReport: false, lifecycle: 'merged' }],
+    [{ state: 'running', cannotReport: false, lifecycle: 'closed' }],
+    [{ state: 'running', cannotReport: false, lifecycle: 'open' }],
+    [
+      { state: 'passing', cannotReport: false, lifecycle: 'merged' },
+      { state: 'running', cannotReport: false, lifecycle: 'merged' },
+    ],
+    [
+      { state: 'passing', cannotReport: false, lifecycle: 'open' },
+      { state: 'running', cannotReport: false, lifecycle: 'open' },
+    ],
+    [
+      { state: 'failing', cannotReport: false, lifecycle: 'merged' },
+      { state: 'running', cannotReport: false, lifecycle: 'merged' },
     ],
   ];
 

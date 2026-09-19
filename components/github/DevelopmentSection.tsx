@@ -26,6 +26,8 @@ import {
   type DevelopmentGateRead,
 } from './DevelopmentGateFrame';
 import { MergeOutcomeSlot, PersistedMergeOutcomes } from './MergeOutcomeSlot';
+import { DecisionDocumentSlot } from './DecisionDocumentSlot';
+import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import { CI_STATE_META } from './ciStateMeta';
 import { QueueExitAutoPart, type AutoQueueExits } from './QueueExitAutoPart';
 
@@ -414,6 +416,7 @@ export function DevelopmentSectionBody({
   designResult = null,
   repair = null,
   autoQueueExits = null,
+  decision = null,
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -528,8 +531,22 @@ export function DevelopmentSectionBody({
    * drawn: under a gate the frame reads the exits itself.
    */
   autoQueueExits?: AutoQueueExits | null;
+  /**
+   * THE DECISION PORT (Story MOTIR-4907 · Subtask MOTIR-5678; design `design/github`
+   * §27) — supplied only for a card that asks the decision question and holds a decision
+   * gate. The document leads the block, the pull requests follow behind the soft rule,
+   * and ⚠️ there is NO How to test, in any state: a decision ships a document, not
+   * something to run (§27, *Revised on review*). `gate` is the card's decision gate —
+   * read so that, when the merge question leads (Panel 5b), the slot can say the decision
+   * stands.
+   */
+  decision?: {
+    document: DecisionDocumentViewDTO | null;
+    gate: DevelopmentGateRead['gate'] | null;
+  } | null;
 }) {
   const t = useTranslations('github');
+  const tDecision = useTranslations('approvalGate.decision');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
   // The rows to draw, and what each one's delivery knows about it. `pullRequests`
   // keeps its order and its place at the front — it is what this section has
@@ -599,28 +616,50 @@ export function DevelopmentSectionBody({
         {after}
       </>
     );
-  const block = designResult ? (
+  // Panel 5b: the merge question leads, and the decision's answer stands as a line.
+  const decisionStands =
+    decision?.gate?.state === 'approved' &&
+    mergeGate !== null &&
+    mergeGate.gate.kind !== 'decision_approval' &&
+    decision.gate.decidedByLabel
+      ? tDecision.rich('acceptedUnchanged', {
+          name: decision.gate.decidedByLabel,
+          when: decision.gate.decidedAt ? new Date(decision.gate.decidedAt).toLocaleString() : '',
+          b: (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>,
+        })
+      : null;
+  const pullRequestsGroup = (
+    <div
+      role="group"
+      aria-label={t('development.pullRequestsGroup')}
+      className="mt-4 min-w-0 border-t border-(--el-border-soft) pt-2"
+    >
+      {nothingLinked ? (
+        <EmptyState
+          className="mt-2"
+          icon={<GitPullRequestArrow className="h-12 w-12" aria-hidden />}
+          title={t('development.emptyTitle')}
+          description={t.rich('development.emptyDescription', { key: itemIdentifier, mono })}
+        />
+      ) : (
+        rowsThen(null)
+      )}
+    </div>
+  );
+  const block = decision ? (
+    // THE DECISION CARD'S ORDER (§27): the document, then the pull requests — and no How
+    // to test between them, whatever the run wrote.
+    <>
+      <DecisionDocumentSlot document={decision.document} acceptedLine={decisionStands} />
+      {pullRequestsGroup}
+    </>
+  ) : designResult ? (
     // THE DESIGN CARD'S ORDER (Q8, revised on review 2026-09-14): design result,
     // How to test, then the pull requests behind the rule How to test used to carry.
     <>
       {designResult}
       {howToTestPart}
-      <div
-        role="group"
-        aria-label={t('development.pullRequestsGroup')}
-        className="mt-4 min-w-0 border-t border-(--el-border-soft) pt-2"
-      >
-        {nothingLinked ? (
-          <EmptyState
-            className="mt-2"
-            icon={<GitPullRequestArrow className="h-12 w-12" aria-hidden />}
-            title={t('development.emptyTitle')}
-            description={t.rich('development.emptyDescription', { key: itemIdentifier, mono })}
-          />
-        ) : (
-          rowsThen(null)
-        )}
-      </div>
+      {pullRequestsGroup}
     </>
   ) : nothingLinked ? (
     <>
@@ -650,6 +689,16 @@ export function DevelopmentSectionBody({
     return (
       <DevelopmentGateFrame
         read={mergeGate}
+        decision={
+          decision
+            ? {
+                document: decision.document,
+                openPullRequests: rows
+                  .filter((row) => row.pr.state === 'open')
+                  .map((row) => `${row.repo} · #${row.number}`),
+              }
+            : null
+        }
         itemIdentifier={itemIdentifier}
         // Band 1's meta names the RUN that delivered the pull requests, so it
         // reads a run author and nothing else (MOTIR-5455, which deleted the

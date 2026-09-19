@@ -8,6 +8,9 @@ import {
   type GateSetMember,
 } from '@/lib/approvalGates/gateSet';
 import { routingTargetId } from '@/lib/approvalGates/routing';
+import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
+import { decisionMembersOf } from '@/lib/approvalGates/decisionApprovalHandler';
+import { decisionIdentityOf } from '@/lib/approvalGates/decisionSubject';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -80,15 +83,28 @@ export async function gateSetFor(
   tx: Prisma.TransactionClient,
   signals: GateSetSignals = {},
 ): Promise<GateSetForResult> {
-  const [currentDesign, latestDesignGate, latestMergeGate, deliveries, mode, terminalByProject] =
-    await Promise.all([
-      designEvidenceRepository.findCurrentByWorkItem(item.id, tx),
-      approvalGateRepository.findLatestByWorkItem(item.id, 'design_result', tx),
-      approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
-      workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
-      projectRepository.findPrMergeMode(item.projectId, tx),
-      workflowsService.getTerminalStatusKeysByProjects([item.projectId], item.workspaceId, tx),
-    ]);
+  const asksDecision = asksTheDecisionQuestion(item);
+  const [
+    currentDesign,
+    latestDesignGate,
+    latestMergeGate,
+    latestDecisionGate,
+    deliveries,
+    mode,
+    terminalByProject,
+  ] = await Promise.all([
+    designEvidenceRepository.findCurrentByWorkItem(item.id, tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'design_result', tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
+    // Only a card that asks the decision question reads its gate (clause 10), so every
+    // other card's reads — and its answer — are what they were before the kind existed.
+    asksDecision
+      ? approvalGateRepository.findLatestByWorkItem(item.id, 'decision_approval', tx)
+      : Promise.resolve(null),
+    workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+    projectRepository.findPrMergeMode(item.projectId, tx),
+    workflowsService.getTerminalStatusKeysByProjects([item.projectId], item.workspaceId, tx),
+  ]);
 
   const members: GateSetMember[] = [];
   const blockedMembers: GateSetForResult['blockedMembers'][number][] = [];
@@ -135,6 +151,17 @@ export async function gateSetFor(
     prMergeMode: mode?.prMergeMode ?? null,
     cardIsTerminal: isTerminalStatus(item, terminalByProject),
     workItemId: item.id,
+    // THE DECISION QUESTION (MOTIR-5677) — read from the SAME delivery rows as the
+    // merge question, off the capture MOTIR-5674 writes, so the two can never be about
+    // different pull requests and no host is called.
+    ...(asksDecision
+      ? {
+          decision: {
+            identity: decisionIdentityOf(decisionMembersOf(deliveries)),
+            latestGate: latestDecisionGate,
+          },
+        }
+      : {}),
   });
 
   return { ...set, blockedMembers };

@@ -13,6 +13,7 @@ import {
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
+import type { DevelopmentGateRead } from '@/components/github/DevelopmentGateFrame';
 import { DesignResultPanel } from './DesignResultPanel';
 import { RunSection } from './RunSection';
 import { formatRunTimes } from './runTimes';
@@ -83,6 +84,53 @@ import { RUN_HISTORY_PAGE, type LateReads } from './lateReads';
 // there is deliberately no `error.tsx`: a section-level empty/error state is
 // what the design specifies, and a route-level error page would replace the
 // whole item with a failure the reader cannot act on.
+
+/**
+ * ⚠️ WHICH GATE THE DEVELOPMENT FRAME IS A PORT FOR (MOTIR-5667, MOTIR-5678). A PRIMARY
+ * question that is still open — the DESIGN (AMENDMENT 6 Q1) or the DECISION (§8's FIFTH
+ * AMENDMENT, clause 5) — leads, so the press addresses it and ONE press answers both
+ * questions and merges the set. Pressing the merge gate there would leave the primary
+ * awaiting after its own commits had merged.
+ *
+ * The MEMBERS stay the merge gate's: they are what the press will merge. Once the primary
+ * is decided the merge gate leads ALONE while it still awaits (Q2; §27 Panel 5b) — the
+ * reader is being asked about the commits, and the primary shows as decided. A DECISION
+ * card with no merge question left keeps its own gate in the frame (§27 Panels 4, 5a, 6a,
+ * 6b): its record is the frame's record.
+ */
+function frameGateFor(r: LateReads): DevelopmentGateRead | null {
+  const primary = (read: {
+    gate: DevelopmentGateRead['gate'] | null;
+    canDecide: boolean;
+    routedToLabel: string | null;
+    stamp: string | null;
+  }): DevelopmentGateRead | null =>
+    read.gate
+      ? {
+          gate: read.gate,
+          canDecide: read.canDecide,
+          routedToLabel: read.routedToLabel,
+          // The PRIMARY gate's stamp — it covers the pull requests beneath it too.
+          stamp: read.stamp,
+          members: r.mergeGate.members,
+        }
+      : null;
+  const merge = r.mergeGate.gate ? primary(r.mergeGate) : null;
+  const decision = r.decisionGate.gate;
+  if (decision) {
+    if (decision.state === 'awaiting' || decision.state === 'superseded') {
+      return primary(r.decisionGate);
+    }
+    // Only an ACCEPTED decision hands the lead to the merge question (Panel 5b). One sent
+    // back keeps the frame — its commits cannot merge (`decisionHoldsMerge`), so an
+    // *Approve and merge* over them would be a press the door refuses.
+    return decision.state === 'approved' && r.mergeGate.gate?.state === 'awaiting'
+      ? merge
+      : primary(r.decisionGate);
+  }
+  if (r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate) return primary(r.designGate);
+  return merge;
+}
 
 /** One pulsing placeholder block. Fill + radius through tokens only. */
 function Block({ className }: { className: string }) {
@@ -194,6 +242,12 @@ export async function LateUpperSections({
     r.designGate.gate !== null &&
     hasOpenPullRequest(r.pullRequests, deliveries ?? []);
   const showDesignResult = !designInDevelopment && (r.designEvidence !== null || r.isDesignCard);
+  // THE DECISION PORT (Story MOTIR-4907 · Subtask MOTIR-5678; design `design/github` §27).
+  // A card that asks the decision question and holds a decision gate shows its document
+  // FIRST in the Development block — the PRIMARY question, with the pull requests beneath
+  // as what accepting it merges. `decisionGate` is read only for such a card.
+  const decisionInDevelopment = r.decisionGate.gate !== null;
+  const developmentFrame = frameGateFor(r);
   return (
     <>
       {/* THE RUN — above Development, because the run is what produced it. It
@@ -226,7 +280,11 @@ export async function LateUpperSections({
           <ContentSectionCard
             title={tGithub('development.title')}
             subtitle={tGithub(
-              designInDevelopment ? 'development.glossWithDesign' : 'development.gloss',
+              decisionInDevelopment
+                ? 'development.glossWithDecision'
+                : designInDevelopment
+                  ? 'development.glossWithDesign'
+                  : 'development.gloss',
             )}
             headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
           >
@@ -286,25 +344,11 @@ export async function LateUpperSections({
               // is decided the merge gate leads ALONE (Q2) — the reader is being asked
               // about the commits, and the design shows as decided rather than as a
               // second thing to answer.
-              mergeGate={
-                r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate
-                  ? {
-                      gate: r.designGate.gate,
-                      canDecide: r.designGate.canDecide,
-                      routedToLabel: r.designGate.routedToLabel,
-                      // The DESIGN gate's stamp — it covers the pull requests beneath it too.
-                      stamp: r.designGate.stamp,
-                      members: r.mergeGate.members,
-                    }
-                  : r.mergeGate.gate
-                    ? {
-                        gate: r.mergeGate.gate,
-                        canDecide: r.mergeGate.canDecide,
-                        routedToLabel: r.mergeGate.routedToLabel,
-                        stamp: r.mergeGate.stamp,
-                        members: r.mergeGate.members,
-                      }
-                    : null
+              mergeGate={developmentFrame}
+              decision={
+                decisionInDevelopment
+                  ? { document: r.decisionGate.document, gate: r.decisionGate.gate }
+                  : null
               }
               // THE FRAME'S VERBS (MOTIR-5484): server actions, handed down as references
               // so the shared block — also the read-only peek's — imports none of them.

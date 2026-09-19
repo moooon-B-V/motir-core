@@ -267,11 +267,11 @@ describe('seam 5 · a delete carries the destination', () => {
 });
 
 describe('seam 6 · the planner marker', () => {
-  it('`@planner-bug-home` still files under the home story, whatever the destination names', async () => {
+  it('`@planner-bug-home` FILES into the product destination when its own pointer is unset — never under a story (MOTIR-5822)', async () => {
     const t = await makeTenant('marker', 'GMRK');
     const triage = await folder(t, 'Triage', null);
     await bugDestinationService.setDestination(t.projectId, triage.id, t.ctx);
-    const home = await workItemsService.createWorkItem(
+    await workItemsService.createWorkItem(
       { projectId: t.projectId, kind: 'story', title: PLANNER_BUG_HOME_STORY_TITLE },
       t.ctx,
     );
@@ -280,7 +280,7 @@ describe('seam 6 · the planner marker', () => {
       parentKey: PLANNER_BUG_HOME_MARKER,
     });
 
-    expect(bug).toMatchObject({ parentId: home.id, folderId: null });
+    expect(bug).toMatchObject({ parentId: null, folderId: triage.id });
     expect(await destinationOf(t.projectId)).toBe(triage.id);
   });
 });

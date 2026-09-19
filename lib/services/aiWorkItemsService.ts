@@ -1,12 +1,7 @@
 import { resolveServiceProjectByKey } from '@/lib/ai/serviceAuth';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import {
-  isPlannerBugHomeMarker,
-  PLANNER_BUG_HOME_MARKER,
-  PLANNER_BUG_HOME_STORY_TITLE,
-  PlannerBugHomeNotProvisionedError,
-} from '@/lib/ai/plannerBugHome';
+import { isPlannerBugHomeMarker } from '@/lib/ai/plannerBugHome';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { JobRequestAuth } from '@/lib/ai/jobAuth';
@@ -44,9 +39,10 @@ export interface FileServiceBugInput {
   descriptionMd?: string | null;
   /** Optional parent work-item key (e.g. `MOTIR-819`) in the SAME project, OR the
    *  drift-proof `PLANNER_BUG_HOME_MARKER` sentinel (`@planner-bug-home`), which
-   *  resolves to the planner-bug home STORY by TITLE — the reseed-durable handle
-   *  the self-learning loop targets instead of a volatile numeric key
-   *  (MOTIR-1466; MOTIR-2201). When omitted, the bug is filed into the project's BUG DESTINATION — its folder, or the project root (a
+   *  FILES the bug into the project's PLANNER-BUG destination folder rather than
+   *  parenting it (Story MOTIR-5818 · MOTIR-5822; the ladder is
+   *  `bugDestinationService.resolvePlannerBug`). When omitted, the bug is filed
+   *  into the project's BUG DESTINATION — its folder, or the project root (a
    *  top-level `bug` is matrix-legal). */
   parentKey?: string | null;
 }
@@ -56,34 +52,17 @@ export const aiWorkItemsService = {
     const project = await resolveServiceProjectByKey(input.projectKey, ctx);
 
     let parentId: string | null = null;
+    let plannerBug = false;
     const rawParentKey = input.parentKey?.trim() ?? '';
     if (rawParentKey !== '') {
       if (isPlannerBugHomeMarker(rawParentKey)) {
         // MOTIR-1466 — the DRIFT-PROOF path: the config carries the marker, not a
-        // numeric key, so it never dangles across deploys. MOTIR-2201 — ONE hop:
-        // the home STORY, found PROJECT-WIDE by its own title, IS the bug parent.
-        // It used to take a second hop — the home epic by title, then *that epic's
-        // first `story` child* — and that read of mutable tree position broke the
-        // moment the story was re-parented. A project-wide title lookup does not
-        // care where the story sits, so no `move_to_parent` can void it.
-        // Browse-gated here. A missing home is a server invariant breach, not a
-        // caller error: logged + 500, never a quiet 404 the filing path swallows.
-        const home = await workItemsService.getWorkItemByProjectKindAndTitle(
-          project.id,
-          'story',
-          PLANNER_BUG_HOME_STORY_TITLE,
-          ctx,
-        );
-        if (!home) {
-          console.error('[aiWorkItemsService] the planner-bug home story is missing', {
-            projectKey: input.projectKey,
-            projectId: project.id,
-            marker: PLANNER_BUG_HOME_MARKER,
-            expectedStoryTitle: PLANNER_BUG_HOME_STORY_TITLE,
-          });
-          throw new PlannerBugHomeNotProvisionedError(input.projectKey);
-        }
-        parentId = home.id;
+        // numeric key, so it never dangles across deploys. MOTIR-5822 — the marker
+        // no longer names a PARENT at all. It used to resolve to a story found by
+        // its title, and that story became a container every read treats as open
+        // work (MOTIR-5296's shape, for the product bugs). It now FILES the bug
+        // into the planner-bug destination, below, with `parentId` left null.
+        plannerBug = true;
       } else {
         // A literal `MOTIR-<n>` identifier. The parent must live in the SAME
         // project. `getWorkItemByIdentifier` applies the tenant gate + browse check
@@ -98,15 +77,19 @@ export const aiWorkItemsService = {
       }
     }
 
-    // No parent named ⇒ the project's BUG DESTINATION (Story MOTIR-4927 ·
-    // MOTIR-4937): its folder, or the project root when it deliberately names
-    // none. A named parent — the marker or a key — is kept exactly as before, and
-    // never also filed (`parentId` and `folderId` are exclusive).
+    // No parent ⇒ a FOLDER placement. The marker reads the PLANNER-bug ladder
+    // (its destination → the product destination → the root, MOTIR-5822); no
+    // parentKey at all reads the product BUG DESTINATION (Story MOTIR-4927 ·
+    // MOTIR-4937). Every rung is legal, so neither path can fail for want of a
+    // place. A named parent key is kept exactly as before, and never also filed
+    // (`parentId` and `folderId` are exclusive).
     const folderId =
       parentId === null
         ? (
             await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-              bugDestinationService.resolve(project.id, tx),
+              plannerBug
+                ? bugDestinationService.resolvePlannerBug(project.id, tx)
+                : bugDestinationService.resolve(project.id, tx),
             )
           ).folderId
         : null;

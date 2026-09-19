@@ -237,6 +237,12 @@ describe('H · refused — every member of the union renders in place, with a ne
     { refusal: { tag: 'APPROVAL_GATE_NOT_AUTHORISED' }, expect: /not yours to make/ },
     { refusal: { tag: 'APPROVAL_GATE_NOT_FOUND' }, expect: /no longer here/ },
     { refusal: { tag: 'APPROVAL_GATE_KIND_UNREGISTERED' }, expect: /cannot decide this kind/ },
+    // A decision gate with no single document (MOTIR-5676) — Approve refused, and the
+    // next action names the one thing that fixes it.
+    {
+      refusal: { tag: 'APPROVAL_GATE_DECISION_UNRESOLVABLE' },
+      expect: /no single decision document[\s\S]*exactly one file under docs\/decisions\//,
+    },
     { refusal: { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }, expect: /already waiting/ },
     { refusal: { tag: 'APPROVAL_GATE_DECIDED_IMMUTABLE' }, expect: /cannot be changed/ },
     // The MERGE refusals (MOTIR-5512) — each asserted by its title AND its next

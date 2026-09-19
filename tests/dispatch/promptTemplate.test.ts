@@ -241,6 +241,53 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     expect(prompt).toContain(marker);
   });
 
+  // ── MOTIR-5682: the DECISION lane names what the decision gate reads
+  //
+  // The gate asks a person about the ONE `docs/decisions/*.md` file the card's pull
+  // request carries (`approval-gates.md` §8's FIFTH AMENDMENT). A lane that only
+  // said "a decision document in the repository docs" let an honest run write it
+  // anywhere, or twice, and leave a gate nobody could approve.
+  describe('WHAT_TO_DO.decision teaches the decision gate’s four rules (MOTIR-5682)', () => {
+    const RULES = [
+      'EXACTLY ONE markdown file at docs/decisions/<kebab-slug>.md',
+      'the gate reads exactly one, and two cannot be approved',
+      'The pull request is REQUIRED',
+      'The decision is NOT final when your run ends. A person reads the document in',
+      'Stop at the',
+    ];
+    const agentPrompt = () =>
+      assembleDispatchPrompt(source({ type: 'decision', executor: 'coding_agent' })).prompt;
+
+    it.each(RULES)('an agent’s decision card is told: %s', (rule) => {
+      expect(agentPrompt()).toContain(rule);
+    });
+
+    // Design review 2026-09-19 (MOTIR-5673): the decision port shows NO How to test, so the
+    // agent is not asked to write one — neither the record nor the pull request's section.
+    it('an agent’s decision card writes NO How to test — not the record, not the PR section', () => {
+      const prompt = agentPrompt();
+      expect(prompt).toContain(
+        'do NOT publish How to test for PROD-7. A decision card ships a document',
+      );
+      expect(prompt).toContain('It carries NO "## How to test" section');
+      expect(prompt).not.toContain("4b. publish this run's HOW TO TEST");
+      expect(prompt).not.toContain('Its body carries a "## How to test" section');
+    });
+
+    it('a CODE card still publishes How to test — the decision rule is the decision type’s alone', () => {
+      const { prompt } = assembleDispatchPrompt(source({ type: 'code', executor: 'coding_agent' }));
+      expect(prompt).toContain("4b. publish this run's HOW TO TEST");
+      expect(prompt).toContain('Its body carries a "## How to test" section');
+    });
+
+    it('a HUMAN decision card never reaches the lane — it gets the manual steps and none of the rules', () => {
+      const { prompt } = assembleDispatchPrompt(source({ type: 'decision', executor: 'human' }));
+      expect(prompt).toContain('Never paste a secret into the work item.');
+      for (const rule of RULES) expect(prompt).not.toContain(rule);
+      expect(prompt).not.toContain('docs/decisions/<kebab-slug>.md');
+    });
+  });
+
   // ── MOTIR-3059, REWRITTEN BY MOTIR-3783: the design step that closes the loop
   //
   // MOTIR-3059 pinned a CONFIRMATION: the result was published by CI from a step
