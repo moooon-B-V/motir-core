@@ -23,6 +23,17 @@ import type { MonitorAssigneeSyncNote } from '@/lib/monitors/syncStates';
 // filing twice. A count-then-write guard with no constraint and no lock behind
 // it passes every serial test and fails only under a warm pool.
 
+/** A link with the connection and grant it came from — what the work-item
+ *  page's Errors section reads (MOTIR-5730). The installation contributes only
+ *  its `metadata` (the organisation slug), never a credential column. */
+export type MonitorIssueWithConnection = MonitorIssue & {
+  connection: {
+    id: string;
+    externalProjectSlug: string;
+    installation: { metadata: Prisma.JsonValue | null };
+  };
+};
+
 /** The facts a reconcile writes, from `NormalizedMonitorIssue`. */
 export interface MonitorIssueFacts {
   title: string;
@@ -147,6 +158,43 @@ export const monitorIssueRepository = {
     return rows.flatMap((row) =>
       row.workItemId ? [{ externalIssueId: row.externalIssueId, workItemId: row.workItemId }] : [],
     );
+  },
+
+  /**
+   * Every link pointing at one work item, WITH the connection it came from and
+   * that connection's grant metadata — the Errors section's read (Story
+   * MOTIR-4932 · Subtask MOTIR-5730). Most recently seen first, `externalIssueId`
+   * as the stable tie-break.
+   *
+   * ⚠️ A SECOND READ BESIDE {@link listByWorkItem}, DELIBERATELY, and not a
+   * near-copy of it: that one is the resolve-back's fan-out, which wants bare
+   * rows in a stable `id` order and no join; this one is a person's list, which
+   * wants recency order and the connection's label. Widening the fan-out's read
+   * to carry a join it never uses, or re-ordering it under the sync, would change
+   * a shipped consumer for a reader it does not have.
+   *
+   * The `select` on the installation is the credential boundary: no token column
+   * is fetched, so none can reach a DTO by accident. Runs under the CALLER's
+   * workspace binding — `monitor_issue`, `monitor_connection` and
+   * `monitor_installation` each scope it by policy.
+   */
+  async listByWorkItemWithConnection(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorIssueWithConnection[]> {
+    return tx.monitorIssue.findMany({
+      where: { workItemId },
+      include: {
+        connection: {
+          select: {
+            id: true,
+            externalProjectSlug: true,
+            installation: { select: { metadata: true } },
+          },
+        },
+      },
+      orderBy: [{ lastSeenAt: 'desc' }, { externalIssueId: 'asc' }],
+    });
   },
 
   // ── SYNC (Story MOTIR-4931 · Subtask MOTIR-5701) ───────────────────────────
