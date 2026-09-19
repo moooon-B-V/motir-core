@@ -12,7 +12,10 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 //     the effective-folder rule, in TypeScript and in SQL        → 'seam · one rule, two implementations'
 //     one Folder condition, every consumer of the grammar        → 'seam · one set'
 //   guards
-//     the roadmap still treats a filed epic as a root            → 'guard · the roadmap'
+//     the roadmap: unchanged for every canvas that does not ask for folders,
+//     and a filed epic moves into its folder for /roadmap, which does
+//     (RESTATED by Bug MOTIR-5710 · MOTIR-5738 — the "roadmap is unchanged"
+//     premise was retired by design MOTIR-5713)                   → 'guard · the roadmap'
 //     the public project: filed work visible, no folder leaks    → 'guard · the public project'
 //   already guarded, cited rather than copied
 //     boards, backlog, ready list and reports unchanged by filing:
@@ -347,8 +350,14 @@ describe('seam · one set, every consumer of the grammar', () => {
   });
 });
 
-describe('guard · the roadmap treats a filed epic as a root', () => {
-  it('the roots level lists a filed epic exactly as it listed it unfiled, and its children level is unchanged', async () => {
+describe('guard · the roadmap — filing changes /roadmap only, and only where it asks', () => {
+  // RESTATED, not deleted (Bug MOTIR-5710 · MOTIR-5738). This guard used to pin
+  // "the roadmap is unchanged: its root lists a filed epic exactly as before".
+  // Design MOTIR-5713 retired that premise for the `/roadmap` surface, which now
+  // asks for folders. The half that still holds is the other one: every canvas
+  // that does NOT ask — plan review, plan change, onboarding, the item page's
+  // Children panel — calls this same read and must see nothing move.
+  it('without the folder option, the roots level lists a filed epic exactly as it listed it unfiled, and its children level is unchanged', async () => {
     const fx = await makeWorkItemFixture();
     const epic = await make(fx, 'epic', 'Old import');
     await make(fx, 'story', 'Map legacy fields', epic.id);
@@ -366,6 +375,33 @@ describe('guard · the roadmap treats a filed epic as a root', () => {
 
     expect(await roots()).toEqual(rootsBefore);
     expect(await children()).toEqual(childrenBefore);
+  });
+
+  it('with the folder option, a filed epic leaves the roots level and appears in its folder’s level, children unchanged', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await make(fx, 'epic', 'Old import');
+    await make(fx, 'story', 'Map legacy fields', epic.id);
+    const q3 = await make(fx, 'epic', 'Q3 launch');
+    const parked = await folder(fx, 'Parked');
+    const childrenBefore = await workItemsService.getProjectRoadmap(fx.projectId, epic.id, fx.ctx);
+
+    await file(fx, epic.id, parked.id);
+
+    const roots = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      folders: true,
+    });
+    expect(roots.nodes.map((n) => n.id)).toEqual([q3.id]);
+    expect(roots.levelTotal).toBe(1);
+    expect(roots.folders?.find((f) => f.id === parked.id)?.itemCount).toBe(1);
+
+    const inside = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      folders: true,
+      folderId: parked.id,
+    });
+    expect(inside.nodes.map((n) => n.id)).toEqual([epic.id]);
+    expect(
+      await workItemsService.getProjectRoadmap(fx.projectId, epic.id, fx.ctx, { folders: true }),
+    ).toEqual(childrenBefore);
   });
 });
 
