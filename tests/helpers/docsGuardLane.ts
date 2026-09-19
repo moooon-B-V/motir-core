@@ -224,6 +224,10 @@ export function docsReadingSpecsIn(
  * that really does match.
  */
 export const DELIBERATELY_OUT: Readonly<Record<string, string>> = {
+  'tests/api/approval-gate-route.test.ts':
+    'a FIXTURE path, not a read (MOTIR-4907). Its `docs/decisions/page-body.md` is the ' +
+    "decision document named by a stubbed read's DTO, so the overlay route's decision " +
+    'arm can be asserted without a host; the spec opens no file at all.',
   'tests/github/decisionPortBoundary.test.ts':
     'FIXTURE paths, not reads (MOTIR-4907). Its `docs/decisions/page-body.md` is the ' +
     'decision document a mapper test names in a DTO; the files it opens are the ' +
