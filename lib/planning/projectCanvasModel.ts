@@ -123,6 +123,28 @@ export interface CanvasCrumb {
   crumbKey?: string;
 }
 
+// A FOLDER's node id on the canvas (Bug MOTIR-5710 · MOTIR-5741). A folder is a
+// DOOR like the grouped node — the consumer's `loadLevel` intercepts the prefix
+// and reads that folder's level — so both halves of the drill must spell the id
+// the same way, which is why it is minted and parsed here and nowhere else — a
+// pure module, because the server page resolving a `?folder=` arrival mints one
+// too. A
+// work-item id is a cuid and never carries a colon, so the namespace cannot
+// collide with one.
+export const FOLDER_NODE_PREFIX = 'folder:';
+
+/** The canvas node id of a folder. */
+export function folderNodeId(folderId: string): string {
+  return `${FOLDER_NODE_PREFIX}${folderId}`;
+}
+
+/** The folder id behind a canvas node id, or `null` when the node is not a folder. */
+export function folderIdFromNodeId(nodeId: string | null): string | null {
+  return nodeId !== null && nodeId.startsWith(FOLDER_NODE_PREFIX)
+    ? nodeId.slice(FOLDER_NODE_PREFIX.length)
+    : null;
+}
+
 /**
  * A work item's BREADCRUMB label — `identifier · title` (MOTIR-1805 design
  * DECISION 2). Lives here, in the pure model, because two independent producers

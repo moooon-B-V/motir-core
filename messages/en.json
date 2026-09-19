@@ -6205,6 +6205,17 @@
         "countOne": "1 item",
         "aria": "Not in an epic — {count} work items outside every epic"
       },
+      "folder": {
+        "items": "{count} items",
+        "itemsOne": "1 item",
+        "folders": "{count} folders",
+        "foldersOne": "1 folder",
+        "both": "{folders} · {items}",
+        "empty": "Empty",
+        "aria": "Folder {name}, {contents}. Open to see what is filed in it.",
+        "emptyTitle": "This folder is empty",
+        "emptyDescription": "Work items filed into {name} from Work items will show here."
+      },
       "more": {
         "label": "+ {count} more",
         "showing": "Showing {shown} of {total}",

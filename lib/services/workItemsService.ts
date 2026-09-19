@@ -80,7 +80,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { automationFieldsFromDiffKeys } from '@/lib/automation/fields';
 import { keyForAppend, keyBetween } from '@/lib/workItems/positioning';
 import { folderRepository } from '@/lib/repositories/folderRepository';
-import { toFolderTreeRowDto } from '@/lib/mappers/folderMappers';
+import { toFolderTreeRowDto, toRoadmapFolderDto } from '@/lib/mappers/folderMappers';
 import type { TreeFolderLevel } from '@/lib/repositories/workItemRepository';
 import {
   CrossProjectFolderError,
@@ -4362,8 +4362,31 @@ export const workItemsService = {
     projectId: string,
     parentId: string | null,
     ctx: ServiceContext,
-    opts: { scope?: 'project' | 'sprint'; all?: boolean; ids?: readonly string[] } = {},
+    opts: {
+      scope?: 'project' | 'sprint';
+      all?: boolean;
+      ids?: readonly string[];
+      /**
+       * FOLDERS on the roadmap (Bug MOTIR-5710 · MOTIR-5738) — OPT-IN, and only
+       * the `/roadmap` surface asks. With it, the project-scope root leaves out
+       * every FILED work item and returns the project's root folders instead,
+       * and `folderId` addresses one folder's level. Without it the read is
+       * byte-for-byte what it always was — which is what the plan-change,
+       * plan-review and onboarding canvases and the item page's Children panel
+       * need, because they call this same read and have no folder card to show
+       * a filed row in.
+       */
+      folders?: boolean;
+      /** The FOLDER whose level to read — the other level address beside
+       *  `parentId`, never together with it. Meaningful only with `folders`. */
+      folderId?: string;
+    } = {},
   ): Promise<ProjectRoadmapDto> {
+    if (opts.folderId !== undefined && parentId !== null) {
+      throw new PlacementConflictError(
+        'A roadmap level is one parent’s children or one folder’s contents — name only one.',
+      );
+    }
     const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
@@ -4409,6 +4432,36 @@ export const workItemsService = {
       sprintId = activeSprint.id;
     }
 
+    // THE FOLDER TREATMENT (Bug MOTIR-5710 · MOTIR-5738, `design/roadmap/design-notes.md`
+    // decisions 1, 4, 6 and 8). Applied only when asked for, and never under sprint
+    // scope (a committed row renders where it would unfiled — decision 6) or for an
+    // explicit id set (a run's members are drawn as the run took them — decision 8).
+    // The SAME `TreeFolderLevel` goes to the read AND the count below, so a level's
+    // rows and its "Showing N of M" keep sharing one predicate, exactly as the
+    // `/items` tree's banded read does (`readFolderLevel`).
+    const foldersApply = opts.folders === true && sprintId === null && ids === undefined;
+    if (opts.folderId !== undefined && !foldersApply) {
+      // A folder level exists only where folders are drawn; anywhere else it is a
+      // level with nothing on it, answered rather than queried.
+      return { nodes: [], edges: [], offLevelBlockers: [], levelMemberBlockers: [], levelTotal: 0 };
+    }
+    const folderLevel: TreeFolderLevel | undefined = !foldersApply
+      ? undefined
+      : opts.folderId !== undefined
+        ? { kind: 'folder', folderId: opts.folderId }
+        : parentId === null
+          ? { kind: 'excludeFiled' }
+          : undefined;
+    // A level's folders are the root's folders or one folder's child folders — a
+    // WORK ITEM's children are never folders, so a parent level carries none.
+    const folderParentId: string | null | undefined = !foldersApply
+      ? undefined
+      : opts.folderId !== undefined
+        ? opts.folderId
+        : parentId === null
+          ? null
+          : undefined;
+
     // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
     // The tenant gate and `report:view` are both awaited above; neither the
     // tree-level read nor the status list refuses.
@@ -4434,6 +4487,7 @@ export const workItemsService = {
           },
           sprintId,
           tx,
+          folderLevel,
         ),
       ),
       workflowsService.listStatusesByProject(projectId, project.workspaceId),
@@ -4448,6 +4502,7 @@ export const workItemsService = {
           sprintId,
           tx,
           ids,
+          folderLevel,
         ),
       ),
     ]);
@@ -4558,6 +4613,23 @@ export const workItemsService = {
     const offLevelStubs = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.findRoadmapBlockerStubs(offLevelIds, tx),
     );
+    // WHERE a FILED off-level blocker lives (Bug MOTIR-5710 · MOTIR-5739, design
+    // decision 7): its EFFECTIVE folder's path, root first, so the ghost anchor can
+    // name the door that holds it instead of a parent it does not have. Two bounded
+    // reads for the whole level — the effective folders, then their paths — and
+    // none at all when no blocker is off the level. Carried whether or not the
+    // caller asked for folders: it is a fact about the blocker, true on every canvas.
+    const folderPathByStub = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const effective = await workItemRepository.findEffectiveFolderIds(offLevelIds, tx);
+      const folderIds = [
+        ...new Set(effective.map((e) => e.folderId).filter((f): f is string => f !== null)),
+      ];
+      const paths = await folderRepository.findPathsByIds(folderIds, ctx.workspaceId, tx);
+      const pathByFolder = new Map(paths.map((p) => [p.id, p.path]));
+      return new Map(
+        effective.map((e) => [e.id, e.folderId ? (pathByFolder.get(e.folderId) ?? null) : null]),
+      );
+    });
 
     // ⚠️ A ROW THE CAP DROPPED IS STILL A MEMBER OF THIS LEVEL (bug MOTIR-5043).
     // `levelIds` above is the rows the read RETURNED, and `take` is 200 — so on a
@@ -4590,8 +4662,23 @@ export const workItemsService = {
     //     blocker and flags an out-of-sprint one "blocker not in sprint", which is
     //     TRUE of a cap-dropped sibling. Leaving it alone keeps it true.
     const isParentLevel = ids === undefined && opts.scope !== 'sprint';
+    // ⚠️ WITH FOLDERS ON, A NULL PARENT IS NO LONGER A LEVEL (Bug MOTIR-5710): the
+    // root holds only UNFILED parentless rows, and a folder's level holds the rows
+    // filed in it. So membership compares the folder as well as the parent — else a
+    // blocker filed in another folder would be read as a cap-dropped sibling and
+    // lose its off-level anchor.
+    const inThisFolder = (folderId: string | null): boolean =>
+      folderLevel === undefined
+        ? true
+        : folderLevel.kind === 'folder'
+          ? folderId === folderLevel.folderId
+          : folderId === null;
     const levelMemberIds = new Set(
-      isParentLevel ? offLevelStubs.filter((s) => s.parentId === parentId).map((s) => s.id) : [],
+      isParentLevel
+        ? offLevelStubs
+            .filter((s) => s.parentId === parentId && inThisFolder(s.folderId))
+            .map((s) => s.id)
+        : [],
     );
     const offLevelBlockers = offLevelStubs
       .filter((s) => !levelMemberIds.has(s.id))
@@ -4600,6 +4687,7 @@ export const workItemsService = {
         identifier: s.identifier,
         title: s.title,
         parentTitle: s.parentTitle,
+        folderPath: folderPathByStub.get(s.id) ?? null,
         // Terminal (incl. `cancelled`), NOT `doneKeys` — a cancelled blocker is
         // satisfied and must not be flagged "not in sprint" (MOTIR-1561).
         isDone: terminalKeys.has(s.status),
@@ -4614,7 +4702,29 @@ export const workItemsService = {
       .filter((s) => levelMemberIds.has(s.id))
       .map((s) => ({ id: s.id, isDone: s.status === 'done' }));
 
-    return { nodes, edges, offLevelBlockers, levelMemberBlockers, levelTotal };
+    // The level's FOLDERS (decision 4): read WHOLE, never cut by the work-item cap —
+    // the ceiling is a guard against a runaway read, not a page — and each carries
+    // its DIRECT counts from ONE aggregate over the level (decision 3), never a read
+    // per folder.
+    if (folderParentId === undefined) {
+      return { nodes, edges, offLevelBlockers, levelMemberBlockers, levelTotal };
+    }
+    const folders = await withWorkspaceServiceContext(project.workspaceId, async (tx) => {
+      const rows = await folderRepository.findLevel(
+        projectId,
+        project.workspaceId,
+        folderParentId,
+        { take: ROADMAP_LEVEL_ALL_TAKE, offset: 0 },
+        tx,
+      );
+      const counts = await folderRepository.countDirectContents(
+        rows.map((r) => r.id),
+        tx,
+      );
+      const countsById = new Map(counts.map((c) => [c.id, c]));
+      return rows.map((r) => toRoadmapFolderDto(r, countsById.get(r.id)));
+    });
+    return { nodes, edges, offLevelBlockers, levelMemberBlockers, levelTotal, folders };
   },
 
   /**

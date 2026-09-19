@@ -22,6 +22,8 @@ const {
   getCapabilities,
   getProjectRoadmap,
   getWorkItemWithAncestors,
+  getWorkItemPlacement,
+  getFolderTrail,
   getActiveSprint,
   isMotirAiConfigured,
 } = vi.hoisted(() => ({
@@ -30,6 +32,8 @@ const {
   getCapabilities: vi.fn(),
   getProjectRoadmap: vi.fn(),
   getWorkItemWithAncestors: vi.fn(),
+  getWorkItemPlacement: vi.fn(),
+  getFolderTrail: vi.fn(),
   getActiveSprint: vi.fn(),
   isMotirAiConfigured: vi.fn(),
 }));
@@ -49,7 +53,10 @@ vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: { getCapabilities },
 }));
 vi.mock('@/lib/services/workItemsService', () => ({
-  workItemsService: { getProjectRoadmap, getWorkItemWithAncestors },
+  workItemsService: { getProjectRoadmap, getWorkItemWithAncestors, getWorkItemPlacement },
+}));
+vi.mock('@/lib/services/foldersService', () => ({
+  foldersService: { getFolderTrail },
 }));
 vi.mock('@/lib/services/sprintsService', () => ({
   sprintsService: { getActiveSprint },
@@ -73,6 +80,8 @@ beforeEach(() => {
   getProjectRoadmap.mockResolvedValue({ nodes: [{ id: 'wi1' }] });
   getActiveSprint.mockResolvedValue(null);
   isMotirAiConfigured.mockReturnValue(true);
+  // An UNFILED item by default — the shipped `?item=` trail, untouched.
+  getWorkItemPlacement.mockResolvedValue({ placementFolder: null });
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -157,5 +166,67 @@ describe('the roadmap ARRIVAL LEVEL (?item=)', () => {
     // there is no canvas to arrive on.
     expect(getActiveSprint).not.toHaveBeenCalled();
     expect(element.props.initialTrail).toBeUndefined();
+  });
+});
+
+// FOLDERS (Bug MOTIR-5710 · MOTIR-5742): a folder's level is addressable too, and a
+// filed item's trail walks through its folder chain first.
+describe('the roadmap ARRIVAL LEVEL — folders', () => {
+  it('`?folder=<id>` opens on that folder, its chain root-first as folder crumbs', async () => {
+    getFolderTrail.mockResolvedValue([
+      { id: 'f1', name: 'Parked' },
+      { id: 'f2', name: '2025' },
+    ]);
+
+    const element = await RoadmapPage({ searchParams: params({ folder: 'f2' }) });
+
+    expect(getFolderTrail).toHaveBeenCalledWith('p1', 'f2', { userId: 'u1', workspaceId: 'ws1' });
+    expect(element.props.initialTrail).toEqual([
+      { id: 'folder:f1', label: 'Parked' },
+      { id: 'folder:f2', label: '2025' },
+    ]);
+  });
+
+  it('an unknown or foreign `?folder=` falls back SILENTLY to the root', async () => {
+    getFolderTrail.mockRejectedValue(new Error('FolderNotFound'));
+
+    const element = await RoadmapPage({ searchParams: params({ folder: 'nope' }) });
+
+    expect(element.props.initialTrail).toEqual([]);
+  });
+
+  it('`?item=` for a FILED item prepends its folder chain to the work-item crumbs', async () => {
+    getWorkItemWithAncestors.mockResolvedValue({
+      item: { id: 'S1', identifier: 'ACME-11', title: 'The story' },
+      ancestors: [{ id: 'E1', identifier: 'ACME-1', title: 'The epic' }],
+    });
+    getWorkItemPlacement.mockResolvedValue({
+      placementFolder: { folderId: 'f1', path: ['Parked'] },
+    });
+    getFolderTrail.mockResolvedValue([{ id: 'f1', name: 'Parked' }]);
+
+    const element = await RoadmapPage({ searchParams: params({ item: 'ACME-11' }) });
+
+    expect(element.props.initialTrail).toEqual([
+      { id: 'folder:f1', label: 'Parked' },
+      { id: 'E1', crumbKey: 'ACME-1', label: 'ACME-1 · The epic' },
+      { id: 'S1', crumbKey: 'ACME-11', label: 'ACME-11 · The story' },
+    ]);
+  });
+
+  it('sprint scope never prepends or opens a folder (decision 6)', async () => {
+    getWorkItemWithAncestors.mockResolvedValue({
+      item: { id: 'E1', identifier: 'ACME-1', title: 'The epic' },
+      ancestors: [],
+    });
+
+    const element = await RoadmapPage({
+      searchParams: params({ scope: 'sprint', item: 'ACME-1', folder: 'f1' }),
+    });
+
+    expect(getFolderTrail).not.toHaveBeenCalled();
+    expect(element.props.initialTrail).toEqual([
+      { id: 'E1', crumbKey: 'ACME-1', label: 'ACME-1 · The epic' },
+    ]);
   });
 });

@@ -799,6 +799,10 @@ export interface RoadmapBlockerStubDto {
   identifier: string;
   title: string;
   parentTitle: string | null;
+  /** The blocker's EFFECTIVE folder path, root first — its own folder, else its
+   *  root ancestor's — or `null` for an unfiled chain (Bug MOTIR-5710 ·
+   *  MOTIR-5739). The ghost anchor names this door in place of the parent line. */
+  folderPath: string[] | null;
   /** Whether the blocker is in a terminal (`done`-category) status — a done
    *  dependency is SATISFIED, so the sprint-scoped view does not flag it
    *  (MOTIR-1379). */
@@ -843,6 +847,24 @@ export interface RoadmapLevelMemberBlockerDto {
  * count over the level's containers, not a whole-tree load. An empty level →
  * `{ nodes: [], edges: [] }`.
  */
+/**
+ * A FOLDER on a roadmap level (Bug MOTIR-5710 · MOTIR-5738,
+ * `design/roadmap/design-notes.md` § *A FOLDER on the canvas*). A folder carries
+ * no workflow, so it has none of a node's status, readiness or progress — only
+ * its name, its place and its DIRECT contents (decision 3: not recursive, not a
+ * status tally). It is never an edge end.
+ */
+export interface RoadmapFolderDto {
+  id: string;
+  parentFolderId: string | null;
+  name: string;
+  position: string;
+  /** Folders filed directly inside this one. */
+  childFolderCount: number;
+  /** Work items filed directly inside this one — archived and triaged excluded. */
+  itemCount: number;
+}
+
 export interface ProjectRoadmapDto {
   nodes: RoadmapNodeDto[];
   edges: RoadmapEdgeDto[];
@@ -871,6 +893,14 @@ export interface ProjectRoadmapDto {
    * node's, the pre-plan stations') — nothing was read, so nothing was capped.
    */
   levelTotal: number;
+  /**
+   * The level's FOLDERS, in position order (Bug MOTIR-5710 · MOTIR-5738) —
+   * present ONLY when the caller asked for the folder treatment and it applies
+   * (project scope, no explicit id set). Absent otherwise, so every read that
+   * does not ask is byte-for-byte what it was. Never capped: a level's folders
+   * are read whole (decision 4), and `levelTotal` counts work items only.
+   */
+  folders?: RoadmapFolderDto[];
 }
 
 /**

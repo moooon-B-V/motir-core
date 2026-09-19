@@ -5,7 +5,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
-// GET /api/projects/[key]/roadmap?parentId=<id>&scope=sprint (Subtask 7.20.4
+// GET /api/projects/[key]/roadmap?parentId=<id>&scope=sprint&folders=1&folderId=<id> (Subtask 7.20.4
 // re-plan, MOTIR-1010; sprint scope MOTIR-1381) — ONE LEVEL of the project
 // roadmap: the roots (omit `parentId`) or one parent's direct children, each with
 // a lazy `hasChildren` drill flag, plus the `is_blocked_by` edges from that level.
@@ -51,6 +51,24 @@ export async function GET(
   // fetch and the cap cannot drift from `all=1`'s. The service still applies the
   // tenant gate, `report:view` and the archived/triage exclusions, so an id the
   // actor may not see simply does not come back.
+  // `folders=1` — the FOLDER treatment (Bug MOTIR-5710 · MOTIR-5740), OPT-IN and
+  // asked for by `/roadmap` alone: the root leaves filed work items out and
+  // returns the root folders. `folderId=<id>` addresses one folder's level — the
+  // other level address beside `parentId`, never together with it (a 400). Any
+  // other value of `folders`, and its absence, is the shipped read byte for byte,
+  // which is what every other canvas calling this route relies on.
+  const folders = search.get('folders') === '1';
+  const folderId = search.get('folderId') || undefined;
+  if (folderId !== undefined && parentId !== null) {
+    return NextResponse.json(
+      {
+        code: 'LEVEL_ADDRESS_CONFLICT',
+        error:
+          'A roadmap level is one parent’s children or one folder’s contents — pass parentId or folderId, not both.',
+      },
+      { status: 400 },
+    );
+  }
   const idsParam = search.get('ids');
   const ids =
     idsParam === null
@@ -70,6 +88,8 @@ export async function GET(
       scope,
       all,
       ...(ids !== undefined ? { ids } : {}),
+      ...(folders ? { folders } : {}),
+      ...(folderId !== undefined ? { folderId } : {}),
     });
     return NextResponse.json(roadmap);
   } catch (err) {

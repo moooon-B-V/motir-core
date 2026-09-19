@@ -5,7 +5,11 @@ import {
   FolderNameTakenError,
   FolderNotFoundError,
 } from '@/lib/folders/errors';
-import type { FolderTreeRow, ProjectFolderRow } from '@/lib/mappers/folderMappers';
+import type {
+  FolderDirectCountRow,
+  FolderTreeRow,
+  ProjectFolderRow,
+} from '@/lib/mappers/folderMappers';
 
 // Folder repository — single operations on the `folder` table (Epic MOTIR-5307
 // · Story MOTIR-5308 · MOTIR-5313). The persistence leaf under `foldersService`,
@@ -382,6 +386,36 @@ export const folderRepository = {
              array_agg("name" ORDER BY depth DESC) AS "path"
         FROM chain
        GROUP BY "leaf_id", "leaf_project_id"`;
+  },
+
+  /**
+   * The DIRECT contents of each folder in `folderIds` (Bug MOTIR-5710 ·
+   * MOTIR-5738) — how many child folders it holds and how many work items are
+   * filed straight into it — for the roadmap's folder card.
+   *
+   * ONE query for the whole level, however many folders it holds: the card's
+   * count must never be computed by loading each folder's contents. The item
+   * count applies the level's own exclusions (not archived, not in triage), the
+   * same predicate `findLevel`'s `hasChildren` probe uses, so a folder holding
+   * only archived work reads `Empty` rather than a number the reader cannot open.
+   * Direct, never recursive: a filed epic counts once however many stories it
+   * holds (`design/roadmap/design-notes.md` decision 3).
+   */
+  async countDirectContents(
+    folderIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<FolderDirectCountRow[]> {
+    if (folderIds.length === 0) return [];
+    return tx.$queryRaw<FolderDirectCountRow[]>`
+      SELECT f."id",
+             (SELECT COUNT(*)::int FROM "folder" c
+               WHERE c."parent_folder_id" = f."id") AS "childFolderCount",
+             (SELECT COUNT(*)::int FROM "work_item" w
+               WHERE w."folderId" = f."id"
+                 AND w."archivedAt" IS NULL
+                 AND w."triagedAt" IS NULL) AS "itemCount"
+        FROM "folder" f
+       WHERE f."id" IN (${Prisma.join([...folderIds])})`;
   },
 
   /** How many folders sit directly inside `folderId` — the set `deleteFolder` moves. */

@@ -7,10 +7,16 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { RoadmapView } from '@/components/planning/RoadmapView';
-import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import {
+  folderNodeId,
+  workItemCrumbLabel,
+  type CanvasCrumb,
+} from '@/lib/planning/projectCanvasModel';
+import { isRoadmapRootEmpty } from '@/lib/planning/roadmapClient';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 
 // The project Roadmap VIEW (Story 7.20 · Subtask 7.20.5 / MOTIR-1011) — the route
@@ -52,7 +58,22 @@ async function resolveArrivalTrail(
   searchParams: Promise<Record<string, string | string[] | undefined>> | undefined,
   wsCtx: { userId: string; workspaceId: string },
 ): Promise<CanvasCrumb[]> {
-  const itemParam = (await searchParams)?.['item'];
+  const params = await searchParams;
+  // FOLDERS live on the project-scope roadmap only (design decision 6): the sprint
+  // slice ignores placement, so no folder crumb is ever prepended there.
+  const foldersOn = params?.['scope'] !== 'sprint';
+  // A FOLDER's level (Bug MOTIR-5710 · MOTIR-5742): `?folder=<id>` opens on that
+  // folder, its chain as the crumbs. The same SILENT catch — an unknown folder,
+  // another project's, or one this actor cannot browse opens the root.
+  const folderParam = params?.['folder'];
+  if (foldersOn && typeof folderParam === 'string' && folderParam) {
+    try {
+      return folderCrumbs(await foldersService.getFolderTrail(projectId, folderParam, wsCtx));
+    } catch {
+      return [];
+    }
+  }
+  const itemParam = params?.['item'];
   // A repeated `?item=` arrives as an array; there is no right answer to which
   // one was meant, so the level is the root.
   const itemKey = typeof itemParam === 'string' ? itemParam : null;
@@ -63,14 +84,31 @@ async function resolveArrivalTrail(
       itemKey,
       wsCtx,
     );
-    return [...ancestors, item].map((a) => ({
+    const workItemCrumbs = [...ancestors, item].map((a) => ({
       id: a.id,
       crumbKey: a.identifier,
       label: workItemCrumbLabel(a.identifier, a.title),
     }));
+    if (!foldersOn) return workItemCrumbs;
+    // A FILED item (or one under a filed epic) sits behind its folder's door on
+    // this roadmap, so the trail walks through that folder chain first — exactly
+    // the crumbs a reader drilling by hand would have (MOTIR-5742).
+    const placement = await workItemsService.getWorkItemPlacement(projectId, item.id, wsCtx);
+    if (!placement.placementFolder) return workItemCrumbs;
+    const chain = await foldersService.getFolderTrail(
+      projectId,
+      placement.placementFolder.folderId,
+      wsCtx,
+    );
+    return [...folderCrumbs(chain), ...workItemCrumbs];
   } catch {
     return [];
   }
+}
+
+/** A folder chain → the canvas crumbs a drill through those folders pushes. */
+function folderCrumbs(chain: Array<{ id: string; name: string }>): CanvasCrumb[] {
+  return chain.map((f) => ({ id: folderNodeId(f.id), label: f.name }));
 }
 
 // ⚠️ MODULE SCOPE ON PURPOSE — do not fold this back into the page body.
@@ -132,8 +170,14 @@ export default async function RoadmapPage({
   // design's empty state with the Plan-with-AI CTA, rather than mounting the canvas
   // to show its bare "nothing here" panel. The canvas re-reads the roots itself
   // (cached client-side) when it mounts for the populated case.
-  const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx);
-  const isEmpty = roots.nodes.length === 0;
+  // FOLDER-AWARE (Bug MOTIR-5710 · MOTIR-5740): the canvas asks for folders, so the
+  // emptiness check must read the same root it will draw. A project that filed
+  // every root row into a folder is NOT empty; one holding only its seeded, empty
+  // Bugs folder still is (`isRoadmapRootEmpty`).
+  const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx, {
+    folders: true,
+  });
+  const isEmpty = isRoadmapRootEmpty(roots);
   const aiConfigured = isMotirAiConfigured();
 
   // An empty PROJECT keeps the server empty state (the canvas never mounts). A

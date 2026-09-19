@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
+import { folderIdFromNodeId, folderNodeId } from '@/components/planning/workItemLevel';
 import type { RoadmapScope } from '@/lib/planning/roadmapClient';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 
@@ -63,6 +64,20 @@ export interface RoadmapViewProps {
    * unresolvable `?item=` produces.
    */
   initialTrail?: readonly CanvasCrumb[];
+}
+
+/**
+ * The session-cache key of the level a trail ends on (MOTIR-3836, extended by Bug
+ * MOTIR-5710 · MOTIR-5742): a work item's `crumbKey`, or — for a FOLDER's level,
+ * which has no work-item key — its `folder:<id>` crumb id. Both spellings are the
+ * ones `onPopState` re-derives from the address bar, so a Back lands on the level
+ * it left.
+ */
+function levelAddressKey(trail: readonly CanvasCrumb[]): string | null {
+  const last = trail[trail.length - 1];
+  if (!last) return null;
+  if (folderIdFromNodeId(last.id) !== null) return last.id;
+  return last.crumbKey ?? null;
 }
 
 export function RoadmapView({
@@ -124,7 +139,7 @@ export function RoadmapView({
   // address bar without a reload — falls back to the ROOT level and does NOT
   // fetch, the same silent fallback the server applies to an unresolvable
   // `?item=`.
-  const seededKey = initialTrail[initialTrail.length - 1]?.crumbKey ?? null;
+  const seededKey = levelAddressKey(initialTrail);
   const trailCacheRef = useRef<Map<string, readonly CanvasCrumb[]>>(
     new Map(seededKey === null ? [] : [[seededKey, initialTrail]]),
   );
@@ -138,12 +153,18 @@ export function RoadmapView({
   // across the write — the two params are independent view state on one route.
   const handleLevelChange = useCallback(
     (trail: readonly CanvasCrumb[]) => {
-      const key = trail[trail.length - 1]?.crumbKey ?? null;
+      const key = levelAddressKey(trail);
       if (key !== null) trailCacheRef.current.set(key, trail);
       setLevelTrail(trail);
       const next = new URLSearchParams(searchParams.toString());
-      if (key === null) next.delete('item');
-      else next.set('item', key);
+      // A FOLDER level is addressed by `?folder=` (Bug MOTIR-5710 · MOTIR-5742), a
+      // work item's by `?item=` — never both, so each write clears the other.
+      next.delete('item');
+      next.delete('folder');
+      const last = trail[trail.length - 1];
+      const folderId = last ? folderIdFromNodeId(last.id) : null;
+      if (folderId !== null) next.set('folder', folderId);
+      else if (last?.crumbKey) next.set('item', last.crumbKey);
       const qs = next.toString();
       shallowPush(qs ? `${pathname}?${qs}` : pathname);
     },
@@ -157,7 +178,9 @@ export function RoadmapView({
   // up yet — the same reason this is an event listener at all.
   useEffect(() => {
     function onPopState() {
-      const key = new URLSearchParams(window.location.search).get('item');
+      const params = new URLSearchParams(window.location.search);
+      const folder = params.get('folder');
+      const key = folder !== null ? folderNodeId(folder) : params.get('item');
       setLevelTrail(key === null ? [] : (trailCacheRef.current.get(key) ?? []));
     }
     window.addEventListener('popstate', onPopState);

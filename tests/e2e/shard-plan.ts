@@ -704,6 +704,15 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'roadmap-auto-drill.spec.ts': 6.9,
   'roadmap-done-ready.spec.ts': 3.0,
   'roadmap-flow.spec.ts': 5.7,
+  // Bug MOTIR-5710 · MOTIR-5743 — the folder journey on /roadmap: one test that
+  // seeds a tenant with folders, drills two folders deep, crumbs back, reloads,
+  // opens an empty folder and switches to sprint scope. MEASURED locally on
+  // 2026-09-19 against the DEV server (JSON reporter, the test's `duration`):
+  // **35.75 s**, first-hit route compilation included — an upper-side reading,
+  // recorded as **36.0**, rounded UP because under-estimating is the direction
+  // that unbalances a bin-packer. RE-MEASURE from the first green bulk artifact
+  // that includes it, as for every new entry.
+  'roadmap-folders.spec.ts': 36.0,
   'roadmap-fullscreen.spec.ts': 3.5,
   'roadmap-locate.spec.ts': 4.2,
   'roadmap-refresh-scope.spec.ts': 10.7,
