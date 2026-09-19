@@ -15,8 +15,9 @@ import { cn } from '@/lib/utils/cn';
 
 // Shared presentational bits for the automation editor + list (Story 6.6 ·
 // Subtask 6.6.5). Kept together so the rule list and the editor render the same
-// avatar, switch, and picker-option grammar (the design-notes' shared
-// vocabulary: Avatar, Switch, the status dot, the priority direction icon).
+// avatar and picker-option grammar (the design-notes' shared vocabulary: Avatar,
+// the status dot, the priority direction icon). The enable switch is the design
+// system's `Switch`, not a local copy (MOTIR-5735).
 
 /** Up-to-two-letter initials for the owner / member avatar (the mockup's `ZY`
  * grammar — first letter of the first two whitespace-separated words). */
@@ -54,46 +55,6 @@ export function StatusDot({ status }: { status: WorkflowStatusDto }) {
       className="inline-block size-2 shrink-0 rounded-full"
       style={{ backgroundColor: color }}
     />
-  );
-}
-
-/** A sliding enable/disable switch (`role="switch"`). No extracted primitive
- * exists; this matches the mockup's `.sw` control, keyboard-operable, with the
- * knob + track as genuine pills (the shape-rule carve-out for the Switch knob). */
-export function RuleSwitch({
-  checked,
-  onChange,
-  label,
-  disabled,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  label: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:cursor-default disabled:opacity-60',
-        checked
-          ? 'border-(--el-accent) bg-(--el-accent)'
-          : 'border-(--el-border-strong) bg-(--el-muted)',
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn(
-          'inline-block size-3.5 rounded-full bg-(--el-surface) shadow-(--shadow-subtle) transition-transform',
-          checked ? 'translate-x-[18px]' : 'translate-x-0.5',
-        )}
-      />
-    </button>
   );
 }
 

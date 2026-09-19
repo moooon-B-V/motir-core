@@ -206,6 +206,10 @@ const SELF_WALKING_MEMBERS = [
   // system's `src/`; it imports `importGraph`'s `stripComments` and
   // `tailwindCascade`, neither of which walks a tree — so nothing derives it.
   'tests/theme/lineClampDisplayOverride.test.ts',
+  // MOTIR-5735. Its own `readdirSync` over `app/`, `components/` and
+  // `packages/`; it imports only `importGraph`'s `stripComments` — so nothing
+  // derives it.
+  'tests/theme/switchPrimitiveOnly.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {
