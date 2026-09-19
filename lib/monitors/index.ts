@@ -38,6 +38,15 @@ export {
   registerMonitorProvider,
   registeredMonitorProviderIds,
 } from './registry';
+// The configuration preflight (MOTIR-5831). Re-exported HERE and not imported
+// from `./configPreflight` directly, for the reason this whole barrel exists: a
+// consumer that reaches past it resolves providers that were never registered.
+export {
+  MONITOR_CONFIG_BLIND_SPOT,
+  missingProviderEnv,
+  verifyMonitorProviderConfig,
+} from './configPreflight';
+export type { MonitorConfigVerdict, MonitorProviderConfigReport } from './configPreflight';
 export {
   MONITOR_GRANT_EXCHANGE_TIMEOUT_MS,
   MONITOR_HEALTH_TIMEOUT_MS,

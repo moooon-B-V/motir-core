@@ -129,6 +129,36 @@ export interface MonitorProvider {
   readonly id: MonitorProviderId;
 
   /**
+   * The environment-variable NAMES this provider cannot work without
+   * (MOTIR-5831).
+   *
+   * ⚠️ IT IS A DECLARATION, NOT A READ, AND IT CHANGES NOTHING ABOUT WHEN THE
+   * VALUES ARE READ. Every adapter here resolves its credentials at CALL time and
+   * keeps doing so, so a deployment that never registered this integration still
+   * boots — that choice is deliberate and MOTIR-5831 does not touch it. What the
+   * call-time read costs is DETECTION: a missing value is invisible until a
+   * person exercises the flow, and `SENTRY_APP_CLIENT_SECRET` was absent from
+   * production for seven days after the card that set it recorded four names
+   * read back. This list is what lets something ASK before a person does.
+   *
+   * ⚠️ DECLARE IT BESIDE THE CODE THAT READS THE NAMES, in the adapter's own
+   * module, so the list cannot drift from the reads. A second copy anywhere above
+   * this seam — a literal list in a route, in a job, in a config module — is the
+   * home that goes stale, which is the whole reason the SEAM carries it and the
+   * consumers ask.
+   *
+   * ⚠️ NAMES ONLY. Nothing that consumes this may report a value, a length or a
+   * digest; the only question it answers is whether the name is set.
+   *
+   * Consumed by the OAuth START route, which refuses before sending a person to
+   * approve an install that cannot complete, and by
+   * `system.daily-health-check`'s configuration probe
+   * (`lib/monitors/configPreflight.ts`). A provider that needs nothing declares
+   * the empty array — the fake does.
+   */
+  readonly requiredEnv: readonly string[];
+
+  /**
    * Turn the authorisation code from the install redirect into a stored
    * credential.
    *

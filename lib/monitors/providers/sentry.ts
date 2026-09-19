@@ -52,6 +52,37 @@ import type {
 const apiBase = (): string =>
   process.env['SENTRY_API_BASE_URL']?.replace(/\/+$/, '') ?? 'https://sentry.io/api/0';
 
+/**
+ * The env-var NAMES this adapter cannot work without (MOTIR-5831) — the
+ * `MonitorProvider.requiredEnv` declaration, kept HERE, beside the reads, so the
+ * list and the reads cannot drift.
+ *
+ * ⚠️ THE THREE ARE NOT ALL READ BY THE SAME FUNCTION, and that is the reason
+ * this constant sits at module scope rather than inside {@link appCredentials}.
+ * `SENTRY_APP_CLIENT_ID` and `SENTRY_APP_CLIENT_SECRET` are read by
+ * `appCredentials()` below, on the grant exchange and the refresh.
+ * `SENTRY_APP_SLUG` is read one layer up, by `externalInstallUrl()` in
+ * `app/api/monitors/sentry/oauth/start/route.ts`, which builds the install URL —
+ * and it is required in exactly the same sense: without it the flow cannot
+ * start. `tests/monitors/monitorRequiredEnv.test.ts` pins each name to the read
+ * that consumes it, so adding a name here without a read (or a read without a
+ * name) fails.
+ *
+ * ⚠️ AND `SENTRY_TOKEN_ENCRYPTION_KEY` IS DELIBERATELY ABSENT. It is not
+ * required: `lib/monitors/tokenCrypto.ts` resolves it with a documented FALLBACK
+ * to `GITHUB_TOKEN_ENCRYPTION_KEY`, so a deployment that already wired GitHub
+ * connects a monitor with zero new config. Declaring it here would fail the
+ * health probe on a deployment that is correctly configured — a false alarm, and
+ * the one failure mode `system.daily-health-check` is written to avoid.
+ * `SENTRY_API_BASE_URL` and `SENTRY_WEB_BASE_URL` are absent for the plainer
+ * reason that both have defaults.
+ */
+export const SENTRY_REQUIRED_ENV = [
+  'SENTRY_APP_CLIENT_ID',
+  'SENTRY_APP_CLIENT_SECRET',
+  'SENTRY_APP_SLUG',
+] as const;
+
 /** The registered integration's credentials. Read at call time; a missing pair is
  *  an operator misconfiguration, so it refuses loudly and names the env vars
  *  MOTIR-5257 sets. */
@@ -163,6 +194,10 @@ const jsonHeaders = (accessToken: string): Record<string, string> => ({
 
 export const sentryMonitorProvider: MonitorProvider = {
   id: 'sentry',
+
+  /** The three names above, declared on the seam every consumer asks through
+   *  (MOTIR-5831). */
+  requiredEnv: SENTRY_REQUIRED_ENV,
 
   /** `POST /sentry-app-installations/{installationId}/authorizations/` with
    *  `grant_type: 'authorization_code'`. */

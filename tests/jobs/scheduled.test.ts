@@ -7,6 +7,8 @@ import {
   DAILY_HEALTH_CHECK_PAYLOAD,
   DAILY_HEALTH_CHECK_CRON,
 } from '@/lib/jobs/definitions/dailyHealthCheck';
+import { registerMonitorProvider } from '@/lib/monitors/registry';
+import { sentryMonitorProvider } from '@/lib/monitors/providers/sentry';
 import { adminDb } from '../helpers/adminDb';
 import { truncateJobRuns } from '../helpers/db';
 import { seedHealthyJobSchedules } from '../helpers/jobs';
@@ -579,5 +581,98 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
     expect(error?.message).toContain('codegraphVersion');
     // The blind spot travels into the DLQ row with the diagnosis.
     expect(error?.message).toContain('OFFERED');
+  });
+  // ── The SIXTH probe: monitor configuration (MOTIR-5831) ───────────────────
+  //
+  // The only probe here that asserts something about THIS PROCESS'S OWN
+  // ENVIRONMENT, so its fixture is `vi.stubEnv` and nothing else — no registry,
+  // no address, no ledger rows. It reads through the provider registry, so the
+  // REAL adapter has to be registered for its declaration to be non-empty; the
+  // suite may have left the fake under `sentry`.
+
+  const SENTRY_NAMES = ['SENTRY_APP_CLIENT_ID', 'SENTRY_APP_CLIENT_SECRET', 'SENTRY_APP_SLUG'];
+
+  /** Every probe ABOVE this one green, so a red run can only be this one. */
+  function greenExceptMonitorConfig() {
+    stubCiFleet();
+    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
+    registerMonitorProvider(sentryMonitorProvider, 'sentry');
+    for (const name of SENTRY_NAMES) vi.stubEnv(name, '');
+  }
+
+  it('PASSES when no monitor provider is configured — a deployment that never connected one', async () => {
+    // ⚠️ THE ARM THAT KEEPS THIS PROBE FROM CRYING WOLF, and it is the common
+    // case: `sentry` is registered at import in EVERY build, including a
+    // self-hosted one that will never connect an error monitor. Failing here
+    // would dead-letter this job every morning over a state its operator chose.
+    await seedHealthyJobSchedules();
+    greenExceptMonitorConfig();
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result } = await engine.execute();
+
+    expect(result).toMatchObject({ ok: true, monitorConfig: { verdict: 'not_applicable' } });
+  });
+
+  it('records the verdict on a HEALTHY tick too, with the blind spot on it', async () => {
+    // The same reason every other verdict here is recorded on success: the
+    // ledger has to be able to answer "was the integration fully configured
+    // yesterday?", and `complete` and `not_applicable` are very different
+    // states that a field appearing only on failure could not tell apart.
+    await seedHealthyJobSchedules();
+    greenExceptMonitorConfig();
+    for (const name of SENTRY_NAMES) vi.stubEnv(name, 'set');
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result } = await engine.execute();
+
+    expect(result).toMatchObject({ ok: true, monitorConfig: { verdict: 'complete' } });
+    expect((result as { monitorConfig: { blindSpot: string } }).monitorConfig.blindSpot).toContain(
+      'EVERY declared name',
+    );
+  });
+
+  it('FAILS the run when a provider is PARTLY configured — naming the variable and the provider', async () => {
+    // ⚠️ THE CARD'S CENTRAL ASSERTION, and the production fixture exactly:
+    // `SENTRY_APP_CLIENT_ID` and `SENTRY_APP_SLUG` present,
+    // `SENTRY_APP_CLIENT_SECRET` absent, for seven days, with every other probe
+    // green and every surface anyone looks at reporting normally. The message is
+    // the whole of what the DLQ panel renders, so it must name the variable, the
+    // provider, the fix AND what it did not measure.
+    await seedHealthyJobSchedules();
+    greenExceptMonitorConfig();
+    vi.stubEnv('SENTRY_APP_CLIENT_ID', 'id');
+    vi.stubEnv('SENTRY_APP_SLUG', 'motir');
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result, error } = (await engine.execute()) as {
+      result?: unknown;
+      error?: { message?: string };
+    };
+
+    expect(result).toBeUndefined();
+    expect(error?.message).toContain('SENTRY_APP_CLIENT_SECRET');
+    expect(error?.message).toContain('sentry');
+    expect(error?.message).toContain('fly secrets set');
+    // The blind spot travels into the DLQ row with the diagnosis.
+    expect(error?.message).toContain('EVERY declared name');
+  });
+
+  it('reports NAMES only — no value, no length, no digest reaches the row or the message', async () => {
+    // The card's explicit boundary. The DLQ row is rendered to a human, so a
+    // probe that printed a length would put a secret-adjacent artifact on an
+    // operator surface to answer a question that only ever needed yes or no.
+    const SECRET = 'zzq-do-not-leak-me-5831';
+    await seedHealthyJobSchedules();
+    greenExceptMonitorConfig();
+    vi.stubEnv('SENTRY_APP_CLIENT_ID', SECRET);
+    vi.stubEnv('SENTRY_APP_SLUG', 'motir');
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { error } = (await engine.execute()) as { error?: { message?: string } };
+
+    expect(error?.message).toBeDefined();
+    expect(error?.message).not.toContain(SECRET);
+    expect(error?.message).not.toContain(String(SECRET.length));
   });
 });
