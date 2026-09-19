@@ -246,11 +246,22 @@ function connectionLabel(c: { orgSlug: string | null; projectSlug: string }): st
  * the open results; the other connections' candidates still list.
  */
 export function LinkErrorForm() {
+  const { open } = useLinkControl();
+  // ⚠️ THE SEARCH MUST NOT EXIST UNTIL THE PICKER IS OPEN. Its hook fetches the
+  // empty query the moment it mounts, so it lives in a component that mounts
+  // only when a person opens the picker — calling it above an `if (!open)`
+  // early return searched the monitor on every page load an editor made
+  // (found by the story's E2E, MOTIR-5734), and remounting per open is also
+  // what keeps a reopened picker from showing a previous search's results.
+  if (!open) return null;
+  return <OpenLinkErrorForm />;
+}
+
+function OpenLinkErrorForm() {
   const t = useTranslations('monitorErrors');
   const tc = useTranslations('common');
   const format = useFormatter();
-  const { open, cancel, submit, moveFrom, dismissMove, error, pending, workItemId } =
-    useLinkControl();
+  const { cancel, submit, moveFrom, dismissMove, error, pending, workItemId } = useLinkControl();
   const [selected, setSelected] = useState<string | null>(null);
   const [failures, setFailures] = useState<MonitorIssueSearchFailureDto[]>([]);
   const search = useLinkCandidateSearch<MonitorIssueCandidateDto>({
@@ -268,8 +279,6 @@ export function LinkErrorForm() {
       return { ok: true, candidates: res.result.candidates };
     },
   });
-  if (!open) return null;
-
   const keyOf = (c: MonitorIssueCandidateDto) => `${c.connectionId}\u0000${c.externalIssueId}`;
   const picked = search.candidates.find((c) => keyOf(c) === selected) ?? null;
 

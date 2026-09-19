@@ -396,3 +396,19 @@ describe('the remaining picker arms', () => {
     expect(() => render(<LinkErrorDoor />)).toThrow(/MonitorErrorsLinkProvider/);
   });
 });
+
+describe('opening the page asks the monitor nothing (MOTIR-5734 regression)', () => {
+  it('an editor’s card with links makes NO search until the picker is opened — past the debounce', async () => {
+    searchMonitorIssuesAction.mockResolvedValue(searchResult([]));
+    renderCard({});
+    // Longer than the hook's 250 ms debounce: a search mounted with the closed
+    // picker would have fired by now.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    expect(searchMonitorIssuesAction).not.toHaveBeenCalled();
+
+    await openPicker();
+    await vi.waitFor(() => expect(searchMonitorIssuesAction).toHaveBeenCalledTimes(1));
+  });
+});
