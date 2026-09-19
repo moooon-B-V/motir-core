@@ -644,6 +644,16 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'plan-shapes.spec.ts': 14.0,
   'plan-timeline.spec.ts': 14.0,
   'planning-anchor-level.spec.ts': 11.0,
+  // Bug MOTIR-5782 · MOTIR-5796 — folders on the plan-review canvas: one test that
+  // seeds the folder roadmap plus a two-proposal plan, arrives on a folder, crumbs
+  // to the root and drills two folders deep. MEASURED locally on 2026-09-19 against
+  // a PRODUCTION build (list reporter, the test's own time): **2.9 s**, warm — so
+  // recorded as **5.0**, rounded UP because under-estimating is the direction that
+  // unbalances a bin-packer. RE-MEASURE from the first green bulk artifact that
+  // includes it, as for every new entry. (Its overlay twin,
+  // `cloud-plan-change-folders.spec.ts`, runs on the cloud lane, which this plan
+  // does not shard.)
+  'plans-review-folders.spec.ts': 5.0,
   'plans-review.spec.ts': 14.8,
   // MOTIR-5539. Promoted from the acceptance lane (it was
   // `acceptance-pr-merge-mode.spec.ts`). ESTIMATED, not measured — it has never
