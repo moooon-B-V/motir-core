@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from '@playwright/test';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { servePrivateObjectStore } from './_helpers/object-store';
@@ -13,10 +13,22 @@ import {
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 
-// DECIDE IT FULL SCREEN, END TO END — AND THE ACCEPTANCE RECEIPT FOR IT
+// DECIDE IT FULL SCREEN, END TO END
 // (Story MOTIR-5214 · Subtask MOTIR-5227).
 //
-// ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
+// ── PROMOTED FROM THE ACCEPTANCE LANE (MOTIR-5724) ──────────────────────────
+//
+// This was `acceptance-approval-overlay.spec.ts`, the receipt for MOTIR-5214.
+// That story is `done`, so the spec has discharged its purpose and, per
+// docs/decisions/acceptance-receipt-lifecycle.md §3, leaves the lane rather than
+// being edited in place. (Its receipt was never approved — it reads `pending` —
+// so nothing frozen is touched either way.) It went RED on Story MOTIR-5238,
+// whose design-notes § 26 HOLDS a decided row in place until the next load.
+// The receipt's `chapter()` / `beat()` pacing and its `acceptanceStory()` tag
+// are gone (`test.step` keeps the structure). Disposition recorded in
+// docs/acceptance-lane-triage.md.
+//
+// ── WHAT IT PROTECTS ────────────────────────────────────────────────────────
 //
 // A person with a queue of decisions clicks one, and the thing being decided
 // fills the screen — not a port a few hundred pixels tall inside a list row.
@@ -30,10 +42,10 @@ import zh from '@/messages/zh.json';
 // A unit test has no scroll position and no history stack, so the scroll, the
 // page of the list and browser Back are asserted here and nowhere else.
 //
-// ── SITS BESIDE `acceptance-approvals-tab.spec.ts`, NOT INSIDE IT ───────────
+// ── SITS BESIDE `approvals-tab.spec.ts`, NOT INSIDE IT ──────────────────────
 //
-// That spec is MOTIR-4879's receipt (the tab), re-scoped by MOTIR-5225 to decide
-// through the overlay. This one is MOTIR-5214's receipt (the overlay), and it
+// That spec was MOTIR-4879's receipt (the tab), re-scoped by MOTIR-5225 to decide
+// through the overlay. This one was MOTIR-5214's receipt (the overlay), and it
 // owns what that one does not assert: band 2 at full size, the decided record
 // inside the overlay, the scroll and page on return, Back, a pasted address, and
 // the walk in `zh`.
@@ -52,8 +64,7 @@ import zh from '@/messages/zh.json';
 // trade; nothing here decides one or asserts on its content.
 //
 // ⚠️ EVERY WAIT IS AUTHORITATIVE — the named dialog (its name is set only when
-// the read answers), the decide action's response, the row count, the URL. The
-// holds are `chapter()`'s pacing, taken after each state is proven.
+// the read answers), the decide action's response, the row count, the URL.
 
 test.describe.configure({ timeout: 300_000 });
 
@@ -101,11 +112,7 @@ test.describe('an approval, decided full screen over the page you are on', () =>
   test('open a waiting design from its row, approve it there, and close back to exactly where you were', async ({
     page,
     baseURL,
-    chapter,
-    beat,
-    acceptanceStory,
   }) => {
-    acceptanceStory('MOTIR-5214');
     await servePrivateObjectStore(page);
 
     const client = await openAgentSession(seed.token, baseURL!);
@@ -122,7 +129,7 @@ test.describe('an approval, decided full screen over the page you are on', () =>
     });
     const designRow = rows(page).filter({ hasText: seed.designTitle });
 
-    await chapter('Twenty-six decisions are waiting, and the tab says so', async () => {
+    await test.step('Twenty-six decisions are waiting, and the tab says so', async () => {
       await signIn(page, seed.reviewerEmail, seed.password);
       await page.goto('/workbench?tab=approvals');
       await expect(rows(page)).toHaveCount(25);
@@ -130,7 +137,7 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       expect(await badgeCount(page, toApprove)).toBe(26);
     });
 
-    await chapter('Clicking the row fills the screen with the design', async () => {
+    await test.step('Clicking the row fills the screen with the design', async () => {
       await openRow(designRow);
       await expect(designDialog).toBeVisible();
       // The tab is never left: the address only gains the overlay's two names.
@@ -150,9 +157,8 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       expect(box.width).toBeGreaterThan(viewport.width * 0.9);
       expect(box.height).toBeGreaterThan(viewport.height * 0.5);
     });
-    await beat();
 
-    await chapter('Approving it there shows the decided record, in place', async () => {
+    await test.step('Approving it there shows the decided record, in place', async () => {
       await designDialog
         .getByRole('button', { name: en.approvalGate.verb.approve, exact: true })
         .click();
@@ -170,9 +176,8 @@ test.describe('an approval, decided full screen over the page you are on', () =>
         designDialog.getByRole('button', { name: en.approvalGate.verb.approve, exact: true }),
       ).toHaveCount(0);
     });
-    await beat();
 
-    await chapter('Esc returns to the tab, one decision fewer, in one page state', async () => {
+    await test.step('Esc returns to the tab, one decision fewer, in one page state', async () => {
       await page.keyboard.press('Escape');
       await expect(designDialog).toBeHidden();
       await expect(page).toHaveURL(onTheTab);
@@ -185,9 +190,8 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       await expect(rows(page)).toHaveCount(25);
       expect(await badgeCount(page, toApprove)).toBe(25);
     });
-    await beat();
 
-    await chapter('Closing lands on the same page of the list, at the same scroll', async () => {
+    await test.step('Closing lands on the same page of the list, at the same scroll', async () => {
       const last = rows(page).last();
       const lastId = (await last.getAttribute('data-testid'))!;
       await last.scrollIntoViewIfNeeded();
@@ -211,9 +215,8 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       await expect(again).toBeVisible();
       expect(await listScroll(again)).toBe(before);
     });
-    await beat();
 
-    await chapter('Browser Back closes it too, and lands on the tab', async () => {
+    await test.step('Browser Back closes it too, and lands on the tab', async () => {
       await openRow(rows(page).first());
       const opened = page.getByRole('dialog', { name: /^Design result for / });
       await expect(opened).toBeVisible();
@@ -222,9 +225,8 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       await expect(page).toHaveURL(onTheTab);
       await expect(rows(page)).toHaveCount(25);
     });
-    await beat();
 
-    await chapter('A pasted address for a gate that does not exist opens and says so', async () => {
+    await test.step('A pasted address for a gate that does not exist opens and says so', async () => {
       await page.goto('/workbench?tab=approvals&approval=QUEUE-99999&approvalKind=design_result');
       const refused = page.getByRole('dialog', { name: en.approvalOverlay.notAvailable.title });
       await expect(refused).toBeVisible();
@@ -247,10 +249,7 @@ test.describe('an approval, decided full screen over the page you are on', () =>
   test('a reader who may SEE a decision but not make it reaches the design and no verbs', async ({
     page,
     baseURL,
-    chapter,
-    acceptanceStory,
   }) => {
-    acceptanceStory('MOTIR-5214');
     await servePrivateObjectStore(page);
 
     // A project `viewer` who is the ASSIGNEE: routed the gate, held out of
@@ -263,7 +262,7 @@ test.describe('an approval, decided full screen over the page you are on', () =>
     expect((await publishDesignResult(client, viewerCard.identifier)).isError ?? false).toBe(false);
     await client.close();
 
-    await chapter('The viewer opens the one decision routed to them', async () => {
+    await test.step('The viewer opens the one decision routed to them', async () => {
       await signIn(page, seed.viewerEmail, seed.password);
       await page.goto('/workbench?tab=approvals');
       await expect(rows(page)).toHaveCount(1);
@@ -286,8 +285,7 @@ test.describe('an approval, decided full screen over the page you are on', () =>
     });
   });
 
-  test('the same walk in Chinese', async ({ page, baseURL, chapter, beat, acceptanceStory }) => {
-    acceptanceStory('MOTIR-5214');
+  test('the same walk in Chinese', async ({ page, baseURL }) => {
     await servePrivateObjectStore(page);
 
     const client = await openAgentSession(seed.token, baseURL!);
@@ -303,7 +301,7 @@ test.describe('an approval, decided full screen over the page you are on', () =>
     // The suite's own locale switch (`workbench.spec.ts`).
     await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: page.url() }]);
 
-    await chapter('待审批 — the row opens the design full screen', async () => {
+    await test.step('待审批 — the row opens the design full screen', async () => {
       await page.goto('/workbench?tab=approvals');
       await expect(page.getByRole('link', { name: toApprove })).toHaveAttribute(
         'aria-current',
@@ -318,9 +316,8 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       // Asserted through the catalogue's own strings, and negatively too.
       await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
     });
-    await beat();
 
-    await chapter('批准 — and the decided record, in Chinese', async () => {
+    await test.step('批准 — and the decided record, in Chinese', async () => {
       await dialog.getByRole('button', { name: zh.approvalGate.verb.approve, exact: true }).click();
       await expect(dialog.getByText(zh.approvalGate.confirm.title)).toBeVisible();
       const decided = page.waitForResponse(
@@ -344,9 +341,8 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       await expect(queue(page, zh.workbench.tabs.toApprove)).toHaveCount(0);
       expect(await badgeCount(page, toApprove)).toBe(0);
     });
-    await beat();
 
-    await chapter('A pasted address that names nothing says so, in Chinese', async () => {
+    await test.step('A pasted address that names nothing says so, in Chinese', async () => {
       await page.goto('/workbench?tab=approvals&approval=QUEUE-99999&approvalKind=design_result');
       const refused = page.getByRole('dialog', { name: zh.approvalOverlay.notAvailable.title });
       await expect(refused).toBeVisible();
