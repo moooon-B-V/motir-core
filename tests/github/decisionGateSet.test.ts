@@ -4,7 +4,7 @@ import { getGitProvider } from '@/lib/git';
 import type { GitProvider } from '@/lib/git/provider';
 import type { PullRequestFiles } from '@/lib/github/pullRequestFiles';
 import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
-import { ApprovalGateDecisionPendingError } from '@/lib/approvalGates/errors';
+import { ApprovalGatePrimaryPendingError } from '@/lib/approvalGates/errors';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { settleGreenVerdict } from '@/lib/services/mergeGates';
@@ -284,15 +284,17 @@ describe('the merge follows ONLY the decision', () => {
       },
     });
 
-    await expect(decide(merge.id, 'approve')).rejects.toBeInstanceOf(
-      ApprovalGateDecisionPendingError,
-    );
+    // The same refusal a design card's merge gate gets (MOTIR-5785), naming the DECISION.
+    await expect(decide(merge.id, 'approve')).rejects.toMatchObject({
+      tag: 'APPROVAL_GATE_PRIMARY_PENDING',
+      primary: 'decision',
+    });
     await expect(
       pullRequestMergeService.decideGate(
         { stamp: DECIDED_WITHOUT_A_READER, gateId: merge.id, decision: 'approve', source: 'api' },
         fx.ctx,
       ),
-    ).rejects.toBeInstanceOf(ApprovalGateDecisionPendingError);
+    ).rejects.toBeInstanceOf(ApprovalGatePrimaryPendingError);
     expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: merge.id } })).state).toBe(
       'awaiting',
     );

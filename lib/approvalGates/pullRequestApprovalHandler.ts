@@ -13,8 +13,9 @@ import {
 } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
-import { ApprovalGateDecisionPendingError } from '@/lib/approvalGates/errors';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { designResultHoldsMerge } from '@/lib/services/mergeGates';
+import { ApprovalGatePrimaryPendingError } from '@/lib/approvalGates/errors';
 
 // THE `pull_request_approval` HANDLER — the registry's THIRD member (Story MOTIR-4909 ·
 // MOTIR-5481; ADR docs/decisions/approval-gates.md §8's amendment, decisions 2 and 6).
@@ -141,16 +142,24 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
    * exempts THIS gate only.
    */
   async approve({ gate, ctx, tx, resolvedStatusKey }: GateEffectArgs): Promise<GateEffect> {
-    // ⚠️ THE MERGE FOLLOWS ONLY THE DECISION (Story MOTIR-4907 · MOTIR-5677;
-    // `approval-gates.md` §8's FIFTH AMENDMENT, clause 5). On a decision card this gate is
-    // the COMPANION of the decision gate, decided by the decision's own press once that
-    // decision is on the record. Any other door reaching it first — the merge row pressed
-    // alone, the REST route — would merge the commits of a decision nobody accepted, so it
-    // is refused here, under the door's lock, whatever door it came through. A card that
-    // does not ask the decision question is untouched.
+    // ⚠️ THE MERGE FOLLOWS THE DESIGN, WHATEVER DOOR IT IS PRESSED THROUGH (Bug MOTIR-5785;
+    // `design-result.md` AMENDMENT 6 Q1). MOTIR-5712 hid this gate from the To-approve
+    // queue on a design card, and MOTIR-5762 held the `auto` arm and the GitHub review
+    // sync — but the gate itself is still real, and any door naming its id (the REST
+    // route, the merge row pressed alone) reached the merge over an undecided design. So
+    // it is refused HERE, under the door's lock, before anything is written. Awaiting,
+    // sent back, or approved for a result since superseded all hold (`designHoldsMerge`).
+    // The design's own press decides the design first and this gate after, so it never
+    // meets the refusal; Request changes is never refused.
+    if (await designResultHoldsMerge(gate.workItemId, tx)) {
+      throw new ApprovalGatePrimaryPendingError(gate.workItemId, 'design');
+    }
+    // ⚠️ …AND THE DECISION, the other primary (Story MOTIR-4907 · MOTIR-5677;
+    // `approval-gates.md` §8's FIFTH AMENDMENT, clause 5), refused with the same tag so
+    // the two primaries cannot drift into two differently-worded rules (MOTIR-5785).
     const item = await workItemRepository.findById(gate.workItemId, tx);
     if (item && (await decisionHoldsMerge(item, tx))) {
-      throw new ApprovalGateDecisionPendingError(gate.workItemId);
+      throw new ApprovalGatePrimaryPendingError(gate.workItemId, 'decision');
     }
     if (resolvedStatusKey !== PULL_REQUEST_APPROVAL_TARGET.key) {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };

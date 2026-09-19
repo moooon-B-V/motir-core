@@ -589,8 +589,9 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
     case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
       headline = t('decisionUnresolvable.title');
       break;
-    case 'APPROVAL_GATE_DECISION_PENDING':
-      headline = t('decisionPending.title');
+    case 'APPROVAL_GATE_PRIMARY_PENDING':
+      // Names WHICH question the merge follows (MOTIR-5785) — the next action differs.
+      headline = t(`primaryPending.${refusal.primary}.title`);
       break;
     case 'APPROVAL_GATE_ALREADY_AWAITING':
       headline = t('alreadyAwaiting.title');
@@ -655,7 +656,9 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
       ? refusal.permission
         ? t('mergeAppPermissionMissing.next', { permission: refusal.permission })
         : t('mergeAppPermissionMissing.nextUnnamed')
-      : t(`${nextActionKey}.next`);
+      : refusal.tag === 'APPROVAL_GATE_PRIMARY_PENDING'
+        ? t(`primaryPending.${refusal.primary}.next`)
+        : t(`${nextActionKey}.next`);
 
   return { headline, nextAction };
 }
@@ -726,8 +729,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'kindUnregistered';
     case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
       return 'decisionUnresolvable';
-    case 'APPROVAL_GATE_DECISION_PENDING':
-      return 'decisionPending';
+    case 'APPROVAL_GATE_PRIMARY_PENDING':
+      return 'primaryPending';
     case 'APPROVAL_GATE_ALREADY_AWAITING':
       return 'alreadyAwaiting';
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':

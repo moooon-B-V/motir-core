@@ -67,10 +67,11 @@ export type ApprovalGateErrorTag =
   // `approval-gates.md` §8's FIFTH AMENDMENT, clause 3). Approve is refused;
   // Request changes is not.
   | 'APPROVAL_GATE_DECISION_UNRESOLVABLE'
-  // The approve-to-merge gate of a DECISION card, approved through any door but the
-  // decision press while the decision is not accepted (MOTIR-5677; §8's FIFTH
-  // AMENDMENT, clause 5): the merge follows only the decision.
-  | 'APPROVAL_GATE_DECISION_PENDING'
+  // The approve-to-merge gate of a card whose PRIMARY question — the design, or a
+  // decision — is not answered, approved through a door that is not the primary's own
+  // press (Bug MOTIR-5785; `design-result.md` AMENDMENT 6 Q1). The merge FOLLOWS the
+  // primary. Approve is refused; Request changes is not.
+  | 'APPROVAL_GATE_PRIMARY_PENDING'
   // The question is still live and what the reader was shown MOVED under them
   // (Story MOTIR-5232 · MOTIR-5234) — the stamp they pressed with no longer matches.
   | 'APPROVAL_GATE_STALE_SUBJECT'
@@ -442,17 +443,29 @@ export class ApprovalGateDecisionUnresolvableError extends ApprovalGateError {
 }
 
 /**
- * APPROVE on a decision card's approve-to-merge gate while its decision is not accepted
- * over the current document (Story MOTIR-4907 · MOTIR-5677; `approval-gates.md` §8's
- * FIFTH AMENDMENT, clause 5). The decision is the PRIMARY question; one press on it
- * answers both, and no other door may merge the commits of a decision nobody accepted.
+ * The PRIMARY question a card's merge follows (Bug MOTIR-5785): its DESIGN
+ * (`design-result.md` AMENDMENT 6 Q1) or, once Story MOTIR-4907 lands, its DECISION
+ * (`approval-gates.md` §8's FIFTH AMENDMENT). ONE refusal names either, so two primaries
+ * holding one merge cannot drift into two differently-worded rules.
  */
-export class ApprovalGateDecisionPendingError extends ApprovalGateError {
-  readonly tag = 'APPROVAL_GATE_DECISION_PENDING' as const;
-  readonly code = 'APPROVAL_GATE_DECISION_PENDING' as const;
-  constructor(readonly workItemId: string) {
-    super(`The decision on work item ${workItemId} has to be accepted before it can merge.`);
-    this.name = 'ApprovalGateDecisionPendingError';
+export type PendingPrimary = 'design' | 'decision';
+
+/**
+ * APPROVE on a card's approve-to-merge gate while its PRIMARY question is unanswered
+ * (Bug MOTIR-5785). The primary's own press decides the primary FIRST and the merge
+ * after, so it never meets this; any other door naming the merge gate's id — the REST
+ * route, the merge row pressed alone — would merge commits nobody's primary decision
+ * covers. Raised under the door's lock, before anything is written.
+ */
+export class ApprovalGatePrimaryPendingError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_PRIMARY_PENDING' as const;
+  readonly code = 'APPROVAL_GATE_PRIMARY_PENDING' as const;
+  constructor(
+    readonly workItemId: string,
+    readonly primary: PendingPrimary,
+  ) {
+    super(`The ${primary} on work item ${workItemId} has to be approved before it can merge.`);
+    this.name = 'ApprovalGatePrimaryPendingError';
   }
 }
 
