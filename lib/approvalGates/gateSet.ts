@@ -1,3 +1,4 @@
+import type { LandingClass } from '@/lib/mergeQueue/queueExit';
 import type { ApprovalGateState } from '@/generated/prisma/client';
 
 // THE GATE-SET PREDICATE — which questions a card should currently be ASKING
@@ -116,12 +117,16 @@ export interface GateSetInput {
   /** The card's own id — a merge gate's `subjectId` is the card (MOTIR-5603). */
   workItemId: string;
   /**
-   * When the LATEST merge-queue FAILURE exit still standing at a member's CURRENT
-   * head was recorded — `queueExitHoldsAtHead`'s answer, read by the loader — or
-   * null when no member carries one (§4 FOURTH AMENDMENT, points 1–2; MOTIR-5805).
-   * Optional, and absent reads as null, so a caller with no exit in hand is unchanged.
+   * The LATEST UN-LANDED OUTCOME still standing at a member's CURRENT head — when it
+   * was recorded, and what CLASS its reason falls in (§4 FOURTH AMENDMENT, points 2–3;
+   * MOTIR-5802 · MOTIR-5805). Null when no member carries one. Optional, and absent
+   * reads as null, so a caller with no outcome in hand is unchanged.
+   *
+   * ⚠️ THE CLASS DECIDES WHETHER THE QUESTION COMES BACK AT ALL. `retryable` and
+   * `setting` re-ask, because the same commits could still land; `cant_land` does NOT,
+   * because they cannot, and a gate there would offer a button guaranteed to fail.
    */
-  standingFailureExitAt?: Date | null;
+  standingUnlandedOutcome?: { at: Date; landingClass: LandingClass } | null;
 }
 
 /** One question the card should be asking. */
@@ -292,21 +297,26 @@ export function designHoldsMerge(
  *     already answered these exact commits, and no standing design approval already
  *     authorises the merge (Q4 — asking there would be the second press Q4 forbids).
  *
- *     ⚠️ **A FAILED MERGE PUTS THE QUESTION BACK** — §4's FOURTH AMENDMENT, points
- *     1–2 (MOTIR-5805), which REVERSES the rule MOTIR-5666 wrote here (*"a failed
- *     merge does not put the question back"*, keyed to *Queue again*). When a
- *     member carries a merge-queue FAILURE exit standing at its current head, and
- *     no merge approval was given after that exit, the question is OWED in a
- *     `manual` project even though the latest merge gate is `approved` at the same
- *     set version, and even where the design's one-press carry answered it: the
- *     queue said those commits did not land, so the yes about them landing has not
- *     been honoured. The DESIGN question is untouched — the design was never the
- *     problem. The old gate row is never edited or re-decided; the re-ask is
- *     computed from the exit (`standingFailureExitAt`), not from the approval. A
- *     PUSH still moves the head, the exit stops standing, and the next green asks
- *     about the new commits. The candidacy check is MOTIR-5604's and the
- *     same-commits check is MOTIR-5632's; both survive as inputs rather than as
- *     guards scattered across raisers.
+ *     ⚠️ **A MERGE THAT DID NOT LAND PUTS THE QUESTION BACK — UNLESS THE COMMITS
+ *     CANNOT LAND AT ALL** — §4's FOURTH AMENDMENT, points 1–3 (MOTIR-5802 ·
+ *     MOTIR-5805), which REVERSES the rule MOTIR-5666 wrote here (*"a failed merge
+ *     does not put the question back"*, keyed to *Queue again*). When a member
+ *     carries an UN-LANDED outcome standing at its current head — a queue exit of
+ *     any disposition, NEUTRAL included, or a recorded host refusal — and no merge
+ *     approval was given after it, the question is OWED in a `manual` project even
+ *     though the latest merge gate is `approved` at the same set version, and even
+ *     where the design's one-press carry answered it: one approval authorizes ONE
+ *     attempt, and that attempt did not land. The one EXCEPTION is the `cant_land`
+ *     class (a conflict): the same commits cannot combine, so a gate there would
+ *     offer a button guaranteed to fail — the card is held at `implemented` with
+ *     `motir fix`, and only a PUSH brings the question back. The DESIGN question is
+ *     untouched — the design was never the problem. The old gate row is never
+ *     edited or re-decided; the re-ask is computed from the OUTCOME
+ *     (`standingUnlandedOutcome`), not from the approval. A PUSH still moves the
+ *     head, the outcome stops standing, and the next green asks about the new
+ *     commits. The candidacy check is MOTIR-5604's and the same-commits check is
+ *     MOTIR-5632's; both survive as inputs rather than as guards scattered across
+ *     raisers.
  *  4. **The DESIGN gate is primary** whenever both are owed (Q1). A merge gate owed
  *     alone — after an approval whose merge then failed — leads by itself (Q2).
  */
@@ -339,11 +349,15 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // §4 FOURTH AMENDMENT (MOTIR-5802 · MOTIR-5805): an UN-LANDED outcome standing at a
   // member's head outranks every merge decision made BEFORE it — a decided gate and the
   // design carry alike. `manual` only: `auto` has no person to ask, and never reaches here.
+  const outcome = input.standingUnlandedOutcome ?? null;
   const reaskedByEjection =
-    input.standingFailureExitAt !== null &&
-    input.standingFailureExitAt !== undefined &&
+    outcome !== null &&
+    // ⚠️ A CAN'T-LAND OUTCOME ASKS NOTHING (point 2). The commits cannot land as they
+    // stand, so the card waits at `implemented` with `motir fix`, and the question comes
+    // back only when a PUSH moves the head — at which point this outcome stops standing.
+    outcome.landingClass !== 'cant_land' &&
     unlandedOutcomeOutranksApproval(
-      { at: input.standingFailureExitAt },
+      { at: outcome.at },
       // Any DECISION after the outcome answers it — an approval (which re-queues) or a
       // request for changes (which re-queues nothing and is still an answer).
       input.latestMergeGate?.decidedAt ?? null,

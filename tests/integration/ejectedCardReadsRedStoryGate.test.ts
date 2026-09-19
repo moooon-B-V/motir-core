@@ -20,6 +20,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
@@ -203,8 +204,11 @@ async function ejectedManual(email: string, reason = 'CI_FAILURE') {
   expect(await statusOf(item.id)).toBe('approved');
   vi.restoreAllMocks();
   await eject(7, 'sha-a', reason);
-  // §4 FOURTH AMENDMENT (MOTIR-5805): back to review, with ONE fresh gate.
-  expect(await statusOf(item.id)).toBe('in_review');
+  // §4 FOURTH AMENDMENT, point 2 (MOTIR-5805): settled by the reason's CLASS — back to
+  // review with ONE fresh gate, or held at `implemented` where the commits cannot land.
+  expect(await statusOf(item.id)).toBe(
+    classOfQueueExit(reason) === 'cant_land' ? 'implemented' : 'in_review',
+  );
   return { s, item, gateId: gate!.id };
 }
 

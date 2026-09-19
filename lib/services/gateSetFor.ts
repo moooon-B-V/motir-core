@@ -13,9 +13,11 @@ import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepos
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
-import { derivePrCiState } from '@/lib/github/prCiState';
+import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
+import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
+import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { mergeCandidateHead } from './mergeGates';
-import { standingQueueFailures } from './deliveryVerdict';
 import { workflowsService } from './workflowsService';
 
 // THE PREDICATE'S ONE LOADER (Story MOTIR-5652 · Subtask MOTIR-5662) — reads the
@@ -126,19 +128,28 @@ export async function gateSetFor(
     });
   }
 
-  // ⚠️ A FAILURE EXIT STANDING AT A MEMBER'S HEAD RE-ASKS THE MERGE (§4 FOURTH
-  // AMENDMENT, points 1–2; MOTIR-5805). Read through `standingQueueFailures` — the
-  // `queueExitHoldsAtHead` rule the promotion hold, the card's fold and the repair
-  // claim already share — so the four cannot disagree about which exit stands. One
-  // indexed read, and an empty map for nearly every card.
-  const standing = await standingQueueFailures(
-    new Map(deliveries.map((delivery) => [delivery.githubPullRequestId, delivery.pullRequest])),
+  // ⚠️ AN UN-LANDED OUTCOME STANDING AT A MEMBER'S HEAD RE-ASKS THE MERGE, AND ITS
+  // CLASS SAYS WHETHER IT ASKS AT ALL (§4 FOURTH AMENDMENT, points 2–3; MOTIR-5802 ·
+  // MOTIR-5805). Read over EVERY disposition, not only the failures the promotion hold
+  // reads: a NEUTRAL removal spends the approval exactly as a failure does (Yue,
+  // 2026-09-19: *"re-ask too"*), so it must reach the predicate. One indexed read, and
+  // nothing for nearly every card.
+  const latestExits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+    deliveries.map((delivery) => delivery.githubPullRequestId),
     tx,
   );
-  const standingFailureExitAt =
-    [...standing.values()]
-      .map((exit) => exit.exitedAt)
-      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  const standingOutcomes = deliveries.flatMap((delivery) => {
+    const exit = latestExits.get(delivery.githubPullRequestId);
+    const head = liveRowsAtLatestSha([...delivery.pullRequest.checkRuns])[0]?.commitSha;
+    // The RULE is `deliverySet.ts`'s `queueExitStandsAtHead` — the promotion hold's own
+    // twin, one disposition wider — so the two readers cannot disagree about which exit
+    // still describes the code.
+    if (!queueExitStandsAtHead(exit, head)) return [];
+    return [{ at: exit!.exitedAt, landingClass: classOfQueueExit(exit!.rawReason) }];
+  });
+  // The LATEST outcome is the one the question is about; an older one is history.
+  const standingUnlandedOutcome =
+    standingOutcomes.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;
 
   const set = resolveGateSet({
     currentDesignEvidence: currentDesign
@@ -151,7 +162,7 @@ export async function gateSetFor(
     prMergeMode: mode?.prMergeMode ?? null,
     cardIsTerminal: isTerminalStatus(item, terminalByProject),
     workItemId: item.id,
-    standingFailureExitAt,
+    standingUnlandedOutcome,
   });
 
   return { ...set, blockedMembers };

@@ -206,7 +206,7 @@ describe('ejectedCardConvergenceService.converge', () => {
       'utf8',
     );
     const script = readFileSync(join(process.cwd(), 'scripts/converge-ejected-cards.ts'), 'utf8');
-    expect(source).toContain('reaskMergeAfterEjection(item, ctx, tx)');
+    expect(source).toContain('settleUnlandedOutcome(item, landingClass, ctx, tx)');
     for (const text of [source, script]) {
       expect(text).not.toMatch(/applyStatusTransition\s*\(/);
       expect(text).not.toMatch(/approvalGateRepository\.create\s*\(/);

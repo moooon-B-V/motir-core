@@ -296,18 +296,24 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
     expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
   });
 
-  it('a CONFLICT exit is refused as CANNOT-LAND — not even a fresh approval re-queues it', async () => {
-    const { s, prId, reasked } = await reaskedManual(
+  it('a CONFLICT exit holds the card at Implemented, asks nothing, and refuses the press', async () => {
+    const { s, item, approved, prId } = await ejectedManual(
       'manual-conflict@example.com',
       'MERGE_CONFLICT',
     );
     const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_C' });
-    // The card is asked again after a conflict at this base (the class-driven move to
-    // Implemented is MOTIR-5805's), so press the FRESH gate: even a brand-new approval may
-    // not re-queue commits that cannot combine — §4 FOURTH AMENDMENT, point 2.
-    const outcome = await press(s, reasked.id, prId);
 
-    expect(outcome).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
+    // CAN'T LAND (§4 FOURTH AMENDMENT, point 2): the commits cannot combine as they
+    // stand, so the card waits at Implemented with `motir fix` and NOTHING is asked.
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaitingGates(item.id)).toEqual([]);
+
+    const outcome = await press(s, approved.id, prId);
+
+    expect(outcome).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
+    });
     expect(host).not.toHaveBeenCalled();
     expect((await latestExit(11)).requeuedAt).toBeNull();
   });

@@ -32,7 +32,11 @@ import type { GitProvider } from '@/lib/git/provider';
 import type { MergeChangeRequestResult } from '@/lib/git/types';
 import { ApprovalGateAlreadyRequeuedError } from '@/lib/approvalGates/errors';
 import { derivePrCiState } from '@/lib/github/prCiState';
-import { QUEUE_EXIT_REASONS, classifyQueueExit } from '@/lib/mergeQueue/queueExit';
+import {
+  QUEUE_EXIT_REASONS,
+  classOfQueueExit,
+  classifyQueueExit,
+} from '@/lib/mergeQueue/queueExit';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -515,8 +519,15 @@ describe('4 · the dispositions, over the WHOLE reason table', () => {
         expect.objectContaining({ rawReason: reason, disposition }),
       ]);
       expect(await queueRef(7)).toBeNull();
-      // §4 FOURTH AMENDMENT, point 1: a manual failure returns the card to review.
-      expect(await statusOf(item.id)).toBe(disposition === 'failure' ? 'in_review' : 'approved');
+      // ⚠️ §4 FOURTH AMENDMENT, point 2 (MOTIR-5805): the CLASS decides where the card
+      // goes, not the disposition. Every un-landed reason settles it — a neutral removal
+      // as much as a failure — and only a CONFLICT is held at `implemented`, because the
+      // same commits cannot combine however often anybody says yes.
+      const landingClass = classOfQueueExit(reason);
+      expect(await statusOf(item.id)).toBe(
+        landingClass === 'cant_land' ? 'implemented' : 'in_review',
+      );
+      expect(await awaiting(item.id)).toHaveLength(landingClass === 'cant_land' ? 0 : 1);
     }
     // The other member is never touched.
     expect(await queueRef(12)).toBe('queue:MQE_12');
@@ -816,7 +827,10 @@ describe('10 · the ejection arm’s edges, through the real handler', () => {
       await githubWebhookService.handleEvent('pull_request', noReason, nextGuid()),
     ).toMatchObject({ outcome: 'recorded', disposition: 'neutral', rawReason: null });
     expect(await exitsOf(7)).toEqual([expect.objectContaining({ rawReason: '' })]);
-    expect(await statusOf(item.id)).toBe('approved');
+    // A reason nobody stated is RETRYABLE: the safe default is to ask a person, never
+    // to leave a card holding an approval nothing will act on (MOTIR-5805).
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaiting(item.id)).toHaveLength(1);
     expect(warn).toHaveBeenCalledTimes(1);
 
     const pr = structuredClone(body.pull_request) as Record<string, unknown>;
@@ -878,6 +892,8 @@ describe('10 · the ejection arm’s edges, through the real handler', () => {
   // whatever the workflow holds.
   it('Queue again on a neutral exit is refused on the spent approval and writes no status', async () => {
     const { s, item, approved } = await approvedIntoTheQueue('no-edge@example.com');
+    // The removal itself asks again (MOTIR-5805), which is a status write of its own;
+    // what this test pins is that the PRESS on the spent approval writes none.
     await eject('web', 7, 'sha-web', 'MANUAL');
     const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: s.project.id } });
     const idOf = (key: string) => statuses.find((row) => row.key === key)!.id;
@@ -896,7 +912,7 @@ describe('10 · the ejection arm’s edges, through the real handler', () => {
       refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
     });
     expect(await queueRef(7)).toBeNull();
-    expect(await statusOf(item.id)).toBe('approved');
+    expect(await statusOf(item.id)).toBe('in_review');
     expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
   });
 });

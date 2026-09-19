@@ -324,21 +324,39 @@ describe('a FAILURE removal', () => {
     expect(await gates(item.id)).toEqual([]);
   });
 
+  // ⚠️ BY CLASS, NOT BY DISPOSITION (§4 FOURTH AMENDMENT, point 2; MOTIR-5805). All
+  // five are `failure` rows; what differs is what a person can do about them.
   it.each([
-    'CI_TIMEOUT',
-    'MERGE_CONFLICT',
-    'INVALID_MERGE_COMMIT',
-    'GIT_TREE_INVALID',
-    'BRANCH_PROTECTIONS',
-  ])('%s is a failure too', async (reason) => {
+    ['CI_TIMEOUT', 'in_review', 1],
+    ['INVALID_MERGE_COMMIT', 'in_review', 1],
+    ['GIT_TREE_INVALID', 'in_review', 1],
+    // A setting somebody can change: the same commits land once it is changed.
+    ['BRANCH_PROTECTIONS', 'in_review', 1],
+    // CAN'T LAND: the commits cannot combine, so the card is held and NOTHING is asked.
+    ['MERGE_CONFLICT', 'implemented', 0],
+  ] as const)('%s settles the card at %s with %i gate(s)', async (reason, status, gateCount) => {
     const { item } = await approvedAndQueued(`fail-${reason}@example.com`);
     await eject(
       dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason }),
       `guid-${reason}`,
     );
-    expect(await statusOf(item.id)).toBe('in_review');
-    expect(await awaitingGates(item.id)).toHaveLength(1);
+    expect(await statusOf(item.id)).toBe(status);
+    expect(await awaitingGates(item.id)).toHaveLength(gateCount);
     expect((await exits(11))[0]).toMatchObject({ rawReason: reason, disposition: 'failure' });
+  });
+
+  it('a CONFLICT held at Implemented raises nothing on a green check at the SAME head', async () => {
+    const { item } = await approvedAndQueued('conflict-hold@example.com');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: 'MERGE_CONFLICT' }),
+      'guid-conflict-hold',
+    );
+    expect(await statusOf(item.id)).toBe('implemented');
+
+    await ci(11, 'sha-a');
+
+    expect(await awaitingGates(item.id)).toEqual([]);
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 
   it('moves only a card at the enqueued status, and names the rest', async () => {
@@ -399,7 +417,7 @@ describe('a FAILURE removal', () => {
 });
 
 describe('NEUTRAL, UNKNOWN and LANDED removals', () => {
-  it('a manual removal writes a neutral row, clears the queued record and leaves the card approved', async () => {
+  it('a manual removal writes a neutral row, clears the queued record and ASKS AGAIN', async () => {
     const { item } = await approvedAndQueued('manual@example.com');
 
     const result = await eject(
@@ -407,15 +425,21 @@ describe('NEUTRAL, UNKNOWN and LANDED removals', () => {
       'guid-manual',
     );
 
-    expect(result).toMatchObject({ outcome: 'recorded', disposition: 'neutral', moved: [] });
+    expect(result).toMatchObject({
+      outcome: 'recorded',
+      disposition: 'neutral',
+      moved: [item.identifier],
+      reasked: [item.identifier],
+    });
     expect((await exits(11))[0]).toMatchObject({ rawReason: 'MANUAL', disposition: 'neutral' });
     expect((await pr(11)).mergeOutcomeRef).toBeNull();
-    expect(await statusOf(item.id)).toBe('approved');
-    // A neutral removal says nothing about the commits: nothing is re-asked.
-    expect(await awaitingGates(item.id)).toEqual([]);
+    // ⚠️ A NEUTRAL REMOVAL RE-ASKS TOO (MOTIR-5805; Yue, 2026-09-19). The approval sent
+    // the pull request to the queue and it did not land, so the yes has been used.
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingGates(item.id)).toHaveLength(1);
   });
 
-  it('an unrecognised reason is recorded neutral, moves nothing, and is logged raw once', async () => {
+  it('an unrecognised reason is recorded neutral, asks again, and is logged raw once', async () => {
     const { item } = await approvedAndQueued('unknown@example.com');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -424,8 +448,14 @@ describe('NEUTRAL, UNKNOWN and LANDED removals', () => {
       'guid-unknown',
     );
 
-    expect(result).toMatchObject({ outcome: 'recorded', disposition: 'neutral', moved: [] });
-    expect(await statusOf(item.id)).toBe('approved');
+    // Unrecognised is `neutral` (it moves nothing on the disposition axis) and
+    // RETRYABLE (a person is asked, and can still reach for `motir fix`).
+    expect(result).toMatchObject({
+      outcome: 'recorded',
+      disposition: 'neutral',
+      moved: [item.identifier],
+    });
+    expect(await statusOf(item.id)).toBe('in_review');
     const logged = warn.mock.calls.filter((call) =>
       String(call[0]).includes('unrecognised merge-queue removal reason'),
     );

@@ -1,6 +1,6 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import type { GitProviderId, NormalizedMergeQueueExit } from '@/lib/git/types';
-import { classifyQueueExit } from '@/lib/mergeQueue/queueExit';
+import { classifyQueueExit, classOfQueueExit, type LandingClass } from '@/lib/mergeQueue/queueExit';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubMergeQueueAttemptRepository } from '@/lib/repositories/githubMergeQueueAttemptRepository';
@@ -67,6 +67,13 @@ const ENQUEUED_STATUS = { manual: 'approved', auto: 'in_review' } as const;
  *  review, where the merge question is asked again. `auto`: to `implemented`, as
  *  before — no person decides, and a push re-arms it. */
 const EJECTED_STATUS = { manual: 'in_review', auto: 'implemented' } as const;
+
+/**
+ * WHERE A MANUAL CARD GOES when its merge did not land, by class (§4 FOURTH AMENDMENT,
+ * point 2): back to review where a person can answer again, or to `implemented` where
+ * `motir fix` claims it and nothing is asked until the head moves.
+ */
+const UNLANDED_STATUS = { reask: 'in_review', cantLand: 'implemented' } as const;
 
 export type MergeQueueExitOutcome =
   /** A `landed` reason — nothing written, the merge webhook owns `done`. */
@@ -212,7 +219,11 @@ export const mergeQueueExitService = {
         skipped: [],
         clearedQueuedOutcome: cleared,
       };
-      if (disposition !== 'failure') return result;
+      // ⚠️ EVERY DISPOSITION BUT `landed` REACHES THE CARDS NOW (§4 FOURTH AMENDMENT,
+      // points 1–2; MOTIR-5805). A NEUTRAL removal spends the approval exactly as a
+      // failure does — Yue, 2026-09-19: *"re-ask too"* — so it is settled by class like
+      // any other. `landed` returned above, before anything was written.
+      const landingClass = classOfQueueExit(exit.rawReason);
 
       for (const ref of await resolveDeliveredWorkItems(pr.id, tx)) {
         if (!ctx) {
@@ -236,23 +247,27 @@ export const mergeQueueExitService = {
           continue;
         }
         if (mode === 'manual') {
-          // §4 FOURTH AMENDMENT, points 1–2 (MOTIR-5805): back to review, and the
-          // merge question is asked again — the same entry point the convergence of
-          // cards ejected before this shipped calls (MOTIR-5809).
-          const reask = await reaskMergeAfterEjection(item, ctx, tx);
-          if (reask.transition) {
+          // §4 FOURTH AMENDMENT, points 1–2 (MOTIR-5805): settled by the reason's
+          // CLASS — back to review with one fresh question, or held at `implemented`
+          // where the commits cannot land. The same entry point the host refusal
+          // (MOTIR-5833) and the convergence of stranded cards (MOTIR-5809) call.
+          const settled = await settleUnlandedOutcome(item, landingClass, ctx, tx);
+          if (settled.transition) {
             moved.push({
               id: item.id,
               key: item.identifier,
-              revisionId: reask.transition.revisionId,
-              from: reask.transition.fromStatusKey,
-              to: reask.transition.toStatusKey,
+              revisionId: settled.transition.revisionId,
+              from: settled.transition.fromStatusKey,
+              to: settled.transition.toStatusKey,
             });
             result.moved!.push(item.identifier);
           }
-          if (reask.raised) result.reasked!.push(item.identifier);
+          if (settled.raised) result.reasked!.push(item.identifier);
           continue;
         }
+        // AUTO mode is unchanged: no gate, no person to ask, and only a FAILURE moves
+        // the card (THIRD AMENDMENT, decision 3).
+        if (disposition !== 'failure') continue;
         const { transition } = await workItemsService.applyStatusTransition(
           item.id,
           EJECTED_STATUS.auto,
@@ -308,39 +323,50 @@ export const mergeQueueExitService = {
 };
 
 /**
- * RE-ASK THE MERGE QUESTION after a merge-queue FAILURE, in the caller's transaction
- * (`approval-gates.md` §4 FOURTH AMENDMENT, points 1–2; Story MOTIR-5799 · MOTIR-5805).
+ * SETTLE AN UN-LANDED MERGE BY ITS REASON CLASS, in the caller's transaction
+ * (`approval-gates.md` §4 FOURTH AMENDMENT, points 1–3; Story MOTIR-5799 · MOTIR-5802 ·
+ * MOTIR-5805).
  *
- * Moves the card to `in_review` as a SYSTEM write — the status for *CI spoke and a
- * person must decide*, and the only one a fresh approval can leave for `approved` — and
- * then raises whatever {@link reconcileGatesFor} says is owed: exactly ONE awaiting
- * `pull_request_approval` gate over the current set, because `resolveGateSet` reads the
- * standing failure exit as outranking the approval given before it. A decided design
- * gate is not re-asked; the old merge gate row is never touched.
+ * ⚠️ THE CLASS IS THE WHOLE OF THE DECISION, and it answers one question: could
+ * re-running these SAME commits land them?
  *
- * ⚠️ THE ONE ENTRY POINT for both callers: a live ejection (`recordExit`, from
- * `approved`) and the operator convergence of cards ejected BEFORE this shipped
- * (`scripts/converge-ejected-cards.ts`, from `implemented`; MOTIR-5809). Neither
- * re-implements the move or the raise.
+ *  · `retryable` / `setting` — YES (a flaky check, a cleared queue, a hand removal, a
+ *    setting somebody can change). The card moves to `in_review` as a SYSTEM write —
+ *    the status for *CI spoke and a person must decide*, and the only one a fresh
+ *    approval can leave for `approved` — and {@link reconcileGatesFor} then raises
+ *    exactly ONE awaiting `pull_request_approval` gate over the current set, because
+ *    `resolveGateSet` reads the standing outcome as outranking the approval given
+ *    before it. A decided design gate is not re-asked; the old merge gate row is never
+ *    touched.
+ *  · `cant_land` — NO. The commits cannot combine as they stand, so asking would offer
+ *    a button guaranteed to fail. The card moves to `implemented`, where `motir fix`
+ *    claims it (MOTIR-5803), and the promotion is HELD at that head: no gate is raised
+ *    here and none is raised by a green check at the same commits. A PUSH is what ends
+ *    the hold, and the next green asks about the new commits (MOTIR-5604's path).
+ *  · `landed` — nothing happened that anybody has to answer.
+ *
+ * ⚠️ THE ONE ENTRY POINT for every source: a live queue exit (`recordExit`), a host
+ * refusal at the press (MOTIR-5833) and the operator convergence of cards stranded
+ * BEFORE this shipped (`scripts/converge-ejected-cards.ts`; MOTIR-5809). None of them
+ * re-implements the move or the raise, which is what keeps one rule in one place.
  *
  * The caller holds the card's lock ({@link lockCard}) and has checked the mode. A card
- * already at `in_review` is not moved again; the raise is idempotent either way (the
- * reconciler never writes a second awaiting row).
+ * already at the target status is not moved again; the raise is idempotent either way
+ * (the reconciler never writes a second awaiting row).
  */
-export async function reaskMergeAfterEjection(
+export async function settleUnlandedOutcome(
   item: WorkItem,
+  landingClass: LandingClass,
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
 ): Promise<{ transition: AppliedMove; raised: boolean }> {
+  if (landingClass === 'landed') return { transition: null, raised: false };
+  const target = landingClass === 'cant_land' ? UNLANDED_STATUS.cantLand : UNLANDED_STATUS.reask;
   let transition: AppliedMove = null;
-  if (item.status !== EJECTED_STATUS.manual) {
-    ({ transition } = await workItemsService.applyStatusTransition(
-      item.id,
-      EJECTED_STATUS.manual,
-      ctx,
-      tx,
-      { system: true },
-    ));
+  if (item.status !== target) {
+    ({ transition } = await workItemsService.applyStatusTransition(item.id, target, ctx, tx, {
+      system: true,
+    }));
   }
   const fresh = (await workItemRepository.findById(item.id, tx)) ?? item;
   await reconcileGatesFor(fresh, tx);

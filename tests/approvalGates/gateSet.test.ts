@@ -357,7 +357,11 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
   for (const c of cases) {
     it(`manual · ${c.name}: ONE merge gate over the SAME set is owed, standing alone`, () => {
       const set = resolveGateSet(
-        input({ ...c.over, members: GREEN_ONE, standingFailureExitAt: EXIT_AFTER }),
+        input({
+          ...c.over,
+          members: GREEN_ONE,
+          standingUnlandedOutcome: { at: EXIT_AFTER, landingClass: 'retryable' },
+        }),
       );
       expect(set.awaited).toEqual([
         { kind: 'pull_request_approval', subjectId: WORK_ITEM, subjectVersion: SET },
@@ -371,7 +375,7 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
           ...c.over,
           prMergeMode: 'auto',
           members: GREEN_ONE,
-          standingFailureExitAt: EXIT_AFTER,
+          standingUnlandedOutcome: { at: EXIT_AFTER, landingClass: 'retryable' },
         }),
       );
       expect(set.awaited.filter((g) => g.kind === 'pull_request_approval')).toEqual([]);
@@ -385,7 +389,7 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
         latestDesignGate: approvedDesign,
         latestMergeGate: approvedMerge,
         members: GREEN_ONE,
-        standingFailureExitAt: EXIT_AFTER,
+        standingUnlandedOutcome: { at: EXIT_AFTER, landingClass: 'retryable' },
       }),
     );
     expect(set.awaited.map((g) => g.kind)).toEqual(['pull_request_approval']);
@@ -396,7 +400,7 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
       input({
         latestMergeGate: { ...approvedMerge, decidedAt: EXIT_AFTER },
         members: GREEN_ONE,
-        standingFailureExitAt: EXIT_BEFORE,
+        standingUnlandedOutcome: { at: EXIT_BEFORE, landingClass: 'retryable' },
       }),
     );
     expect(set.awaited).toEqual([]);
@@ -410,7 +414,7 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
           decidedAt: EXIT_AFTER,
         },
         members: GREEN_ONE,
-        standingFailureExitAt: EXIT_BEFORE,
+        standingUnlandedOutcome: { at: EXIT_BEFORE, landingClass: 'retryable' },
       }),
     );
     expect(set.awaited).toEqual([]);
@@ -418,9 +422,37 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
 
   it('with NO standing exit the approval still answers the same commits (MOTIR-5632, unchanged)', () => {
     const set = resolveGateSet(
-      input({ latestMergeGate: approvedMerge, members: GREEN_ONE, standingFailureExitAt: null }),
+      input({ latestMergeGate: approvedMerge, members: GREEN_ONE, standingUnlandedOutcome: null }),
     );
     expect(set.awaited).toEqual([]);
+  });
+
+  // ⚠️ A CAN'T-LAND OUTCOME ASKS NOTHING (§4 FOURTH AMENDMENT, point 2; MOTIR-5805).
+  // The commits cannot combine as they stand, so a gate there would offer a button
+  // guaranteed to fail — the card waits at Implemented with `motir fix`, and a PUSH is
+  // what brings the question back.
+  it('a CONFLICT outcome raises NOTHING, however long it stands', () => {
+    const set = resolveGateSet(
+      input({
+        latestMergeGate: approvedMerge,
+        members: GREEN_ONE,
+        standingUnlandedOutcome: { at: EXIT_AFTER, landingClass: 'cant_land' },
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+  });
+
+  it('a SETTING outcome re-asks, exactly as a retryable one does', () => {
+    const set = resolveGateSet(
+      input({
+        latestMergeGate: approvedMerge,
+        members: GREEN_ONE,
+        standingUnlandedOutcome: { at: EXIT_AFTER, landingClass: 'setting' },
+      }),
+    );
+    expect(set.awaited).toEqual([
+      { kind: 'pull_request_approval', subjectId: WORK_ITEM, subjectVersion: SET },
+    ]);
   });
 
   it('a member that already MERGED is settled, not blocking — the re-ask is still owed (MOTIR-5805)', () => {
@@ -429,7 +461,7 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
       input({
         latestMergeGate: { ...decided(WORK_ITEM, TWO), decidedAt: DECIDED_AT },
         members: [member(SET), { ...member('moooon/motir-ai#4@bbb2', false), merged: true }],
-        standingFailureExitAt: EXIT_AFTER,
+        standingUnlandedOutcome: { at: EXIT_AFTER, landingClass: 'retryable' },
       }),
     );
     expect(set.awaited).toEqual([
@@ -451,7 +483,7 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
       input({
         latestMergeGate: approvedMerge,
         members: [member(SET, false)],
-        standingFailureExitAt: EXIT_AFTER,
+        standingUnlandedOutcome: { at: EXIT_AFTER, landingClass: 'retryable' },
       }),
     );
     expect(set.awaited).toEqual([]);

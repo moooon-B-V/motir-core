@@ -7,7 +7,8 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { standingQueueFailures } from './deliveryVerdict';
-import { queueExitCardMoves, reaskMergeAfterEjection } from './mergeQueueExitService';
+import { queueExitCardMoves, settleUnlandedOutcome } from './mergeQueueExitService';
+import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 
 // CONVERGE THE CARDS EJECTED BEFORE THE FOURTH AMENDMENT SHIPPED (Story MOTIR-5799 ·
 // MOTIR-5809; `docs/decisions/approval-gates.md` §4 FOURTH AMENDMENT, point 7).
@@ -132,8 +133,12 @@ export const ejectedCardConvergenceService = {
           );
           if (!owner) throw new Error(`workspace ${item.workspaceId} has no owner to write as`);
           const ctx = { userId: owner.userId, workspaceId: item.workspaceId };
-          const reask = await reaskMergeAfterEjection(item, ctx, tx);
-          if (!reask.raised) {
+          // The class of the outcome this card is stranded under — the same map the live
+          // path reads (MOTIR-5805). MOTIR-5809 widens the POPULATION this walks; the
+          // move itself is the one entry point's, here as everywhere.
+          const landingClass = classOfQueueExit([...held.values()][0]!.rawReason);
+          const reask = await settleUnlandedOutcome(item, landingClass, ctx, tx);
+          if (landingClass !== 'cant_land' && !reask.raised) {
             // Rolls the move back with it: a card at `in_review` asking nothing is
             // worse than the stranded state it started in.
             throw new Error('the re-ask raised no approve-to-merge gate');
