@@ -8209,6 +8209,30 @@ decision already made strands no question — which is what Panel B already draw
 shows this is `tests/e2e/acceptance-gate.spec.ts`; the guard is
 `tests/components/late-stack-development-block.test.tsx`.
 
+### AMENDMENT (MOTIR-5792, 2026-09-19) — the standalone section's DECIDED state is the shared frame
+
+**G4's own _Approved_ pill is RETIRED, and nothing new is drawn.** While the panel owned the
+verbs, a pill of its own was the decided state; MOTIR-5790 handed the decision to the overlay
+and left the pill behind, which made the panel a second place the product says _approved_ — and
+it says it with less: no decider, no moment, no version. The surface for a decided question
+already exists and is specified elsewhere: **`design/workbench/approval-control.mock.html`'s
+record band**, the frame every other kind uses.
+
+So the standalone **Acceptance** section now renders `ApprovalGateControl` for every state the
+call-to-action band does not — the record, state `B`'s _waiting on_, a withdrawal — with **the
+recording as its port** and an EMPTY verb set. That is `DesignResultSection`'s arrangement
+since MOTIR-5229, one kind over, and it needs no mock of its own because both halves are drawn:
+the frame in the approval-control asset, the receipt in G1.
+
+**The pill survives in exactly one case and it is not a gate:** a receipt with NO gate row at
+all — one published before the kind existed, or before its question was raised. There is no
+decision to speak about there, so the receipt's own status is all there is to say.
+
+Enforced by `tests/approval-gate-one-language.test.ts`, which DERIVES its population (any
+module handling an `ApprovalGateDTO`) rather than listing it — which is also why
+`AcceptanceDevelopmentSlot` stopped taking a gate: it is what the frame puts in band 2, so it
+takes the two facts it draws and its caller reads the gate.
+
 **Panel D(i) is drawn so the absence is unambiguous.** The E2E subtask recorded the video and is not
 where it is decided (point 1). Its page shows its own Development gate only — no receipt port, no
 acceptance copy, no acceptance verb. An implementation that puts the port here has built the wrong
