@@ -7,6 +7,7 @@ import {
 } from '@/lib/folders/errors';
 import type {
   FolderDirectCountRow,
+  FolderTrailRow,
   FolderTreeRow,
   ProjectFolderRow,
 } from '@/lib/mappers/folderMappers';
@@ -384,6 +385,42 @@ export const folderRepository = {
       )
       SELECT "leaf_id" AS "id", "leaf_project_id" AS "projectId",
              array_agg("name" ORDER BY depth DESC) AS "path"
+        FROM chain
+       GROUP BY "leaf_id", "leaf_project_id"`;
+  },
+
+  /**
+   * The TRAIL of every folder in `ids`, ROOT FIRST, each step carrying its id AS
+   * WELL AS its name (Bug MOTIR-5782 · MOTIR-5798) — the id-carrying twin of
+   * {@link findPathsByIds}, and the same one recursive read. A trail is what a
+   * canvas needs to make each folder a LEVEL: a crumb that navigates is addressed
+   * by id, and so is a `folder:<id>` level key for an ancestor folder. The path
+   * of names is `trail.map((t) => t.name)`, so a caller reading both takes one
+   * query, not two. An id that no longer exists simply does not come back.
+   */
+  async findTrailsByIds(
+    ids: string[],
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<FolderTrailRow[]> {
+    if (ids.length === 0) return [];
+    return tx.$queryRaw<FolderTrailRow[]>`
+      WITH RECURSIVE chain AS (
+        SELECT f."id" AS "leaf_id", f."project_id" AS "leaf_project_id",
+               f."id" AS "node_id", f."parent_folder_id", f."name", 0 AS depth
+          FROM "folder" f
+         WHERE f."id" = ANY(${ids}::text[])
+           AND f."workspace_id" = ${workspaceId}
+        UNION ALL
+        SELECT c."leaf_id", c."leaf_project_id", f."id", f."parent_folder_id", f."name",
+               c.depth + 1
+          FROM "folder" f
+          JOIN chain c ON f."id" = c."parent_folder_id"
+         WHERE c.depth < 1000
+      )
+      SELECT "leaf_id" AS "id", "leaf_project_id" AS "projectId",
+             json_agg(json_build_object('id', "node_id", 'name', "name") ORDER BY depth DESC)
+               AS "trail"
         FROM chain
        GROUP BY "leaf_id", "leaf_project_id"`;
   },

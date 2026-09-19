@@ -103,6 +103,7 @@ function modifiedItem(changes: PlanReviewItemDto['changes']): PlanReviewItemDto 
     folderId: null,
     folderPath: null,
     folderMissing: false,
+    folderTrail: [],
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
     committedBlockedBy: [],

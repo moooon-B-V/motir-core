@@ -52,6 +52,7 @@ const FOLDER_SIDE = {
   folderId: 'fold_2025',
   folderPath: PARKED,
   folderMissing: false,
+  folderTrail: [],
 };
 
 describe('the count-based collapse rule (Part XVII §17.6)', () => {
