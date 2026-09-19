@@ -93,11 +93,14 @@ export function summarizeProject(row: McpProjectRow): string {
  */
 export async function runListProjects(ctx: ServiceContext): Promise<CallToolResult> {
   try {
-    const projects = await projectsService.listProjects(ctx.workspaceId, ctx.userId);
-    const reachable = ctx.tokenProjectId
-      ? projects.filter((p) => p.id === ctx.tokenProjectId)
-      : projects;
-    const rows = reachable.map(toProjectRow);
+    // The binding is applied INSIDE the read (MOTIR-5763), so the text block and
+    // the structured payload below are built from the one list and cannot differ.
+    const projects = await projectsService.listProjects(
+      ctx.workspaceId,
+      ctx.userId,
+      ctx.tokenProjectId,
+    );
+    const rows = projects.map(toProjectRow);
     // Dual content: the text block for a human, the array under `projects` for
     // the agent (structuredContent must be an object, so the list is wrapped).
     // An empty workspace is an EMPTY LIST, never an error — "you can reach no

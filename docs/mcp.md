@@ -3353,6 +3353,13 @@ calls, so the checks are the UI's: workspace membership is asserted, then every
 project the caller may not browse (Story 6.4) is filtered out. A workspace with no
 reachable projects returns an **empty list**, not an error.
 
+**A project-bound token lists ONLY its project** (MOTIR-2607, MOTIR-5763). Every
+per-key tool refuses such a token's other projects as `PROJECT_NOT_FOUND`, so the
+list answers with the same set: exactly the bound project, in BOTH the text block
+and `structuredContent`. A device token (`motir login`) is unbound and lists every
+project its holder may browse. `GET /api/v1/projects` applies the same rule — both
+read through `projectsService.listProjects`, which takes the binding.
+
 **No per-row cost.** The whole call is a constant number of queries regardless of
 how many projects come back. `createdAt` and a work-item count are deliberately
 omitted — either would cost an extra projection or a query per row, which a

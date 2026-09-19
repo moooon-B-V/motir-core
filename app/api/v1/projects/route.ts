@@ -52,7 +52,13 @@ export const GET = withV1Route({ permission: 'project:browse' }, async (ctx) => 
   // answering 422 without touching the database is both faster and honest.
   const page = parseCollectionPageRequest(ctx.req, 'projects', readRowIdPosition);
 
-  const projects = await projectsService.listProjects(ctx.workspaceId, ctx.userId);
+  // A project-bound token lists exactly its one project (MOTIR-5763) — the same
+  // set `GET /api/v1/projects/{key}` lets it open.
+  const projects = await projectsService.listProjects(
+    ctx.workspaceId,
+    ctx.userId,
+    ctx.service.tokenProjectId,
+  );
   const ordered = [...projects].sort((a, b) => a.identifier.localeCompare(b.identifier, 'en'));
 
   // The POSITION is the row id — internal, and it stays internal: it is signed

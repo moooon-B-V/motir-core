@@ -139,7 +139,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     operationId: 'listProjects',
     summary: 'List the projects in this token’s workspace',
     description:
-      'Every project the token owner may browse in the bound workspace, ordered by key ascending — a total order the page addressing owns, so a cursor can never skip or duplicate a row.',
+      'Every project the token owner may browse in the bound workspace, ordered by key ascending — a total order the page addressing owns, so a cursor can never skip or duplicate a row. A token BOUND to one project lists exactly that project — the same set `getProject` lets it open — so a narrowed credential is never shown a project it would then be refused.',
     permission: 'project:browse',
     parameters: pageParameters(),
     response: {
