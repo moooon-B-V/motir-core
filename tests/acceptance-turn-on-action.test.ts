@@ -15,9 +15,9 @@ import { truncateAuthTables } from './helpers/db';
 // ⚠️ THE DEFECT THIS PINS. MOTIR-4925 moved the switch's READ to
 // `Project.acceptanceVideoEnabled` and left this action writing the
 // ORGANISATION's column, so the press flipped a flag nothing read. The first case
-// therefore asserts BOTH columns: the project's moves, and the organisation's
-// does not — a test reading only the project column would pass against an action
-// that wrote both.
+// asserts the PROJECT column moves. It used to also assert the organisation's did
+// not; that column was dropped by MOTIR-5195, so an action writing it would now
+// fail outright rather than silently.
 
 const session = { current: null as { user: { id: string; email: string } } | null };
 const activeCtx = { current: null as { userId: string; workspaceId: string } | null };
@@ -81,7 +81,6 @@ async function seed(slug: string) {
   });
   return {
     workspaceId: workspace.id,
-    organizationId: workspace.organizationId,
     projectId: project.id,
     identifier: project.identifier,
     admin,
@@ -102,18 +101,9 @@ async function projectSwitch(projectId: string): Promise<boolean> {
   return row.acceptanceVideoEnabled;
 }
 
-/** Read by SQL, not the generated client: the organisation column has no
- *  application reader after MOTIR-5172, and a test must not become one. */
-async function orgColumn(organizationId: string): Promise<boolean> {
-  const rows = await adminDb.$queryRaw<{ acceptance_video_enabled: boolean }[]>`
-    SELECT acceptance_video_enabled FROM organization WHERE id = ${organizationId}`;
-  return rows[0]!.acceptance_video_enabled;
-}
-
 describe('turnOnAcceptanceVideoAction', () => {
-  it('a project admin turns the PROJECT switch on — and the organisation column does not move', async () => {
+  it('a project admin turns the PROJECT switch on', async () => {
     const s = await seed('admin');
-    const orgBefore = await orgColumn(s.organizationId);
     actAs(s.admin, s.workspaceId);
 
     const res = await turnOnAcceptanceVideoAction({
@@ -123,7 +113,6 @@ describe('turnOnAcceptanceVideoAction', () => {
 
     expect(res).toEqual({ ok: true });
     expect(await projectSwitch(s.projectId)).toBe(true);
-    expect(await orgColumn(s.organizationId)).toBe(orgBefore);
     expect(revalidatePath).toHaveBeenCalledWith(`/items/${s.identifier}-1`);
   });
 

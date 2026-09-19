@@ -1,9 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
-import { adminDb } from './helpers/adminDb';
-import { truncateAuthTables } from './helpers/db';
+import { describe, expect, it } from 'vitest';
 
 // MOTIR-4925 · MOTIR-5167 — the acceptance-video switch moves to the PROJECT, and
 // the BACKFILL is what makes the move safe.
@@ -17,20 +14,17 @@ import { truncateAuthTables } from './helpers/db';
 //
 // ⚠️ THIS FILE ASSERTS THE MIGRATION'S OWN SQL, READ FROM THE MIGRATION.
 // A test that retyped the UPDATE would pass for ever while the shipped statement
-// drifted away from it — and the statement is the deliverable. So the backfill is
-// extracted from the migration file and executed verbatim: if somebody edits the
-// migration, this file is measuring the edit.
+// drifted away from it — and the statement is the deliverable.
 //
-// Real Postgres; truncate between tests (CLAUDE.md: never mock the DB). The fixture
-// builds TWO tenants that disagree, which is the only shape that can tell a
-// per-project backfill from a blanket write — with one organisation both answers
-// look identical.
-//
-// `adminDb` throughout, deliberately: cross-tenant fixture writes are exactly what
-// the RLS policies exist to refuse, and a raw statement on the owner client is the
-// shipped rule (`tests/helpers/adminDb.ts`) rather than an exception to it — which
-// is also why this file does not move `tests/rls/test-singleton-statement-guard`'s
-// `RAW_CEILING`, a ratchet that only ever falls.
+// ⚠️ IT NO LONGER EXECUTES THAT STATEMENT, and that is MOTIR-5195, not a lost
+// case. Two cases here used to seed organisations that disagreed, run the
+// extracted backfill verbatim against Postgres, and assert each project took its
+// organisation's answer. The backfill reads `organization.acceptance_video_enabled`,
+// which MOTIR-5195 dropped, so against a database migrated to the current tree the
+// statement has no source column to read. It ran exactly once, at deploy, as part
+// of 20260911170000, and those two cases proved it before that deploy. What stays
+// is the structural half: the copy-forward still lives in the same migration that
+// adds the column, and still resolves the organisation through the workspace.
 
 const MIGRATION = path.join(
   process.cwd(),
@@ -53,107 +47,14 @@ function backfillStatement(): string {
   const updates = migrationStatements().filter((s) => /^UPDATE\b/i.test(s));
   expect(
     updates,
-    'the migration must carry EXACTLY ONE backfill UPDATE — this file executes it, ' +
+    'the migration must carry EXACTLY ONE backfill UPDATE — this file asserts it, ' +
       'so zero means the copy-forward was dropped and two means it no longer knows which ' +
       'statement it is asserting',
   ).toHaveLength(1);
   return updates[0]!;
 }
 
-let seq = 0;
-
-/** An organisation + workspace + project, with the organisation's answer set. */
-async function seedTenant(tag: string, orgAnswer: boolean) {
-  const n = seq++;
-  const org = await adminDb.organization.create({
-    data: { name: `Org ${tag}`, slug: `avp-org-${tag}-${n}` },
-  });
-  // The organisation's answer is written by SQL rather than through the generated
-  // client: the column has no application writer after MOTIR-5172, and MOTIR-5173
-  // `@ignore`s the field — while this file, which executes the migration's
-  // copy-forward FROM that column, still needs it set.
-  await adminDb.$executeRaw`
-    UPDATE organization SET acceptance_video_enabled = ${orgAnswer} WHERE id = ${org.id}`;
-  const workspace = await adminDb.workspace.create({
-    data: { name: `WS ${tag}`, slug: `avp-ws-${tag}-${n}`, organizationId: org.id },
-  });
-  const project = await adminDb.project.create({
-    data: {
-      name: `Project ${tag}`,
-      slug: `avp-p-${tag}-${n}`,
-      identifier: `AVP${tag}${n}`,
-      workspaceId: workspace.id,
-    },
-  });
-  return { org, workspace, project };
-}
-
-/** The project's stored answer, read past RLS. */
-async function projectAnswer(projectId: string): Promise<boolean> {
-  const row = await adminDb.project.findUniqueOrThrow({
-    where: { id: projectId },
-    select: { acceptanceVideoEnabled: true },
-  });
-  return row.acceptanceVideoEnabled;
-}
-
-beforeEach(async () => {
-  await truncateAuthTables();
-});
-
-afterAll(async () => {
-  await db.$disconnect();
-  await adminDb.$disconnect();
-});
-
 describe('the project-tier acceptance-video switch inherits its organisation answer', () => {
-  it('copies each organisation answer forward — OFF becomes off, ON stays on', async () => {
-    // Both projects start at the column DEFAULT, which IS the pre-backfill state:
-    // the migration has added the column and has not yet copied anything forward.
-    const off = await seedTenant('off', false);
-    const on = await seedTenant('on', true);
-
-    expect(await projectAnswer(off.project.id)).toBe(true);
-    expect(await projectAnswer(on.project.id)).toBe(true);
-
-    await adminDb.$executeRawUnsafe(backfillStatement());
-
-    // The PAIR is the assertion. A blanket write would satisfy either line alone.
-    expect(
-      await projectAnswer(off.project.id),
-      'a project whose organisation had acceptance video OFF must not come back ON',
-    ).toBe(false);
-    expect(
-      await projectAnswer(on.project.id),
-      'a project whose organisation had it ON must not be turned off by the backfill',
-    ).toBe(true);
-  });
-
-  it('is per-project: two projects under ONE organisation both take its answer', async () => {
-    // The sibling property. The backfill resolves through the workspace, so a
-    // second project under the same organisation must land on the same value —
-    // this is what proves the join is not matching one arbitrary row.
-    const { org, workspace } = await seedTenant('multi', false);
-    const second = await adminDb.project.create({
-      data: {
-        name: 'Project multi B',
-        slug: `avp-p-multi-b-${seq++}`,
-        identifier: 'AVPMB',
-        workspaceId: workspace.id,
-      },
-    });
-
-    await adminDb.$executeRawUnsafe(backfillStatement());
-
-    const projects = await adminDb.project.findMany({
-      where: { workspace: { organizationId: org.id } },
-      select: { acceptanceVideoEnabled: true },
-    });
-    expect(projects).toHaveLength(2);
-    expect(projects.every((p) => p.acceptanceVideoEnabled === false)).toBe(true);
-    expect(await projectAnswer(second.id)).toBe(false);
-  });
-
   it('the backfill lives IN the migration, so a deploy cannot apply the column without it', () => {
     const statements = migrationStatements();
 

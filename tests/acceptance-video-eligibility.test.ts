@@ -12,10 +12,8 @@ import { truncateAuthTables } from './helpers/db';
 //
 // ⚠️ THE ORG-TIER WRITE THIS FILE ALSO COVERED IS GONE (MOTIR-5172):
 // `organizationsService.setAcceptanceVideoEnabled` was removed with the switch's
-// move to the project tier. The organisation column is still in the schema until
-// its three-phase removal finishes, so where a case needs it to DISAGREE with the
-// project it is written and read by SQL — a test must not become the column's
-// last reader through the generated client.
+// move to the project tier, and the organisation column itself was dropped by
+// MOTIR-5195 — the last case in this file asserts that from the database.
 //
 // ⚠️ THE TWO HALVES OF THE AND NOW LIVE AT DIFFERENT TIERS (MOTIR-4925 ·
 // MOTIR-5168): `hasPaidAiPlan` is the ORGANISATION's and the SWITCH is the
@@ -81,13 +79,6 @@ async function seed() {
     organizationId: ws.organizationId,
     projectId: project.id,
   };
-}
-
-/** The retired organisation column, by SQL (see the header). */
-async function orgColumn(organizationId: string): Promise<boolean> {
-  const rows = await adminDb.$queryRaw<{ acceptance_video_enabled: boolean }[]>`
-    SELECT acceptance_video_enabled FROM organization WHERE id = ${organizationId}`;
-  return rows[0]!.acceptance_video_enabled;
 }
 
 beforeEach(async () => {
@@ -178,11 +169,6 @@ describe("the switch is the PROJECT's, and the entitlement stays the organisatio
     const on = await addProject(fx.workspaceId, true);
     aiAccess.current = access({ organizationId: fx.organizationId, hasPaidAiPlan: true });
 
-    // The organisation's own column is left ON for both, so neither verdict can
-    // be right by accident: a read that still consulted the organisation would
-    // return `eligible` for the OFF project too.
-    expect(await orgColumn(fx.organizationId)).toBe(true);
-
     const offVerdict = await acceptanceVideoEligibilityService.resolve({
       actorUserId: fx.ownerId,
       workspaceId: fx.workspaceId,
@@ -225,24 +211,17 @@ describe("the switch is the PROJECT's, and the entitlement stays the organisatio
     expect(verdictB.toggleEnabled, 'the sibling project keeps its own answer').toBe(true);
   });
 
-  it('the ORGANISATION flag no longer moves the verdict — only the entitlement does', async () => {
-    // The migration's whole point, asserted from the losing side. Flipping the org
-    // column OFF while the project stays ON must not gate the project; the org's
-    // remaining job is `hasPaidAiPlan`, which is mocked here and is what DOES gate.
-    const fx = await seed();
-    aiAccess.current = access({ organizationId: fx.organizationId, hasPaidAiPlan: true });
-
-    await adminDb.$executeRaw`
-      UPDATE organization SET acceptance_video_enabled = false WHERE id = ${fx.organizationId}`;
-
-    const r = await acceptanceVideoEligibilityService.resolve({
-      actorUserId: fx.ownerId,
-      workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
-    });
-    expect(r.toggleEnabled, 'the project said ON; the organisation is not asked').toBe(true);
-    expect(r.eligible).toBe(true);
-    expect(r.reason).toBe('eligible');
+  it('the ORGANISATION has no switch left to ask — only the project column exists', async () => {
+    // The migration's whole point, asserted from the losing side. This case used
+    // to flip the organisation column OFF and show the verdict did not move; once
+    // MOTIR-5195 dropped that column, the stronger statement is that there is
+    // nothing at the organisation tier to consult at all. The org's remaining job
+    // is `hasPaidAiPlan`, which the next case covers.
+    const columns = await adminDb.$queryRaw<{ table_name: string }[]>`
+      SELECT table_name FROM information_schema.columns
+      WHERE table_schema = current_schema() AND column_name = 'acceptance_video_enabled'
+      ORDER BY table_name`;
+    expect(columns.map((c) => c.table_name)).toEqual(['project']);
   });
 
   it('the entitlement is still ORG-resolved: no paid plan gates every project', async () => {

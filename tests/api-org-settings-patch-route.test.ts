@@ -43,13 +43,13 @@ function patch(orgId: string, body: unknown) {
   );
 }
 
-/** The org row's name and its retired column, read by SQL rather than through the
- *  generated client — the column has no application reader any more, and a test
- *  must not become one (MOTIR-5173 takes the field out of the client). */
+/** The org row's name, read past RLS. (Its retired acceptance-video column was
+ *  dropped by MOTIR-5195, so there is no longer a second column to watch.) */
 async function orgRow(orgId: string) {
-  const rows = await adminDb.$queryRaw<{ name: string; acceptance_video_enabled: boolean }[]>`
-    SELECT name, acceptance_video_enabled FROM organization WHERE id = ${orgId}`;
-  return rows[0]!;
+  return adminDb.organization.findUniqueOrThrow({
+    where: { id: orgId },
+    select: { name: true },
+  });
 }
 
 beforeEach(async () => {
@@ -76,14 +76,12 @@ describe('PATCH /api/organizations/[orgId]', () => {
     expect((await orgRow(workspace.organizationId)).name).toBe('Beacon Labs');
   });
 
-  it('refuses a body carrying ONLY the retired toggle — 400, and the column does not move', async () => {
+  it('refuses a body carrying ONLY the retired toggle — 400, and the row does not move', async () => {
     const { workspace, owner } = await createTestWorkspace();
     signInAs(owner);
     const before = await orgRow(workspace.organizationId);
 
-    const res = await patch(workspace.organizationId, {
-      acceptanceVideoEnabled: !before.acceptance_video_enabled,
-    });
+    const res = await patch(workspace.organizationId, { acceptanceVideoEnabled: false });
 
     expect(res.status).toBe(400);
     // The message names the ONE field the route takes. It used to read
@@ -93,20 +91,17 @@ describe('PATCH /api/organizations/[orgId]', () => {
     expect(await orgRow(workspace.organizationId)).toEqual(before);
   });
 
-  it('ignores the retired toggle beside a valid name — the rename lands, the column does not move', async () => {
+  it('ignores the retired toggle beside a valid name — the rename lands', async () => {
     const { workspace, owner } = await createTestWorkspace();
     signInAs(owner);
-    const before = await orgRow(workspace.organizationId);
 
     const res = await patch(workspace.organizationId, {
       name: 'Renamed',
-      acceptanceVideoEnabled: !before.acceptance_video_enabled,
+      acceptanceVideoEnabled: false,
     });
 
     expect(res.status).toBe(200);
-    const after = await orgRow(workspace.organizationId);
-    expect(after.name).toBe('Renamed');
-    expect(after.acceptance_video_enabled).toBe(before.acceptance_video_enabled);
+    expect((await orgRow(workspace.organizationId)).name).toBe('Renamed');
   });
 
   it('400 on an empty body and on a blank name', async () => {
