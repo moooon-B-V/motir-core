@@ -227,8 +227,8 @@ export async function seedAcceptanceGate(slug: string): Promise<AcceptanceGateSe
         '2. Come back inside fifteen minutes — the basket still holds it.',
       ].join('\n'),
       repos: [
-        { repoId: webRow.id, commitSha: headShaFor(16101) },
-        { repoId: apiRow.id, commitSha: headShaFor(16102) },
+        { repoId: webRow.id, commitSha: headShaFor(17101) },
+        { repoId: apiRow.id, commitSha: headShaFor(17102) },
       ],
     },
     ctx,

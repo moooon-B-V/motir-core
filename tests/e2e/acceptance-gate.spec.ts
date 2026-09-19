@@ -49,15 +49,18 @@ import zh from '@/messages/zh.json';
 // role, or a committed read after a reload. No timed wait anywhere in this file; the holds
 // are `chapter()` / `beat()`'s, taken after the assertion.
 //
-// ⚠️ THE 16xxx BLOCK IS THIS SPEC'S (`tests/e2e-pull-request-number-blocks.test.ts`).
+// ⚠️ THE 17xxx BLOCK IS THIS SPEC'S (`tests/e2e-pull-request-number-blocks.test.ts`). It
+// was 16xxx until the merge with `main`, which brought `acceptance-decision-gate.spec.ts`
+// holding that block already — two specs on one block is the collision that guard exists
+// to end, and the numbers here moved rather than its.
 
 test.describe.configure({ timeout: 480_000 });
 
 const PRS = {
-  storyRun: { web: { number: 16101 }, api: { number: 16102 } },
-  singleCard: { web: { number: 16201 }, api: { number: 16202 } },
-  held: { web: { number: 16301 }, api: { number: 16302 } },
-  zh: { web: { number: 16401 }, api: { number: 16402 } },
+  storyRun: { web: { number: 17101 }, api: { number: 17102 } },
+  singleCard: { web: { number: 17201 }, api: { number: 17202 } },
+  held: { web: { number: 17301 }, api: { number: 17302 } },
+  zh: { web: { number: 17401 }, api: { number: 17402 } },
 } as const;
 
 type Scenario = keyof typeof PRS;
@@ -241,7 +244,7 @@ test.describe('the acceptance-video gate', () => {
         uploaderUserId: seed.ownerUserId,
         story: cards.story,
         producedByKey: cards.e2e.identifier,
-        commitSha: headShaFor(16101),
+        commitSha: headShaFor(17101),
       });
     }
   });
@@ -272,7 +275,7 @@ test.describe('the acceptance-video gate', () => {
       ).toBeVisible();
       // The row names the RECORDING — how many chapters it walks and the commit it was
       // recorded at — which is what `acceptanceMeta` renders (`ApprovalRow.tsx`).
-      await expect(row.getByText(/3 chapters · 00003ee5/)).toBeVisible();
+      await expect(row.getByText(/3 chapters · 000042cd/)).toBeVisible();
     });
     await beat();
 
