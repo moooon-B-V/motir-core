@@ -59,9 +59,12 @@ import { queueAgainAutoAction } from '@/app/(authed)/items/[key]/approvalGateAct
 // `githubWebhookService.handleEvent` with the REAL captured deliveries
 // (`tests/fixtures/github/merge-queue/`), and asserts the seams no unit owns:
 //
-//   1. the whole manual loop — green → ONE gate → approve and merge → eject → a green
-//      check changes nothing → Queue again → merges → done;
-//   2. the re-arm — a push after the ejection raises exactly ONE fresh gate;
+//   1. the whole manual loop — green → ONE gate → approve and merge → eject → In Review
+//      with ONE fresh gate (§4 FOURTH AMENDMENT; MOTIR-5805) → a green check asks
+//      nothing twice → Queue again refused (MOTIR-5802) → approve re-queues → merges →
+//      done;
+//   2. the re-arm — a push after the ejection supersedes the re-asked gate and the next
+//      green raises exactly ONE fresh gate;
 //   3. auto mode — eject from in_review, a person's Queue again, once;
 //   4. every reason in the amendment's map, from the SAME constant the handler reads;
 //   5. redelivery and order;
@@ -302,26 +305,32 @@ afterAll(async () => {
 });
 
 describe('1 · the whole manual loop', () => {
-  it('eject → a green check at the same head changes nothing → Queue again is refused → both merge → done', async () => {
+  // §4 FOURTH AMENDMENT (Story MOTIR-5799): the ejection RE-ASKS the merge question at
+  // In Review, Queue again is retired for it, and approving the fresh gate re-queues.
+  it('eject → In Review with ONE fresh gate → a green at the same head asks nothing twice → Queue again is refused → approve re-queues → both merge → done', async () => {
     const { s, item, approved } = await approvedIntoTheQueue('loop@example.com');
 
     // A failure exit for web#7.
     expect(await eject('web', 7, 'sha-web')).toMatchObject({
       outcome: 'recorded',
       moved: [item.identifier],
+      reasked: [item.identifier],
     });
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('in_review');
     expect(await exitsOf(7)).toHaveLength(1);
     expect(await queueRef(7)).toBeNull();
     expect(await queueRef(12)).toBe('queue:MQE_12');
     expect(await adminDb.approvalGate.findUniqueOrThrow({ where: { id: approved.id } })).toEqual(
       approved,
     );
+    const [reasked, ...more] = await awaiting(item.id);
+    expect(more).toEqual([]);
+    expect(reasked!.subjectVersion).toBe(approved.subjectVersion);
 
-    // Guard (a): a green check at web#7's SAME head neither promotes nor re-asks.
+    // Guard (a): a green check at web#7's SAME head asks nothing a second time.
     await green('web', 7, 'sha-web', 'Lint');
-    expect(await statusOf(item.id)).toBe('implemented');
-    expect(await awaiting(item.id)).toEqual([]);
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect((await awaiting(item.id)).map((g) => g.id)).toEqual([reasked!.id]);
 
     // Queue again on a FAILURE exit is RETIRED (§4 FOURTH AMENDMENT, point 4; MOTIR-5802):
     // the old approval is not reused, nothing is claimed, and no host is called.
@@ -332,14 +341,54 @@ describe('1 · the whole manual loop', () => {
       refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
     });
     expect(host).not.toHaveBeenCalled();
-    expect(await queueRef(7)).toBeNull();
     expect((await exitsOf(7))[0]!.requeuedAt).toBeNull();
 
-    // Both merges land (web#7 by hand on GitHub): done.
+    // Approving the re-asked gate re-queues (point 3).
+    const { members } = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: reasked!.id, source: 'ui' },
+      s.ctx,
+    );
+    expect(members.map((m) => m.outcome)).toEqual(['enqueued', 'enqueued']);
+    expect(await statusOf(item.id)).toBe('approved');
+    expect(await queueRef(7)).toBe('queue:MQE_7');
+    expect((await exitsOf(7))[0]!.requeuedAt).not.toBeNull();
+
+    // Both merges land: done.
     await prDelivery('api', 'closed', 12, headRefOf(item.identifier, 12), { merged: true });
+    expect(await statusOf(item.id)).toBe('approved');
     await prDelivery('web', 'closed', 7, headRefOf(item.identifier, 7), { merged: true });
     expect(await statusOf(item.id)).toBe('done');
-    expect(await gates(item.id)).toHaveLength(1);
+    expect(await gates(item.id)).toHaveLength(2);
+  });
+});
+
+describe('1b · a sibling already MERGED when the queue ejects the other (MOTIR-5805)', () => {
+  it('the re-ask is still raised over the SAME set, and approving it re-queues only the ejected member', async () => {
+    const { s, item, approved } = await approvedIntoTheQueue('merged-sibling@example.com');
+    // api#12 lands first; the card waits on web#7.
+    await prDelivery('api', 'closed', 12, headRefOf(item.identifier, 12), { merged: true });
+    expect(await statusOf(item.id)).toBe('approved');
+
+    await eject('web', 7, 'sha-web');
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    const [reasked, ...more] = await awaiting(item.id);
+    expect(more).toEqual([]);
+    expect(reasked!.subjectVersion).toBe(approved.subjectVersion);
+
+    const host = enqueueAll();
+    host.mockClear();
+    const { members } = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: reasked!.id, source: 'ui' },
+      s.ctx,
+    );
+    expect(host).toHaveBeenCalledTimes(1);
+    expect(host.mock.calls[0]![0]).toMatchObject({ number: 7 });
+    expect(members.map((m) => m.outcome).sort()).toEqual(['enqueued', 'no_merge_gate']);
+    expect(await statusOf(item.id)).toBe('approved');
+
+    await prDelivery('web', 'closed', 7, headRefOf(item.identifier, 7), { merged: true });
+    expect(await statusOf(item.id)).toBe('done');
   });
 });
 
@@ -347,13 +396,18 @@ describe('2 · the re-arm', () => {
   it('a push after the ejection raises exactly ONE fresh gate over the new head, and the old exit cannot be queued again', async () => {
     const { s, item, approved } = await approvedIntoTheQueue('rearm@example.com');
     await eject('web', 7, 'sha-web');
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('in_review');
+    const [reasked] = await awaiting(item.id);
 
     await prDelivery('web', 'synchronize', 7, headRefOf(item.identifier, 7), {
       headSha: 'sha-web-2',
     });
     await pending('web', 7, 'sha-web-2');
-    expect(await statusOf(item.id)).toBe('implemented');
+    // The push supersedes the re-asked gate `head moved`: the question was about the
+    // commits the queue threw out, and those are no longer the head.
+    expect(
+      await adminDb.approvalGate.findUniqueOrThrow({ where: { id: reasked!.id } }),
+    ).toMatchObject({ state: 'superseded', supersededCause: 'head_moved' });
     expect(await awaiting(item.id)).toEqual([]);
 
     await green('web', 7, 'sha-web-2');
@@ -445,7 +499,8 @@ describe('4 · the dispositions, over the WHOLE reason table', () => {
         expect.objectContaining({ rawReason: reason, disposition }),
       ]);
       expect(await queueRef(7)).toBeNull();
-      expect(await statusOf(item.id)).toBe(disposition === 'failure' ? 'implemented' : 'approved');
+      // §4 FOURTH AMENDMENT, point 1: a manual failure returns the card to review.
+      expect(await statusOf(item.id)).toBe(disposition === 'failure' ? 'in_review' : 'approved');
     }
     // The other member is never touched.
     expect(await queueRef(12)).toBe('queue:MQE_12');
@@ -462,7 +517,9 @@ describe('5 · redelivery and order', () => {
       outcome: 'duplicate',
     });
     expect(await exitsOf(7)).toHaveLength(1);
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('in_review');
+    // …and raises no second gate.
+    expect(await awaiting(item.id)).toHaveLength(1);
   });
 
   // NEUTRAL exits from here: Queue again survives only for them (MOTIR-5802).
@@ -539,7 +596,7 @@ describe('6 · the failing check', () => {
     expect(after.checkRuns).toHaveLength(rowsBefore);
     expect(derivePrCiState(after.checkRuns)).toBe(verdictBefore);
     expect(await adminDb.githubCheckRun.count({ where: { commitSha: group } })).toBe(0);
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('in_review');
   });
 });
 

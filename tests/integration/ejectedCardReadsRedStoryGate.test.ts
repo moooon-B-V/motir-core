@@ -203,7 +203,8 @@ async function ejectedManual(email: string, reason = 'CI_FAILURE') {
   expect(await statusOf(item.id)).toBe('approved');
   vi.restoreAllMocks();
   await eject(7, 'sha-a', reason);
-  expect(await statusOf(item.id)).toBe('implemented');
+  // §4 FOURTH AMENDMENT (MOTIR-5805): back to review, with ONE fresh gate.
+  expect(await statusOf(item.id)).toBe('in_review');
   return { s, item, gateId: gate!.id };
 }
 
@@ -245,8 +246,9 @@ describe('1 · exit → badge, and the promotion refuses', () => {
     await check(7, 'sha-a', 'success', 'Lint');
 
     expect(await ciStateOf(item.id)).toBe('failing');
-    expect(await statusOf(item.id)).toBe('implemented');
-    expect(await awaiting(item.id)).toEqual([]);
+    expect(await statusOf(item.id)).toBe('in_review');
+    // The re-asked gate, and no second one.
+    expect(await awaiting(item.id)).toHaveLength(1);
     // Guard (a): the pull request's own verdict — the pill — is untouched.
     expect(derivePrCiState((await prRow(7)).checkRuns)).toBe('passing');
   });
@@ -265,6 +267,20 @@ describe('2 · Queue again → clear', () => {
     });
     expect(host).not.toHaveBeenCalled();
     expect(await ciStateOf(item.id)).toBe('failing');
+  });
+
+  it('manual: APPROVING the re-asked gate re-queues and clears the red (MOTIR-5805)', async () => {
+    const { s, item } = await ejectedManual('reask-clears@example.com');
+    const [reasked] = await awaiting(item.id);
+    stubHost({ outcome: 'enqueued', entryId: 'MQE_7r' });
+
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: reasked!.id, source: 'ui' },
+      s.ctx,
+    );
+
+    expect(await statusOf(item.id)).toBe('approved');
+    expect(await ciStateOf(item.id)).toBe('passing');
   });
 
   it('auto: a person’s Queue again clears the red', async () => {
@@ -427,7 +443,7 @@ describe('5 · claim ⟸ exit, and the page’s repair view', () => {
     // Queue again no longer re-queues a failure exit (MOTIR-5802), so the card stays where
     // the ejection left it and the repair view still offers `motir fix`.
     expect(await queueAgain(s, gateId, 7)).toMatchObject({ outcome: 'refused' });
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('in_review');
     expect((await workItemRepairService.getRepairView(item.id, s.ctx)).state).toBe('offer');
   });
 });
@@ -438,12 +454,13 @@ describe('6 · the v1 resource → the CLI', () => {
     expect(ciVerdict(await cliDeliveries(s, item.identifier))).toBe('red');
 
     // The re-queue stamp is what lifts the red (MOTIR-5717). A manual failure is re-queued
-    // by approving the re-asked gate (MOTIR-5805), never by Queue again (MOTIR-5802), so
-    // this seam stamps the exit the way that approval does.
-    await adminDb.githubPullRequestQueueExit.updateMany({
-      where: { pullRequestId: (await prRow(7)).id },
-      data: { requeuedAt: new Date() },
-    });
+    // by approving the re-asked gate (MOTIR-5805), never by Queue again (MOTIR-5802).
+    const [reasked] = await awaiting(item.id);
+    stubHost({ outcome: 'enqueued', entryId: 'MQE_7d' });
+    await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: reasked!.id, source: 'ui' },
+      s.ctx,
+    );
     expect(ciVerdict(await cliDeliveries(s, item.identifier))).toBe('green');
   });
 

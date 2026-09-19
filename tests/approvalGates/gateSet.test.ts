@@ -324,6 +324,140 @@ describe("resolveGateSet — MOTIR-5666: Q4's carry is ONE-TIME", () => {
   });
 });
 
+// ── §4 FOURTH AMENDMENT, points 1–2 (Story MOTIR-5799 · MOTIR-5805) ──────────────
+// A merge-queue FAILURE standing at a member's head RE-ASKS the merge question, even
+// over an approval of the same commits and over the design's carry — but only in a
+// `manual` project, never the design question, and never over a decision made AFTER
+// the exit (the re-asked gate's own answer).
+describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks the merge', () => {
+  const SET = 'moooon/motir-core#10@aaa1';
+  const DECIDED_AT = new Date('2026-09-19T10:00:00.000Z');
+  const EXIT_AFTER = new Date('2026-09-19T10:05:00.000Z');
+  const EXIT_BEFORE = new Date('2026-09-19T09:55:00.000Z');
+  const approvedMerge: ExistingGate = { ...decided(WORK_ITEM, SET), decidedAt: DECIDED_AT };
+  const designEvidence = { id: 'ev_1', commitSha: 'c0ffee' };
+  const approvedDesign: ExistingGate = { ...decided('ev_1', 'c0ffee'), decidedAt: DECIDED_AT };
+
+  const cases = [
+    {
+      name: 'the merge gate APPROVED at the same version',
+      over: { latestMergeGate: approvedMerge },
+    },
+    {
+      name: "the design's one-press CARRY (no merge gate ever)",
+      over: {
+        currentDesignEvidence: designEvidence,
+        latestDesignGate: approvedDesign,
+        designApprovalStandsForMerge: true,
+      },
+    },
+    { name: 'NO gate at all', over: {} },
+  ] as const;
+
+  for (const c of cases) {
+    it(`manual · ${c.name}: ONE merge gate over the SAME set is owed, standing alone`, () => {
+      const set = resolveGateSet(
+        input({ ...c.over, members: GREEN_ONE, standingFailureExitAt: EXIT_AFTER }),
+      );
+      expect(set.awaited).toEqual([
+        { kind: 'pull_request_approval', subjectId: WORK_ITEM, subjectVersion: SET },
+      ]);
+      expect(set.primary).toBe('pull_request_approval');
+    });
+
+    it(`auto · ${c.name}: nothing is owed — no person decides in auto mode`, () => {
+      const set = resolveGateSet(
+        input({
+          ...c.over,
+          prMergeMode: 'auto',
+          members: GREEN_ONE,
+          standingFailureExitAt: EXIT_AFTER,
+        }),
+      );
+      expect(set.awaited.filter((g) => g.kind === 'pull_request_approval')).toEqual([]);
+    });
+  }
+
+  it('never re-asks the DESIGN — a decided design stays decided', () => {
+    const set = resolveGateSet(
+      input({
+        currentDesignEvidence: designEvidence,
+        latestDesignGate: approvedDesign,
+        latestMergeGate: approvedMerge,
+        members: GREEN_ONE,
+        standingFailureExitAt: EXIT_AFTER,
+      }),
+    );
+    expect(set.awaited.map((g) => g.kind)).toEqual(['pull_request_approval']);
+  });
+
+  it('an approval given AFTER the exit answers it — the re-asked gate’s own yes is not asked again', () => {
+    const set = resolveGateSet(
+      input({
+        latestMergeGate: { ...approvedMerge, decidedAt: EXIT_AFTER },
+        members: GREEN_ONE,
+        standingFailureExitAt: EXIT_BEFORE,
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+  });
+
+  it('CHANGES REQUESTED after the exit is an answer too', () => {
+    const set = resolveGateSet(
+      input({
+        latestMergeGate: {
+          ...decided(WORK_ITEM, SET, 'changes_requested'),
+          decidedAt: EXIT_AFTER,
+        },
+        members: GREEN_ONE,
+        standingFailureExitAt: EXIT_BEFORE,
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+  });
+
+  it('with NO standing exit the approval still answers the same commits (MOTIR-5632, unchanged)', () => {
+    const set = resolveGateSet(
+      input({ latestMergeGate: approvedMerge, members: GREEN_ONE, standingFailureExitAt: null }),
+    );
+    expect(set.awaited).toEqual([]);
+  });
+
+  it('a member that already MERGED is settled, not blocking — the re-ask is still owed (MOTIR-5805)', () => {
+    const TWO = 'moooon/motir-ai#4@bbb2,' + SET;
+    const set = resolveGateSet(
+      input({
+        latestMergeGate: { ...decided(WORK_ITEM, TWO), decidedAt: DECIDED_AT },
+        members: [member(SET), { ...member('moooon/motir-ai#4@bbb2', false), merged: true }],
+        standingFailureExitAt: EXIT_AFTER,
+      }),
+    );
+    expect(set.awaited).toEqual([
+      { kind: 'pull_request_approval', subjectId: WORK_ITEM, subjectVersion: TWO },
+    ]);
+  });
+
+  it('…and WITHOUT an ejection a merged member still blocks, exactly as before', () => {
+    const set = resolveGateSet(
+      input({
+        members: [member(SET), { ...member('moooon/motir-ai#4@bbb2', false), merged: true }],
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+  });
+
+  it('still needs every member to be a merge candidate — an ejection does not bypass MOTIR-5604', () => {
+    const set = resolveGateSet(
+      input({
+        latestMergeGate: approvedMerge,
+        members: [member(SET, false)],
+        standingFailureExitAt: EXIT_AFTER,
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+  });
+});
+
 describe('resolveGateSet — ONE home, and every trigger goes through it', () => {
   // The whole reason the decision is a pure predicate: adding a trigger must
   // duplicate no logic, because duplicating it is how this family reached six

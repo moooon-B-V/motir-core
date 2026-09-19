@@ -5,6 +5,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { deliveryMemberVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { failureExitOutranksApproval } from '@/lib/approvalGates/gateSet';
 import type { PullRequestApprovalMemberDTO, PullRequestQueueExitDTO } from '@/lib/dto/approvalGate';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -63,11 +64,14 @@ async function approvedMembers(
     // only while the pull request is still at the head the approval named, which is what
     // makes reusing the approval honest.
     const standingExit = exit !== null && exit.requeuedAt === null;
-    // ⚠️ A FAILURE EXIT IS NEVER REQUEUEABLE on this read (MOTIR-5802; `approval-gates.md`
-    // §4 FOURTH AMENDMENT, point 4): the card is asked again on a fresh gate instead. Only
-    // an approved gate reaches here, which only a `manual` project raises, and the exit's
-    // `disposition` rides on `exit` so the frame can tell the two apart.
-    const failureExit = standingExit && exit.disposition === 'failure';
+    // ⚠️ A FAILURE EXIT IS NOT REQUEUEABLE ON AN APPROVAL GIVEN BEFORE IT (MOTIR-5802;
+    // `approval-gates.md` §4 FOURTH AMENDMENT, point 4): the card is asked again on a fresh
+    // gate instead. The re-asked gate's OWN approval is given after the exit, so a host
+    // refusing its re-queue is retried here like any other (MOTIR-5805). Only an approved
+    // gate reaches here, which only a `manual` project raises, and the exit's
+    // `disposition` rides on `exit` so the frame can tell the cases apart.
+    const failureExit =
+      standingExit && failureExitOutranksApproval(exit, approval.decidedAt ?? null);
     const atApprovedHead =
       standingExit && row !== undefined && deliveryMemberVersion(row) === member.subjectVersion;
     const open = pr !== undefined && pr.state === 'open' && !pr.merged;

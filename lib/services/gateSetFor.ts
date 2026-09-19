@@ -15,6 +15,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import { mergeCandidateHead } from './mergeGates';
+import { standingQueueFailures } from './deliveryVerdict';
 import { workflowsService } from './workflowsService';
 
 // THE PREDICATE'S ONE LOADER (Story MOTIR-5652 · Subtask MOTIR-5662) — reads the
@@ -121,8 +122,23 @@ export async function gateSetFor(
         moved ? signals.movedHead!.headSha : (head ?? undefined),
       ),
       isMergeCandidate: head !== null,
+      merged: delivery.pullRequest.merged,
     });
   }
+
+  // ⚠️ A FAILURE EXIT STANDING AT A MEMBER'S HEAD RE-ASKS THE MERGE (§4 FOURTH
+  // AMENDMENT, points 1–2; MOTIR-5805). Read through `standingQueueFailures` — the
+  // `queueExitHoldsAtHead` rule the promotion hold, the card's fold and the repair
+  // claim already share — so the four cannot disagree about which exit stands. One
+  // indexed read, and an empty map for nearly every card.
+  const standing = await standingQueueFailures(
+    new Map(deliveries.map((delivery) => [delivery.githubPullRequestId, delivery.pullRequest])),
+    tx,
+  );
+  const standingFailureExitAt =
+    [...standing.values()]
+      .map((exit) => exit.exitedAt)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
   const set = resolveGateSet({
     currentDesignEvidence: currentDesign
@@ -135,6 +151,7 @@ export async function gateSetFor(
     prMergeMode: mode?.prMergeMode ?? null,
     cardIsTerminal: isTerminalStatus(item, terminalByProject),
     workItemId: item.id,
+    standingFailureExitAt,
   });
 
   return { ...set, blockedMembers };

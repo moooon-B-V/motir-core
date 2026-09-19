@@ -57,6 +57,14 @@ export interface GateSetMember {
    * refusal, moved here from `raisePullRequestApprovalGate`'s guard chain.
    */
   isMergeCandidate: boolean;
+  /**
+   * Whether this member's pull request has already MERGED. Read only by the re-ask
+   * (§4 FOURTH AMENDMENT; MOTIR-5805): the queue can eject one member of a set after
+   * another has landed, and a merged member is then settled — nothing about it is asked
+   * again — rather than a reason the question cannot be asked at all. Optional; absent
+   * reads as not merged.
+   */
+  merged?: boolean;
 }
 
 /** A gate the card already has, reduced to what decides whether it still answers. */
@@ -65,6 +73,10 @@ export interface ExistingGate {
   /** The `DesignEvidence` id for a design gate; the card's own id for a merge gate. */
   subjectId: string;
   subjectVersion: string | null;
+  /** When it was decided; null while it awaits (MOTIR-5805 — an ejection outranks
+   *  only a decision made BEFORE it). Optional so a caller with no decision in hand
+   *  need not spell one. */
+  decidedAt?: Date | null;
 }
 
 export interface GateSetInput {
@@ -103,6 +115,13 @@ export interface GateSetInput {
   designApprovalStandsForMerge: boolean;
   /** The card's own id — a merge gate's `subjectId` is the card (MOTIR-5603). */
   workItemId: string;
+  /**
+   * When the LATEST merge-queue FAILURE exit still standing at a member's CURRENT
+   * head was recorded — `queueExitHoldsAtHead`'s answer, read by the loader — or
+   * null when no member carries one (§4 FOURTH AMENDMENT, points 1–2; MOTIR-5805).
+   * Optional, and absent reads as null, so a caller with no exit in hand is unchanged.
+   */
+  standingFailureExitAt?: Date | null;
 }
 
 /** One question the card should be asking. */
@@ -153,6 +172,28 @@ export interface GateSet {
  *   spellings differ — which they do for every design gate raised before this
  *   card, all of which carry a null `subjectVersion`.
  */
+/**
+ * Does a merge-queue FAILURE put the merge question back (§4 FOURTH AMENDMENT, points
+ * 1–4; MOTIR-5802 · MOTIR-5805)? True when a failure exit stands and no approval of the
+ * merge was given AFTER it.
+ *
+ * ⚠️ THE ORDER IS THE WHOLE RULE. The yes that sent the commits to the queue was given
+ * BEFORE the queue said they did not land, so it is not honoured and is asked again. A
+ * yes given AFTER the exit — the re-asked gate's own approval — IS the answer to that
+ * failure: it re-queues, and a host refusing that re-queue is retried under it rather
+ * than asked a third time.
+ *
+ * Shared by the gate set (is the question owed?), the members read (is *Queue again*
+ * offered?) and the retry (may it re-queue?), so the three cannot disagree.
+ */
+export function failureExitOutranksApproval(
+  exit: { disposition: string; exitedAt: Date } | null | undefined,
+  approvalDecidedAt: Date | null | undefined,
+): boolean {
+  if (!exit || exit.disposition !== 'failure') return false;
+  return !approvalDecidedAt || exit.exitedAt.getTime() >= approvalDecidedAt.getTime();
+}
+
 function alreadyDecided(
   gate: ExistingGate | null,
   subjectId: string,
@@ -244,16 +285,20 @@ export function designHoldsMerge(
  *     already answered these exact commits, and no standing design approval already
  *     authorises the merge (Q4 — asking there would be the second press Q4 forbids).
  *
- *     ⚠️ **A FAILED MERGE DOES NOT PUT THE QUESTION BACK HERE**, and that is a rule
- *     rather than an omission (MOTIR-5666). AMENDMENT 6 Q2 — *the merge gate
- *     re-opens alone* — names its own mechanism in its next sentence: it is
- *     MOTIR-5461's **Queue again**, keyed to the merge gate. §4's THIRD AMENDMENT
- *     decision 6 holds an ejected card at `implemented` with NO awaiting gate
- *     precisely so a green at the same head cannot re-ask about commits somebody
- *     already approved; raising one here would be that second ask, arriving from a
- *     different direction. The routes back are Queue again (reuse the decision) and
- *     a PUSH (a new head, a new question) — and neither is the design's. The candidacy check is MOTIR-5604's and
- *     the same-commits check is MOTIR-5632's; both survive as inputs rather than as
+ *     ⚠️ **A FAILED MERGE PUTS THE QUESTION BACK** — §4's FOURTH AMENDMENT, points
+ *     1–2 (MOTIR-5805), which REVERSES the rule MOTIR-5666 wrote here (*"a failed
+ *     merge does not put the question back"*, keyed to *Queue again*). When a
+ *     member carries a merge-queue FAILURE exit standing at its current head, and
+ *     no merge approval was given after that exit, the question is OWED in a
+ *     `manual` project even though the latest merge gate is `approved` at the same
+ *     set version, and even where the design's one-press carry answered it: the
+ *     queue said those commits did not land, so the yes about them landing has not
+ *     been honoured. The DESIGN question is untouched — the design was never the
+ *     problem. The old gate row is never edited or re-decided; the re-ask is
+ *     computed from the exit (`standingFailureExitAt`), not from the approval. A
+ *     PUSH still moves the head, the exit stops standing, and the next green asks
+ *     about the new commits. The candidacy check is MOTIR-5604's and the
+ *     same-commits check is MOTIR-5632's; both survive as inputs rather than as
  *     guards scattered across raisers.
  *  4. **The DESIGN gate is primary** whenever both are owed (Q1). A merge gate owed
  *     alone — after an approval whose merge then failed — leads by itself (Q2).
@@ -284,10 +329,29 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // about new commits. Without this clause the design approval would go on
   // authorising every future green, merging code nobody approved.
   const carriedByDesign = input.designApprovalStandsForMerge && input.latestMergeGate === null;
+  // §4 FOURTH AMENDMENT (MOTIR-5805): a failure exit standing at a member's head
+  // outranks every merge decision made BEFORE it — a decided gate and the design
+  // carry alike. `manual` only: `auto` has no person to ask, and never reaches here.
+  const reaskedByEjection =
+    input.standingFailureExitAt !== null &&
+    input.standingFailureExitAt !== undefined &&
+    failureExitOutranksApproval(
+      { disposition: 'failure', exitedAt: input.standingFailureExitAt },
+      // Any DECISION after the exit answers it — an approval (which re-queues) or a
+      // request for changes (which re-queues nothing and is still an answer).
+      input.latestMergeGate?.decidedAt ?? null,
+    );
   const answered =
-    carriedByDesign || alreadyDecided(input.latestMergeGate, input.workItemId, version, true);
+    !reaskedByEjection &&
+    (carriedByDesign || alreadyDecided(input.latestMergeGate, input.workItemId, version, true));
+  // A member that has already MERGED is settled, not blocking, when an ejection re-asks:
+  // the question is about the commits that did not land (MOTIR-5805). Everywhere else a
+  // merged member still makes the set unmergeable, exactly as MOTIR-5604 wrote it.
   const everyMemberMergeable =
-    input.members.length > 0 && input.members.every((member) => member.isMergeCandidate);
+    input.members.length > 0 &&
+    input.members.every(
+      (member) => member.isMergeCandidate || (reaskedByEjection && member.merged === true),
+    );
   if (input.prMergeMode === 'manual' && !answered && everyMemberMergeable && version !== null) {
     awaited.push({
       kind: 'pull_request_approval',

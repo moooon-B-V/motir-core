@@ -27,6 +27,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
+import { failureExitOutranksApproval } from '@/lib/approvalGates/gateSet';
 import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
 import type {
   ApproveAndMergeMemberOutcomeDTO,
@@ -125,7 +126,9 @@ interface MergeTarget {
 async function checkMember(
   args: { approvalGateId: string; member: MemberVersion },
   ctx: ServiceContext,
-): Promise<{ kind: 'mergeable'; target: MergeTarget } | { kind: 'stale' }> {
+): Promise<
+  { kind: 'mergeable'; target: MergeTarget; approvalDecidedAt: Date | null } | { kind: 'stale' }
+> {
   const { approvalGateId, member } = args;
   return withWorkspaceContext(ctx, async (tx) => {
     const gate = await approvalGateRepository.findById(approvalGateId, tx);
@@ -187,6 +190,7 @@ async function checkMember(
 
     return {
       kind: 'mergeable',
+      approvalDecidedAt: gate.decidedAt,
       target: {
         pullRequestId: pr.id,
         workItemId: gate.workItemId,
@@ -769,6 +773,34 @@ async function mergeMember(
     };
   }
 
+  // ⚠️ APPROVING THE RE-ASKED GATE RE-QUEUES AN EJECTED MEMBER (§4 FOURTH AMENDMENT,
+  // point 3; MOTIR-5805). A member whose latest merge-queue exit still stands at the head
+  // this approval names goes through the SAME path *Queue again* uses — claim the exit
+  // (`requeuedAt`, which lifts the card's red and the promotion hold), merge or enqueue,
+  // and release the claim if the host refuses — so the exit is stamped exactly once and
+  // a refusal leaves it standing to retry. The approval post-dates the exit, so that
+  // path's failure refusal does not fire.
+  const standingExit = await withWorkspaceContext(ctx, async (tx) =>
+    (
+      await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+        [target.pullRequestId],
+        tx,
+      )
+    ).get(target.pullRequestId),
+  );
+  if (
+    standingExit &&
+    standingExit.requeuedAt === null &&
+    standingExit.headSha === target.expectedHeadSha
+  ) {
+    return queueAgainUnderApproval(
+      approvalGateId,
+      member,
+      { workItemId: target.workItemId, exit: standingExit },
+      ctx,
+    );
+  }
+
   try {
     const outcome = await mergeOrEnqueue(approvalGateId, target, ctx);
     return { subjectVersion: member.subjectVersion, pullRequestId: target.pullRequestId, outcome };
@@ -815,12 +847,14 @@ async function queueAgainUnderApproval(
   ctx: ServiceContext,
 ): Promise<ApproveAndMergeMemberOutcome> {
   let target: MergeTarget;
+  let approvalDecidedAt: Date | null;
   try {
     const checked = await checkMember({ approvalGateId, member }, ctx);
     // A moved head: the approval no longer describes the code, so nothing is claimed.
     // The next green verdict raises the fresh question (decision 6).
     if (checked.kind === 'stale') throw new ApprovalGateSupersededError(approvalGateId);
     target = checked.target;
+    approvalDecidedAt = checked.approvalDecidedAt;
   } catch (err) {
     const refusal = memberRefusal(err);
     if (!refusal) throw err;
@@ -832,12 +866,13 @@ async function queueAgainUnderApproval(
     };
   }
 
-  // ⚠️ A FAILURE EXIT IS NOT RE-QUEUED ON THE OLD APPROVAL (MOTIR-5802;
+  // ⚠️ A FAILURE EXIT IS NOT RE-QUEUED ON AN APPROVAL GIVEN BEFORE IT (MOTIR-5802;
   // `approval-gates.md` §4 FOURTH AMENDMENT, point 4). The queue said those commits did
-  // not land, so the yes that approved them has not been honoured: the card is asked
-  // again on a fresh gate, and approving THAT re-queues. Nothing is claimed or written.
+  // not land, so the yes that sent them has not been honoured: the card is asked again
+  // on a fresh gate, and approving THAT re-queues (MOTIR-5805) — through this very
+  // function, whose approval then post-dates the exit. Nothing is claimed or written.
   // (A moved head was answered above: the approval no longer describes the code.)
-  if (args.exit.disposition === 'failure') {
+  if (failureExitOutranksApproval(args.exit, approvalDecidedAt)) {
     return {
       subjectVersion: member.subjectVersion,
       pullRequestId: target.pullRequestId,
