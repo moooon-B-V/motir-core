@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
+  designHoldsMerge,
   resolveGateSet,
   type ExistingGate,
   type GateSetInput,
@@ -362,5 +363,27 @@ describe('resolveGateSet — ONE home, and every trigger goes through it', () =>
         `${file}: ${readFileSync(join(process.cwd(), file), 'utf8').includes('resolveGateSet(')}`,
       ).toBe(`${file}: false`);
     }
+  });
+});
+
+describe('designHoldsMerge — MOTIR-5762: only an approval of the CURRENT result releases the merge', () => {
+  const current = { id: 'ev-2' };
+  const gate = (state: string, subjectId = 'ev-2') => ({ state, subjectId });
+
+  it('a card with no design result is never held', () => {
+    expect(designHoldsMerge(null, null)).toBe(false);
+    expect(designHoldsMerge(null, gate('awaiting'))).toBe(false);
+  });
+
+  it('a result nobody has answered, or one sent back, holds', () => {
+    expect(designHoldsMerge(current, null)).toBe(true);
+    expect(designHoldsMerge(current, gate('awaiting'))).toBe(true);
+    // Sent back is not an OPEN question — `resolveGateSet` asks nothing — and it still holds.
+    expect(designHoldsMerge(current, gate('changes_requested'))).toBe(true);
+  });
+
+  it('an approval of a SUPERSEDED result holds; an approval of the current one releases', () => {
+    expect(designHoldsMerge(current, gate('approved', 'ev-1'))).toBe(true);
+    expect(designHoldsMerge(current, gate('approved'))).toBe(false);
   });
 });
