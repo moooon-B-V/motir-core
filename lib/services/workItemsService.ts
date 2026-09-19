@@ -144,6 +144,7 @@ import {
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
 import { toLinkedPullRequestDto, toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
+import { standingQueueFailures } from './deliveryVerdict';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { amendRepoDeliveryWithSet } from '@/lib/workItems/deliverySet';
@@ -6033,10 +6034,19 @@ export const workItemsService = {
    * access-gated read has already resolved; this adds no tenancy gate of its own.
    */
   async listDeliverySet(workItemId: string, ctx: ServiceContext): Promise<WorkItemDeliveryDto[]> {
-    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx),
-    );
-    return rows.map(toWorkItemDeliveryDto);
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const rows = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
+      // Each member's STANDING queue failure (MOTIR-5720), over ONE read for the set
+      // — the rule is `queueExitHoldsAtHead`, the same one the card's badge, the
+      // promotion hold and the repair claim read.
+      const held = await standingQueueFailures(
+        new Map(rows.map((row) => [row.githubPullRequestId, row.pullRequest])),
+        tx,
+      );
+      return rows.map((row) =>
+        toWorkItemDeliveryDto(row, held.get(row.githubPullRequestId) ?? null),
+      );
+    });
   },
 
   /**

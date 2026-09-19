@@ -586,6 +586,8 @@ export const pullRequestMergeService = {
       if ((await githubPullRequestQueueExitRepository.claimRequeue(exit.id, now, tx)) === 0) {
         throw new ApprovalGateAlreadyRequeuedError(pr.id);
       }
+      // The stamp lifts the queue failure from the card's `ciState` (MOTIR-5717).
+      await queueExitCardMoves.recomputeDeliveredCiState(pr.id, tx);
 
       const moved = await queueExitCardMoves.returnCard(item, 'in_review', ctx, tx, {});
       return { item, exit, moved };
@@ -826,6 +828,9 @@ async function queueAgainUnderApproval(
         tx,
       );
       if (count === 0) throw new ApprovalGateAlreadyRequeuedError(target.pullRequestId);
+      // The stamp lifts the queue failure from every delivered card's `ciState`
+      // (MOTIR-5717); a refused re-enqueue below puts it back.
+      await queueExitCardMoves.recomputeDeliveredCiState(args.exit.pullRequestId, tx);
     });
   } catch (err) {
     const refusal = memberRefusal(err);
@@ -843,9 +848,11 @@ async function queueAgainUnderApproval(
     outcome = await mergeOrEnqueue(approvalGateId, target, ctx);
   } catch (err) {
     // The host said no, or said nothing: the exit is offered again.
-    await withWorkspaceContext(ctx, (tx) =>
-      githubPullRequestQueueExitRepository.releaseRequeue(args.exit.id, claimedAt, tx),
-    );
+    await withWorkspaceContext(ctx, async (tx) => {
+      await githubPullRequestQueueExitRepository.releaseRequeue(args.exit.id, claimedAt, tx);
+      // The exit stands again, and so does the card's red (MOTIR-5717).
+      await queueExitCardMoves.recomputeDeliveredCiState(args.exit.pullRequestId, tx);
+    });
     const refusal = memberRefusal(err);
     if (!refusal) throw err;
     return {

@@ -692,7 +692,7 @@ export interface paths {
         put?: never;
         /**
          * Claim the repair of an Implemented work item’s failing pull requests
-         * @description Hand an `implemented` work item’s RED pull requests to ONE fixing agent, after the run that opened them has ended (`motir fix <key>`). In ONE transaction the item’s row is locked and, in order: an archived item or one not at the Implemented status is `not_repairable` (`not_implemented`); an item whose pull requests belong to a run launched against another item is `not_repairable` (`repair_on_run_target`, naming `runTargetKey`); an item with no pull requests is `no_pull_requests`; an item with no failing OPEN pull request is `ci_running` when one is running, else `not_failing`. Otherwise an open dispatch run with command `fix` already holding the item answers `mine` (yours — a resumed repair, same `runId`) or `taken` (somebody else’s, named with its start), and if there is none a `fix` run is opened: `claimed`. ⚠️ A refusal is a 200 with an `outcome`, not an error. ⚠️ The item’s status and assignee are NEVER written: the open run is the lock, and the build moves the item when it goes green. CLOSE the run (`closeDispatchRun`) when the repair ends.
+         * @description Hand an `implemented` work item’s RED pull requests to ONE fixing agent, after the run that opened them has ended (`motir fix <key>`). In ONE transaction the item’s row is locked and, in order: an archived item or one not at the Implemented status is `not_repairable` (`not_implemented`); an item whose pull requests belong to a run launched against another item is `not_repairable` (`repair_on_run_target`, naming `runTargetKey`); an item with no pull requests is `no_pull_requests`; an item with no failing OPEN pull request is `ci_running` when one is running, else `not_failing`. A pull request the merge queue threw out for a failure that still stands at its current head counts as FAILING whatever its own checks say, and carries `queueExit` (the reason and the queue’s failing check). Otherwise an open dispatch run with command `fix` already holding the item answers `mine` (yours — a resumed repair, same `runId`) or `taken` (somebody else’s, named with its start), and if there is none a `fix` run is opened: `claimed`. ⚠️ A refusal is a 200 with an `outcome`, not an error. ⚠️ The item’s status and assignee are NEVER written: the open run is the lock, and the build moves the item when it goes green. CLOSE the run (`closeDispatchRun`) when the repair ends.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -1375,6 +1375,12 @@ export interface components {
                 ci: ("passing" | "failing" | "running") | null;
                 baseRef: string | null;
                 defaultBranch: string;
+                queueExit: {
+                    rawReason: string;
+                    headSha: string;
+                    failingCheckName: string | null;
+                    failingCheckUrl: string | null;
+                } | null;
             }[];
         };
         WorkItemLinkGroups: {
@@ -1771,6 +1777,14 @@ export interface components {
                 baseRef: string | null;
                 ci: ("passing" | "failing" | "running") | null;
                 failingChecks: string[];
+                queueExit: {
+                    rawReason: string;
+                    /** Format: date-time */
+                    exitedAt: string;
+                    headSha: string;
+                    failingCheckName: string | null;
+                    failingCheckUrl: string | null;
+                } | null;
             }[];
         };
         ScopeClaim: {

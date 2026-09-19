@@ -165,6 +165,9 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'launched against another item is `not_repairable` (`repair_on_run_target`, naming ' +
       '`runTargetKey`); an item with no pull requests is `no_pull_requests`; an item with no ' +
       'failing OPEN pull request is `ci_running` when one is running, else `not_failing`. ' +
+      'A pull request the merge queue threw out for a failure that still stands at its ' +
+      'current head counts as FAILING whatever its own checks say, and carries `queueExit` ' +
+      '(the reason and the queue\u2019s failing check). ' +
       'Otherwise an open dispatch run with command `fix` already holding the item answers ' +
       '`mine` (yours \u2014 a resumed repair, same `runId`) or `taken` (somebody else\u2019s, ' +
       'named with its start), and if there is none a `fix` run is opened: `claimed`. ' +

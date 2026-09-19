@@ -1,11 +1,13 @@
-import type { GithubCheckRun, Prisma } from '@/generated/prisma/client';
-import { derivePrCiState, type PrCiState } from '@/lib/github/prCiState';
+import type { GithubCheckRun, GithubPullRequestQueueExit, Prisma } from '@/generated/prisma/client';
+import { derivePrCiState, liveRowsAtLatestSha, type PrCiState } from '@/lib/github/prCiState';
+import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
   deliveryStateForCard,
   foldCardCiState,
+  queueExitHoldsAtHead,
   repoCannotReportChecks,
 } from '@/lib/workItems/deliverySet';
 
@@ -75,6 +77,34 @@ export async function collectDeliveries(
   return byId;
 }
 
+/**
+ * WHICH members of a delivery set a merge-queue failure still HOLDS (MOTIR-5717) —
+ * each held member's pull-request id mapped to the exit row that holds it, over ONE
+ * read of the set's latest exits.
+ *
+ * The rule itself is {@link queueExitHoldsAtHead}; this is only its transaction-
+ * scoped wrapper, so the promotion hold, the card's fold and the repair claim read
+ * the exits the same way as well as judging them the same way. It returns the ROW,
+ * not only the id, because the repair claim hands the agent the exit's reason and
+ * failing check (MOTIR-5719). A set with no exit at all — nearly every card — costs
+ * one indexed read and returns an empty map.
+ */
+export async function standingQueueFailures(
+  byId: ReadonlyMap<string, { checkRuns: readonly GithubCheckRun[] }>,
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, GithubPullRequestQueueExit>> {
+  const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+    [...byId.keys()],
+    tx,
+  );
+  const held = new Map<string, GithubPullRequestQueueExit>();
+  for (const [pullRequestId, exit] of exits) {
+    const head = liveRowsAtLatestSha([...byId.get(pullRequestId)!.checkRuns])[0]?.commitSha;
+    if (queueExitHoldsAtHead(exit, head)) held.set(pullRequestId, exit);
+  }
+  return held;
+}
+
 /** One classified member of a card's delivery set: the verdict its own check rows
  *  give, plus whether its repository is able to report a check at all. */
 export interface ClassifiedDelivery {
@@ -84,6 +114,10 @@ export interface ClassifiedDelivery {
   /** True when a `null` state means "this repository has no CI" rather than
    *  "nothing has reported yet" (`repoCannotReportChecks`). */
   cannotReport: boolean;
+  /** True when this member's latest merge-queue exit still holds it
+   *  ({@link standingQueueFailures}) — a failure the pull request's OWN `state`
+   *  cannot show, because the queue failed on its merge group (MOTIR-5717). */
+  queueFailure: boolean;
 }
 
 /**
@@ -107,15 +141,17 @@ export async function classifyDeliveries(
 ): Promise<ClassifiedDelivery[]> {
   const byId = await collectDeliveries(item, tx);
 
-  const members = [...byId.values()].map((pr) => ({
+  const members = [...byId.entries()].map(([id, pr]) => ({
+    id,
     repoId: pr.repoId,
     state: derivePrCiState(pr.checkRuns),
   }));
 
   const silentRepoIds = [...new Set(members.filter((m) => m.state === null).map((m) => m.repoId))];
-  const [reporting, mergedSilent] = await Promise.all([
+  const [reporting, mergedSilent, queueHeld] = await Promise.all([
     githubPullRequestRepository.listRepoIdsWithAnyCheckRun(silentRepoIds, tx),
     githubPullRequestRepository.listRepoIdsWithAWatchedMergeWithoutChecks(silentRepoIds, tx),
+    standingQueueFailures(byId, tx),
   ]);
   const hasReported = new Set(reporting);
   const hasMergedSilently = new Set(mergedSilent);
@@ -138,6 +174,7 @@ export async function classifyDeliveries(
     repoId: m.repoId,
     state: m.state,
     cannotReport: cannotReport.has(m.repoId),
+    queueFailure: queueHeld.has(m.id),
   }));
 }
 
@@ -194,7 +231,7 @@ export async function recomputeWorkItemCiState(
 
   const members = await classifyDeliveries({ id: item.id, sessionBranch: item.sessionBranch }, tx);
   const ciState = foldCardCiState(
-    members.map((m) => deliveryStateForCard(m.state, m.cannotReport)),
+    members.map((m) => deliveryStateForCard(m.state, m.cannotReport, m.queueFailure)),
   );
 
   // Idempotent: an unchanged verdict writes nothing. A check event that moves no

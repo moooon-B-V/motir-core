@@ -10,7 +10,10 @@ import type { RepairPullRequestRefDto, WorkItemRepairViewDto } from '@/lib/dto/w
 import { formatRunInstant } from '@/lib/runs/runClock';
 
 // THE FIX PART of the Development block (Story MOTIR-5460 · MOTIR-5466), built to
-// `design/github/design-notes.md` § 21 · Panels F1–F4.
+// `design/github/design-notes.md` § 21 · Panels F1–F4, and § 26 · Panels X1–X5 for an
+// EJECTED card (Story MOTIR-5628 · MOTIR-5721): a member failing only because the
+// merge queue threw it out is named on the left-the-queue line, and the offer
+// state adds the sentence that says whether *Queue again* or `motir fix` applies.
 //
 // ⚠️ A FLUSH PART, NOT A BOX. It is the card's own region under a soft rule with
 // an `h4`, the grammar How to test uses directly below it — a container does not
@@ -38,7 +41,33 @@ export function relativeLabel(iso: string, locale: string, now: number): string 
 
 const bold = (chunks: ReactNode) => <b className="font-semibold whitespace-nowrap">{chunks}</b>;
 
-function FailingLine({ failing }: { failing: RepairPullRequestRefDto[] }) {
+/**
+ * A member failing ONLY because the merge queue threw it out — its own checks are
+ * not red, and it carries a standing exit (§ 26's show-when rule, MOTIR-5721). It
+ * is named on the left-the-queue line, because *Checks are failing* would be false.
+ */
+function isEjectedOnly(pr: RepairPullRequestRefDto): boolean {
+  return pr.queueExit !== null && pr.ci !== 'failing';
+}
+
+/** Which of § 26's three sentences applies. A conflict wins: *Queue again*
+ *  cannot land that member, whatever the others need. */
+function whichVariant(
+  ejected: readonly RepairPullRequestRefDto[],
+): 'conflict' | 'checks' | 'other' {
+  const reasons = ejected.map((pr) => pr.queueExit!.rawReason);
+  if (reasons.includes('MERGE_CONFLICT')) return 'conflict';
+  if (reasons.some((r) => r === 'CI_FAILURE' || r === 'CI_TIMEOUT')) return 'checks';
+  return 'other';
+}
+
+function PrLine({
+  failing,
+  message,
+}: {
+  failing: RepairPullRequestRefDto[];
+  message: 'failingOn' | 'leftQueueOn';
+}) {
   const t = useTranslations('github.development.fix');
   const locale = useLocale();
   // Each pull request is named as its row's meta line names it, bold and never
@@ -57,7 +86,34 @@ function FailingLine({ failing }: { failing: RepairPullRequestRefDto[] }) {
   return (
     <p className="flex items-start gap-2 text-[13px] leading-normal text-(--el-text)">
       <CircleX className="mt-0.5 h-4 w-4 shrink-0 text-(--el-danger-on-surface)" aria-hidden />
-      <span>{t.rich('failingOn', { prs: () => list })}</span>
+      <span>{t.rich(message, { prs: () => list })}</span>
+    </p>
+  );
+}
+
+/** The own-checks line and the left-the-queue line — both when the set holds
+ *  both kinds, own-failing first (§ 26). */
+function FailingLines({ failing }: { failing: RepairPullRequestRefDto[] }) {
+  const own = failing.filter((pr) => !isEjectedOnly(pr));
+  const ejected = failing.filter(isEjectedOnly);
+  return (
+    <>
+      {own.length > 0 ? <PrLine failing={own} message="failingOn" /> : null}
+      {ejected.length > 0 ? <PrLine failing={ejected} message="leftQueueOn" /> : null}
+    </>
+  );
+}
+
+/** The WHICH-TO-USE sentence (§ 26): under the command, in the offer state only,
+ *  when a member is failing because the queue threw it out. */
+function WhichToUse({ ejected }: { ejected: RepairPullRequestRefDto[] }) {
+  const t = useTranslations('github.development.fix');
+  return (
+    <p className="text-xs leading-normal text-(--el-text-secondary)" data-testid="repair-which">
+      {t.rich(`which.${whichVariant(ejected)}`, {
+        b: (chunks) => <b className="font-semibold text-(--el-text)">{chunks}</b>,
+        code: (chunks) => <span className="font-mono">{chunks}</span>,
+      })}
     </p>
   );
 }
@@ -126,7 +182,7 @@ export function RepairFixPart({
         <h4 className="text-[13px] font-semibold text-(--el-text)">{t('title')}</h4>
         {pill}
       </div>
-      <FailingLine failing={repair.failing} />
+      <FailingLines failing={repair.failing} />
 
       {repair.state === 'in_progress' ? (
         <>
@@ -173,6 +229,9 @@ export function RepairFixPart({
             </div>
           ) : null}
           <Command itemIdentifier={itemIdentifier} many={repair.failing.length > 1} />
+          {repair.failing.some(isEjectedOnly) ? (
+            <WhichToUse ejected={repair.failing.filter(isEjectedOnly)} />
+          ) : null}
         </>
       ) : null}
 

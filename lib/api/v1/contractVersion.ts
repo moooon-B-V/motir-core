@@ -482,5 +482,34 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.32.0` at `6471cac0f`, so this claims `1.33.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATIONS.
+ *
+ * - `1.34.0` — MOTIR-5719 adds `queueExit` to `WorkItemRepairClaim.pullRequests[]`:
+ *   the repair claim now counts a pull request the merge queue threw out for a
+ *   standing failure as FAILING (so `motir fix` can take an ejected card instead of
+ *   being refused `not_failing`), and tells the agent why — the queue's reason and
+ *   its failing check, both null-able for a conflict.
+ *
+ *   Additive: one new nullable field on an existing resource (§8's allowed list).
+ *   No refusal name changes; `ci` keeps its meaning (the pull request's OWN
+ *   verdict) and may now read `passing` beside a set `queueExit`. Gated on the
+ *   same `work_item:edit`; the grant is NOT widened.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.33.0` at `bbbe8d9b0`, so this claims `1.34.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.35.0` — MOTIR-5720 adds `queueExit` to `WorkItemDetail.deliveries[]`: a
+ *   delivering pull request whose latest merge-queue exit is a failure, not
+ *   re-queued, at its current head carries the exit's reason and failing check.
+ *   The server decides "standing"; `ci` keeps the pull request's own verdict. It
+ *   is what lets `motir fix` see an ejected pull request as red — its own checks
+ *   are green, so the watch loop used to call it green and never run the agent.
+ *
+ *   Additive: one new nullable field on an existing shape (§8's allowed list); no
+ *   declared field changes meaning. Read-only, on the same `project:browse` read.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.35.0` over
+ *   MOTIR-5719's `1.34.0` on the same parent branch. If the numbering has moved,
+ *   RENUMBER both entries.
  */
-export const V1_CONTRACT_VERSION = '1.33.0';
+export const V1_CONTRACT_VERSION = '1.35.0';

@@ -526,11 +526,28 @@ const repairPullRequestSchema = z.object({
   /** The branch the pull request targets; the agent merges it first. Null on a
    *  row mirrored before base branches were recorded. */
   baseRef: z.string().nullable(),
-  /** From `derivePrCiState`, the verdict the Development pill shows. */
+  /** From `derivePrCiState`, the verdict the Development pill shows — the pull
+   *  request's OWN checks. It may be `passing` when `queueExit` is set: the merge
+   *  queue failed on its merge group, not on its own checks. */
   ci: z.enum(['passing', 'failing', 'running']).nullable(),
   /** The checks failing at that verdict's commit, by name, sorted. A repair that
    *  gives up re-claims (`mine`) and names these. */
   failingChecks: z.array(z.string()),
+  /** The standing merge-queue FAILURE that makes this pull request failing, or
+   *  null. Set exactly when its latest queue exit is a failure, not re-queued, at
+   *  its current head (MOTIR-5719). */
+  queueExit: z
+    .object({
+      /** GitHub's own reason — `CI_FAILURE`, `CI_TIMEOUT`, `MERGE_CONFLICT`, … */
+      rawReason: z.string(),
+      exitedAt: z.string().datetime(),
+      /** The head the queue tested — the pull request's current head. */
+      headSha: z.string(),
+      /** The queue's failing check; both null when none is known (a conflict). */
+      failingCheckName: z.string().nullable(),
+      failingCheckUrl: z.string().nullable(),
+    })
+    .nullable(),
 });
 
 /**
@@ -582,6 +599,16 @@ export function presentWorkItemRepairClaim(dto: WorkItemRepairClaimDto): V1WorkI
       baseRef: pr.baseRef,
       ci: pr.ci,
       failingChecks: [...pr.failingChecks],
+      queueExit:
+        pr.queueExit === null
+          ? null
+          : {
+              rawReason: pr.queueExit.rawReason,
+              exitedAt: pr.queueExit.exitedAt,
+              headSha: pr.queueExit.headSha,
+              failingCheckName: pr.queueExit.failingCheckName,
+              failingCheckUrl: pr.queueExit.failingCheckUrl,
+            },
     })),
   };
 }

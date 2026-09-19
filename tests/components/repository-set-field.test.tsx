@@ -57,6 +57,7 @@ function delivery(
     },
     baseRef,
     defaultBranch,
+    queueExit: null,
   };
 }
 

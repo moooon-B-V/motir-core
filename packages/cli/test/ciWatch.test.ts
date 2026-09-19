@@ -3,9 +3,11 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CI_FIX_ATTEMPTS,
+  NOTHING_TO_CHANGE_DETAIL,
   ciVerdict,
   failingDeliveries,
   pluralize,
+  queueReasonInWords,
   renderFixPrompt,
   runCiWatchPhase,
   watchAndFixCi,
@@ -644,5 +646,109 @@ describe('there is exactly ONE CI verdict, and it is the server’s', () => {
     expect(text).not.toContain('execCommand');
     expect(text).not.toContain('spawnSync');
     expect(text).not.toContain("from './git.js'");
+  });
+});
+
+// ── AN EJECTED PULL REQUEST IS RED (Story MOTIR-5628 · MOTIR-5720) ───────────────
+//
+// The merge queue failed on the pull request's MERGE GROUP, so its own `ci` is
+// `passing` — and this loop used to call it green on the first poll, with 0
+// attempts, and never run the agent. The server now publishes the standing exit on
+// the delivery, and the loop reads it.
+
+describe('a STANDING merge-queue failure (MOTIR-5720)', () => {
+  const exit = (over: Partial<NonNullable<WorkItemDelivery['queueExit']>> = {}) => ({
+    rawReason: 'CI_FAILURE',
+    headSha: 'sha-a',
+    failingCheckName: 'Merge queue / e2e',
+    failingCheckUrl: 'https://github.com/moooon/motir-core/runs/77',
+    ...over,
+  });
+  const ejected = (over: Partial<NonNullable<WorkItemDelivery['queueExit']>> = {}) =>
+    delivery({ ci: 'passing', queueExit: exit(over) });
+
+  it('the verdict: passing + queueExit is RED, passing + null is GREEN', () => {
+    expect(ciVerdict([ejected()])).toBe('red');
+    expect(ciVerdict([delivery({ ci: 'passing', queueExit: null })])).toBe('green');
+    // An older Motir sends no field at all — read as no standing failure.
+    expect(ciVerdict([delivery({ ci: 'passing' })])).toBe('green');
+    expect(failingDeliveries([ejected(), delivery({ ci: 'passing' })])).toHaveLength(1);
+  });
+
+  it('the loop RUNS the agent on an ejected delivery instead of calling it green', async () => {
+    const { outcome, fixes } = await drive([
+      [ejected()],
+      [delivery({ ci: 'running', queueExit: null })],
+      [delivery({ ci: 'passing', queueExit: null })],
+    ]);
+    expect(fixes).toBe(1);
+    expect(outcome).toEqual({ kind: 'green', attempts: 1 });
+  });
+
+  it('an attempt that pushes NOTHING ends after ONE attempt, pointing at Queue again', async () => {
+    const { outcome, fixes, lines } = await drive([[ejected()]]);
+    expect(fixes).toBe(1);
+    expect(outcome).toEqual({ kind: 'fix_failed', attempts: 1, detail: NOTHING_TO_CHANGE_DETAIL });
+    expect(lines.at(-1)).toContain('Queue again');
+  });
+
+  it('a push whose first check lands a poll late still goes on — one unchanged poll is grace', async () => {
+    const { outcome, fixes } = await drive([
+      [ejected()],
+      // The push happened, but its first pending check has not arrived yet, so
+      // the server still reads the old head.
+      [ejected()],
+      [delivery({ ci: 'running', queueExit: null })],
+      [delivery({ ci: 'passing', queueExit: null })],
+    ]);
+    expect(fixes).toBe(1);
+    expect(outcome).toEqual({ kind: 'green', attempts: 1 });
+  });
+
+  it('a queue failure BESIDE an own-checks failure is ordinary red, not an early stop', async () => {
+    const { outcome, fixes } = await drive([[ejected(), delivery({ number: 2, ci: 'failing' })]]);
+    expect(fixes).toBe(CI_FIX_ATTEMPTS);
+    expect(outcome.kind).toBe('gave_up');
+  });
+
+  it('the prompt says why it left the queue, names the check, and for a CONFLICT says to merge the base', () => {
+    const failing = [
+      ejected(),
+      delivery({
+        number: 2,
+        url: 'https://github.com/moooon/motir-core/pull/2',
+        baseRef: 'parent/PROD-2',
+        ci: 'passing',
+        queueExit: exit({
+          rawReason: 'MERGE_CONFLICT',
+          failingCheckName: null,
+          failingCheckUrl: null,
+        }),
+      }),
+    ];
+    const prompt = renderFixPrompt({ key: 'PROD-1', title: 'A card', failing, attempt: 1 });
+
+    expect(prompt).toContain('## Why it left the merge queue');
+    expect(prompt).toContain(queueReasonInWords('CI_FAILURE'));
+    expect(prompt).toContain('https://github.com/moooon/motir-core/runs/77');
+    expect(prompt).toContain('Merge queue / e2e');
+    expect(prompt).toContain(queueReasonInWords('MERGE_CONFLICT'));
+    expect(prompt).toContain('Merge `origin/parent/PROD-2` into the branch, resolve the conflicts');
+    expect(prompt).toContain('make NO commit and say so');
+    expect(prompt).toContain('*Queue again*');
+  });
+
+  it('a pull request with no queue exit gets the prompt it always got', () => {
+    const prompt = renderFixPrompt({
+      key: 'PROD-1',
+      title: null,
+      failing: [delivery({ ci: 'failing', queueExit: null })],
+      attempt: 1,
+    });
+    expect(prompt).not.toContain('Why it left the merge queue');
+  });
+
+  it('an unrecognised reason still reads as something', () => {
+    expect(queueReasonInWords('SOMETHING_NEW')).toContain('SOMETHING_NEW');
   });
 });

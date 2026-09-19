@@ -14,6 +14,7 @@ import {
   OptimisticStatusProvider,
   useDisplayedStatus,
 } from '@/app/(authed)/items/[key]/_components/OptimisticStatusProvider';
+import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import type {
   ApprovalGateDTO,
   PullRequestApprovalMemberDTO,
@@ -449,5 +450,138 @@ describe('the catalog', () => {
     expect(Object.keys(z.exit).sort()).toEqual(Object.keys(pra.exit).sort());
     expect(Object.keys(z.exit.reason).sort()).toEqual(Object.keys(pra.exit.reason).sort());
     expect(Object.keys(z.requeue).sort()).toEqual(Object.keys(pra.requeue).sort());
+  });
+});
+
+// ── `motir fix` BESIDE Queue again (Story MOTIR-5628 · MOTIR-5721; design § 26, X1–X4) ─
+//
+// The repair view the page reads carries, per failing member, its own `ci` and its
+// standing `queueExit` (MOTIR-5719). A member failing ONLY because the queue threw it
+// out is named on the left-the-queue line, and the offer state adds the sentence that
+// says whether *Queue again* or `motir fix` applies. Queue again itself is untouched.
+
+describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', () => {
+  const fixMsg = en.github.development.fix;
+  const FIX_TAGS = ['<b>', '</b>', '<code>', '</code>', '<prs></prs>'] as const;
+  const sentence = (text: string) => FIX_TAGS.reduce((out, tag) => out.split(tag).join(''), text);
+  const ejectedRef = (rawReason = 'CI_FAILURE') => ({
+    repo: 'moooon/motir-gateway',
+    number: 57,
+    ci: 'passing' as const,
+    queueExit: { rawReason, failingCheckName: 'CI complete' },
+  });
+  const offer = (rawReason?: string): WorkItemRepairViewDto => ({
+    state: 'offer',
+    failing: [ejectedRef(rawReason)],
+    lastGaveUp: null,
+  });
+  const fixPart = () => screen.getByRole('group', { name: fixMsg.aria.part });
+
+  function renderWithRepair(
+    repair: WorkItemRepairViewDto,
+    exitOver: Partial<PullRequestQueueExitDTO> = {},
+    locale?: { locale: string; messages: Record<string, unknown> },
+  ) {
+    return render(
+      <OptimisticStatusProvider serverStatus="implemented">
+        <DevelopmentSectionBody
+          pullRequests={[{ ...CORE_PR, state: 'merged' }, GATEWAY_PR]}
+          itemIdentifier="ACME-12"
+          manualLinkable
+          howToTest={STORY}
+          repair={repair}
+          mergeGate={{
+            gate: APPROVED,
+            canDecide: true,
+            routedToLabel: null,
+            stamp: 'v1.stamp-on-screen',
+            members: members({ exit: exit(exitOver) }),
+          }}
+          gateActions={fakeActions()}
+        />
+      </OptimisticStatusProvider>,
+      locale,
+    );
+  }
+
+  it('X1 · failed checks: Left the queue + Queue again on the row, and the fix part with the left-the-queue line, the command and the checks sentence', () => {
+    renderWithRepair(offer());
+    expect(within(gatewayRow()).getByText(pra.outcome.leftQueue)).toBeTruthy();
+    expect(queueAgain()).toBeTruthy();
+    const part = fixPart();
+    expect(part.textContent).toContain(`${GATEWAY_NAME} left the merge queue.`);
+    expect(part.textContent).not.toContain('Checks are failing');
+    expect(part.textContent).toContain('motir fix ACME-12');
+    expect(within(part).getByTestId('repair-which').textContent).toBe(
+      sentence(fixMsg.which.checks),
+    );
+  });
+
+  it('X2 · a merge conflict: the conflict sentence, and Queue again is still offered', () => {
+    renderWithRepair(offer('MERGE_CONFLICT'), {
+      rawReason: 'MERGE_CONFLICT',
+      failingCheckName: null,
+      failingCheckUrl: null,
+    });
+    expect(queueAgain()).toBeTruthy();
+    expect(within(fixPart()).getByTestId('repair-which').textContent).toBe(
+      sentence(fixMsg.which.conflict),
+    );
+  });
+
+  it('X4 · a repair in progress: no command and no sentence, and Queue again is still offered', () => {
+    renderWithRepair({
+      state: 'in_progress',
+      failing: [ejectedRef()],
+      holder: { id: 'u-2', name: 'Mara S.' },
+      byViewer: false,
+      startedAt: '2026-09-15T15:10:00.000Z',
+    });
+    expect(queueAgain()).toBeTruthy();
+    const part = fixPart();
+    expect(part.textContent).toContain(`${GATEWAY_NAME} left the merge queue.`);
+    expect(part.textContent).not.toContain('motir fix');
+    expect(within(part).queryByTestId('repair-which')).toBeNull();
+  });
+
+  it('the sentence has an exact zh twin', () => {
+    renderWithRepair(offer(), {}, { locale: 'zh', messages: zh });
+    const zhPart = screen.getByRole('group', { name: zh.github.development.fix.aria.part });
+    expect(within(zhPart).getByTestId('repair-which').textContent).toBe(
+      sentence(zh.github.development.fix.which.checks),
+    );
+  });
+
+  it('X3 · auto mode: no frame, and the fix part comes BEFORE the Merge queue part, as the shipped body renders it', () => {
+    render(
+      <OptimisticStatusProvider serverStatus="implemented">
+        <DevelopmentSectionBody
+          pullRequests={[GATEWAY_PR]}
+          itemIdentifier="ACME-12"
+          manualLinkable
+          howToTest={STORY}
+          repair={offer()}
+          autoQueueExits={{
+            workItemId: 'item-1',
+            canEdit: true,
+            queueAgain: vi.fn(),
+            exits: [
+              {
+                pullRequestId: GATEWAY_PR.id,
+                repo: 'moooon/motir-gateway',
+                number: 57,
+                exit: exit(),
+                requeueable: true,
+              },
+            ],
+          }}
+        />
+      </OptimisticStatusProvider>,
+    );
+    const queuePart = screen.getByRole('group', { name: pra.exit.partTitle });
+    const part = fixPart();
+    expect(part.compareDocumentPosition(queuePart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(part).getByTestId('repair-which')).toBeTruthy();
+    expect(screen.queryByRole('group', { name: en.approvalGate.port.label })).toBeNull();
   });
 });

@@ -228,7 +228,7 @@ describe('hasOpenPullRequest — the condition the slot is shown on', () => {
     expect(
       hasOpenPullRequest(
         [merged],
-        [{ pullRequest: GATEWAY_PR, baseRef: 'main', defaultBranch: 'main' }],
+        [{ pullRequest: GATEWAY_PR, baseRef: 'main', defaultBranch: 'main', queueExit: null }],
       ),
     ).toBe(true);
   });

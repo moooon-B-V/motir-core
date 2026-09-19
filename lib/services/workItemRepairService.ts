@@ -14,6 +14,7 @@ import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
+import { standingQueueFailures } from '@/lib/services/deliveryVerdict';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -109,12 +110,26 @@ async function evaluate(
   // cannot change a merged or closed pull request, so its colour says nothing
   // about what an agent could do.
   const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
-  const open = deliveries
-    .filter((d) => d.pullRequest.state === 'open' && !d.pullRequest.merged)
-    .map((d) => ({ row: d, ci: derivePrCiState(d.pullRequest.checkRuns) }));
+  const openRows = deliveries.filter(
+    (d) => d.pullRequest.state === 'open' && !d.pullRequest.merged,
+  );
+  // ⚠️ A STANDING MERGE-QUEUE FAILURE IS A FAILING MEMBER (MOTIR-5719). The queue
+  // ejected the pull request on its merge group, so its own checks are usually
+  // green — and a repair it needs (a conflict above all) was refused `not_failing`.
+  // The rule is the fold's and the promotion hold's (`queueExitHoldsAtHead`, read
+  // through `standingQueueFailures`), never re-derived here.
+  const queueHeld = await standingQueueFailures(
+    new Map(openRows.map((d) => [d.pullRequest.id, d.pullRequest])),
+    tx,
+  );
+  const open = openRows.map((d) => ({
+    row: d,
+    ci: derivePrCiState(d.pullRequest.checkRuns),
+    exit: queueHeld.get(d.pullRequest.id) ?? null,
+  }));
   const failing: RepairPullRequestDto[] = open
-    .filter((m) => m.ci === 'failing')
-    .map(({ row, ci }) => ({
+    .filter((m) => m.ci === 'failing' || m.exit !== null)
+    .map(({ row, ci, exit }) => ({
       repo: `${row.repo.owner}/${row.repo.name}`,
       number: row.pullRequest.number,
       url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.pullRequest.number}`,
@@ -130,6 +145,16 @@ async function evaluate(
             .map((c) => c.checkName),
         ),
       ].sort(),
+      queueExit:
+        exit === null
+          ? null
+          : {
+              rawReason: exit.rawReason,
+              exitedAt: exit.exitedAt.toISOString(),
+              headSha: exit.headSha,
+              failingCheckName: exit.failingCheckName,
+              failingCheckUrl: exit.failingCheckUrl,
+            },
     }));
 
   // The repair runs where the run that delivered the pull requests was launched.
@@ -165,7 +190,15 @@ function attemptsOf(data: unknown): number | null {
   return typeof attempts === 'number' && Number.isInteger(attempts) ? attempts : null;
 }
 
-const refOf = (pr: RepairPullRequestDto) => ({ repo: pr.repo, number: pr.number });
+const refOf = (pr: RepairPullRequestDto) => ({
+  repo: pr.repo,
+  number: pr.number,
+  ci: pr.ci,
+  queueExit:
+    pr.queueExit === null
+      ? null
+      : { rawReason: pr.queueExit.rawReason, failingCheckName: pr.queueExit.failingCheckName },
+});
 
 export const workItemRepairService = {
   /**

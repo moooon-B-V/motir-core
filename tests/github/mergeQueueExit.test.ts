@@ -37,6 +37,8 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
+import { derivePrCiState } from '@/lib/github/prCiState';
+import { workItemCiStateBackfillService } from '@/lib/services/workItemCiStateBackfillService';
 
 // THE EJECTION ARM (Story MOTIR-5461 · MOTIR-5632; `docs/decisions/approval-gates.md`
 // §4 THIRD AMENDMENT, decisions 1–4, 6 and 9), on a REAL Postgres, through the real
@@ -671,5 +673,129 @@ describe('a DESIGN card the queue ejects', () => {
     expect(
       await adminDb.approvalGate.findUniqueOrThrow({ where: { id: design.gate.id } }),
     ).toMatchObject({ state: 'approved', supersededCause: null });
+  });
+});
+
+// ── THE CARD'S BADGE COUNTS THE EXIT (Story MOTIR-5628 · MOTIR-5717) ─────────────
+//
+// The pull request's OWN checks stay green through an ejection — the queue failed on
+// its merge group — so the card's `ciState`, folded from those checks alone, read
+// `passing` on a card the promotion refuses. The fold now reads the same
+// `queueExitHoldsAtHead` rule the hold does, and the exit write recomputes it.
+
+describe('an ejected card reads RED (MOTIR-5717)', () => {
+  const ciStateOf = async (id: string) =>
+    (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).ciState;
+  const ownVerdict = async (number: number) =>
+    derivePrCiState(
+      await adminDb.githubCheckRun.findMany({ where: { pullRequestId: (await pr(number)).id } }),
+    );
+  /** A PENDING check at a new commit — the shipped pending arm, as a push produces. */
+  const pending = (number: number, headSha: string) =>
+    githubWebhookService.handleEvent('check_run', {
+      action: 'created',
+      installation: INSTALLATION,
+      repository: { id: Number(REPO_PROVIDER_ID) },
+      check_run: {
+        head_sha: headSha,
+        status: 'in_progress',
+        conclusion: null,
+        name: 'build',
+        check_suite: { head_branch: null },
+        pull_requests: [{ number }],
+      },
+    });
+
+  it('a failure exit makes the card failing while the pull request’s own verdict stays passing', async () => {
+    const { item } = await approvedAndQueued('red-fail@example.com');
+    expect(await ciStateOf(item.id)).toBe('passing');
+
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-red-1');
+
+    expect(await ciStateOf(item.id)).toBe('failing');
+    // Guard (a): the pull request's own verdict — the pill, the promotion's green
+    // test — is NOT touched by the queue.
+    expect(await ownVerdict(11)).toBe('passing');
+  });
+
+  it('a card skipped as not_enqueued_status turns red too', async () => {
+    const { s, item } = await approvedAndQueued('red-skipped@example.com');
+    const other = await card(s, 'Also delivered, still being worked', []);
+    const row = await pr(11);
+    await adminDb.workItemDelivery.create({
+      data: {
+        workspaceId: s.workspace.id,
+        workItemId: other.id,
+        githubPullRequestId: row.id,
+        repoId: row.repoId,
+      },
+    });
+
+    const result = await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }),
+      'guid-red-2',
+    );
+
+    expect(result).toMatchObject({
+      skipped: [{ key: other.identifier, reason: 'not_enqueued_status' }],
+    });
+    expect(await statusOf(other.id)).toBe('in_progress');
+    expect(await ciStateOf(other.id)).toBe('failing');
+    expect(await ciStateOf(item.id)).toBe('failing');
+  });
+
+  it('a neutral exit leaves the card at its own verdict', async () => {
+    const { item } = await approvedAndQueued('red-neutral@example.com');
+    await eject(dequeued('dequeued-manual', { number: 11, headSha: 'sha-a' }), 'guid-red-neutral');
+    expect((await exits(11))[0]).toMatchObject({ disposition: 'neutral' });
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('a failure exit recorded at an OLD head contributes the member’s own verdict', async () => {
+    const { item } = await approvedAndQueued('red-old-head@example.com');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-before' }),
+      'guid-red-old',
+    );
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('a pending check at a NEW head moves the card from failing to running', async () => {
+    const { item } = await approvedAndQueued('red-push@example.com');
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-red-3');
+    expect(await ciStateOf(item.id)).toBe('failing');
+
+    await pending(11, 'sha-a2');
+
+    // The exit names `sha-a`; the head is now `sha-a2`, so the hold has lifted and
+    // the member reads its own (pending) verdict.
+    expect(await ciStateOf(item.id)).toBe('running');
+  });
+
+  it('a further green check at the SAME head keeps the card red and does not promote it', async () => {
+    const { item } = await approvedAndQueued('red-same-head@example.com');
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-red-4');
+
+    await laterCheck(11, 'sha-a', 'lint');
+
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await ciStateOf(item.id)).toBe('failing');
+  });
+
+  it('the backfill dry run predicts what the apply writes for an ejected card', async () => {
+    const { item } = await approvedAndQueued('red-backfill@example.com');
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-red-5');
+    // A card ejected BEFORE this change shipped: its stored verdict is still green.
+    await adminDb.workItem.update({ where: { id: item.id }, data: { ciState: 'passing' } });
+
+    const rehearsal = await workItemCiStateBackfillService.backfillCiState({ dryRun: true });
+    expect(rehearsal.changed).toEqual([
+      { workItemId: item.id, identifier: item.identifier, from: 'passing', to: 'failing' },
+    ]);
+    expect(await ciStateOf(item.id)).toBe('passing');
+
+    const real = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
+    expect(real.changed).toEqual(rehearsal.changed);
+    expect(await ciStateOf(item.id)).toBe('failing');
   });
 });

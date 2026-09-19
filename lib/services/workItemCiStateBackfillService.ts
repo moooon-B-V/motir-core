@@ -183,7 +183,7 @@ export const workItemCiStateBackfillService = {
               tx,
             );
             const to = foldCardCiState(
-              members.map((m) => deliveryStateForCard(m.state, m.cannotReport)),
+              members.map((m) => deliveryStateForCard(m.state, m.cannotReport, m.queueFailure)),
             );
             return { kind: 'decided' as const, identifier: item.identifier, from, to };
           }

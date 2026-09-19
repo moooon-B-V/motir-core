@@ -4,6 +4,7 @@ import { workItemRepairClaimSchema } from '@/lib/api/v1/workLoop/schema';
 import { findV1Operation } from '@/lib/api/v1/openapi/registry';
 import { createTestWorkItem } from '../../fixtures';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { connectRepairRepo, deliveredPr, setStatus } from '../../helpers/repairFixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
@@ -67,6 +68,46 @@ describe('POST /api/v1/work-items/{key}/repair', () => {
     expect(parsed.data?.runId).toEqual(expect.any(String));
     expect(parsed.data?.pullRequests).toEqual([
       expect.objectContaining({ repo: 'acme/web', headRef: 'subtask/red', ci: 'failing' }),
+    ]);
+  });
+
+  it('an EJECTED card whose own checks are green is claimed, and `queueExit` PARSES (MOTIR-5719)', async () => {
+    const card = await createTestWorkItem(caller.fixture, { kind: 'task', title: 'Ejected' });
+    await setStatus(card.id, 'implemented');
+    const repo = await connectRepairRepo(caller.fixture, 'web');
+    const pr = await deliveredPr(caller.fixture, card.id, repo, {
+      headRef: 'subtask/ejected',
+      checks: { Vitest: 'success' },
+    });
+    await adminDb.githubPullRequestQueueExit.create({
+      data: {
+        pullRequestId: pr.id,
+        deliveryId: 'guid-route-ejected',
+        rawReason: 'MERGE_CONFLICT',
+        disposition: 'failure',
+        headSha: 'c'.repeat(40),
+        exitedAt: new Date('2026-09-18T10:00:00.000Z'),
+      },
+    });
+
+    const res = await repair(card.identifier, caller);
+
+    expect(res.status).toBe(200);
+    const parsed = workItemRepairClaimSchema.safeParse(await res.json());
+    expect(parsed.success, JSON.stringify(parsed.error?.issues, null, 2)).toBe(true);
+    expect(parsed.data?.outcome).toBe('claimed');
+    expect(parsed.data?.pullRequests).toEqual([
+      expect.objectContaining({
+        headRef: 'subtask/ejected',
+        ci: 'passing',
+        queueExit: {
+          rawReason: 'MERGE_CONFLICT',
+          exitedAt: '2026-09-18T10:00:00.000Z',
+          headSha: 'c'.repeat(40),
+          failingCheckName: null,
+          failingCheckUrl: null,
+        },
+      }),
     ]);
   });
 
