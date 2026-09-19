@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
@@ -57,10 +57,40 @@ function useRefreshOnNudge(nudge: number): void {
   }, [nudge, router]);
 }
 
-/** The provider: subscribes once, refreshes on a nudge, hands the signal down. */
+/** Where the Workbench lives — the one address whose lists this makes current. */
+const WORKBENCH_PATH = '/workbench';
+
+/**
+ * The provider: subscribes once, refreshes on a nudge, hands the signal down.
+ *
+ * ⚠️ IT IS MOUNTED IN THE SHELL, NOT IN THE WORKBENCH PAGE, and MOTIR-5245's E2E
+ * is why. The approval overlay is mounted ONCE in `app/(authed)/layout.tsx` —
+ * it opens over any authed page from its address — so it is not a descendant of
+ * anything the Workbench page renders. A provider inside that page therefore
+ * could not reach it: the overlay read {@link WorkbenchLiveContext}'s QUIET
+ * default, was never nudged, and MOTIR-5243's whole deliverable was inert in the
+ * product while passing its own tests, which wrapped the overlay in this
+ * provider by hand — an arrangement that existed nowhere.
+ *
+ * ⚠️ AND THE SHELL IS NOT THE SAME THING AS "EVERY PAGE IS LIVE", which this
+ * story is explicitly scoped away from. Two gates keep them apart:
+ *
+ *   · IT SUBSCRIBES only while a live surface is on screen — the Workbench, or
+ *     an open approval. Everywhere else it holds no connection at all, which is
+ *     the same cost the page-level mount had.
+ *   · IT REFRESHES only on the Workbench. A nudge with the overlay open over an
+ *     item page must not re-render that page under the reader: the overlay's own
+ *     probe is what it needs, and that probe reads the SIGNAL, never a refresh.
+ */
 export function WorkbenchLive({ children }: { children: ReactNode }) {
-  const live = useWorkbenchLiveStream();
-  useRefreshOnNudge(live.nudge);
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const onWorkbench = pathname === WORKBENCH_PATH;
+  // The overlay's own open condition (`ApprovalOverlay` reads the same name).
+  const approvalOpen = params.get('approval') !== null;
+
+  const live = useWorkbenchLiveStream(onWorkbench || approvalOpen);
+  useRefreshOnNudge(onWorkbench ? live.nudge : 0);
   return <WorkbenchLiveContext.Provider value={live}>{children}</WorkbenchLiveContext.Provider>;
 }
 

@@ -14,6 +14,7 @@ import { IssueListPager } from '../../items/_components/IssueListPager';
 import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 import { useLiveRows } from './useLiveRows';
 import type { WorkbenchRowView } from './workbenchRows';
+import type { ReactNode } from 'react';
 
 // The Workbench list (Story MOTIR-2649 · MOTIR-2653, renamed and widened by
 // Story MOTIR-4777 · MOTIR-4782, per `design/workbench/design-notes.md`
@@ -283,12 +284,21 @@ export function WorkbenchList({
   label,
   tab,
   pagination,
+  empty,
 }: {
   rows: WorkbenchRowView[];
   label: string;
   tab: WorkbenchTab;
   /** The window this list is one page of — the pager's own contract. */
   pagination: { total: number; page: number; pageSize: number };
+  /**
+   * What an empty tab shows. Drawn HERE for the reason `ApprovalsList`'s own
+   * `empty` records in full: a component that only exists once the first row
+   * has landed cannot know that the row arrived, so the arrival into an empty
+   * tab — the one a reader is most certainly watching — was the one this
+   * surface could never mark.
+   */
+  empty: ReactNode;
 }) {
   const t = useTranslations('workbench');
   const router = useRouter();
@@ -310,6 +320,12 @@ export function WorkbenchList({
   // progress leaving the To do list is the list being correct, and holding it
   // would show a card in a tab it is no longer in with nothing to explain why.
   const live = useLiveRows(rows, `${tab}:${pagination.page}`, (row) => row.id);
+
+  // These tabs hold nothing (see the note above), so `live.rows` empties exactly
+  // when the server's does — the branch reads the live set anyway, so the two
+  // lists answer *am I empty?* the same way.
+  if (live.rows.length === 0) return <>{empty}</>;
+
   const groups = tab === 'watching' ? splitWatchingGroups(live.rows) : null;
   return (
     <div

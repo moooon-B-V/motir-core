@@ -23,16 +23,24 @@ import { announceGateDecided } from '@/lib/approvals/decidedGates';
 //   · RECONNECTING IS NOT LOADING. It says so with the rows at full ink.
 
 const { refresh, push } = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
+// WHERE THE READER IS — mutable, because the host's two gates are ABOUT that.
+let pathname = '/workbench';
+let params = new URLSearchParams('tab=approvals');
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh, push }),
-  usePathname: () => '/workbench',
-  useSearchParams: () => new URLSearchParams('tab=approvals'),
+  usePathname: () => pathname,
+  useSearchParams: () => params,
 }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush: vi.fn(), shallowReplace: vi.fn() }));
 
 const { WorkbenchLive, WorkbenchReconnecting } =
   await import('../../app/(authed)/workbench/_components/WorkbenchLive');
 const { ApprovalsList } = await import('../../app/(authed)/workbench/_components/ApprovalsList');
+const { STREAM_STALE_MS } =
+  await import('../../app/(authed)/workbench/_components/useWorkbenchLive');
+
+/** The empty state a tab's list draws when it holds nothing (MOTIR-5245). */
+const EMPTY = <p>Nothing is waiting</p>;
 const { WORKBENCH_STREAM_PATH } =
   await import('../../app/(authed)/workbench/_components/useWorkbenchLive');
 
@@ -74,12 +82,23 @@ function controllableStream() {
   const calls: string[] = [];
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
   const encoder = new TextEncoder();
-  const fetchMock = vi.fn((input: RequestInfo | URL) => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     calls.push(String(input));
     const body = new ReadableStream<Uint8Array>({
       start(c) {
         controller = c;
       },
+    });
+    // ⚠️ THE SIGNAL IS HONOURED, because a mock that ignores it cannot fail the
+    // way the product can. A real `fetch` errors its body when the signal
+    // aborts; a mock that quietly keeps streaming would make every abort arm —
+    // the watchdog, `offline`, the unmount — pass for the wrong reason.
+    init?.signal?.addEventListener('abort', () => {
+      try {
+        controller?.error(new DOMException('aborted', 'AbortError'));
+      } catch {
+        // Already closed — the reader left first, which is not this arm's case.
+      }
     });
     return Promise.resolve(new Response(body, { status: 200 }));
   });
@@ -100,6 +119,13 @@ function controllableStream() {
         await Promise.resolve();
       });
     },
+    /** A `:` comment — what a quiet connection sends, and nothing else. */
+    async heartbeat() {
+      await act(async () => {
+        controller?.enqueue(encoder.encode(': heartbeat\n\n'));
+        await Promise.resolve();
+      });
+    },
     async drop() {
       await act(async () => {
         controller?.close();
@@ -112,6 +138,8 @@ function controllableStream() {
 const PAGE = { total: 2, page: 1, pageSize: 25 };
 
 beforeEach(() => {
+  pathname = '/workbench';
+  params = new URLSearchParams('tab=approvals');
   refresh.mockClear();
   push.mockClear();
 });
@@ -133,7 +161,12 @@ describe('ONE STREAM, HELD BY THE HOST', () => {
               when the fan-out defect was first paid for. */}
           <WorkbenchReconnecting />
           <WorkbenchReconnecting />
-          <ApprovalsList rows={[row('gate-1', 5147, 'One')]} label="To approve" pagination={PAGE} />
+          <ApprovalsList
+            rows={[row('gate-1', 5147, 'One')]}
+            label="To approve"
+            pagination={PAGE}
+            empty={EMPTY}
+          />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -197,6 +230,7 @@ describe('RECONNECTING says so — and is not a loading state', () => {
             rows={[row('gate-1', 5147, 'Still perfectly readable')]}
             label="To approve"
             pagination={PAGE}
+            empty={EMPTY}
           />
         </WorkbenchLive>,
       );
@@ -224,7 +258,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     await act(async () => {
       view = renderWithIntl(
         <WorkbenchLive>
-          <ApprovalsList rows={first} label="To approve" pagination={PAGE} />
+          <ApprovalsList rows={first} label="To approve" pagination={PAGE} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -235,7 +269,12 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     await act(async () => {
       view.rerender(
         <WorkbenchLive>
-          <ApprovalsList rows={[first[0]!]} label="To approve" pagination={{ ...PAGE, total: 1 }} />
+          <ApprovalsList
+            rows={[first[0]!]}
+            label="To approve"
+            pagination={{ ...PAGE, total: 1 }}
+            empty={EMPTY}
+          />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -259,7 +298,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     await act(async () => {
       view = renderWithIntl(
         <WorkbenchLive>
-          <ApprovalsList rows={first} label="To approve" pagination={PAGE} />
+          <ApprovalsList rows={first} label="To approve" pagination={PAGE} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -274,6 +313,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
             rows={[...first, row('gate-9', 5239, 'Arrived under the reader')]}
             label="To approve"
             pagination={PAGE}
+            empty={EMPTY}
           />
         </WorkbenchLive>,
       );
@@ -290,7 +330,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     await act(async () => {
       view = renderWithIntl(
         <WorkbenchLive>
-          <ApprovalsList rows={first} label="To approve" pagination={PAGE} />
+          <ApprovalsList rows={first} label="To approve" pagination={PAGE} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -298,7 +338,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     await act(async () => {
       view.rerender(
         <WorkbenchLive>
-          <ApprovalsList rows={[first[0]!]} label="To approve" pagination={PAGE} />
+          <ApprovalsList rows={[first[0]!]} label="To approve" pagination={PAGE} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -314,6 +354,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
             rows={[row('gate-7', 5008, 'Page two')]}
             label="To approve"
             pagination={{ ...PAGE, page: 2 }}
+            empty={EMPTY}
           />
         </WorkbenchLive>,
       );
@@ -515,7 +556,7 @@ describe('a row THIS READER decided survives a frame, with its state pill', () =
     await act(async () => {
       view = renderWithIntl(
         <WorkbenchLive>
-          <ApprovalsList rows={rows} label="To approve" pagination={PAGE} />
+          <ApprovalsList rows={rows} label="To approve" pagination={PAGE} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -552,7 +593,12 @@ describe('a row THIS READER decided survives a frame, with its state pill', () =
     await act(async () => {
       view.rerender(
         <WorkbenchLive>
-          <ApprovalsList rows={[rows[0]!]} label="To approve" pagination={{ ...PAGE, total: 1 }} />
+          <ApprovalsList
+            rows={[rows[0]!]}
+            label="To approve"
+            pagination={{ ...PAGE, total: 1 }}
+            empty={EMPTY}
+          />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -565,5 +611,272 @@ describe('a row THIS READER decided survives a frame, with its state pill', () =
     // never learned.
     expect(screen.getByText('Approved')).toBeTruthy();
     expect(screen.queryByText('Decided elsewhere')).toBeNull();
+  });
+});
+
+describe('THE ARRIVAL INTO AN EMPTY TAB — the one a reader is certainly watching', () => {
+  // ⚠️ THIS IS THE TEST THE E2E HAD TO FIND FOR US (Story MOTIR-5238 · MOTIR-5245),
+  // and it is worth saying why it did not exist. Every arrival test above renders a
+  // list that ALREADY HAS ROWS and then re-renders it with one more, because that is
+  // the shape the rule is written in — *what is in `incoming` and not in the set I
+  // saw last*. Nothing was wrong with `useLiveRows`; the surface simply did not
+  // MOUNT it until the first row had landed, so there was no "set I saw last" and
+  // the chip, correctly, did not appear. A unit test that renders the list directly
+  // cannot see that, because rendering it is precisely the thing the page was not
+  // doing. So the assertion here is about the EMPTY state being one of the list's
+  // own states, which is what makes the row that replaces it an arrival at all.
+  it('a row landing in a tab that was EMPTY carries `New`', async () => {
+    const view = renderWithIntl(
+      <ApprovalsList
+        rows={[]}
+        label="To approve"
+        pagination={{ ...PAGE, total: 0 }}
+        empty={EMPTY}
+      />,
+    );
+    // The tab holds nothing, and says so — no table, and no pager under it.
+    expect(screen.getByText('Nothing is waiting')).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'To approve' })).toBeNull();
+
+    // …and then, with nobody touching anything, a row arrives.
+    view.rerender(
+      <ApprovalsList
+        rows={[row('gate-9', 5147, 'Arrived while you were reading')]}
+        label="To approve"
+        pagination={{ ...PAGE, total: 1 }}
+        empty={EMPTY}
+      />,
+    );
+
+    expect(screen.queryByText('Nothing is waiting')).toBeNull();
+    const arrived = screen.getByTestId('approval-row-gate-9');
+    expect(arrived.textContent).toContain('New');
+  });
+
+  it('a queue the reader EMPTIES does not flip to the empty state under the receipt', async () => {
+    // § 20 and § 26 together: the decided row is HELD, so the list is not empty —
+    // and a list that read the SERVER's rows rather than its live set would show
+    // "Nothing is waiting" over the decision the reader has just made.
+    const only = [row('gate-1', 5147, 'The one they decided')];
+    const view = renderWithIntl(
+      <ApprovalsList
+        rows={only}
+        label="To approve"
+        pagination={{ ...PAGE, total: 1 }}
+        empty={EMPTY}
+      />,
+    );
+    view.rerender(
+      <ApprovalsList
+        rows={[]}
+        label="To approve"
+        pagination={{ ...PAGE, total: 0 }}
+        empty={EMPTY}
+      />,
+    );
+
+    expect(screen.getByTestId('approval-row-gate-1')).toBeTruthy();
+    expect(screen.queryByText('Nothing is waiting')).toBeNull();
+  });
+});
+
+describe('A DROPPED CONNECTION THAT NEVER FAILS — the silence the heartbeat measures', () => {
+  // ⚠️ THE CASE THE ACCEPTANCE LANE FOUND, and the reason it is worth its own
+  // block. Taking the browser offline mid-walk failed every NEW request with
+  // `ERR_INTERNET_DISCONNECTED` and left the already-open stream **untouched** —
+  // no error, no `done`, no event of any kind. The pump was not wrong; nothing
+  // had happened that it could see. The reader sat in front of a page that
+  // looked live and was frozen, and `Reconnecting…` — the one thing § 26 Panel 2
+  // promises them — never came.
+  //
+  // The server was already paying for the answer: a `:` heartbeat every 15s, so
+  // a proxy does not close the connection. That makes SILENCE measurable, and
+  // these are the two arms that measure it.
+
+  it('treats SILENCE past the stale window as a drop, and reconnects from the cursor', async () => {
+    // ⚠️ FAKE TIMERS BEFORE THE RENDER, not after. The watchdog's `setInterval`
+    // is created while the connection opens, so a clock installed afterwards
+    // never owns it — the test then advances an hour and nothing fires, which
+    // reads exactly like a watchdog that does not work.
+    //
+    // ⚠️ AND `Date` IS FAKED WITH THEM, named explicitly rather than left to the
+    // default. The watchdog measures SILENCE with `Date.now()` — deliberately,
+    // so a laptop that slept for an hour wakes up and reconnects at once instead
+    // of waiting out a stale window of intervals that never ran. A clock that
+    // advances timers while `Date.now()` stands still is a combination the
+    // product never sees, and under it this test fails for a reason the code
+    // does not have.
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    try {
+      const stream = controllableStream();
+      await act(async () => {
+        renderWithIntl(
+          <WorkbenchLive>
+            <WorkbenchReconnecting />
+          </WorkbenchLive>,
+        );
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      // A healthy connection, with a cursor the reconnect must present again.
+      await stream.send({ moved: ['toDo'], cursor: 'w1.before-the-silence' });
+      expect(screen.queryByTestId('workbench-reconnecting')).toBeNull();
+      expect(stream.calls).toHaveLength(1);
+
+      // …and then nothing at all arrives. Not a heartbeat, not a frame — exactly
+      // what the offline browser produced.
+      // ⚠️ STOP BEFORE THE BACKOFF ELAPSES. The watchdog fires on its first tick
+      // at or past the stale window (36s on a 2s grid) and the pump then sleeps
+      // 1s before reconnecting — so advancing a whole 37s would drop AND
+      // reconnect inside one call, and the chip this asserts would already have
+      // cleared. The window between is what a reader actually sees.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STREAM_STALE_MS + 1_000);
+      });
+      expect(screen.getByTestId('workbench-reconnecting')).toBeTruthy();
+
+      // It RESUMES rather than restarting: the watermark is what makes a
+      // reconnect neither a replay nor a gap.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+      expect(stream.calls.length).toBeGreaterThan(1);
+      expect(stream.calls.at(-1)).toContain('since=w1.before-the-silence');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does NOT cry drop while the heartbeat is still arriving', async () => {
+    // The other half, and the one that makes the first assertion mean something:
+    // a connection carrying nothing but heartbeats is HEALTHY, and announcing a
+    // drop that has not happened teaches a reader to ignore the one that has.
+    const stream = controllableStream();
+    await act(async () => {
+      renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+
+    vi.useFakeTimers();
+    try {
+      // Three heartbeat intervals' worth of time, with a heartbeat in each —
+      // comfortably past the stale window in total, never silent within it.
+      for (let beat = 0; beat < 3; beat += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(15_000);
+        });
+        await stream.heartbeat();
+      }
+      expect(screen.queryByTestId('workbench-reconnecting')).toBeNull();
+      expect(stream.calls).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says so AT ONCE when the browser itself knows it is offline', async () => {
+    controllableStream();
+    await act(async () => {
+      renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+    expect(screen.queryByTestId('workbench-reconnecting')).toBeNull();
+
+    // No waiting out the watchdog: the lift stopped and the reader is told.
+    await act(async () => {
+      window.dispatchEvent(new Event('offline'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('workbench-reconnecting')).toBeTruthy();
+  });
+
+  it('does not wait out the backoff once the network is visibly back', async () => {
+    const stream = controllableStream();
+    await act(async () => {
+      renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event('offline'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('workbench-reconnecting')).toBeTruthy();
+    const attempts = stream.calls.length;
+
+    // `online` interrupts the sleep. A page the reader can SEE is stale, while
+    // their connection is visibly back, is the half of a drop they remember.
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(stream.calls.length).toBeGreaterThan(attempts);
+  });
+});
+
+describe('WHERE THE HOST LISTENS — it lives in the shell, so it must not be live everywhere', () => {
+  // ⚠️ THE PRICE OF MOVING THE HOST UP (Story MOTIR-5238 · MOTIR-5245). The
+  // provider has to be an ancestor of the approval overlay, which is mounted in
+  // `app/(authed)/layout.tsx` — so it is now mounted on EVERY authed page. This
+  // story is explicitly scoped away from making the item page, the board, the
+  // backlog or the roadmap live, and these two gates are what keep that true.
+  // They are cheap to write and the only thing standing between "the overlay can
+  // hear the stream" and "every page in the product holds a connection".
+
+  it('opens NO connection on a page that is neither the Workbench nor an open approval', async () => {
+    pathname = '/items/MOTIR-1';
+    params = new URLSearchParams('');
+    const stream = controllableStream();
+
+    await act(async () => {
+      renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(stream.calls).toHaveLength(0);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('DOES listen for an approval opened over another page — and refreshes nothing there', async () => {
+    // The overlay opens over any authed page from its address. It needs the
+    // signal (its own probe reads it); the page underneath must not be re-read.
+    pathname = '/items/MOTIR-1';
+    params = new URLSearchParams('approval=MOTIR-1&approvalKind=design_result');
+    const stream = controllableStream();
+
+    await act(async () => {
+      renderWithIntl(
+        <WorkbenchLive>
+          <WorkbenchReconnecting />
+        </WorkbenchLive>,
+      );
+      await Promise.resolve();
+    });
+    expect(stream.calls).toHaveLength(1);
+
+    await stream.send({ moved: ['approvals'], cursor: 'w1.a' });
+    // ⚠️ THE NUDGE LANDS — a consumer reading the context sees it — and the page
+    // under the overlay is NOT refreshed. `router.refresh()` there would re-render
+    // an item page under a reader who only opened an approval over it.
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

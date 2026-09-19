@@ -7,6 +7,7 @@ import { workbenchTabHref } from '@/lib/workbench/tab';
 import { ApprovalRow, APPROVALS_GRID_TEMPLATE } from '@/components/approvals/ApprovalRow';
 import { useLiveRows } from './useLiveRows';
 import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
+import type { ReactNode } from 'react';
 
 // THE APPROVALS TAB'S LIST (Story MOTIR-4879 · Subtask MOTIR-4794), built to
 // `design/workbench/approvals-row.mock.html` and its § 20 in
@@ -24,10 +25,27 @@ export function ApprovalsList({
   rows,
   label,
   pagination,
+  empty,
 }: {
   rows: ApprovalQueueRowDto[];
   label: string;
   pagination: { total: number; page: number; pageSize: number };
+  /**
+   * What an empty tab shows — rendered HERE rather than instead of this
+   * component (Story MOTIR-5238 · MOTIR-5245's E2E finding).
+   *
+   * ⚠️ THE MOST VISIBLE ARRIVAL IS INTO AN EMPTY TAB, and it was the one
+   * arrival that could never be marked. `useLiveRows` answers *what arrived*
+   * from the set this component saw LAST — so a component that does not exist
+   * until the first row lands has no last set, mounts fresh, and by its own
+   * correct rule marks nothing (`arrivedRowIds`: "a reader who has just landed
+   * has had nothing arrive under them"). A reader watching *Nothing is waiting
+   * on your approval* is the reader most obviously LOOKING, and § 26 Panel 1
+   * draws exactly that moment. So the branch moves inside: the component is
+   * mounted the whole time and the empty state is one of the things it can
+   * draw, which makes the row that replaces it an arrival like any other.
+   */
+  empty: ReactNode;
 }) {
   const t = useTranslations('workbench.approvals');
   const router = useRouter();
@@ -36,6 +54,11 @@ export function ApprovalsList({
   // names: a `router.refresh()` keeps the address and holds its rows, a pager
   // move changes the page and starts clean.
   const live = useLiveRows(rows, `approvals:${pagination.page}`, (row) => row.gateId);
+
+  // ⚠️ `live.rows`, NOT `rows` — a HELD row keeps the list non-empty, so a queue
+  // the reader has just emptied does not flip to the empty state underneath the
+  // receipt of the decision they have only just made (§ 20, § 26).
+  if (live.rows.length === 0) return <>{empty}</>;
 
   return (
     <div

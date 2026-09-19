@@ -46,6 +46,9 @@ vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.
 
 const { ApprovalsList } = await import('../../app/(authed)/workbench/_components/ApprovalsList');
 
+/** The empty state a tab's list draws when it holds nothing (MOTIR-5245). */
+const EMPTY = <p>Nothing is waiting</p>;
+
 function designRow(over: Partial<ApprovalQueueRowDto> = {}): ApprovalQueueRowDto {
   return {
     gateId: 'gate-1',
@@ -78,7 +81,9 @@ const PAGINATION = { total: 1, page: 1, pageSize: 25 };
 const OPENED = '/workbench?tab=approvals&page=2&approval=MOTIR-5147&approvalKind=design_result';
 
 function renderRows(rows: ApprovalQueueRowDto[]) {
-  return renderWithIntl(<ApprovalsList rows={rows} label="To approve" pagination={PAGINATION} />);
+  return renderWithIntl(
+    <ApprovalsList rows={rows} label="To approve" pagination={PAGINATION} empty={EMPTY} />,
+  );
 }
 
 /** The whole-row door — named for the row, so it never reads as a second "Review". */
@@ -408,6 +413,7 @@ describe('the Approvals list — the pager', () => {
         rows={[designRow()]}
         label="To approve"
         pagination={{ total: 60, page: 1, pageSize: 25 }}
+        empty={EMPTY}
       />,
     );
 

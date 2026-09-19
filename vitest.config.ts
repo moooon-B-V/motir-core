@@ -4497,15 +4497,19 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
-        // ⚠️ BRANCHES PINNED AT 85, WITH A REASON; lines and functions are 100.
-        // The residual arms are the four `cancelled` / `aborted` guards inside
-        // the pump — *the reader has already gone*. Reaching them means resolving
-        // a `fetch` after an unmount and winning a race with the abort, which is
-        // a test that would pass on the machine it was written on and flake on
-        // CI. The BEHAVIOUR they protect is asserted directly instead: the
-        // unmount test proves no reconnect follows an abort.
+        // ⚠️ RAISED 85 → 90 BY MOTIR-5245, and the reason the 85 existed is worth
+        // keeping because it was RIGHT and stopped being true. It was written for
+        // the four `cancelled` / `aborted` guards inside the pump — *the reader
+        // has already gone* — which are reachable only by resolving a `fetch`
+        // after an unmount and winning a race with the abort. Those arms are
+        // still there and still unreached; what changed is that the connection
+        // gained arms a test CAN drive (the heartbeat watchdog, `offline`,
+        // `online`, the per-connection abort), so the residual is a smaller
+        // share of a bigger file: MEASURED 97.56 lines / 91.66 branches / 100
+        // functions on this branch. The floor moves up to meet it rather than
+        // sitting under a number nothing is defending.
         'app/**/workbench/_components/useWorkbenchLive.ts': {
-          branches: 85,
+          branches: 90,
           functions: 90,
           lines: 90,
         },

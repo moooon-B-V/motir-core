@@ -42,13 +42,19 @@ export async function ApprovalsTab({ ctx, page }: { ctx: HomeActorContext; page:
   const t = await getTranslations('workbench');
   const window = await approvalGatesService.listAwaitingMe(ctx, { page });
 
-  if (window.items.length === 0) return <NothingWaiting />;
-
+  // ⚠️ THE LIST IS MOUNTED EVEN WHEN IT IS EMPTY, and the empty state is handed
+  // to it (Story MOTIR-5238 · MOTIR-5245). Returning `<NothingWaiting />`
+  // INSTEAD of the list meant the component that knows what arrived did not
+  // exist until the first row had already arrived — so the arrival a reader is
+  // most certainly watching was the one that could never carry `New`. The empty
+  // state is still server-rendered, still this file's, and still exactly what a
+  // tab with nothing in it shows; only the branch moved.
   return (
     <ApprovalsList
       rows={window.items}
       label={t('tabs.toApprove')}
       pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
+      empty={<NothingWaiting />}
     />
   );
 }

@@ -130,6 +130,9 @@ const { workItemsService } = await import('@/lib/services/workItemsService');
 const { ApprovalOverlay } = await import('@/components/approvals/ApprovalOverlay');
 const { ApprovalsList } = await import('@/app/(authed)/workbench/_components/ApprovalsList');
 
+/** The empty state a tab's list draws when it holds nothing (MOTIR-5245). */
+const EMPTY = <p>Nothing is waiting</p>;
+
 let fx: WorkItemFixture;
 
 beforeEach(async () => {
@@ -264,6 +267,7 @@ describe('SEAM 2 · a decision made in the overlay, seen from the tab', () => {
           rows={queue.items}
           label="To approve"
           pagination={{ total: queue.total, page: queue.page, pageSize: queue.pageSize }}
+          empty={EMPTY}
         />
         <ApprovalOverlay />
       </>,

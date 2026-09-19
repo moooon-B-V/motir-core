@@ -34,6 +34,7 @@ import { ProjectAccessProvider } from './_components/ProjectAccessProvider';
 import { ReportProvider } from './_components/ReportProvider';
 import { AppCommandPalette } from './_components/AppCommandPalette';
 import { OnboardingResumeProvider } from './_components/OnboardingResumeProvider';
+import { WorkbenchLive } from './workbench/_components/WorkbenchLive';
 // The drawer's utility strip (MOTIR-2373) renders the SAME three controls the
 // top bar's four-slot budget displaced below `md` — not copies of them.
 import { ReportButton } from './_components/ReportButton';
@@ -382,8 +383,26 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 enabled={resumeOnboardingEnabled}
                 activeProjectId={activeProject?.id ?? null}
               >
-                <AppLayout
-                  /* THE APP-WIDE DELETION BANNER (MOTIR-3704) — design
+                {/* ⚠️ THE WORKBENCH'S LIVE HOST, AND IT BELONGS HERE RATHER THAN IN
+                  THE WORKBENCH PAGE (Story MOTIR-5238 · MOTIR-5242, moved by
+                  MOTIR-5245). The approval overlay below is mounted ONCE at this
+                  level — it opens over any authed page from its address — so a
+                  provider inside `/workbench` is not an ancestor of it, and the
+                  overlay read the context's QUIET default and was never told its
+                  subject had moved. Everything that reads the signal is inside
+                  this: `{children}` (so the Workbench's five lists and its strip
+                  are) and `<ApprovalOverlay />` (so an open approval is).
+
+                  ⚠️ IT OPENS NO CONNECTION ANYWHERE ELSE. The component gates its
+                  own subscription on a live surface being on screen — the
+                  Workbench, or an open approval — and refreshes only on the
+                  Workbench, so mounting it in the shell does not make the item
+                  page, the board, the backlog or the roadmap live. That boundary
+                  is the story's own, and it is enforced in the component rather
+                  than by where it is mounted. */}
+                <WorkbenchLive>
+                  <AppLayout
+                    /* THE APP-WIDE DELETION BANNER (MOTIR-3704) — design
                      DECISION 4's second cancel door, mounted ONCE here rather
                      than per page, because *"a grace period is only reachable
                      if the reader can find it"* and a reader who changes their
@@ -393,47 +412,49 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                      component so that a cancel from EITHER door clears it on a
                      `router.refresh()` — see its own file for why an island
                      seeded at mount could not do that. */
-                  banner={<AccountDeletionBanner userId={session.user.id} />}
-                  topNav={
-                    <TopNav
-                      activeOrg={activeOrg}
-                      orgs={orgs}
-                      workspaces={workspaces}
-                      activeWorkspaceId={activeWorkspaceId}
-                      activeProject={activeProject}
-                      projects={projects}
-                      aiConfigured={aiPlanningConfigured}
-                      user={{ name: session.user.name, email: session.user.email }}
-                      platformStaff={isPlatformStaff}
-                      initialUnreadCount={initialUnreadCount}
-                      buildInPublicProjectKey={buildInPublicProjectKey}
-                      buildingInPublic={buildingInPublic}
-                      cloudBilling={cloudBilling}
-                      showPlanWithAi={showPlanWithAi}
-                    />
-                  }
-                  sidebar={
-                    <SidebarNav
-                      activeProject={activeProject}
-                      variant="rail"
-                      settingsPermissions={settingsPermissions}
-                      user={{ name: session.user.name, email: session.user.email }}
-                      organization={
-                        activeOrg
-                          ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
-                          : null
-                      }
-                      workspace={activeWorkspaceModel ? { name: activeWorkspaceModel.name } : null}
-                      billingAvailable={cloudBilling}
-                      workspaceTierRevealed={workspaceTierRevealed}
-                      publicProjectsAvailable={publicProjectsAvailable}
-                      helpMenu={
-                        <HelpMenu docsIndexUrl={docsIndexUrl} legalIndexUrl={legalIndexUrl} />
-                      }
-                    />
-                  }
-                >
-                  {/* The content column RESERVES the floating orb's footprint
+                    banner={<AccountDeletionBanner userId={session.user.id} />}
+                    topNav={
+                      <TopNav
+                        activeOrg={activeOrg}
+                        orgs={orgs}
+                        workspaces={workspaces}
+                        activeWorkspaceId={activeWorkspaceId}
+                        activeProject={activeProject}
+                        projects={projects}
+                        aiConfigured={aiPlanningConfigured}
+                        user={{ name: session.user.name, email: session.user.email }}
+                        platformStaff={isPlatformStaff}
+                        initialUnreadCount={initialUnreadCount}
+                        buildInPublicProjectKey={buildInPublicProjectKey}
+                        buildingInPublic={buildingInPublic}
+                        cloudBilling={cloudBilling}
+                        showPlanWithAi={showPlanWithAi}
+                      />
+                    }
+                    sidebar={
+                      <SidebarNav
+                        activeProject={activeProject}
+                        variant="rail"
+                        settingsPermissions={settingsPermissions}
+                        user={{ name: session.user.name, email: session.user.email }}
+                        organization={
+                          activeOrg
+                            ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
+                            : null
+                        }
+                        workspace={
+                          activeWorkspaceModel ? { name: activeWorkspaceModel.name } : null
+                        }
+                        billingAvailable={cloudBilling}
+                        workspaceTierRevealed={workspaceTierRevealed}
+                        publicProjectsAvailable={publicProjectsAvailable}
+                        helpMenu={
+                          <HelpMenu docsIndexUrl={docsIndexUrl} legalIndexUrl={legalIndexUrl} />
+                        }
+                      />
+                    }
+                  >
+                    {/* The content column RESERVES the floating orb's footprint
                       (MOTIR-2763). `PlanWithAIFab` below is `fixed right-5
                       bottom-5 h-14 w-14 z-40`, so it owns the bottom-right
                       viewport rect `y ∈ [bottom−76, bottom−20]` on every screen
@@ -458,101 +479,101 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       column) is a stylesheet that cannot read a React prop.
                       6rem = the orb's 76px reach + a visible gap. See
                       `design/shell/design-notes.md`. */}
-                  <div
-                    style={
-                      {
-                        '--shell-bottom-clearance': showPlanWithAi ? '6rem' : '1.5rem',
-                      } as CSSProperties
-                    }
-                    className="px-4 pt-6 pb-(--shell-bottom-clearance) sm:px-6 lg:px-8"
-                  >
-                    {children}
-                  </div>
-                </AppLayout>
+                    <div
+                      style={
+                        {
+                          '--shell-bottom-clearance': showPlanWithAi ? '6rem' : '1.5rem',
+                        } as CSSProperties
+                      }
+                      className="px-4 pt-6 pb-(--shell-bottom-clearance) sm:px-6 lg:px-8"
+                    >
+                      {children}
+                    </div>
+                  </AppLayout>
 
-                {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The
+                  {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The
             drawer is portaled, so it lives at the layout root rather than in an
             AppLayout slot. Its header carries the same tenancy-tier cluster (org
             control + the workspace switcher at ≥2 workspaces) the top nav shows,
             since the drawer replaces the top nav on mobile. */}
-                <SidebarDrawer
-                  header={
-                    <ShellTierNav
-                      activeOrg={activeOrg}
-                      orgs={orgs}
-                      workspaces={workspaces}
-                      activeWorkspaceId={activeWorkspaceId}
-                      cloudBilling={cloudBilling}
-                      placement="drawer"
-                    />
-                  }
-                  // The utility strip (MOTIR-2373 · design/shell Panel D): the
-                  // room for the controls the below-md bar's four-slot budget
-                  // displaced. Each one is the SAME component the bar renders,
-                  // re-homed — build-in-public (labelled, truncating), then
-                  // Help (MOTIR-4239 — the drawer has no footer of its own, so
-                  // its trigger lives here instead), report, then theme. The
-                  // Plan-with-AI pill is deliberately absent: PlanWithAIFab
-                  // below is already its phone-width door.
-                  footer={
-                    <>
-                      <div className="min-w-0 flex-1">
-                        {buildInPublicProjectKey ? (
-                          <BuildInPublicButton
-                            projectKey={buildInPublicProjectKey}
-                            placement="drawer"
-                          />
-                        ) : buildingInPublic ? (
-                          <BuildingInPublicHeaderLink placement="drawer" />
-                        ) : null}
-                      </div>
-                      <HelpMenu
+                  <SidebarDrawer
+                    header={
+                      <ShellTierNav
+                        activeOrg={activeOrg}
+                        orgs={orgs}
+                        workspaces={workspaces}
+                        activeWorkspaceId={activeWorkspaceId}
+                        cloudBilling={cloudBilling}
                         placement="drawer"
-                        docsIndexUrl={docsIndexUrl}
-                        legalIndexUrl={legalIndexUrl}
                       />
-                      <ReportButton display="drawer" />
-                      <ThemeToggle placement="drawer" />
-                    </>
-                  }
-                >
-                  <SidebarNav
-                    activeProject={activeProject}
-                    variant="drawer"
-                    settingsPermissions={settingsPermissions}
-                    user={{ name: session.user.name, email: session.user.email }}
-                    organization={
-                      activeOrg
-                        ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
-                        : null
                     }
-                    workspace={activeWorkspaceModel ? { name: activeWorkspaceModel.name } : null}
-                    billingAvailable={cloudBilling}
-                    workspaceTierRevealed={workspaceTierRevealed}
-                    publicProjectsAvailable={publicProjectsAvailable}
-                  />
-                </SidebarDrawer>
+                    // The utility strip (MOTIR-2373 · design/shell Panel D): the
+                    // room for the controls the below-md bar's four-slot budget
+                    // displaced. Each one is the SAME component the bar renders,
+                    // re-homed — build-in-public (labelled, truncating), then
+                    // Help (MOTIR-4239 — the drawer has no footer of its own, so
+                    // its trigger lives here instead), report, then theme. The
+                    // Plan-with-AI pill is deliberately absent: PlanWithAIFab
+                    // below is already its phone-width door.
+                    footer={
+                      <>
+                        <div className="min-w-0 flex-1">
+                          {buildInPublicProjectKey ? (
+                            <BuildInPublicButton
+                              projectKey={buildInPublicProjectKey}
+                              placement="drawer"
+                            />
+                          ) : buildingInPublic ? (
+                            <BuildingInPublicHeaderLink placement="drawer" />
+                          ) : null}
+                        </div>
+                        <HelpMenu
+                          placement="drawer"
+                          docsIndexUrl={docsIndexUrl}
+                          legalIndexUrl={legalIndexUrl}
+                        />
+                        <ReportButton display="drawer" />
+                        <ThemeToggle placement="drawer" />
+                      </>
+                    }
+                  >
+                    <SidebarNav
+                      activeProject={activeProject}
+                      variant="drawer"
+                      settingsPermissions={settingsPermissions}
+                      user={{ name: session.user.name, email: session.user.email }}
+                      organization={
+                        activeOrg
+                          ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
+                          : null
+                      }
+                      workspace={activeWorkspaceModel ? { name: activeWorkspaceModel.name } : null}
+                      billingAvailable={cloudBilling}
+                      workspaceTierRevealed={workspaceTierRevealed}
+                      publicProjectsAvailable={publicProjectsAvailable}
+                    />
+                  </SidebarDrawer>
 
-                {/* The ⌘K palette UI — fed the same workspace/project data the shell
+                  {/* The ⌘K palette UI — fed the same workspace/project data the shell
             above already resolved, so navigation + switch actions stay in sync
             without a second fetch. */}
-                <AppCommandPalette
-                  workspaces={workspaces}
-                  activeWorkspaceId={activeWorkspaceId}
-                  projects={projects}
-                  activeProjectId={activeProject?.id ?? null}
-                  settingsPermissions={settingsPermissions}
-                  aiPlanningConfigured={aiPlanningConfigured}
-                  publicProjectsAvailable={publicProjectsAvailable}
-                />
+                  <AppCommandPalette
+                    workspaces={workspaces}
+                    activeWorkspaceId={activeWorkspaceId}
+                    projects={projects}
+                    activeProjectId={activeProject?.id ?? null}
+                    settingsPermissions={settingsPermissions}
+                    aiPlanningConfigured={aiPlanningConfigured}
+                    publicProjectsAvailable={publicProjectsAvailable}
+                  />
 
-                {/* The floating "M" entrance (MOTIR-1299) — the second of the two
+                  {/* The floating "M" entrance (MOTIR-1299) — the second of the two
                   planning-workspace doors the design ships (alongside the
                   header pill). A fixed bottom-right orb, mounted once at the
                   layout root, under the same gate as the pill. */}
-                {showPlanWithAi ? <PlanWithAIFab /> : null}
+                  {showPlanWithAi ? <PlanWithAIFab /> : null}
 
-                {/* THE PLANNING WORKSPACE, as an OVERLAY (MOTIR-4729 · story
+                  {/* THE PLANNING WORKSPACE, as an OVERLAY (MOTIR-4729 · story
                   MOTIR-4725). Mounted ONCE here, beside the orb — but NOT behind
                   the orb's gate; see the note below — and open only when the
                   address carries the overlay's namespaced query, so on every page
@@ -583,27 +604,27 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
 
                   `activeProject` is what the gate's `no-project` arm would
                   answer, so it is checked here rather than rendered. */}
-                {activeProject ? (
-                  // ⚠️ THE `<Suspense>` IS NOT DECORATION. This is the first
-                  // component mounted at LAYOUT level that reads
-                  // `useSearchParams()`, and Next refuses to build a route where
-                  // that read is not inside a boundary
-                  // (`missing-suspense-with-csr-bailout`). This layout is dynamic
-                  // today — it awaits `getSession()` and `cookies()` — so the
-                  // error does not fire; the boundary is here so that a later
-                  // change to what this layout awaits cannot break every authed
-                  // route's build at once. `null` is the right fallback: an
-                  // overlay that has not resolved its address yet is a closed
-                  // overlay, which is what the reader should see.
-                  <>
-                    <Suspense fallback={null}>
-                      <PlanningWorkspaceOverlay
-                        projectKey={activeProject.identifier}
-                        projectName={activeProject.name}
-                        substrate={planningSubstrate}
-                      />
-                    </Suspense>
-                    {/* THE APPROVAL OVERLAY (Story MOTIR-5214 · Subtask MOTIR-5224) —
+                  {activeProject ? (
+                    // ⚠️ THE `<Suspense>` IS NOT DECORATION. This is the first
+                    // component mounted at LAYOUT level that reads
+                    // `useSearchParams()`, and Next refuses to build a route where
+                    // that read is not inside a boundary
+                    // (`missing-suspense-with-csr-bailout`). This layout is dynamic
+                    // today — it awaits `getSession()` and `cookies()` — so the
+                    // error does not fire; the boundary is here so that a later
+                    // change to what this layout awaits cannot break every authed
+                    // route's build at once. `null` is the right fallback: an
+                    // overlay that has not resolved its address yet is a closed
+                    // overlay, which is what the reader should see.
+                    <>
+                      <Suspense fallback={null}>
+                        <PlanningWorkspaceOverlay
+                          projectKey={activeProject.identifier}
+                          projectName={activeProject.name}
+                          substrate={planningSubstrate}
+                        />
+                      </Suspense>
+                      {/* THE APPROVAL OVERLAY (Story MOTIR-5214 · Subtask MOTIR-5224) —
                         mounted ONCE, beside the planning overlay and for the same
                         reasons: it opens over ANY authed page from its address, so
                         the Workbench's row (MOTIR-5225) and the item page's control
@@ -611,11 +632,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                         rooms. Behind `activeProject` because its one read resolves a
                         key against the active project; in its own `<Suspense>`
                         because it reads `useSearchParams()` too. */}
-                    <Suspense fallback={null}>
-                      <ApprovalOverlay />
-                    </Suspense>
-                  </>
-                ) : null}
+                      <Suspense fallback={null}>
+                        <ApprovalOverlay />
+                      </Suspense>
+                    </>
+                  ) : null}
+                </WorkbenchLive>
               </OnboardingResumeProvider>
             </ReportProvider>
           </ProjectAccessProvider>
