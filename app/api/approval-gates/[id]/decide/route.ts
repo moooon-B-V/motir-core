@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { ApprovalGateError, ApprovalGateStaleSubjectError } from '@/lib/approvalGates/errors';
+import {
+  ApprovalGateError,
+  ApprovalGatePrimaryPendingError,
+  ApprovalGateStaleSubjectError,
+} from '@/lib/approvalGates/errors';
 import { APPROVAL_GATE_STATUS } from '@/lib/approvalGates/httpStatus';
 import type { GateDecision } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
@@ -130,7 +134,10 @@ export async function POST(
         // A stale refusal also says WHAT moved, so a caller can re-read the right thing.
         err instanceof ApprovalGateStaleSubjectError
           ? { code: err.code, error: err.message, moved: err.moved }
-          : { code: err.code, error: err.message },
+          : // …and a primary-pending refusal says WHICH question to answer first (MOTIR-5785).
+            err instanceof ApprovalGatePrimaryPendingError
+            ? { code: err.code, error: err.message, primary: err.primary }
+            : { code: err.code, error: err.message },
         { status: APPROVAL_GATE_STATUS[err.tag] },
       );
     }

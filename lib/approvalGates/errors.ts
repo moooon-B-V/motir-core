@@ -62,6 +62,11 @@ export type ApprovalGateErrorTag =
   | 'APPROVAL_GATE_NOT_AUTHORISED'
   | 'APPROVAL_GATE_KIND_UNREGISTERED'
   | 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH'
+  // The approve-to-merge gate of a card whose PRIMARY question — the design, or a
+  // decision — is not answered, approved through a door that is not the primary's own
+  // press (Bug MOTIR-5785; `design-result.md` AMENDMENT 6 Q1). The merge FOLLOWS the
+  // primary. Approve is refused; Request changes is not.
+  | 'APPROVAL_GATE_PRIMARY_PENDING'
   // The question is still live and what the reader was shown MOVED under them
   // (Story MOTIR-5232 · MOTIR-5234) — the stamp they pressed with no longer matches.
   | 'APPROVAL_GATE_STALE_SUBJECT'
@@ -414,6 +419,33 @@ export class ApprovalGateAlreadyRequeuedError extends ApprovalGateError {
   constructor(readonly pullRequestId: string) {
     super(`Pull request ${pullRequestId} was already put back into the merge queue.`);
     this.name = 'ApprovalGateAlreadyRequeuedError';
+  }
+}
+
+/**
+ * The PRIMARY question a card's merge follows (Bug MOTIR-5785): its DESIGN
+ * (`design-result.md` AMENDMENT 6 Q1) or, once Story MOTIR-4907 lands, its DECISION
+ * (`approval-gates.md` §8's FIFTH AMENDMENT). ONE refusal names either, so two primaries
+ * holding one merge cannot drift into two differently-worded rules.
+ */
+export type PendingPrimary = 'design' | 'decision';
+
+/**
+ * APPROVE on a card's approve-to-merge gate while its PRIMARY question is unanswered
+ * (Bug MOTIR-5785). The primary's own press decides the primary FIRST and the merge
+ * after, so it never meets this; any other door naming the merge gate's id — the REST
+ * route, the merge row pressed alone — would merge commits nobody's primary decision
+ * covers. Raised under the door's lock, before anything is written.
+ */
+export class ApprovalGatePrimaryPendingError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_PRIMARY_PENDING' as const;
+  readonly code = 'APPROVAL_GATE_PRIMARY_PENDING' as const;
+  constructor(
+    readonly workItemId: string,
+    readonly primary: PendingPrimary,
+  ) {
+    super(`The ${primary} on work item ${workItemId} has to be approved before it can merge.`);
+    this.name = 'ApprovalGatePrimaryPendingError';
   }
 }
 
