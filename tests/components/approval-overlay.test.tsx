@@ -100,6 +100,10 @@ function readOf(overrides: Partial<ApprovalGateOverlayReadDTO> = {}): ApprovalGa
     canDecide: true,
     routedToLabel: 'Riley Reviewer',
     stamp: 'v1.stamp-the-read-handed-over',
+    // NOTHING HAS MOVED since this reader opened it (Story MOTIR-5238 · MOTIR-5243).
+    // The field is REQUIRED rather than optional so a read that forgot to answer
+    // *what changed?* is a compile error and not a silent empty notice.
+    movedSince: [],
     subject: {
       state: 'resolved',
       kind: 'design_result',
