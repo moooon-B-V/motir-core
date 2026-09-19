@@ -302,7 +302,7 @@ afterAll(async () => {
 });
 
 describe('1 · the whole manual loop', () => {
-  it('eject → a green check at the same head changes nothing → Queue again → both merge → done', async () => {
+  it('eject → a green check at the same head changes nothing → Queue again is refused → both merge → done', async () => {
     const { s, item, approved } = await approvedIntoTheQueue('loop@example.com');
 
     // A failure exit for web#7.
@@ -323,17 +323,20 @@ describe('1 · the whole manual loop', () => {
     expect(await statusOf(item.id)).toBe('implemented');
     expect(await awaiting(item.id)).toEqual([]);
 
-    // Queue again: back into the queue, card approved, still no question.
-    enqueueAll();
-    expect(await queueAgain(s, approved.id, 7)).toMatchObject({ outcome: 'enqueued' });
-    expect(await statusOf(item.id)).toBe('approved');
-    expect(await queueRef(7)).toBe('queue:MQE_7');
-    expect((await exitsOf(7))[0]!.requeuedAt).not.toBeNull();
-    expect(await awaiting(item.id)).toEqual([]);
+    // Queue again on a FAILURE exit is RETIRED (§4 FOURTH AMENDMENT, point 4; MOTIR-5802):
+    // the old approval is not reused, nothing is claimed, and no host is called.
+    const host = enqueueAll();
+    host.mockClear();
+    expect(await queueAgain(s, approved.id, 7)).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
+    });
+    expect(host).not.toHaveBeenCalled();
+    expect(await queueRef(7)).toBeNull();
+    expect((await exitsOf(7))[0]!.requeuedAt).toBeNull();
 
-    // Both merges land: done.
+    // Both merges land (web#7 by hand on GitHub): done.
     await prDelivery('api', 'closed', 12, headRefOf(item.identifier, 12), { merged: true });
-    expect(await statusOf(item.id)).toBe('approved');
     await prDelivery('web', 'closed', 7, headRefOf(item.identifier, 7), { merged: true });
     expect(await statusOf(item.id)).toBe('done');
     expect(await gates(item.id)).toHaveLength(1);
@@ -462,15 +465,16 @@ describe('5 · redelivery and order', () => {
     expect(await statusOf(item.id)).toBe('implemented');
   });
 
+  // NEUTRAL exits from here: Queue again survives only for them (MOTIR-5802).
   it('an OLD exit redelivered after Queue again changes nothing, and the queue ref is kept', async () => {
     const { s, item, approved } = await approvedIntoTheQueue('old-exit@example.com');
     const id = nextGuid();
-    await eject('web', 7, 'sha-web', 'CI_FAILURE', id);
+    await eject('web', 7, 'sha-web', 'MANUAL', id);
     enqueueAll();
     await queueAgain(s, approved.id, 7);
     expect(await statusOf(item.id)).toBe('approved');
 
-    expect(await eject('web', 7, 'sha-web', 'CI_FAILURE', id)).toMatchObject({
+    expect(await eject('web', 7, 'sha-web', 'MANUAL', id)).toMatchObject({
       outcome: 'duplicate',
     });
     expect(await statusOf(item.id)).toBe('approved');
@@ -478,16 +482,16 @@ describe('5 · redelivery and order', () => {
     expect(await exitsOf(7)).toHaveLength(1);
   });
 
-  it('a second GENUINE exit at the same head after Queue again is a new row, and the card goes back', async () => {
+  it('a second GENUINE exit at the same head after Queue again is a new row, offered again', async () => {
     const { s, item, approved } = await approvedIntoTheQueue('second-exit@example.com');
-    await eject('web', 7, 'sha-web');
+    await eject('web', 7, 'sha-web', 'MANUAL');
     enqueueAll();
     await queueAgain(s, approved.id, 7);
 
-    expect(await eject('web', 7, 'sha-web')).toMatchObject({ outcome: 'recorded' });
+    expect(await eject('web', 7, 'sha-web', 'MANUAL')).toMatchObject({ outcome: 'recorded' });
     expect(await exitsOf(7)).toHaveLength(2);
     expect((await exitsOf(7))[1]!.requeuedAt).toBeNull();
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('approved');
     expect(await queueRef(7)).toBeNull();
 
     // …and the new exit is offered again, on the same approval.
@@ -606,7 +610,7 @@ describe('9 · the doors a person presses', () => {
 
   it('the route re-queues on the decided approval, and answers a second press with 409', async () => {
     const { s, item, approved } = await approvedIntoTheQueue('route-manual@example.com');
-    await eject('web', 7, 'sha-web');
+    await eject('web', 7, 'sha-web', 'MANUAL');
     doors.ctx = s.ctx;
     const prId = (await prRow(7)).id;
     enqueueAll();
@@ -621,6 +625,23 @@ describe('9 · the doors a person presses', () => {
     expect(await second.json()).toMatchObject({
       member: { outcome: 'refused', refusal: { tag: 'MERGE_ALREADY_REQUEUED' } },
     });
+  });
+
+  it('the route answers a manual FAILURE exit with MERGE_REQUEUE_NEEDS_APPROVAL, and re-queues nothing (MOTIR-5802)', async () => {
+    const { s, item, approved } = await approvedIntoTheQueue('route-failure@example.com');
+    await eject('web', 7, 'sha-web');
+    doors.ctx = s.ctx;
+    const prId = (await prRow(7)).id;
+    const host = enqueueAll();
+    host.mockClear();
+
+    const res = await post(item.id, prId, JSON.stringify({ approvalGateId: approved.id }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      member: { outcome: 'refused', refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' } },
+    });
+    expect(host).not.toHaveBeenCalled();
+    expect((await exitsOf(7))[0]!.requeuedAt).toBeNull();
   });
 
   it('the route’s auto door re-dispatches, and maps each refusal to its status', async () => {
@@ -766,9 +787,12 @@ describe('10 · the ejection arm’s edges, through the real handler', () => {
     await expect(eject('web', 7, 'sha-web')).rejects.toThrow('the disk is full');
   });
 
-  it('a workflow that cannot take the card back leaves it, and Queue again still re-queues', async () => {
+  // REPLACES "a workflow that cannot take the card back leaves it" (MOTIR-5634): Queue
+  // again no longer moves a card at all (MOTIR-5802), so a workflow without
+  // `implemented → approved` changes nothing about it.
+  it('Queue again on a neutral exit re-queues and writes no status, with or without `implemented → approved`', async () => {
     const { s, item, approved } = await approvedIntoTheQueue('no-edge@example.com');
-    await eject('web', 7, 'sha-web');
+    await eject('web', 7, 'sha-web', 'MANUAL');
     const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: s.project.id } });
     const idOf = (key: string) => statuses.find((row) => row.key === key)!.id;
     await adminDb.workflowTransition.deleteMany({
@@ -778,16 +802,13 @@ describe('10 · the ejection arm’s edges, through the real handler', () => {
         toStatusId: idOf('approved'),
       },
     });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     enqueueAll();
+    sent.length = 0;
 
     expect(await queueAgain(s, approved.id, 7)).toMatchObject({ outcome: 'enqueued' });
     expect(await queueRef(7)).toBe('queue:MQE_7');
-    expect(await statusOf(item.id)).toBe('implemented');
-    expect(warn).toHaveBeenCalledWith(
-      '[mergeQueueExitService] Queue again could not return the card',
-      expect.objectContaining({ workItemId: item.id, to: 'approved' }),
-    );
+    expect(await statusOf(item.id)).toBe('approved');
+    expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
   });
 });
 

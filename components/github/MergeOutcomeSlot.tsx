@@ -94,11 +94,13 @@ export type PersistedRowOutcome =
   | 'notMergedYet';
 
 export function persistedRowOutcome(
-  fact: Pick<PullRequestApprovalMemberDTO, 'queued' | 'retryable' | 'exit' | 'requeueable'>,
+  fact: Pick<PullRequestApprovalMemberDTO, 'queued' | 'retryable' | 'exit' | 'exitAtApprovedHead'>,
 ): PersistedRowOutcome | null {
   if (fact.queued) return 'queued';
   if (fact.exit && fact.exit.requeuedAt === null) {
-    if (!fact.requeueable) return 'newCommits';
+    // The HEAD decides *New commits*, not whether Queue again is offered: a FAILURE exit
+    // at the approved head is not requeueable (MOTIR-5802) and still *Left the queue*.
+    if (!fact.exitAtApprovedHead) return 'newCommits';
     return fact.exit.disposition === 'failure' ? 'leftQueue' : 'removedFromQueue';
   }
   if (fact.retryable) return 'notMergedYet';

@@ -596,6 +596,9 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
     case 'MERGE_ALREADY_REQUEUED':
       headline = t('mergeAlreadyRequeued.title');
       break;
+    case 'MERGE_REQUEUE_NEEDS_APPROVAL':
+      headline = t('mergeRequeueNeedsApproval.title');
+      break;
     case 'MERGE_APP_PERMISSION_MISSING':
       headline = t('mergeAppPermissionMissing.title');
       break;
@@ -719,6 +722,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'mergeAlreadyMerged';
     case 'MERGE_ALREADY_REQUEUED':
       return 'mergeAlreadyRequeued';
+    case 'MERGE_REQUEUE_NEEDS_APPROVAL':
+      return 'mergeRequeueNeedsApproval';
     case 'MERGE_APP_PERMISSION_MISSING':
       return 'mergeAppPermissionMissing';
   }

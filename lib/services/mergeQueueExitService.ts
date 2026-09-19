@@ -327,14 +327,16 @@ async function recomputeDeliveredCiState(
 }
 
 /**
- * Return a card a merge-queue failure moved to `implemented` to the status it was moved
- * from, when it is still there. A card somebody has since moved elsewhere is left where
+ * Return a card an `auto`-mode merge-queue failure moved to `implemented` to `in_review`,
+ * the status it was moved from, when it is still there (*Queue again* in `auto` mode).
+ * ⚠️ `approved` is no longer a target (MOTIR-5802): a manual failure is re-asked on a
+ * fresh gate, and nothing writes `implemented → approved`. A card somebody has since moved elsewhere is left where
  * they put it, and a workflow that refuses the move leaves it too — the re-enqueue has
  * happened either way, and the move is secondary to it.
  */
 async function returnCard(
   item: { id: string; status: string },
-  to: 'approved' | 'in_review',
+  to: 'in_review',
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
   opts: { decidingGateId?: string },

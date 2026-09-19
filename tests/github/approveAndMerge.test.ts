@@ -462,6 +462,7 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
         queued: false,
         retryable: true,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
       },
       {
@@ -470,6 +471,7 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
         queued: true,
         retryable: false,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
       },
     ]);
@@ -536,6 +538,7 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
         queued: false,
         retryable: true,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
       },
       {
@@ -544,6 +547,7 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
         queued: true,
         retryable: false,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
       },
     ]);
@@ -722,6 +726,7 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
         queued: false,
         retryable: false,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
       },
       {
@@ -730,6 +735,7 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
         queued: false,
         retryable: false,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
       },
     ]);

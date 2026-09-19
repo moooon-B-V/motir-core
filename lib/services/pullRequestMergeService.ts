@@ -792,16 +792,21 @@ async function mergeMember(
 }
 
 /**
- * QUEUE AGAIN under the card's DECIDED approval (Story MOTIR-5461 · MOTIR-5634;
- * `approval-gates.md` §4 THIRD AMENDMENT, decision 5). The member left the merge queue
- * and nobody has put it back; while it is still at the head the approval named, the
- * approval still describes it, so it is re-enqueued with no second question.
+ * QUEUE AGAIN under the card's DECIDED approval — for a NEUTRAL exit ONLY (Story
+ * MOTIR-5461 · MOTIR-5634; narrowed by MOTIR-5802, `approval-gates.md` §4 FOURTH
+ * AMENDMENT, point 4). Somebody took the member out of the merge queue, or the queue was
+ * cleared: nothing was learned about the commits, so while it is still at the head the
+ * approval named, it is re-enqueued with no second question. A FAILURE exit at that head
+ * is REFUSED here, before anything is claimed.
  *
  * ⚠️ THE CLAIM COMES BEFORE THE HOST CALL. Two presses on one exit must enqueue ONCE,
  * so the first stamps the exit's `requeuedAt` under the card's row lock and the second
  * finds it stamped. A host that refuses releases the stamp, so the exit is offered
- * again; a success returns the card `implemented → approved`, carrying the decided
- * gate's id — the one write rule 2b lets into `approved` while a pull request is open.
+ * again.
+ *
+ * ⚠️ IT MOVES NO CARD. A neutral removal never moved the card out of `approved`, so
+ * there is nothing to return — and this was the last writer of `implemented → approved`,
+ * which the FOURTH AMENDMENT removes from the workflow.
  */
 async function queueAgainUnderApproval(
   approvalGateId: string,
@@ -824,6 +829,20 @@ async function queueAgainUnderApproval(
       pullRequestId: null,
       outcome: 'refused',
       refusal,
+    };
+  }
+
+  // ⚠️ A FAILURE EXIT IS NOT RE-QUEUED ON THE OLD APPROVAL (MOTIR-5802;
+  // `approval-gates.md` §4 FOURTH AMENDMENT, point 4). The queue said those commits did
+  // not land, so the yes that approved them has not been honoured: the card is asked
+  // again on a fresh gate, and approving THAT re-queues. Nothing is claimed or written.
+  // (A moved head was answered above: the approval no longer describes the code.)
+  if (args.exit.disposition === 'failure') {
+    return {
+      subjectVersion: member.subjectVersion,
+      pullRequestId: target.pullRequestId,
+      outcome: 'refused',
+      refusal: toGateRefusal('MERGE_REQUEUE_NEEDS_APPROVAL'),
     };
   }
 
@@ -872,14 +891,6 @@ async function queueAgainUnderApproval(
     };
   }
 
-  const moved = await withWorkspaceContext(ctx, async (tx) => {
-    await queueExitCardMoves.lockCard(args.workItemId, tx);
-    const item = await workItemRepository.findById(args.workItemId, tx);
-    return item
-      ? queueExitCardMoves.returnCard(item, 'approved', ctx, tx, { decidingGateId: approvalGateId })
-      : null;
-  });
-  await queueExitCardMoves.emitMoved(args.workItemId, moved, ctx);
   return { subjectVersion: member.subjectVersion, pullRequestId: target.pullRequestId, outcome };
 }
 

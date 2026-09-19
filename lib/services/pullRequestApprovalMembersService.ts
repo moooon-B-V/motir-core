@@ -63,6 +63,13 @@ async function approvedMembers(
     // only while the pull request is still at the head the approval named, which is what
     // makes reusing the approval honest.
     const standingExit = exit !== null && exit.requeuedAt === null;
+    // ⚠️ A FAILURE EXIT IS NEVER REQUEUEABLE on this read (MOTIR-5802; `approval-gates.md`
+    // §4 FOURTH AMENDMENT, point 4): the card is asked again on a fresh gate instead. Only
+    // an approved gate reaches here, which only a `manual` project raises, and the exit's
+    // `disposition` rides on `exit` so the frame can tell the two apart.
+    const failureExit = standingExit && exit.disposition === 'failure';
+    const atApprovedHead =
+      standingExit && row !== undefined && deliveryMemberVersion(row) === member.subjectVersion;
     const open = pr !== undefined && pr.state === 'open' && !pr.merged;
     return {
       subjectVersion: member.subjectVersion,
@@ -71,11 +78,8 @@ async function approvedMembers(
       // A member Motir has not merged or queued yet is the one a person can try again.
       retryable: pr !== undefined && !pr.merged && outcome === null && !standingExit,
       exit: exit ? toQueueExitDto(exit) : null,
-      requeueable:
-        open &&
-        standingExit &&
-        row !== undefined &&
-        deliveryMemberVersion(row) === member.subjectVersion,
+      exitAtApprovedHead: atApprovedHead,
+      requeueable: open && atApprovedHead && !failureExit,
     };
   });
 }

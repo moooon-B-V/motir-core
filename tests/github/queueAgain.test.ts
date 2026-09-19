@@ -40,6 +40,11 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 // put back by ONE press while its head is unchanged — on the card's DECIDED approval in a
 // `manual` project, as a person's re-dispatch in an `auto` one — and never twice. The host
 // is the seam's `mergeChangeRequest`, stubbed: the one thing that leaves the process.
+//
+// ⚠️ NARROWED BY §4's FOURTH AMENDMENT, point 4 (MOTIR-5802): in a `manual` project a
+// FAILURE exit is no longer re-queued on the old approval — the press is refused and the
+// card is asked again on a fresh gate. So the manual-mode tests below eject NEUTRALLY
+// (`MANUAL`) unless they are asserting that refusal.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-queue-again';
@@ -221,10 +226,41 @@ afterAll(async () => {
 });
 
 describe('manual mode — Queue again on the card’s ONE decided approval', () => {
-  it('re-enqueues, stamps the exit, returns the card to approved, and asks nobody anything', async () => {
-    const { s, item, approved, prId } = await ejectedManual('manual-ok@example.com');
-    expect(await statusOf(item.id)).toBe('implemented');
+  // REPLACES the THIRD AMENDMENT's "re-enqueues … returns the card to approved" test,
+  // which asserted the `implemented → approved` write this card removes (MOTIR-5802).
+  it('a FAILURE exit is REFUSED — nothing is stamped, no host is called, the card and its gates are unchanged', async () => {
+    const { s, item, approved, prId } = await ejectedManual('manual-failure@example.com');
+    const statusBefore = await statusOf(item.id);
+    const gatesBefore = await adminDb.approvalGate.findMany({
+      where: { workItemId: item.id },
+      orderBy: { createdAt: 'asc' },
+    });
     const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_2' });
+    sent.length = 0;
+
+    const outcome = await press(s, approved.id, prId);
+
+    expect(outcome).toMatchObject({
+      pullRequestId: prId,
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
+    });
+    expect(host).not.toHaveBeenCalled();
+    expect((await latestExit(11)).requeuedAt).toBeNull();
+    expect(await statusOf(item.id)).toBe(statusBefore);
+    expect(
+      await adminDb.approvalGate.findMany({
+        where: { workItemId: item.id },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ).toEqual(gatesBefore);
+    expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
+  });
+
+  it('a neutral exit re-enqueues, stamps the exit, and leaves the card at approved', async () => {
+    const { s, item, approved, prId } = await ejectedManual('manual-neutral@example.com', 'MANUAL');
+    expect(await statusOf(item.id)).toBe('approved');
+    const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_3' });
     sent.length = 0;
 
     const outcome = await press(s, approved.id, prId);
@@ -232,31 +268,15 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
     expect(outcome).toMatchObject({ pullRequestId: prId, outcome: 'enqueued' });
     expect(host).toHaveBeenCalledTimes(1);
     expect(host.mock.calls[0]![0]).toMatchObject({ number: 11, expectedHeadSha: 'sha-a' });
-    expect((await pr(11)).mergeOutcomeRef).toBe('queue:MQE_2');
-    expect((await latestExit(11)).requeuedAt).not.toBeNull();
+    expect((await pr(11)).mergeOutcomeRef).toBe('queue:MQE_3');
     expect(await statusOf(item.id)).toBe('approved');
-    // The decided gate is byte-for-byte what it was, and nothing new is asked.
+    expect((await latestExit(11)).requeuedAt).not.toBeNull();
+    // The decided gate is byte-for-byte what it was, nothing new is asked, and no card moves.
     expect(await adminDb.approvalGate.findUniqueOrThrow({ where: { id: approved.id } })).toEqual(
       approved,
     );
     expect(await awaitingGates(item.id)).toEqual([]);
-    expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([
-      expect.objectContaining({
-        data: expect.objectContaining({ fromStatusKey: 'implemented', toStatusKey: 'approved' }),
-      }),
-    ]);
-  });
-
-  it('a neutral exit re-enqueues and leaves the card where it was', async () => {
-    const { s, item, approved, prId } = await ejectedManual('manual-neutral@example.com', 'MANUAL');
-    expect(await statusOf(item.id)).toBe('approved');
-    stubHost({ outcome: 'enqueued', entryId: 'MQE_3' });
-
-    const outcome = await press(s, approved.id, prId);
-
-    expect(outcome).toMatchObject({ outcome: 'enqueued' });
-    expect(await statusOf(item.id)).toBe('approved');
-    expect((await latestExit(11)).requeuedAt).not.toBeNull();
+    expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
   });
 
   it('a moved head is refused, and nothing is claimed and no host is called', async () => {
@@ -278,14 +298,14 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
   });
 
   it('a host refusal releases the claim, so the exit is offered again', async () => {
-    const { s, item, approved, prId } = await ejectedManual('manual-refused@example.com');
+    const { s, item, approved, prId } = await ejectedManual('manual-refused@example.com', 'MANUAL');
     stubHost({ outcome: 'refused', refusal: { code: 'conflict' } });
 
     const outcome = await press(s, approved.id, prId);
 
     expect(outcome).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
     expect((await latestExit(11)).requeuedAt).toBeNull();
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('approved');
     const members = await pullRequestMergeService.listApprovalMembers(
       { workItemId: item.id, approvalGateId: approved.id },
       s.ctx,
@@ -294,16 +314,16 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
   });
 
   it('a host FAULT releases the claim and is rethrown, not dressed as a refusal', async () => {
-    const { s, item, approved, prId } = await ejectedManual('manual-fault@example.com');
+    const { s, item, approved, prId } = await ejectedManual('manual-fault@example.com', 'MANUAL');
     vi.spyOn(github, 'mergeChangeRequest').mockRejectedValue(new Error('the host is on fire'));
 
     await expect(press(s, approved.id, prId)).rejects.toThrow('the host is on fire');
     expect((await latestExit(11)).requeuedAt).toBeNull();
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('approved');
   });
 
   it('a second press on the same exit is refused and enqueues nothing', async () => {
-    const { s, approved, prId } = await ejectedManual('manual-twice@example.com');
+    const { s, approved, prId } = await ejectedManual('manual-twice@example.com', 'MANUAL');
     const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_5' });
 
     await press(s, approved.id, prId);
@@ -318,7 +338,7 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
   });
 
   it('two presses at once enqueue exactly once, and the other is refused', async () => {
-    const { s, approved, prId } = await ejectedManual('manual-race@example.com');
+    const { s, approved, prId } = await ejectedManual('manual-race@example.com', 'MANUAL');
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
     const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_6' }, () => gate);
@@ -365,15 +385,26 @@ describe('the members read — requeueable only where Queue again is honest', ()
         )
       ).find((m) => m.pullRequestId !== prId)!;
 
-    // A standing failure exit at the head the approval named.
+    // A standing FAILURE exit at the head the approval named: NOT requeueable — the card is
+    // asked again instead (§4 FOURTH AMENDMENT, point 4; MOTIR-5802).
     expect(await read()).toMatchObject({
-      requeueable: true,
+      requeueable: false,
       retryable: false,
       queued: false,
       exit: { rawReason: 'CI_FAILURE', disposition: 'failure', headSha: 'sha-a', requeuedAt: null },
     });
     // A member the queue never removed.
     expect(await sibling()).toMatchObject({ requeueable: false, exit: null, queued: true });
+
+    // The SAME exit, had it been NEUTRAL: Queue again is honest.
+    await adminDb.githubPullRequestQueueExit.updateMany({
+      where: { pullRequestId: prId },
+      data: { disposition: 'neutral', rawReason: 'MANUAL' },
+    });
+    expect(await read()).toMatchObject({
+      requeueable: true,
+      exit: { rawReason: 'MANUAL', disposition: 'neutral', headSha: 'sha-a', requeuedAt: null },
+    });
 
     // Put back: no longer requeueable.
     await adminDb.githubPullRequestQueueExit.updateMany({
@@ -601,32 +632,21 @@ describe('the card’s ciState follows Queue again (MOTIR-5717)', () => {
   const ciStateOf = async (id: string) =>
     (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).ciState;
 
-  it('manual: an ejected card reads failing, and a successful press clears it', async () => {
+  // The manual press no longer re-queues a FAILURE exit (MOTIR-5802), so it no longer
+  // stamps it either: the red stands until the fresh gate's approval re-queues it
+  // (MOTIR-5805) or a push moves the head. A NEUTRAL exit never folds into the verdict.
+  it('manual: an ejected card reads failing, and the refused press leaves it failing', async () => {
     const { s, item, approved, prId } = await ejectedManual('ci-manual-ok@example.com');
     expect(await ciStateOf(item.id)).toBe('failing');
-    // The stamp commits BEFORE the host is asked, and the badge has already cleared.
-    let atHostCall: string | null | undefined;
-    stubHost({ outcome: 'enqueued', entryId: 'MQE_CI' }, async () => {
-      atHostCall = await ciStateOf(item.id);
-    });
-
-    await press(s, approved.id, prId);
-
-    expect(atHostCall).toBe('passing');
-    expect(await ciStateOf(item.id)).toBe('passing');
-  });
-
-  it('manual: a refused re-enqueue releases the stamp, and the card reads failing again', async () => {
-    const { s, item, approved, prId } = await ejectedManual('ci-manual-refused@example.com');
-    let atHostCall: string | null | undefined;
-    stubHost({ outcome: 'refused', refusal: { code: 'conflict' } }, async () => {
-      atHostCall = await ciStateOf(item.id);
-    });
+    const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_CI' });
 
     const outcome = await press(s, approved.id, prId);
 
-    expect(outcome).toMatchObject({ outcome: 'refused' });
-    expect(atHostCall).toBe('passing');
+    expect(outcome).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
+    });
+    expect(host).not.toHaveBeenCalled();
     expect(await ciStateOf(item.id)).toBe('failing');
   });
 

@@ -253,17 +253,18 @@ describe('1 · exit → badge, and the promotion refuses', () => {
 });
 
 describe('2 · Queue again → clear', () => {
-  it('manual: a successful re-enqueue clears the red; a HOST REFUSAL brings it back', async () => {
+  // Queue again on a manual FAILURE exit is retired (MOTIR-5802; §4 FOURTH AMENDMENT,
+  // point 4): the refused press stamps nothing, so the red stands.
+  it('manual: Queue again on a failure exit is refused, and the red stands', async () => {
     const { s, item, gateId } = await ejectedManual('requeue-manual@example.com');
 
-    stubHost({ outcome: 'refused', refusal: { code: 'conflict' } });
-    expect(await queueAgain(s, gateId, 7)).toMatchObject({ outcome: 'refused' });
+    const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_7b' });
+    expect(await queueAgain(s, gateId, 7)).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
+    });
+    expect(host).not.toHaveBeenCalled();
     expect(await ciStateOf(item.id)).toBe('failing');
-
-    vi.restoreAllMocks();
-    stubHost({ outcome: 'enqueued', entryId: 'MQE_7b' });
-    expect(await queueAgain(s, gateId, 7)).toMatchObject({ outcome: 'enqueued' });
-    expect(await ciStateOf(item.id)).toBe('passing');
   });
 
   it('auto: a person’s Queue again clears the red', async () => {
@@ -397,7 +398,7 @@ describe('4 · the fold ⟺ the promotion, over seeded cards', () => {
 });
 
 describe('5 · claim ⟸ exit, and the page’s repair view', () => {
-  it('the ejected card is claimed with the exit’s reason and check; the view offers it; after Queue again both refuse', async () => {
+  it('the ejected card is claimed with the exit’s reason and check; the view offers it; a refused Queue again changes neither', async () => {
     const { s, item, gateId } = await ejectedManual('claim@example.com');
     await adminDb.githubPullRequestQueueExit.updateMany({
       where: { pullRequestId: (await prRow(7)).id },
@@ -423,24 +424,26 @@ describe('5 · claim ⟸ exit, and the page’s repair view', () => {
     await dispatchRunService.close(claim.runId!, { stopReason: 'completed' }, s.ctx);
 
     stubHost({ outcome: 'enqueued', entryId: 'MQE_7c' });
-    await queueAgain(s, gateId, 7);
-    // The card is back at `approved`, so it is not at Implemented any more: the claim and
-    // the view both refuse, and neither offers a command for a card the queue now holds.
-    expect(await statusOf(item.id)).toBe('approved');
-    expect((await workItemRepairService.getRepairView(item.id, s.ctx)).state).toBe('hidden');
-    expect(
-      (await workItemRepairService.claimRepair(s.project.id, item.identifier, s.ctx)).outcome,
-    ).toBe('not_repairable');
+    // Queue again no longer re-queues a failure exit (MOTIR-5802), so the card stays where
+    // the ejection left it and the repair view still offers `motir fix`.
+    expect(await queueAgain(s, gateId, 7)).toMatchObject({ outcome: 'refused' });
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect((await workItemRepairService.getRepairView(item.id, s.ctx)).state).toBe('offer');
   });
 });
 
 describe('6 · the v1 resource → the CLI', () => {
-  it('the published deliveries read RED through the CLI’s adapter and verdict, and GREEN after Queue again', async () => {
-    const { s, item, gateId } = await ejectedManual('v1-cli@example.com');
+  it('the published deliveries read RED through the CLI’s adapter and verdict, and GREEN once the exit is re-queued', async () => {
+    const { s, item } = await ejectedManual('v1-cli@example.com');
     expect(ciVerdict(await cliDeliveries(s, item.identifier))).toBe('red');
 
-    stubHost({ outcome: 'enqueued', entryId: 'MQE_7d' });
-    await queueAgain(s, gateId, 7);
+    // The re-queue stamp is what lifts the red (MOTIR-5717). A manual failure is re-queued
+    // by approving the re-asked gate (MOTIR-5805), never by Queue again (MOTIR-5802), so
+    // this seam stamps the exit the way that approval does.
+    await adminDb.githubPullRequestQueueExit.updateMany({
+      where: { pullRequestId: (await prRow(7)).id },
+      data: { requeuedAt: new Date() },
+    });
     expect(ciVerdict(await cliDeliveries(s, item.identifier))).toBe('green');
   });
 

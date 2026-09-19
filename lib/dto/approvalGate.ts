@@ -599,9 +599,15 @@ export interface PullRequestApprovalMemberDTO {
   /** The pull request's latest merge-queue EXIT (MOTIR-5632), or null when the queue
    *  never removed it. The failing check's name and link are MOTIR-5633's. */
   exit: PullRequestQueueExitDTO | null;
+  /** The latest exit has not been put back, and the pull request is still at the head
+   *  the approval named — the exit still describes the approved code, whatever its
+   *  disposition. False once a push moved the head (*New commits since approval*). */
+  exitAtApprovedHead: boolean;
   /** *Queue again* is offered (MOTIR-5634; `approval-gates.md` §4 THIRD AMENDMENT,
-   *  decision 5): the approval stands, the latest exit has not been put back, and the
-   *  pull request is still at the head the approval named. */
+   *  decision 5): {@link exitAtApprovedHead}, the pull request is open, and the exit is
+   *  NEUTRAL. ⚠️ Never for a FAILURE exit (MOTIR-5802; §4 FOURTH AMENDMENT, point 4): the
+   *  card is asked again on a fresh gate instead, so the frame reads `exit.disposition` to
+   *  tell a failure at the approved head from a moved head. */
   requeueable: boolean;
 }
 

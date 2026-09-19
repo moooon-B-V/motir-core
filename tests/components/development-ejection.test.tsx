@@ -86,6 +86,7 @@ function members(over: Partial<PullRequestApprovalMemberDTO>): PullRequestApprov
       queued: false,
       retryable: false,
       exit: null,
+      exitAtApprovedHead: false,
       requeueable: false,
     },
     {
@@ -94,6 +95,7 @@ function members(over: Partial<PullRequestApprovalMemberDTO>): PullRequestApprov
       queued: false,
       retryable: false,
       exit: exit(),
+      exitAtApprovedHead: true,
       requeueable: true,
       ...over,
     },
@@ -217,7 +219,7 @@ describe('manual mode, on the card’s decided approval', () => {
   });
 
   it('E3 · a moved head: New commits since approval, and no Queue again', () => {
-    renderFrame({ members: members({ requeueable: false }) });
+    renderFrame({ members: members({ exitAtApprovedHead: false, requeueable: false }) });
     expect(within(gatewayRow()).getByText(pra.outcome.newCommits)).toBeTruthy();
     expect(queueAgain()).toBeNull();
     expect(screen.getByText(pra.exit.newCommits)).toBeTruthy();
