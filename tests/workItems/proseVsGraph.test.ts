@@ -697,7 +697,7 @@ describe('overGateSizing — THE ESTIMATION GATE, as two integers and an enum', 
   it('reports the POINTS ceiling on its own, AT the threshold and not below it', () => {
     expect(overGateSizing({ ...rightSized, storyPoints: ESTIMATION_GATE_STORY_POINTS })).toEqual({
       threshold: 'story_points',
-      storyPoints: 13,
+      storyPoints: 8,
       estimateMinutes: 45,
     });
     // 13 is the SPLIT SIGNAL itself, so the comparison is `>=`. The value below
@@ -748,30 +748,36 @@ describe('overGateSizing — THE ESTIMATION GATE, as two integers and an enum', 
     });
   });
 
-  it('MOTIR-3154 SHAPE — 8 points / 240 minutes FIRES on the minutes arm: the human-estimate tell', () => {
-    // The case the arm exists for, and the reason it is moved rather than
-    // deleted: the gate names a human half-day as the tell that *"you estimated
-    // the human, not the agent"* (~5x too high). The points column is 8, below
-    // the 13 split signal, so ONLY the minutes arm can catch it.
+  it('MOTIR-3154 SHAPE — 8 points / 240 minutes FIRES on BOTH arms: the human-estimate tell', () => {
+    // The case the minutes arm exists for, and the reason it is moved rather
+    // than deleted: the gate names a human half-day as the tell that *"you
+    // estimated the human, not the agent"* (~5x too high). Its points column is
+    // 8, which was below the old 13 threshold, so before MOTIR-5588 ONLY the
+    // minutes arm caught it. 8 IS now the split signal, so it names both.
     expect(overGateSizing({ ...rightSized, storyPoints: 8, estimateMinutes: 240 })).toEqual({
-      threshold: 'estimate_minutes',
+      threshold: 'both',
       storyPoints: 8,
+      estimateMinutes: 240,
+    });
+    // The same half-day under the split signal is still caught — by minutes alone.
+    expect(overGateSizing({ ...rightSized, storyPoints: 5, estimateMinutes: 240 })).toEqual({
+      threshold: 'estimate_minutes',
+      storyPoints: 5,
       estimateMinutes: 240,
     });
   });
 
-  it('leaves the POINTS arm exactly where it was — 13 at-or-above, whatever the minutes say', () => {
-    // The half that was right stays right. `13+` is the gate's own literal
-    // signal, read off the card's own column, so it fires on the same cards it
-    // fired on before MOTIR-3271 — including one whose minutes are now well
-    // inside the threshold, which is the case a minutes-only change could have
-    // silently altered.
-    expect(overGateSizing({ ...rightSized, storyPoints: 13, estimateMinutes: 20 })).toEqual({
+  it('fires the POINTS arm at-or-above 8, whatever the minutes say', () => {
+    // `8+` is the gate's own literal split signal (MOTIR-5588 — it was 13, a
+    // value the planner's `1 / 2 / 3 / 5 / 8` deck can never reach), read off
+    // the card's own column, so it fires even on a card whose minutes are well
+    // inside the threshold.
+    expect(overGateSizing({ ...rightSized, storyPoints: 8, estimateMinutes: 20 })).toEqual({
       threshold: 'story_points',
-      storyPoints: 13,
+      storyPoints: 8,
       estimateMinutes: 20,
     });
-    expect(overGateSizing({ ...rightSized, storyPoints: 12, estimateMinutes: 20 })).toBeNull();
+    expect(overGateSizing({ ...rightSized, storyPoints: 7, estimateMinutes: 20 })).toBeNull();
   });
 
   it('a card over BOTH is ONE finding that names both — MOTIR-3068, verbatim', () => {
@@ -831,13 +837,14 @@ describe('overGateSizing — THE ESTIMATION GATE, as two integers and an enum', 
     // the rule. The two numbers are pinned to DIFFERENT things, which is the
     // MOTIR-3271 correction:
     //
-    //   13 is QUOTED from `plan-rules/kind-leaf-deepen.md` — the literal `13+`
-    //      split signal, read off the same column the rule names.
+    //   8 is the gate's literal `8+` split signal — the top of the planner's
+    //      Fibonacci deck — read off the same column the rule names
+    //      (MOTIR-5588; it was 13, which no planner-authored leaf could reach).
     //   70 is DERIVED from the same pack's calibration table — the top of its
     //      largest endorsed band (5 points, ~50–70 total). It is NOT the gate's
     //      60-minute ceiling, because that ceiling is on agent run time
     //      EXCLUDING CI while `estimateMinutes` sums the two.
-    expect(ESTIMATION_GATE_STORY_POINTS).toBe(13);
+    expect(ESTIMATION_GATE_STORY_POINTS).toBe(8);
     expect(ESTIMATION_GATE_ESTIMATE_MINUTES).toBe(70);
   });
 });
