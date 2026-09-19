@@ -313,7 +313,7 @@ export const pullRequestMergeService = {
    * plain door, decided the design alone, and left the merge gate for a SECOND press Q4
    * forbids. Once the queue lists that card by its design gate only, this is the one press
    * it offers, so it has to mean what the frame's press means. A design gate with no merge
-   * gate beside it decides exactly as before: `approveDesignAndMerge` finds no companion and
+   * gate beside it decides exactly as before: `approvePrimaryAndMerge` finds no companion and
    * merges nothing.
    */
   async decideGate(
@@ -329,8 +329,10 @@ export const pullRequestMergeService = {
         const { approval, members } = await approveAndMergeGate(input, ctx);
         return { ...approval, members };
       }
-      if (gate?.kind === 'design_result') {
-        const { approval, members } = await approveDesignAndMerge(input, ctx);
+      // MOTIR-5789 — an ACCEPTANCE gate is a PRIMARY exactly as a design gate is (the
+      // MOTIR-5787 amendment, point 2): one press decides it and carries the story's merge.
+      if (gate?.kind === 'design_result' || gate?.kind === 'acceptance_result') {
+        const { approval, members } = await approvePrimaryAndMerge(input, ctx);
         return { ...approval, members };
       }
     }
@@ -429,7 +431,10 @@ export const pullRequestMergeService = {
     // stops a gate of some future kind merging things by accident, and a kind admitted
     // by name is a decision somebody made — a guard deleted is a decision nobody will
     // remember making.
-    if (gate && gate.kind === 'design_result') return approveDesignAndMerge(input, ctx);
+    // MOTIR-5789: `acceptance_result` is admitted by name beside it, for the same reason.
+    if (gate && (gate.kind === 'design_result' || gate.kind === 'acceptance_result')) {
+      return approvePrimaryAndMerge(input, ctx);
+    }
     if (gate && gate.kind !== APPROVAL_KIND) {
       throw new Error(`approveAndMerge was handed a ${gate.kind} gate (${input.gateId})`);
     }
@@ -656,7 +661,7 @@ async function approveAndMergeGate(
  * next green verdict with no second press — `settleGreenVerdict` carries it, because
  * the predicate has answered *no merge gate is owed* for the same reason.
  */
-async function approveDesignAndMerge(
+async function approvePrimaryAndMerge(
   input: Omit<DecideGateInput, 'decision'>,
   ctx: ServiceContext,
 ): Promise<ApproveAndMergeResult> {

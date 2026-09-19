@@ -222,16 +222,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // `pullRequestApprovalGates.ts` is a thin wrapper over it. `designEvidenceService`
       // stays a declared caller because the publish creates the design gate inside its
       // own evidence transaction, over the row it has just inserted.
-      // AMENDED ON THE RECORD — MOTIR-4950, 2026-09-19. `acceptanceEvidenceService` joins
-      // for the design publish's reason: a receipt publish raises the story's
-      // `acceptance_result` gate inside its own transaction, over the receipt row it has
-      // just inserted (`approval-gates.md` §1, the MOTIR-5787 amendment, point 1). Folding
-      // that raise into the gate-set predicate is MOTIR-5789's.
-      callers: [
-        'lib/services/acceptanceEvidenceService.ts',
-        'lib/services/designEvidenceService.ts',
-        'lib/services/gateSetFor.ts',
-      ],
+      // MOTIR-5789, 2026-09-19: a receipt publish raises the story's `acceptance_result`
+      // gate through `reconcileGatesFor` (the predicate), so it adds NO caller here —
+      // MOTIR-4950 declared `acceptanceEvidenceService` for one commit and this removes it.
+      callers: ['lib/services/designEvidenceService.ts', 'lib/services/gateSetFor.ts'],
     },
     {
       method: 'supersedeAwaitingByWorkItem',

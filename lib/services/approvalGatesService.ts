@@ -195,7 +195,7 @@ export interface DecideGateResult {
    * when the card has no such gate.
    *
    * ⚠️ IT IS WHAT MAKES THE TWO-GATE PRESS SAFE after the first commit.
-   * `approveDesignAndMerge` decides the companion in a SECOND transaction, and a
+   * `approvePrimaryAndMerge` decides the companion in a SECOND transaction, and a
    * push between the two would raise a new merge gate over commits the reader
    * never saw. The press decides the companion only when its version is still
    * this one.
@@ -275,7 +275,7 @@ export interface WorkItemGateRead {
 /**
  * The `subjectVersion` of the card's AWAITING approve-to-merge gate, when the gate
  * being read or decided is a DESIGN gate — the pull requests one press on a design
- * also decides and merges (MOTIR-5652, `pullRequestMergeService.approveDesignAndMerge`).
+ * also decides and merges (MOTIR-5652, `pullRequestMergeService.approvePrimaryAndMerge`).
  * Null for every other kind, and when the card has no such gate.
  *
  * ⚠️ THE SAME LOOKUP THE PRESS MAKES — the card's awaiting gates, filtered to the
@@ -285,7 +285,9 @@ async function companionSubjectVersion(
   gate: { kind: string; workItemId: string },
   tx: Prisma.TransactionClient,
 ): Promise<string | null> {
-  if (gate.kind !== 'design_result') return null;
+  // A PRIMARY kind's press also decides the merge gate beside it — the design's
+  // (MOTIR-5652) and, since MOTIR-5789, a story's acceptance (the MOTIR-5787 amendment).
+  if (gate.kind !== 'design_result' && gate.kind !== 'acceptance_result') return null;
   const merge = (await approvalGateRepository.findAwaitingByWorkItem(gate.workItemId, tx)).find(
     (row) => row.kind === 'pull_request_approval',
   );
@@ -1412,7 +1414,7 @@ export const approvalGatesService = {
       // wrong only when two things happened close together.
       //
       // ⚠️ THE COMPANION IS READ EVEN FOR THE BYPASS, because the result reports it:
-      // `approveDesignAndMerge` decides the companion only while its version is still
+      // `approvePrimaryAndMerge` decides the companion only while its version is still
       // the one checked here.
       const companionVersion = await companionSubjectVersion(locked, tx);
       if (input.stamp !== DECIDED_WITHOUT_A_READER) {

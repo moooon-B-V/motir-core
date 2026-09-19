@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
-import { routingTargetId } from '@/lib/approvalGates/routing';
+import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -302,21 +302,13 @@ async function persistEvidence(
     // ineligible project before anything is uploaded, so a receipt that reaches this
     // line exists only on a project whose switch is ON.
     //
-    // ONE GATE PER RECORDING, keyed on the receipt row — created a few statements
-    // above, so the partial unique `(work_item_id, kind, subject_id) WHERE awaiting`
-    // cannot collide. Routed by ADR §2's rule, answered here at creation (§6a).
-    await approvalGateRepository.create(
-      {
-        workspaceId: ctx.workspaceId,
-        projectId: args.story.projectId,
-        workItemId: args.story.id,
-        kind: 'acceptance_result',
-        subjectId: evidence.id,
-        subjectVersion: evidence.commitSha,
-        routedToId: routingTargetId(args.story),
-      },
-      tx,
-    );
+    // ⚠️ AND IT IS THE PREDICATE THAT RAISES IT (MOTIR-5789), not this site. The publish
+    // WAKES the evaluation (MOTIR-5670's *the card's own changes re-ask it*) and
+    // `reconcileGatesFor` raises whatever the card should be asking — the acceptance
+    // question over the receipt just inserted, and on a story run whose set is green the
+    // merge question beside it. One creator, so the two can never disagree about which
+    // questions this story holds.
+    await reconcileGatesFor(args.story, tx);
     return evidence;
   });
 }

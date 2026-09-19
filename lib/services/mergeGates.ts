@@ -7,8 +7,9 @@ import {
   githubPullRequestRepository,
   type GithubPullRequestWithInstallation,
 } from '@/lib/repositories/githubPullRequestRepository';
-import { designApprovalStandsForMerge, designHoldsMerge } from '@/lib/approvalGates/gateSet';
+import { designHoldsMerge, primaryApprovalStandsForMerge } from '@/lib/approvalGates/gateSet';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -83,20 +84,32 @@ export function mergeCandidateHead(
  *
  * Either way only the RUN TARGET's members count, and only merge candidates.
  */
-/** {@link designApprovalStandsForMerge}, read from the card's own rows. */
-async function designApprovalHolds(
+/** {@link primaryApprovalStandsForMerge}, read from the card's own rows — a standing
+ *  DESIGN or ACCEPTANCE approval (MOTIR-5789). */
+async function primaryApprovalHolds(
   workItemId: string,
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
-  const [currentDesign, latestDesignGate, latestMergeGate] = await Promise.all([
-    designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
-    approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
-    approvalGateRepository.findLatestByWorkItem(workItemId, 'pull_request_approval', tx),
-  ]);
+  const [currentDesign, latestDesignGate, currentReceipt, latestAcceptanceGate, latestMergeGate] =
+    await Promise.all([
+      designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
+      approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
+      acceptanceEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
+      approvalGateRepository.findLatestByWorkItem(workItemId, 'acceptance_result', tx),
+      approvalGateRepository.findLatestByWorkItem(workItemId, 'pull_request_approval', tx),
+    ]);
   // The same ONE-TIME clause the predicate applies: once a merge gate has existed,
   // the commits are the merge gate's question and a later green is not this
   // approval's to carry (MOTIR-5666).
-  return latestMergeGate === null && designApprovalStandsForMerge(currentDesign, latestDesignGate);
+  return (
+    latestMergeGate === null &&
+    primaryApprovalStandsForMerge({
+      currentDesign,
+      latestDesignGate,
+      currentReceipt,
+      latestAcceptanceGate,
+    })
+  );
 }
 
 /**
@@ -134,8 +147,8 @@ export async function settleGreenVerdict(
     // The predicate has already answered *no merge gate is owed* for the same
     // reason, so without this arm the card would go green holding an approval
     // nobody carried out. Both readers ask the one question, in
-    // `designApprovalStandsForMerge`.
-    if (!(await designApprovalHolds(args.item.id, tx))) return [];
+    // `primaryApprovalStandsForMerge`.
+    if (!(await primaryApprovalHolds(args.item.id, tx))) return [];
   } else if (mode?.prMergeMode !== 'auto') {
     return [];
   } else if ((await resolveRunTargetFor(args.item, tx)).kind === 'ancestor') {
