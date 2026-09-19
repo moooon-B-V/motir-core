@@ -8215,7 +8215,7 @@ shows this is `tests/e2e/acceptance-gate.spec.ts`; the guard is
 verbs, a pill of its own was the decided state; MOTIR-5790 handed the decision to the overlay
 and left the pill behind, which made the panel a second place the product says _approved_ — and
 it says it with less: no decider, no moment, no version. The surface for a decided question
-already exists and is specified elsewhere: **`design/workbench/approval-control.mock.html`'s
+already exists and is specified elsewhere: **`design/work-items/approval-control.mock.html`'s
 record band**, the frame every other kind uses.
 
 So the standalone **Acceptance** section now renders `ApprovalGateControl` for every state the
