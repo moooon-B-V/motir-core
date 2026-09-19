@@ -705,20 +705,26 @@ export const projectsService = {
    * lists projects the actor can actually open (no shown-then-denied). Workspace
    * owner/admin keep every project; the filter resolves roles in one batch (no
    * N+1) inside the same workspace transaction.
+   *
+   * `tokenProjectId` is the acting API token's project binding (MOTIR-2607): a
+   * bound token lists exactly its one project, the same set every per-key read
+   * lets it open (MOTIR-5763). Session callers and device tokens omit it.
    */
-  async listProjects(workspaceId: string, actorUserId: string): Promise<ProjectDTO[]> {
+  async listProjects(
+    workspaceId: string,
+    actorUserId: string,
+    tokenProjectId?: string,
+  ): Promise<ProjectDTO[]> {
     await projectsService.assertMembership(actorUserId, workspaceId);
-    const browsable = await withWorkspaceContext(
-      { userId: actorUserId, workspaceId },
-      async (tx) => {
-        const projects = await projectRepository.findByWorkspace(workspaceId, tx);
-        return projectAccessService.filterBrowsable(
-          projects,
-          { userId: actorUserId, workspaceId },
-          tx,
-        );
-      },
-    );
+    const actor = {
+      userId: actorUserId,
+      workspaceId,
+      ...(tokenProjectId !== undefined ? { tokenProjectId } : {}),
+    };
+    const browsable = await withWorkspaceContext(actor, async (tx) => {
+      const projects = await projectRepository.findByWorkspace(workspaceId, tx);
+      return projectAccessService.filterBrowsable(projects, actor, tx);
+    });
     return browsable.map((project) => toProjectDTO(project));
   },
 

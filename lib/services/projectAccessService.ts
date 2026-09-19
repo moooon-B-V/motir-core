@@ -315,12 +315,21 @@ export const projectAccessService = {
    * the actor's roles in ONE pass — workspace role once, all project memberships
    * in a single query — then applies the pure `canBrowse` policy in memory (no
    * N+1). A workspace owner/admin keeps every project; a non-member gets none.
+   *
+   * ⚠️ It honours the token's PROJECT BINDING itself (MOTIR-5763). This batch
+   * path never calls {@link resolveInputs}, so the refusal there did not reach
+   * it: a project-bound token was LISTED every project it would then 404 on.
+   * A bound actor keeps at most its one project, before any role is read.
    */
   async filterBrowsable<T extends Pick<Project, 'id' | 'accessLevel'>>(
     projects: T[],
     ctx: AccessActorContext,
     tx?: Prisma.TransactionClient,
   ): Promise<T[]> {
+    const tokenProjectId = ctx.tokenProjectId;
+    if (tokenProjectId !== undefined) {
+      projects = projects.filter((p) => p.id === tokenProjectId);
+    }
     if (projects.length === 0) return [];
     // MOTIR-2527: one bound transaction for both reads — `project_membership` is gated
     // on `app.workspace_id` too, so binding only the membership read would silently
