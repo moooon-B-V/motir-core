@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Design mock · The DECISION port — the decision document as the primary question — MOTIR-5673 (a delta of approve-and-merge.mock.html)</title>
+    <title>
+      Design mock · The DECISION port — the decision document as the primary question — MOTIR-5673
+      (a delta of approve-and-merge.mock.html)
+    </title>
     <!--
       DELTA MOCK — Subtask MOTIR-5673 (Story MOTIR-4907), the design MOTIR-5678 (the port)
       and MOTIR-5679 (the row) are blocked_by. Drawn to docs/decisions/approval-gates.md §8's
@@ -3032,7 +3035,6 @@
         text-transform: uppercase;
         color: var(--el-text-secondary);
       }
-    
 
       /* ══ MOTIR-5438 · the approval OVERLAY around the approve-to-merge frame ══════════════════
          Every rule re-declares design/workbench/approval-overlay.mock.html's markup (§ 22, the
@@ -3448,7 +3450,7 @@
       .rw-btn:hover {
         background: var(--el-surface);
       }
-    
+
       /* ── MOTIR-5673 · the DECISION document's slot (the one new element) ─────────────────
          Composed from the How-to-test part: its head row (dvb-htt-head) and its rendered
          markdown (dvb-md). It sits FIRST in the port, where a design card's result sits
@@ -3515,7 +3517,6 @@
       .dd-held-band .af-btn {
         margin-left: auto;
       }
-
     </style>
   </head>
   <body>
@@ -4380,9 +4381,17 @@
           <path d="M7 7h10v10" />
           <path d="M7 17 17 7" />
         </symbol>
-      
+
         <!-- lucide `scale` — the decision TYPE's own mark (lib/issues/workItemTypeMeta.ts) -->
-        <symbol viewBox="0 0 24 24" id="i-scale" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-scale"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M12 3v18" />
           <path d="m19 8 3 8a5 5 0 0 1-6 0zV7" />
           <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" />
@@ -4390,19 +4399,36 @@
           <path d="M7 21h10" />
         </symbol>
         <!-- lucide `file-x` — no single document to show -->
-        <symbol viewBox="0 0 24 24" id="i-file-x" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-file-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
           <path d="M14 2v5a1 1 0 0 0 1 1h5" />
           <path d="m14.5 12.5-5 5" />
           <path d="m9.5 12.5 5 5" />
         </symbol>
         <!-- lucide `files` — several documents -->
-        <symbol viewBox="0 0 24 24" id="i-files" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-files"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" />
           <path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z" />
           <path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1" />
         </symbol>
-
       </defs>
     </svg>
     <div class="review-head">
@@ -4419,7 +4445,10 @@
     </div>
     <div class="ov-sheet">
       <section class="ov-group">
-        <div class="panel-label">Panel 1 · <b>awaiting, routed to you</b> — the decision document is the PRIMARY question; How to test and the pull request sit beneath it; ONE Approve and merge</div>
+        <div class="panel-label">
+          Panel 1 · <b>awaiting, routed to you</b> — the decision document is the PRIMARY question;
+          How to test and the pull request sit beneath it; ONE Approve and merge
+        </div>
         <div class="panel">
           <div class="card-body" style="padding-bottom: 0">
             <div class="dvb-cap">ACME-18</div>
@@ -4429,79 +4458,122 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting you</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <span class="dd-meta"
-                          ><span class="mono">docs/decisions/page-body.md</span><span
-                            >blob <span class="mono">3f9a2c1</span> at <span class="mono">7a9e0c1</span></span
-                          ><a class="dd-link" href="#"
-                            >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
-                        ></span>
-                      <div class="dvb-md">
-                        <h1>ADR: How a page stores its body</h1>
-                        <p><strong>Status:</strong> Proposed · written by Run #502</p>
-                        <h2>Context</h2>
-                        <p>
-                          A page is edited by several people at once and read far more often than it is
-                          written. Its body needs to merge concurrent edits and to render quickly.
-                        </p>
-                        <h2>Decision</h2>
-                        <p>
-                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and HTML
-                          from it on save. Readers are served the derived HTML.
-                        </p>
-                        <h2>Consequences</h2>
-                        <ul>
-                          <li>Concurrent edits merge without locking.</li>
-                          <li>Every save writes three columns, and the derived two can be rebuilt.</li>
-                        </ul>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-foot">
-                    <span class="af-why">Approving accepts this decision and merges <b>moooon/motir-core · #214</b>, then moves <b>ACME-18</b> to Approved.</span
-                    ><span class="af-verbs"
-                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
-                      ><button class="af-btn af-btn-primary" type="button">Approve and merge</button></span
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
                     >
                   </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <span class="dd-meta"
+                      ><span class="mono">docs/decisions/page-body.md</span
+                      ><span
+                        >blob <span class="mono">3f9a2c1</span> at
+                        <span class="mono">7a9e0c1</span></span
+                      ><a class="dd-link" href="#"
+                        >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                    ></span>
+                    <div class="dvb-md">
+                      <h1>ADR: How a page stores its body</h1>
+                      <p><strong>Status:</strong> Proposed · written by Run #502</p>
+                      <h2>Context</h2>
+                      <p>
+                        A page is edited by several people at once and read far more often than it
+                        is written. Its body needs to merge concurrent edits and to render quickly.
+                      </p>
+                      <h2>Decision</h2>
+                      <p>
+                        Store the body as a <strong>Yjs document</strong>, and derive Markdown and
+                        HTML from it on save. Readers are served the derived HTML.
+                      </p>
+                      <h2>Consequences</h2>
+                      <ul>
+                        <li>Concurrent edits merge without locking.</li>
+                        <li>
+                          Every save writes three columns, and the derived two can be rebuilt.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Approving accepts this decision and merges <b>moooon/motir-core · #214</b>,
+                    then moves <b>ACME-18</b> to Approved.</span
+                  ><span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button class="af-btn af-btn-primary" type="button">
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">Band 1 names the kind <b>Decision</b> and the document's path. Band 2 is the Development block in the design card's order — the subject first, then How to test, then the pull requests (<span class="mono">DevelopmentSection</span>). The document is the file at the pull request's head, rendered as Markdown with the block's own <span class="mono">dvb-md</span> styles; its path, its blob and the head it was read at are in the slot's meta line, with <i>View on GitHub</i>. Band 3 is the shipped approve-and-merge band: one press accepts the decision AND merges (§8's FIFTH AMENDMENT, clause 5).</p>
+        <p class="panel-note">
+          Band 1 names the kind <b>Decision</b> and the document's path. Band 2 is the Development
+          block in the design card's order — the subject first, then How to test, then the pull
+          requests (<span class="mono">DevelopmentSection</span>). The document is the file at the
+          pull request's head, rendered as Markdown with the block's own
+          <span class="mono">dvb-md</span> styles; its path, its blob and the head it was read at
+          are in the slot's meta line, with <i>View on GitHub</i>. Band 3 is the shipped
+          approve-and-merge band: one press accepts the decision AND merges (§8's FIFTH AMENDMENT,
+          clause 5).
+        </p>
       </section>
       <section class="ov-group">
         <div class="panel-label">Panel 1 · <b>dark</b></div>
@@ -4514,79 +4586,116 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting you</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <span class="dd-meta"
-                          ><span class="mono">docs/decisions/page-body.md</span><span
-                            >blob <span class="mono">3f9a2c1</span> at <span class="mono">7a9e0c1</span></span
-                          ><a class="dd-link" href="#"
-                            >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
-                        ></span>
-                      <div class="dvb-md">
-                        <h1>ADR: How a page stores its body</h1>
-                        <p><strong>Status:</strong> Proposed · written by Run #502</p>
-                        <h2>Context</h2>
-                        <p>
-                          A page is edited by several people at once and read far more often than it is
-                          written. Its body needs to merge concurrent edits and to render quickly.
-                        </p>
-                        <h2>Decision</h2>
-                        <p>
-                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and HTML
-                          from it on save. Readers are served the derived HTML.
-                        </p>
-                        <h2>Consequences</h2>
-                        <ul>
-                          <li>Concurrent edits merge without locking.</li>
-                          <li>Every save writes three columns, and the derived two can be rebuilt.</li>
-                        </ul>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-foot">
-                    <span class="af-why">Approving accepts this decision and merges <b>moooon/motir-core · #214</b>, then moves <b>ACME-18</b> to Approved.</span
-                    ><span class="af-verbs"
-                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
-                      ><button class="af-btn af-btn-primary" type="button">Approve and merge</button></span
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
                     >
                   </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <span class="dd-meta"
+                      ><span class="mono">docs/decisions/page-body.md</span
+                      ><span
+                        >blob <span class="mono">3f9a2c1</span> at
+                        <span class="mono">7a9e0c1</span></span
+                      ><a class="dd-link" href="#"
+                        >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                    ></span>
+                    <div class="dvb-md">
+                      <h1>ADR: How a page stores its body</h1>
+                      <p><strong>Status:</strong> Proposed · written by Run #502</p>
+                      <h2>Context</h2>
+                      <p>
+                        A page is edited by several people at once and read far more often than it
+                        is written. Its body needs to merge concurrent edits and to render quickly.
+                      </p>
+                      <h2>Decision</h2>
+                      <p>
+                        Store the body as a <strong>Yjs document</strong>, and derive Markdown and
+                        HTML from it on save. Readers are served the derived HTML.
+                      </p>
+                      <h2>Consequences</h2>
+                      <ul>
+                        <li>Concurrent edits merge without locking.</li>
+                        <li>
+                          Every save writes three columns, and the derived two can be rebuilt.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Approving accepts this decision and merges <b>moooon/motir-core · #214</b>,
+                    then moves <b>ACME-18</b> to Approved.</span
+                  ><span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button class="af-btn af-btn-primary" type="button">
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">Panel 1 under <span class="mono">data-theme="dark"</span>. Nothing in the slot takes a colour of its own; every ink is the block's.</p>
+        <p class="panel-note">
+          Panel 1 under <span class="mono">data-theme="dark"</span>. Nothing in the slot takes a
+          colour of its own; every ink is the block's.
+        </p>
       </section>
       <section class="ov-group">
         <div class="panel-label">Panel 1 · <b>narrow (~400px)</b></div>
@@ -4599,82 +4708,122 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting you</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <span class="dd-meta"
-                          ><span class="mono">docs/decisions/page-body.md</span><span
-                            >blob <span class="mono">3f9a2c1</span> at <span class="mono">7a9e0c1</span></span
-                          ><a class="dd-link" href="#"
-                            >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
-                        ></span>
-                      <div class="dvb-md">
-                        <h1>ADR: How a page stores its body</h1>
-                        <p><strong>Status:</strong> Proposed · written by Run #502</p>
-                        <h2>Context</h2>
-                        <p>
-                          A page is edited by several people at once and read far more often than it is
-                          written. Its body needs to merge concurrent edits and to render quickly.
-                        </p>
-                        <h2>Decision</h2>
-                        <p>
-                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and HTML
-                          from it on save. Readers are served the derived HTML.
-                        </p>
-                        <h2>Consequences</h2>
-                        <ul>
-                          <li>Concurrent edits merge without locking.</li>
-                          <li>Every save writes three columns, and the derived two can be rebuilt.</li>
-                        </ul>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-foot">
-                    <span class="af-why">Approving accepts this decision and merges <b>moooon/motir-core · #214</b>, then moves <b>ACME-18</b> to Approved.</span
-                    ><span class="af-verbs"
-                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
-                      ><button class="af-btn af-btn-primary" type="button">Approve and merge</button></span
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
                     >
                   </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <span class="dd-meta"
+                      ><span class="mono">docs/decisions/page-body.md</span
+                      ><span
+                        >blob <span class="mono">3f9a2c1</span> at
+                        <span class="mono">7a9e0c1</span></span
+                      ><a class="dd-link" href="#"
+                        >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                    ></span>
+                    <div class="dvb-md">
+                      <h1>ADR: How a page stores its body</h1>
+                      <p><strong>Status:</strong> Proposed · written by Run #502</p>
+                      <h2>Context</h2>
+                      <p>
+                        A page is edited by several people at once and read far more often than it
+                        is written. Its body needs to merge concurrent edits and to render quickly.
+                      </p>
+                      <h2>Decision</h2>
+                      <p>
+                        Store the body as a <strong>Yjs document</strong>, and derive Markdown and
+                        HTML from it on save. Readers are served the derived HTML.
+                      </p>
+                      <h2>Consequences</h2>
+                      <ul>
+                        <li>Concurrent edits merge without locking.</li>
+                        <li>
+                          Every save writes three columns, and the derived two can be rebuilt.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Approving accepts this decision and merges <b>moooon/motir-core · #214</b>,
+                    then moves <b>ACME-18</b> to Approved.</span
+                  ><span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button class="af-btn af-btn-primary" type="button">
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">The meta line wraps under the title; band 3 wraps its sentence above the verbs, as the frame already does.</p>
+        <p class="panel-note">
+          The meta line wraps under the title; band 3 wraps its sentence above the verbs, as the
+          frame already does.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 2 · <b>awaiting, not yours</b> — state B: the document is readable, no verbs, and who it waits on</div>
+        <div class="panel-label">
+          Panel 2 · <b>awaiting, not yours</b> — state B: the document is readable, no verbs, and
+          who it waits on
+        </div>
         <div class="panel">
           <div class="card-body" style="padding-bottom: 0">
             <div class="dvb-cap">ACME-18</div>
@@ -4684,139 +4833,114 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <span class="dd-meta"
-                          ><span class="mono">docs/decisions/page-body.md</span><span
-                            >blob <span class="mono">3f9a2c1</span> at <span class="mono">7a9e0c1</span></span
-                          ><a class="dd-link" href="#"
-                            >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
-                        ></span>
-                      <div class="dvb-md">
-                        <h1>ADR: How a page stores its body</h1>
-                        <p><strong>Status:</strong> Proposed · written by Run #502</p>
-                        <h2>Context</h2>
-                        <p>
-                          A page is edited by several people at once and read far more often than it is
-                          written. Its body needs to merge concurrent edits and to render quickly.
-                        </p>
-                        <h2>Decision</h2>
-                        <p>
-                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and HTML
-                          from it on save. Readers are served the derived HTML.
-                        </p>
-                        <h2>Consequences</h2>
-                        <ul>
-                          <li>Concurrent edits merge without locking.</li>
-                          <li>Every save writes three columns, and the derived two can be rebuilt.</li>
-                        </ul>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-foot"><span class="af-why">Waiting on <b>Ada L.</b>.</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p class="panel-note">Reading is not deciding: the port is live and the file opens on GitHub. Band 3 is <span class="mono">approvalGate.waitingOn</span>, as every kind draws it.</p>
-      </section>
-      <section class="ov-group">
-        <div class="panel-label">Panel 3a · <b>none</b> — the pull request adds no <span class="mono">docs/decisions/*.md</span></div>
-        <div class="panel">
-          <div class="card-body" style="padding-bottom: 0">
-            <div class="dvb-cap">ACME-18</div>
-            <div class="detail-title">Decide how a page stores its body</div>
-          </div>
-          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
-            <div class="card-head">
-              <div>
-                <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
-              </div>
-            </div>
-            <div class="card-body af-host">
-              <div class="af-frame">
-                <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">No decision document · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting you</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <div class="dvb-callout dvb-callout-missing" role="status">
-                        <svg aria-hidden="true"><use href="#i-file-x" /></svg><span><b>This pull request adds no decision document.</b> A decision is one file under <span class="mono">docs/decisions/</span>. Send it back to the agent with Request changes.</span>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-foot">
-                    <span class="af-why">Nothing can be approved until the pull request carries exactly one decision document. Nothing merges until then.</span
-                    ><span class="af-verbs"
-                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
-                      ><button class="af-btn af-btn-primary" type="button" disabled aria-disabled="true">Approve and merge</button></span
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
                     >
                   </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <span class="dd-meta"
+                      ><span class="mono">docs/decisions/page-body.md</span
+                      ><span
+                        >blob <span class="mono">3f9a2c1</span> at
+                        <span class="mono">7a9e0c1</span></span
+                      ><a class="dd-link" href="#"
+                        >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                    ></span>
+                    <div class="dvb-md">
+                      <h1>ADR: How a page stores its body</h1>
+                      <p><strong>Status:</strong> Proposed · written by Run #502</p>
+                      <h2>Context</h2>
+                      <p>
+                        A page is edited by several people at once and read far more often than it
+                        is written. Its body needs to merge concurrent edits and to render quickly.
+                      </p>
+                      <h2>Decision</h2>
+                      <p>
+                        Store the body as a <strong>Yjs document</strong>, and derive Markdown and
+                        HTML from it on save. Readers are served the derived HTML.
+                      </p>
+                      <h2>Consequences</h2>
+                      <ul>
+                        <li>Concurrent edits merge without locking.</li>
+                        <li>
+                          Every save writes three columns, and the derived two can be rebuilt.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why">Waiting on <b>Ada L.</b>.</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">Approve is <b>disabled</b> with its reason in band 3; Request changes stays enabled, because <i>there is no document here</i> is exactly what it exists to say. The pull request is green and still does not merge — the question holds it (§8's FIFTH AMENDMENT, clause 3). The gate's version: <span class="mono">moooon/motir-core:unresolvable:none</span>.</p>
+        <p class="panel-note">
+          Reading is not deciding: the port is live and the file opens on GitHub. Band 3 is
+          <span class="mono">approvalGate.waitingOn</span>, as every kind draws it.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 3b · <b>several</b> — two files under <span class="mono">docs/decisions/</span></div>
+        <div class="panel-label">
+          Panel 3a · <b>none</b> — the pull request adds no
+          <span class="mono">docs/decisions/*.md</span>
+        </div>
         <div class="panel">
           <div class="card-body" style="padding-bottom: 0">
             <div class="dvb-cap">ACME-18</div>
@@ -4826,60 +4950,108 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">2 decision documents · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting you</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <div class="dvb-callout dvb-callout-missing" role="status">
-                        <svg aria-hidden="true"><use href="#i-files" /></svg><span><b>This pull request changes 2 files under docs/decisions/</b> — <span class="mono">page-body.md</span>, <span class="mono">page-body-storage.md</span>. A decision has exactly one document.</span>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-foot">
-                    <span class="af-why">Nothing can be approved until the pull request carries exactly one decision document. Nothing merges until then.</span
-                    ><span class="af-verbs"
-                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
-                      ><button class="af-btn af-btn-primary" type="button" disabled aria-disabled="true">Approve and merge</button></span
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >No decision document · 1 pull request · delivered by Run #502</span
                     >
                   </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <div class="dvb-callout dvb-callout-missing" role="status">
+                      <svg aria-hidden="true"><use href="#i-file-x" /></svg
+                      ><span
+                        ><b>This pull request adds no decision document.</b> A decision is one file
+                        under <span class="mono">docs/decisions/</span>. Send it back to the agent
+                        with Request changes.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Nothing can be approved until the pull request carries exactly one decision
+                    document. Nothing merges until then.</span
+                  ><span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button
+                      class="af-btn af-btn-primary"
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                    >
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">Approve is <b>disabled</b> with its reason in band 3; Request changes stays enabled, because <i>there is no document here</i> is exactly what it exists to say. The pull request is green and still does not merge — the question holds it (§8's FIFTH AMENDMENT, clause 3). The gate's version: <span class="mono">moooon/motir-core:unresolvable:several</span>.</p>
+        <p class="panel-note">
+          Approve is <b>disabled</b> with its reason in band 3; Request changes stays enabled,
+          because <i>there is no document here</i> is exactly what it exists to say. The pull
+          request is green and still does not merge — the question holds it (§8's FIFTH AMENDMENT,
+          clause 3). The gate's version:
+          <span class="mono">moooon/motir-core:unresolvable:none</span>.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 3c · <b>gone at the head</b> — the captured file is not at the head any more</div>
+        <div class="panel-label">
+          Panel 3b · <b>several</b> — two files under <span class="mono">docs/decisions/</span>
+        </div>
         <div class="panel">
           <div class="card-body" style="padding-bottom: 0">
             <div class="dvb-cap">ACME-18</div>
@@ -4889,60 +5061,109 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting you</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <div class="dvb-callout dvb-callout-missing" role="status">
-                        <svg aria-hidden="true"><use href="#i-file-x" /></svg><span><b>The decision document is no longer at this pull request's head.</b> A push removed or renamed it.</span>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-foot">
-                    <span class="af-why">Nothing can be approved until the pull request carries exactly one decision document. Nothing merges until then.</span
-                    ><span class="af-verbs"
-                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
-                      ><button class="af-btn af-btn-primary" type="button" disabled aria-disabled="true">Approve and merge</button></span
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >2 decision documents · 1 pull request · delivered by Run #502</span
                     >
                   </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <div class="dvb-callout dvb-callout-missing" role="status">
+                      <svg aria-hidden="true"><use href="#i-files" /></svg
+                      ><span
+                        ><b>This pull request changes 2 files under docs/decisions/</b> —
+                        <span class="mono">page-body.md</span>,
+                        <span class="mono">page-body-storage.md</span>. A decision has exactly one
+                        document.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Nothing can be approved until the pull request carries exactly one decision
+                    document. Nothing merges until then.</span
+                  ><span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button
+                      class="af-btn af-btn-primary"
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                    >
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">Approve is <b>disabled</b> with its reason in band 3; Request changes stays enabled, because <i>there is no document here</i> is exactly what it exists to say. The pull request is green and still does not merge — the question holds it (§8's FIFTH AMENDMENT, clause 3). The gate's version: <span class="mono">read: gone_at_head</span>.</p>
+        <p class="panel-note">
+          Approve is <b>disabled</b> with its reason in band 3; Request changes stays enabled,
+          because <i>there is no document here</i> is exactly what it exists to say. The pull
+          request is green and still does not merge — the question holds it (§8's FIFTH AMENDMENT,
+          clause 3). The gate's version:
+          <span class="mono">moooon/motir-core:unresolvable:several</span>.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 3d · <b>host unreachable</b> — the file could not be read</div>
+        <div class="panel-label">
+          Panel 3c · <b>gone at the head</b> — the captured file is not at the head any more
+        </div>
         <div class="panel">
           <div class="card-body" style="padding-bottom: 0">
             <div class="dvb-cap">ACME-18</div>
@@ -4952,60 +5173,106 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting you</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <div class="dvb-callout dvb-callout-missing" role="status">
-                        <svg aria-hidden="true"><use href="#i-file-question" /></svg><span><b>Motir could not reach GitHub to show the decision document.</b> Nothing can be approved until it can be read. Try again in a moment.</span>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-foot">
-                    <span class="af-why">Nothing can be approved until the pull request carries exactly one decision document. Nothing merges until then.</span
-                    ><span class="af-verbs"
-                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
-                      ><button class="af-btn af-btn-primary" type="button" disabled aria-disabled="true">Approve and merge</button></span
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
                     >
                   </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <div class="dvb-callout dvb-callout-missing" role="status">
+                      <svg aria-hidden="true"><use href="#i-file-x" /></svg
+                      ><span
+                        ><b>The decision document is no longer at this pull request's head.</b> A
+                        push removed or renamed it.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Nothing can be approved until the pull request carries exactly one decision
+                    document. Nothing merges until then.</span
+                  ><span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button
+                      class="af-btn af-btn-primary"
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                    >
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">Approve is <b>disabled</b> with its reason in band 3; Request changes stays enabled, because <i>there is no document here</i> is exactly what it exists to say. The pull request is green and still does not merge — the question holds it (§8's FIFTH AMENDMENT, clause 3). The gate's version: <span class="mono">capture: unreadable · read: host_unreachable</span>.</p>
+        <p class="panel-note">
+          Approve is <b>disabled</b> with its reason in band 3; Request changes stays enabled,
+          because <i>there is no document here</i> is exactly what it exists to say. The pull
+          request is green and still does not merge — the question holds it (§8's FIFTH AMENDMENT,
+          clause 3). The gate's version: <span class="mono">read: gone_at_head</span>.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 4 · <b>approved, merge held until green</b> — the decision is answered; the merge waits on checks</div>
+        <div class="panel-label">
+          Panel 3d · <b>host unreachable</b> — the file could not be read
+        </div>
         <div class="panel">
           <div class="card-body" style="padding-bottom: 0">
             <div class="dvb-cap">ACME-18</div>
@@ -5015,189 +5282,108 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-state af-pill-ok"><span class="af-dot" aria-hidden="true"></span>Approved</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <span class="dd-meta"
-                          ><span class="mono">docs/decisions/page-body.md</span><span
-                            >blob <span class="mono">3f9a2c1</span> at <span class="mono">7a9e0c1</span></span
-                          ><a class="dd-link" href="#"
-                            >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
-                        ></span>
-                      <div class="dvb-md">
-                        <h1>ADR: How a page stores its body</h1>
-                        <p><strong>Status:</strong> Proposed · written by Run #502</p>
-                        <h2>Context</h2>
-                        <p>
-                          A page is edited by several people at once and read far more often than it is
-                          written. Its body needs to merge concurrent edits and to render quickly.
-                        </p>
-                        <h2>Decision</h2>
-                        <p>
-                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and HTML
-                          from it on save. Readers are served the derived HTML.
-                        </p>
-                        <h2>Consequences</h2>
-                        <ul>
-                          <li>Concurrent edits merge without locking.</li>
-                          <li>Every save writes three columns, and the derived two can be rebuilt.</li>
-                        </ul>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-peach"><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-record"><span>Decision accepted by <b>Ada L.</b> · 19 Sep 2026, 15:02</span><span class="dd-held"><svg aria-hidden="true"><use href="#i-clock" /></svg>The pull request merges when its checks pass — no second press.</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p class="panel-note">Pressed before CI spoke (AMENDMENT 6 Q4, one kind over). The record band says the decision is accepted and the merge follows the next green verdict by itself. There is <b>no verb anywhere</b> on this panel: a second press would ask a question whose answer is already on the record.</p>
-      </section>
-      <section class="ov-group">
-        <div class="panel-label">Panel 5a · <b>superseded by a push that CHANGED the document</b> — the old question, withdrawn (<span class="mono">head_moved</span>), pointing at the new one</div>
-        <div class="panel">
-          <div class="card-body" style="padding-bottom: 0">
-            <div class="dvb-cap">ACME-18</div>
-            <div class="detail-title">Decide how a page stores its body</div>
-          </div>
-          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
-            <div class="card-head">
-              <div>
-                <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
-              </div>
-            </div>
-            <div class="card-body af-host">
-              <div class="af-frame">
-                <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · blob 3f9a2c1</span>
-                    </div>
-                    <span class="af-pill-state af-pill-gone"><span class="af-dot" aria-hidden="true"></span>Withdrawn</span>
-                  </div><div class="af-port-dead"><b>A push changed the decision document, so this question was withdrawn.</b><span>Nobody decided it. The new version is asked in its place.</span><button class="af-btn af-btn-secondary" type="button">Show the current version</button></div><div class="af-record"><span>No decision · no one to attribute</span><span>withdrawn 19 Sep 2026, 15:20</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p class="panel-note">The decision gate's <span class="mono">head_moved</span> is written only when the document's blob changed, so its sentence says so — a per-kind line beside the shared one (see the notes' copy table). <i>Show the current version</i> is the frame's shipped re-read; it lands on Panel 1 for blob <span class="mono">9d41e07</span>.</p>
-      </section>
-      <section class="ov-group">
-        <div class="panel-label">Panel 5b · <b>a push that did NOT change the document</b> — the decision's answer stands; only the merge question moved</div>
-        <div class="panel">
-          <div class="card-body" style="padding-bottom: 0">
-            <div class="dvb-cap">ACME-18</div>
-            <div class="detail-title">Decide how a page stores its body</div>
-          </div>
-          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
-            <div class="card-head">
-              <div>
-                <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
-              </div>
-            </div>
-            <div class="card-body af-host">
-              <div class="af-frame">
-                <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Pull requests</span><span class="af-meta">1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting you</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <span class="dd-meta"
-                          ><span class="mono">docs/decisions/page-body.md</span><span
-                            >blob <span class="mono">3f9a2c1</span> at <span class="mono">c52b8e4</span></span
-                          ><a class="dd-link" href="#"
-                            >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
-                        ></span>
-                      <span class="dd-held"><svg aria-hidden="true"><use href="#i-check" /></svg>Decision accepted by <b>Ada L.</b> · 19 Sep 2026, 15:02 — unchanged at the new head</span><div class="dvb-md">
-                        <h1>ADR: How a page stores its body</h1>
-                        <p><strong>Status:</strong> Proposed · written by Run #502</p>
-                        <h2>Context</h2>
-                        <p>
-                          A page is edited by several people at once and read far more often than it is
-                          written. Its body needs to merge concurrent edits and to render quickly.
-                        </p>
-                        <h2>Decision</h2>
-                        <p>
-                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and HTML
-                          from it on save. Readers are served the derived HTML.
-                        </p>
-                        <h2>Consequences</h2>
-                        <ul>
-                          <li>Concurrent edits merge without locking.</li>
-                          <li>Every save writes three columns, and the derived two can be rebuilt.</li>
-                        </ul>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-foot">
-                    <span class="af-why">Approving merges <b>moooon/motir-core · #214</b> at its new head, then moves <b>ACME-18</b> to Approved.</span
-                    ><span class="af-verbs"
-                      ><button class="af-btn af-btn-secondary" type="button">Request changes</button
-                      ><button class="af-btn af-btn-primary" type="button">Approve and merge</button></span
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
                     >
                   </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <div class="dvb-callout dvb-callout-missing" role="status">
+                      <svg aria-hidden="true"><use href="#i-file-question" /></svg
+                      ><span
+                        ><b>Motir could not reach GitHub to show the decision document.</b> Nothing
+                        can be approved until it can be read. Try again in a moment.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Nothing can be approved until the pull request carries exactly one decision
+                    document. Nothing merges until then.</span
+                  ><span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button
+                      class="af-btn af-btn-primary"
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                    >
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">The version is the document's BLOB (clause 4): a push that fixed a test leaves <span class="mono">3f9a2c1</span> where it was, so the decision stays accepted and its record band stays. The approve-to-merge question was withdrawn by the push and re-asked on the next green over the new commits — alone, and so it leads: band 3 is the plain approve-and-merge verb, with nothing about the decision in it.</p>
+        <p class="panel-note">
+          Approve is <b>disabled</b> with its reason in band 3; Request changes stays enabled,
+          because <i>there is no document here</i> is exactly what it exists to say. The pull
+          request is green and still does not merge — the question holds it (§8's FIFTH AMENDMENT,
+          clause 3). The gate's version:
+          <span class="mono">capture: unreadable · read: host_unreachable</span>.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 6a · <b>approved</b> — the record band names the blob that was accepted</div>
+        <div class="panel-label">
+          Panel 4 · <b>approved, merge held until green</b> — the decision is answered; the merge
+          waits on checks
+        </div>
         <div class="panel">
           <div class="card-body" style="padding-bottom: 0">
             <div class="dvb-cap">ACME-18</div>
@@ -5207,76 +5393,120 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
+                    >
+                  </div>
+                  <span class="af-pill-state af-pill-ok"
+                    ><span class="af-dot" aria-hidden="true"></span>Approved</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
                     </div>
-                    <span class="af-pill-state af-pill-ok"><span class="af-dot" aria-hidden="true"></span>Approved</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <span class="dd-meta"
-                          ><span class="mono">docs/decisions/page-body.md</span><span
-                            >blob <span class="mono">3f9a2c1</span> at <span class="mono">7a9e0c1</span></span
-                          ><a class="dd-link" href="#"
-                            >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
-                        ></span>
-                      <div class="dvb-md">
-                        <h1>ADR: How a page stores its body</h1>
-                        <p><strong>Status:</strong> Proposed · written by Run #502</p>
-                        <h2>Context</h2>
-                        <p>
-                          A page is edited by several people at once and read far more often than it is
-                          written. Its body needs to merge concurrent edits and to render quickly.
-                        </p>
-                        <h2>Decision</h2>
-                        <p>
-                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and HTML
-                          from it on save. Readers are served the derived HTML.
-                        </p>
-                        <h2>Consequences</h2>
-                        <ul>
-                          <li>Concurrent edits merge without locking.</li>
-                          <li>Every save writes three columns, and the derived two can be rebuilt.</li>
-                        </ul>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
+                    <span class="dd-meta"
+                      ><span class="mono">docs/decisions/page-body.md</span
+                      ><span
+                        >blob <span class="mono">3f9a2c1</span> at
+                        <span class="mono">7a9e0c1</span></span
+                      ><a class="dd-link" href="#"
+                        >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                    ></span>
+                    <div class="dvb-md">
+                      <h1>ADR: How a page stores its body</h1>
+                      <p><strong>Status:</strong> Proposed · written by Run #502</p>
+                      <h2>Context</h2>
+                      <p>
+                        A page is edited by several people at once and read far more often than it
+                        is written. Its body needs to merge concurrent edits and to render quickly.
                       </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
+                      <h2>Decision</h2>
+                      <p>
+                        Store the body as a <strong>Yjs document</strong>, and derive Markdown and
+                        HTML from it on save. Readers are served the derived HTML.
+                      </p>
+                      <h2>Consequences</h2>
+                      <ul>
+                        <li>Concurrent edits merge without locking.</li>
+                        <li>
+                          Every save writes three columns, and the derived two can be rebuilt.
+                        </li>
+                      </ul>
                     </div>
-                  </div><div class="af-record"><span>Decision accepted by <b>Ada L.</b> · 19 Sep 2026, 15:02 · blob <span class="mono">3f9a2c1</span></span><span>The pull request merged. <b>ACME-18</b> moves to Done when GitHub reports it.</span></div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-peach"
+                        ><svg aria-hidden="true"><use href="#i-dots" /></svg>Checks running</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-record">
+                  <span>Decision accepted by <b>Ada L.</b> · 19 Sep 2026, 15:02</span
+                  ><span class="dd-held"
+                    ><svg aria-hidden="true"><use href="#i-clock" /></svg>The pull request merges
+                    when its checks pass — no second press.</span
+                  >
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">State E. The record names the accepted document by its blob, which is the gate's version and stays durable on GitHub (§6c retention: nothing is pinned).</p>
+        <p class="panel-note">
+          Pressed before CI spoke (AMENDMENT 6 Q4, one kind over). The record band says the decision
+          is accepted and the merge follows the next green verdict by itself. There is
+          <b>no verb anywhere</b> on this panel: a second press would ask a question whose answer is
+          already on the record.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 6b · <b>changes requested</b> — recorded, nothing merged, the status unchanged</div>
+        <div class="panel-label">
+          Panel 5a · <b>superseded by a push that CHANGED the document</b> — the old question,
+          withdrawn (<span class="mono">head_moved</span>), pointing at the new one
+        </div>
         <div class="panel">
           <div class="card-body" style="padding-bottom: 0">
             <div class="dvb-cap">ACME-18</div>
@@ -5286,152 +5516,531 @@
             <div class="card-head">
               <div>
                 <h3>Development</h3>
-                <p class="hsub">The decision, how to test it and its pull request · live PR and CI status</p>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
               </div>
             </div>
             <div class="card-body af-host">
               <div class="af-frame">
                 <div class="af-head">
-                    <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
-                    </div>
-                    <span class="af-pill-state ov-pill-warn"><span class="af-dot" aria-hidden="true"></span>Changes requested</span>
-                  </div><div class="af-port dvb-in-port" role="group" aria-label="What is being decided" tabindex="0">
-                    <div class="af-expand-bar"><button class="af-expand" type="button">Expand ⤢</button></div>
-                    <div class="dd-slot" role="group" aria-label="Decision document">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">Decision document</h4>
-                      </div>
-                      <span class="dd-meta"
-                          ><span class="mono">docs/decisions/page-body.md</span><span
-                            >blob <span class="mono">3f9a2c1</span> at <span class="mono">7a9e0c1</span></span
-                          ><a class="dd-link" href="#"
-                            >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
-                        ></span>
-                      <div class="dvb-md">
-                        <h1>ADR: How a page stores its body</h1>
-                        <p><strong>Status:</strong> Proposed · written by Run #502</p>
-                        <h2>Context</h2>
-                        <p>
-                          A page is edited by several people at once and read far more often than it is
-                          written. Its body needs to merge concurrent edits and to render quickly.
-                        </p>
-                        <h2>Decision</h2>
-                        <p>
-                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and HTML
-                          from it on save. Readers are served the derived HTML.
-                        </p>
-                        <h2>Consequences</h2>
-                        <ul>
-                          <li>Concurrent edits merge without locking.</li>
-                          <li>Every save writes three columns, and the derived two can be rebuilt.</li>
-                        </ul>
-                      </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
-                      <div class="dvb-htt-head">
-                        <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
-                      </div>
-                      <p class="dvb-abbrev">
-                        The run's How to test, as the Development block draws it — unchanged, and
-                        abbreviated on this sheet.
-                      </p>
-                    </div><div class="pr-row">
-                      <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
-                      <div class="pr-text">
-                        <div class="pr-title">Record the page-body decision</div>
-                        <div class="pr-meta">moooon/motir-core · #214</div>
-                      </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
-                      <a class="ext" href="#" aria-label="Open on GitHub"
-                        ><svg aria-hidden="true"><use href="#i-external" /></svg
-                      ></a>
-                    </div>
-                  </div><div class="af-record"><span>Changes requested by <b>Ada L.</b> · 19 Sep 2026, 15:02</span><span>“Keep the Markdown as the source; Yjs only while a page is open.”</span></div>
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta">docs/decisions/page-body.md · blob 3f9a2c1</span>
+                  </div>
+                  <span class="af-pill-state af-pill-gone"
+                    ><span class="af-dot" aria-hidden="true"></span>Withdrawn</span
+                  >
+                </div>
+                <div class="af-port-dead">
+                  <b>A push changed the decision document, so this question was withdrawn.</b
+                  ><span>Nobody decided it. The new version is asked in its place.</span
+                  ><button class="af-btn af-btn-secondary" type="button">
+                    Show the current version
+                  </button>
+                </div>
+                <div class="af-record">
+                  <span>No decision · no one to attribute</span
+                  ><span>withdrawn 19 Sep 2026, 15:20</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <p class="panel-note">The note is the reviewer's own. The agent's next push that changes the document asks again (Panel 5a's path); a push that does not, does not.</p>
+        <p class="panel-note">
+          The decision gate's <span class="mono">head_moved</span> is written only when the
+          document's blob changed, so its sentence says so — a per-kind line beside the shared one
+          (see the notes' copy table). <i>Show the current version</i> is the frame's shipped
+          re-read; it lands on Panel 1 for blob <span class="mono">9d41e07</span>.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 7 · <b>the approval overlay</b> — band 2 is Panel 1's block, band 3 its verbs</div>
+        <div class="panel-label">
+          Panel 5b · <b>a push that did NOT change the document</b> — the decision's answer stands;
+          only the merge question moved
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-18</div>
+            <div class="detail-title">Decide how a page stores its body</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
+              </div>
+            </div>
+            <div class="card-body af-host">
+              <div class="af-frame">
+                <div class="af-head">
+                  <div class="af-what">
+                    <span class="af-kind">Pull requests</span
+                    ><span class="af-meta">1 pull request · delivered by Run #502</span>
+                  </div>
+                  <span class="af-pill-await"
+                    ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <span class="dd-meta"
+                      ><span class="mono">docs/decisions/page-body.md</span
+                      ><span
+                        >blob <span class="mono">3f9a2c1</span> at
+                        <span class="mono">c52b8e4</span></span
+                      ><a class="dd-link" href="#"
+                        >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                    ></span>
+                    <span class="dd-held"
+                      ><svg aria-hidden="true"><use href="#i-check" /></svg>Decision accepted by
+                      <b>Ada L.</b> · 19 Sep 2026, 15:02 — unchanged at the new head</span
+                    >
+                    <div class="dvb-md">
+                      <h1>ADR: How a page stores its body</h1>
+                      <p><strong>Status:</strong> Proposed · written by Run #502</p>
+                      <h2>Context</h2>
+                      <p>
+                        A page is edited by several people at once and read far more often than it
+                        is written. Its body needs to merge concurrent edits and to render quickly.
+                      </p>
+                      <h2>Decision</h2>
+                      <p>
+                        Store the body as a <strong>Yjs document</strong>, and derive Markdown and
+                        HTML from it on save. Readers are served the derived HTML.
+                      </p>
+                      <h2>Consequences</h2>
+                      <ul>
+                        <li>Concurrent edits merge without locking.</li>
+                        <li>
+                          Every save writes three columns, and the derived two can be rebuilt.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-foot">
+                  <span class="af-why"
+                    >Approving merges <b>moooon/motir-core · #214</b> at its new head, then moves
+                    <b>ACME-18</b> to Approved.</span
+                  ><span class="af-verbs"
+                    ><button class="af-btn af-btn-secondary" type="button">Request changes</button
+                    ><button class="af-btn af-btn-primary" type="button">
+                      Approve and merge
+                    </button></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The version is the document's BLOB (clause 4): a push that fixed a test leaves
+          <span class="mono">3f9a2c1</span> where it was, so the decision stays accepted and its
+          record band stays. The approve-to-merge question was withdrawn by the push and re-asked on
+          the next green over the new commits — alone, and so it leads: band 3 is the plain
+          approve-and-merge verb, with nothing about the decision in it.
+        </p>
+      </section>
+      <section class="ov-group">
+        <div class="panel-label">
+          Panel 6a · <b>approved</b> — the record band names the blob that was accepted
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-18</div>
+            <div class="detail-title">Decide how a page stores its body</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
+              </div>
+            </div>
+            <div class="card-body af-host">
+              <div class="af-frame">
+                <div class="af-head">
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
+                    >
+                  </div>
+                  <span class="af-pill-state af-pill-ok"
+                    ><span class="af-dot" aria-hidden="true"></span>Approved</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <span class="dd-meta"
+                      ><span class="mono">docs/decisions/page-body.md</span
+                      ><span
+                        >blob <span class="mono">3f9a2c1</span> at
+                        <span class="mono">7a9e0c1</span></span
+                      ><a class="dd-link" href="#"
+                        >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                    ></span>
+                    <div class="dvb-md">
+                      <h1>ADR: How a page stores its body</h1>
+                      <p><strong>Status:</strong> Proposed · written by Run #502</p>
+                      <h2>Context</h2>
+                      <p>
+                        A page is edited by several people at once and read far more often than it
+                        is written. Its body needs to merge concurrent edits and to render quickly.
+                      </p>
+                      <h2>Decision</h2>
+                      <p>
+                        Store the body as a <strong>Yjs document</strong>, and derive Markdown and
+                        HTML from it on save. Readers are served the derived HTML.
+                      </p>
+                      <h2>Consequences</h2>
+                      <ul>
+                        <li>Concurrent edits merge without locking.</li>
+                        <li>
+                          Every save writes three columns, and the derived two can be rebuilt.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-git-merge" /></svg>Merged</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-record">
+                  <span
+                    >Decision accepted by <b>Ada L.</b> · 19 Sep 2026, 15:02 · blob
+                    <span class="mono">3f9a2c1</span></span
+                  ><span
+                    >The pull request merged. <b>ACME-18</b> moves to Done when GitHub reports
+                    it.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          State E. The record names the accepted document by its blob, which is the gate's version
+          and stays durable on GitHub (§6c retention: nothing is pinned).
+        </p>
+      </section>
+      <section class="ov-group">
+        <div class="panel-label">
+          Panel 6b · <b>changes requested</b> — recorded, nothing merged, the status unchanged
+        </div>
+        <div class="panel">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="dvb-cap">ACME-18</div>
+            <div class="detail-title">Decide how a page stores its body</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">
+                  The decision, how to test it and its pull request · live PR and CI status
+                </p>
+              </div>
+            </div>
+            <div class="card-body af-host">
+              <div class="af-frame">
+                <div class="af-head">
+                  <div class="af-what">
+                    <span class="af-kind">Decision</span
+                    ><span class="af-meta"
+                      >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
+                    >
+                  </div>
+                  <span class="af-pill-state ov-pill-warn"
+                    ><span class="af-dot" aria-hidden="true"></span>Changes requested</span
+                  >
+                </div>
+                <div
+                  class="af-port dvb-in-port"
+                  role="group"
+                  aria-label="What is being decided"
+                  tabindex="0"
+                >
+                  <div class="af-expand-bar">
+                    <button class="af-expand" type="button">Expand ⤢</button>
+                  </div>
+                  <div class="dd-slot" role="group" aria-label="Decision document">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">Decision document</h4>
+                    </div>
+                    <span class="dd-meta"
+                      ><span class="mono">docs/decisions/page-body.md</span
+                      ><span
+                        >blob <span class="mono">3f9a2c1</span> at
+                        <span class="mono">7a9e0c1</span></span
+                      ><a class="dd-link" href="#"
+                        >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                    ></span>
+                    <div class="dvb-md">
+                      <h1>ADR: How a page stores its body</h1>
+                      <p><strong>Status:</strong> Proposed · written by Run #502</p>
+                      <h2>Context</h2>
+                      <p>
+                        A page is edited by several people at once and read far more often than it
+                        is written. Its body needs to merge concurrent edits and to render quickly.
+                      </p>
+                      <h2>Decision</h2>
+                      <p>
+                        Store the body as a <strong>Yjs document</strong>, and derive Markdown and
+                        HTML from it on save. Readers are served the derived HTML.
+                      </p>
+                      <h2>Consequences</h2>
+                      <ul>
+                        <li>Concurrent edits merge without locking.</li>
+                        <li>
+                          Every save writes three columns, and the derived two can be rebuilt.
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="dvb-htt" role="group" aria-label="How to test">
+                    <div class="dvb-htt-head">
+                      <h4 class="dvb-htt-title">How to test</h4>
+                      <span class="dvb-htt-by"
+                        >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                      >
+                    </div>
+                    <p class="dvb-abbrev">
+                      The run's How to test, as the Development block draws it — unchanged, and
+                      abbreviated on this sheet.
+                    </p>
+                  </div>
+                  <div class="pr-row">
+                    <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
+                    <div class="pr-text">
+                      <div class="pr-title">Record the page-body decision</div>
+                      <div class="pr-meta">moooon/motir-core · #214</div>
+                    </div>
+                    <span class="pr-states"
+                      ><span class="pill pill-sky"
+                        ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                      ><span class="pill pill-mint"
+                        ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                      ></span
+                    >
+                    <a class="ext" href="#" aria-label="Open on GitHub"
+                      ><svg aria-hidden="true"><use href="#i-external" /></svg
+                    ></a>
+                  </div>
+                </div>
+                <div class="af-record">
+                  <span>Changes requested by <b>Ada L.</b> · 19 Sep 2026, 15:02</span
+                  ><span>“Keep the Markdown as the source; Yjs only while a page is open.”</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The note is the reviewer's own. The agent's next push that changes the document asks again
+          (Panel 5a's path); a push that does not, does not.
+        </p>
+      </section>
+      <section class="ov-group">
+        <div class="panel-label">
+          Panel 7 · <b>the approval overlay</b> — band 2 is Panel 1's block, band 3 its verbs
+        </div>
         <div class="ov-vp-wrap" style="width: 1136px">
-          <div class="ov-bar">viewport 1136 × 720 · Modal size="full" · ApprovalGateControl layout="fill"</div>
+          <div class="ov-bar">
+            viewport 1136 × 720 · Modal size="full" · ApprovalGateControl layout="fill"
+          </div>
           <div class="ov-vp" style="height: 720px">
             <div role="dialog" aria-modal="true" aria-labelledby="ov-title-d7" class="ov-dialog">
               <h2 id="ov-title-d7" class="ov-sr">Decision approval for ACME-18</h2>
               <div class="ov-exit">
                 <button type="button" class="ov-exit-btn">
-                  <svg class="ov-ic" aria-hidden="true"><use href="#i-x-plain" /></svg>Close<kbd class="ov-kbd">Esc</kbd>
+                  <svg class="ov-ic" aria-hidden="true"><use href="#i-x-plain" /></svg>Close<kbd
+                    class="ov-kbd"
+                    >Esc</kbd
+                  >
                 </button>
-                <span class="ov-item"><span class="ov-key">ACME-18</span><span class="ov-title">Decide how a page stores its body</span></span>
-                <a href="/items/ACME-18" class="ov-exit-btn ov-open">Open work item<svg class="ov-ic" aria-hidden="true"><use href="#i-arrow-up-right" /></svg></a>
+                <span class="ov-item"
+                  ><span class="ov-key">ACME-18</span
+                  ><span class="ov-title">Decide how a page stores its body</span></span
+                >
+                <a href="/items/ACME-18" class="ov-exit-btn ov-open"
+                  >Open work item<svg class="ov-ic" aria-hidden="true">
+                    <use href="#i-arrow-up-right" /></svg
+                ></a>
               </div>
               <div class="ov-body">
                 <div class="af-frame ov-fill">
                   <div class="af-head">
                     <div class="af-what">
-                      <span class="af-kind">Decision</span><span class="af-meta">docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span>
+                      <span class="af-kind">Decision</span
+                      ><span class="af-meta"
+                        >docs/decisions/page-body.md · 1 pull request · delivered by Run #502</span
+                      >
                     </div>
-                    <span class="af-pill-await"><span class="af-dot" aria-hidden="true"></span>Awaiting you</span>
+                    <span class="af-pill-await"
+                      ><span class="af-dot" aria-hidden="true"></span>Awaiting you</span
+                    >
                   </div>
-                  <div class="af-port dvb-in-port ov-port" role="group" aria-label="What is being decided" tabindex="0">
+                  <div
+                    class="af-port dvb-in-port ov-port"
+                    role="group"
+                    aria-label="What is being decided"
+                    tabindex="0"
+                  >
                     <div class="dd-slot" role="group" aria-label="Decision document">
                       <div class="dvb-htt-head">
                         <h4 class="dvb-htt-title">Decision document</h4>
                       </div>
                       <span class="dd-meta"
-                          ><span class="mono">docs/decisions/page-body.md</span><span
-                            >blob <span class="mono">3f9a2c1</span> at <span class="mono">7a9e0c1</span></span
-                          ><a class="dd-link" href="#"
-                            >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
-                        ></span>
+                        ><span class="mono">docs/decisions/page-body.md</span
+                        ><span
+                          >blob <span class="mono">3f9a2c1</span> at
+                          <span class="mono">7a9e0c1</span></span
+                        ><a class="dd-link" href="#"
+                          >View on GitHub<svg aria-hidden="true"><use href="#i-external" /></svg></a
+                      ></span>
                       <div class="dvb-md">
                         <h1>ADR: How a page stores its body</h1>
                         <p><strong>Status:</strong> Proposed · written by Run #502</p>
                         <h2>Context</h2>
                         <p>
-                          A page is edited by several people at once and read far more often than it is
-                          written. Its body needs to merge concurrent edits and to render quickly.
+                          A page is edited by several people at once and read far more often than it
+                          is written. Its body needs to merge concurrent edits and to render
+                          quickly.
                         </p>
                         <h2>Decision</h2>
                         <p>
-                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and HTML
-                          from it on save. Readers are served the derived HTML.
+                          Store the body as a <strong>Yjs document</strong>, and derive Markdown and
+                          HTML from it on save. Readers are served the derived HTML.
                         </p>
                         <h2>Consequences</h2>
                         <ul>
                           <li>Concurrent edits merge without locking.</li>
-                          <li>Every save writes three columns, and the derived two can be rebuilt.</li>
+                          <li>
+                            Every save writes three columns, and the derived two can be rebuilt.
+                          </li>
                         </ul>
                       </div>
-                    </div><div class="dvb-htt" role="group" aria-label="How to test">
+                    </div>
+                    <div class="dvb-htt" role="group" aria-label="How to test">
                       <div class="dvb-htt-head">
                         <h4 class="dvb-htt-title">How to test</h4>
-                        <span class="dvb-htt-by">Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span>
+                        <span class="dvb-htt-by"
+                          >Written by <b>Run #502</b> · 19 Sep 2026, 14:40</span
+                        >
                       </div>
                       <p class="dvb-abbrev">
                         The run's How to test, as the Development block draws it — unchanged, and
                         abbreviated on this sheet.
                       </p>
-                    </div><div class="pr-row">
+                    </div>
+                    <div class="pr-row">
                       <svg class="pr-ic" aria-hidden="true"><use href="#i-git-pr" /></svg>
                       <div class="pr-text">
                         <div class="pr-title">Record the page-body decision</div>
                         <div class="pr-meta">moooon/motir-core · #214</div>
                       </div>
-                      <span class="pr-states"><span class="pill pill-sky"><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span><span class="pill pill-mint"><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span></span>
+                      <span class="pr-states"
+                        ><span class="pill pill-sky"
+                          ><svg aria-hidden="true"><use href="#i-git-pr" /></svg>Open</span
+                        ><span class="pill pill-mint"
+                          ><svg aria-hidden="true"><use href="#i-check" /></svg>Checks passing</span
+                        ></span
+                      >
                       <a class="ext" href="#" aria-label="Open on GitHub"
                         ><svg aria-hidden="true"><use href="#i-external" /></svg
                       ></a>
                     </div>
                   </div>
                   <div class="af-foot">
-                    <span class="af-why">Approving accepts this decision and merges <b>moooon/motir-core · #214</b>, then moves <b>ACME-18</b> to Approved.</span
+                    <span class="af-why"
+                      >Approving accepts this decision and merges <b>moooon/motir-core · #214</b>,
+                      then moves <b>ACME-18</b> to Approved.</span
                     ><span class="af-verbs"
                       ><button class="af-btn af-btn-secondary" type="button">Request changes</button
-                      ><button class="af-btn af-btn-primary" type="button">Approve and merge</button></span
+                      ><button class="af-btn af-btn-primary" type="button">
+                        Approve and merge
+                      </button></span
                     >
                   </div>
                 </div>
@@ -5439,29 +6048,46 @@
             </div>
           </div>
         </div>
-        <p class="panel-note">The overlay (MOTIR-5222, band 2 per MOTIR-5438) opens on
-          <span class="mono">approvalKind=decision_approval</span> and its port is the same block, so the
-          reader has the document, How to test and the pull request before pressing anything. Nothing in
-          the container is redrawn; the dialog's title is <span class="mono">approvalOverlay.dialogTitle</span>
-          with the kind's name.</p>
+        <p class="panel-note">
+          The overlay (MOTIR-5222, band 2 per MOTIR-5438) opens on
+          <span class="mono">approvalKind=decision_approval</span> and its port is the same block,
+          so the reader has the document, How to test and the pull request before pressing anything.
+          Nothing in the container is redrawn; the dialog's title is
+          <span class="mono">approvalOverlay.dialogTitle</span> with the kind's name.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 8a · <b>the ACCESS PATH on the item page</b> — the status-held notice's <i>Review &amp; approve</i></div>
+        <div class="panel-label">
+          Panel 8a · <b>the ACCESS PATH on the item page</b> — the status-held notice's
+          <i>Review &amp; approve</i>
+        </div>
         <div class="panel" style="max-width: 760px">
           <div class="card-body">
             <div class="dvb-cap">ACME-18</div>
             <div class="detail-title">Decide how a page stores its body</div>
             <div class="dd-held-band" role="status">
-              <span>Status can't be moved to <strong>Done</strong> directly — a <strong>decision approval</strong> is waiting.</span>
-              <a class="af-btn af-btn-primary" href="?approval=ACME-18&amp;approvalKind=decision_approval">Review &amp; approve</a>
+              <span
+                >Status can't be moved to <strong>Done</strong> directly — a
+                <strong>decision approval</strong> is waiting.</span
+              >
+              <a
+                class="af-btn af-btn-primary"
+                href="?approval=ACME-18&amp;approvalKind=decision_approval"
+                >Review &amp; approve</a
+              >
             </div>
           </div>
         </div>
-        <p class="panel-note">Both entrances already ship and neither is redrawn: the status-held notice
-          (<span class="mono">workItems.statusHeld.decision</span> with <span class="mono">decisionNoun.decision_approval</span>
-          and <span class="mono">reviewAndApprove</span>) and the Development frame's own <i>Expand ⤢</i> each open
-          Panel 7's overlay. The To-approve row's door is drawn in
-          <span class="mono">design/workbench/approvals-row--decision.mock.html</span>.</p>
+        <p class="panel-note">
+          Both entrances already ship and neither is redrawn: the status-held notice (<span
+            class="mono"
+            >workItems.statusHeld.decision</span
+          >
+          with <span class="mono">decisionNoun.decision_approval</span> and
+          <span class="mono">reviewAndApprove</span>) and the Development frame's own
+          <i>Expand ⤢</i> each open Panel 7's overlay. The To-approve row's door is drawn in
+          <span class="mono">design/workbench/approvals-row--decision.mock.html</span>.
+        </p>
       </section>
     </div>
   </body>

@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Design mock · The To-approve row for a DECISION — MOTIR-5673 (a delta of approvals-row.mock.html)</title>
+    <title>
+      Design mock · The To-approve row for a DECISION — MOTIR-5673 (a delta of
+      approvals-row.mock.html)
+    </title>
     <!--
       DELTA MOCK — Subtask MOTIR-5673 (Story MOTIR-4907), the design MOTIR-5679 (the row) is
       blocked_by. It AMENDS design/workbench/approvals-row.mock.html (MOTIR-5147) as amended by
@@ -3022,7 +3025,6 @@
         text-transform: uppercase;
         color: var(--el-text-secondary);
       }
-    
 
       /* ══ MOTIR-5438 · the approval OVERLAY around the approve-to-merge frame ══════════════════
          Every rule re-declares design/workbench/approval-overlay.mock.html's markup (§ 22, the
@@ -3438,7 +3440,7 @@
       .rw-btn:hover {
         background: var(--el-surface);
       }
-    
+
       /* ── MOTIR-5673 · the decision row's glyph hue — the decision TYPE's own
          (--el-type-decision, lib/issues/workItemTypeMeta.ts), exactly as a design row takes
          --el-type-design. The glyph is aria-hidden; the kind's words carry the meaning. */
@@ -3450,7 +3452,6 @@
       .rw-kind-ic[data-kind='unbuilt'] {
         color: var(--el-text-faint);
       }
-
     </style>
   </head>
   <body>
@@ -4315,10 +4316,18 @@
           <path d="M7 7h10v10" />
           <path d="M7 17 17 7" />
         </symbol>
-      
+
         <!-- lucide `scale` (1.16.0, lucide-react/dist/esm/icons/scale.mjs) — the decision
              TYPE's own mark, as lib/issues/workItemTypeMeta.ts ships it -->
-        <symbol viewBox="0 0 24 24" id="i-scale" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-scale"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M12 3v18" />
           <path d="m19 8 3 8a5 5 0 0 1-6 0zV7" />
           <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" />
@@ -4326,262 +4335,428 @@
           <path d="M7 21h10" />
         </symbol>
         <!-- lucide `circle-dashed` is already on the sheet as #i-circle-dashed -->
-
       </defs>
     </svg>
     <div class="review-head">
       <h1>The To-approve row for a DECISION</h1>
       <p>
-        MOTIR-5673, for MOTIR-5679. A decision waiting on you lists as ONE row — the decision
-        type's glyph, the kind <b>Decision</b>, and a subject line naming the document — and the row
-        opens the approval overlay. It replaces <i>Not built yet</i>. The row is not redrawn.
+        MOTIR-5673, for MOTIR-5679. A decision waiting on you lists as ONE row — the decision type's
+        glyph, the kind <b>Decision</b>, and a subject line naming the document — and the row opens
+        the approval overlay. It replaces <i>Not built yet</i>. The row is not redrawn.
       </p>
     </div>
     <div class="ov-sheet">
       <section class="ov-group">
-        <div class="panel-label">Panel 7a · <b>the To-approve row for a decision</b> — the decision type's glyph, and the document named by its first <span class="mono">#</span> heading</div>
+        <div class="panel-label">
+          Panel 7a · <b>the To-approve row for a decision</b> — the decision type's glyph, and the
+          document named by its first <span class="mono">#</span> heading
+        </div>
         <div>
-        <div class="ov-vp-wrap" style="width: 896px">
-          <div class="ov-bar">the To-approve tab · content 896px · the row as approvals-row.mock.html Panel 9</div>
-          <div class="rw-table" role="table" aria-label="To approve">
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-head">
-                <div role="columnheader"><span class="rw-th">Waiting on</span></div>
-                <div role="columnheader"><span class="rw-th">Work item</span></div>
-                <div role="columnheader"><span class="rw-th">Waited</span></div>
-                <div role="columnheader"><span class="rw-th"></span></div>
-              </div>
+          <div class="ov-vp-wrap" style="width: 896px">
+            <div class="ov-bar">
+              the To-approve tab · content 896px · the row as approvals-row.mock.html Panel 9
             </div>
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-row">
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" aria-haspopup="dialog" aria-label="Review this decision" class="rw-door"></a>
-                  <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true"><use href="#i-scale" /></svg
-                  ><span class="rw-kind">Decision</span><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1">How a page stores its body · docs/decisions/page-body.md</span>
+            <div class="rw-table" role="table" aria-label="To approve">
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-head">
+                  <div role="columnheader"><span class="rw-th">Waiting on</span></div>
+                  <div role="columnheader"><span class="rw-th">Work item</span></div>
+                  <div role="columnheader"><span class="rw-th">Waited</span></div>
+                  <div role="columnheader"><span class="rw-th"></span></div>
                 </div>
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" class="rw-link"><span class="rw-key">ACME-18</span><span class="rw-title">Decide how a page stores its body</span></a>
+              </div>
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-row">
+                  <div role="cell" class="rw-cell">
+                    <a
+                      href="/items/ACME-18"
+                      aria-haspopup="dialog"
+                      aria-label="Review this decision"
+                      class="rw-door"
+                    ></a>
+                    <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    ><span class="rw-kind">Decision</span
+                    ><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1"
+                      >How a page stores its body · docs/decisions/page-body.md</span
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell">
+                    <a href="/items/ACME-18" class="rw-link"
+                      ><span class="rw-key">ACME-18</span
+                      ><span class="rw-title">Decide how a page stores its body</span></a
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
+                  <div role="cell" class="rw-cell rw-cell-end">
+                    <button type="button" class="rw-btn" aria-haspopup="dialog">Review</button>
+                  </div>
                 </div>
-                <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
-                <div role="cell" class="rw-cell rw-cell-end"><button type="button" class="rw-btn" aria-haspopup="dialog">Review</button></div>
               </div>
             </div>
           </div>
         </div>
-        </div>
-        <p class="panel-note">The glyph is the decision TYPE's own mark — lucide <span class="mono">scale</span> in <span class="mono">--el-type-decision</span> — exactly as a design row takes the design type's pencil, so the reader already knows it. The kind reads <b>Decision</b>. The subject line is the document's first <span class="mono">#</span> heading with its path (the leading <i>ADR:</i> is dropped), truncated as every subject line is; its <span class="mono">title</span> carries the path and the blob.</p>
+        <p class="panel-note">
+          The glyph is the decision TYPE's own mark — lucide <span class="mono">scale</span> in
+          <span class="mono">--el-type-decision</span> — exactly as a design row takes the design
+          type's pencil, so the reader already knows it. The kind reads <b>Decision</b>. The subject
+          line is the document's first <span class="mono">#</span> heading with its path (the
+          leading <i>ADR:</i> is dropped), truncated as every subject line is; its
+          <span class="mono">title</span> carries the path and the blob.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 7b · <b>no heading to show</b> — the file name, never an empty cell</div>
+        <div class="panel-label">
+          Panel 7b · <b>no heading to show</b> — the file name, never an empty cell
+        </div>
         <div>
-        <div class="ov-vp-wrap" style="width: 896px">
-          <div class="ov-bar">the same row when the heading is not available</div>
-          <div class="rw-table" role="table" aria-label="To approve">
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-head">
-                <div role="columnheader"><span class="rw-th">Waiting on</span></div>
-                <div role="columnheader"><span class="rw-th">Work item</span></div>
-                <div role="columnheader"><span class="rw-th">Waited</span></div>
-                <div role="columnheader"><span class="rw-th"></span></div>
+          <div class="ov-vp-wrap" style="width: 896px">
+            <div class="ov-bar">the same row when the heading is not available</div>
+            <div class="rw-table" role="table" aria-label="To approve">
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-head">
+                  <div role="columnheader"><span class="rw-th">Waiting on</span></div>
+                  <div role="columnheader"><span class="rw-th">Work item</span></div>
+                  <div role="columnheader"><span class="rw-th">Waited</span></div>
+                  <div role="columnheader"><span class="rw-th"></span></div>
+                </div>
               </div>
-            </div>
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-row">
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" aria-haspopup="dialog" aria-label="Review this decision" class="rw-door"></a>
-                  <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true"><use href="#i-scale" /></svg
-                  ><span class="rw-kind">Decision</span><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1">Page body · docs/decisions/page-body.md</span>
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-row">
+                  <div role="cell" class="rw-cell">
+                    <a
+                      href="/items/ACME-18"
+                      aria-haspopup="dialog"
+                      aria-label="Review this decision"
+                      class="rw-door"
+                    ></a>
+                    <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    ><span class="rw-kind">Decision</span
+                    ><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1"
+                      >Page body · docs/decisions/page-body.md</span
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell">
+                    <a href="/items/ACME-18" class="rw-link"
+                      ><span class="rw-key">ACME-18</span
+                      ><span class="rw-title">Decide how a page stores its body</span></a
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
+                  <div role="cell" class="rw-cell rw-cell-end">
+                    <button type="button" class="rw-btn" aria-haspopup="dialog">Review</button>
+                  </div>
                 </div>
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" class="rw-link"><span class="rw-key">ACME-18</span><span class="rw-title">Decide how a page stores its body</span></a>
-                </div>
-                <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
-                <div role="cell" class="rw-cell rw-cell-end"><button type="button" class="rw-btn" aria-haspopup="dialog">Review</button></div>
               </div>
             </div>
           </div>
         </div>
-        </div>
-        <p class="panel-note">The subject summary is read from the capture with no host call, so it always has the PATH; the heading needs the document's content, read through the resolver. When the row does not have it — the document has no level-1 heading, or the read did not answer — the title comes from the file name (<span class="mono">titleFromDecisionPath</span>: <span class="mono">page-body.md</span> → <i>Page body</i>). The row is never blank and never waits on GitHub to draw.</p>
+        <p class="panel-note">
+          The subject summary is read from the capture with no host call, so it always has the PATH;
+          the heading needs the document's content, read through the resolver. When the row does not
+          have it — the document has no level-1 heading, or the read did not answer — the title
+          comes from the file name (<span class="mono">titleFromDecisionPath</span>:
+          <span class="mono">page-body.md</span> → <i>Page body</i>). The row is never blank and
+          never waits on GitHub to draw.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 7c · <b>unresolvable decisions still list</b> — the subject says why, the door still opens</div>
+        <div class="panel-label">
+          Panel 7c · <b>unresolvable decisions still list</b> — the subject says why, the door still
+          opens
+        </div>
         <div>
-        <div class="ov-vp-wrap" style="width: 896px">
-          <div class="ov-bar">two cards whose decision cannot be approved yet</div>
-          <div class="rw-table" role="table" aria-label="To approve">
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-head">
-                <div role="columnheader"><span class="rw-th">Waiting on</span></div>
-                <div role="columnheader"><span class="rw-th">Work item</span></div>
-                <div role="columnheader"><span class="rw-th">Waited</span></div>
-                <div role="columnheader"><span class="rw-th"></span></div>
+          <div class="ov-vp-wrap" style="width: 896px">
+            <div class="ov-bar">two cards whose decision cannot be approved yet</div>
+            <div class="rw-table" role="table" aria-label="To approve">
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-head">
+                  <div role="columnheader"><span class="rw-th">Waiting on</span></div>
+                  <div role="columnheader"><span class="rw-th">Work item</span></div>
+                  <div role="columnheader"><span class="rw-th">Waited</span></div>
+                  <div role="columnheader"><span class="rw-th"></span></div>
+                </div>
               </div>
-            </div>
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-row">
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-21" aria-haspopup="dialog" aria-label="Review this decision" class="rw-door"></a>
-                  <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true"><use href="#i-scale" /></svg
-                  ><span class="rw-kind">Decision</span><span class="rw-sub">No decision document · moooon/motir-core · #214</span>
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-row">
+                  <div role="cell" class="rw-cell">
+                    <a
+                      href="/items/ACME-21"
+                      aria-haspopup="dialog"
+                      aria-label="Review this decision"
+                      class="rw-door"
+                    ></a>
+                    <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    ><span class="rw-kind">Decision</span
+                    ><span class="rw-sub">No decision document · moooon/motir-core · #214</span>
+                  </div>
+                  <div role="cell" class="rw-cell">
+                    <a href="/items/ACME-21" class="rw-link"
+                      ><span class="rw-key">ACME-21</span
+                      ><span class="rw-title">Decide the retention window</span></a
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell"><span class="rw-sub">40 minutes</span></div>
+                  <div role="cell" class="rw-cell rw-cell-end">
+                    <button type="button" class="rw-btn" aria-haspopup="dialog">Review</button>
+                  </div>
                 </div>
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-21" class="rw-link"><span class="rw-key">ACME-21</span><span class="rw-title">Decide the retention window</span></a>
+                <div role="row" class="rw-grid rw-row">
+                  <div role="cell" class="rw-cell">
+                    <a
+                      href="/items/ACME-24"
+                      aria-haspopup="dialog"
+                      aria-label="Review this decision"
+                      class="rw-door"
+                    ></a>
+                    <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    ><span class="rw-kind">Decision</span
+                    ><span class="rw-sub">2 decision documents · moooon/motir-core · #219</span>
+                  </div>
+                  <div role="cell" class="rw-cell">
+                    <a href="/items/ACME-24" class="rw-link"
+                      ><span class="rw-key">ACME-24</span
+                      ><span class="rw-title">Decide the import format</span></a
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell"><span class="rw-sub">5 minutes</span></div>
+                  <div role="cell" class="rw-cell rw-cell-end">
+                    <button type="button" class="rw-btn" aria-haspopup="dialog">Review</button>
+                  </div>
                 </div>
-                <div role="cell" class="rw-cell"><span class="rw-sub">40 minutes</span></div>
-                <div role="cell" class="rw-cell rw-cell-end"><button type="button" class="rw-btn" aria-haspopup="dialog">Review</button></div>
-              </div>
-              <div role="row" class="rw-grid rw-row">
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-24" aria-haspopup="dialog" aria-label="Review this decision" class="rw-door"></a>
-                  <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true"><use href="#i-scale" /></svg
-                  ><span class="rw-kind">Decision</span><span class="rw-sub">2 decision documents · moooon/motir-core · #219</span>
-                </div>
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-24" class="rw-link"><span class="rw-key">ACME-24</span><span class="rw-title">Decide the import format</span></a>
-                </div>
-                <div role="cell" class="rw-cell"><span class="rw-sub">5 minutes</span></div>
-                <div role="cell" class="rw-cell rw-cell-end"><button type="button" class="rw-btn" aria-haspopup="dialog">Review</button></div>
               </div>
             </div>
           </div>
         </div>
-        </div>
-        <p class="panel-note">An unresolvable decision is a real question somebody has to act on — its <i>Request changes</i> is live — so it is listed and it opens the overlay (Panel 3 of the github delta). The subject line names the reason and the pull request instead of a document.</p>
+        <p class="panel-note">
+          An unresolvable decision is a real question somebody has to act on — its
+          <i>Request changes</i> is live — so it is listed and it opens the overlay (Panel 3 of the
+          github delta). The subject line names the reason and the pull request instead of a
+          document.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 7d · <b>before / after</b> — <i>Not built yet</i> is gone for this kind</div>
+        <div class="panel-label">
+          Panel 7d · <b>before / after</b> — <i>Not built yet</i> is gone for this kind
+        </div>
         <div>
-        <div class="ov-vp-wrap" style="width: 896px">
-          <div class="ov-bar">before (MOTIR-5612 Panel 7, as ships today) · after (this card)</div>
-          <div class="rw-table" role="table" aria-label="Before">
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-head">
-                <div role="columnheader"><span class="rw-th">Waiting on</span></div>
-                <div role="columnheader"><span class="rw-th">Work item</span></div>
-                <div role="columnheader"><span class="rw-th">Waited</span></div>
-                <div role="columnheader"><span class="rw-th"></span></div>
+          <div class="ov-vp-wrap" style="width: 896px">
+            <div class="ov-bar">
+              before (MOTIR-5612 Panel 7, as ships today) · after (this card)
+            </div>
+            <div class="rw-table" role="table" aria-label="Before">
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-head">
+                  <div role="columnheader"><span class="rw-th">Waiting on</span></div>
+                  <div role="columnheader"><span class="rw-th">Work item</span></div>
+                  <div role="columnheader"><span class="rw-th">Waited</span></div>
+                  <div role="columnheader"><span class="rw-th"></span></div>
+                </div>
+              </div>
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-row">
+                  <div role="cell" class="rw-cell">
+                    <a
+                      href="/items/ACME-18"
+                      aria-haspopup="dialog"
+                      aria-label="Review this decision"
+                      class="rw-door"
+                    ></a>
+                    <svg class="rw-kind-ic" data-kind="unbuilt" aria-hidden="true">
+                      <use href="#i-circle-dashed" /></svg
+                    ><span class="rw-kind">Decision approval</span><span class="rw-sub"></span>
+                  </div>
+                  <div role="cell" class="rw-cell">
+                    <a href="/items/ACME-18" class="rw-link"
+                      ><span class="rw-key">ACME-18</span
+                      ><span class="rw-title">Decide how a page stores its body</span></a
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
+                  <div role="cell" class="rw-cell rw-cell-end">
+                    <span class="pill pill-neutral">Not built yet</span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-row">
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" aria-haspopup="dialog" aria-label="Review this decision" class="rw-door"></a>
-                  <svg class="rw-kind-ic" data-kind="unbuilt" aria-hidden="true"><use href="#i-circle-dashed" /></svg
-                  ><span class="rw-kind">Decision approval</span><span class="rw-sub"></span>
+            <div class="rw-table" role="table" aria-label="After">
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-head">
+                  <div role="columnheader"><span class="rw-th">Waiting on</span></div>
+                  <div role="columnheader"><span class="rw-th">Work item</span></div>
+                  <div role="columnheader"><span class="rw-th">Waited</span></div>
+                  <div role="columnheader"><span class="rw-th"></span></div>
                 </div>
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" class="rw-link"><span class="rw-key">ACME-18</span><span class="rw-title">Decide how a page stores its body</span></a>
-                </div>
-                <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
-                <div role="cell" class="rw-cell rw-cell-end"><span class="pill pill-neutral">Not built yet</span></div>
               </div>
-            </div>
-          </div><div class="rw-table" role="table" aria-label="After">
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-head">
-                <div role="columnheader"><span class="rw-th">Waiting on</span></div>
-                <div role="columnheader"><span class="rw-th">Work item</span></div>
-                <div role="columnheader"><span class="rw-th">Waited</span></div>
-                <div role="columnheader"><span class="rw-th"></span></div>
-              </div>
-            </div>
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-row">
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" aria-haspopup="dialog" aria-label="Review this decision" class="rw-door"></a>
-                  <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true"><use href="#i-scale" /></svg
-                  ><span class="rw-kind">Decision</span><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1">How a page stores its body · docs/decisions/page-body.md</span>
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-row">
+                  <div role="cell" class="rw-cell">
+                    <a
+                      href="/items/ACME-18"
+                      aria-haspopup="dialog"
+                      aria-label="Review this decision"
+                      class="rw-door"
+                    ></a>
+                    <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    ><span class="rw-kind">Decision</span
+                    ><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1"
+                      >How a page stores its body · docs/decisions/page-body.md</span
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell">
+                    <a href="/items/ACME-18" class="rw-link"
+                      ><span class="rw-key">ACME-18</span
+                      ><span class="rw-title">Decide how a page stores its body</span></a
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
+                  <div role="cell" class="rw-cell rw-cell-end">
+                    <button type="button" class="rw-btn" aria-haspopup="dialog">Review</button>
+                  </div>
                 </div>
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" class="rw-link"><span class="rw-key">ACME-18</span><span class="rw-title">Decide how a page stores its body</span></a>
-                </div>
-                <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
-                <div role="cell" class="rw-cell rw-cell-end"><button type="button" class="rw-btn" aria-haspopup="dialog">Review</button></div>
               </div>
             </div>
           </div>
         </div>
-        </div>
-        <p class="panel-note">Before MOTIR-5676 registered the kind, a decision gate took the unregistered row: the faint dashed circle, the enum's words and the <i>Not built yet</i> pill with no door. After, it is a live kind's row, drawn above.</p>
+        <p class="panel-note">
+          Before MOTIR-5676 registered the kind, a decision gate took the unregistered row: the
+          faint dashed circle, the enum's words and the <i>Not built yet</i> pill with no door.
+          After, it is a live kind's row, drawn above.
+        </p>
       </section>
       <section class="ov-group">
-        <div class="panel-label">Panel 8b · <b>the ACCESS PATH</b> — the whole row is the door to the decision overlay</div>
+        <div class="panel-label">
+          Panel 8b · <b>the ACCESS PATH</b> — the whole row is the door to the decision overlay
+        </div>
         <div>
-        <div class="ov-vp-wrap" style="width: 896px">
-          <div class="ov-bar">a plain primary click on the row</div>
-          <div class="rw-table" role="table" aria-label="To approve">
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-head">
-                <div role="columnheader"><span class="rw-th">Waiting on</span></div>
-                <div role="columnheader"><span class="rw-th">Work item</span></div>
-                <div role="columnheader"><span class="rw-th">Waited</span></div>
-                <div role="columnheader"><span class="rw-th"></span></div>
+          <div class="ov-vp-wrap" style="width: 896px">
+            <div class="ov-bar">a plain primary click on the row</div>
+            <div class="rw-table" role="table" aria-label="To approve">
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-head">
+                  <div role="columnheader"><span class="rw-th">Waiting on</span></div>
+                  <div role="columnheader"><span class="rw-th">Work item</span></div>
+                  <div role="columnheader"><span class="rw-th">Waited</span></div>
+                  <div role="columnheader"><span class="rw-th"></span></div>
+                </div>
               </div>
-            </div>
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-row">
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" aria-haspopup="dialog" aria-label="Review this decision" class="rw-door"></a>
-                  <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true"><use href="#i-scale" /></svg
-                  ><span class="rw-kind">Decision</span><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1">How a page stores its body · docs/decisions/page-body.md</span>
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-row">
+                  <div role="cell" class="rw-cell">
+                    <a
+                      href="/items/ACME-18"
+                      aria-haspopup="dialog"
+                      aria-label="Review this decision"
+                      class="rw-door"
+                    ></a>
+                    <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    ><span class="rw-kind">Decision</span
+                    ><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1"
+                      >How a page stores its body · docs/decisions/page-body.md</span
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell">
+                    <a href="/items/ACME-18" class="rw-link"
+                      ><span class="rw-key">ACME-18</span
+                      ><span class="rw-title">Decide how a page stores its body</span></a
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
+                  <div role="cell" class="rw-cell rw-cell-end">
+                    <button type="button" class="rw-btn" aria-haspopup="dialog">Review</button>
+                  </div>
                 </div>
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" class="rw-link"><span class="rw-key">ACME-18</span><span class="rw-title">Decide how a page stores its body</span></a>
-                </div>
-                <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
-                <div role="cell" class="rw-cell rw-cell-end"><button type="button" class="rw-btn" aria-haspopup="dialog">Review</button></div>
               </div>
             </div>
           </div>
         </div>
-        </div>
-        <p class="panel-note">As every live row: a plain primary click writes <span class="mono">?approval=ACME-18&amp;approvalKind=decision_approval</span> with <span class="mono">shallowPush</span> and the overlay drawn in <span class="mono">design/github/approve-and-merge--decision.mock.html</span> Panel 7 opens over the tab; a modified or middle click opens the card in a new tab. The work-item cell stays the one link that visibly leaves.</p>
+        <p class="panel-note">
+          As every live row: a plain primary click writes
+          <span class="mono">?approval=ACME-18&amp;approvalKind=decision_approval</span> with
+          <span class="mono">shallowPush</span> and the overlay drawn in
+          <span class="mono">design/github/approve-and-merge--decision.mock.html</span> Panel 7
+          opens over the tab; a modified or middle click opens the card in a new tab. The work-item
+          cell stays the one link that visibly leaves.
+        </p>
       </section>
       <section class="ov-group">
         <div class="panel-label">Panel 7a · <b>dark</b></div>
         <div class="panel ov-dark-stage" data-theme="dark" data-appearance-scope>
-        <div class="ov-vp-wrap" style="width: 896px">
-          <div class="ov-bar">data-theme="dark"</div>
-          <div class="rw-table" role="table" aria-label="To approve">
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-head">
-                <div role="columnheader"><span class="rw-th">Waiting on</span></div>
-                <div role="columnheader"><span class="rw-th">Work item</span></div>
-                <div role="columnheader"><span class="rw-th">Waited</span></div>
-                <div role="columnheader"><span class="rw-th"></span></div>
+          <div class="ov-vp-wrap" style="width: 896px">
+            <div class="ov-bar">data-theme="dark"</div>
+            <div class="rw-table" role="table" aria-label="To approve">
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-head">
+                  <div role="columnheader"><span class="rw-th">Waiting on</span></div>
+                  <div role="columnheader"><span class="rw-th">Work item</span></div>
+                  <div role="columnheader"><span class="rw-th">Waited</span></div>
+                  <div role="columnheader"><span class="rw-th"></span></div>
+                </div>
               </div>
-            </div>
-            <div role="rowgroup">
-              <div role="row" class="rw-grid rw-row">
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" aria-haspopup="dialog" aria-label="Review this decision" class="rw-door"></a>
-                  <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true"><use href="#i-scale" /></svg
-                  ><span class="rw-kind">Decision</span><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1">How a page stores its body · docs/decisions/page-body.md</span>
+              <div role="rowgroup">
+                <div role="row" class="rw-grid rw-row">
+                  <div role="cell" class="rw-cell">
+                    <a
+                      href="/items/ACME-18"
+                      aria-haspopup="dialog"
+                      aria-label="Review this decision"
+                      class="rw-door"
+                    ></a>
+                    <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    ><span class="rw-kind">Decision</span
+                    ><span class="rw-sub" title="docs/decisions/page-body.md at blob 3f9a2c1"
+                      >How a page stores its body · docs/decisions/page-body.md</span
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell">
+                    <a href="/items/ACME-18" class="rw-link"
+                      ><span class="rw-key">ACME-18</span
+                      ><span class="rw-title">Decide how a page stores its body</span></a
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
+                  <div role="cell" class="rw-cell rw-cell-end">
+                    <button type="button" class="rw-btn" aria-haspopup="dialog">Review</button>
+                  </div>
                 </div>
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-18" class="rw-link"><span class="rw-key">ACME-18</span><span class="rw-title">Decide how a page stores its body</span></a>
+                <div role="row" class="rw-grid rw-row">
+                  <div role="cell" class="rw-cell">
+                    <a
+                      href="/items/ACME-21"
+                      aria-haspopup="dialog"
+                      aria-label="Review this decision"
+                      class="rw-door"
+                    ></a>
+                    <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true">
+                      <use href="#i-scale" /></svg
+                    ><span class="rw-kind">Decision</span
+                    ><span class="rw-sub">No decision document · moooon/motir-core · #214</span>
+                  </div>
+                  <div role="cell" class="rw-cell">
+                    <a href="/items/ACME-21" class="rw-link"
+                      ><span class="rw-key">ACME-21</span
+                      ><span class="rw-title">Decide the retention window</span></a
+                    >
+                  </div>
+                  <div role="cell" class="rw-cell"><span class="rw-sub">40 minutes</span></div>
+                  <div role="cell" class="rw-cell rw-cell-end">
+                    <button type="button" class="rw-btn" aria-haspopup="dialog">Review</button>
+                  </div>
                 </div>
-                <div role="cell" class="rw-cell"><span class="rw-sub">2 hours</span></div>
-                <div role="cell" class="rw-cell rw-cell-end"><button type="button" class="rw-btn" aria-haspopup="dialog">Review</button></div>
-              </div>
-              <div role="row" class="rw-grid rw-row">
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-21" aria-haspopup="dialog" aria-label="Review this decision" class="rw-door"></a>
-                  <svg class="rw-kind-ic" data-kind="decision" aria-hidden="true"><use href="#i-scale" /></svg
-                  ><span class="rw-kind">Decision</span><span class="rw-sub">No decision document · moooon/motir-core · #214</span>
-                </div>
-                <div role="cell" class="rw-cell">
-                  <a href="/items/ACME-21" class="rw-link"><span class="rw-key">ACME-21</span><span class="rw-title">Decide the retention window</span></a>
-                </div>
-                <div role="cell" class="rw-cell"><span class="rw-sub">40 minutes</span></div>
-                <div role="cell" class="rw-cell rw-cell-end"><button type="button" class="rw-btn" aria-haspopup="dialog">Review</button></div>
               </div>
             </div>
           </div>
         </div>
-        </div>
-        <p class="panel-note"><span class="mono">--el-type-decision</span> is the palette's charcoal ink in light and flips with the theme; the row takes no colour of its own.</p>
+        <p class="panel-note">
+          <span class="mono">--el-type-decision</span> is the palette's charcoal ink in light and
+          flips with the theme; the row takes no colour of its own.
+        </p>
       </section>
     </div>
   </body>
