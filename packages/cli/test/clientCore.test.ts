@@ -16,6 +16,7 @@ import {
   v1Project,
   v1Proposal,
   v1WorkItem,
+  v1Detail,
   v1ReadyRow,
   v1Sprint,
   type TestServer,
@@ -389,6 +390,78 @@ describe('typed wrappers — each names its operation and forwards its arguments
       holder: { id: 'user_me', name: 'Mo' },
       pullRequests: [pullRequest],
     });
+  });
+
+  it('carries a repair claim’s standing queue exit through, field by field (MOTIR-5719)', async () => {
+    const queueExit = {
+      rawReason: 'CI_FAILURE',
+      exitedAt: '2026-09-18T10:00:00.000Z',
+      headSha: 'sha-a',
+      failingCheckName: 'Merge queue / e2e',
+      failingCheckUrl: 'https://github.com/acme/web/runs/77',
+    };
+    const pullRequest = {
+      repo: 'acme/web',
+      number: 12,
+      url: 'https://github.com/acme/web/pull/12',
+      headRef: 'subtask/PROD-7-widget',
+      baseRef: 'main',
+      ci: 'passing',
+      failingChecks: [],
+      queueExit,
+    };
+    server.scriptV1({
+      'POST /api/v1/work-items/{key}/repair': {
+        body: {
+          key: 'PROD-7',
+          title: 'Widget',
+          outcome: 'claimed',
+          reason: null,
+          runTargetKey: null,
+          runId: 'run_fix_2',
+          holder: { id: 'user_me', name: 'Mo' },
+          startedAt: '2026-09-16T10:00:00.000Z',
+          pullRequests: [pullRequest],
+        },
+      },
+    });
+
+    const claim = await connected().claimWorkItemRepair('PROD-7');
+
+    expect(claim.pullRequests).toEqual([pullRequest]);
+  });
+
+  it('carries a delivery’s standing queue exit through on the work-item read (MOTIR-5720)', async () => {
+    const queueExit = {
+      rawReason: 'MERGE_CONFLICT',
+      headSha: 'sha-a',
+      failingCheckName: null,
+      failingCheckUrl: null,
+    };
+    const delivery = {
+      repo: 'acme/web',
+      number: 12,
+      title: 'a change',
+      url: 'https://github.com/acme/web/pull/12',
+      state: 'open',
+      ci: 'passing',
+      baseRef: 'main',
+      defaultBranch: 'main',
+    };
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': {
+        body: v1Detail('PROD-7', {
+          deliveries: [
+            { ...delivery, queueExit },
+            { ...delivery, number: 13, queueExit: null },
+          ],
+        }),
+      },
+    });
+
+    const item = await connected().getWorkItem('PROD-7');
+
+    expect(item.deliveries?.map((d) => d.queueExit)).toEqual([queueExit, null]);
   });
 
   it('carries a repair REFUSAL through with no holder and no pull requests', async () => {

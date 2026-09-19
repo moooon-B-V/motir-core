@@ -12,6 +12,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { connectRepairRepo, deliveredPr } from '../helpers/repairFixtures';
 
 // THE SERVICE'S EDGES (Story MOTIR-1789 · MOTIR-1798).
 //
@@ -218,5 +219,48 @@ describe('the reads refuse an id or a key they cannot resolve', () => {
         fixture.ctx,
       ),
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+});
+
+describe('the run view publishes each delivery’s STANDING queue failure (MOTIR-5720)', () => {
+  it('a card’s ejected pull request carries `queueExit`, and its other pull request carries null', async () => {
+    // The run view builds the same `WorkItemDeliveryDto` the work item's own read
+    // does, so it must not publish a `null` that means "not stuck" about a pull
+    // request the merge queue threw out.
+    const key = await seedLeaf('An ejected card');
+    const item = await adminDb.workItem.findFirstOrThrow({ where: { identifier: key } });
+    const repo = await connectRepairRepo(fixture, 'web');
+    const ejected = await deliveredPr(fixture, item.id, repo, {
+      headRef: 'subtask/ejected',
+      checks: { Vitest: 'success' },
+    });
+    await deliveredPr(fixture, item.id, repo, {
+      headRef: 'subtask/clean',
+      checks: { Vitest: 'success' },
+    });
+    await adminDb.githubPullRequestQueueExit.create({
+      data: {
+        pullRequestId: ejected.id,
+        deliveryId: 'guid-run-view',
+        rawReason: 'MERGE_CONFLICT',
+        disposition: 'failure',
+        headSha: 'c'.repeat(40),
+        exitedAt: new Date('2026-09-18T10:00:00.000Z'),
+      },
+    });
+    const runId = await openRun([key]);
+
+    const detail = await dispatchRunService.getRunDetail(runId, fixture.ctx);
+
+    const deliveries = detail.cards[0]!.deliveries;
+    expect(deliveries).toHaveLength(2);
+    const byNumber = new Map(deliveries.map((d) => [d.pullRequest.number, d]));
+    expect(byNumber.get(ejected.number)?.queueExit).toEqual({
+      rawReason: 'MERGE_CONFLICT',
+      headSha: 'c'.repeat(40),
+      failingCheckName: null,
+      failingCheckUrl: null,
+    });
+    expect(deliveries.filter((d) => d.queueExit === null)).toHaveLength(1);
   });
 });
