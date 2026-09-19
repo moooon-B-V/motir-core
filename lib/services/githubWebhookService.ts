@@ -1320,7 +1320,15 @@ export async function capturePullRequestFiles(
 
     let files: PullRequestFiles = { paths: [], truncated: false, files: [], headSha: null };
     try {
-      const { token } = await getGitProvider(PROVIDER).mintInstallationToken(installationId);
+      // The App is chosen by the repository's PROVENANCE, as the merge's and the
+      // decision capture's are: a HOSTED repository — one owned by the provisioning
+      // org — is installed on the provisioning App ONLY, so a mint through the
+      // user-facing default cannot reach it (MOTIR-5811). The failure is not loud:
+      // the catch below turns it into a row with NO changed paths, which every
+      // reader of `changed_paths` sees as a pull request that touched nothing.
+      const { token } = await getGitProvider(PROVIDER).mintInstallationToken(installationId, {
+        owner: repo.owner,
+      });
       files = await listPullRequestFiles(token, repo.owner, repo.name, cr.number);
     } catch (err) {
       console.error(
