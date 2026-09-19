@@ -40,6 +40,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
@@ -283,9 +284,24 @@ async function approvedIntoTheQueue(email: string) {
 
 const queueAgain = async (s: Scenario, approvalGateId: string, number: number) =>
   pullRequestMergeService.retryApproveAndMergeMember(
-    { approvalGateId, pullRequestId: (await prRow(number)).id, noteMd: null, source: 'ui' },
+    {
+      approvalGateId,
+      pullRequestId: (await prRow(number)).id,
+      noteMd: null,
+      source: 'ui',
+      // On the RE-ASKED gate the press IS the approval (MOTIR-5802), so it carries a
+      // stamp; on a decided gate nothing reads it.
+      stamp: DECIDED_WITHOUT_A_READER,
+    },
     s.ctx,
   );
+
+/** The card's ONE awaiting approve-to-merge gate — the re-asked question a row's verb
+ *  decides (MOTIR-5802). */
+const reaskedGate = async (workItemId: string) => {
+  const [gate] = await awaiting(workItemId);
+  return gate!;
+};
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -522,16 +538,18 @@ describe('5 · redelivery and order', () => {
     expect(await awaiting(item.id)).toHaveLength(1);
   });
 
-  // NEUTRAL exits from here: Queue again survives only for them (MOTIR-5802).
+  // ⚠️ THE VERB IS PRESSED ON THE RE-ASKED GATE FROM HERE ON (MOTIR-5802): every un-landed
+  // exit spends the approval that preceded it, so the press that puts the pull request back
+  // is the NEW approval rather than the old one carried out again.
   it('an OLD exit redelivered after Queue again changes nothing, and the queue ref is kept', async () => {
-    const { s, item, approved } = await approvedIntoTheQueue('old-exit@example.com');
+    const { s, item } = await approvedIntoTheQueue('old-exit@example.com');
     const id = nextGuid();
-    await eject('web', 7, 'sha-web', 'MANUAL', id);
+    await eject('web', 7, 'sha-web', 'CI_FAILURE', id);
     enqueueAll();
-    await queueAgain(s, approved.id, 7);
+    await queueAgain(s, (await reaskedGate(item.id)).id, 7);
     expect(await statusOf(item.id)).toBe('approved');
 
-    expect(await eject('web', 7, 'sha-web', 'MANUAL', id)).toMatchObject({
+    expect(await eject('web', 7, 'sha-web', 'CI_FAILURE', id)).toMatchObject({
       outcome: 'duplicate',
     });
     expect(await statusOf(item.id)).toBe('approved');
@@ -539,21 +557,24 @@ describe('5 · redelivery and order', () => {
     expect(await exitsOf(7)).toHaveLength(1);
   });
 
-  it('a second GENUINE exit at the same head after Queue again is a new row, offered again', async () => {
-    const { s, item, approved } = await approvedIntoTheQueue('second-exit@example.com');
-    await eject('web', 7, 'sha-web', 'MANUAL');
+  it('a second GENUINE exit at the same head after Queue again is a new row, asked again', async () => {
+    const { s, item } = await approvedIntoTheQueue('second-exit@example.com');
+    await eject('web', 7, 'sha-web', 'CI_FAILURE');
     enqueueAll();
-    await queueAgain(s, approved.id, 7);
+    await queueAgain(s, (await reaskedGate(item.id)).id, 7);
 
-    expect(await eject('web', 7, 'sha-web', 'MANUAL')).toMatchObject({ outcome: 'recorded' });
+    expect(await eject('web', 7, 'sha-web', 'CI_FAILURE')).toMatchObject({ outcome: 'recorded' });
     expect(await exitsOf(7)).toHaveLength(2);
     expect((await exitsOf(7))[1]!.requeuedAt).toBeNull();
-    expect(await statusOf(item.id)).toBe('approved');
     expect(await queueRef(7)).toBeNull();
 
-    // …and the new exit is offered again, on the same approval.
+    // …and the NEW exit spends the approval that re-queued it, so the card is asked once
+    // more and that fresh press puts it back.
+    expect(await statusOf(item.id)).toBe('in_review');
     enqueueAll();
-    expect(await queueAgain(s, approved.id, 7)).toMatchObject({ outcome: 'enqueued' });
+    expect(await queueAgain(s, (await reaskedGate(item.id)).id, 7)).toMatchObject({
+      outcome: 'enqueued',
+    });
     expect(await statusOf(item.id)).toBe('approved');
   });
 });
@@ -665,19 +686,26 @@ describe('9 · the doors a person presses', () => {
       { params: Promise.resolve({ id, pullRequestId }) },
     );
 
-  it('the route re-queues on the decided approval, and answers a second press with 409', async () => {
-    const { s, item, approved } = await approvedIntoTheQueue('route-manual@example.com');
-    await eject('web', 7, 'sha-web', 'MANUAL');
+  it('the route re-queues by DECIDING the re-asked gate, and answers a second press with the exit it stamped', async () => {
+    const { s, item } = await approvedIntoTheQueue('route-manual@example.com');
+    await eject('web', 7, 'sha-web', 'CI_FAILURE');
     doors.ctx = s.ctx;
     const prId = (await prRow(7)).id;
+    const reasked = await reaskedGate(item.id);
+    // The API caller hands back the stamp its read was shown, exactly as the frame does.
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'pull_request_approval' },
+      s.ctx,
+    );
     enqueueAll();
 
-    const first = await post(item.id, prId, JSON.stringify({ approvalGateId: approved.id }));
+    const body = JSON.stringify({ approvalGateId: reasked.id, stamp: read.stamp });
+    const first = await post(item.id, prId, body);
     expect(first.status).toBe(200);
     expect(await first.json()).toMatchObject({ member: { outcome: 'enqueued' } });
     expect(await statusOf(item.id)).toBe('approved');
 
-    const second = await post(item.id, prId, JSON.stringify({ approvalGateId: approved.id }));
+    const second = await post(item.id, prId, body);
     expect(second.status).toBe(200);
     expect(await second.json()).toMatchObject({
       member: { outcome: 'refused', refusal: { tag: 'MERGE_ALREADY_REQUEUED' } },
@@ -844,10 +872,11 @@ describe('10 · the ejection arm’s edges, through the real handler', () => {
     await expect(eject('web', 7, 'sha-web')).rejects.toThrow('the disk is full');
   });
 
-  // REPLACES "a workflow that cannot take the card back leaves it" (MOTIR-5634): Queue
-  // again no longer moves a card at all (MOTIR-5802), so a workflow without
-  // `implemented → approved` changes nothing about it.
-  it('Queue again on a neutral exit re-queues and writes no status, with or without `implemented → approved`', async () => {
+  // REPLACES "a workflow that cannot take the card back leaves it" (MOTIR-5634): no press
+  // writes `implemented → approved` any more (MOTIR-5802), and a NEUTRAL exit spends the
+  // approval exactly as a failure does — so the old press is refused and moves nothing,
+  // whatever the workflow holds.
+  it('Queue again on a neutral exit is refused on the spent approval and writes no status', async () => {
     const { s, item, approved } = await approvedIntoTheQueue('no-edge@example.com');
     await eject('web', 7, 'sha-web', 'MANUAL');
     const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: s.project.id } });
@@ -862,8 +891,11 @@ describe('10 · the ejection arm’s edges, through the real handler', () => {
     enqueueAll();
     sent.length = 0;
 
-    expect(await queueAgain(s, approved.id, 7)).toMatchObject({ outcome: 'enqueued' });
-    expect(await queueRef(7)).toBe('queue:MQE_7');
+    expect(await queueAgain(s, approved.id, 7)).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
+    });
+    expect(await queueRef(7)).toBeNull();
     expect(await statusOf(item.id)).toBe('approved');
     expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
   });

@@ -227,6 +227,9 @@ export function DevelopmentGateFrame({
         approvalGateId: gate.id,
         pullRequestId,
         identifier: itemIdentifier,
+        // On the RE-ASKED gate this press IS the approval (MOTIR-5802), so it carries the
+        // stamp THIS read handed over — what is on screen, never refetched (MOTIR-5235).
+        stamp: read.stamp ?? '',
       });
       if (queueAgain?.failure && !result.ok) clearOptimisticStatus();
       // ONLY THAT ROW: a retry reports one member, and the others keep what they showed.

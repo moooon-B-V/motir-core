@@ -5,7 +5,8 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { deliveryMemberVersion } from '@/lib/approvalGates/deliverySetVersion';
-import { failureExitOutranksApproval } from '@/lib/approvalGates/gateSet';
+import { unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
+import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import type { PullRequestApprovalMemberDTO, PullRequestQueueExitDTO } from '@/lib/dto/approvalGate';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -20,8 +21,9 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //     merged — so the row reads *Queued to merge* for as long as that is true;
 //   · whether a RETRY is offered, which is a fact about the pull request rather than about a
 //     second gate: the approval stands, and this member has no merge outcome yet;
-//   · the merge queue's latest EXIT, and whether *Queue again* is honest — the exit nobody has
-//     put back, while the pull request is still at the head the approval named (MOTIR-5634).
+//   · the merge queue's latest EXIT, and whether the row's verb is honest — the exit nobody has
+//     put back, while the pull request is still at the head the gate named (MOTIR-5634), and
+//     the approval it would act on has not already been spent on that outcome (MOTIR-5802).
 //
 // ⚠️ NO REFUSAL REASON: the press does not persist one.
 //
@@ -41,11 +43,16 @@ async function approvedMembers(
   if (
     !approval ||
     approval.kind !== APPROVAL_KIND ||
-    approval.state !== 'approved' ||
+    (approval.state !== 'approved' && approval.state !== 'awaiting') ||
     approval.workItemId !== workItemId
   ) {
     return [];
   }
+  // ⚠️ AN `awaiting` GATE IS READ TOO, AND IT IS THE RE-ASKED ONE (MOTIR-5802; §4 FOURTH
+  // AMENDMENT, point 4). Its members carry the row verbs — *Queue again* / *Retry merge* —
+  // and pressing one DECIDES this gate rather than reusing a spent approval, so the row
+  // needs its id. Nothing was decided on it yet, so nothing it covers has been spent.
+  const awaitingReask = approval.state === 'awaiting';
   const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
   const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
     deliveries.map((row) => row.pullRequest.id),
@@ -64,14 +71,20 @@ async function approvedMembers(
     // only while the pull request is still at the head the approval named, which is what
     // makes reusing the approval honest.
     const standingExit = exit !== null && exit.requeuedAt === null;
-    // ⚠️ A FAILURE EXIT IS NOT REQUEUEABLE ON AN APPROVAL GIVEN BEFORE IT (MOTIR-5802;
-    // `approval-gates.md` §4 FOURTH AMENDMENT, point 4): the card is asked again on a fresh
-    // gate instead. The re-asked gate's OWN approval is given after the exit, so a host
-    // refusing its re-queue is retried here like any other (MOTIR-5805). Only an approved
-    // gate reaches here, which only a `manual` project raises, and the exit's
-    // `disposition` rides on `exit` so the frame can tell the cases apart.
-    const failureExit =
-      standingExit && failureExitOutranksApproval(exit, approval.decidedAt ?? null);
+    // ⚠️ NO VERB ACTS ON A SPENT APPROVAL (MOTIR-5802; `approval-gates.md` §4 FOURTH
+    // AMENDMENT, points 1 and 4). An un-landed outcome standing at the approved head —
+    // of ANY disposition, NEUTRAL included — means the yes that sent these commits has
+    // been used, so this gate offers no verb: the card is asked again on a fresh gate,
+    // and it is THAT gate the row's press decides. On the re-asked (`awaiting`) gate
+    // nothing has been spent, so the verb is offered and carries the gate's id.
+    const spentOnThisOutcome =
+      !awaitingReask &&
+      standingExit &&
+      unlandedOutcomeOutranksApproval({ at: exit.exitedAt }, approval.decidedAt ?? null);
+    // ⚠️ AND A CAN'T-LAND EXIT OFFERS NO VERB AT ALL (§4 FOURTH AMENDMENT, point 2): the
+    // same commits cannot land however many times anyone says yes, so a button that
+    // re-queues them is a button guaranteed to fail. `motir fix` is the way forward.
+    const cantLand = standingExit && classOfQueueExit(exit.rawReason) === 'cant_land';
     const atApprovedHead =
       standingExit && row !== undefined && deliveryMemberVersion(row) === member.subjectVersion;
     const open = pr !== undefined && pr.state === 'open' && !pr.merged;
@@ -79,11 +92,17 @@ async function approvedMembers(
       subjectVersion: member.subjectVersion,
       pullRequestId: pr?.id ?? null,
       queued: pr !== undefined && !pr.merged && (outcome?.startsWith('queue:') ?? false),
-      // A member Motir has not merged or queued yet is the one a person can try again.
-      retryable: pr !== undefined && !pr.merged && outcome === null && !standingExit,
+      // A member Motir has not merged or queued yet is the one a person can try again —
+      // under the approval that ATTEMPTED it. On the re-asked gate nothing has been
+      // attempted yet, so there is nothing to retry: its verb is the enqueue below.
+      retryable:
+        !awaitingReask && pr !== undefined && !pr.merged && outcome === null && !standingExit,
       exit: exit ? toQueueExitDto(exit) : null,
       exitAtApprovedHead: atApprovedHead,
-      requeueable: open && atApprovedHead && !failureExit,
+      requeueable: open && atApprovedHead && !spentOnThisOutcome && !cantLand,
+      // Which gate the row's press DECIDES — the re-asked one, or null on the decided
+      // gate, where the press carries out a decision already made.
+      retryDecidesGateId: awaitingReask ? approval.id : null,
     };
   });
 }

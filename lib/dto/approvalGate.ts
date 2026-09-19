@@ -603,12 +603,19 @@ export interface PullRequestApprovalMemberDTO {
    *  the approval named — the exit still describes the approved code, whatever its
    *  disposition. False once a push moved the head (*New commits since approval*). */
   exitAtApprovedHead: boolean;
-  /** *Queue again* is offered (MOTIR-5634; `approval-gates.md` §4 THIRD AMENDMENT,
-   *  decision 5): {@link exitAtApprovedHead}, the pull request is open, and the exit is
-   *  NEUTRAL. ⚠️ Never for a FAILURE exit (MOTIR-5802; §4 FOURTH AMENDMENT, point 4): the
-   *  card is asked again on a fresh gate instead, so the frame reads `exit.disposition` to
-   *  tell a failure at the approved head from a moved head. */
+  /** The row's verb — *Queue again* for a queue exit, *Retry merge* for a refused merge —
+   *  is offered: {@link exitAtApprovedHead}, and the pull request is open.
+   *  ⚠️ NEVER ON A SPENT APPROVAL (MOTIR-5802; §4 FOURTH AMENDMENT, points 1 and 4).
+   *  An un-landed outcome of ANY disposition, NEUTRAL included, spends the approval that
+   *  preceded it, so the DECIDED gate offers no verb at all; the card is asked again and
+   *  the verb rides on the re-asked gate, whose id is {@link retryDecidesGateId}. The
+   *  frame reads `exit.disposition` to word the row, never to decide this. */
   requeueable: boolean;
+  /** WHICH GATE the row's press DECIDES (MOTIR-5802; §4 FOURTH AMENDMENT, point 4) — the
+   *  re-asked `awaiting` gate, so pressing *Queue again* / *Retry merge* IS the new
+   *  approval. Null on a decided gate, where a press carries out a decision already made
+   *  and never re-decides it. */
+  retryDecidesGateId: string | null;
 }
 
 /** One merge-queue removal as a surface reads it (MOTIR-5632 · MOTIR-5634). */

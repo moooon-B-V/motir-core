@@ -66,3 +66,51 @@ export function classifyQueueExit(rawReason: string | null | undefined): QueueEx
   }
   return { disposition: 'neutral', recognised: false };
 }
+
+/**
+ * WHAT A PERSON CAN DO ABOUT AN UN-LANDED MERGE (§4 FOURTH AMENDMENT, point 2;
+ * MOTIR-5802 · MOTIR-5805). One question decides it: could re-running these SAME
+ * commits land them?
+ *
+ *  · `retryable`  — yes (a flaky check, a cleared queue, a hand removal): ask again.
+ *  · `cant_land`  — no, not as they stand (a conflict): asking would offer a button
+ *                   guaranteed to fail, so the card goes back to Implemented and
+ *                   `motir fix` is the way forward.
+ *  · `setting`    — yes, once a person changes a SETTING (branch protection): ask
+ *                   again, and name the setting.
+ *  · `landed`     — it merged; there is nothing to ask.
+ *
+ * ⚠️ THE CLASS IS NOT THE DISPOSITION, and both survive. The disposition says what the
+ * removal did to the card the moment it arrived; the class says what may be done about
+ * it now. `BRANCH_PROTECTIONS` is a `failure` and a `setting`; `MANUAL` is `neutral`
+ * and `retryable`.
+ */
+export type LandingClass = 'retryable' | 'cant_land' | 'setting' | 'landed';
+
+/** Every reason the table above names, with its class. Total by construction. */
+const QUEUE_EXIT_CLASSES = {
+  CI_FAILURE: 'retryable',
+  CI_TIMEOUT: 'retryable',
+  INVALID_MERGE_COMMIT: 'retryable',
+  GIT_TREE_INVALID: 'retryable',
+  MANUAL: 'retryable',
+  QUEUE_CLEARED: 'retryable',
+  ROLL_BACK: 'retryable',
+  UNKNOWN_REMOVAL_REASON: 'retryable',
+  MERGE_CONFLICT: 'cant_land',
+  BRANCH_PROTECTIONS: 'setting',
+  MERGE: 'landed',
+  ALREADY_MERGED: 'landed',
+} as const satisfies Record<KnownQueueExitReason, LandingClass>;
+
+/**
+ * Classify one raw removal reason by what can be DONE about it. TOTAL: an unrecognised
+ * string is `retryable`, which is the safe default — a person is asked and can still
+ * reach for `motir fix`, where `cant_land` would silently offer them nothing.
+ */
+export function classOfQueueExit(rawReason: string | null | undefined): LandingClass {
+  if (rawReason && Object.hasOwn(QUEUE_EXIT_CLASSES, rawReason)) {
+    return QUEUE_EXIT_CLASSES[rawReason as KnownQueueExitReason];
+  }
+  return 'retryable';
+}

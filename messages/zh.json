@@ -8439,8 +8439,8 @@
         "next": "无需再做任何操作。刷新页面查看它现在的状态。"
       },
       "mergeRequeueNeedsApproval": {
-        "title": "这个拉取请求因失败离开了合并队列，需要重新批准。",
-        "next": "再次批准该工作项即可把它放回合并队列；如果失败是真实问题，请运行 motir fix。"
+        "title": "这些提交没有合入，发起它们的那次批准已经用掉了。",
+        "next": "再次批准该工作项即可再试一次；如果检查失败确有原因，请改用 motir fix。"
       },
       "mergeAppPermissionMissing": {
         "title": "Motir 的 GitHub App 无权在此合并。",

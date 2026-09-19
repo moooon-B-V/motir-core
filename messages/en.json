@@ -8443,8 +8443,8 @@
         "next": "Nothing is left to do. Reload to see where it is now."
       },
       "mergeRequeueNeedsApproval": {
-        "title": "This pull request left the merge queue because it failed, so it needs a fresh approval.",
-        "next": "Approve the work item again to put it back in the merge queue, or run motir fix if the failure is real."
+        "title": "These commits did not land, so the approval that sent them has been used.",
+        "next": "Approve the work item again to try once more. If a check failed for a real reason, run motir fix instead."
       },
       "mergeAppPermissionMissing": {
         "title": "Motir's GitHub App is not allowed to merge here.",

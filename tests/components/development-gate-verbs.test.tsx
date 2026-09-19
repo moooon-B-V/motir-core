@@ -237,6 +237,8 @@ describe('the press (Panels 12s, 12t, 12u)', () => {
       approvalGateId: APPROVED.id,
       pullRequestId: GATEWAY_PR.id,
       identifier: 'ACME-12',
+      // As above: the row's press carries the stamp (MOTIR-5802).
+      stamp: 'v1.stamp-on-screen',
     });
     expect(screen.queryByRole('alert')).toBeNull();
     expect(within(rowOf(CORE_PR.title)).getByText(pra.outcome.merged)).toBeTruthy();

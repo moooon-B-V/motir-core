@@ -256,6 +256,9 @@ describe('manual mode, on the card’s decided approval', () => {
       approvalGateId: APPROVED.id,
       pullRequestId: GATEWAY_PR.id,
       identifier: 'ACME-12',
+      // The press carries the stamp this read was shown: on the RE-ASKED gate it IS the
+      // approval, and the door refuses one made against a stamp that has moved (MOTIR-5802).
+      stamp: 'v1.stamp-on-screen',
     });
     // E2: the pill stays, the button waits, the record says what is happening.
     await waitFor(() => expect((queueAgain() as HTMLButtonElement).disabled).toBe(true));

@@ -173,25 +173,32 @@ export interface GateSet {
  *   card, all of which carry a null `subjectVersion`.
  */
 /**
- * Does a merge-queue FAILURE put the merge question back (§4 FOURTH AMENDMENT, points
- * 1–4; MOTIR-5802 · MOTIR-5805)? True when a failure exit stands and no approval of the
- * merge was given AFTER it.
+ * Has the approval been SPENT on an attempt that did not land (§4 FOURTH AMENDMENT,
+ * points 1–4; MOTIR-5802 · MOTIR-5805)? True when an un-landed outcome stands and no
+ * approval of the merge was given AFTER it.
  *
- * ⚠️ THE ORDER IS THE WHOLE RULE. The yes that sent the commits to the queue was given
- * BEFORE the queue said they did not land, so it is not honoured and is asked again. A
- * yes given AFTER the exit — the re-asked gate's own approval — IS the answer to that
- * failure: it re-queues, and a host refusing that re-queue is retried under it rather
- * than asked a third time.
+ * ⚠️ THE ORDER IS THE WHOLE RULE. The yes that sent the commits was given BEFORE the
+ * attempt failed to land, so it has been used and is asked again. A yes given AFTER the
+ * outcome — the re-asked gate's own approval — IS the answer to it: it re-queues or
+ * merges, and a host refusing THAT is a new outcome of its own rather than a third
+ * question about the same one.
  *
- * Shared by the gate set (is the question owed?), the members read (is *Queue again*
- * offered?) and the retry (may it re-queue?), so the three cannot disagree.
+ * ⚠️ AND THE CALLER DECIDES WHAT IS UN-LANDED, which is why this takes an instant
+ * rather than a row. An outcome reaches it only when it is STANDING — a queue exit
+ * nobody put back, a recorded host refusal nobody superseded — and `landed` never
+ * reaches it at all. Every DISPOSITION is otherwise in scope, NEUTRAL included: the
+ * amendment's point 1 admits no exception, and the disposition decides the CLASS
+ * (`lib/mergeQueue/queueExit.ts`), never whether the approval was spent.
+ *
+ * Shared by the gate set (is the question owed?), the members read (is the row's verb
+ * offered?) and the retry (may it act?), so the three cannot disagree.
  */
-export function failureExitOutranksApproval(
-  exit: { disposition: string; exitedAt: Date } | null | undefined,
+export function unlandedOutcomeOutranksApproval(
+  outcome: { at: Date } | null | undefined,
   approvalDecidedAt: Date | null | undefined,
 ): boolean {
-  if (!exit || exit.disposition !== 'failure') return false;
-  return !approvalDecidedAt || exit.exitedAt.getTime() >= approvalDecidedAt.getTime();
+  if (!outcome) return false;
+  return !approvalDecidedAt || outcome.at.getTime() >= approvalDecidedAt.getTime();
 }
 
 function alreadyDecided(
@@ -329,15 +336,15 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // about new commits. Without this clause the design approval would go on
   // authorising every future green, merging code nobody approved.
   const carriedByDesign = input.designApprovalStandsForMerge && input.latestMergeGate === null;
-  // §4 FOURTH AMENDMENT (MOTIR-5805): a failure exit standing at a member's head
-  // outranks every merge decision made BEFORE it — a decided gate and the design
-  // carry alike. `manual` only: `auto` has no person to ask, and never reaches here.
+  // §4 FOURTH AMENDMENT (MOTIR-5802 · MOTIR-5805): an UN-LANDED outcome standing at a
+  // member's head outranks every merge decision made BEFORE it — a decided gate and the
+  // design carry alike. `manual` only: `auto` has no person to ask, and never reaches here.
   const reaskedByEjection =
     input.standingFailureExitAt !== null &&
     input.standingFailureExitAt !== undefined &&
-    failureExitOutranksApproval(
-      { disposition: 'failure', exitedAt: input.standingFailureExitAt },
-      // Any DECISION after the exit answers it — an approval (which re-queues) or a
+    unlandedOutcomeOutranksApproval(
+      { at: input.standingFailureExitAt },
+      // Any DECISION after the outcome answers it — an approval (which re-queues) or a
       // request for changes (which re-queues nothing and is still an answer).
       input.latestMergeGate?.decidedAt ?? null,
     );

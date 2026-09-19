@@ -15,6 +15,7 @@ import { getGitProvider } from '@/lib/git';
 import type { GitProvider } from '@/lib/git/provider';
 import type { MergeChangeRequestResult } from '@/lib/git/types';
 import {
+  ApprovalGateAlreadyDecidedError,
   ApprovalGateAlreadyRequeuedError,
   ApprovalGateNotFoundError,
 } from '@/lib/approvalGates/errors';
@@ -41,10 +42,11 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 // `manual` project, as a person's re-dispatch in an `auto` one — and never twice. The host
 // is the seam's `mergeChangeRequest`, stubbed: the one thing that leaves the process.
 //
-// ⚠️ NARROWED BY §4's FOURTH AMENDMENT, point 4 (MOTIR-5802): in a `manual` project a
-// FAILURE exit is no longer re-queued on the old approval — the press is refused and the
-// card is asked again on a fresh gate. So the manual-mode tests below eject NEUTRALLY
-// (`MANUAL`) unless they are asserting that refusal.
+// ⚠️ NARROWED BY §4's FOURTH AMENDMENT, points 1 and 4 (MOTIR-5802): in a `manual` project
+// NO exit is re-queued on the approval that preceded it — a NEUTRAL removal no more than a
+// failure, because one approval authorizes ONE enqueue. The press is refused, the card is
+// asked again on a fresh gate, and pressing the row's verb on THAT gate IS the new
+// approval. The manual-mode tests below assert both halves.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-queue-again';
@@ -207,9 +209,22 @@ async function ejectedManual(email: string, reason = 'CI_FAILURE') {
   return { s, item, approved, prId: (await pr(11)).id };
 }
 
+/** The same card after the queue removed #11, with the SIBLING already merged — so the
+ *  re-asked gate covers exactly one un-landed member and the host is called once. Returns
+ *  that fresh `awaiting` gate, which is what the row's verb decides (MOTIR-5802). */
+async function reaskedManual(email: string, reason = 'CI_FAILURE') {
+  const ejected = await ejectedManual(email, reason);
+  await adminDb.githubPullRequest.update({
+    where: { id: (await pr(12)).id },
+    data: { merged: true, state: 'closed' },
+  });
+  const [reasked] = await awaitingGates(ejected.item.id);
+  return { ...ejected, reasked: reasked! };
+}
+
 const press = (s: Scenario, approvalGateId: string, pullRequestId: string) =>
   pullRequestMergeService.retryApproveAndMergeMember(
-    { approvalGateId, pullRequestId, noteMd: null, source: 'ui' },
+    { approvalGateId, pullRequestId, noteMd: null, source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
     s.ctx,
   );
 
@@ -257,26 +272,70 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
     expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
   });
 
-  it('a neutral exit re-enqueues, stamps the exit, and leaves the card at approved', async () => {
-    const { s, item, approved, prId } = await ejectedManual('manual-neutral@example.com', 'MANUAL');
-    expect(await statusOf(item.id)).toBe('approved');
+  // REPLACES the THIRD AMENDMENT's "a neutral exit re-enqueues on the standing approval"
+  // test: point 1 admits no exception, and Yue settled the neutral case by name
+  // (2026-09-19, *"re-ask too"*).
+  it('a NEUTRAL exit is REFUSED too — the approval that sent it has been spent', async () => {
+    const { s, approved, prId } = await ejectedManual('manual-neutral@example.com', 'MANUAL');
     const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_3' });
     sent.length = 0;
 
     const outcome = await press(s, approved.id, prId);
 
+    expect(outcome).toMatchObject({
+      pullRequestId: prId,
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
+    });
+    expect(host).not.toHaveBeenCalled();
+    expect((await latestExit(11)).requeuedAt).toBeNull();
+    // The decided gate is byte-for-byte what it was.
+    expect(await adminDb.approvalGate.findUniqueOrThrow({ where: { id: approved.id } })).toEqual(
+      approved,
+    );
+    expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
+  });
+
+  it('a CONFLICT exit is refused as CANNOT-LAND — not even a fresh approval re-queues it', async () => {
+    const { s, prId, reasked } = await reaskedManual(
+      'manual-conflict@example.com',
+      'MERGE_CONFLICT',
+    );
+    const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_C' });
+    // The card is asked again after a conflict at this base (the class-driven move to
+    // Implemented is MOTIR-5805's), so press the FRESH gate: even a brand-new approval may
+    // not re-queue commits that cannot combine — §4 FOURTH AMENDMENT, point 2.
+    const outcome = await press(s, reasked.id, prId);
+
+    expect(outcome).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
+    expect(host).not.toHaveBeenCalled();
+    expect((await latestExit(11)).requeuedAt).toBeNull();
+  });
+
+  it('pressing the RE-ASKED gate IS the new approval — it decides it, enqueues once and returns the card to approved', async () => {
+    const { s, item, approved, prId, reasked } = await reaskedManual('manual-reask@example.com');
+    // The failure exit put the card back at In Review with ONE fresh question (MOTIR-5805).
+    expect(await statusOf(item.id)).toBe('in_review');
+    const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_R' });
+    sent.length = 0;
+
+    const outcome = await press(s, reasked.id, prId);
+
     expect(outcome).toMatchObject({ pullRequestId: prId, outcome: 'enqueued' });
     expect(host).toHaveBeenCalledTimes(1);
     expect(host.mock.calls[0]![0]).toMatchObject({ number: 11, expectedHeadSha: 'sha-a' });
-    expect((await pr(11)).mergeOutcomeRef).toBe('queue:MQE_3');
-    expect(await statusOf(item.id)).toBe('approved');
+    expect((await pr(11)).mergeOutcomeRef).toBe('queue:MQE_R');
     expect((await latestExit(11)).requeuedAt).not.toBeNull();
-    // The decided gate is byte-for-byte what it was, nothing new is asked, and no card moves.
+    expect(await statusOf(item.id)).toBe('approved');
+    // The press DECIDED the fresh gate — that is what makes it an approval — and left the
+    // earlier one untouched as history.
+    const decided = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: reasked.id } });
+    expect(decided.state).toBe('approved');
+    expect(decided.decidedById).toBe(s.user.id);
     expect(await adminDb.approvalGate.findUniqueOrThrow({ where: { id: approved.id } })).toEqual(
       approved,
     );
     expect(await awaitingGates(item.id)).toEqual([]);
-    expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([]);
   });
 
   it('a moved head is refused, and nothing is claimed and no host is called', async () => {
@@ -298,36 +357,42 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
   });
 
   it('a host refusal releases the claim, so the exit is offered again', async () => {
-    const { s, item, approved, prId } = await ejectedManual('manual-refused@example.com', 'MANUAL');
+    const { s, item, reasked, prId } = await reaskedManual('manual-refused@example.com');
     stubHost({ outcome: 'refused', refusal: { code: 'conflict' } });
 
-    const outcome = await press(s, approved.id, prId);
+    const outcome = await press(s, reasked.id, prId);
 
     expect(outcome).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
     expect((await latestExit(11)).requeuedAt).toBeNull();
     expect(await statusOf(item.id)).toBe('approved');
+    // The exit PRE-DATES this approval, which is what makes the row's verb honest: the
+    // press was the yes for THIS exit, the host refused the enqueue, and the exit is
+    // offered again under it. (A host refusal spends the approval too — but nothing
+    // RECORDS one yet, which is MOTIR-5833's row and MOTIR-5834's refusal.)
     const members = await pullRequestMergeService.listApprovalMembers(
-      { workItemId: item.id, approvalGateId: approved.id },
+      { workItemId: item.id, approvalGateId: reasked.id },
       s.ctx,
     );
     expect(members.find((m) => m.pullRequestId === prId)).toMatchObject({ requeueable: true });
   });
 
   it('a host FAULT releases the claim and is rethrown, not dressed as a refusal', async () => {
-    const { s, item, approved, prId } = await ejectedManual('manual-fault@example.com', 'MANUAL');
+    const { s, item, reasked, prId } = await reaskedManual('manual-fault@example.com');
     vi.spyOn(github, 'mergeChangeRequest').mockRejectedValue(new Error('the host is on fire'));
 
-    await expect(press(s, approved.id, prId)).rejects.toThrow('the host is on fire');
+    await expect(press(s, reasked.id, prId)).rejects.toThrow('the host is on fire');
     expect((await latestExit(11)).requeuedAt).toBeNull();
     expect(await statusOf(item.id)).toBe('approved');
   });
 
   it('a second press on the same exit is refused and enqueues nothing', async () => {
-    const { s, approved, prId } = await ejectedManual('manual-twice@example.com', 'MANUAL');
+    const { s, reasked, prId } = await reaskedManual('manual-twice@example.com');
     const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_5' });
 
-    await press(s, approved.id, prId);
-    const second = await press(s, approved.id, prId);
+    await press(s, reasked.id, prId);
+    // The gate the first press DECIDED carries the decision out; the exit it stamped is
+    // what refuses a second enqueue.
+    const second = await press(s, reasked.id, prId);
 
     expect(second).toMatchObject({
       outcome: 'refused',
@@ -338,22 +403,29 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
   });
 
   it('two presses at once enqueue exactly once, and the other is refused', async () => {
-    const { s, approved, prId } = await ejectedManual('manual-race@example.com', 'MANUAL');
+    const { s, reasked, prId } = await reaskedManual('manual-race@example.com');
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
     const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_6' }, () => gate);
 
-    const both = Promise.all([press(s, approved.id, prId), press(s, approved.id, prId)]);
-    // Let both reach their claim before the winner's host call returns.
+    const both = Promise.allSettled([press(s, reasked.id, prId), press(s, reasked.id, prId)]);
+    // Let both reach the gate before the winner's host call returns.
     await new Promise((r) => setTimeout(r, 200));
     release();
-    const outcomes = await both;
+    const settled = await both;
 
+    // ⚠️ THE GATE IS NOW THE RACE'S GUARD, not the exit's claim (MOTIR-5802): the press IS
+    // the approval, so the loser meets the DECISION door's own refusal — the same one two
+    // people pressing Approve at once meet, which every surface already renders.
     expect(host).toHaveBeenCalledTimes(1);
-    expect(outcomes.map((o) => o.outcome).sort()).toEqual(['enqueued', 'refused']);
-    expect(outcomes.find((o) => o.outcome === 'refused')).toMatchObject({
-      refusal: { tag: 'MERGE_ALREADY_REQUEUED' },
-    });
+    const won = settled.filter((r) => r.status === 'fulfilled');
+    const lost = settled.filter((r) => r.status === 'rejected');
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(1);
+    expect((won[0] as PromiseFulfilledResult<{ outcome: string }>).value.outcome).toBe('enqueued');
+    expect((lost[0] as PromiseRejectedResult).reason).toBeInstanceOf(
+      ApprovalGateAlreadyDecidedError,
+    );
   });
 
   it('the auto entry point refuses a manual project', async () => {
@@ -396,15 +468,30 @@ describe('the members read — requeueable only where Queue again is honest', ()
     // A member the queue never removed.
     expect(await sibling()).toMatchObject({ requeueable: false, exit: null, queued: true });
 
-    // The SAME exit, had it been NEUTRAL: Queue again is honest.
+    // The SAME exit, NEUTRAL: still not requeueable on this approval (MOTIR-5802, point 1).
+    // One approval authorizes one enqueue, and a hand removal spends it exactly as a
+    // failure does — Yue, 2026-09-19: *"re-ask too"*.
     await adminDb.githubPullRequestQueueExit.updateMany({
       where: { pullRequestId: prId },
       data: { disposition: 'neutral', rawReason: 'MANUAL' },
     });
     expect(await read()).toMatchObject({
-      requeueable: true,
+      requeueable: false,
+      retryDecidesGateId: null,
       exit: { rawReason: 'MANUAL', disposition: 'neutral', headSha: 'sha-a', requeuedAt: null },
     });
+
+    // …and it IS offered on the RE-ASKED gate, whose id the row presses: that press is the
+    // new approval (point 4).
+    const [reasked] = await awaitingGates(item.id);
+    expect(reasked).toBeDefined();
+    const onReask = (
+      await pullRequestMergeService.listApprovalMembers(
+        { workItemId: item.id, approvalGateId: reasked!.id },
+        s.ctx,
+      )
+    ).find((m) => m.pullRequestId === prId);
+    expect(onReask).toMatchObject({ requeueable: true, retryDecidesGateId: reasked!.id });
 
     // Put back: no longer requeueable.
     await adminDb.githubPullRequestQueueExit.updateMany({

@@ -27,7 +27,8 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
-import { failureExitOutranksApproval } from '@/lib/approvalGates/gateSet';
+import { unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
+import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
 import type {
   ApproveAndMergeMemberOutcomeDTO,
@@ -441,18 +442,25 @@ export const pullRequestMergeService = {
   },
 
   /**
-   * RETRY one refused member of an approve-and-merge press — step 2 of {@link approveAndMerge}
-   * for that ONE pull request alone (MOTIR-5613).
+   * THE PULL-REQUEST ROW'S VERB — *Retry merge* on a refused member, *Queue again* on one the
+   * merge queue removed (MOTIR-5613 · MOTIR-5634), addressed by (a gate, the pull request).
    *
-   * ⚠️ ADDRESSED BY (THE CARD'S GATE, THE PULL REQUEST), and it decides NOTHING: the card's
-   * gate was decided when it was approved, and a retry carries that same decision out again
-   * for the one member the host refused. The approval must still stand, and the pull request
-   * must still be a member of it at the head it was approved at — otherwise this is a
-   * withdrawn question, refused with the door's own error rather than re-asked.
+   * ⚠️ WHICH GATE IT IS HANDED DECIDES WHAT THE PRESS MEANS (MOTIR-5802; §4 FOURTH
+   * AMENDMENT, points 1 and 4):
+   *
+   *  · an `awaiting` gate — the RE-ASKED one — means the press IS the new approval. It goes
+   *    through {@link approveAndMergeGate}, the same path the frame's *Approve and merge*
+   *    takes, so the row's button and the frame's verb are one decision with one guard. The
+   *    reader's `stamp` is carried into it and the stale check is the door's own;
+   *  · a DECIDED gate means the press carries out a decision already made — the shipped
+   *    retry. It is refused (`MERGE_REQUEUE_NEEDS_APPROVAL`) the moment that approval has
+   *    been SPENT on an outcome that did not land, which is what point 1 forbids.
+   *
+   * The pull request must still be a member of the gate at the head it names — otherwise
+   * this is a withdrawn question, refused with the door's own error rather than re-asked.
    */
   async retryApproveAndMergeMember(
-    // No `stamp`: a retry decides nothing — it carries out an approval already made.
-    input: Omit<DecideGateInput, 'decision' | 'gateId' | 'stamp'> & {
+    input: Omit<DecideGateInput, 'decision' | 'gateId'> & {
       approvalGateId: string;
       pullRequestId: string;
     },
@@ -463,9 +471,11 @@ export const pullRequestMergeService = {
       if (!approval || approval.kind !== APPROVAL_KIND) {
         throw new ApprovalGateNotFoundError(input.approvalGateId);
       }
+      // THE RE-ASKED GATE: the press is the new approval, and nothing below applies — the
+      // whole set is decided and acted on by the one door (point 4).
+      if (approval.state === 'awaiting') return { reask: true as const };
       // Each non-approved state gets the refusal that is TRUE of it: a withdrawn question
-      // is superseded, changes requested is a decision that merges nothing, and an
-      // awaiting gate has no press to retry a member of.
+      // is superseded, and changes requested is a decision that merges nothing.
       if (approval.state === 'superseded') {
         throw new ApprovalGateSupersededError(input.approvalGateId);
       }
@@ -514,6 +524,27 @@ export const pullRequestMergeService = {
         pullRequestId: delivered.pullRequest.id,
       };
     });
+    // THE PRESS IS THE NEW APPROVAL (point 4): one decision, then every member acted on,
+    // exactly as the frame's own verb does it. The row reports ITS member's outcome; a
+    // member the decision no longer covers answers `no_merge_gate`, as it does there.
+    if (found && 'reask' in found) {
+      const { members } = await approveAndMergeGate(
+        {
+          gateId: input.approvalGateId,
+          noteMd: input.noteMd,
+          source: input.source,
+          stamp: input.stamp,
+        },
+        ctx,
+      );
+      return (
+        members.find((outcome) => outcome.pullRequestId === input.pullRequestId) ?? {
+          subjectVersion: members[0]?.subjectVersion ?? '',
+          pullRequestId: null,
+          outcome: 'no_merge_gate',
+        }
+      );
+    }
     // Not delivered by this card, or never a member of what was approved: there is no
     // question to carry out, and the card's gate is not re-asked.
     if (!found) throw new ApprovalGateSupersededError(input.approvalGateId);
@@ -824,12 +855,13 @@ async function mergeMember(
 }
 
 /**
- * QUEUE AGAIN under the card's DECIDED approval — for a NEUTRAL exit ONLY (Story
- * MOTIR-5461 · MOTIR-5634; narrowed by MOTIR-5802, `approval-gates.md` §4 FOURTH
- * AMENDMENT, point 4). Somebody took the member out of the merge queue, or the queue was
- * cleared: nothing was learned about the commits, so while it is still at the head the
- * approval named, it is re-enqueued with no second question. A FAILURE exit at that head
- * is REFUSED here, before anything is claimed.
+ * PUT AN EXITED MEMBER BACK IN THE QUEUE under an approval that COVERS the exit (Story
+ * MOTIR-5461 · MOTIR-5634; narrowed to one act per approval by MOTIR-5802,
+ * `approval-gates.md` §4 FOURTH AMENDMENT, points 1 and 4). The only approval that covers
+ * an exit is one given AFTER it — the re-asked gate's own, which the row's verb or the
+ * frame's *Approve and merge* has just decided. An exit that PRE-DATES nothing, i.e. one
+ * standing against an older approval, is REFUSED here before anything is claimed, whatever
+ * its disposition: a neutral removal spends the yes exactly as a failure does.
  *
  * ⚠️ THE CLAIM COMES BEFORE THE HOST CALL. Two presses on one exit must enqueue ONCE,
  * so the first stamps the exit's `requeuedAt` under the card's row lock and the second
@@ -866,18 +898,33 @@ async function queueAgainUnderApproval(
     };
   }
 
-  // ⚠️ A FAILURE EXIT IS NOT RE-QUEUED ON AN APPROVAL GIVEN BEFORE IT (MOTIR-5802;
-  // `approval-gates.md` §4 FOURTH AMENDMENT, point 4). The queue said those commits did
-  // not land, so the yes that sent them has not been honoured: the card is asked again
-  // on a fresh gate, and approving THAT re-queues (MOTIR-5805) — through this very
-  // function, whose approval then post-dates the exit. Nothing is claimed or written.
-  // (A moved head was answered above: the approval no longer describes the code.)
-  if (failureExitOutranksApproval(args.exit, approvalDecidedAt)) {
+  // ⚠️ NO EXIT IS RE-QUEUED ON AN APPROVAL GIVEN BEFORE IT — WHATEVER ITS DISPOSITION
+  // (MOTIR-5802; `approval-gates.md` §4 FOURTH AMENDMENT, points 1 and 4). One approval
+  // authorizes ONE enqueue: the pull request left the queue without landing, so that yes
+  // has been used, and a NEUTRAL removal is no exception (Yue, 2026-09-19: *"re-ask
+  // too"*). The card is asked again on a fresh gate, and approving THAT re-queues
+  // (MOTIR-5805) — through this very function, whose approval then post-dates the exit.
+  // Nothing is claimed or written. (A moved head was answered above: the approval no
+  // longer describes the code.)
+  if (unlandedOutcomeOutranksApproval({ at: args.exit.exitedAt }, approvalDecidedAt)) {
     return {
       subjectVersion: member.subjectVersion,
       pullRequestId: target.pullRequestId,
       outcome: 'refused',
       refusal: toGateRefusal('MERGE_REQUEUE_NEEDS_APPROVAL'),
+    };
+  }
+
+  // ⚠️ AND A CAN'T-LAND EXIT IS NEVER RE-QUEUED, whatever anyone approves (§4 FOURTH
+  // AMENDMENT, point 2). A conflict does not resolve by being asked again: the commits
+  // have to change, so the card sits at Implemented with `motir fix` (MOTIR-5803) and
+  // the next push re-arms the question.
+  if (classOfQueueExit(args.exit.rawReason) === 'cant_land') {
+    return {
+      subjectVersion: member.subjectVersion,
+      pullRequestId: target.pullRequestId,
+      outcome: 'refused',
+      refusal: toGateRefusal('MERGE_CONFLICT'),
     };
   }
 
