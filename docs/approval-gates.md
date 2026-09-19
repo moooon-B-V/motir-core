@@ -43,6 +43,31 @@ author has said it is not ready, and GitHub will not merge one. Motir asks when
 the pull request is marked **ready for review**, and converting it back to a
 draft withdraws a question that was already waiting.
 
+### When a decision gate appears
+
+A `type: decision` work item decided by an agent ships its decision as **one file under
+`docs/decisions/`** in a pull request. When that pull request's head is seen, Motir asks
+you to accept the decision: the work item's **Development** section shows the document
+itself, rendered, with the pull request beneath it. The document is the question; the
+pull request is what accepting it merges. There is no _How to test_ part: a decision
+ships a document, not something to run.
+
+**One press answers both.** _Approve and merge_ records that you accept the decision and
+merges its pull request — or, when its checks have not passed yet, the pull request
+merges on its own once they do, with no second press. In a project that merges
+automatically, the pull request still waits for your answer: an agent's decision never
+merges before a person has accepted it.
+
+**Approve is disabled when there is no single document to accept** — the pull request
+adds none, adds more than one, the file is gone from its head, or Motir could not read
+it. The section says which, in words. _Request changes_ stays available, because
+sending it back to the agent is exactly what those cases need. A push that changes the
+document withdraws the question and asks about the new version; a push that leaves the
+document alone keeps your answer, and only the merge is asked again.
+
+A decision card worked by a person asks nothing here: a person choosing between options
+is a different question.
+
 ## What you see
 
 The gate always renders as the same three bands, in the same order, and the order
@@ -226,8 +251,6 @@ guessing about the rest:
   asks you to approve the commits whose checks passed, and links out to each pull
   request; outside a gate, merging still happens on GitHub.
 - **There is no per-project setting** that turns any of this on or off.
-- **There is no gate for approving a decision document**, though the language is
-  built to take one.
 - **No email and no bell notification** is sent when a gate is raised.
 
 Each is a separate piece of work, and this page will grow as they land.

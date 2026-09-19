@@ -3,7 +3,7 @@
 import { useCallback, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { CircleDashed, GitPullRequest, Pencil, Video } from 'lucide-react';
+import { CircleDashed, GitPullRequest, Pencil, Scale, Video } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,7 @@ import type {
   ApprovalGateSubjectSummaryDTO,
   ApprovalQueueRowDto,
   ApprovalRecordDecidedRowDto,
+  DecisionApprovalSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
@@ -138,6 +139,11 @@ function KindGlyph({ kind }: { kind: ApprovalGateKindDTO }) {
     // hue — the question is about the story, so the row reads as one.
     return <Video className="h-4 w-4 shrink-0 text-(--el-type-story)" aria-hidden />;
   }
+  if (kind === 'decision_approval') {
+    // The decision TYPE's own mark and hue (MOTIR-5679; `design/workbench` § 27) — exactly
+    // as a design row takes the design type's pencil, so the reader already knows it.
+    return <Scale className="h-4 w-4 shrink-0 text-(--el-type-decision)" aria-hidden />;
+  }
   return kind === 'design_result' ? (
     // `lib/issues/workItemTypeMeta.ts`'s own glyph + hue for `design` — a design
     // result IS a design, so the reader already knows this mark.
@@ -166,6 +172,38 @@ function PullRequestSetLine({ subject }: { subject: PullRequestApprovalSubjectSu
       {shown.join(', ')}
     </span>
   );
+}
+
+/**
+ * THE DECISION'S SUBJECT LINE (Story MOTIR-4907 · Subtask MOTIR-5679; `design/workbench`
+ * § 27, Panels 7a–7c). Read from the capture's summary — NO host call per row, so the
+ * title is the file name's (`titleFromDecisionPath`, Panel 7b) and the row never waits on
+ * GitHub to draw. An unresolvable decision still lists, and says why in words.
+ */
+function DecisionSubjectLine({ subject }: { subject: DecisionApprovalSubjectSummaryDTO }) {
+  const t = useTranslations('workbench.approvals.decisionSubject');
+  const pr = `${subject.repo} · #${subject.number}`;
+  if (subject.outcome === 'one' && subject.path) {
+    return (
+      <span
+        className="truncate text-xs text-(--el-text-secondary)"
+        title={
+          subject.blobSha
+            ? t('title', { path: subject.path, blob: subject.blobSha.slice(0, 7) })
+            : subject.path
+        }
+      >
+        {subject.title ? `${subject.title} · ${subject.path}` : subject.path}
+      </span>
+    );
+  }
+  const line =
+    subject.outcome === 'several'
+      ? t('several', { count: subject.documentCount, pr })
+      : subject.outcome === 'none'
+        ? t('none', { pr })
+        : t('unreadable', { pr });
+  return <span className="truncate text-xs text-(--el-text-secondary)">{line}</span>;
 }
 
 /** What the row says about the thing being decided, per kind. */
@@ -202,6 +240,11 @@ function SubjectMeta({
         })}
       </span>
     );
+  }
+  if (subject.kind === 'decision_approval') {
+    // The DOCUMENT names the decision for a live question and a decided record alike: the
+    // version is `owner/name:path@blob`, whose first 8 characters identify nothing.
+    return <DecisionSubjectLine subject={subject} />;
   }
   if (decidedVersion !== undefined) {
     // A RECORD says WHICH bytes were decided (`design/approvals` § The ROW,
@@ -306,6 +349,7 @@ export function ApprovalRow({
   // overlay can render this kind). The frame it opens is the item page's Development
   // block at viewport height, so the row no longer has to send the reader to the card.
   const pullRequestSet = row.subject?.kind === 'pull_request_approval';
+  const decision = row.subject?.kind === 'decision_approval';
   // A kind with no renderer, or a subject that is gone, still HAS the door — the
   // overlay draws both (§ 22 Panels 4a / 4b). What they lack is anything to
   // decide, so their Decide cell keeps § 20's treatment.
@@ -313,7 +357,8 @@ export function ApprovalRow({
     row.subject !== null &&
     (row.subject.kind === 'design_result' ||
       row.subject.kind === 'acceptance_result' ||
-      pullRequestSet);
+      pullRequestSet ||
+      decision);
   const settledState: ApprovalGateStateDTO | null =
     record.section === 'decided' ? record.row.state : announcedState;
   // A HELD row is settled with no state to show: it has left the awaiting set,
@@ -375,7 +420,11 @@ export function ApprovalRow({
             settled || !renderable ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
           )}
         >
-          {pullRequestSet ? t('pullRequest.kindLabel') : t(`kind.${row.kind}`)}
+          {pullRequestSet
+            ? t('pullRequest.kindLabel')
+            : decision
+              ? t('rowKind.decision_approval')
+              : t(`kind.${row.kind}`)}
         </span>
         {record.section === 'decided' ? (
           <SubjectMeta subject={row.subject} decidedVersion={record.row.subjectVersion} />

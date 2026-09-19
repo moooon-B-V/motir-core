@@ -565,6 +565,9 @@ export function ApprovalOverlay() {
             repoDelivery={subject.repoDelivery}
             deliveries={subject.deliveries}
             howToTest={subject.howToTest}
+            // THE DECISION PORT (MOTIR-5678, §27 Panel 7) — the document leads, and the
+            // block draws no How to test for it.
+            decision={subject.decision ? { document: subject.decision.document, gate } : null}
             designResult={
               subject.designEvidence ? (
                 <DesignResultPanel

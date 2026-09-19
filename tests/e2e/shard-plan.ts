@@ -643,6 +643,16 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'plan-proposal-correction.spec.ts': 4.4,
   'plan-shapes.spec.ts': 14.0,
   'plan-timeline.spec.ts': 14.0,
+  // MOTIR-5828 — a brand-new spec, so there is no green `main` run to read
+  // `result.duration` from, and the guard caught it with no entry on its FIRST CI
+  // run: a spec nobody measured is assigned to no leg and never runs. Measured
+  // LOCALLY on 2026-09-19 against a production build on its own port and database
+  // (`PORT=3187`), one test, three filings and three tree reads: **6.8 s** on a
+  // freshly started server. Recorded as **8.0**, rounded UP, because
+  // under-estimating is the direction that unbalances a bin-packer, and this
+  // file's own calibration says a local reading runs at or below the CI cost.
+  // Re-measure from the first green run that includes it.
+  'planner-bug-destination.spec.ts': 8.0,
   'planning-anchor-level.spec.ts': 11.0,
   'plans-review.spec.ts': 14.8,
   // MOTIR-5539. Promoted from the acceptance lane (it was

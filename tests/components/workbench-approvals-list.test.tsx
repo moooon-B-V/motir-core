@@ -233,13 +233,14 @@ describe('the Approvals list — rows with no subject to show', () => {
   it('says a kind is NOT BUILT YET, offers nothing to decide, and still opens — on its own kind', () => {
     const row = designRow({
       gateId: 'gate-approval',
-      // Still a declared hole (MOTIR-4907); both pull-request kinds are registered.
-      kind: 'decision_approval',
-      subject: { kind: 'decision_approval' },
+      // The one declared hole left — RETIRED by MOTIR-5616. (`decision_approval` stood
+      // here until MOTIR-5676 registered it; its row is MOTIR-5679's.)
+      kind: 'pull_request_merge',
+      subject: { kind: 'pull_request_merge' },
     });
     renderRows([row]);
 
-    expect(screen.getByText('Decision approval')).toBeTruthy();
+    expect(screen.getByText('Pull-request merge')).toBeTruthy();
     expect(screen.getByText('Not built yet')).toBeTruthy();
     expect(screen.getByText('Motir cannot show this kind yet')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
@@ -247,7 +248,7 @@ describe('the Approvals list — rows with no subject to show', () => {
     // The overlay draws this arm (§ 22 Panel 4a), so the row has the door.
     fireEvent.click(rowDoor());
     expect(shallowPush).toHaveBeenCalledWith(
-      '/workbench?tab=approvals&page=2&approval=MOTIR-5147&approvalKind=decision_approval',
+      '/workbench?tab=approvals&page=2&approval=MOTIR-5147&approvalKind=pull_request_merge',
     );
   });
 

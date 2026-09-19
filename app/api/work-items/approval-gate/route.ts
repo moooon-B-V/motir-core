@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
+import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -155,6 +156,20 @@ async function readSubject(
       return evidence
         ? { state: 'resolved', kind: 'acceptance_result', evidence }
         : { state: 'gone' };
+    }
+
+    // THE DECISION PORT (MOTIR-5678; design §27 Panel 7): the Development block with the
+    // decision document FIRST — read here, on the server, through the resolver — and the
+    // pull requests one press merges beneath it. The document is read beside the block,
+    // never inside a transaction, because the production resolver calls the Git host.
+    case 'decision_approval': {
+      const [block, document] = await Promise.all([
+        readDevelopmentBlock(gate, item, ctx),
+        decisionDocumentService.readViewForWorkItem(gate.workItemId, ctx).catch(() => null),
+      ]);
+      return block.state === 'resolved' && block.kind === 'pull_request_approval'
+        ? { ...block, decision: { document } }
+        : block;
     }
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error

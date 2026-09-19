@@ -243,8 +243,15 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // MOTIR-4950: a newer RECEIPT retires the story's awaiting acceptance question with
       // cause `republished` — the same write, and the same lock order, as a design
       // republish (the MOTIR-5787 amendment, point 5).
+      //
+      // AMENDED ON THE RECORD — MOTIR-5677, 2026-09-19 (`approval-gates.md` §8's FIFTH
+      // AMENDMENT, clause 4): the DECISION gate is withdrawn when a capture shows a push
+      // CHANGED the decision document's blob — `head_moved`, product-written, no actor.
+      // It lives with the capture because that is the only moment the new version is
+      // known; the decision it withdraws is still made only through the door.
       callers: [
         'lib/services/acceptanceEvidenceService.ts',
+        'lib/services/decisionDocumentCaptureService.ts',
         'lib/services/designEvidenceService.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],

@@ -285,9 +285,17 @@ async function companionSubjectVersion(
   gate: { kind: string; workItemId: string },
   tx: Prisma.TransactionClient,
 ): Promise<string | null> {
-  // A PRIMARY kind's press also decides the merge gate beside it — the design's
-  // (MOTIR-5652) and, since MOTIR-5789, a story's acceptance (the MOTIR-5787 amendment).
-  if (gate.kind !== 'design_result' && gate.kind !== 'acceptance_result') return null;
+  // A PRIMARY kind's press also decides the merge gate beside it, so its stamp covers
+  // that gate: the design's (MOTIR-5652), the DECISION's (MOTIR-5677; `approval-gates.md`
+  // §8's FIFTH AMENDMENT, clause 5) and a story's ACCEPTANCE (MOTIR-5789; §1's MOTIR-5787
+  // amendment).
+  if (
+    gate.kind !== 'design_result' &&
+    gate.kind !== 'decision_approval' &&
+    gate.kind !== 'acceptance_result'
+  ) {
+    return null;
+  }
   const merge = (await approvalGateRepository.findAwaitingByWorkItem(gate.workItemId, tx)).find(
     (row) => row.kind === 'pull_request_approval',
   );

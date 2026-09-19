@@ -1679,15 +1679,15 @@ model Project {
   /// `SetNull` on the primary, `Cascade` on the list: removing the address a
   /// project is canonical at must NOT delete the project, it must fall back to
   /// the default; deleting the project takes its addresses with it.
-  primaryAddressId       String?         @map("primary_address_id")
-  primaryAddress         PublicAddress?  @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
-  publicAddresses        PublicAddress[] @relation("ProjectPublicAddresses")
+  primaryAddressId              String?         @map("primary_address_id")
+  primaryAddress                PublicAddress?  @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
+  publicAddresses               PublicAddress[] @relation("ProjectPublicAddresses")
   /// Approval gates scoped to this project (a gate is `workspaceId` + `projectId`,
   /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
-  approvalGates          ApprovalGate[]
+  approvalGates                 ApprovalGate[]
   /// The project's folders (Story MOTIR-5308) — named, nestable places in its
   /// tree that carry no workflow. Cascade.
-  folders                Folder[]
+  folders                       Folder[]
   /// The folder this project's filed bugs land in (Story MOTIR-4927 · MOTIR-4934).
   /// NULL MEANS THE PROJECT ROOT, CHOSEN — nullable with no default, and never to
   /// be made required. `NoAction`, the `Folder.parentFolder` idiom: a folder this
@@ -1695,8 +1695,19 @@ model Project {
   /// the destination to the folder's parent first (MOTIR-5537); `SetNull` would
   /// turn a deleted nested folder into a root nobody chose. Same-project is
   /// enforced by `trg_project_bug_destination_folder_tenancy`.
-  bugDestinationFolderId String?         @map("bug_destination_folder_id")
-  bugDestinationFolder   Folder?         @relation("ProjectBugDestinationFolder", fields: [bugDestinationFolderId], references: [id], onDelete: NoAction)
+  bugDestinationFolderId        String?         @map("bug_destination_folder_id")
+  bugDestinationFolder          Folder?         @relation("ProjectBugDestinationFolder", fields: [bugDestinationFolderId], references: [id], onDelete: NoAction)
+  /// The folder this project's PLANNER bugs are filed into (Story MOTIR-5818 ·
+  /// MOTIR-5820) — the `@planner-bug-home` marker's destination. A SECOND
+  /// pointer, mirroring `bugDestinationFolderId` field for field, because the two
+  /// destinations are distinct. NULL MEANS *FALL BACK*: a planner bug then goes
+  /// wherever the product bugs go (`bugDestinationFolderId`), and thence to the
+  /// project root. Nothing seeds it — it stays null in every project that does not
+  /// deliberately set it. `NoAction` for the same reason as the product pointer:
+  /// `foldersService.deleteFolder` carries it up first (MOTIR-5821). Same-project
+  /// is enforced by `trg_project_planner_bug_destination_folder_tenancy`.
+  plannerBugDestinationFolderId String?         @map("planner_bug_destination_folder_id")
+  plannerBugDestinationFolder   Folder?         @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -1709,6 +1720,8 @@ model Project {
   @@index([primaryAddressId])
   /// A folder delete checks `project` for rows naming it (the NoAction FK above).
   @@index([bugDestinationFolderId])
+  /// …and for rows naming it as the PLANNER-bug destination (MOTIR-5820).
+  @@index([plannerBugDestinationFolderId])
   // pg_trgm GIN over the public-project DIRECTORY's free-text contains-match
   // columns (Story 6.13 · Subtask 6.13.3, finding #57): the project-square
   // search compiles to ILIKE '%…%' over the project `name` + the public
@@ -2036,6 +2049,24 @@ enum GithubRepositoryPermission {
   unknown
 
   @@map("github_repository_permission")
+}
+
+/// What the head of a decision card's pull request carries under
+/// `docs/decisions/` (MOTIR-5674; `approval-gates.md` §8's FIFTH AMENDMENT,
+/// clauses 3 and 7). Anything but `one` raises a decision gate that cannot be
+/// approved and holds the merge.
+enum DecisionDocOutcome {
+  /// Exactly one `docs/decisions/*.md` file added or modified.
+  one
+  /// None.
+  none
+  /// Two or more.
+  several
+  /// The host could not say — a failed read, a truncated file list, or a
+  /// provider this build cannot list files on.
+  unreadable
+
+  @@map("decision_doc_outcome")
 }
 
 enum MergeAuthority {
@@ -6659,16 +6690,16 @@ model GithubRepo {
 /// repo AND the work item modelled on both sides (the FK-`@relation` rule). Read
 /// through the GitProvider seam as a NormalizedChangeRequest.
 model GithubPullRequest {
-  id                    String          @id @default(cuid())
+  id                    String              @id @default(cuid())
   /// Provider discriminator — always "github" for these rows.
-  provider              String          @default("github")
+  provider              String              @default("github")
   /// FK → GithubRepo.id (internal cuid).
-  repoId                String          @map("repo_id")
+  repoId                String              @map("repo_id")
   number                Int
   /// Normalized change-request state: "open" | "closed" (merged is the boolean).
   state                 String
-  merged                Boolean         @default(false)
-  headRef               String          @map("head_ref")
+  merged                Boolean             @default(false)
+  headRef               String              @map("head_ref")
   /// The branch the change request targets, as of the last delivery (Story
   /// MOTIR-2725 · MOTIR-2729). The completion decision has always compared this
   /// against the repository's mirrored `defaultBranch` — a merge onto anything
@@ -6686,7 +6717,7 @@ model GithubPullRequest {
   /// rule `merged_at` above states for the same reason. Every live path supplies
   /// it: it is REQUIRED on `NormalizedChangeRequest` for both providers and on
   /// the historical backfill, so only pre-existing rows are ever null.
-  baseRef               String?         @map("base_ref")
+  baseRef               String?             @map("base_ref")
   /// The PR's title as of the last webhook delivery (MOTIR-1579 — the
   /// Development surface renders it). Nullable: rows ingested before title
   /// capture display their `head_ref` instead.
@@ -6748,25 +6779,25 @@ model GithubPullRequest {
   /// 2026-08-28). Phase 2 `@ignore`s the field and RELEASES; phase 3 drops the
   /// column with the `-- @client-stopped-selecting:` marker
   /// `tests/contract-phase-guard.test.ts` requires.
-  linkedManually        Boolean         @default(false) @map("linked_manually")
+  linkedManually        Boolean             @default(false) @map("linked_manually")
   /// WHEN the merge landed, stamped from the delivery's `pull_request.merged_at`
   /// (MOTIR-2922). Null on every row that has not merged — and on merged rows
   /// ingested before this column existed, which is why a consumer must treat
   /// null as "unknown", never as "merged at the epoch". `updatedAt` cannot serve
   /// this purpose: a later `check_suite`-driven upsert moves it, so it answers
   /// "when did we last hear about this PR", not "when did the work land".
-  mergedAt              DateTime?       @map("merged_at")
+  mergedAt              DateTime?           @map("merged_at")
   /// The repo-relative paths the MERGE touched, captured best-effort after the
   /// status sync commits (MOTIR-2922). Empty when the PR has not merged, when
   /// the capture failed, and on rows that predate the column — all three are the
   /// same "no evidence" state on purpose, because a consumer that could tell
   /// them apart would still have nothing to do with the difference.
-  changedPaths          String[]        @default([]) @map("changed_paths")
+  changedPaths          String[]            @default([]) @map("changed_paths")
   /// Whether `changedPaths` is a PREFIX of the merge's real file list rather
   /// than the whole of it — set when the list exceeded `MAX_CAPTURED_PR_PATHS`
   /// or the page walk hit its cap. A consumer may read absence of a path as
   /// evidence ONLY while this is false (the no-silent-caps rule).
-  changedPathsTruncated Boolean         @default(false) @map("changed_paths_truncated")
+  changedPathsTruncated Boolean             @default(false) @map("changed_paths_truncated")
   /// THE MERGE RECORD (MOTIR-5520) — written ONLY when Motir itself merged or
   /// enqueued this pull request, never by the webhook. `null` on both means *not
   /// merged by Motir*, which is every row that predates this column and every merge a
@@ -6777,13 +6808,38 @@ model GithubPullRequest {
   /// the item page paints it as a status (`OptimisticStatusProvider.tsx`); a merge SHA
   /// written there would render as one. An automatic merge has no gate row at all,
   /// so the pull request is the one place both paths can record what happened.
-  mergeAuthority        MergeAuthority? @map("merge_authority")
+  mergeAuthority        MergeAuthority?     @map("merge_authority")
   /// What the merge PRODUCED — the merge commit SHA, or `queue:<entryId>` when the
   /// pull request was enqueued. The queue entry is what lets a later ejection be
   /// matched to the entry Motir created (MOTIR-5461).
-  mergeOutcomeRef       String?         @map("merge_outcome_ref")
-  createdAt             DateTime        @default(now()) @map("created_at")
-  updatedAt             DateTime        @updatedAt @map("updated_at")
+  mergeOutcomeRef       String?             @map("merge_outcome_ref")
+  /// THE DECISION DOCUMENT AT THE HEAD (Story MOTIR-4907 · MOTIR-5674;
+  /// `docs/decisions/approval-gates.md` §8's FIFTH AMENDMENT, clause 7). Which
+  /// `docs/decisions/*.md` file this pull request adds or modifies, read off the
+  /// host's file list when a head is OBSERVED — so a gate transaction can ask the
+  /// decision question without calling the host. Written only for a pull request
+  /// delivering a `decision` + `coding_agent` card. `null` = never captured.
+  ///
+  /// ⚠️ NOT A COPY OF THE DOCUMENT. Motir stores no decision text anywhere; this is
+  /// the file's IDENTITY (path + git blob sha), a fact about the host. And it is
+  /// NOT `changedPaths`, which stays the MERGE's file list (MOTIR-2922): these are
+  /// a HEAD-time fact, and one column meaning two moments would make both wrong.
+  decisionDocOutcome    DecisionDocOutcome? @map("decision_doc_outcome")
+  /// The document's repo-relative path, set only for outcome `one`.
+  decisionDocPath       String?             @map("decision_doc_path")
+  /// The document's git BLOB sha at that head, set only for outcome `one`. The
+  /// decision gate's version keys on this, not on the head, so a push that leaves
+  /// the document untouched does not re-ask an accepted decision (clause 4).
+  decisionDocBlobSha    String?             @map("decision_doc_blob_sha")
+  /// The head commit the capture was read at, for every outcome; null when the
+  /// host named none.
+  decisionDocHeadSha    String?             @map("decision_doc_head_sha")
+  /// EVERY decision document the head writes — the one path for `one`, each of them
+  /// for `several` (MOTIR-5678), so the port can name what a reviewer must reduce to
+  /// one. Empty for `none`, `unreadable` and a row never captured.
+  decisionDocPaths      String[]            @default([]) @map("decision_doc_paths")
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
 
   repo               GithubRepo                   @relation(fields: [repoId], references: [id], onDelete: Cascade)
   checkRuns          GithubCheckRun[]
@@ -10057,17 +10113,21 @@ model Folder {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  workspace        Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project          Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace               Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project                 Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   // NoAction, as `WorkItem.parent` is: a folder with child folders cannot be
   // deleted until the service has moved them up.
-  parentFolder     Folder?    @relation("FolderParent", fields: [parentFolderId], references: [id], onDelete: NoAction)
-  childFolders     Folder[]   @relation("FolderParent")
-  createdBy        User       @relation("FolderCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  workItems        WorkItem[] @relation("WorkItemFolder")
+  parentFolder            Folder?    @relation("FolderParent", fields: [parentFolderId], references: [id], onDelete: NoAction)
+  childFolders            Folder[]   @relation("FolderParent")
+  createdBy               User       @relation("FolderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  workItems               WorkItem[] @relation("WorkItemFolder")
   /// The project whose bug destination this folder is, if any (MOTIR-4934) —
   /// at most its own project, by `trg_project_bug_destination_folder_tenancy`.
-  bugDestinationOf Project[]  @relation("ProjectBugDestinationFolder")
+  bugDestinationOf        Project[]  @relation("ProjectBugDestinationFolder")
+  /// The project whose PLANNER-bug destination this folder is, if any
+  /// (MOTIR-5820) — at most its own project, by
+  /// `trg_project_planner_bug_destination_folder_tenancy`.
+  plannerBugDestinationOf Project[]  @relation("ProjectPlannerBugDestinationFolder")
 
   @@index([projectId, parentFolderId, position])
   @@index([workspaceId])

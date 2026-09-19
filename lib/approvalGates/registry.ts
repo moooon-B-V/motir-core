@@ -4,6 +4,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
 import { acceptanceResultGateHandler } from '@/lib/approvalGates/acceptanceResultHandler';
+import { decisionApprovalGateHandler } from '@/lib/approvalGates/decisionApprovalHandler';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
@@ -61,10 +62,20 @@ import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 // the per-pull-request kind has no producer (MOTIR-5611), no decider (MOTIR-5613) and no
 // surface (MOTIR-5615). It moves to the holes below rather than out of the enum: the rows it
 // already wrote are superseded, not deleted, and they still reference the value.
-// MOTIR-4950 registers the THIRD: `acceptance_result`, a story's acceptance receipt — the
-// kind the approval vocabulary was generalised FROM (§1's evidence table), joining the
-// registry at last (§1's MOTIR-5787 amendment).
-export type RegisteredGateKind = 'design_result' | 'pull_request_approval' | 'acceptance_result';
+// MOTIR-5676 registers the THIRD: `decision_approval`, the DECISION gate over the ONE
+// `docs/decisions/*.md` file a `decision` + `coding_agent` card's pull request carries
+// (Story MOTIR-4907; `approval-gates.md` §8's FIFTH AMENDMENT). It left the holes below
+// the way §1 says a kind should arrive: a handler, a summary loader and a renderer, and
+// no second vocabulary.
+//
+// MOTIR-4950 registers the FOURTH: `acceptance_result`, a story's acceptance receipt —
+// the kind the approval vocabulary was generalised FROM (§1's evidence table), joining
+// the registry at last (§1's MOTIR-5787 amendment).
+export type RegisteredGateKind =
+  | 'design_result'
+  | 'decision_approval'
+  | 'acceptance_result'
+  | 'pull_request_approval';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -72,12 +83,11 @@ export type RegisteredGateKind = 'design_result' | 'pull_request_approval' | 'ac
  *
  * | kind                    | owner                                              |
  * | ----------------------- | -------------------------------------------------- |
- * | `decision_approval`     | MOTIR-4907 — the DECISION gate                     |
  * | `pull_request_merge`    | nobody — RETIRED (MOTIR-5616)                      |
  *
- * ⚠️ THE TWO HOLES ARE NOT THE SAME KIND OF HOLE, and the difference is worth
- * keeping: `decision_approval` is NOT BUILT YET and has a card that will build
- * it; `pull_request_merge` is BUILT AND WITHDRAWN. Nothing owns it, nothing will
+ * ⚠️ THE ONE HOLE LEFT IS NOT A NOT-YET. `decision_approval` was the other, a kind
+ * NOT BUILT YET with a card that would build it — and MOTIR-5676 built it.
+ * `pull_request_merge` is BUILT AND WITHDRAWN: nothing owns it, nothing will
  * register it again, and a surface meeting one of its superseded rows should say
  * this build does not render the kind — which is exactly what being unregistered
  * makes it say.
@@ -93,7 +103,6 @@ export type UnregisteredGateKind = Exclude<ApprovalGateKind, RegisteredGateKind>
  * exactly once.
  */
 export const UNREGISTERED_GATE_KINDS = [
-  'decision_approval',
   'pull_request_merge',
 ] as const satisfies readonly UnregisteredGateKind[];
 
@@ -316,6 +325,7 @@ export interface GateHandler<TSubject = unknown> {
  */
 export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   design_result: designResultGateHandler,
+  decision_approval: decisionApprovalGateHandler,
   pull_request_approval: pullRequestApprovalGateHandler,
   acceptance_result: acceptanceResultGateHandler,
 };

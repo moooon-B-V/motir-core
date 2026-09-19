@@ -1,4 +1,5 @@
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
+import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
 // and this DTO is imported by client components. An `import type` is erased.
 import type { StampComponent } from '@/lib/approvalGates/stamp';
@@ -291,21 +292,50 @@ export interface AcceptanceResultSubjectSummaryDTO {
 }
 
 /**
+ * WHICH DECISION is waiting, at row scale (Story MOTIR-4907 · MOTIR-5676) — read
+ * from the capture on the card's pull request, never from the host, so a queue of
+ * decisions costs no Git call.
+ *
+ * ⚠️ `title` IS THE FILE NAME, NOT THE DOCUMENT'S HEADING. Motir keeps no copy of a
+ * decision document, and a summary loader runs inside a transaction that may not
+ * call a host; the heading exists only in the content, which a surface reads
+ * through the resolver (`decisionDocumentService`) and `headingOf` turns into a
+ * line. A surface that has done that read shows the heading; this is what a row
+ * can say without it.
+ */
+export interface DecisionApprovalSubjectSummaryDTO {
+  kind: 'decision_approval';
+  /** `one` — a single document; anything else, the gate cannot be approved. */
+  outcome: 'one' | 'none' | 'several' | 'unreadable';
+  /** `owner/name#number` of the pull request the answer was read off. */
+  repo: string;
+  number: number;
+  /** The document's path, for `one`. */
+  path: string | null;
+  /** A readable title from the file name, for `one`. */
+  title: string | null;
+  /** The document's git blob, for `one` — the row's `title` names it (MOTIR-5679). */
+  blobSha: string | null;
+  /** How many documents the head writes — what a `several` row counts (MOTIR-5679). */
+  documentCount: number;
+}
+
+/**
  * A gate whose KIND THIS BUILD REGISTERS NO RENDERER FOR — a real row on the
  * day this ships, not a defensive branch.
  *
- * `lib/approvalGates/registry.ts` registers two kinds and names the other two as
- * declared holes: `decision_approval`, which MOTIR-4907 will build, and
- * `pull_request_merge`, which MOTIR-5616 RETIRED — built once, withdrawn, and never
- * to be registered again. A gate carrying either can exist — a fixture, a
- * half-landed sibling, or one of the superseded merge rows the backfill left — and
- * the honest answer is a row that SAYS the kind is not built here, which is exactly
- * what `UNREGISTERED_GATE_KINDS` exists at runtime to let a surface do.
+ * `lib/approvalGates/registry.ts` registers four kinds and names the fifth as a
+ * declared hole: `pull_request_merge`, which MOTIR-5616 RETIRED — built once,
+ * withdrawn, and never to be registered again. (`decision_approval` was the other
+ * hole until MOTIR-5676 built it.) A gate carrying it can exist — one of the
+ * superseded merge rows the backfill left — and the honest answer is a row that
+ * SAYS the kind is not built here, which is exactly what `UNREGISTERED_GATE_KINDS`
+ * exists at runtime to let a surface do.
  */
 export interface UnregisteredSubjectSummaryDTO {
   kind: Exclude<
     ApprovalGateKindDTO,
-    'design_result' | 'pull_request_approval' | 'acceptance_result'
+    'design_result' | 'decision_approval' | 'acceptance_result' | 'pull_request_approval'
   >;
 }
 
@@ -321,6 +351,7 @@ export interface UnregisteredSubjectSummaryDTO {
  */
 export type ApprovalGateSubjectSummaryDTO =
   | DesignResultSubjectSummaryDTO
+  | DecisionApprovalSubjectSummaryDTO
   | PullRequestApprovalSubjectSummaryDTO
   | AcceptanceResultSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
@@ -583,6 +614,13 @@ export type ApprovalGateOverlaySubjectDTO =
        * nothing.
        */
       members: PullRequestApprovalMemberDTO[];
+      /**
+       * THE DECISION PORT (Story MOTIR-4907 · Subtask MOTIR-5678; design §27 Panel 7) —
+       * present exactly when the gate is a `decision_approval`: the document read through
+       * the resolver ON THE SERVER, drawn first in the block with no How to test. `document`
+       * is null when nothing has been captured yet.
+       */
+      decision?: { document: DecisionDocumentViewDTO | null };
     };
 
 /** The overlay's one read. */

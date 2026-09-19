@@ -848,11 +848,16 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
 const CARRIED_MERGE_GATE_EXCLUDED = {
   NOT: {
     kind: 'pull_request_approval',
-    // A PRIMARY carries the merge: the design gate (MOTIR-5712), and a story's acceptance
-    // gate (MOTIR-5789; the MOTIR-5787 amendment, point 2) — never both on one card.
     workItem: {
       approvalGates: {
-        some: { kind: { in: ['design_result', 'acceptance_result'] }, state: 'awaiting' },
+        // EVERY primary carries the merge, so the merge gate beside an open one is not a
+        // second question: the design gate (MOTIR-5712), the DECISION gate (Story
+        // MOTIR-4907 · MOTIR-5677; §8's FIFTH AMENDMENT, clause 5) and a story's
+        // ACCEPTANCE gate (MOTIR-5789; §1's MOTIR-5787 amendment, point 2).
+        some: {
+          kind: { in: ['design_result', 'decision_approval', 'acceptance_result'] },
+          state: 'awaiting',
+        },
       },
     },
   },

@@ -76,6 +76,32 @@ export interface PullRequestFiles {
   paths: string[];
   /** Whether `paths` is a PREFIX of the real file list rather than the whole. */
   truncated: boolean;
+  /**
+   * The same rows as `paths`, in the same order, with what the host says about
+   * each at the pull request's HEAD (MOTIR-5674). `paths` is kept as it was
+   * because the merge capture persists it verbatim; this is the richer view the
+   * decision-document capture needs.
+   */
+  files: PullRequestFile[];
+  /**
+   * The head commit this list was read at, recovered from the `ref` the host puts
+   * on each row's `contents_url`; null when no row carried one. Read off the
+   * RESPONSE rather than a delivery, so it names the head the list actually
+   * describes — a redelivered `synchronize` can carry an older head than the one
+   * the endpoint answers for.
+   */
+  headSha: string | null;
+}
+
+/** One changed file as the files endpoint reports it. */
+export interface PullRequestFile {
+  path: string;
+  /** The git BLOB sha of the file at the head; null when the host omitted it (a
+   *  removed file has none worth naming). */
+  sha: string | null;
+  /** `added` · `modified` · `removed` · `renamed` · `copied` · `changed` ·
+   *  `unchanged` — the host's own word, passed through; null when absent. */
+  status: string | null;
 }
 
 /** Raised when a pull request's file list cannot be read — a revoked token, a
@@ -106,6 +132,24 @@ function readFilename(raw: unknown): string | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const name = (raw as Record<string, unknown>)['filename'];
   return typeof name === 'string' && name.length > 0 ? name : null;
+}
+
+/** A non-empty string field of a row, or null. */
+function readString(raw: unknown, key: string): string | null {
+  const value = (raw as Record<string, unknown>)[key];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/** The `ref` query parameter of a row's `contents_url` — the head commit the row
+ *  was reported at. Null when the URL is absent or carries no ref. */
+function readContentsRef(raw: unknown): string | null {
+  const url = readString(raw, 'contents_url');
+  if (!url) return null;
+  try {
+    return new URL(url).searchParams.get('ref');
+  } catch {
+    return null;
+  }
 }
 
 async function fetchPage(
@@ -198,19 +242,32 @@ export async function listPullRequestFiles(
   number: number,
 ): Promise<PullRequestFiles> {
   const paths: string[] = [];
+  const files: PullRequestFile[] = [];
+  let headSha: string | null = null;
+  const result = (truncated: boolean): PullRequestFiles => ({ paths, truncated, files, headSha });
 
   for (let page = 1; page <= MAX_PULL_REQUEST_FILE_PAGES; page += 1) {
     const rows = await fetchPage(token, owner, name, number, page);
     for (const row of rows) {
       const filename = readFilename(row);
       if (!filename) continue;
-      if (paths.length >= MAX_CAPTURED_PR_PATHS) return { paths, truncated: true };
+      if (paths.length >= MAX_CAPTURED_PR_PATHS) return result(true);
       paths.push(filename);
+      files.push({
+        path: filename,
+        sha: readString(row, 'sha'),
+        status: readString(row, 'status'),
+      });
+      // A removed file is reported against the BASE, so only a surviving file's
+      // ref names the head.
+      if (headSha === null && readString(row, 'status') !== 'removed') {
+        headSha = readContentsRef(row);
+      }
     }
     // A short page is the last page — the walk saw the whole list.
-    if (rows.length < PER_PAGE) return { paths, truncated: false };
+    if (rows.length < PER_PAGE) return result(false);
   }
 
   // Every page was full and the page cap stopped the walk: there is more to read.
-  return { paths, truncated: true };
+  return result(true);
 }

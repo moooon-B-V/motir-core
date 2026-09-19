@@ -48,13 +48,16 @@ describe('the approval-gate registry — totality at runtime', () => {
     expect(registered.filter((k) => unregistered.includes(k as never))).toEqual([]);
   });
 
-  it('registers `design_result`, `pull_request_approval` and `acceptance_result`, and NOT the retired merge kind', () => {
+  it('registers `design_result`, `decision_approval`, `acceptance_result` and `pull_request_approval`, and NOT the retired merge kind', () => {
     expect(Object.keys(APPROVAL_GATE_HANDLERS)).toEqual([
       'design_result',
+      'decision_approval',
       'pull_request_approval',
       'acceptance_result',
     ]);
     expect(isRegisteredGateKind('design_result')).toBe(true);
+    // MOTIR-5676 (Story MOTIR-4907): the DECISION gate left the holes it was declared in.
+    expect(isRegisteredGateKind('decision_approval')).toBe(true);
     expect(isRegisteredGateKind('pull_request_approval')).toBe(true);
     // MOTIR-4950: a story's acceptance receipt joins the contract (§1's MOTIR-5787 amendment).
     expect(isRegisteredGateKind('acceptance_result')).toBe(true);
@@ -64,13 +67,14 @@ describe('the approval-gate registry — totality at runtime', () => {
     expect(isRegisteredGateKind('pull_request_merge')).toBe(false);
   });
 
-  it('leaves TWO declared holes — one not built yet, one RETIRED', () => {
-    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['decision_approval', 'pull_request_merge']);
-    // ⚠️ THEY ARE NOT THE SAME KIND OF HOLE. `decision_approval` is unbuilt and owned
-    // by MOTIR-4907. `pull_request_merge` was built (MOTIR-4793), raised real gates, and
-    // was WITHDRAWN by MOTIR-5616 — nothing owns it and nothing will register it again.
-    // The enum keeps the value either way, because the rows MOTIR-5614 superseded still
-    // reference it; the registry is where a kind stops being live.
+  it('leaves ONE declared hole — the RETIRED merge kind', () => {
+    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['pull_request_merge']);
+    // ⚠️ `decision_approval` WAS THE OTHER HOLE — unbuilt, owned by MOTIR-4907 — until
+    // MOTIR-5676 built it. `pull_request_merge` is a different kind of hole: it was built
+    // (MOTIR-4793), raised real gates, and was WITHDRAWN by MOTIR-5616 — nothing owns it
+    // and nothing will register it again. The enum keeps the value because the rows
+    // MOTIR-5614 superseded still reference it; the registry is where a kind stops being
+    // live.
   });
 
   it('a registered kind dispatches to a handler carrying the full contract', () => {

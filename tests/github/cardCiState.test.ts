@@ -475,6 +475,88 @@ describe('a FINISHED pull request with no check rows (MOTIR-5786)', () => {
     expect(await recompute(s.workspace.id, item.id)).toBe('running');
     expect(await ciStateOf(item.id)).toBe('running');
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // MOTIR-5817 — the same rule through the OTHER arm: stuck at `pending`.
+  //
+  // MOTIR-5786 dropped a finished member with NO check rows (`state === null`).
+  // A finished member whose last rows still say `pending` derives `running`, so
+  // it survived that filter and pinned the card at `running` just the same. The
+  // checks cannot settle — a completion event was lost, or the check was
+  // abandoned at merge. On production these were the entire `passing → running`
+  // column of the backfill's dry run: 40 cards, all of them `done`.
+  //
+  // `pending` is what the webhook records for any `check_run` whose status is
+  // not `completed` (`lib/github/checkRuns.ts`), so a never-completed
+  // `in_progress` run is exactly the production shape.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** A check that starts and never completes — one `pending` row at `headSha`. */
+  function pendingCheck(headSha: string, prNumbers: number[]) {
+    return ci({ status: 'in_progress', conclusion: null, headSha, prNumbers });
+  }
+
+  it.each([
+    ['MERGED', true],
+    ['CLOSED', false],
+  ] as const)(
+    'a card whose only member is %s with a PENDING check recomputes to NULL, not running',
+    async (label, merged) => {
+      const s = await makeScenario(`pending-${label.toLowerCase()}@example.com`);
+      await reportingRepo(s);
+      const item = await makeCard(s, 'A change whose check never reported');
+      await linkSilent(item.identifier, 95);
+      await pendingCheck('sha-95', [95]);
+      // While it is OPEN the check is genuinely still running.
+      expect(await recompute(s.workspace.id, item.id)).toBe('running');
+
+      await finish(95, merged);
+      expect(await recompute(s.workspace.id, item.id)).toBeNull();
+      expect(await ciStateOf(item.id)).toBeNull();
+    },
+  );
+
+  it('one PASSING member plus one merged member stuck at PENDING recomputes to PASSING', async () => {
+    // The production shape exactly: a done card reading `passing` off its green
+    // member, which the backfill would have overwritten with `running`.
+    const s = await makeScenario('pending-mixed@example.com');
+    await reportingRepo(s);
+    const item = await makeCard(s, 'A change in two pull requests');
+
+    await linkSilent(item.identifier, 96);
+    await ci({ conclusion: 'success', headSha: 'sha-96', prNumbers: [96] });
+    await linkSilent(item.identifier, 97);
+    await pendingCheck('sha-97', [97]);
+    expect(await recompute(s.workspace.id, item.id)).toBe('running');
+
+    await finish(97, true);
+    expect(await recompute(s.workspace.id, item.id)).toBe('passing');
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('an OPEN member stuck at PENDING still recomputes to RUNNING', async () => {
+    const s = await makeScenario('pending-open@example.com');
+    await reportingRepo(s);
+    const item = await makeCard(s, 'A change still building');
+    await linkSilent(item.identifier, 98);
+    await pendingCheck('sha-98', [98]);
+    expect(await recompute(s.workspace.id, item.id)).toBe('running');
+    expect(await ciStateOf(item.id)).toBe('running');
+  });
+
+  it('a MERGED member whose latest checks FAILED still makes the card FAILING', async () => {
+    // The drop is scoped to `running`. A red merged pull request is a verdict,
+    // and it stands.
+    const s = await makeScenario('pending-red-merge@example.com');
+    await reportingRepo(s);
+    const item = await makeCard(s, 'A change that merged red');
+    await linkSilent(item.identifier, 99);
+    await ci({ conclusion: 'failure', headSha: 'sha-99', prNumbers: [99] });
+
+    await finish(99, true);
+    expect(await recompute(s.workspace.id, item.id)).toBe('failing');
+    expect(await ciStateOf(item.id)).toBe('failing');
+  });
 });
 
 describe('concurrency — two check events racing on one card (MOTIR-5470)', () => {

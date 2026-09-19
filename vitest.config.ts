@@ -2171,6 +2171,27 @@ export default defineConfig({
         'lib/approvalGates/deliverySetVersion.ts',
         'lib/approvalGates/memberVersion.ts',
         'lib/services/pullRequestApprovalGates.ts',
+        // ── Story MOTIR-4907 · MOTIR-5680 — THE DECISION GATE, the story's own vitest gate.
+        // The capture, the subject and its resolver, the handler, the document read and its
+        // mapper, and the port's slot. MEASURED on the parent branch before being pinned,
+        // over `tests/approvalGates`, `tests/github/decision*`,
+        // `tests/components/{decision-port,approval-row-decision}` and
+        // `tests/api/approval-gate-route`: 100 / 100 / 100 / 100 for the subject, the
+        // document rules, the resolver and the read; the handler 95.7 / 92.9 / 90.9 / 94.7,
+        // the capture 100 / 90.9 / 100 / 100, the mapper 100 / 90 / 100 / 100 and the slot
+        // 100 / 94.7 / 100 / 100. The shared files the story widened (`gateSet.ts`,
+        // `mergeGates.ts`, `pullRequestMergeService.ts`, `ciPromotion.ts`,
+        // `DevelopmentGateFrame.tsx`, `ApprovalRow.tsx`) keep their existing pins or their
+        // report-only place, and are not re-pinned here; `subjectSummary.ts` stays out for
+        // the reason recorded above.
+        'lib/approvalGates/decisionApprovalHandler.ts',
+        'lib/approvalGates/decisionDocumentResolver.ts',
+        'lib/approvalGates/decisionSubject.ts',
+        'lib/approvalGates/decisionDocument.ts',
+        'lib/services/decisionDocumentCaptureService.ts',
+        'lib/services/decisionDocumentService.ts',
+        'lib/mappers/decisionDocumentMappers.ts',
+        'components/github/DecisionDocumentSlot.tsx',
         // ── Bug MOTIR-5652 · MOTIR-5660 / MOTIR-5662 — THE GATE-SET PREDICATE and its
         // one loader. Added to `include`, deliberately NOT to `thresholds`, by this
         // config's own rule: MEASURED on this branch over `tests/approvalGates`,
@@ -2499,6 +2520,54 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/pullRequestApprovalGates.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/decisionApprovalHandler.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/decisionDocumentResolver.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/decisionSubject.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/decisionDocument.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/decisionDocumentCaptureService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/decisionDocumentService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/decisionDocumentMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/github/DecisionDocumentSlot.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
