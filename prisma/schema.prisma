@@ -1084,42 +1084,10 @@ model OrganizationMembership {
 /// (every existing workspace got its own default org); Cascade so deleting an
 /// org takes its workspaces with it (the whole tenant goes).
 model Workspace {
-  id                 String      @id @default(cuid())
-  organizationId     String
-  name               String
-  slug               String      @unique
-  /// ⚠️ RETIRED, AND STILL DECLARED — this is PHASE 2 of a three-phase column
-  /// removal (MOTIR-5505; `docs/decisions/delivery-reader-migration.md` §6a /
-  /// §6b; `docs/decisions/approval-gates.md` §7 point 3), and both the
-  /// declaration and the `@ignore` are the whole point of the phase, not an
-  /// oversight.
-  ///
-  /// It was the workspace-wide merge policy for pull requests (`manual` /
-  /// `auto`). The policy moved to `Project.prMergeMode`, the tier its reader
-  /// (the merge gate) is scoped to, and the migration that added that column
-  /// copied this value onto every project. PHASE 1 (MOTIR-4880) removed every
-  /// application reader and writer.
-  ///
-  /// ⚠️ `@ignore` IS HOW THE CLIENT STOPS SELECTING THE COLUMN WHILE IT STAYS.
-  /// A Prisma read with no explicit `select` — the bare `findUnique` /
-  /// `findFirst` / `findMany` / `update` calls in `workspaceRepository` among
-  /// them — emits every scalar the model DECLARES, so without it this line
-  /// would itself be a reader, the last one, and the one no grep for the name
-  /// can find. `@ignore` keeps `prisma migrate diff … --exit-code` at exit 0
-  /// (§6b); deleting the field instead IS drift by that gate. The column keeps
-  /// its database default, so an insert that omits it still writes a legal row.
-  /// Tests that are about the column itself read and write it in raw SQL.
-  ///
-  /// ⚠️ DO NOT DELETE THIS FIELD AND THE COLUMN IN ONE CHANGE, and do not drop
-  /// the `@ignore` on its own. `fly.toml`'s `release_command` migrates before any
-  /// new machine takes traffic, so a `DROP COLUMN` must land only after a build
-  /// carrying this `@ignore` is DEPLOYED and serving (MOTIR-5506 verifies that
-  /// from the platform). PHASE 3 (MOTIR-5508) then drops the column and deletes
-  /// this line together, and its migration carries
-  /// `-- @client-stopped-selecting: MOTIR-5505`, the marker
-  /// `tests/contract-phase-guard.test.ts` requires.
-  subtaskPrMergeMode PrMergeMode @default(manual) @ignore
-
+  id                String  @id @default(cuid())
+  organizationId    String
+  name              String
+  slug              String  @unique
   /// Whether every member of this workspace must hold a second factor
   /// (Story MOTIR-1215 · Subtask MOTIR-3644). The EFFECTIVE requirement on a
   /// person is the OR of the two tiers — this column, and `requiresTwoFactor`
@@ -1381,7 +1349,8 @@ model Project {
   /// (all Motir-hosted ⇒ `auto`; imported, MIXED or empty ⇒ `manual`) cannot be
   /// a column default: it is written at ESTABLISHMENT by
   /// `projectPrMergeModeService` (MOTIR-5178). Existing rows were backfilled
-  /// from their workspace's `subtaskPrMergeMode`.
+  /// from their workspace's merge-mode column, `workspace."subtaskPrMergeMode"`,
+  /// which was retired in three phases and dropped by MOTIR-5508.
   prMergeMode                      PrMergeMode           @default(manual) @map("pr_merge_mode")
   /// When `prMergeMode` was last DECIDED — by the establishment default or by a
   /// person. NULL means nothing has decided it and the floor stands, which is

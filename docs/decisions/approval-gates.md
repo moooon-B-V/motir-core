@@ -1911,6 +1911,17 @@ The phases:
 
 Releases 2 and 3 are Story **MOTIR-5175**, `blocked_by` MOTIR-4880.
 
+**Completed (2026-09-19).** The three phases shipped as MOTIR-4880 (readers),
+MOTIR-5505 (`@ignore`, in Story MOTIR-5175) and MOTIR-5508 (the drop, migration
+`20260919150000_drop_workspace_subtask_pr_merge_mode`, whose marker is
+`-- @client-stopped-selecting: MOTIR-5505`). Between phases 2 and 3, MOTIR-5506
+read the platform at 2026-09-19T13:58:48Z. Fly release **v595** was `complete`
+and served by all four `motir-core` machines (app ×2, worker, standby worker)
+from one image whose `GH_SHA` is **`5ce9c84ecfe96cb90394238367c62f5cb3d2e0f2`**.
+That commit contains MOTIR-5505's merge `6dccc212f` and declares the field
+`@ignore`. The column no longer exists, and the `pr_merge_mode` type stays
+because `Project.prMergeMode` uses it.
+
 **4. `review_on_fail` is RETIRED, not reserved (Yue, 2026-09-13).** Only a
 **green** pull request is ever a merge candidate, in every mode. A red pull
 request never reaches In Review: it belongs to the run's fix loop, and when that
