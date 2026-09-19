@@ -83,6 +83,29 @@ export function parseWorkbenchTab(raw: string | string[] | undefined): Workbench
 }
 
 /**
+ * THE WORKBENCH'S OWN ADDRESS — the page whose lists a live nudge re-reads
+ * (Story MOTIR-5238 · MOTIR-5726).
+ *
+ * ⚠️ IT IS A DIFFERENT FACT FROM THE LANDING, and DERIVED from it anyway. *Where
+ * a signed-in reader goes when nothing more specific is asked for* and *where
+ * the Workbench is* are equal today and are not the same sentence: the landing
+ * already has a registration arm that sends a new account to `/onboarding`
+ * instead, so the two have begun to come apart. What they still share is the
+ * STRING, and that string has one home — `AUTHED_LANDING_PATH` — because
+ * MOTIR-3373 collapsed nine copies of it into that constant after six defects
+ * had each been a separate repair. Re-typing it here to say a different thing
+ * would start the same clock again: two spellings kept equal by hand, and
+ * `tests/navigation/landing-owner-guard.test.ts` exists to refuse exactly that.
+ *
+ * So this NAMES the Workbench's address without re-typing it, and lives in the
+ * module that already owns how the Workbench is spelled in a URL — beside
+ * {@link workbenchTabHref}, which takes the same constant for the same reason.
+ * If the landing is ever moved OFF the Workbench, this line and that builder are
+ * the two that change, together and here.
+ */
+export const WORKBENCH_PATH = AUTHED_LANDING_PATH;
+
+/**
  * The canonical URL for a tab, optionally at a given PAGE.
  *
  * Every tab carries its `?tab=` (MOTIR-5218), so this is the ONE builder of a

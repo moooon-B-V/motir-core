@@ -9,6 +9,11 @@ import {
   useWorkbenchLiveSignal,
   useWorkbenchLiveStream,
 } from './useWorkbenchLive';
+// ⚠️ IMPORTED, NEVER RE-TYPED (MOTIR-5726). `/workbench` has ONE home in this
+// repo — `lib/navigation/landing.ts` — and `lib/workbench/tab.ts` names the
+// Workbench's own address from it. A literal here reds `landing-owner-guard`,
+// and the guard is right: it is the shape six separate repairs came from.
+import { WORKBENCH_PATH } from '@/lib/workbench/tab';
 
 // THE HOST THAT HOLDS THE STREAM (Story MOTIR-5238 · Subtask MOTIR-5242).
 //
@@ -56,9 +61,6 @@ function useRefreshOnNudge(nudge: number): void {
     router.refresh();
   }, [nudge, router]);
 }
-
-/** Where the Workbench lives — the one address whose lists this makes current. */
-const WORKBENCH_PATH = '/workbench';
 
 /**
  * The provider: subscribes once, refreshes on a nudge, hands the signal down.
