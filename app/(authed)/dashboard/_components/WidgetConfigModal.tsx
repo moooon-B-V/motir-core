@@ -8,6 +8,7 @@ import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { FormField } from '@/components/ui/FormField';
 import { Modal } from '@/components/ui/Modal';
 import { Segmented } from '@/components/ui/Segmented';
+import { Switch } from '@/components/ui/Switch';
 import { useToast } from '@/components/ui/Toast';
 import type { DashboardWidgetType } from '@/generated/prisma/client';
 import type { DashboardWidgetDto } from '@/lib/dto/dashboards';
@@ -273,6 +274,7 @@ export function WidgetConfigModal({
               />
             </FormField>
             <Toggle
+              id="widget-cumulative"
               checked={draft.cumulative}
               onChange={(cumulative) => setDraft((d) => ({ ...d, cumulative }))}
               label={t('cumulative')}
@@ -394,35 +396,29 @@ function Stepper({
   );
 }
 
+/**
+ * The labelled on/off row — the design system's `Switch` with its visible label
+ * beside it (MOTIR-5735). The `<label htmlFor>` keeps the text a click target
+ * for the switch, and `aria-labelledby` makes that same text its accessible name.
+ */
 function Toggle({
+  id,
   checked,
   onChange,
   label,
 }: {
+  id: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
 }) {
+  const labelId = `${id}-label`;
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="inline-flex items-center gap-2.5 self-start text-sm text-(--el-text) focus-visible:outline-none"
-    >
-      <span
-        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-          checked ? 'bg-(--el-accent)' : 'bg-(--el-border-strong)'
-        }`}
-      >
-        <span
-          className={`inline-block size-4 rounded-full bg-(--el-page-bg) transition-transform ${
-            checked ? 'translate-x-[18px]' : 'translate-x-0.5'
-          }`}
-        />
-      </span>
-      {label}
-    </button>
+    <div className="inline-flex items-center gap-2.5 self-start">
+      <Switch id={id} checked={checked} onCheckedChange={onChange} aria-labelledby={labelId} />
+      <label id={labelId} htmlFor={id} className="cursor-pointer text-sm text-(--el-text)">
+        {label}
+      </label>
+    </div>
   );
 }

@@ -382,6 +382,13 @@ export const STRUCTURAL_GUARD_SPECS = [
   // imports only `node:*`, `importGraph`'s `stripComments` and
   // `tailwindCascade`, so it carries no coverage into the merged report.
   'tests/theme/lineClampDisplayOverride.test.ts',
+  // ── tests/theme/ — the one-Switch guard (MOTIR-5735) ─────────────────────
+  // Its own `readdirSync` over `app/`, `components/` and `packages/`, reading
+  // every `.tsx` comment-stripped for a `role="switch"` outside the design
+  // system's `Switch.tsx` — hence its `SELF_WALKING_MEMBERS` entry. It opens no
+  // database, renders nothing, and imports only `node:*` and `importGraph`'s
+  // `stripComments`, so it carries no coverage into the merged report.
+  'tests/theme/switchPrimitiveOnly.test.ts',
 ] as const;
 
 /**

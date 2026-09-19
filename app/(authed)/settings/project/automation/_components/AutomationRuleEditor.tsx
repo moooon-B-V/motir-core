@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
+import { Switch } from '@/components/ui/Switch';
 import { astFromRows } from '@/lib/issues/issueListAdvancedFilter';
 import {
   AUTOMATION_ACTIONS_PER_RULE_CAP,
@@ -74,7 +75,6 @@ import {
   BlockWedge,
   memberOptions,
   priorityOptions,
-  RuleSwitch,
   statusOptions,
 } from './AutomationParts';
 
@@ -263,7 +263,7 @@ export function AutomationRuleEditor({
               autoFocus
             />
           </div>
-          <RuleSwitch checked={enabled} onChange={setEnabled} label={t('enabledAria')} />
+          <Switch checked={enabled} onCheckedChange={setEnabled} aria-label={t('enabledAria')} />
         </div>
 
         {/* WHEN */}

@@ -1674,10 +1674,10 @@ export type WorkItemProseSizingThresholdDto = 'story_points' | 'estimate_minutes
 
 /**
  * THE ESTIMATION GATE, mechanized (MOTIR-3110) — a childless `coding_agent` card
- * sized at or above 13 story points, or estimated at more than 70 TOTAL minutes.
+ * sized at or above 8 story points, or estimated at more than 70 TOTAL minutes.
  *
  * ⚠️ **Only ONE of those two is the gate's own number** (corrected by
- * MOTIR-3271). `13+` is the gate's literal SPLIT signal, read off the card's own
+ * MOTIR-3271). `8+` is the gate's literal SPLIT signal, read off the card's own
  * points column. The gate's minutes ceiling is on the AGENT RUN ALONE, excluding
  * CI, while `estimateMinutes` is defined as agent run **plus** CI — so the
  * minutes arm is a PROXY, and `70` is the top of the largest band the gate's
@@ -1717,7 +1717,7 @@ export type WorkItemProseSizingThresholdDto = 'story_points' | 'estimate_minutes
  * alone. So the MINUTES arm does have a false-positive class — a short run
  * behind a heavy CI leg — and MOTIR-3239 (5 SP / 65 min, inside the calibration
  * table's own 50–70 band) was a measured member of it under the old `60`
- * threshold. The POINTS arm's half of the claim stands unaltered: `13+` is the
+ * threshold. The POINTS arm's half of the claim stands unaltered: `8+` is the
  * gate's literal signal and fires on exactly what the rule names. The remedy
  * chosen was to move the threshold and to SAY the minutes arm is a proxy
  * wherever a finding is rendered — not to add a mute, which would put the

@@ -13,6 +13,15 @@
   decision-subtask ladder). This is the rung-1 policy the rest of MOTIR-1627
   implements — no acceptance-video code ships until these four decisions are
   pinned. **No application behaviour ships in this subtask** (the ADR only).
+- **Amendment (2026-09-19, MOTIR-5787) — WHERE the acceptance decision lives is
+  `approval-gates.md` §1's MOTIR-5787 amendment, not this record.** A published
+  receipt raises an `acceptance_result` approval gate on the **STORY** that owns
+  it — whatever the run target, and never on the E2E subtask that recorded it. On
+  a story run that gate is the PRIMARY of two, and its one press also merges the
+  story's pull requests; the video itself is never committed and is never what
+  is merged. This record's pipeline, entitlement, retention and CI-upload
+  decisions are unchanged, and `acceptance-receipt-lifecycle.md` §2's freeze is
+  what closes the receipt once that gate is approved.
 - **Amendment (2026-09-11, MOTIR-4925 / MOTIR-5169) — §3's TIER is reversed: the
   switch is `Project.acceptanceVideoEnabled`, not an org column.** A setting's tier
   follows its readers and writers, and §3 chose its own by analogy to the

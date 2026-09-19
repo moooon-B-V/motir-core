@@ -649,9 +649,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // UNCHANGED, and this is the first re-pin that was a family rather than a
     // severity: still the advisory channel, still never a gate, so the verdict
     // line stays true.
+    //
+    // Re-pinned for MOTIR-5588: the over-gate sizing advisory's points arm moved
+    // from 13+ to 8+ story points. Summary UNCHANGED — it names no threshold.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '03c985aeafef',
+    descriptionFingerprint: '06549ce0bbd1',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

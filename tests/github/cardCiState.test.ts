@@ -8,6 +8,8 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { recomputeWorkItemCiState } from '@/lib/services/deliveryVerdict';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
@@ -377,6 +379,100 @@ describe('a just-linked pull request with no check rows (MOTIR-5470)', () => {
       title: `A change (subtask/${item.identifier}-more)`,
     });
     await openPrIn(REPO_PROVIDER_ID, `subtask/${item.identifier}-more`, 82);
+    expect(await ciStateOf(item.id)).toBe('running');
+  });
+});
+
+describe('a FINISHED pull request with no check rows (MOTIR-5786)', () => {
+  // The `running` arm above is for a pull request opened seconds ago. A MERGED or
+  // CLOSED one with no rows will never report, so reading it as `running` pinned
+  // the card there for ever — 212 finished cards on production's backfill dry
+  // run. Every case here sits in a repository that HAS reported a check (PR #90
+  // on another card), so the silence cannot be read as "this repository has no
+  // CI"; that is the condition the defect needed.
+
+  async function reportingRepo(s: Awaited<ReturnType<typeof makeScenario>>) {
+    const other = await makeCard(s, 'Somebody else');
+    await linkPrByIdentifier({
+      identifier: other.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: 90,
+      headRef: `subtask/${other.identifier}-work`,
+      title: `Other (subtask/${other.identifier}-work)`,
+    });
+    await openPrIn(REPO_PROVIDER_ID, `subtask/${other.identifier}-work`, 90);
+    await ci({ conclusion: 'success', headSha: 'sha-other', prNumbers: [90] });
+  }
+
+  async function linkSilent(identifier: string, number: number) {
+    await linkPrByIdentifier({
+      identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number,
+      headRef: `subtask/${identifier}-${number}`,
+      title: `A change (subtask/${identifier}-${number})`,
+    });
+    await openPrIn(REPO_PROVIDER_ID, `subtask/${identifier}-${number}`, number);
+  }
+
+  /** Finish the pull request on the mirror row, the way an old merge or a
+   *  CI-skipping merge leaves it: terminal, with not one check row. */
+  async function finish(number: number, merged: boolean) {
+    const r = await adminDb.githubPullRequest.updateMany({
+      where: { number, repo: { name: 'acme' } },
+      data: { state: 'closed', merged },
+    });
+    expect(r.count).toBe(1);
+  }
+
+  async function recompute(workspaceId: string, workItemId: string) {
+    return withWorkspaceServiceContext(workspaceId, (tx) =>
+      recomputeWorkItemCiState(workItemId, tx),
+    );
+  }
+
+  it.each([
+    ['MERGED', true],
+    ['CLOSED', false],
+  ] as const)(
+    'a card whose only member is %s with no checks recomputes to NULL, not running',
+    async (label, merged) => {
+      const s = await makeScenario(`finished-${label.toLowerCase()}@example.com`);
+      await reportingRepo(s);
+      const item = await makeCard(s, 'A change');
+      await linkSilent(item.identifier, 91);
+      // While it is OPEN, the just-opened arm still reads it as waiting.
+      expect(await recompute(s.workspace.id, item.id)).toBe('running');
+
+      await finish(91, merged);
+      expect(await recompute(s.workspace.id, item.id)).toBeNull();
+      expect(await ciStateOf(item.id)).toBeNull();
+    },
+  );
+
+  it('one PASSING member plus one merged member with no checks recomputes to PASSING', async () => {
+    const s = await makeScenario('finished-mixed@example.com');
+    await reportingRepo(s);
+    const item = await makeCard(s, 'A change in two pull requests');
+
+    await linkSilent(item.identifier, 92);
+    await ci({ conclusion: 'success', headSha: 'sha-92', prNumbers: [92] });
+    await linkSilent(item.identifier, 93);
+    expect(await recompute(s.workspace.id, item.id)).toBe('running');
+
+    await finish(93, true);
+    expect(await recompute(s.workspace.id, item.id)).toBe('passing');
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('an OPEN member with no checks still recomputes to RUNNING (the just-opened case is kept)', async () => {
+    const s = await makeScenario('finished-open@example.com');
+    await reportingRepo(s);
+    const item = await makeCard(s, 'A change');
+    await linkSilent(item.identifier, 94);
+    expect(await recompute(s.workspace.id, item.id)).toBe('running');
     expect(await ciStateOf(item.id)).toBe('running');
   });
 });

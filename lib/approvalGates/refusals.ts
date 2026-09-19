@@ -1,4 +1,4 @@
-import type { ApprovalGateErrorTag } from '@/lib/approvalGates/errors';
+import type { ApprovalGateErrorTag, PendingPrimary } from '@/lib/approvalGates/errors';
 import type { StampComponent } from '@/lib/approvalGates/stamp';
 
 // THE REFUSAL SET THE APPROVAL FRAME RENDERS IN PLACE (Story MOTIR-4778 ·
@@ -70,6 +70,15 @@ export type GateRefusal =
   | { tag: 'APPROVAL_GATE_NOT_AUTHORISED' }
   | { tag: 'APPROVAL_GATE_NOT_FOUND' }
   | { tag: 'APPROVAL_GATE_KIND_UNREGISTERED' }
+  | {
+      tag: 'APPROVAL_GATE_PRIMARY_PENDING';
+      /**
+       * WHICH primary holds the merge (MOTIR-5785) — the copy names it, because *approve
+       * the design above* and *accept the decision above* are different next actions.
+       * Defaults to `design` when the caller could not say: the only primary on `main`.
+       */
+      primary: PendingPrimary;
+    }
   | { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }
   | { tag: 'APPROVAL_GATE_DECIDED_IMMUTABLE' }
   | { tag: 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH' }
@@ -136,6 +145,7 @@ export function toGateRefusal(
     reason?: string | null;
     supersedeCause?: string | null;
     moved?: readonly StampComponent[] | null;
+    primary?: PendingPrimary | null;
   },
 ): GateRefusal {
   switch (code) {
@@ -157,6 +167,8 @@ export function toGateRefusal(
             ? [...extra.moved]
             : ['subject', 'pull_requests', 'criteria'],
       };
+    case 'APPROVAL_GATE_PRIMARY_PENDING':
+      return { tag: code, primary: extra?.primary ?? 'design' };
     case 'APPROVAL_GATE_NOT_AUTHORISED':
     case 'APPROVAL_GATE_NOT_FOUND':
     case 'APPROVAL_GATE_KIND_UNREGISTERED':
