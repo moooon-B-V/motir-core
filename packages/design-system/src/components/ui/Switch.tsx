@@ -52,7 +52,7 @@ export function Switch({
       className={cn(
         'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
         checked
-          ? 'border-(--el-switch-on) bg-(--el-switch-on)'
+          ? 'border-(--el-switch-on-border) bg-(--el-switch-on)'
           : 'border-(--el-border-strong) bg-(--el-muted)',
         className,
       )}

@@ -62,6 +62,9 @@ describe('icon/text-role + surface-primitive tokens map to their Tier-0 --color-
     '--el-tooltip-bg': '--color-foreground',
     '--el-tooltip-text': '--color-background',
     '--el-switch-on': '--color-primary-fill',
+    // MOTIR-5715 — the ON track's edge is the primary INK, not the fill: the fill
+    // is under 3:1 on the page in three light palettes (switchStateContrast.test.ts).
+    '--el-switch-on-border': '--color-primary',
     // MOTIR-5711 — the knob is a PAIR with its track: ON is the fill's own ink,
     // OFF the muted grey (switchStateContrast.test.ts measures both at 3:1).
     '--el-switch-knob': '--color-primary-foreground',
@@ -144,9 +147,9 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
     expect(src).not.toMatch(/bg-\(--el-text\)/);
   });
 
-  it('Switch uses --el-switch-on (track) + --el-switch-knob (thumb)', () => {
+  it('Switch uses --el-switch-on (track) + --el-switch-on-border (edge) + --el-switch-knob (thumb)', () => {
     const src = read('packages/design-system/src/components/ui/Switch.tsx');
-    expect(src).toContain('border-(--el-switch-on) bg-(--el-switch-on)');
+    expect(src).toContain('border-(--el-switch-on-border) bg-(--el-switch-on)');
     expect(src).toContain('bg-(--el-switch-knob)');
   });
 
