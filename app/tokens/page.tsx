@@ -128,6 +128,7 @@ const ICON_TEXT_SURFACE_GROUPS: { heading: string; tokens: [string, string][] }[
       ['--el-tooltip-bg', 'tooltip bg'],
       ['--el-tooltip-text', 'tooltip text'],
       ['--el-switch-on', 'switch on'],
+      ['--el-switch-on-border', 'switch on border'],
       ['--el-switch-knob', 'switch knob'],
       ['--el-switch-knob-off', 'switch knob off'],
       ['--el-option-active-bg', 'option active bg'],

@@ -18,6 +18,12 @@ import { contrast, flattenColorMix } from './colorMetrics';
 // sienna light, garnet dark), where the palette's primary fill is light enough to
 // swallow a surface-coloured knob.
 //
+// MOTIR-5715 — the ON track's OUTER EDGE against the page. The knob fix keeps
+// the state perceivable, but a person finds each switch by its boundary, and the
+// ON track was bordered in its own fill: 1.80 / 1.47 / 1.57:1 on `--el-page-bg`
+// in amber, citrine and candy light. The edge now has its own token, and this
+// suite measures it over the same matrix.
+//
 // Same shape as `dangerFillInkContrast.test.ts`, and for the same reason: this is
 // a property of the token LAYER used exactly as designed, invisible to any scan
 // of the components, because `Switch.tsx` is correct — it paints the tokens it
@@ -45,18 +51,18 @@ function resolved(ctx: ThemeContext, token: string): string {
 const label = (ctx: ThemeContext) => `${ctx.palette}/${ctx.theme}`;
 
 /**
- * One state's knob-on-track pairing, measured as a TABLE: a per-context `expect`
+ * One foreground-on-background pairing, measured as a TABLE: a per-context `expect`
  * reports the first failure and hides the rest, and what a reader needs when this
  * goes red is which palettes sit near the bar.
  */
-function measure(knob: string, track: string) {
+function measure(fg: string, bg: string) {
   const rows = CONTEXTS.map((ctx) => {
-    const k = resolved(ctx, knob);
-    const t = resolved(ctx, track);
-    return { context: label(ctx), knob: k, track: t, ratio: contrast(k, t) };
+    const f = resolved(ctx, fg);
+    const b = resolved(ctx, bg);
+    return { context: label(ctx), fg: f, bg: b, ratio: contrast(f, b) };
   });
   const table = rows
-    .map((r) => `  ${r.context.padEnd(18)} ${r.knob} on ${r.track} = ${r.ratio.toFixed(2)}:1`)
+    .map((r) => `  ${r.context.padEnd(18)} ${r.fg} on ${r.bg} = ${r.ratio.toFixed(2)}:1`)
     .join('\n');
   return { under: rows.filter((r) => r.ratio < AA_NON_TEXT).map((r) => r.context), table };
 }
@@ -78,7 +84,7 @@ describe('the Switch knob is distinguishable from its track, in every palette an
     // The ratios below are only about the component if these are the tokens it
     // binds to each state. A knob moved back onto one shared token, or a track
     // repainted, would leave this suite measuring a pairing nothing renders.
-    expect(SWITCH_SRC).toContain("'border-(--el-switch-on) bg-(--el-switch-on)'");
+    expect(SWITCH_SRC).toContain("'border-(--el-switch-on-border) bg-(--el-switch-on)'");
     expect(SWITCH_SRC).toContain("'border-(--el-border-strong) bg-(--el-muted)'");
     expect(SWITCH_SRC).toContain("'translate-x-[18px] bg-(--el-switch-knob)'");
     expect(SWITCH_SRC).toContain("'translate-x-0.5 bg-(--el-switch-knob-off)'");
@@ -97,6 +103,17 @@ describe('the Switch knob is distinguishable from its track, in every palette an
     expect(
       under,
       `An ON switch's knob must clear ${AA_NON_TEXT}:1 against its track everywhere (WCAG 1.4.11).\n${table}\n`,
+    ).toEqual([]);
+  });
+
+  it("the ON track's edge (`--el-switch-on-border`) on the page (`--el-page-bg`) clears 3:1", () => {
+    // The boundary is what tells a reader where the control is and how far the
+    // knob has travelled within it. The border is the control's outermost ring,
+    // painted over the fill's edge, so it is what the page meets.
+    const { under, table } = measure('--el-switch-on-border', '--el-page-bg');
+    expect(
+      under,
+      `An ON switch's edge must clear ${AA_NON_TEXT}:1 against the page everywhere (WCAG 1.4.11).\n${table}\n`,
     ).toEqual([]);
   });
 });

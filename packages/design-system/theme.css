@@ -3543,6 +3543,16 @@
   --el-tooltip-bg: var(--color-foreground); /* inverted tooltip fill (was --el-text) */
   --el-tooltip-text: var(--color-background); /* text on the tooltip (was --el-text-inverted) */
   --el-switch-on: var(--color-primary-fill); /* checked track (was --el-accent) */
+  /* The ON track's OUTER EDGE, against the page it sits on (WCAG 1.4.11, 3:1 —
+     where the control is, and how far its knob has travelled). The fill alone
+     fell to 1.80 / 1.47 / 1.57:1 on --el-page-bg in amber, citrine and candy
+     light, whose primary fill is a pale yellow or pink. So the border takes the
+     palette's own primary INK rather than its fill: the fill, and with it the
+     palette's identity and the ON knob pairing above it, is untouched. Where the
+     fill already passes the two are equal or near it; lowest 4.67:1 across all
+     twenty palette x theme pairs. tests/theme/switchStateContrast.test.ts
+     (MOTIR-5715). */
+  --el-switch-on-border: var(--color-primary); /* the ON track's edge, on --el-page-bg */
   /* The two knob inks are a PAIR with the track under them, and are measured as
      one (WCAG 1.4.11, 3:1 — the knob's position IS the switch's state). The
      OFF knob used to share --el-switch-knob and sat at 1.01:1 on --el-muted in
