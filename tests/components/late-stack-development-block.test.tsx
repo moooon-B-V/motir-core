@@ -102,6 +102,9 @@ function reads(): LateReads {
     },
     // No repair to show — also what a FAILED repair read answers (MOTIR-5466).
     repair: null,
+    // No monitor links, no connection — the Errors section draws nothing (MOTIR-5732).
+    monitorIssueLinks: [],
+    monitorHasConnection: false,
   };
 }
 

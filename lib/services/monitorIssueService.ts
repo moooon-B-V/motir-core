@@ -1,5 +1,6 @@
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import { toMonitorIssueLinkDto } from '@/lib/mappers/monitorIssueLinkMappers';
+import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
 import { monitorIssueRepository } from '@/lib/repositories/monitorIssueRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -46,5 +47,20 @@ export const monitorIssueService = {
       monitorIssueRepository.listByWorkItemWithConnection(workItemId, tx),
     );
     return rows.map(toMonitorIssueLinkDto);
+  },
+
+  /**
+   * Does the project bind at least one monitored project? The Errors section's
+   * door rule (Story MOTIR-4932 · Subtask MOTIR-5732, design §14 Decision 5):
+   * the unlink control and the link doors show only where there is something to
+   * search. Gated like the read above — the caller must browse the project — and
+   * scoped by `monitor_connection`'s own policy. A count; never a provider call.
+   */
+  async projectHasConnection(projectId: string, ctx: ServiceContext): Promise<boolean> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const count = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      monitorConnectionRepository.countForProject(projectId, tx),
+    );
+    return count > 0;
   },
 };

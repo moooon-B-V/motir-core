@@ -8797,5 +8797,36 @@
         "body": "Motir 需要可用的连接才能列出这些项目。请重新连接 Sentry，然后选择你的项目。"
       }
     }
+  },
+  "monitorErrors": {
+    "title": "错误",
+    "gloss": "已关联的 Sentry 错误 · 计数截至上次检查",
+    "seen": "出现 <b>{count, number}</b> 次",
+    "lastSeen": "最近出现于 {when}",
+    "openInSentry": "在 Sentry 中打开",
+    "resolve": {
+      "pending": "正在 Sentry 中解决…",
+      "resolved": "Motir 已在 Sentry 中解决 <t>{when}</t>",
+      "failed": "<b>无法在 Sentry 中解决此错误：</b>{reason} 尝试于 <t>{when}</t> — Motir 会在下次检查时重试。",
+      "gone": "<b>Sentry 中已不存在此错误。</b>其信息保持最后一次看到时的状态。"
+    },
+    "assignee": {
+      "teamAssignee": "此错误在 Sentry 中分配给了一个团队，因此此工作项的负责人保持不变。",
+      "noMatch": "此错误在 Sentry 中分配给了一位不是此处成员的人，因此此工作项的负责人保持不变。"
+    },
+    "error": {
+      "notFound": "此错误或工作项已不可用。请关闭选择器后重试。",
+      "forbidden": "你无法在此工作项上关联错误。"
+    },
+    "unlink": {
+      "aria": "移除与 {title} 的关联",
+      "confirmBefore": "移除与以下错误的关联：",
+      "confirmAfter": "？如果此错误再次发生，将为其创建新的缺陷。",
+      "action": "移除关联",
+      "nothing": "没有可移除的关联 — 该关联已被移除。",
+      "failed": "无法移除关联：{reason}"
+    },
+    "loadFailedTitle": "无法加载此工作项的错误",
+    "loadFailedBody": "页面的其余部分不受影响。请稍后重试。"
   }
 }
