@@ -1267,13 +1267,13 @@ triangle`) · **No actions** (neutral, `minus-circle`) — AA per finding #35
 
 ## The last-run glyph vocabulary (list + audit log share it)
 
-| State         | glyph            | colour                | copy                          |
+| State | glyph | colour | copy |
 | ------------- | ---------------- | --------------------- | ----------------------------- | ------------------------------------------------------- |
-| Success       | `check-circle`   | `--el-success`        | "Ran {time} ago"              |
-| Failure       | `alert-triangle` | `--el-danger`         | "Failed · {time} ago"         |
-| No actions    | `minus-circle`   | `--el-text-faint`     | "No actions · {time} ago"     | — faint is correct here: the `minus-circle` is a glyph. |
-| Never run     | — (text only)    | `--el-text-secondary` | "Never run"                   |
-| Auto-disabled | `alert-triangle` | `--el-danger`         | "Auto-disabled · 10 failures" |
+| Success | `check-circle` | `--el-success` | "Ran {time} ago" |
+| Failure | `alert-triangle` | `--el-danger` | "Failed · {time} ago" |
+| No actions | `minus-circle` | `--el-text-faint` | "No actions · {time} ago" | — faint is correct here: the `minus-circle` is a glyph. |
+| Never run | — (text only) | `--el-text-secondary` | "Never run" |
+| Auto-disabled | `alert-triangle` | `--el-danger` | "Auto-disabled · 10 failures" |
 
 ## Real-product operations (finding #57 — bounded, drawn)
 
@@ -2073,22 +2073,22 @@ byte-identical rather than pruned, which is exactly why it was there to compose 
 
 ## Primitives composed — MOTIR-2263's screens need NO new primitive; MOTIR-2257's page needs exactly ONE
 
-| Element                               | Shipped primitive                                   | Token role                                                                                                   |
+| Element | Shipped primitive | Token role |
 | ------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
-| The role list · the permission card   | `Card`                                              | `--radius-card` · `--shadow-card` · `--el-border`                                                            |
-| A role ROW                            | the `MembersCard` row grammar                       | `--spacing-card-padding` · hover `--el-surface-soft`                                                         |
-| A role's TILE                         | `Pill` tint grammar                                 | built-in `--el-tint-lavender` · custom `--el-tint-sky` · `--el-text-strong` ink                              |
-| `Built-in` lock · `Custom` chip       | `Pill`                                              | `--el-text-faint` · `pill-member` sky                                                                        | — faint is correct here: the `Built-in` lock is a glyph. |
-| Domain heading                        | `SectionLabel` grammar                              | `--el-muted` · `--el-text-secondary`                                                                         |
-| Held / withheld / level-gated mark    | icon + `aria-label`                                 | `--el-success` · `--el-text-faint`                                                                           |
-| `Create role` · `Cancel` · `Edit`     | `Button` (primary / ghost / secondary)              | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md`                                      |
-| `Delete` on a custom role             | `Button` (icon)                                     | `--spacing-icon-btn` (PADDING) · `--radius-control`                                                          |
-| Name field · Start-from picker        | `Input` / `FormField`                               | `--radius-input` · `--height-input` · `--spacing-input-x/y`                                                  |
-| The sticky action bar                 | `Card`                                              | `--radius-card` · `--shadow-elevated`                                                                        |
-| Rail, groups, rows                    | `Sidebar` / `SidebarSection` / `SidebarNavItem`     | `--el-sidebar-*` · `--radius-control` · `--height-control`                                                   |
-| **Permission checkbox** — **NEW**     | ⚠️ **`Checkbox`, to be added by MOTIR-2257**        | `--radius-control` · `--el-border-strong` · `--el-accent`                                                    |
-| Delete-with-reassign dialog (p5)      | `Modal` (inherited) + `Button` (`danger` / `ghost`) | `--radius-modal` · `--shadow-modal` · `--el-danger` · destination picker on `Input`/`FormField`              |
-| Cap explanation on `Create role` (p6) | `Tooltip`                                           | `--el-tooltip-bg` / `--el-tooltip-text` · `--radius-control` · `--spacing-tooltip-x/y` · `--shadow-elevated` |
+| The role list · the permission card | `Card` | `--radius-card` · `--shadow-card` · `--el-border` |
+| A role ROW | the `MembersCard` row grammar | `--spacing-card-padding` · hover `--el-surface-soft` |
+| A role's TILE | `Pill` tint grammar | built-in `--el-tint-lavender` · custom `--el-tint-sky` · `--el-text-strong` ink |
+| `Built-in` lock · `Custom` chip | `Pill` | `--el-text-faint` · `pill-member` sky | — faint is correct here: the `Built-in` lock is a glyph. |
+| Domain heading | `SectionLabel` grammar | `--el-muted` · `--el-text-secondary` |
+| Held / withheld / level-gated mark | icon + `aria-label` | `--el-success` · `--el-text-faint` |
+| `Create role` · `Cancel` · `Edit` | `Button` (primary / ghost / secondary) | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md` |
+| `Delete` on a custom role | `Button` (icon) | `--spacing-icon-btn` (PADDING) · `--radius-control` |
+| Name field · Start-from picker | `Input` / `FormField` | `--radius-input` · `--height-input` · `--spacing-input-x/y` |
+| The sticky action bar | `Card` | `--radius-card` · `--shadow-elevated` |
+| Rail, groups, rows | `Sidebar` / `SidebarSection` / `SidebarNavItem` | `--el-sidebar-*` · `--radius-control` · `--height-control` |
+| **Permission checkbox** — **NEW** | ⚠️ **`Checkbox`, to be added by MOTIR-2257** | `--radius-control` · `--el-border-strong` · `--el-accent` |
+| Delete-with-reassign dialog (p5) | `Modal` (inherited) + `Button` (`danger` / `ghost`) | `--radius-modal` · `--shadow-modal` · `--el-danger` · destination picker on `Input`/`FormField` |
+| Cap explanation on `Create role` (p6) | `Tooltip` | `--el-tooltip-bg` / `--el-tooltip-text` · `--radius-control` · `--spacing-tooltip-x/y` · `--shadow-elevated` |
 
 **The one new primitive.** `components/ui/` ships `Switch` and `MultiSelectPicker` but no `Checkbox`;
 the product's only checkbox is a raw unstyled `<input type="checkbox">` in `WorkflowEditor.tsx`.
@@ -3894,6 +3894,67 @@ the destination now simply follows.
 The copy strings changed by this amendment are in §5, marked **(amended)**; the
 reason table in §5 is replaced by the pointer table below it.
 
+## ⚠️ AMENDMENT 2026-09-19 (MOTIR-5819) — the room holds TWO destinations
+
+**The room now answers two questions, not one**, and the delta that draws the
+second is `bug-destination--planner-bugs.mock.html` (panels A–G). The base asset
+above is NOT edited and stays the truth for everything it decides; read the delta
+FIRST and this section for what it supersedes.
+
+**What it adds:** a SECOND settings card in the same room, `Planning-bug
+destination` — where Motir files the mistakes its planner catches in this
+project's own plan (Story MOTIR-5818; the pointer is MOTIR-5820, the resolver
+MOTIR-5822). The two cards are told apart by their MARK (the lucide `Bug` and
+`Sparkles`, the marks the rail already gives `Bugs` and `AI planning`), their
+title and their sentence — never by their order alone. Two identical pickers
+under two labels is the failure the delta is drawn against.
+
+| What the delta decides                    | Why                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Three choices again, and UNSET is one** | `Wherever product bugs go` is the stored `null`, and it is drawn as a named choice that SHOWS what it resolves to today — the bug destination's folder, or `Project root` — tagged `Follows the bug destination`. It is the state every project but Motir's own will ever be in, so an empty-looking control would tell every team their project is misconfigured (the base asset's own first decision, applied again). |
+| **`Project root` is NOT that choice**     | Pinning the root and FOLLOWING a destination that happens to be the root are different answers: one moves when the bug destination moves, the other does not. Both are drawn.                                                                                                                                                                                                                                           |
+| **The folder is named by its PATH**       | `Bugs ▸ Planning bugs`, with the shipped separator. Two folders may share a leaf name, and the path is what tells them apart.                                                                                                                                                                                                                                                                                           |
+| **The no-folders project is drawn**       | `A folder` is drawn UNAVAILABLE with its reason ("This project has no folders yet…"), never hidden — a reader who wants a folder needs to learn the answer is to make one.                                                                                                                                                                                                                                              |
+| **The REFUSED write is drawn**            | A folder deleted under the reader refuses as `FolderNotFoundError`; the error toast carries the shipped `folderGone` sentence, the choice STAYS where the reader put it, and the named line is struck and tagged.                                                                                                                                                                                                       |
+| **No new room, rail entry or key**        | Same page, same `project:administer`, same access path. A second rail entry would ask every reader to learn that Motir files two kinds of bug before finding either setting.                                                                                                                                                                                                                                            |
+
+**What it supersedes in the base asset**, so a reader of the older one is not
+left believing it: the room holds ONE card (now two), and the page description is
+amended (below). Everything else — the group argument, the permission reasoning,
+the choice-card grammar, the shipped folder picker, the explicit save, the
+stored-pointer table — is unchanged and still the base's.
+
+**The `en` copy the delta adds** (keys under `settings.bugs`, for MOTIR-5823;
+the `zh` twin is MOTIR-5826's and is deliberately not written here):
+
+| Key                           | `en`                                                                                                                                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pageDescription` (amended)   | … unchanged first two sentences … ` The planner's own bugs — the mistakes it catches in this project's plan — have their own destination below.`                                                            |
+| `plannerCardTitle`            | `Planning-bug destination`                                                                                                                                                                                  |
+| `plannerCardDescription`      | `Where Motir files the mistakes its planner catches in this project's own plan — records of what the plan got wrong, not defects in the product. Changing it does not move records that are already filed.` |
+| `plannerSameTitle` · `desc`   | `Wherever product bugs go` · `Planning bugs go wherever the bug destination above sends product bugs. This is the default, and it is a choice: nothing is unset.`                                           |
+| `plannerFollowsTag`           | `Follows the bug destination`                                                                                                                                                                               |
+| `plannerFolderTitle` · `desc` | `A folder` · `Any folder in this project.`                                                                                                                                                                  |
+| `plannerNoFolders`            | `This project has no folders yet. Make one from the work-item tree and it will be offered here.`                                                                                                            |
+| `plannerRootTitle` · `desc`   | `Project root` · `Planning bugs are filed at the top of the project with no parent.`                                                                                                                        |
+| `plannerSavedTitle`           | `Planning-bug destination saved`                                                                                                                                                                            |
+| `plannerSavedFollow`          | `New planning bugs will follow the bug destination.`                                                                                                                                                        |
+| `plannerSavedFolder`          | `New planning bugs will be filed into {path}.`                                                                                                                                                              |
+| `plannerSavedRoot`            | `New planning bugs will be filed at the project root.`                                                                                                                                                      |
+| `plannerSaveErrorTitle`       | `Planning-bug destination not saved`                                                                                                                                                                        |
+
+The refusal sentences are the shipped `folderGone` / `saveError` / `saveForbidden`
+strings, reused as they are: the failure is the room's, not this card's.
+
+**Rendered, not recalled.** The shipped room was rendered before the delta was
+drawn — the real `BugDestinationRoom` bundled with the real `theme.css` and
+`globals.css` and screenshotted headless, closed and with the folder picker open —
+and the delta composes what that render shows (the card head's icon, the radio
+grammar, the folder line with its `Open` link, the footer's disabled `Save
+changes`). Like its base, the delta carries the LIGHT token set only.
+
+---
+
 **A new project-settings ROOM, `Project settings → Work → Bugs`, holding the one
 setting that decides where Motir creates the bugs it files for this project.**
 The asset is `bug-destination.mock.html` + `bug-destination.png`. Layout source of
@@ -3902,9 +3963,10 @@ truth for **MOTIR-4938** (the picker, its route, both catalogues), and the surfa
 
 ## Files
 
-| HTML source (truth)         | PNG export            |
-| --------------------------- | --------------------- |
-| `bug-destination.mock.html` | `bug-destination.png` |
+| HTML source (truth)                       | PNG export            |
+| ----------------------------------------- | --------------------- |
+| `bug-destination.mock.html`               | `bug-destination.png` |
+| `bug-destination--planner-bugs.mock.html` | — (delta, MOTIR-5819) |
 
 ## 1. What it COMPOSES, and what it decides
 
