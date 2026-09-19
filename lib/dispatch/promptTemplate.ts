@@ -806,9 +806,9 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
       ...oversized.map(
         (a) =>
           `    - ${a.storyPoints ?? '—'} story points / ${a.estimateMinutes ?? '—'} estimated` +
-          ` minutes, over ${a.threshold === 'both' ? 'BOTH ceilings' : a.threshold === 'story_points' ? 'the 13-point split signal' : 'the 70-minute estimate threshold'}.`,
+          ` minutes, over ${a.threshold === 'both' ? 'BOTH ceilings' : a.threshold === 'story_points' ? 'the 8-point split signal' : 'the 70-minute estimate threshold'}.`,
       ),
-      '  13+ points is the split signal read literally, and a coding_agent run must fit inside',
+      '  8+ points is the split signal read literally, and a coding_agent run must fit inside',
       '  an hour. The MINUTES half is a PROXY for that hour, not the rule itself: the gate',
       '  ceilings the AGENT RUN excluding CI, while the estimate column sums agent time AND CI',
       '  time — so past 70 total minutes the run is PROBABLY over the hour, and a card with a',
