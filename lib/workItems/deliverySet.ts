@@ -393,17 +393,28 @@ export interface VerdictMember {
 
 /**
  * The members of a delivery set that carry, or are still WAITING FOR, a
- * verdict — the set BOTH readings are taken over (MOTIR-5786).
+ * verdict — the set BOTH readings are taken over (MOTIR-5786 · MOTIR-5817).
  *
- * ── The one member it drops ────────────────────────────────────────────────
- * A pull request that is already MERGED or CLOSED, has no check rows, and sits
- * in a repository that CAN report checks. The `running` arm of
+ * ── What it drops: a FINISHED member that is not waiting on anything ───────
+ * A pull request that is already MERGED or CLOSED, sits in a repository that
+ * CAN report checks, and has said nothing conclusive. The `running` arm of
  * {@link deliveryStateForCard} was written for a pull request opened seconds ago
- * (MOTIR-5470), whose silence means *not yet*. A finished one's silence means
- * *never*: it will emit no further check, so reading it as `running` pinned the
- * card at `running` for ever. On production that was 212 finished cards, nearly
- * all of them old merges from before checks were recorded or merges that skipped
- * CI. It is not waiting on anything, so it says nothing about the card.
+ * (MOTIR-5470), whose silence means *not yet*. A finished one's means *never*:
+ * it will emit no further check, so reading it as `running` pinned the card at
+ * `running` for ever.
+ *
+ * ⚠️ AND "SAID NOTHING CONCLUSIVE" IS TWO ARMS, NOT ONE. MOTIR-5786 closed the
+ * first and left the second open, which is why this rule is written on the
+ * QUESTION rather than on a state:
+ *   - **no check rows at all** → `derivePrCiState` gives `null`. 212 finished
+ *     cards on production, nearly all old merges from before checks were
+ *     recorded, or merges that skipped CI.
+ *   - **rows still at `pending`** → `derivePrCiState` gives `'running'`, not
+ *     `null`, so the first arm's `state !== null` test kept it. A completion
+ *     event was lost, or the check was abandoned when the pull request merged.
+ *     40 finished cards on production, every one of them `done` and correctly
+ *     `passing` until the backfill would have overwritten it.
+ * Both are a wait that can never end, and neither says anything about the card.
  *
  * ── Why it is a FILTER over the set, not a cell in either mapper ───────────
  * The card could have mapped the member to `null`, which its fold ignores. The
@@ -416,19 +427,34 @@ export interface VerdictMember {
  * property instead of a coincidence.
  *
  * ── What it keeps, deliberately ───────────────────────────────────────────
- *   - an OPEN member with no checks: still `running`, the just-opened case;
+ *   - an OPEN member with no checks, or stuck at pending: still `running`, the
+ *     just-opened case — an open pull request really can still report;
  *   - a finished member in a repository that CANNOT report: still `passing`
  *     (MOTIR-3823 decided a CI-less repository is green);
- *   - a finished member that DID report: its verdict stands;
+ *   - a finished member that reported a SETTLED verdict: it stands, so a red
+ *     merged pull request still makes its card `failing`;
  *   - a member held by a queue failure: never dropped, whatever else is true.
  *
  * A set of only dropped members becomes EMPTY, which folds to `null` and does
  * not promote: the empty-set rule decides it, with no special case here.
  */
 export function membersWithAVerdict<M extends VerdictMember>(members: readonly M[]): M[] {
-  return members.filter(
-    (m) => m.state !== null || m.cannotReport || m.queueFailure || m.lifecycle === 'open',
-  );
+  return members.filter((m) => {
+    // A standing queue failure is never dropped, whatever else is true
+    // (MOTIR-5717). It outranks both arms below.
+    if (m.queueFailure) return true;
+    // An OPEN member is still genuinely waiting: both its silence and its
+    // `running` mean *not yet*, which is the case MOTIR-5470 wrote them for.
+    if (m.lifecycle === 'open') return true;
+    // FINISHED from here — it will emit no further check, so the only question
+    // left is whether what it already said is a VERDICT or a wait.
+    //   - silent: a verdict only where the repository cannot report at all,
+    //     which MOTIR-3823 reads as green;
+    //   - `running`: a wait that can never end (MOTIR-5817);
+    //   - `passing` / `failing`: settled, and it stands.
+    if (m.state === null) return m.cannotReport;
+    return m.state !== 'running';
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
