@@ -2771,3 +2771,206 @@ stylesheet and sprite provenance carried verbatim (MOTIR-123, 757, 1273–1277, 
 | MOTIR-5673               | this card                                                                                                                                                                                                                                                                                    |
 
 Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
+
+## 28 · Every un-landed merge is classed by its REASON — one approval for one merge or enqueue, _Queue again_ / _Retry merge_ ARE that approval, and a conflict asks nothing at all (MOTIR-5801, 2026-09-19)
+
+**AMENDS § 22** (Panels **E1–E3** and **E7** of
+[`approve-and-merge--ejected.mock.html`](./approve-and-merge--ejected.mock.html) — the _Queue
+again on the same approval_ panels) **and § 26** (the _which one to use_ line of
+[`github--fix-callout--ejected.mock.html`](./github--fix-callout--ejected.mock.html), Panels
+X1–X5). The delta is
+**[`approve-and-merge--ejected--reasked.mock.html`](./approve-and-merge--ejected--reasked.mock.html)**,
+Panels **1–10**, each in light and dark. Card MOTIR-5801, Story MOTIR-5799. **No existing mock is
+edited.** The behaviour drawn is `docs/decisions/approval-gates.md` § 4 **FOURTH AMENDMENT**
+(MOTIR-5800), which reverses the THIRD AMENDMENT's decisions 5, 6 and 7; each panel cites the point
+it discharges. The component that builds every panel is **MOTIR-5806**.
+
+**Why it is owed, and why this is the SECOND cut.** § 22 was drawn around one idea: nothing
+changed, so press _Queue again_ and nobody is asked. The first cut of this section reversed that
+for a FAILURE ejection only, kept _Queue again_ on the standing approval for a neutral removal, and
+drew no conflict case at all. The owner reviewed it and widened the rule (Yue, 2026-09-19):
+_"every merge/requeue needs to be approved again, one approval for one merge/enqueue action"_;
+_"retry merge is needed too, retry merge can be on the work item link PR"_; _"if it's conflict the
+PR really can't be merged, retry is useless… should we flip the status back to implemented?"_; and
+for a neutral removal, _"re-ask too"_. So the axis is no longer failure-vs-neutral. It is the
+REASON the merge did not land, in four classes.
+
+### The four classes — the one table
+
+Every row is a **`manual`**-mode project. The class is assigned by ONE total map over BOTH sources:
+the queue's exit reason (`GithubPullRequestQueueExit.rawReason`) and the host's `MergeRefusalCode`
+when a press is refused (MOTIR-5800 point 2).
+
+| class                       | reason                                                                                                         | rail status     | the gate                                       | the pull-request row offers                      | `motir fix`                                 | panel |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------- | ------------------------------------------------ | ------------------------------------------- | ----- |
+| **RETRYABLE**               | queue `CI_FAILURE`, `CI_TIMEOUT`, `INVALID_MERGE_COMMIT`, `GIT_TREE_INVALID`                                   | **In Review**   | ONE fresh **awaiting** gate                    | **Queue again** — and that press IS the approval | **yes**, at In Review                       | 1, 6  |
+| **RETRYABLE**               | every NEUTRAL removal — queue `MANUAL`, `QUEUE_CLEARED`, `ROLL_BACK`, an unmapped reason                       | **In Review**   | ONE fresh **awaiting** gate                    | **Queue again** — and that press IS the approval | **no** — it refuses, naming what would help | 2     |
+| **CAN'T LAND AS IT STANDS** | queue `MERGE_CONFLICT`; host `conflict`, `checks_not_green`                                                    | **Implemented** | **none** — the promotion is HELD at that head  | **nothing** — no approve, no retry verb          | **yes**, at Implemented                     | 3, 5b |
+| **BLOCKED BY A SETTING**    | queue `BRANCH_PROTECTIONS`; host `branch_protected`, `app_permission_missing`                                  | **In Review**   | ONE fresh **awaiting** gate, the setting NAMED | **Retry merge** — and that press IS the approval | **no** — nothing for an agent to change     | 4, 7b |
+| **LANDED**                  | queue `MERGE`, `ALREADY_MERGED`; host `already_merged`                                                         | unchanged       | none                                           | nothing                                          | n/a                                         | —     |
+| _not an outcome_            | `subject_changed` — the stale-stamp refusal (MOTIR-5232): the action was never attempted, so nothing was spent | In Review       | still awaiting                                 | unchanged                                        | unchanged                                   | 8d    |
+
+**_Queue again_ and _Retry merge_ ARE the approve, and never reuse an approval.** They stay on the
+pull request's own row, where the person sees the outcome. Pressing one **decides the awaiting
+re-asked gate** with the member's stamp and then performs ONE merge or enqueue; the frame's
+**Approve and merge**, and the full-screen overlay's, run the same service path. With NO awaiting
+gate they refuse by name — `MERGE_REQUEUE_NEEDS_APPROVAL` — and press nothing (panel 8e). The verb
+differs only because the door does: _Queue again_ where the queue ejected, _Retry merge_ where the
+host refused.
+
+**A CAN'T-LAND card offers NO approval surface at all.** No gate frame, no verbs, no _Queue again_,
+no _Retry merge_ — and **no row in _To approve_**, because a gate is what puts a card there and
+none is raised. `motir fix <KEY>` is the only call to action, and the card leaves the hold the way
+any card does: a push moves the head, and the next green raises exactly one gate over the new
+commits (MOTIR-5604's path, unchanged).
+
+### Access path
+
+- **The item page → the Development block** (§ 20), reached from any board card, list row or
+  Workbench row that opens the work item. The re-asked gate is the frame's own gate; no new entry
+  point. A CAN'T-LAND work item shows the Development block with **no frame** — the ungated body
+  § 21's Panel F1 draws.
+- **Workbench → To approve → _Review_ → the full-screen approval overlay** (MOTIR-5437;
+  `design/workbench/design-notes.md` § 24). **This SUPERSEDES § 22's _"An ejected card is NOT in
+  To approve"_** for the two re-asking classes: their gate is an **awaiting** gate, so the card is
+  listed again, by the shipped ONE-gate row (`approvals-row--one-gate.mock.html`, Panel 1),
+  unchanged. Panel 7 draws that row above the overlay it opens, then the RETRYABLE and SETTING
+  states inside it.
+
+### Composed from what shipped, not redrawn
+
+The stylesheets and sprite are carried verbatim from the three approved mocks the delta composes:
+`github--fix-callout--ejected.mock.html` (the item page's Development frame, § 22's `ej-` exit
+lines and § 21's fix part and ungated body), `approval-overlay--pull-request-gate.mock.html` (the
+overlay's `ov-` chrome and its `fill` port) and `approvals-row--one-gate.mock.html` (the To-approve
+row). The only new rules are the `rq-` block, unchanged from the first cut — the rail wrapper, the
+re-ask sentence's ink, the board note and the decided design strip. **This cut adds no rule**: each
+new state is drawn from a class the file already declares (`pill pill-rose` / `pill-neutral` /
+`pill-peach` for the row's outcome, `af-btn af-btn-secondary af-btn-row` for the row verb,
+`af-alert` + `af-slot` for a refusal, `ej-part` for an exit line outside a record band). The frame
+is the shipped `DevelopmentGateFrame` over `ApprovalGateControl`; the row slot is
+`MergeOutcomeSlot`; the exit is `QueueExitLine`; the command is `RepairFixPart`.
+
+### The panels
+
+| panel | state                                                                                                                                                                                                                                                                                                                                                                                              | rail                             | point   |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------- |
+| 1     | **RETRYABLE, a queue FAILURE (`CI_FAILURE`)** — ONE awaiting gate standing alone over the SAME commits; the ejected row reads **Left the queue** and carries **Queue again**, whose confirm says that pressing it APPROVES and re-queues; the record band keeps the earlier approval as history, the reason and the failing check; the fix part with `motir fix ACME-12` and the which-to-use line | In Review                        | 1–4, 6  |
+| 2     | **RETRYABLE, a NEUTRAL removal (`MANUAL` / `QUEUE_CLEARED`)** — panel 1's shape, worded neutrally (_taken out of the merge queue by hand_), and with **no fix part**: no code change is implied. Replaces the first cut's "neutral keeps the standing approval" contrast panel                                                                                                                     | In Review                        | 1, 2, 6 |
+| 3     | **CAN'T LAND AS IT STANDS (`MERGE_CONFLICT`, host `conflict` / `checks_not_green`)** — no gate frame, no verbs; the row reads **Cannot be merged**, the exit says why and that the promotion is held, and `motir fix` is the only call to action, plus the line that a push and the next green ask again                                                                                           | Implemented                      | 2, 3, 6 |
+| 4     | **BLOCKED BY A SETTING (`BRANCH_PROTECTIONS`, host `branch_protected` / `app_permission_missing`)** — ONE fresh gate; the row reads **Blocked by a setting** and carries **Retry merge**; the record band NAMES the branch-protection rule and the App-permission alternative; no fix part                                                                                                         | In Review                        | 2, 4, 6 |
+| 5a    | **A host refusal AT THE PRESS** — the merge transaction rolled back, so no decision is written and the frame still awaits; the refusal shows inline on the row, with the `MergeRefusalCode` in the alert's slot label                                                                                                                                                                              | In Review                        | 5, 8    |
+| 5b    | **The same card after a reload** — the recorded refusal is classed; `conflict` lands in panel 3's state, `branch_protected` in panel 4's, `already_merged` in LANDED. The one panel drawn as a before and an after                                                                                                                                                                                 | Implemented                      | 2, 5    |
+| 6     | **The DESIGN card in the RETRYABLE state** — the design result reads **Design approved**, decided, with no verbs; only the merge is asked again, including where the merge had ridden on the design approval's one press                                                                                                                                                                           | In Review                        | 3       |
+| 7     | **The approval overlay** — the To-approve row that opens it, then **7a** the RETRYABLE state (`motir fix` included; today the overlay composes the block without it) and **7b** the SETTING state, with **Retry merge** and no fix part                                                                                                                                                            | In Review                        | 4, 6    |
+| 8a–8e | **Confirm · pending · done · stale-stamp refusal · `MERGE_REQUEUE_NEEDS_APPROVAL`** — one confirm whichever door opened it; the row verb disables with the frame's; **done** reads **Queued to merge** and the rail **Approved**; 8d nothing was spent; **8e is new**: a stale tab pressing _Queue again_ after the gate was decided elsewhere                                                     | In Review · Approved · In Review | 1, 3, 4 |
+| 9     | **A push after an un-landed outcome** — the re-asked gate is superseded `head_moved`, the row reads **New commits since approval**, no verbs; the next green raises ONE gate over the new commits, which is also how a CAN'T-LAND card leaves its hold                                                                                                                                             | In Review                        | 3, 6    |
+| 10    | **auto mode, unchanged** — no gate, no approval, a failure exit still writes `in_review → implemented`, and _Queue again_ still re-dispatches the same head. The panel exists to say so                                                                                                                                                                                                            | Implemented                      | 10      |
+
+### What changes on § 22's slot table
+
+| kind          | pill                               | offers                                                                                                   |
+| ------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `leftQueue`   | _Left the queue_ (rose)            | **Queue again**, which DECIDES the awaiting gate and enqueues (§ 22 offered it on the standing approval) |
+| `leftQueue`   | _Removed from the queue_ (neutral) | **Queue again**, same door, same meaning — a neutral removal is RETRYABLE, not "nothing happened"        |
+| `cannotLand`  | _Cannot be merged_ (rose)          | **nothing** — no verb at all, and the work item is at Implemented                                        |
+| `settingHeld` | _Blocked by a setting_ (peach)     | **Retry merge**, which DECIDES the awaiting gate and merges                                              |
+
+`requeueable` is no longer the predicate for drawing a verb; the CLASS is. The row draws its verb
+when the standing outcome's class is RETRYABLE or SETTING **and** an awaiting merge gate exists
+(MOTIR-5802), and `exitAtApprovedHead` still tells an outcome at the current head from
+_New commits since approval_.
+
+### Tone and tokens
+
+`--el-*` colour and element-semantic shape tokens only, in the panel markup and in the sheet's own
+`<style>` block alike. Annotation ink is `--el-text-secondary` everywhere — `--el-text-muted` fails
+AA on `--el-surface` / `--el-surface-soft` / `--el-muted`, and `--el-text-faint` fails on every
+surface. The re-ask sentence (`rq-why`) is `--el-text-secondary`, § 22's follow-on grammar. Pills
+ride the shipped `Pill` axes; no new variant and no new rule. The rail is the shipped status pill.
+No new sprite symbol: every `<use>` resolves inside the carried sprite.
+
+### Copy — `en` + `zh`
+
+New or changed strings only; everything else is § 22's, § 26's and the shipped frame's, unchanged.
+Under **`approvalGate.pullRequestApproval`** unless the key names another namespace.
+
+| key                                              | en                                                                                                                                                                                                                                | zh                                                                                                                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reasked.meta`                                   | Asked again after the merge queue                                                                                                                                                                                                 | 合并队列退回后再次征求批准                                                                                                                                      |
+| `reasked.earlier`                                | Approved earlier by {name} · {date} · {count} commits — not merged                                                                                                                                                                | {name} 曾于 {date} 批准 · {count} 个提交 — 未合并                                                                                                               |
+| `row.verb.queueAgain`                            | Queue again                                                                                                                                                                                                                       | 重新排队                                                                                                                                                        |
+| `row.verb.retryMerge`                            | Retry merge                                                                                                                                                                                                                       | 重试合并                                                                                                                                                        |
+| `exit.reasked.failure`                           | These commits did not land, so that approval is spent and Motir is asking you again. **Queue again** on the pull request — or **Approve and merge** below — is the new approval, and puts them back in the merge queue.           | 这些提交未能合并，那次批准已经用掉，因此 Motir 再次征求你的批准。在拉取请求上按**重新排队**，或按下方的**批准并合并**，都是一次新的批准，会把它们放回合并队列。 |
+| `exit.neutral.line`                              | {pr} was taken out of the merge queue by hand.                                                                                                                                                                                    | {pr} 被人工移出了合并队列。                                                                                                                                     |
+| `exit.neutral.nothingLearned`                    | Nothing was learned about the commits — the queue never finished with them.                                                                                                                                                       | 队列没有跑完这些提交，因此对它们一无所知。                                                                                                                      |
+| `exit.neutral.reasked`                           | They still did not land, so that approval is spent and Motir is asking you again. **Queue again** on the pull request — or **Approve and merge** below — is the new approval, and puts them back in the merge queue.              | 它们仍未合并，那次批准已经用掉，因此 Motir 再次征求你的批准。在拉取请求上按**重新排队**，或按下方的**批准并合并**，都是一次新的批准，会把它们放回合并队列。     |
+| `cannotLand.pill`                                | Cannot be merged                                                                                                                                                                                                                  | 无法合并                                                                                                                                                        |
+| `cannotLand.line`                                | {pr} cannot be merged as it stands: it conflicts with `main`.                                                                                                                                                                     | {pr} 目前无法合并：它与 `main` 存在冲突。                                                                                                                       |
+| `cannotLand.held`                                | The same commits cannot land however many times anyone says yes, so Motir is not asking again. {key} is held at Implemented, at this head.                                                                                        | 无论多少人批准，这些提交都无法合并，因此 Motir 不再征求批准。{key} 停留在“已实现”，保持在这个提交上。                                                           |
+| `cannotLand.hostCodes`                           | The host refusing a press reads the same way: `conflict`, and `checks_not_green` when the pull request's own required checks have not passed.                                                                                     | 托管方在按下按钮时拒绝的情形也一样：`conflict`；当拉取请求自身的必需检查未通过时则是 `checks_not_green`。                                                       |
+| `cannotLand.fix.line` (§ 21 `repair.fix.*`)      | {pr} conflicts with `main` and cannot be merged.                                                                                                                                                                                  | {pr} 与 `main` 冲突，无法合并。                                                                                                                                 |
+| `cannotLand.fix.agent` (§ 21)                    | An agent rebases or resolves on the pull request's own branch, pushes, and the checks run again.                                                                                                                                  | 代理会在拉取请求自己的分支上变基或解决冲突、推送，检查随即重新运行。                                                                                            |
+| `cannotLand.fix.rearm` (§ 21)                    | There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits.                                                                        | 这里没有可批准的东西。推送会移动 HEAD 并重新武装这个问题；下一次检查全绿时，会就新的提交提出一次合并审批。                                                      |
+| `setting.pill`                                   | Blocked by a setting                                                                                                                                                                                                              | 被某项设置阻止                                                                                                                                                  |
+| `setting.line`                                   | {pr} left the merge queue: **branch protection on `main`** blocked the merge.                                                                                                                                                     | {pr} 离开了合并队列：**`main` 上的分支保护**阻止了这次合并。                                                                                                    |
+| `setting.rule`                                   | The rule that blocked it: **Require review from Code Owners** — no code owner has approved this pull request.                                                                                                                     | 阻止它的规则：**要求代码所有者审查** — 还没有代码所有者批准这个拉取请求。                                                                                       |
+| `setting.hostCodes`                              | Where the host refuses a press instead, the setting is named the same way: `branch_protected`, or `app_permission_missing` — _the Motir GitHub App is missing `contents: write` on {repo}_.                                       | 如果是托管方在按下时拒绝，设置也以同样方式点名：`branch_protected`，或 `app_permission_missing` — _Motir GitHub App 在 {repo} 上缺少 `contents: write` 权限_。  |
+| `setting.reasked`                                | Change the setting, then **Retry merge** on the pull request — or **Approve and merge** below. Either press is the new approval and merges the same commits. `motir fix` is not offered: there is no code for an agent to change. | 改好设置后，在拉取请求上按**重试合并**，或按下方的**批准并合并**。任何一次按下都是新的批准，并合并相同的提交。这里不提供 `motir fix`：没有可让代理修改的代码。  |
+| `reasked.why`                                    | Approving puts {pr} back in its repository’s merge queue, which merges it when the queue’s checks pass, then moves {key} to Approved.                                                                                             | 批准后会把 {pr} 放回其仓库的合并队列，队列检查通过后即合并，并将 {key} 移至“已批准”。                                                                           |
+| `reasked.why.setting`                            | Approving merges {pr} into **main** once the setting allows it, then moves {key} to Approved.                                                                                                                                     | 设置放行后，批准会把 {pr} 合并进 **main**，并将 {key} 移至“已批准”。                                                                                            |
+| `reasked.confirm.newApproval`                    | record that you approved these {count} commits again, with the time — a new approval, not the spent one;                                                                                                                          | 记录你再次批准了这 {count} 个提交及其时间 — 这是一次新的批准，而不是已用掉的那一次；                                                                            |
+| `reasked.confirm.requeue`                        | add {pr} back to its repository’s merge queue, which merges it when the queue’s checks pass;                                                                                                                                      | 将 {pr} 重新加入其仓库的合并队列，队列检查通过后即合并；                                                                                                        |
+| `reasked.progress`                               | Adding {pr} back to its merge queue…                                                                                                                                                                                              | 正在将 {pr} 放回合并队列…                                                                                                                                       |
+| `refusal.hostAtPress.title`                      | GitHub would not merge this pull request.                                                                                                                                                                                         | GitHub 拒绝合并这个拉取请求。                                                                                                                                   |
+| `refusal.hostAtPress.body`                       | {pr} conflicts with `main`, so nothing was merged. Your approval was spent on this attempt and no decision was written on this gate.                                                                                              | {pr} 与 `main` 冲突，因此没有合并任何内容。你的批准已用在这次尝试上，而这道审批没有写入任何决定。                                                               |
+| `refusal.hostAtPress.next`                       | Reload to see what Motir is asking now — the refusal has been recorded against this pull request.                                                                                                                                 | 重新加载以查看 Motir 现在在问什么 — 这次拒绝已记录在该拉取请求上。                                                                                              |
+| `exit.refusalRecorded`                           | {pr} was refused by GitHub at {time}, at this head.                                                                                                                                                                               | {pr} 于 {time} 在这个提交上被 GitHub 拒绝。                                                                                                                     |
+| `exit.refusalRecorded.sub`                       | The refusal is recorded, not only shown: a reload lands this work item in the state its reason class decides.                                                                                                                     | 这次拒绝被记录下来，而不只是显示一次：重新加载后，该工作项会进入其原因类别所决定的状态。                                                                        |
+| `approvalGate.refusal.mergeRequeueNeedsApproval` | This pull request needs a fresh approval. — _The approval this tab was showing has already been answered, so Queue again had nothing to decide. Nothing was queued._                                                              | 这个拉取请求需要一次新的批准。— _这个标签页显示的审批已经被回答过，因此“重新排队”没有可决定的对象。没有任何内容进入队列。_                                      |
+| `repair.fix.whichToUse` (§ 26, **amended**)      | Nothing changed on your side? **Queue again** approves these same commits once more and puts them back in the merge queue. If the failing check points at real code, `motir fix` hands it to an agent.                            | 你这边没有改动？**重新排队**会再次批准这些相同的提交并把它们放回合并队列。如果未通过的检查指向真实的代码问题，`motir fix` 会把它交给代理处理。                  |
+| `auto.requeue.note` (auto mode, unchanged)       | **Queue again** re-dispatches the same head. Nobody is asked, because in auto mode nobody was asked in the first place.                                                                                                           | **重新排队**会重新派发同一个 HEAD。没有人被征求意见，因为在自动模式下本来就没有人被征求过。                                                                     |
+
+The `mergeRequeueNeedsApproval` row is the refusal MOTIR-5802 ships for a _Queue again_ or
+_Retry merge_ press with no awaiting gate; it is listed so the frame card renders it, not re-keyed.
+Its wording changed from the first cut, which had it name a FAILURE exit: the refusal is now about
+the GATE being gone, not about why the pull request left the queue.
+
+**_Queue again_ is NOT withdrawn — it is re-pointed.** The first cut withdrew it for a manual
+failure exit and kept it on the standing approval elsewhere. Both halves are superseded: the verb
+stays on the row for every RETRYABLE outcome, failure and neutral alike, and it now decides a gate
+instead of riding one. `auto` mode keeps § 22's Panel E5 unchanged, because there is no approval
+there to spend.
+
+### Scope
+
+**Drawn:** the four classes on the item page, the host refusal at the press and after the reload,
+the design-card variant, the overlay in two of the classes with the To-approve row that reaches it,
+confirm / pending / done and the two refusals, a push after an un-landed outcome, and auto mode —
+each in light and dark. **Not drawn, and whose it is:** the class map and the re-ask itself —
+MOTIR-5805; the row verbs as gate decisions and the `MERGE_REQUEUE_NEEDS_APPROVAL` refusal —
+MOTIR-5802; `motir fix`'s claim at In Review and its refusal for the neutral and setting classes —
+MOTIR-5803; the recorded host refusal — MOTIR-5804; the component — MOTIR-5806. How to test is
+unchanged and abbreviated on the sheet.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' approve-and-merge--ejected--reasked.mock.html design-notes.md § 28 | sort -u`.
+The mock's own keys (outside the carried stylesheets and sprite, which carry the three base mocks'
+provenance verbatim and GIVE or TAKE nothing here): MOTIR-5232, 5437, 5604, 5634, 5664, 5667, 5801, 5806.
+
+| key                             | GIVES / TAKES                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5806                      | **GIVES** every panel, the copy and the tokens above — it builds them, in the item page's frame AND in the overlay's port, and it is what makes the row verb a gate decision on the surface. Its estimate was re-read against the widened set: the classes share ONE composition with four data-driven arms, and the only genuinely new drawing is the ungated CAN'T-LAND body, which § 21's Panel F1 already ships. It fits and is not amended |
+| MOTIR-5805                      | **TAKES** the class map, the re-ask at `in_review` for RETRYABLE and SETTING, and the `approved → implemented` hold for CAN'T LAND                                                                                                                                                                                                                                                                                                              |
+| MOTIR-5802                      | **TAKES** that _Queue again_ / _Retry merge_ decide the awaiting gate and then act, that they refuse `MERGE_REQUEUE_NEEDS_APPROVAL` with no gate, and that `exitAtApprovedHead` separates an outcome at the head from _New commits since approval_                                                                                                                                                                                              |
+| MOTIR-5803                      | **TAKES** that `motir fix` claims a RETRYABLE-failure card at In Review and a CAN'T-LAND card at Implemented, and REFUSES the neutral and setting classes — which is what lets the fix part be drawn on two panels and left off three                                                                                                                                                                                                           |
+| MOTIR-5804                      | **TAKES** the recorded host refusal (`GithubPullRequestMergeRefusal`) that panels 5a and 5b stand on: without a written row there is nothing to class on a reload                                                                                                                                                                                                                                                                               |
+| MOTIR-5631 · 5635 · 5718 · 5721 | **TAKES** their frame, row slot, exit lines, fix part and ungated body — `done` cards, history, not re-opened. Their mocks stay as records; this section supersedes E1–E3, E7 and the which-to-use line                                                                                                                                                                                                                                         |
+| MOTIR-5667 · 5664               | **TAKES** the decided-design treatment beside a standing-alone merge gate (panel 6), and the one-press carry, which is spent with the attempt it carried                                                                                                                                                                                                                                                                                        |
+| MOTIR-5437                      | **TAKES** the overlay's `fill` port composing `DevelopmentSectionBody` (panel 7)                                                                                                                                                                                                                                                                                                                                                                |
+| MOTIR-5232                      | **TAKES** the stale-stamp refusal, drawn once (panel 8d) and told apart from 8e by its code                                                                                                                                                                                                                                                                                                                                                     |
+| MOTIR-5604 · 5634               | **TAKES** the push-then-green path (panels 9 and 3) and `requeueAutoMember` (panel 10), both unchanged by this amendment                                                                                                                                                                                                                                                                                                                        |
+| MOTIR-5801                      | this card                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+Fixture items use `ACME-n` keys, so they link to nothing.
