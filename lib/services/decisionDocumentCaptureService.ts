@@ -90,10 +90,11 @@ export async function captureDecisionDocument(
     await reconcileDecisionGates(pr.id, pr.repo.workspaceId);
     return { outcome: capture.outcome };
   } catch (err) {
+    // A CONSTANT message and the id as data — never the id inside the format string,
+    // which a `%` in it could turn into a format directive (CodeQL js/tainted-format-string).
     console.error(
-      `[decisionDocumentCapture] could not capture the decision document for pull request ` +
-        `${pullRequestId}; the delivery that triggered it stands:`,
-      err,
+      '[decisionDocumentCapture] could not capture the decision document; the delivery that triggered it stands',
+      { pullRequestId, error: err instanceof Error ? err.message : String(err) },
     );
     return { outcome: 'failed' };
   }
@@ -179,9 +180,11 @@ async function readHeadFiles(pr: {
     return await listPullRequestFiles(token, pr.repo.owner, pr.repo.name, pr.number);
   } catch (err) {
     console.warn(
-      `[decisionDocumentCapture] ${pr.repo.owner}/${pr.repo.name}#${pr.number}: the file ` +
-        `list could not be read, so the decision document is recorded as unreadable`,
-      { error: err instanceof Error ? err.message : String(err) },
+      '[decisionDocumentCapture] the file list could not be read, so the decision document is recorded as unreadable',
+      {
+        pullRequest: `${pr.repo.owner}/${pr.repo.name}#${pr.number}`,
+        error: err instanceof Error ? err.message : String(err),
+      },
     );
     return null;
   }

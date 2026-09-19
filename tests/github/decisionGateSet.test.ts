@@ -33,6 +33,14 @@ vi.mock('@/lib/github/pullRequestFiles', async (importOriginal) => ({
   listPullRequestFiles: listFiles,
 }));
 
+// The auto merge is DISPATCHED as an event after the settle commits; capturing the call is
+// the observable answer to "did the press settle the card" (MOTIR-5677, clause 6).
+const sent = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('@/lib/jobs/sendEvent', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/jobs/sendEvent')>()),
+  sendEvent: sent,
+}));
+
 const github = getGitProvider('github') as Required<GitProvider>;
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const HEAD_2 = 'b1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
@@ -232,6 +240,27 @@ describe('the merge follows ONLY the decision', () => {
     const [asked] = await gatesOf(item.id, 'decision_approval');
     await decide(asked!.id, 'approve');
     expect(await settle(item, pr.id)).toEqual([{ pullRequestId: pr.id, headSha: HEAD }]);
+  });
+
+  it('AUTO: the decision pressed on a set ALREADY green dispatches its merge at once — no verdict to wait for', async () => {
+    const { item, pr } = await decisionCard({ mode: 'auto' });
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
+    const [asked] = await gatesOf(item.id, 'decision_approval');
+    sent.mockClear();
+
+    const result = await pullRequestMergeService.decideGate(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: asked!.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
+
+    expect(result.gate.state).toBe('approved');
+    // No companion in `auto` — so the press settled the card itself.
+    expect(result.members).toEqual([]);
+    expect(sent).toHaveBeenCalledWith(
+      'pull-request/auto-merge.requested',
+      expect.objectContaining({ workItemId: item.id, pullRequestId: pr.id, headSha: HEAD }),
+    );
   });
 
   it('AUTO: a decision SENT BACK still holds the merge', async () => {
