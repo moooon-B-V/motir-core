@@ -187,7 +187,8 @@ async function fakeCalls(page: Page): Promise<string[]> {
 }
 
 const errorsHeading = (page: Page) => page.getByRole('heading', { name: 'Errors', exact: true });
-const rows = (page: Page) => page.getByTestId('error-row');
+// Scoped to the LIVE page, never page-rooted (MOTIR-5037's guard).
+const rows = (page: Page) => page.getByRole('main').getByTestId('error-row');
 const itemPath = (identifier: string) => `/items/${identifier}`;
 
 /** The link id of one issue on one card, from the store. */
@@ -306,7 +307,9 @@ test('a monitor-filed bug shows its error, a customer-reported card links the sa
       await page.getByRole('button', { name: `Actions for ${reported.identifier}` }).click();
       await page.getByRole('menuitem', { name: 'Link an error' }).click();
       await expect(errorsHeading(page)).toBeVisible();
-      await expect(page.getByText('No errors linked to this work item yet.')).toBeVisible();
+      await expect(
+        page.getByRole('main').getByText('No errors linked to this work item yet.'),
+      ).toBeVisible();
       await beat();
 
       await searchAndPick(page, 'formatDate', SECOND);
@@ -329,7 +332,7 @@ test('a monitor-filed bug shows its error, a customer-reported card links the sa
       await page.getByRole('button', { name: 'Link error' }).click();
       await searchAndPick(page, 'Cannot read', FIRST);
       await page.getByRole('button', { name: 'Link', exact: true }).click();
-      const confirm = page.getByTestId('move-confirm');
+      const confirm = page.getByRole('dialog').getByTestId('move-confirm');
       await expect(confirm).toContainText(
         `Move this error's link from ${monitorBug.identifier} to this work item?`,
       );
@@ -381,9 +384,11 @@ test('a monitor-filed bug shows its error, a customer-reported card links the sa
       .getByRole('button', { name: `Remove the link to ${SECOND}` })
       .click();
     await expect(
-      page.getByText('If this error happens again, a new bug will be filed for it.', {
-        exact: false,
-      }),
+      page
+        .getByRole('dialog')
+        .getByText('If this error happens again, a new bug will be filed for it.', {
+          exact: false,
+        }),
     ).toBeVisible();
     await beat();
     const removed = actionWrite(page, itemPath(reported.identifier), (await linkOf('second'))!.id);
@@ -407,7 +412,7 @@ test('a monitor-filed bug shows its error, a customer-reported card links the sa
     });
     await page.getByRole('button', { name: 'Link error' }).click();
     await page.getByRole('combobox', { name: 'Error to link' }).click();
-    await expect(page.getByTestId('search-failure')).toHaveText(
+    await expect(page.getByRole('note')).toHaveText(
       "Couldn't search fake-org / worker: Sentry is temporarily unavailable",
     );
     await expect(page.getByRole('option', { name: new RegExp(escape(FIRST)) })).toBeVisible();

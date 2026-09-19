@@ -309,12 +309,16 @@ function OpenLinkErrorForm() {
     };
   });
 
+  // SPANS, not divs: `Combobox` renders its `footer` inside a `<p>`, where a block
+  // element is invalid HTML (the browser closes the paragraph early). Each line is
+  // a `note` — a named, a11y-tree-visible statement inside the open results.
   const failureLines =
     failures.length > 0 ? (
-      <div className="flex flex-col gap-1.5">
+      <span className="flex flex-col gap-1.5">
         {failures.map((f) => (
-          <div
+          <span
             key={f.connectionId}
+            role="note"
             className="flex items-start gap-1.5 rounded-(--radius-control) bg-(--el-warning-surface) px-2.5 py-1.5 font-sans text-xs text-(--el-warning-text)"
             data-testid="search-failure"
           >
@@ -326,9 +330,9 @@ function OpenLinkErrorForm() {
                 reason: f.reason,
               })}
             </span>
-          </div>
+          </span>
         ))}
-      </div>
+      </span>
     ) : undefined;
 
   return (
