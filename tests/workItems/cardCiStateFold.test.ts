@@ -4,6 +4,8 @@ import {
   deliveryStateForCard,
   deliveryStateForPromotion,
   foldCardCiState,
+  membersWithAVerdict,
+  type VerdictMember,
 } from '@/lib/workItems/deliverySet';
 import type { PrCiState } from '@/lib/github/prCiState';
 
@@ -140,5 +142,108 @@ describe('the card verdict and the promotion agree on GREEN (MOTIR-5470)', () =>
     // a careless implementation of either would disagree.
     expect(foldCardCiState([])).toBeNull();
     expect(deliverySetIsGreen([])).toBe(false);
+  });
+});
+
+describe('membersWithAVerdict — a finished pull request that never reported (MOTIR-5786)', () => {
+  const member = (over: Partial<VerdictMember>): VerdictMember => ({
+    state: null,
+    cannotReport: false,
+    queueFailure: false,
+    lifecycle: 'open',
+    ...over,
+  });
+
+  it('drops a MERGED or CLOSED member with no verdict in a repository that can report', () => {
+    // It will never emit another check, so it is waiting on nothing. Kept, it
+    // mapped to `running` and pinned the card there for ever.
+    expect(membersWithAVerdict([member({ lifecycle: 'merged' })])).toEqual([]);
+    expect(membersWithAVerdict([member({ lifecycle: 'closed' })])).toEqual([]);
+  });
+
+  it('keeps an OPEN member with no verdict — the just-opened case MOTIR-5470 wrote `running` for', () => {
+    const open = member({ lifecycle: 'open' });
+    expect(membersWithAVerdict([open])).toEqual([open]);
+  });
+
+  it('keeps a finished member that DID report, whatever it reported', () => {
+    for (const state of ['passing', 'failing', 'running'] as const) {
+      for (const lifecycle of ['merged', 'closed'] as const) {
+        const m = member({ state, lifecycle });
+        expect(membersWithAVerdict([m])).toEqual([m]);
+      }
+    }
+  });
+
+  it('keeps a finished silent member in a repository that CANNOT report (MOTIR-3823: green)', () => {
+    const m = member({ lifecycle: 'merged', cannotReport: true });
+    expect(membersWithAVerdict([m])).toEqual([m]);
+  });
+
+  it('never drops a member a standing queue failure holds', () => {
+    const m = member({ lifecycle: 'closed', queueFailure: true });
+    expect(membersWithAVerdict([m])).toEqual([m]);
+  });
+
+  it('drops only the finished silent member out of a mixed set, preserving order', () => {
+    const passing = member({ state: 'passing', lifecycle: 'merged' });
+    const silentMerged = member({ lifecycle: 'merged' });
+    const silentOpen = member({ lifecycle: 'open' });
+    expect(membersWithAVerdict([passing, silentMerged, silentOpen])).toEqual([passing, silentOpen]);
+  });
+});
+
+describe('the card verdict and the promotion still agree once finished silent members are dropped (MOTIR-5786)', () => {
+  // The same biconditional as above, now over the members `classifyDeliveries`
+  // actually hands both readers — the filtered set. The cases that exercise the
+  // new rule are the ones with a MERGED or CLOSED silent member.
+  type M = { state: PrCiState; cannotReport: boolean; lifecycle: 'open' | 'merged' | 'closed' };
+  const cases: M[][] = [
+    [{ state: null, cannotReport: false, lifecycle: 'merged' }],
+    [{ state: null, cannotReport: false, lifecycle: 'closed' }],
+    [{ state: null, cannotReport: false, lifecycle: 'open' }],
+    [{ state: null, cannotReport: true, lifecycle: 'merged' }],
+    [
+      { state: 'passing', cannotReport: false, lifecycle: 'open' },
+      { state: null, cannotReport: false, lifecycle: 'merged' },
+    ],
+    [
+      { state: 'passing', cannotReport: false, lifecycle: 'open' },
+      { state: null, cannotReport: false, lifecycle: 'closed' },
+    ],
+    [
+      { state: 'passing', cannotReport: false, lifecycle: 'open' },
+      { state: null, cannotReport: false, lifecycle: 'open' },
+    ],
+    [
+      { state: 'failing', cannotReport: false, lifecycle: 'merged' },
+      { state: null, cannotReport: false, lifecycle: 'merged' },
+    ],
+  ];
+
+  it.each(cases.map((members, i) => [i, members] as const))(
+    'case %i: foldCardCiState === passing ⇔ deliverySetIsGreen',
+    (_i, members) => {
+      const kept = membersWithAVerdict(members.map((m) => ({ ...m, queueFailure: false })));
+      const card = foldCardCiState(
+        kept.map((m) => deliveryStateForCard(m.state, m.cannotReport, false)),
+      );
+      const green = deliverySetIsGreen(
+        kept.map((m) => deliveryStateForPromotion(m.state, m.cannotReport)),
+      );
+      expect(card === 'passing').toBe(green);
+    },
+  );
+
+  it('a card whose only member merged silently reads NULL and does not promote', () => {
+    const kept = membersWithAVerdict([
+      { state: null, cannotReport: false, queueFailure: false, lifecycle: 'merged' as const },
+    ]);
+    expect(
+      foldCardCiState(kept.map((m) => deliveryStateForCard(m.state, m.cannotReport, false))),
+    ).toBeNull();
+    expect(
+      deliverySetIsGreen(kept.map((m) => deliveryStateForPromotion(m.state, m.cannotReport))),
+    ).toBe(false);
   });
 });
