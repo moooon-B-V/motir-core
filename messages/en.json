@@ -5369,7 +5369,8 @@
     "noActiveSprint": "No active sprint",
     "alreadyInActiveSprint": "Already in the active sprint",
     "addedToSprintToast": "Added {key} to {sprint}",
-    "addToSprintErrorTitle": "Couldn’t add to sprint"
+    "addToSprintErrorTitle": "Couldn’t add to sprint",
+    "linkError": "Link an error"
   },
   "projectSquare": {
     "navProduct": "Product",
@@ -8826,6 +8827,55 @@
         "says": "Sentry says: {reason}",
         "body": "Motir needs a working connection to list them. Reconnect Sentry, then choose your projects."
       }
+    }
+  },
+  "monitorErrors": {
+    "title": "Errors",
+    "gloss": "Linked Sentry errors · counts as of the last check",
+    "seen": "Seen <b>{count, number}</b> {count, plural, one {time} other {times}}",
+    "lastSeen": "last seen {when}",
+    "openInSentry": "Open in Sentry",
+    "resolve": {
+      "pending": "Resolving in Sentry…",
+      "resolved": "Resolved in Sentry by Motir <t>{when}</t>",
+      "failed": "<b>Couldn't resolve this in Sentry:</b> {reason} Tried <t>{when}</t> — Motir tries again at the next check.",
+      "gone": "<b>Sentry no longer has this error.</b> Its facts are as they were last seen."
+    },
+    "assignee": {
+      "teamAssignee": "Assigned to a team in Sentry, so this work item's assignee was left as it is.",
+      "noMatch": "Assigned in Sentry to someone who isn't a member here, so this work item's assignee was left as it is."
+    },
+    "error": {
+      "notFound": "This error or work item is no longer available. Close the picker and try again.",
+      "forbidden": "You can't link errors on this work item.",
+      "issueGone": "Sentry no longer has this error, so it can't be linked."
+    },
+    "unlink": {
+      "aria": "Remove the link to {title}",
+      "confirmBefore": "Remove the link to",
+      "confirmAfter": "? If this error happens again, a new bug will be filed for it.",
+      "action": "Remove link",
+      "nothing": "There was nothing to unlink — the link had already been removed.",
+      "failed": "The link could not be removed: {reason}"
+    },
+    "loadFailedTitle": "Couldn't load this work item's errors",
+    "loadFailedBody": "The rest of the page is unaffected. Try again in a moment.",
+    "link": "Link error",
+    "empty": "No errors linked to this work item yet.",
+    "field": "Error to link",
+    "searchPlaceholder": "Search errors, or paste a short id…",
+    "searching": "Searching…",
+    "noMatches": "No matching errors",
+    "noMatchesHint": "Search words from the error's title, or paste its short id from Sentry.",
+    "searchFailed": "<b>Couldn't search {connection}:</b> {reason}",
+    "candidate": "{connection} · Seen {count, number} {count, plural, one {time} other {times}} · {when}",
+    "linkedTo": "Linked to {key}",
+    "linkedHere": "Linked here",
+    "linkAction": "Link",
+    "move": {
+      "title": "Move this error's link from <link>{key}</link> to this work item?",
+      "body": "{key} keeps its other links and its history. From the next check, this error's count and resolve-back follow this work item.",
+      "action": "Move link"
     }
   }
 }

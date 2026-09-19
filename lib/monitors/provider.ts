@@ -3,6 +3,7 @@ import type {
   MonitorProviderId,
   NormalizedMonitorHealth,
   NormalizedMonitorIssue,
+  NormalizedMonitorIssueContext,
   NormalizedMonitorIssuePage,
   NormalizedMonitorProject,
 } from './types';
@@ -23,7 +24,10 @@ import type {
 // that was a decision rather than dead code: `listIssuesSince` is consumed by the
 // reconciling poll (MOTIR-4929 · MOTIR-5580), and `resolveIssue` by the
 // resolve-back (MOTIR-4931 · MOTIR-5703). `getIssue` arrived WITH its consumer,
-// the assignee refresh (MOTIR-4931 · MOTIR-5705). A method whose consumer is not
+// the assignee refresh (MOTIR-4931 · MOTIR-5705). `searchIssues` and
+// `getIssueContext` (MOTIR-4932 · MOTIR-5728) name theirs too: the hand-made
+// link (MOTIR-5731) searches, and the reconciler's context read (MOTIR-5729)
+// and the same link read the latest event. A method whose consumer is not
 // named is one a later reader deletes as unreachable.
 //
 // ⚠️ AND EVERY ENDPOINT NAMED BELOW IS A DOCUMENTED EXPECTATION, NOT A READ.
@@ -91,6 +95,21 @@ export const MONITOR_RESOLVE_ISSUE_TIMEOUT_MS = 10_000;
 /** Deadline for a read of ONE issue, in ms — the assignee refresh (MOTIR-5705)
  *  makes a bounded number of these per poll, so each is bounded like a page. */
 export const MONITOR_GET_ISSUE_TIMEOUT_MS = 10_000;
+
+/** The most issues ONE `searchIssues` call asks for (MOTIR-5728). It feeds a
+ *  PICKER a person reads, not a page walk — so one request, no pagination, and
+ *  a caller asking for more is capped here rather than trusted. */
+export const MONITOR_SEARCH_ISSUES_LIMIT = 20;
+
+/** Deadline for a `searchIssues` call, in ms — a person is typing into the
+ *  picker while it runs, so it is bounded like the health probe, not like a
+ *  page of the unattended poll. */
+export const MONITOR_SEARCH_ISSUES_TIMEOUT_MS = 5_000;
+
+/** Deadline for a `getIssueContext` read, in ms. Interactive when the hand-made
+ *  link calls it, and bounded tightly on the poll too, where it is an
+ *  ENRICHMENT the filing path must never wait long on (MOTIR-5729). */
+export const MONITOR_ISSUE_CONTEXT_TIMEOUT_MS = 5_000;
 
 /**
  * ONE error monitor, as Motir talks to it.
@@ -280,4 +299,67 @@ export interface MonitorProvider {
     orgSlug: string;
     externalIssueId: string;
   }): Promise<NormalizedMonitorIssue | null>;
+
+  /**
+   * Search ONE monitored project's issues for a person to pick from — by words
+   * from the title, or by a pasted short id (Story MOTIR-4932 · MOTIR-5728).
+   *
+   * `GET /api/0/organizations/{orgSlug}/issues/` with `project={externalProjectId}`,
+   * the caller's `query`, `shortIdLookup=1` (Sentry then also parses the query
+   * for an issue SHORT ID, so `MY-PROJECT-1A` finds its issue) and `limit`.
+   *
+   * ⚠️ NO `is:unresolved`, UNLIKE {@link listIssuesSince}. A person linking a
+   * card may be pointing at an issue somebody already resolved in the monitor;
+   * hiding it would make the search look broken rather than filtered.
+   *
+   * An empty `query` answers the project's most recently seen issues (Sentry's
+   * default `sort=date`), so the picker has rows before the first keystroke.
+   * ONE request per call, NO pagination, and `limit` is capped at
+   * {@link MONITOR_SEARCH_ISSUES_LIMIT}. Results are the SAME normalized shape
+   * the poll reads, built by the same mapper, so a picked result is stored
+   * exactly as a polled one. A refusal is `MonitorProviderCallError` with the
+   * provider's reason; the caller decides what a person sees.
+   *
+   * A DOCUMENTED EXPECTATION (read 2026-09-19,
+   * https://docs.sentry.io/api/events/list-an-organizations-issues/). Consumed
+   * by LINK BY HAND (MOTIR-5731). Bounded by
+   * {@link MONITOR_SEARCH_ISSUES_TIMEOUT_MS}.
+   */
+  searchIssues(input: {
+    accessToken: string;
+    orgSlug: string;
+    externalProjectId: string;
+    query: string;
+    limit: number;
+  }): Promise<NormalizedMonitorIssue[]>;
+
+  /**
+   * The ENVIRONMENT and RELEASE of ONE issue's latest event (Story MOTIR-4932 ·
+   * MOTIR-5728).
+   *
+   * `GET /api/0/organizations/{orgSlug}/issues/{issueId}/events/latest/` —
+   * Sentry's "Retrieve an Issue Event" accepts `latest` as the event id.
+   * `environment` is the value of the event's `environment` TAG, `release` is
+   * `release.version`; either is `null` when absent.
+   *
+   * ⚠️ WHY A PER-ISSUE CALL: the list response {@link listIssuesSince} parses
+   * carries neither fact (the list can filter BY environment and still does not
+   * RETURN one), and the only documented operation that does is addressed by one
+   * issue id. So the cost is ONE REQUEST PER ISSUE ASKED ABOUT; the consumer
+   * bounds how often (`MONITOR_CONTEXT_READS_PER_POLL`, MOTIR-5729).
+   *
+   * ⚠️ A 404 THROWS {@link MonitorIssueGoneError} — the provider no longer has
+   * the issue, a fact and not a failure. Every other non-2xx is a
+   * `MonitorProviderCallError` carrying the provider's reason.
+   *
+   * A DOCUMENTED EXPECTATION (read 2026-09-19,
+   * https://docs.sentry.io/api/events/retrieve-an-issue-event/). Consumed by
+   * the reconciler's context read (MOTIR-5729) and LINK BY HAND (MOTIR-5731).
+   * Bounded by {@link MONITOR_ISSUE_CONTEXT_TIMEOUT_MS}.
+   */
+  getIssueContext(input: {
+    accessToken: string;
+    orgSlug: string;
+    externalIssueId: string;
+  }): Promise<NormalizedMonitorIssueContext>;
 }

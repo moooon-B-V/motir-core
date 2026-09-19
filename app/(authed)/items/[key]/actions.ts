@@ -17,7 +17,24 @@ import type { PullRequestLinkCandidateDto } from '@/lib/dto/github';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { TestInstructionsError } from '@/lib/testInstructions/errors';
 import { howToTestRefusal, type HowToTestRefusalField } from '@/lib/testInstructions/refusal';
-import { PermissionDeniedError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
+import { monitorIssueLinkService } from '@/lib/services/monitorIssueLinkService';
+import type {
+  MonitorIssueLinkOutcome,
+  MonitorIssueSearchResultDto,
+} from '@/lib/dto/monitorIssueLink';
+import {
+  MonitorConnectionNotFoundError,
+  MonitorIssueAlreadyLinkedError,
+  MonitorIssueGoneError,
+  MonitorIssueLinkNotFoundError,
+  MonitorProviderCallError,
+} from '@/lib/monitors/errors';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { HowToTestDraftDTO } from '@/lib/dto/testInstructions';
 
 // Server Actions for the detail-page LINK MANAGEMENT surface (Subtask 2.4.9).
@@ -405,4 +422,128 @@ export async function saveHowToTestAction(input: {
   // its derived sub-blocks all come from that read.
   revalidatePath(`/items/${input.identifier}`);
   return { ok: true };
+}
+
+// ── ERROR LINKS by hand (Story MOTIR-4932 · Subtask MOTIR-5731) ─────────────
+//
+// Three doors onto `monitorIssueLinkService`, in the pull-request link actions'
+// shape. ⚠️ THEY RETURN CODES, NOT COPY: every string a person reads — and both
+// locales — belongs to the Errors section (MOTIR-5732), which maps each code.
+
+/** Why an error-link action refused. `already_linked` carries the card holding
+ *  the issue; `provider_failed` carries the MONITOR's own words (data, not copy),
+ *  for the case the monitor itself refused the read a link needs. */
+export type MonitorLinkRefusal =
+  | { ok: false; code: 'already_linked'; holderIdentifier: string }
+  | { ok: false; code: 'issue_gone' }
+  | { ok: false; code: 'not_found' }
+  | { ok: false; code: 'forbidden' }
+  | { ok: false; code: 'provider_failed'; reason: string };
+
+/** The typed refusals the service raises, as codes; `null` = not ours to map. */
+function monitorLinkRefusal(err: unknown): MonitorLinkRefusal | null {
+  if (err instanceof MonitorIssueAlreadyLinkedError) {
+    return { ok: false, code: 'already_linked', holderIdentifier: err.holderIdentifier };
+  }
+  if (err instanceof MonitorIssueGoneError) return { ok: false, code: 'issue_gone' };
+  if (
+    err instanceof WorkItemNotFoundError ||
+    err instanceof ProjectNotFoundError ||
+    err instanceof MonitorConnectionNotFoundError ||
+    err instanceof MonitorIssueLinkNotFoundError ||
+    (err instanceof ProjectAccessDeniedError && err.kind === 'browse')
+  ) {
+    return { ok: false, code: 'not_found' };
+  }
+  if (err instanceof PermissionDeniedError || err instanceof ProjectAccessDeniedError) {
+    return { ok: false, code: 'forbidden' };
+  }
+  if (err instanceof MonitorProviderCallError) {
+    return { ok: false, code: 'provider_failed', reason: err.providerReason };
+  }
+  return null;
+}
+
+/** The session's workspace actor, or null when there is no active project. */
+async function monitorLinkActor(): Promise<{ userId: string; workspaceId: string } | null> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  return ctx ? { userId: ctx.userId, workspaceId: ctx.workspaceId } : null;
+}
+
+/** SEARCH the card's monitored projects for an issue to link. A connection that
+ *  failed is inside `result.failures`, never a refusal. */
+export async function searchMonitorIssuesAction(input: {
+  workItemId: string;
+  query: string;
+}): Promise<{ ok: true; result: MonitorIssueSearchResultDto } | MonitorLinkRefusal> {
+  const actor = await monitorLinkActor();
+  if (!actor) return { ok: false, code: 'not_found' };
+  try {
+    const result = await monitorIssueLinkService.searchCandidates(
+      input.workItemId,
+      input.query,
+      actor,
+    );
+    return { ok: true, result };
+  } catch (err) {
+    const refusal = monitorLinkRefusal(err);
+    if (refusal) return refusal;
+    throw err;
+  }
+}
+
+/** LINK an issue to the card — or, with `move`, take it from the card that
+ *  holds it. Revalidates the item on a write. */
+export async function linkMonitorIssueAction(input: {
+  workItemId: string;
+  identifier: string;
+  connectionId: string;
+  externalIssueId: string;
+  move: boolean;
+}): Promise<{ ok: true; outcome: MonitorIssueLinkOutcome } | MonitorLinkRefusal> {
+  const actor = await monitorLinkActor();
+  if (!actor) return { ok: false, code: 'not_found' };
+  try {
+    const { outcome } = await monitorIssueLinkService.linkIssue(
+      input.workItemId,
+      {
+        connectionId: input.connectionId,
+        externalIssueId: input.externalIssueId,
+        move: input.move === true,
+      },
+      actor,
+    );
+    revalidatePath(`/items/${input.identifier}`);
+    return { ok: true, outcome };
+  } catch (err) {
+    const refusal = monitorLinkRefusal(err);
+    if (refusal) return refusal;
+    throw err;
+  }
+}
+
+/** UNLINK one error from the card. `removed: false` is a success — it was
+ *  already gone. */
+export async function unlinkMonitorIssueAction(input: {
+  workItemId: string;
+  identifier: string;
+  monitorIssueId: string;
+}): Promise<{ ok: true; removed: boolean } | MonitorLinkRefusal> {
+  const actor = await monitorLinkActor();
+  if (!actor) return { ok: false, code: 'not_found' };
+  try {
+    const { removed } = await monitorIssueLinkService.unlinkIssue(
+      input.workItemId,
+      input.monitorIssueId,
+      actor,
+    );
+    if (removed) revalidatePath(`/items/${input.identifier}`);
+    return { ok: true, removed };
+  } catch (err) {
+    const refusal = monitorLinkRefusal(err);
+    if (refusal) return refusal;
+    throw err;
+  }
 }

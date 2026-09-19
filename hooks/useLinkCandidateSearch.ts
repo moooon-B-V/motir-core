@@ -26,9 +26,17 @@ const DEBOUNCE_MS = 250;
 export function useLinkCandidateSearch<T>({
   fetcher,
   refetchKey,
+  minLength = QUICK_SEARCH_MIN_QUERY_LENGTH,
 }: {
   fetcher: LinkCandidateFetcher<T>;
   refetchKey?: string;
+  /**
+   * The shortest query that fetches. Defaults to the work-item search's guard.
+   * `0` fetches on an EMPTY query too — the Errors picker's "before typing"
+   * state lists the monitor's most recently seen issues (MOTIR-5744, design
+   * `design/monitoring` §14 panel 6a), so there is nothing to short-circuit.
+   */
+  minLength?: number;
 }) {
   const [query, setQuery] = useState('');
   const [candidates, setCandidates] = useState<T[]>([]);
@@ -45,7 +53,7 @@ export function useLinkCandidateSearch<T>({
   });
 
   const trimmed = query.trim();
-  const tooShort = trimmed.length < QUICK_SEARCH_MIN_QUERY_LENGTH;
+  const tooShort = trimmed.length < minLength;
 
   // Data-fetching effect: debounce the query, then fetch. Legitimately resets
   // loading/error/candidates around the async call (the ParentPicker precedent),

@@ -3,7 +3,11 @@ import { getMonitorProvider } from '@/lib/monitors';
 import { MonitorBinderUnavailableError, MonitorProviderCallError } from '@/lib/monitors/errors';
 import { meetsMinimumLevel } from '@/lib/monitors/levels';
 import { MONITOR_ISSUES_PAGE_LIMIT } from '@/lib/monitors/provider';
-import type { NormalizedMonitorIssue, NormalizedMonitorIssuePage } from '@/lib/monitors/types';
+import type {
+  NormalizedMonitorIssue,
+  NormalizedMonitorIssueContext,
+  NormalizedMonitorIssuePage,
+} from '@/lib/monitors/types';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   monitorIssueRepository,
@@ -13,14 +17,21 @@ import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectio
 import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
-import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
+import {
+  monitorCredentialService,
+  type MonitorAccessToken,
+} from '@/lib/services/monitorCredentialService';
 import { monitorSyncService } from '@/lib/services/monitorSyncService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { DuplicateLinkError } from '@/lib/workItems/linkErrors';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
 import { ReporterNotInWorkspaceError } from '@/lib/workItems/errors';
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceContext,
+} from '@/lib/workspaces/context';
 
 // The monitor-issue INGESTION service (Story MOTIR-4929) — the reconciler that
 // turns a production error into a `bug` work item and keeps it in agreement with
@@ -79,7 +90,16 @@ const BINDER_CANNOT_FILE =
   'The person who bound this connection can no longer create work items in this project. ' +
   'Bind the monitored project again as someone who can.';
 
-function factsOf(issue: NormalizedMonitorIssue): MonitorIssueFacts {
+/**
+ * The facts a visit writes. `context` is the latest event's environment and
+ * release (MOTIR-5729); when it is absent — not read, capped, failed, gone —
+ * the two keys are left OFF the write, so the stored values stand. A read that
+ * succeeded writes what it got, `null`s included.
+ */
+function factsOf(
+  issue: NormalizedMonitorIssue,
+  context?: NormalizedMonitorIssueContext | null,
+): MonitorIssueFacts {
   return {
     title: issue.title,
     culprit: issue.culprit,
@@ -88,6 +108,7 @@ function factsOf(issue: NormalizedMonitorIssue): MonitorIssueFacts {
     eventCount: issue.eventCount,
     firstSeenAt: issue.firstSeenAt,
     lastSeenAt: issue.lastSeenAt,
+    ...(context ? { environment: context.environment, release: context.release } : {}),
   };
 }
 
@@ -153,6 +174,18 @@ function isBinderRefusal(err: unknown): boolean {
  */
 export const MONITOR_POLL_MAX_PAGES = 20;
 
+/**
+ * The most CONTEXT reads (an issue's latest event — its environment and release)
+ * ONE poll makes for ONE connection (Story MOTIR-4932 · Subtask MOTIR-5729).
+ *
+ * ⚠️ THE COST IS ONE PROVIDER REQUEST PER ISSUE VISITED: the issue list carries
+ * neither fact, and the only documented read that does is addressed by one issue
+ * (`MonitorProvider.getIssueContext`). So a noisy poll is capped here; an issue
+ * past the cap reconciles exactly as it always has and its context is refreshed
+ * on a later visit. An ENRICHMENT, never a gate on filing.
+ */
+export const MONITOR_CONTEXT_READS_PER_POLL = 50;
+
 /** What one poll did — the per-connection run's ledger output. */
 export interface MonitorPollSummary {
   status: 'ok' | 'failed';
@@ -161,6 +194,12 @@ export interface MonitorPollSummary {
   refiled: number;
   /** Issues below the connection's minimum level: counted, never reconciled. */
   skipped: number;
+  /**
+   * Issues below the minimum level that a person LINKED to a live work item —
+   * their facts refreshed, nothing filed (MOTIR-5729). Counted apart so `filed`
+   * keeps its meaning.
+   */
+  refreshed: number;
   pages: number;
 }
 
@@ -172,8 +211,37 @@ const NOTHING_POLLED: MonitorPollSummary = {
   updated: 0,
   refiled: 0,
   skipped: 0,
+  refreshed: 0,
   pages: 0,
 };
+
+/**
+ * Read ONE issue's latest-event context with the credential the poll ALREADY
+ * holds — never inside a transaction, never with a refresh of its own.
+ *
+ * ⚠️ EVERY FAILURE IS ABSORBED, AND THAT IS THE RULE, NOT A SHORTCUT: a refusal,
+ * a timeout and a gone issue all answer `null`, which leaves the stored
+ * environment and release exactly as they were. Filing must not become less
+ * reliable because an enrichment failed (MOTIR-5729; the degrade principle
+ * MOTIR-4930 states for the bug body). It deliberately does not go through
+ * `withFreshCredential`, so an enrichment's 401 can never be the thing that
+ * marks a working connection `degraded` — the listing that just succeeded with
+ * this credential is the health signal.
+ */
+async function readContextQuietly(
+  credential: MonitorAccessToken,
+  externalIssueId: string,
+): Promise<NormalizedMonitorIssueContext | null> {
+  try {
+    return await getMonitorProvider(credential.provider).getIssueContext({
+      accessToken: credential.token,
+      orgSlug: credential.orgSlug ?? '',
+      externalIssueId,
+    });
+  } catch {
+    return null;
+  }
+}
 
 async function recordOutcome(
   connectionId: string,
@@ -327,6 +395,14 @@ export const monitorIngestionService = {
   async reconcileIssue(
     connection: MonitorReconcileConnection,
     issue: NormalizedMonitorIssue,
+    /**
+     * The issue's latest-event environment and release, READ BY THE CALLER
+     * before this method takes its row lock (MOTIR-5729) — a provider call held
+     * inside the lock would hold a row lock across a network round trip. Written
+     * in the same update as the other facts on every outcome; absent or `null`
+     * leaves the stored values alone. It changes no DECISION below.
+     */
+    context?: NormalizedMonitorIssueContext | null,
   ): Promise<MonitorReconcileResult> {
     const binderId = connection.boundByUserId;
     if (!binderId) throw new MonitorBinderUnavailableError(connection.id, BINDER_MISSING);
@@ -338,7 +414,7 @@ export const monitorIngestionService = {
     const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
     const doneKeys = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
 
-    const facts = factsOf(issue);
+    const facts = factsOf(issue, context);
 
     const settled = await withWorkspaceContext({ ...ctx, projectId }, async (tx) => {
       await monitorIssueRepository.insertIfAbsent(
@@ -482,6 +558,48 @@ export const monitorIngestionService = {
   },
 
   /**
+   * The FACTS-ONLY refresh of an issue below the connection's minimum level
+   * that a person has LINKED to a work item (Story MOTIR-4932 · Subtask
+   * MOTIR-5729). Returns whether it wrote.
+   *
+   * The minimum level is a FILING filter, and it stays one: nothing here files,
+   * re-files or re-points. But a hand-made link below the level would otherwise
+   * freeze its count and last-seen at the moment it was linked — the one number
+   * the Errors section exists to keep honest. So under the SAME claim-or-lock the
+   * reconciler takes (lock the row, re-read it), the facts are written when, and
+   * only when, the row still points at a LIVE bug: not in a done-category status,
+   * not deleted (an archived one is live, as it is for the reconciler). A done
+   * bug is skipped exactly as today — re-filing an issue the filter excludes
+   * would defeat the filter.
+   *
+   * SYSTEM context with the workspace bound: `monitor_issue` has a system arm and
+   * `work_item` has none, and an unbound read of the bug would come back empty
+   * and read as "deleted" (the `monitorSyncService` idiom).
+   */
+  async refreshLinkedFacts(
+    connection: Pick<MonitorReconcileConnection, 'id' | 'projectId' | 'workspaceId'>,
+    issue: NormalizedMonitorIssue,
+    context?: NormalizedMonitorIssueContext | null,
+  ): Promise<boolean> {
+    const doneKeys = await doneKeysOf(connection.projectId, connection.workspaceId);
+    return withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, connection.workspaceId);
+      const lockedId = await monitorIssueRepository.lockByExternalId(
+        connection.id,
+        issue.externalId,
+        tx,
+      );
+      if (lockedId === null) return false;
+      const row = await monitorIssueRepository.findById(lockedId, tx);
+      if (!row?.workItemId) return false;
+      const bug = await workItemRepository.findById(row.workItemId, tx);
+      if (!bug || doneKeys.has(bug.status)) return false;
+      await monitorIssueRepository.updateFacts(row.id, factsOf(issue, context), tx);
+      return true;
+    });
+  },
+
+  /**
    * Run ONE reconcile pass for ONE binding, and record on that binding what
    * happened (Story MOTIR-4929 · Subtask MOTIR-5580). The scheduled job calls
    * it (MOTIR-5581) and nothing else does.
@@ -496,7 +614,13 @@ export const monitorIngestionService = {
    *    reason on a second refusal. Stops at a `null` cursor or at
    *    {@link MONITOR_POLL_MAX_PAGES}, which is a FAILED outcome with the
    *    watermark left where it was — loud, never a silent truncation.
-   * 3. FILTER: an issue below the minimum level is counted as skipped.
+   * 3. FILTER: an issue below the minimum level is counted as skipped —
+   *    UNLESS a person linked it to a live work item, when its facts are
+   *    refreshed and nothing is filed ({@link refreshLinkedFacts}, counted as
+   *    `refreshed`; MOTIR-5729). Before each visit the issue's latest-event
+   *    context is read OUTSIDE any lock, at most
+   *    {@link MONITOR_CONTEXT_READS_PER_POLL} times, and a failed read changes
+   *    nothing but those two columns' freshness.
    * 4. RECONCILE each remaining issue through {@link reconcileIssue}. One issue
    *    failing (a binder refusal included) does not stop the others.
    * 5. RECORD: all reconciled ⇒ advance the watermark (compare-and-set on the
@@ -524,6 +648,9 @@ export const monitorIngestionService = {
 
     // ── 2. LIST ────────────────────────────────────────────────────────────────
     const listed: NormalizedMonitorIssue[] = [];
+    // The credential the LAST successful page was read with — the one the
+    // context reads reuse (MOTIR-5729), so they cost no credential round trip.
+    let listingCredential: MonitorAccessToken | null = null;
     let pages = 0;
     let cursor: string | null = null;
     try {
@@ -539,14 +666,17 @@ export const monitorIngestionService = {
         const pageCursor: string | null = cursor;
         const page: NormalizedMonitorIssuePage = await monitorCredentialService.withFreshCredential(
           connection.installationId,
-          (credential) =>
-            getMonitorProvider(credential.provider).listIssuesSince({
+          async (credential) => {
+            const read = await getMonitorProvider(credential.provider).listIssuesSince({
               accessToken: credential.token,
               orgSlug: credential.orgSlug ?? '',
               externalProjectId: connection.externalProjectId,
               lastSeenAfter,
               cursor: pageCursor,
-            }),
+            });
+            listingCredential = credential;
+            return read;
+          },
         );
         pages += 1;
         listed.push(...page.issues);
@@ -579,13 +709,56 @@ export const monitorIngestionService = {
       boundByUserId: connection.boundByUserId,
       externalProjectSlug: connection.externalProjectSlug,
     };
+    // A below-minimum issue is worth a visit only when a person linked it to a
+    // work item (MOTIR-5729) — ONE read tells those apart from the ones merely
+    // skipped, so an unlinked noisy issue never costs a context read.
+    const belowMinimum = listed.filter(
+      (issue) => !meetsMinimumLevel(issue.level, minimumLevelAtStart),
+    );
+    const linkedBelowMinimum = new Set(
+      belowMinimum.length === 0
+        ? []
+        : (
+            await withSystemContext((tx) =>
+              monitorIssueRepository.listLinkedByExternalIds(
+                connection.id,
+                belowMinimum.map((issue) => issue.externalId),
+                tx,
+              ),
+            )
+          ).map((link) => link.externalIssueId),
+    );
+    // Context reads happen HERE, before `reconcileIssue` / `refreshLinkedFacts`
+    // take their row lock, and never more than the cap per poll.
+    let contextReads = 0;
+    const credentialForContext: MonitorAccessToken | null = listingCredential;
+    const contextFor = async (
+      issue: NormalizedMonitorIssue,
+    ): Promise<NormalizedMonitorIssueContext | null> => {
+      if (!credentialForContext || contextReads >= MONITOR_CONTEXT_READS_PER_POLL) return null;
+      contextReads += 1;
+      return readContextQuietly(credentialForContext, issue.externalId);
+    };
     for (const issue of listed) {
       if (!meetsMinimumLevel(issue.level, minimumLevelAtStart)) {
-        summary.skipped += 1;
+        if (!linkedBelowMinimum.has(issue.externalId)) {
+          summary.skipped += 1;
+          continue;
+        }
+        try {
+          const context = await contextFor(issue);
+          const wrote = await monitorIngestionService.refreshLinkedFacts(target, issue, context);
+          if (wrote) summary.refreshed += 1;
+          else summary.skipped += 1;
+        } catch (err) {
+          const why = err instanceof Error ? err.message : String(err);
+          failures.push(`Issue ${issue.externalId} (“${issue.title}”) was not refreshed: ${why}`);
+        }
         continue;
       }
       try {
-        const result = await monitorIngestionService.reconcileIssue(target, issue);
+        const context = await contextFor(issue);
+        const result = await monitorIngestionService.reconcileIssue(target, issue, context);
         summary[result.outcome] += 1;
         // ASSIGNEE FROM THE MONITOR (MOTIR-4931 · MOTIR-5705), on every reconcile
         // visit, with the assignee the page already carried. A hook BESIDE

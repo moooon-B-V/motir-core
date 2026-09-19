@@ -1,7 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { Activity } from 'lucide-react';
 import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActionsMenu';
+import { useMonitorErrorsDoor } from './MonitorErrorsLinkControl';
 
 // The detail-header ⋯ actions menu (Story 2.8 · Subtask 2.8.4) — the client
 // wrapper that gives the shared menu its detail-surface page-state: after a
@@ -48,6 +51,21 @@ export function WorkItemDetailActions({
   inActiveSprint?: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations('workItemActions');
+  // THE NO-LINK ERRORS DOOR (MOTIR-5744, design `design/monitoring` §14 Decision 1):
+  // present only where the late Errors read has said it applies — an editor, a
+  // monitored project, and no link yet. Choosing it mounts the Errors section with
+  // the picker open. Passed from THIS wrapper only, so the shared menu on board
+  // cards and list rows does not gain it.
+  const errorsDoor = useMonitorErrorsDoor();
+  const linkErrorAction =
+    errorsDoor?.available && !archived
+      ? {
+          label: t('linkError'),
+          icon: <Activity className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />,
+          onSelect: errorsDoor.request,
+        }
+      : null;
   const leave = () => {
     router.push('/items');
     router.refresh();
@@ -72,6 +90,7 @@ export function WorkItemDetailActions({
       onSprintChanged={() => router.refresh()}
       onDeleted={leave}
       onArchived={archived ? refreshInPlace : leave}
+      hostAction={linkErrorAction}
       triggerClassName="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) border border-(--el-border) text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     />
   );

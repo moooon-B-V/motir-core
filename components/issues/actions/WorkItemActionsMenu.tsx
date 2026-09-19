@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Archive, Copy, Goal, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
@@ -87,6 +88,7 @@ export function WorkItemActionsMenu({
   editHref,
   align = 'end',
   triggerClassName,
+  hostAction = null,
 }: {
   itemId: string;
   /** The `PROD-N` key — used for the link, the menu label, and toasts. */
@@ -154,6 +156,15 @@ export function WorkItemActionsMenu({
   align?: 'start' | 'center' | 'end';
   /** Override the trigger button styling for a given surface's placement. */
   triggerClassName?: string;
+  /**
+   * ONE extra row a HOST adds after "Add to active sprint" (MOTIR-5744 — the
+   * detail page's **Link an error**, design `design/monitoring` §14 Decision 1).
+   * Supplied by the host rather than known here: the row belongs to the detail
+   * page only, so the board cards and list rows that render this same menu pass
+   * nothing and stay byte-unchanged. The host decides whether it applies; `null`
+   * or absent draws nothing.
+   */
+  hostAction?: { label: string; icon: ReactNode; onSelect: () => void } | null;
 }) {
   const t = useTranslations('workItemActions');
   const { toast } = useToast();
@@ -308,6 +319,21 @@ export function WorkItemActionsMenu({
                   {t('addToActiveSprint')}
                 </button>
               )
+            ) : null}
+
+            {hostAction ? (
+              <button
+                type="button"
+                role="menuitem"
+                className={ITEM_CLASS}
+                onClick={() => {
+                  setOpen(false);
+                  hostAction.onSelect();
+                }}
+              >
+                {hostAction.icon}
+                {hostAction.label}
+              </button>
             ) : null}
 
             <button

@@ -17,6 +17,8 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import { monitorIssueService } from '@/lib/services/monitorIssueService';
+import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { ActivityHistoryPageDto, ActivityAllPageDto } from '@/lib/dto/activity';
 import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
@@ -143,6 +145,20 @@ export interface LateReads {
    * block then renders WITHOUT the fix part, never an error, like `howToTest`.
    */
   repair: WorkItemRepairViewDto | null;
+  /**
+   * The card's monitor-ERROR links (Story MOTIR-4932 · MOTIR-5732, design
+   * `design/monitoring` §14). `null` on a failed read — the Errors section then
+   * renders its own ErrorState, and only in a project that HAS a connection.
+   * Read from the store the reconciler wrote: NO provider call on page load.
+   */
+  monitorIssueLinks: MonitorIssueLinkDto[] | null;
+  /**
+   * Whether the project binds at least one monitored project (§14 Decision 5) —
+   * the half of the door rule `canEdit` does not answer. `false` on a failed
+   * read: an absent door is the honest fallback, never a door that searches
+   * nothing.
+   */
+  monitorHasConnection: boolean;
 }
 
 export interface LateReadsInput {
@@ -194,6 +210,8 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       howToTest,
       mergeGate,
       repair,
+      monitorIssueLinks,
+      monitorHasConnection,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -354,6 +372,20 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           return null;
         }
       })(),
+      (async () => {
+        try {
+          return await monitorIssueService.listForWorkItem(itemId, ctx);
+        } catch {
+          return null;
+        }
+      })(),
+      (async () => {
+        try {
+          return await monitorIssueService.projectHasConnection(projectId, ctx);
+        } catch {
+          return false;
+        }
+      })(),
     ]);
 
     return {
@@ -376,6 +408,8 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       howToTest,
       mergeGate,
       repair,
+      monitorIssueLinks,
+      monitorHasConnection,
     };
   })();
 }
