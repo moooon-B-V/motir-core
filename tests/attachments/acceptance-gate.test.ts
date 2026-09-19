@@ -271,6 +271,18 @@ describe('the freeze — an APPROVED receipt closes (point 6)', () => {
     expect(gates.map((g) => g.state)).toEqual(['approved']);
   });
 
+  it('a PENDING receipt is what a fresh gate would ask about — `currentSubject` names it', async () => {
+    const story = await makeStory('in_review');
+    const evidence = await publish(story.id);
+    const { acceptanceResultGateHandler } =
+      await import('@/lib/approvalGates/acceptanceResultHandler');
+    const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } });
+    const subject = await adminDb.$transaction((tx) =>
+      acceptanceResultGateHandler.currentSubject({ item, ctx: fx.ctx, tx }),
+    );
+    expect(subject).toBe(evidence.id);
+  });
+
   it('the gate never asks about an approved receipt again — `currentSubject` answers nothing once it is signed', async () => {
     const story = await makeStory('in_review');
     await publish(story.id);

@@ -2189,6 +2189,17 @@ export default defineConfig({
         'lib/approvalGates/stamp.ts',
         'components/github/DevelopmentGateFrame.tsx',
         'components/github/MergeOutcomeSlot.tsx',
+        // THE ACCEPTANCE GATE (Story MOTIR-4949 · Subtasks MOTIR-4950 / MOTIR-5790 /
+        // MOTIR-5791). MEASURED on this branch over `tests/attachments/acceptance-gate`,
+        // `tests/approvalGates/{acceptanceStoryGate,acceptanceOnePress}` and
+        // `tests/components/{development-acceptance-primary,acceptance-panel,acceptance-receipt-and-band}`:
+        // 96.87 / 95 / 100 / 96.55 for the handler (its `no_status_in_target_category` arm
+        // needs a project whose done category is empty, which no fixture builds), 100 / 90 /
+        // 100 / 100 for the receipt player, and 100 across the slot and the band.
+        'lib/approvalGates/acceptanceResultHandler.ts',
+        'components/acceptance/AcceptanceReceiptPlayer.tsx',
+        'components/acceptance/AcceptanceDevelopmentSlot.tsx',
+        'components/approvals/GateCallToActionBand.tsx',
         // ── Story MOTIR-5460 · HAND A RED PULL REQUEST TO AN AGENT ────────────
         // Subtask MOTIR-5467, the story's vitest gate. The repair claim's service
         // and route, and the Development block's fix part — MEASURED first, at
@@ -2627,6 +2638,30 @@ export default defineConfig({
         // workbench-approvals-list}` and `tests/approval-records-story-gate`.
         'app/*/approvals/page.tsx': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'app/*/approvals/_components/ApprovalRecordsList.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/approvalGates/acceptanceResultHandler.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/acceptance/AcceptanceReceiptPlayer.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/acceptance/AcceptanceDevelopmentSlot.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/approvals/GateCallToActionBand.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
