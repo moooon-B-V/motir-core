@@ -604,6 +604,10 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
         deliveries: [],
         howToTest: over.howToTest ?? recordDto(),
         designEvidence: (over.designEvidence ?? null) as never,
+        // A pull-request subject on a card with no receipt — the story-run arm is
+        // `development-acceptance-primary.test.tsx`'s (MOTIR-5790).
+        acceptanceEvidence: null,
+        acceptanceGate: null,
         isDesignCard: over.isDesignCard ?? false,
         members: [],
       },

@@ -487,7 +487,7 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789)', () => {
     expect(
       primaryApprovalStandsForMerge({
         ...none,
-        currentReceipt: { id: 'ae_2', commitSha: null },
+        currentReceipt: { id: 'ae_2' },
         latestAcceptanceGate: decided('ae_1', 'c0ffee1'),
       }),
     ).toBe(false);

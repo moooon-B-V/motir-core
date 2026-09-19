@@ -35,7 +35,8 @@ vi.mock('@/app/(authed)/items/[key]/_components/lateReads', () => ({ RUN_HISTORY
 vi.mock('@/app/(authed)/items/[key]/_components/runTimes', () => ({ formatRunTimes: () => ({}) }));
 vi.mock('@/app/(authed)/items/[key]/_components/RunSection', () => ({ RunSection: () => null }));
 vi.mock('@/app/(authed)/items/[key]/_components/AcceptancePanel', () => ({
-  AcceptancePanel: () => null,
+  // A marker, so a test can see whether the STANDALONE section rendered.
+  AcceptancePanel: () => <div data-testid="standalone-acceptance" />,
 }));
 vi.mock('@/app/(authed)/items/[key]/_components/DesignResultSection', () => ({
   // A marker, so a test can see whether the STANDALONE section rendered.
@@ -74,7 +75,17 @@ function reads(): LateReads {
     initialAttachments: null,
     acceptanceEligibility: null,
     acceptanceEvidence: null,
-    canDecideAcceptance: false,
+    // Not a story in review, so the acceptance section is not drawn at all.
+    showAcceptance: false,
+    acceptanceGate: {
+      gate: null,
+      canDecide: false,
+      routedToLabel: null,
+      settingsDoor: null,
+      stamp: null,
+      // Nothing was asked, so nothing moved (Story MOTIR-5238 · MOTIR-5243).
+      movedSince: [],
+    },
     projectId: 'proj-acme',
     designEvidence: null,
     isDesignCard: false,
@@ -353,5 +364,81 @@ describe('the late stack — the page listens for a decision made in the overlay
     await renderStack(designCard(null));
     expect(screen.getByTestId('standalone-design-result')).toBeTruthy();
     expect(screen.queryByTestId('decided-gate-status-bridge')).toBeNull();
+  });
+});
+
+// ── MOTIR-5792 ────────────────────────────────────────────────────────────────
+// WHERE A STORY'S ACCEPTANCE QUESTION IS ASKED, by what the block can carry.
+//
+// MOTIR-5790 moved the receipt into the Development block whenever the story had an
+// open pull request, and suppressed the standalone section there. But the FRAME that
+// carries the question is the merge gate's, so a story whose pull requests are open and
+// not yet green had neither: the receipt rendered as a subject with no verbs, and the
+// awaiting question had no door on the item page at all. Found while recording this
+// story's receipt (`tests/e2e/acceptance-gate.spec.ts`).
+describe('a story run — the acceptance question is asked where it can be answered (MOTIR-5792)', () => {
+  const EVIDENCE = {
+    id: 'ae-1',
+    status: 'pending',
+    videoUrl: null,
+    chapters: [],
+    traceUrl: null,
+    commitSha: 'c0ffee1',
+    ciRunUrl: null,
+    producedByKey: 'ACME-24',
+    approvedById: null,
+    approvedAt: null,
+  } as unknown as LateReads['acceptanceEvidence'];
+  const gate = (state: ApprovalGateDTO['state']) => ({ id: 'gate-acc', state }) as ApprovalGateDTO;
+
+  function story(over: {
+    acceptance: ApprovalGateDTO | null;
+    merge: ApprovalGateDTO | null;
+  }): LateReads {
+    const base = reads();
+    return {
+      ...base,
+      showAcceptance: true,
+      acceptanceEligibility: { applicable: false } as LateReads['acceptanceEligibility'],
+      acceptanceEvidence: EVIDENCE,
+      acceptanceGate: { ...base.acceptanceGate, gate: over.acceptance },
+      mergeGate: { ...base.mergeGate, gate: over.merge },
+    };
+  }
+
+  async function renderStack(r: LateReads) {
+    const ui = await LateUpperSections({
+      reads: Promise.resolve(r),
+      itemId: 'wi-acme-12',
+      itemIdentifier: 'ACME-12',
+      currentUserId: 'u-viewer',
+      canEdit: true,
+      repoDelivery: [],
+      deliveries: [],
+    });
+    return render(ui);
+  }
+
+  it('the set is green: the receipt LEADS the block, and the section is not drawn twice', async () => {
+    await renderStack(
+      story({ acceptance: gate('awaiting'), merge: { id: 'gate-merge' } as ApprovalGateDTO }),
+    );
+    expect(screen.getByTestId('acceptance-development-slot')).toBeTruthy();
+    expect(screen.queryByTestId('standalone-acceptance')).toBeNull();
+  });
+
+  it('the pull requests are open and NOT green: the question keeps its own section', async () => {
+    // No merge gate, so the block has no frame — and an awaiting question with nowhere to
+    // press it is the defect this case exists for.
+    await renderStack(story({ acceptance: gate('awaiting'), merge: null }));
+    expect(screen.getByTestId('standalone-acceptance')).toBeTruthy();
+    expect(screen.queryByTestId('acceptance-development-slot')).toBeNull();
+  });
+
+  it('accepted before green: the DECIDED receipt stays in the block, beside its commits', async () => {
+    // Panel B — nothing is being asked, so there is no question to strand.
+    await renderStack(story({ acceptance: gate('approved'), merge: null }));
+    expect(screen.getByTestId('acceptance-development-slot')).toBeTruthy();
+    expect(screen.queryByTestId('standalone-acceptance')).toBeNull();
   });
 });

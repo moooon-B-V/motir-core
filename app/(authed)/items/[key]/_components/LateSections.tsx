@@ -201,11 +201,22 @@ export async function LateUpperSections({
   // and the pull requests beneath it are what the one press merges. The standalone
   // Acceptance section is then not drawn — one question, one place. A story with no
   // pull request of its own (a single-card run) keeps the section, alone (point 3).
+  //
+  // ⚠️ AND ONLY WHEN THE BLOCK CAN CARRY THE QUESTION (Subtask MOTIR-5792). The frame is
+  // the MERGE gate's — `DevelopmentSectionBody` draws no bands without one — so a story
+  // whose pull requests are open but NOT YET GREEN has no frame to lead. Suppressing the
+  // standalone section there took the last door to an awaiting question off the item page:
+  // the receipt rendered as a subject nobody could answer, and the only remaining door was
+  // the To-approve row. An ANSWERED acceptance is different and stays here: panels B and C
+  // are lines about a decision already made, not a question, and the block is where they
+  // belong beside the commits they cover.
+  const acceptanceAwaiting = r.acceptanceGate.gate?.state === 'awaiting';
   const acceptanceInDevelopment =
     r.acceptanceEvidence !== null &&
     r.acceptanceGate.gate !== null &&
-    hasOpenPullRequest(r.pullRequests, deliveries ?? []);
-  const acceptanceLeads = acceptanceInDevelopment && r.acceptanceGate.gate?.state === 'awaiting';
+    hasOpenPullRequest(r.pullRequests, deliveries ?? []) &&
+    (!acceptanceAwaiting || r.mergeGate.gate !== null);
+  const acceptanceLeads = acceptanceInDevelopment && acceptanceAwaiting;
   return (
     <>
       {/* THE RUN — above Development, because the run is what produced it. It

@@ -8183,6 +8183,32 @@ The stylesheet and sprites are spliced 1:1 from the decision delta; the receipt'
 primary), then How to test, then the pull requests behind the block's soft rule (`.ds-prs`). Unlike a
 decision card, a story run HAS something to run, so **How to test stays**.
 
+### AMENDMENT (MOTIR-5792, 2026-09-19) — the state this table did not name
+
+**The panels above are all drawn with the set GREEN, and a story run is not green for most of
+its life.** Between the pull requests opening and their checks passing the story holds an
+awaiting acceptance question and NO merge question — so there is no frame in the Development
+block, because the frame is the merge gate's. The table has no row for that state, and the
+implementation read the missing row as _the receipt is in the block whenever a pull request is
+open_: the receipt rendered as a subject with no verbs, and the only door left to an awaiting
+question was the To-approve row.
+
+**It is not a new surface and it needs no new panel.** That state is G1–G5 of MOTIR-4942 — the
+standalone **Acceptance** section with the call-to-action band — drawn exactly as it is on a
+story with no pull request at all. The rule, stated positively so the next reader does not
+re-derive it:
+
+| the story's acceptance gate | a merge gate exists | where the receipt is drawn                                           |
+| --------------------------- | ------------------- | -------------------------------------------------------------------- |
+| awaiting                    | yes                 | the Development block, LEADING the frame — Panel A                   |
+| awaiting                    | no                  | the standalone **Acceptance** section, with its band — G1–G5         |
+| decided                     | either              | the Development block, as a line beside its commits — Panels B and C |
+
+**A DECIDED receipt stays in the block whatever the checks are doing**, because a line about a
+decision already made strands no question — which is what Panel B already draws. The walk that
+shows this is `tests/e2e/acceptance-gate.spec.ts`; the guard is
+`tests/components/late-stack-development-block.test.tsx`.
+
 **Panel D(i) is drawn so the absence is unambiguous.** The E2E subtask recorded the video and is not
 where it is decided (point 1). Its page shows its own Development gate only — no receipt port, no
 acceptance copy, no acceptance verb. An implementation that puts the port here has built the wrong
