@@ -760,7 +760,6 @@ describe('claimRepair — a standing merge-queue failure (MOTIR-5719)', () => {
     ['no exit at all', null],
     ['an exit that was re-queued', { requeuedAt: new Date() }],
     ['an exit a push has left behind', { headSha: 'a'.repeat(40) }],
-    ['a NEUTRAL exit', { disposition: 'neutral' as const, rawReason: 'MANUAL' }],
   ])('IN REVIEW with %s is refused not_failing, and opens nothing', async (_label, opts) => {
     const fx = await makeWorkItemFixture();
     const { card, pr } = await greenCard(fx);
@@ -772,6 +771,57 @@ describe('claimRepair — a standing merge-queue failure (MOTIR-5719)', () => {
     expect(result).toMatchObject({ outcome: 'not_repairable', reason: 'not_failing' });
     expect(result.pullRequests).toEqual([]);
     expect(await fixRuns(card.id)).toHaveLength(0);
+  });
+
+  // ── BY CLASS (MOTIR-5803; §4 FOURTH AMENDMENT, point 6) ─────────────────────────
+  // `motir fix` sends an agent to change CODE, so the admission asks one question of the
+  // standing outcome: could a code change answer it?
+  it.each([
+    ['CI_FAILURE', 'failure' as const],
+    ['CI_TIMEOUT', 'failure' as const],
+    ['INVALID_MERGE_COMMIT', 'failure' as const],
+    ['GIT_TREE_INVALID', 'failure' as const],
+    ['MERGE_CONFLICT', 'failure' as const],
+  ])('IN REVIEW with %s is CLAIMED — the code may be at fault', async (rawReason, disposition) => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await setStatus(card.id, 'in_review');
+    await exitOn(pr.id, { rawReason, disposition });
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result.outcome).toBe('claimed');
+    expect(result.pullRequests).toHaveLength(1);
+  });
+
+  it.each([
+    ['BRANCH_PROTECTIONS', 'failure' as const],
+    ['MANUAL', 'neutral' as const],
+    ['QUEUE_CLEARED', 'neutral' as const],
+    ['ROLL_BACK', 'neutral' as const],
+    ['SOMETHING_NOBODY_HAS_MAPPED', 'neutral' as const],
+  ])(
+    'IN REVIEW with %s is refused repair_not_code — an agent has nothing to change',
+    async (rawReason, disposition) => {
+      const fx = await makeWorkItemFixture();
+      const { card, pr } = await greenCard(fx);
+      await setStatus(card.id, 'in_review');
+      await exitOn(pr.id, { rawReason, disposition });
+
+      const result = await claim(fx, card.identifier);
+
+      expect(result).toMatchObject({ outcome: 'not_repairable', reason: 'repair_not_code' });
+      expect(result.pullRequests).toEqual([]);
+      expect(await fixRuns(card.id)).toHaveLength(0);
+    },
+  );
+
+  it('IMPLEMENTED with a CONFLICT is claimed — the only way forward is the code', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await greenCard(fx);
+    await exitOn(pr.id, { rawReason: 'MERGE_CONFLICT', disposition: 'failure' });
+
+    expect((await claim(fx, card.identifier)).outcome).toBe('claimed');
   });
 
   it('IN REVIEW with a red check of its own but no queue exit is still refused — only an ejection admits it', async () => {

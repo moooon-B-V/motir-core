@@ -541,6 +541,26 @@ export function queueExitHoldsAtHead(
   exit: QueueExitFacts | null | undefined,
   headSha: string | null | undefined,
 ): boolean {
+  return queueExitStandsAtHead(exit, headSha) && exit!.disposition === 'failure';
+}
+
+/**
+ * Does this pull request's latest merge-queue exit still STAND at its current head —
+ * whatever its disposition (MOTIR-5802 · MOTIR-5805)?
+ *
+ * The wider half of the rule above, and the one the APPROVAL reads. A `neutral`
+ * removal holds no promotion — nothing was learned about the commits — but it DID
+ * spend the approval that sent them, so the re-ask and the repair claim ask this
+ * question while the promotion hold asks the narrower one. Both are stated here, so
+ * the difference between them is one line rather than two re-derivations.
+ *
+ * It stops standing in exactly two ways, the same two: a re-queue stamps
+ * `requeuedAt`, or a PUSH moves the head so the exit no longer names it.
+ */
+export function queueExitStandsAtHead(
+  exit: QueueExitFacts | null | undefined,
+  headSha: string | null | undefined,
+): boolean {
   if (!exit || !headSha) return false;
-  return exit.disposition === 'failure' && exit.requeuedAt === null && exit.headSha === headSha;
+  return exit.requeuedAt === null && exit.headSha === headSha;
 }

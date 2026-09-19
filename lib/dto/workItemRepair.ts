@@ -36,15 +36,20 @@ export type WorkItemRepairOutcome = 'claimed' | 'mine' | 'taken' | 'not_repairab
  * - `no_pull_requests` — the card has no delivery rows at all.
  * - `ci_running` — nothing open is failing, and at least one member is running.
  * - `not_failing` — nothing open is failing and nothing is running. Also an In
- *   Review card with no standing merge-queue failure at a member's head: it is
+ *   Review card with no standing merge-queue outcome at a member's head: it is
  *   waiting on review, not failing (MOTIR-5803).
+ * - `repair_not_code` — the merge did not land for a reason NO CODE CHANGE fixes
+ *   (MOTIR-5803; `approval-gates.md` §4 FOURTH AMENDMENT, point 6): a setting
+ *   blocked it, or somebody took the pull request out of the queue by hand. The
+ *   message names what would help instead — approve again, or change the setting.
  */
 export type WorkItemRepairRefusal =
   | 'not_implemented'
   | 'repair_on_run_target'
   | 'no_pull_requests'
   | 'ci_running'
-  | 'not_failing';
+  | 'not_failing'
+  | 'repair_not_code';
 
 /** One failing pull request the fixing agent is handed. */
 export interface RepairPullRequestDto {

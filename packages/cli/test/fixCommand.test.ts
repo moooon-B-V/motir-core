@@ -381,6 +381,9 @@ describe('motir fix — refusals touch neither git nor the agent', () => {
     ['no_pull_requests', 'it has no pull requests'],
     ['ci_running', 'its checks are still running'],
     ['not_failing', 'nothing is failing'],
+    // MOTIR-5803: the merge failed for a reason no agent can act on, and the words say
+    // what would help instead.
+    ['repair_not_code', 'its merge did not land for a reason no code change fixes'],
   ];
 
   it.each(REASONS)(
