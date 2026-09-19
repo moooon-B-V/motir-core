@@ -13,6 +13,9 @@ import {
   type RunLegBadge,
 } from '@/components/planning/WorkItemNode';
 import {
+  FOLDER_NODE_PREFIX,
+  folderIdFromNodeId,
+  folderNodeId,
   workItemCrumbLabel,
   type ProjectCanvasDep,
   type ProjectCanvasNode,
@@ -49,25 +52,9 @@ export const ORIGIN_ID = '__planning_origin__';
 // so both halves of the drill must name the same id, never two literals.
 export const NOT_IN_EPIC_ID = '__not_in_an_epic__';
 
-// A FOLDER's node id on the canvas (Bug MOTIR-5710 · MOTIR-5741). A folder is a
-// DOOR like the grouped node — the consumer's `loadLevel` intercepts the prefix
-// and reads that folder's level — so both halves of the drill must spell the id
-// the same way, which is why it is minted and parsed here and nowhere else. A
-// work-item id is a cuid and never carries a colon, so the namespace cannot
-// collide with one.
-export const FOLDER_NODE_PREFIX = 'folder:';
-
-/** The canvas node id of a folder. */
-export function folderNodeId(folderId: string): string {
-  return `${FOLDER_NODE_PREFIX}${folderId}`;
-}
-
-/** The folder id behind a canvas node id, or `null` when the node is not a folder. */
-export function folderIdFromNodeId(nodeId: string | null): string | null {
-  return nodeId !== null && nodeId.startsWith(FOLDER_NODE_PREFIX)
-    ? nodeId.slice(FOLDER_NODE_PREFIX.length)
-    : null;
-}
+// A FOLDER's node id helpers live in the pure canvas model (they are read by the
+// server page too) and are re-exported here beside the other door ids.
+export { FOLDER_NODE_PREFIX, folderIdFromNodeId, folderNodeId };
 
 // The id of the synthetic TRUNCATION tile (MOTIR-3490). Not a door — the consumer
 // intercepts it on ACTIVATION, to re-read this level with the raised ceiling.

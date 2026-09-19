@@ -7,10 +7,15 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { foldersService } from '@/lib/services/foldersService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { RoadmapView } from '@/components/planning/RoadmapView';
-import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import {
+  folderNodeId,
+  workItemCrumbLabel,
+  type CanvasCrumb,
+} from '@/lib/planning/projectCanvasModel';
 import { isRoadmapRootEmpty } from '@/lib/planning/roadmapClient';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 
@@ -53,7 +58,22 @@ async function resolveArrivalTrail(
   searchParams: Promise<Record<string, string | string[] | undefined>> | undefined,
   wsCtx: { userId: string; workspaceId: string },
 ): Promise<CanvasCrumb[]> {
-  const itemParam = (await searchParams)?.['item'];
+  const params = await searchParams;
+  // FOLDERS live on the project-scope roadmap only (design decision 6): the sprint
+  // slice ignores placement, so no folder crumb is ever prepended there.
+  const foldersOn = params?.['scope'] !== 'sprint';
+  // A FOLDER's level (Bug MOTIR-5710 · MOTIR-5742): `?folder=<id>` opens on that
+  // folder, its chain as the crumbs. The same SILENT catch — an unknown folder,
+  // another project's, or one this actor cannot browse opens the root.
+  const folderParam = params?.['folder'];
+  if (foldersOn && typeof folderParam === 'string' && folderParam) {
+    try {
+      return folderCrumbs(await foldersService.getFolderTrail(projectId, folderParam, wsCtx));
+    } catch {
+      return [];
+    }
+  }
+  const itemParam = params?.['item'];
   // A repeated `?item=` arrives as an array; there is no right answer to which
   // one was meant, so the level is the root.
   const itemKey = typeof itemParam === 'string' ? itemParam : null;
@@ -64,14 +84,31 @@ async function resolveArrivalTrail(
       itemKey,
       wsCtx,
     );
-    return [...ancestors, item].map((a) => ({
+    const workItemCrumbs = [...ancestors, item].map((a) => ({
       id: a.id,
       crumbKey: a.identifier,
       label: workItemCrumbLabel(a.identifier, a.title),
     }));
+    if (!foldersOn) return workItemCrumbs;
+    // A FILED item (or one under a filed epic) sits behind its folder's door on
+    // this roadmap, so the trail walks through that folder chain first — exactly
+    // the crumbs a reader drilling by hand would have (MOTIR-5742).
+    const placement = await workItemsService.getWorkItemPlacement(projectId, item.id, wsCtx);
+    if (!placement.placementFolder) return workItemCrumbs;
+    const chain = await foldersService.getFolderTrail(
+      projectId,
+      placement.placementFolder.folderId,
+      wsCtx,
+    );
+    return [...folderCrumbs(chain), ...workItemCrumbs];
   } catch {
     return [];
   }
+}
+
+/** A folder chain → the canvas crumbs a drill through those folders pushes. */
+function folderCrumbs(chain: Array<{ id: string; name: string }>): CanvasCrumb[] {
+  return chain.map((f) => ({ id: folderNodeId(f.id), label: f.name }));
 }
 
 // ⚠️ MODULE SCOPE ON PURPOSE — do not fold this back into the page body.

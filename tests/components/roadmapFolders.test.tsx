@@ -12,6 +12,11 @@ import {
   NOT_IN_EPIC_ID,
 } from '@/components/planning/workItemLevel';
 import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
+import {
+  breadcrumbSegments,
+  ProjectRoadmapCanvas,
+  type RoadmapLevel,
+} from '@/components/planning/ProjectRoadmapCanvas';
 import type {
   RoadmapLevelData,
   RoadmapLevelFolder,
@@ -285,5 +290,135 @@ describe('WorkItemRoadmap — folders end to end over the wire', () => {
     await waitFor(() => expect(spy).toHaveBeenCalled());
 
     expect(String(spy.mock.calls[0]![0])).toBe('/api/projects/MOTIR/roadmap?parentId=E1');
+  });
+});
+
+// ─────────────── MOTIR-5742 · the folder CRUMB navigates ───────────────
+
+describe('breadcrumbSegments — a folder run longer than three collapses from the middle', () => {
+  const crumb = (id: string, label = id) => ({ id, label });
+  const isFolder = (c: { id: string }) => c.id.startsWith('folder:');
+
+  it('keeps a run of up to three folders whole', () => {
+    const crumbs = [crumb('folder:a'), crumb('folder:b'), crumb('folder:c'), crumb('E1')];
+    expect(breadcrumbSegments(crumbs, isFolder)).toEqual([
+      { kind: 'crumb', index: 0, folder: true },
+      { kind: 'crumb', index: 1, folder: true },
+      { kind: 'crumb', index: 2, folder: true },
+      { kind: 'crumb', index: 3, folder: false },
+    ]);
+  });
+
+  it('collapses five folders to first ▸ … ▸ last, the … naming the folder above the last', () => {
+    const crumbs = ['a', 'b', 'c', 'd', 'e'].map((x) => crumb(`folder:${x}`, x.toUpperCase()));
+    expect(breadcrumbSegments([...crumbs, crumb('E1')], isFolder)).toEqual([
+      { kind: 'crumb', index: 0, folder: true },
+      { kind: 'ellipsis', targetIndex: 3, path: ['A', 'B', 'C', 'D', 'E'] },
+      { kind: 'crumb', index: 4, folder: true },
+      { kind: 'crumb', index: 5, folder: false },
+    ]);
+  });
+
+  it('never collapses work-item crumbs', () => {
+    const crumbs = ['1', '2', '3', '4', '5'].map((x) => crumb(`E${x}`));
+    expect(breadcrumbSegments(crumbs, isFolder).every((s) => s.kind === 'crumb')).toBe(true);
+  });
+});
+
+describe('ProjectRoadmapCanvas — folder crumbs', () => {
+  const trail = ['A', 'B', 'C', 'D', 'E'].map((x) => ({ id: `folder:${x}`, label: `Folder ${x}` }));
+
+  function renderAt() {
+    const loadLevel = vi.fn(
+      async (): Promise<RoadmapLevel> => ({
+        nodes: [
+          { id: 'n1', parentId: null, content: <div>Card</div>, searchText: 'Card' },
+          { id: 'n2', parentId: null, content: <div>Card two</div>, searchText: 'Card two' },
+        ],
+        deps: [],
+      }),
+    );
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={loadLevel}
+        rootLabel="Roadmap"
+        initialTrail={trail}
+        isFolderCrumb={(c) => c.id.startsWith('folder:')}
+      />,
+    );
+    return loadLevel;
+  }
+
+  it('draws each shown folder as a Crumb button named “Folder: <name>”, and a … with the full path', async () => {
+    renderAt();
+    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(nav).getByRole('button', { name: 'Folder: Folder A' })).toBeTruthy();
+    expect(within(nav).getByRole('button', { name: 'Folder: Folder E' })).toBeTruthy();
+    expect(within(nav).queryByRole('button', { name: 'Folder: Folder C' })).toBeNull();
+    const more = within(nav).getByRole('button', {
+      name: 'Folder A ▸ Folder B ▸ Folder C ▸ Folder D ▸ Folder E',
+    });
+    expect(more.getAttribute('title')).toBe('Folder A ▸ Folder B ▸ Folder C ▸ Folder D ▸ Folder E');
+    expect(
+      within(nav).getByRole('button', { name: 'Folder: Folder E' }).getAttribute('aria-current'),
+    ).toBe('page');
+  });
+
+  it('the … navigates to the folder just above the last one shown', async () => {
+    const loadLevel = renderAt();
+    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    fireEvent.click(
+      within(nav).getByRole('button', {
+        name: 'Folder A ▸ Folder B ▸ Folder C ▸ Folder D ▸ Folder E',
+      }),
+    );
+    await waitFor(() => expect(loadLevel).toHaveBeenLastCalledWith('folder:D'));
+  });
+
+  it('a folder crumb navigates to that folder’s level', async () => {
+    const loadLevel = renderAt();
+    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    fireEvent.click(within(nav).getByRole('button', { name: 'Folder: Folder A' }));
+    await waitFor(() => expect(loadLevel).toHaveBeenLastCalledWith('folder:A'));
+  });
+});
+
+describe('WorkItemRoadmap — drilling two folders deep and crumbing back', () => {
+  it('the first folder’s crumb returns to its level', async () => {
+    serve({
+      __root__: {
+        nodes: [wireNode('E1', 'Road epic')],
+        edges: [],
+        offLevelBlockers: [],
+        folders: [wireFolder('f1', 'Parked', 1, 0)],
+      },
+      f1: {
+        nodes: [wireNode('B1', 'Parked bug', 'bug')],
+        edges: [],
+        offLevelBlockers: [],
+        folders: [wireFolder('f2', 'Inner', 0, 1)],
+      },
+      f2: {
+        nodes: [wireNode('B2', 'Inner bug', 'bug'), wireNode('B3', 'Inner bug two', 'bug')],
+        edges: [],
+        offLevelBlockers: [],
+        folders: [],
+      },
+    });
+
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Parked');
+    fireEvent.keyDown(el('folder:f1')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('Parked bug');
+    fireEvent.keyDown(el('folder:f2')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('Inner bug');
+
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    fireEvent.click(within(nav).getByRole('button', { name: 'Folder: Parked' }));
+    expect(await screen.findByText('Parked bug')).toBeTruthy();
+    await act(async () => {});
+    expect(el('B2')).toBeNull();
   });
 });

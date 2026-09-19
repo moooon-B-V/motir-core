@@ -518,6 +518,11 @@ export function WorkItemRoadmap({
     ],
   );
 
+  const isFolderCrumb = useCallback(
+    (crumb: CanvasCrumb) => folderIdFromNodeId(crumb.id) !== null,
+    [],
+  );
+
   // AN EMPTY FOLDER'S LEVEL (Bug MOTIR-5710 · MOTIR-5741, sheet 6): the folder's own
   // statement instead of the generic "no children". The crumb's label IS the
   // folder's name — `buildWorkItemLevel` stamps it when it draws the card.
@@ -576,6 +581,9 @@ export function WorkItemRoadmap({
         locatable={locatable}
         emptyRoot={emptyRoot}
         emptyDrilledFor={emptyDrilledFor}
+        // FOLDER CRUMBS (MOTIR-5742): a folder's level is a `folder:<id>` crumb,
+        // drawn with the folder glyph and collapsed from the middle past three.
+        isFolderCrumb={isFolderCrumb}
         // AUTO-DRILL (MOTIR-1807): a level that resolves to exactly ONE drillable node
         // offers no choice, so the canvas descends into it and the roadmap opens on the
         // WORK rather than on one card. Opted in for BOTH scopes, not sprint-only — the
