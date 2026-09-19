@@ -164,6 +164,16 @@ describe('AutomationRuleList — states', () => {
     expect(screen.getByRole('button', { name: 'Re-enable' })).toBeTruthy();
   });
 
+  it('renders the enable switch as the design-system Switch, not a local copy (MOTIR-5735)', () => {
+    renderSettings([rule({ enabled: false })]);
+    const sw = screen.getByRole('switch', { name: /Enabled — Bug verification handoff/ });
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    // The Switch-scoped OFF tokens — the local copy painted `--el-surface` on
+    // `--el-muted` for the knob, the same hex as its track.
+    expect(sw.className).toContain('border-(--el-switch-off-border)');
+    expect(sw.querySelector('span')!.className).toContain('bg-(--el-switch-knob-off)');
+  });
+
   it('disables Create at the 100-rule cap', () => {
     const many = Array.from({ length: 100 }, (_, i) => rule({ id: `r${i}`, name: `Rule ${i}` }));
     renderSettings(many);
