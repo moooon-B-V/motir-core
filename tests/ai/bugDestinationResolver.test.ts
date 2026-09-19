@@ -19,9 +19,10 @@ import { truncateAuthTables } from '../helpers/db';
 // The BUG DESTINATION resolver and the filer that reads it — Story MOTIR-4927 ·
 // Subtask MOTIR-4937. `POST /api/internal/ai/work-items` (`aiWorkItemsService.
 // fileBug`) files a bug that names NO parent into the project's destination: its
-// folder, or the project root. A named parent — the `@planner-bug-home` marker or
-// a literal key — is kept exactly as before and never also filed. Driven through
-// the real route and the real filer, against real Postgres.
+// folder, or the project root. A literal parent key is kept exactly as before and
+// never also filed. The `@planner-bug-home` marker is not a parent at all since
+// MOTIR-5822: it FILES, through `resolvePlannerBug`'s ladder. Driven through the
+// real route and the real filer, against real Postgres.
 
 const SECRET = 'core-callback-secret-test';
 
@@ -76,6 +77,41 @@ async function pointAt(projectId: string, folderId: string | null) {
     data: { bugDestinationFolderId: folderId },
   });
 }
+
+describe('bugDestinationService.resolvePlannerBug — the planner-bug ladder (MOTIR-5822)', () => {
+  const resolvePlanner = (projectId: string, workspaceId: string) =>
+    withWorkspaceServiceContext(workspaceId, (tx) =>
+      bugDestinationService.resolvePlannerBug(projectId, tx),
+    );
+
+  it('rung 1 — the planner-bug pointer, when it is set', async () => {
+    const { ctx, workspace, project } = await makeTenant();
+    const planning = await foldersService.createFolder(
+      { projectId: project.id, parentFolderId: null, name: 'Planning bugs' },
+      ctx,
+    );
+    await adminDb.project.update({
+      where: { id: project.id },
+      data: { plannerBugDestinationFolderId: planning.id },
+    });
+
+    expect(await resolvePlanner(project.id, workspace.id)).toEqual({ folderId: planning.id });
+  });
+
+  it('rung 2 — unset ⇒ the PRODUCT bug destination', async () => {
+    const { workspace, project } = await makeTenant();
+    const bugs = await seededBugsFolderId(project.id);
+
+    expect(await resolvePlanner(project.id, workspace.id)).toEqual({ folderId: bugs });
+  });
+
+  it('rung 3 — both unset ⇒ the project root', async () => {
+    const { workspace, project } = await makeTenant();
+    await pointAt(project.id, null);
+
+    expect(await resolvePlanner(project.id, workspace.id)).toEqual({ folderId: null });
+  });
+});
 
 describe('bugDestinationService.resolve', () => {
   it('returns the folder the pointer names, and null for a deliberate root', async () => {
@@ -134,18 +170,20 @@ describe('fileBug with no parentKey files into the bug destination', () => {
   });
 });
 
-describe('a named parent is kept, and the destination is ignored', () => {
-  it('the @planner-bug-home marker still files under the home story, not into the destination', async () => {
+describe('a named parent key is kept, and the destination is ignored', () => {
+  it('the @planner-bug-home marker is NOT a parent — it FILES, falling back to this destination when its own pointer is unset (MOTIR-5822)', async () => {
     const { ctx, project } = await makeTenant();
-    const home = await workItemsService.createWorkItem(
+    const bugs = await seededBugsFolderId(project.id);
+    // A story titled like the OLD home no longer attracts the marker.
+    await workItemsService.createWorkItem(
       { projectId: project.id, kind: 'story', title: PLANNER_BUG_HOME_STORY_TITLE },
       ctx,
     );
 
     const bug = await fileBug({ parentKey: PLANNER_BUG_HOME_MARKER });
 
-    expect(bug.parentId).toBe(home.id);
-    expect(bug.folderId).toBeNull();
+    expect(bug.parentId).toBeNull();
+    expect(bug.folderId).toBe(bugs);
   });
 
   it('a literal parent key still files under that parent, not into the destination', async () => {

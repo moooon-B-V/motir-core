@@ -105,6 +105,24 @@ function escapeLikePattern(term: string): string {
 // pure read paths use the `db` singleton. No business logic, no DTO
 // mapping, no transactions here — those belong in projectsService.
 
+/**
+ * Every column on `project` that POINTS AT a folder (MOTIR-5821). A folder delete
+ * carries each one up to the deleted folder's parent in the same transaction
+ * (`carryFolderPointers`), so a pointer never dangles and a raw delete never
+ * trips its `NoAction` FK. A new folder pointer joins by DECLARATION here —
+ * forgetting it is caught by `tests/integration/folders/plannerBugDestinationCarry.test.ts`,
+ * which reads the database's own FK catalog.
+ *
+ *   · `bugDestinationFolderId`        — where filed product bugs go (MOTIR-4934);
+ *     `null` means the project root, chosen.
+ *   · `plannerBugDestinationFolderId` — where planner bugs go (MOTIR-5820);
+ *     `null` means fall back to the product destination.
+ */
+export const PROJECT_FOLDER_POINTERS = [
+  'bugDestinationFolderId',
+  'plannerBugDestinationFolderId',
+] as const satisfies readonly (keyof Prisma.ProjectWhereInput)[];
+
 export const projectRepository = {
   /**
    * Read a project by id. Optionally takes `tx` when the caller is already
@@ -994,24 +1012,30 @@ export const projectRepository = {
   },
 
   /**
-   * CARRY a bug destination off a folder that is about to be deleted
-   * (MOTIR-5537): if `projectId`'s destination names `fromFolderId`, point it at
-   * `toFolderId` — the deleted folder's parent, or `null` for the project root.
-   * Conditional in the WHERE, so a project whose destination is elsewhere is not
-   * written. Returns the rows written (0 or 1). `tx` REQUIRED — it runs inside
-   * the delete's own transaction, under its structure lock.
+   * CARRY every project FOLDER POINTER off a folder that is about to be deleted
+   * (MOTIR-5537, widened to the set by MOTIR-5821): for each pointer in
+   * `PROJECT_FOLDER_POINTERS` that names `fromFolderId` on `projectId`, point it
+   * at `toFolderId` — the deleted folder's parent, or `null` when the folder was
+   * a root. Each write is conditional in its WHERE, so a pointer naming
+   * elsewhere is not written. Returns the rows written, summed across pointers.
+   * `tx` REQUIRED — it runs inside the delete's own transaction, under its
+   * structure lock, and before the delete: every pointer is a `NoAction` FK.
    */
-  async carryBugDestination(
+  async carryFolderPointers(
     projectId: string,
     fromFolderId: string,
     toFolderId: string | null,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    const result = await tx.project.updateMany({
-      where: { id: projectId, bugDestinationFolderId: fromFolderId },
-      data: { bugDestinationFolderId: toFolderId },
-    });
-    return result.count;
+    let written = 0;
+    for (const pointer of PROJECT_FOLDER_POINTERS) {
+      const result = await tx.project.updateMany({
+        where: { id: projectId, [pointer]: fromFolderId },
+        data: { [pointer]: toFolderId },
+      });
+      written += result.count;
+    }
+    return written;
   },
 
   /**
