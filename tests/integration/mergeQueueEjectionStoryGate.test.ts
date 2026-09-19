@@ -917,6 +917,111 @@ describe('10 · the ejection arm’s edges, through the real handler', () => {
   });
 });
 
+describe('11 · a HOST REFUSAL at the press, by class (MOTIR-5833 · MOTIR-5834)', () => {
+  /** A manual card, green and approved — with the host REFUSING both members. */
+  async function refusedPress(email: string, code: 'branch_protected' | 'conflict') {
+    const s = await makeScenario(email, 'manual');
+    const item = await card(s, [
+      ['web', 7],
+      ['api', 12],
+    ]);
+    await green('web', 7, 'sha-web');
+    await green('api', 12, 'sha-api');
+    const [gate] = await awaiting(item.id);
+    stubHost(() => ({ outcome: 'refused', refusal: { code } }));
+    const { members } = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: gate!.id, source: 'ui' },
+      s.ctx,
+    );
+    expect(members.every((m) => m.outcome === 'refused')).toBe(true);
+    return { s, item, approved: gate! };
+  }
+
+  const refusalsOf = async (number: number) =>
+    adminDb.githubPullRequestMergeRefusal.findMany({
+      where: { pullRequestId: (await prRow(number)).id },
+      orderBy: { refusedAt: 'asc' },
+    });
+
+  it('a SETTING refusal: recorded, asked again at In Review, and the fresh gate lands it', async () => {
+    const { s, item, approved } = await refusedPress(
+      'refusal-setting@example.com',
+      'branch_protected',
+    );
+
+    // Recorded on BOTH members, and the card asks again — once.
+    expect(await refusalsOf(7)).toHaveLength(1);
+    expect((await refusalsOf(7))[0]).toMatchObject({
+      code: 'branch_protected',
+      supersededAt: null,
+    });
+    expect(await statusOf(item.id)).toBe('in_review');
+    const reasked = await awaiting(item.id);
+    expect(reasked).toHaveLength(1);
+    expect(reasked[0]!.id).not.toBe(approved.id);
+
+    // The spent approval may not press again; the fresh gate may.
+    const host = enqueueAll();
+    host.mockClear();
+    expect(await queueAgain(s, approved.id, 7)).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' },
+    });
+    expect(host).not.toHaveBeenCalled();
+
+    expect(await queueAgain(s, reasked[0]!.id, 7)).toMatchObject({ outcome: 'enqueued' });
+    expect(await statusOf(item.id)).toBe('approved');
+    expect((await refusalsOf(7))[0]!.supersededAt).not.toBeNull();
+  });
+
+  it('a CONFLICT refusal: recorded, HELD at Implemented, and no verb however green it goes', async () => {
+    const { s, item, approved } = await refusedPress('refusal-conflict@example.com', 'conflict');
+
+    expect((await refusalsOf(7))[0]).toMatchObject({ code: 'conflict' });
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaiting(item.id)).toEqual([]);
+
+    // A green check at the SAME head asks nothing: the commits cannot land as they stand.
+    await green('web', 7, 'sha-web');
+    expect(await awaiting(item.id)).toEqual([]);
+
+    const host = enqueueAll();
+    host.mockClear();
+    expect(await queueAgain(s, approved.id, 7)).toMatchObject({ outcome: 'refused' });
+    expect(host).not.toHaveBeenCalled();
+  });
+});
+
+describe('12 · NO DOOR REUSES A SPENT APPROVAL, whatever the reason (MOTIR-5802)', () => {
+  it.each([
+    ['CI_FAILURE', 'in_review'],
+    ['MANUAL', 'in_review'],
+    ['BRANCH_PROTECTIONS', 'in_review'],
+    ['MERGE_CONFLICT', 'implemented'],
+  ] as const)(
+    'after %s the card is at %s and the old approval enqueues nothing',
+    async (reason, status) => {
+      const { s, item, approved } = await approvedIntoTheQueue(
+        `spent-${reason.toLowerCase()}@example.com`,
+      );
+      await eject('web', 7, 'sha-web', reason);
+      expect(await statusOf(item.id)).toBe(status);
+
+      const host = enqueueAll();
+      host.mockClear();
+      const outcome = await queueAgain(s, approved.id, 7);
+
+      expect(outcome).toMatchObject({ outcome: 'refused' });
+      expect(host).not.toHaveBeenCalled();
+      expect((await exitsOf(7)).at(-1)!.requeuedAt).toBeNull();
+      // The decided gate is history, and is never edited.
+      expect(await adminDb.approvalGate.findUniqueOrThrow({ where: { id: approved.id } })).toEqual(
+        approved,
+      );
+    },
+  );
+});
+
 describe('8 · no per-pull-request gate', () => {
   it('is asserted after every scenario above (afterEach), and the refusal type is the shipped one', () => {
     expect(new QueueAgainRefusedError('no_exit', 'x')).toBeInstanceOf(Error);
