@@ -345,7 +345,9 @@ export async function LateUpperSections({
             projectId={r.projectId}
             eligibility={r.acceptanceEligibility}
             initialEvidence={r.acceptanceEvidence}
-            canDecide={r.canDecideAcceptance}
+            gate={r.acceptanceGate.gate}
+            stamp={r.acceptanceGate.stamp}
+            canDecide={r.acceptanceGate.canDecide}
           />
         </ContentSectionCard>
       ) : null}

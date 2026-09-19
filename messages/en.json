@@ -7513,6 +7513,7 @@
       },
       "review": "Review",
       "subjectMeta": "{files, plural, =1 {# file} other {# files}} · {version}",
+      "acceptanceMeta": "{chapters, plural, =0 {No chapters} =1 {# chapter} other {# chapters}} · {version}",
       "noVersion": "no version",
       "decidedOn": "on <mono>{version}</mono>",
       "subjectGone": "The design this asked about is gone",
@@ -7522,7 +7523,8 @@
         "design_result": "Design result",
         "decision_approval": "Decision approval",
         "pull_request_approval": "Pull-request approval",
-        "pull_request_merge": "Pull-request merge"
+        "pull_request_merge": "Pull-request merge",
+        "acceptance_result": "Acceptance video"
       },
       "reviewRow": "Review {key} {title}",
       "pullRequest": {
@@ -8464,6 +8466,19 @@
         "movesToDone": "move {key} to Done, starting the work items waiting on it."
       }
     },
+    "acceptanceResult": {
+      "kindLabel": "Acceptance video",
+      "meta": {
+        "withVersion": "recorded at {version}",
+        "plain": "the recorded run"
+      },
+      "consequence": "Approving accepts {key}. It moves to Done once nothing under it is still open.",
+      "confirm": {
+        "records": "record that you accepted it, with the time and this recording;",
+        "freezes": "lock this recording, so a later run cannot replace it;",
+        "movesToDone": "move {key} to Done once nothing under it is still open."
+      }
+    },
     "pullRequestApproval": {
       "kindLabel": "Pull requests",
       "meta": {
@@ -8576,7 +8591,8 @@
         "design_result": "design approval",
         "pull_request_approval": "pull-request approval",
         "decision_approval": "decision approval",
-        "pull_request_merge": "merge approval"
+        "pull_request_merge": "merge approval",
+        "acceptance_result": "acceptance approval"
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",

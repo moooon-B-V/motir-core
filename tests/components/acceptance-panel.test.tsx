@@ -11,15 +11,19 @@ import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEli
 // are mocked; the panel's branching + the optimistic reconcile are under test.
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
-const { decideAcceptanceAction, turnOnAcceptanceVideoAction } = vi.hoisted(() => ({
-  decideAcceptanceAction: vi.fn(),
+const { decideApprovalGateAction, turnOnAcceptanceVideoAction } = vi.hoisted(() => ({
+  decideApprovalGateAction: vi.fn(),
   turnOnAcceptanceVideoAction: vi.fn(async () => ({ ok: true })),
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 vi.mock('@/app/(authed)/items/[key]/acceptanceActions', () => ({
-  decideAcceptanceAction,
   turnOnAcceptanceVideoAction,
+}));
+// MOTIR-4950 — the panel's verbs press the story's `acceptance_result` gate through the
+// contract's one decide action; the bespoke acceptance action is retired.
+vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
+  decideApprovalGateAction,
 }));
 
 const { AcceptancePanel } = await import('@/app/(authed)/items/[key]/_components/AcceptancePanel');
@@ -76,6 +80,10 @@ const baseProps = {
   // the eligibility DTO's `organizationId`, so a panel that went back to passing
   // the organisation fails the call assertion below rather than coinciding.
   projectId: 'proj_1',
+  // The story's awaiting `acceptance_result` gate and the stamp its read handed the
+  // reader (MOTIR-4950) — what the verbs press back.
+  gate: { id: 'gate_1' },
+  stamp: 'stamp_1',
 };
 
 afterEach(cleanup);
@@ -94,11 +102,11 @@ describe('AcceptancePanel', () => {
     expect(screen.getByRole('button', { name: /request changes/i })).toBeTruthy();
   });
 
-  it('Approve calls the action + reconciles from the response (no self-refresh of state)', async () => {
-    decideAcceptanceAction.mockResolvedValueOnce({
+  it('Approve presses the GATE through the one decide action + reconciles from the response (no self-refresh of state)', async () => {
+    decideApprovalGateAction.mockResolvedValueOnce({
       ok: true,
-      storyStatus: 'done',
-      evidence: evidence({ status: 'approved', approvedById: 'Yue' }),
+      gate: { id: 'gate_1', state: 'approved' },
+      filesKept: null,
     });
     renderPanel({
       ...baseProps,
@@ -113,10 +121,11 @@ describe('AcceptancePanel', () => {
     // that stopped passing it would still approve, still reconcile, and silently
     // stop repainting the page.
     await waitFor(() =>
-      expect(decideAcceptanceAction).toHaveBeenCalledWith({
-        workItemId: 'wi_1',
-        itemIdentifier: 'MOTIR-1',
+      expect(decideApprovalGateAction).toHaveBeenCalledWith({
+        gateId: 'gate_1',
         decision: 'approve',
+        identifier: 'MOTIR-1',
+        stamp: 'stamp_1',
       }),
     );
     // After approval the buttons are gone and the Approved pill shows.

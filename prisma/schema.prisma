@@ -4458,6 +4458,11 @@ enum ApprovalGateKind {
   /// A pull request's MERGE — recorded when the host webhook lands the merge;
   /// the gate that the `pull_request_approval` decision caused.
   pull_request_merge
+  /// A story's ACCEPTANCE RECEIPT (the acceptance video) — "is this what I
+  /// wanted?". Raised on the STORY that owns the receipt, whatever the run target;
+  /// on a story run it is the PRIMARY of two gates (ADR `approval-gates.md` §1,
+  /// the MOTIR-5787 amendment).
+  acceptance_result
 
   @@map("approval_gate_kind")
 }

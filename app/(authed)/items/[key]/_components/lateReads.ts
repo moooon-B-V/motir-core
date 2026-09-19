@@ -68,7 +68,12 @@ export interface LateReads {
   acceptanceEvidence: Awaited<
     ReturnType<typeof acceptanceEvidenceService.getCurrentForStory>
   > | null;
-  canDecideAcceptance: boolean;
+  /**
+   * The story's AWAITING `acceptance_result` gate, whether THIS reader may decide it,
+   * and the stamp they were shown (MOTIR-4950) — what the acceptance panel's verbs
+   * press, through the contract's one decide door. `gate: null` when nothing awaits.
+   */
+  acceptanceGate: { gate: { id: string } | null; canDecide: boolean; stamp: string | null };
   /** The item's own project — the acceptance panel's Turn on flips THIS project's
    *  switch (MOTIR-5172). Already resolved for the page; carried, never re-read. */
   projectId: string;
@@ -203,6 +208,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       initialAttachments,
       acceptanceEligibility,
       acceptanceEvidence,
+      acceptanceGate,
       designEvidence,
       designGate,
       runs,
@@ -258,6 +264,26 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           })
         : null,
       showAcceptance ? acceptanceEvidenceService.getCurrentForStory(itemId, ctx) : null,
+      // Contained like the design gate's read: a failed read renders the panel
+      // without verbs, never an error the reader cannot act on.
+      showAcceptance
+        ? (async () => {
+            try {
+              const read = await approvalGatesService.getForWorkItem(
+                { workItemId: itemId, kind: 'acceptance_result' },
+                ctx,
+              );
+              const awaiting = read.gate?.state === 'awaiting' ? read.gate : null;
+              return {
+                gate: awaiting ? { id: awaiting.id } : null,
+                canDecide: awaiting !== null && read.canDecide,
+                stamp: read.stamp,
+              };
+            } catch {
+              return { gate: null, canDecide: false, stamp: null };
+            }
+          })()
+        : { gate: null, canDecide: false, stamp: null },
       designEvidenceService.getCurrentForWorkItem(itemId, ctx),
       // Contained like its neighbours: a failed gate read must not take the
       // whole late stack down, and "nothing awaiting" is the honest fallback —
@@ -398,7 +424,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       initialAttachments,
       acceptanceEligibility,
       acceptanceEvidence,
-      canDecideAcceptance: input.canEdit && input.itemStatus === 'in_review',
+      acceptanceGate,
       projectId,
       designEvidence,
       isDesignCard: input.itemType === 'design',

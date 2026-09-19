@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -9,26 +9,26 @@ import {
   CircleAlert,
   CircleCheck,
   Clock,
-  ExternalLink,
-  GitCommitHorizontal,
   RotateCcw,
   Settings,
   Sparkles,
   VideoOff,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/Button';
+import {
+  AcceptanceReceiptPlayer,
+  AcceptanceReceiptProvenance,
+} from '@/components/acceptance/AcceptanceReceiptPlayer';
 import { Switch } from '@/components/ui/Switch';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { BILLING_PLANS_PATH } from '@/components/ai/AiPaywall';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEligibility';
-import {
-  decideAcceptanceAction,
-  turnOnAcceptanceVideoAction,
-} from '@/app/(authed)/items/[key]/acceptanceActions';
-
-const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.5, 2] as const;
+import { turnOnAcceptanceVideoAction } from '@/app/(authed)/items/[key]/acceptanceActions';
+import { decideApprovalGateAction } from '@/app/(authed)/items/[key]/approvalGateActions';
+import { useRefusalCopy } from '@/components/approvals/ApprovalGateControl';
+import type { GateRefusal } from '@/lib/approvalGates/refusals';
 
 // The acceptance panel body (Story MOTIR-1627 · Subtask MOTIR-1634), built to
 // design/work-items/acceptance-panel.png. Rendered inside a ContentSectionCard
@@ -52,7 +52,16 @@ export interface AcceptancePanelProps {
   projectId: string;
   eligibility: AcceptanceVideoEligibilityDTO;
   initialEvidence: AcceptanceEvidenceDTO | null;
-  /** The reviewer may act (edit permission) AND the story is in_review. */
+  /**
+   * The story's AWAITING `acceptance_result` gate — the question the verbs answer
+   * (MOTIR-4950), or null when there is none. The verbs decide THIS gate through the
+   * contract's one decide door; there is no acceptance-specific decide path any more.
+   */
+  gate: { id: string } | null;
+  /** What the gate read handed this reader (MOTIR-5234) — pressed back with the
+   *  decision, so a press against a recording that has since moved is refused. */
+  stamp: string | null;
+  /** The gate read's AUTHORITY answer — never re-derived here. */
   canDecide: boolean;
 }
 
@@ -72,31 +81,50 @@ export interface AcceptancePanelProps {
 export const ACCEPTANCE_VIDEO_SETTINGS_HREF = '/settings/project/approvals#acceptance-video';
 
 export function AcceptancePanel({
-  workItemId,
   itemIdentifier,
   projectId,
   eligibility,
   initialEvidence,
+  gate,
+  stamp,
   canDecide,
 }: AcceptancePanelProps) {
   const t = useTranslations('acceptance');
   const router = useRouter();
   const { toast } = useToast();
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [evidence, setEvidence] = useState(initialEvidence);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [playbackRate, setPlaybackRate] = useState(1);
+  const [refusal, setRefusal] = useState<GateRefusal | null>(null);
 
   function decide(decision: 'approve' | 'request_changes') {
+    if (!gate) return;
     setError(null);
+    setRefusal(null);
     startTransition(async () => {
-      const res = await decideAcceptanceAction({ workItemId, itemIdentifier, decision });
+      // THE CONTRACT'S DECIDE DOOR (MOTIR-4950) — the same action every other gate
+      // kind is pressed through. The acceptance handler stamps the receipt and
+      // writes whatever status the decision owns; the panel only reflects it.
+      const res = await decideApprovalGateAction({
+        gateId: gate.id,
+        decision,
+        identifier: itemIdentifier,
+        stamp: stamp ?? '',
+      });
       if (!res.ok) {
-        setError(res.error);
+        setRefusal(res.refusal);
         return;
       }
-      setEvidence(res.evidence); // reconcile from the authoritative response
+      // Reconcile from the authoritative answer: the decision the door recorded is
+      // the receipt's new status (the handler stamps exactly this).
+      setEvidence((current) =>
+        current
+          ? {
+              ...current,
+              status: res.gate.state === 'approved' ? 'approved' : 'changes_requested',
+            }
+          : current,
+      );
       // The story's status pill is server-rendered elsewhere on the page → refresh
       // THAT surface (never the panel's own optimistic state).
       //
@@ -244,59 +272,7 @@ export function AcceptancePanel({
   const approved = evidence.status === 'approved';
   return (
     <div>
-      <div className="overflow-hidden rounded-(--radius-input) border border-(--el-border)">
-        {evidence.videoUrl ? (
-          <video
-            ref={videoRef}
-            src={evidence.videoUrl}
-            controls
-            className="aspect-video w-full bg-black"
-          />
-        ) : null}
-        <div className="flex items-center gap-1.5 px-3.5 pt-3">
-          <span className="mr-0.5 text-[11px] leading-none text-(--el-text-secondary)">
-            {t('player.speed')}
-          </span>
-          {PLAYBACK_SPEEDS.map((rate) => (
-            <button
-              key={rate}
-              type="button"
-              onClick={() => {
-                if (videoRef.current) videoRef.current.playbackRate = rate;
-                setPlaybackRate(rate);
-              }}
-              aria-pressed={playbackRate === rate}
-              aria-label={`${rate}×`}
-              className={`rounded-(--radius-control) px-1.5 py-0.5 text-[11px] font-semibold leading-tight transition-colors ${playbackRate === rate ? 'bg-(--el-accent) text-(--el-accent-text)' : 'text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)'}`}
-            >
-              {rate}×
-            </button>
-          ))}
-        </div>
-        {evidence.chapters.length > 0 ? (
-          <ul className="flex flex-col gap-0.5 p-3.5 pt-3">
-            {evidence.chapters.map((c, i) => (
-              <li key={`${c.tSeconds}-${i}`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (videoRef.current) videoRef.current.currentTime = c.tSeconds;
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-(--radius-control) px-2 py-1.5 text-left text-[13px] text-(--el-text) hover:bg-(--el-surface)"
-                >
-                  <span className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full bg-(--el-tint-lavender) text-[10px] font-bold text-(--el-text-strong)">
-                    {i + 1}
-                  </span>
-                  {c.label}
-                  <span className="ml-auto font-mono text-xs text-(--el-text-secondary)">
-                    {formatTime(c.tSeconds)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
+      <AcceptanceReceiptPlayer evidence={evidence} />
 
       <div className="mt-3.5 mb-3 flex flex-wrap items-center gap-2 text-[13px] text-(--el-text-secondary)">
         <CircleCheck className="h-[15px] w-[15px] text-(--el-success)" aria-hidden />
@@ -307,39 +283,7 @@ export function AcceptancePanel({
         </span>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {evidence.commitSha ? (
-          <span className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-text-secondary)">
-            <GitCommitHorizontal className="h-3 w-3 text-(--el-text-faint)" aria-hidden />
-            {evidence.commitSha.slice(0, 7)}
-          </span>
-        ) : null}
-        {evidence.ciRunUrl ? (
-          <a
-            href={evidence.ciRunUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-link)"
-          >
-            <ExternalLink className="h-3 w-3" aria-hidden />
-            {t('provenance.ciRun')}
-          </a>
-        ) : null}
-        {evidence.traceUrl ? (
-          <a
-            href={evidence.traceUrl}
-            className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-link)"
-          >
-            <ExternalLink className="h-3 w-3" aria-hidden />
-            {t('provenance.trace')}
-          </a>
-        ) : null}
-        {evidence.producedByKey ? (
-          <span className="inline-flex items-center rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-text-secondary)">
-            {evidence.producedByKey}
-          </span>
-        ) : null}
-      </div>
+      <AcceptanceReceiptProvenance evidence={evidence} className="mb-4" />
 
       {approved ? (
         <Pill severity="success">
@@ -373,12 +317,19 @@ export function AcceptancePanel({
         </Pill>
       ) : null}
 
+      {refusal ? <RefusalLine refusal={refusal} /> : null}
       {error ? <p className="mt-2 text-[13px] text-(--el-danger)">{error}</p> : null}
     </div>
   );
 }
 
-function formatTime(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+/** A refused press, in the approval frame's own words (`useRefusalCopy`) — one
+ *  vocabulary for every gate kind, never a second copy of it here. */
+function RefusalLine({ refusal }: { refusal: GateRefusal }) {
+  const { headline, nextAction } = useRefusalCopy(refusal);
+  return (
+    <p role="alert" className="mt-2 text-[13px] text-(--el-text-secondary)">
+      <span className="font-semibold text-(--el-text)">{headline}</span> {nextAction}
+    </p>
+  );
 }

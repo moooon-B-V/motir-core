@@ -222,7 +222,16 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // `pullRequestApprovalGates.ts` is a thin wrapper over it. `designEvidenceService`
       // stays a declared caller because the publish creates the design gate inside its
       // own evidence transaction, over the row it has just inserted.
-      callers: ['lib/services/designEvidenceService.ts', 'lib/services/gateSetFor.ts'],
+      // AMENDED ON THE RECORD — MOTIR-4950, 2026-09-19. `acceptanceEvidenceService` joins
+      // for the design publish's reason: a receipt publish raises the story's
+      // `acceptance_result` gate inside its own transaction, over the receipt row it has
+      // just inserted (`approval-gates.md` §1, the MOTIR-5787 amendment, point 1). Folding
+      // that raise into the gate-set predicate is MOTIR-5789's.
+      callers: [
+        'lib/services/acceptanceEvidenceService.ts',
+        'lib/services/designEvidenceService.ts',
+        'lib/services/gateSetFor.ts',
+      ],
     },
     {
       method: 'supersedeAwaitingByWorkItem',
@@ -237,7 +246,11 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // with a caller nobody calls.
       // MOTIR-5482: the approve-and-merge gate is withdrawn BY CARD, because its subject is
       // the card's whole delivery set — a moved head, a closed member or a set change.
+      // MOTIR-4950: a newer RECEIPT retires the story's awaiting acceptance question with
+      // cause `republished` — the same write, and the same lock order, as a design
+      // republish (the MOTIR-5787 amendment, point 5).
       callers: [
+        'lib/services/acceptanceEvidenceService.ts',
         'lib/services/designEvidenceService.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],

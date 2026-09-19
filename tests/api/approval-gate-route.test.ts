@@ -620,6 +620,9 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
     // calls verbatim; a NEW service method here would be a second read of the block.
     const calls = [...new Set(code.match(/\w+Service\.\w+/g) ?? [])].sort();
     expect(calls).toEqual([
+      // MOTIR-4950 — the acceptance port's read, the receipt twin of
+      // `designEvidenceService.getForGateSubject`: read by the gate's own subject id.
+      'acceptanceEvidenceService.getForGateSubject',
       'approvalGatesService.getForWorkItem',
       'designEvidenceService.getCurrentForWorkItem',
       'designEvidenceService.getForGateSubject',

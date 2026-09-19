@@ -1,12 +1,13 @@
-import { Prisma, type AcceptanceEvidenceStatus, type WorkItem } from '@/generated/prisma/client';
+import { Prisma, type WorkItem } from '@/generated/prisma/client';
 import { randomUUID } from 'node:crypto';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { routingTargetId } from '@/lib/approvalGates/routing';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
-import { workItemsService } from '@/lib/services/workItemsService';
 import { headPrivateBlob, mintPrivateUploadToken, putPrivateAttachment } from '@/lib/blob/uploader';
 import { MAX_UPLOAD_BYTES, isAllowedAcceptanceVideoType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
@@ -16,7 +17,6 @@ import {
   AcceptanceEvidenceNotAStoryError,
   AcceptanceEvidenceNotFoundError,
   AcceptanceEvidenceAlreadyApprovedError,
-  AcceptanceEvidenceNotInReviewError,
   AcceptanceEvidencePathnameError,
 } from '@/lib/acceptanceEvidence/errors';
 import { normalizeCommitSha } from '@/lib/git/commitSha';
@@ -31,16 +31,6 @@ import type {
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-
-/**
- * The status a story must sit in to be approved (MOTIR-1625) — the canonical
- * default-workflow key, matching how `workItemsService` names the same constant
- * for the session tools. A project whose custom workflow renamed `in_review`
- * simply cannot use the acceptance gate, which is the same honest outcome the
- * session tools give: better a clear refusal than an approval out of a status
- * nobody calls review.
- */
-const IN_REVIEW_STATUS_KEY = 'in_review';
 
 /**
  * Story-acceptance evidence — business logic (Story MOTIR-1627 · Subtask
@@ -214,6 +204,23 @@ async function persistEvidence(
   ctx: ServiceContext,
 ) {
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+    // ⚠️ RETIRE THE PRIOR RECORDING'S AWAITING GATE **FIRST** — before the receipt
+    // lock below, and the ORDER is the contract (MOTIR-4950; the same one
+    // `designEvidenceService` records for its pair). The decide door locks the GATE
+    // and then the receipt (the acceptance handler's stamp); taking them here in the
+    // opposite order would deadlock precisely on an approval racing a republish.
+    // `republished` is the cause AMENDMENT 6 Q5 already names for a newer version,
+    // and the MOTIR-5787 amendment (point 5) re-uses it rather than minting one.
+    //
+    // ⚠️ AN APPROVED RECEIPT IS NOT RE-ASKED BY THIS — the freeze just below refuses
+    // the whole publish, which rolls this statement back with it.
+    await approvalGateRepository.supersedeAwaitingByWorkItem(
+      args.story.id,
+      'acceptance_result',
+      'republished',
+      tx,
+    );
+
     // THE FREEZE GATE (MOTIR-2764). An `approved` receipt is the record of a
     // human watching THIS recording and signing it — superseding it destroys the
     // evidence the story was accepted on, and the unlink below hands its bytes to
@@ -271,7 +278,7 @@ async function persistEvidence(
       );
       traceAttachmentId = traceAttachment.id;
     }
-    return acceptanceEvidenceRepository.create(
+    const evidence = await acceptanceEvidenceRepository.create(
       {
         workspaceId: ctx.workspaceId,
         workItemId: args.story.id,
@@ -286,39 +293,32 @@ async function persistEvidence(
       },
       tx,
     );
-  });
-}
 
-/**
- * Lock the story's CURRENT receipt for a DECISION (MOTIR-2851) — the approval
- * side of the freeze seam, taking the very lock the publish path takes so the
- * two serialise on one row instead of interleaving.
- *
- * ⚠️ WHY THE SECOND ATTEMPT, AND WHY EXACTLY ONE. Under READ COMMITTED a
- * `SELECT … FOR UPDATE` that WAITS on a concurrent publish re-evaluates its
- * `WHERE` against the row's new version once that publish commits: `is_current`
- * is now false, so the row drops out and the statement returns NOTHING — while
- * the story does have a current receipt, the freshly inserted one, invisible to
- * this statement's snapshot. A second statement takes a NEW snapshot, sees it,
- * and locks it. That is the "publish committed first" interleaving, and without
- * the re-read it would surface as a spurious 404 on an approval that is legal.
- * Bounded at two because one publish can displace the row once; an unbounded
- * retry would spin against a republish loop rather than refuse.
- *
- * Returns null only when the story genuinely has no current receipt — and note
- * that in THAT case nothing is locked at all (`FOR UPDATE` over zero rows locks
- * nothing), which is sound here because a decision on a story with no receipt
- * is refused rather than written.
- */
-async function lockCurrentReceiptForDecision(
-  workItemId: string,
-  tx: Prisma.TransactionClient,
-): Promise<{ id: string; status: AcceptanceEvidenceStatus } | null> {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const locked = await acceptanceEvidenceRepository.lockCurrentStatusByWorkItem(workItemId, tx);
-    if (locked) return locked;
-  }
-  return null;
+    // ⚠️ THE ACCEPTANCE QUESTION, RAISED ON THE STORY (MOTIR-4950; `approval-gates.md`
+    // §1's MOTIR-5787 amendment, point 1). `args.story` is the receipt's owner, which
+    // both publish doors resolve UP from a leaf key — so the gate lands on the story
+    // whatever card the run was launched against, and never on the E2E subtask that
+    // recorded the video. The switch needs no check here: both doors refuse an
+    // ineligible project before anything is uploaded, so a receipt that reaches this
+    // line exists only on a project whose switch is ON.
+    //
+    // ONE GATE PER RECORDING, keyed on the receipt row — created a few statements
+    // above, so the partial unique `(work_item_id, kind, subject_id) WHERE awaiting`
+    // cannot collide. Routed by ADR §2's rule, answered here at creation (§6a).
+    await approvalGateRepository.create(
+      {
+        workspaceId: ctx.workspaceId,
+        projectId: args.story.projectId,
+        workItemId: args.story.id,
+        kind: 'acceptance_result',
+        subjectId: evidence.id,
+        subjectVersion: evidence.commitSha,
+        routedToId: routingTargetId(args.story),
+      },
+      tx,
+    );
+    return evidence;
+  });
 }
 
 /**
@@ -566,6 +566,24 @@ export const acceptanceEvidenceService = {
   },
 
   /**
+   * The receipt an `acceptance_result` gate ASKS ABOUT, read by the gate's own
+   * `subjectId` (MOTIR-4950) — the approval overlay's acceptance port. Never the
+   * story's CURRENT receipt: a decided gate shows the recording that was decided
+   * on, and a republish makes a different row current. Scoped to the gate's work
+   * item so a subject id from another story resolves to nothing.
+   */
+  async getForGateSubject(
+    input: { workItemId: string; subjectId: string },
+    ctx: ServiceContext,
+  ): Promise<AcceptanceEvidenceDTO | null> {
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => acceptanceEvidenceRepository.findById(input.subjectId, tx),
+    );
+    return row && row.workItemId === input.workItemId ? toAcceptanceEvidenceDto(row) : null;
+  },
+
+  /**
    * Set the acceptance status of one evidence row. `approved` stamps the actor
    * + timestamp (the audit trail behind the `in_review → done` gate the panel /
    * gate-transition card drives); any other status clears the stamp.
@@ -586,78 +604,11 @@ export const acceptanceEvidenceService = {
     return toAcceptanceEvidenceDto(row);
   },
 
-  /**
-   * The acceptance GATE (Story MOTIR-1627 · Subtask MOTIR-1634). A reviewer's
-   * decision on the current evidence moves BOTH the story and the evidence:
-   * **approve** → story `in_review → done` + evidence `approved` (stamped);
-   * **request_changes** → story `in_review → in_progress` + evidence
-   * `changes_requested`. The evidence is stamped only once the transition
-   * succeeds.
-   *
-   * **The in-review gate is enforced HERE, explicitly** (MOTIR-1625). It used to
-   * be an accident of the transition graph — the default workflow had no
-   * `in_progress → done` edge, so `updateStatus` threw for us. MOTIR-1625 adds
-   * that edge (review is optional for ordinary work), so the rule now lives in the
-   * service that means it: acceptance is the IN-REVIEW gate (Principle #18), and a
-   * story is approved out of review, never out of `todo` or mid-implementation.
-   * `request_changes` needs no such check — sending work back is only reachable
-   * from review anyway, and the workflow still gates the move.
-   *
-   * **THE OTHER HALF OF THE FREEZE SEAM (MOTIR-2851).** MOTIR-2764 made a
-   * PUBLISH refuse an already-`approved` receipt by locking the current row and
-   * reading its status under that lock. This path took no lock at all, so an
-   * approval could resolve the current row, a publish could supersede that very
-   * row and unlink its attachments, and the stamp would land on a receipt with
-   * `isCurrent: false` and no bytes — the same evidence loss the freeze exists
-   * to prevent, reached by approving a few hundred milliseconds earlier. So the
-   * decision now takes `lockCurrentStatusByWorkItem` too, and derives WHICH row
-   * to stamp under the lock, in the same transaction as the write.
-   *
-   * The race then has exactly two outcomes, both safe:
-   *   · the approval commits first → the publish's own locked read sees
-   *     `approved` and is refused (MOTIR-2764's path);
-   *   · the publish commits first → the approval stamps the NEW current row,
-   *     which is the recording the reviewer is now looking at.
-   *
-   * Note what is deliberately NOT inside that transaction: the story's own
-   * status move. `workItemsService.updateStatus` owns its transaction and
-   * Prisma cannot nest one, and the ordering the gate promises — the evidence is
-   * stamped only once the transition succeeds — is unchanged.
-   */
-  async decide(
-    input: { workItemId: string; decision: 'approve' | 'request_changes' },
-    ctx: ServiceContext,
-  ): Promise<{ evidence: AcceptanceEvidenceDTO; storyStatus: 'done' | 'in_progress' }> {
-    // A story with no receipt at all cannot be decided, and finding that out
-    // BEFORE the story moves keeps the refusal side-effect-free. This read is
-    // for EXISTENCE only — which row the decision lands on is re-derived under
-    // the lock below, never carried over from here.
-    const current = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) => acceptanceEvidenceRepository.findCurrentByWorkItem(input.workItemId, tx),
-    );
-    if (!current) throw new AcceptanceEvidenceNotFoundError(input.workItemId);
-
-    if (input.decision === 'approve') {
-      const story = await workItemsService.getWorkItem(input.workItemId, ctx);
-      if (story.status !== IN_REVIEW_STATUS_KEY) {
-        throw new AcceptanceEvidenceNotInReviewError(story.status);
-      }
-    }
-
-    const storyStatus = input.decision === 'approve' ? 'done' : 'in_progress';
-    await workItemsService.updateStatus(input.workItemId, storyStatus, ctx);
-
-    const status: AcceptanceEvidenceStatusDTO =
-      input.decision === 'approve' ? 'approved' : 'changes_requested';
-    const row = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        const locked = await lockCurrentReceiptForDecision(input.workItemId, tx);
-        if (!locked) throw new AcceptanceEvidenceNotFoundError(input.workItemId);
-        return stampStatus(locked.id, status, ctx, tx);
-      },
-    );
-    return { evidence: toAcceptanceEvidenceDto(row), storyStatus };
-  },
+  // ⚠️ `decide` WAS HERE (Story MOTIR-1627 · Subtask MOTIR-1634) and is RETIRED
+  // (MOTIR-4950). It flipped the story `in_review → done | in_progress` through its own
+  // path, so an acceptance decision was invisible to the Approvals tab, skipped
+  // `approved` and ignored the manual-flip guard. The decision now goes through the
+  // one gate contract: `acceptanceResultGateHandler` (`lib/approvalGates/`) stamps the
+  // receipt under the same lock (MOTIR-2851) and writes the status the MOTIR-5787
+  // amendment's point 7 records.
 };

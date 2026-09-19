@@ -2,6 +2,7 @@ import type { GateRefusal } from '@/lib/approvalGates/refusals';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
 // and this DTO is imported by client components. An `import type` is erased.
 import type { StampComponent } from '@/lib/approvalGates/stamp';
+import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
@@ -35,7 +36,8 @@ export type ApprovalGateKindDTO =
   | 'design_result'
   | 'decision_approval'
   | 'pull_request_approval'
-  | 'pull_request_merge';
+  | 'pull_request_merge'
+  | 'acceptance_result';
 
 /**
  * The payload every status door carries when the approval-gate guard refuses a
@@ -272,6 +274,23 @@ export interface PullRequestApprovalSubjectSummaryDTO {
 }
 
 /**
+ * WHICH RECORDING an acceptance gate is asking about, at row scale (MOTIR-4950) — the
+ * card that recorded it, the commit the run was at, and how many chapters it walks
+ * through. The video itself is on the story; a row links there.
+ */
+export interface AcceptanceResultSubjectSummaryDTO {
+  kind: 'acceptance_result';
+  /** The `AcceptanceEvidence` row the gate asks about — THIS recording. */
+  acceptanceEvidenceId: string;
+  /** The E2E card whose run recorded it (e.g. `MOTIR-5792`), when the publish named it. */
+  producedByKey: string | null;
+  /** The commit the recorded run was at, when the publish had one. */
+  commitSha: string | null;
+  /** How many chapters the recording is marked into. */
+  chapterCount: number;
+}
+
+/**
  * A gate whose KIND THIS BUILD REGISTERS NO RENDERER FOR — a real row on the
  * day this ships, not a defensive branch.
  *
@@ -284,7 +303,10 @@ export interface PullRequestApprovalSubjectSummaryDTO {
  * what `UNREGISTERED_GATE_KINDS` exists at runtime to let a surface do.
  */
 export interface UnregisteredSubjectSummaryDTO {
-  kind: Exclude<ApprovalGateKindDTO, 'design_result' | 'pull_request_approval'>;
+  kind: Exclude<
+    ApprovalGateKindDTO,
+    'design_result' | 'pull_request_approval' | 'acceptance_result'
+  >;
 }
 
 /**
@@ -300,6 +322,7 @@ export interface UnregisteredSubjectSummaryDTO {
 export type ApprovalGateSubjectSummaryDTO =
   | DesignResultSubjectSummaryDTO
   | PullRequestApprovalSubjectSummaryDTO
+  | AcceptanceResultSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */
@@ -503,6 +526,16 @@ export type ApprovalGateOverlaySubjectDTO =
       evidence: DesignEvidenceDTO;
       /** `DesignGateSubjectDTO.filesKept`, off the row rather than the state. */
       filesKept: boolean;
+    }
+  | {
+      state: 'resolved';
+      kind: 'acceptance_result';
+      /**
+       * The RECORDING the gate asks about — read by the gate's own `subjectId`, so a
+       * decided gate shows the receipt that was decided on, never whichever one is
+       * current now (MOTIR-4950).
+       */
+      evidence: AcceptanceEvidenceDTO;
     }
   | {
       state: 'resolved';

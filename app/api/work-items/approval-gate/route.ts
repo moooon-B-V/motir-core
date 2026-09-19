@@ -3,6 +3,7 @@ import { getActiveProject } from '@/lib/projects';
 import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
@@ -134,6 +135,17 @@ async function readSubject(
     // because the kind that arm answered for is no longer registered to reach it.
     case 'pull_request_approval':
       return readDevelopmentBlock(gate, item, ctx);
+    // MOTIR-4950 — the acceptance port is the RECORDING the gate asks about, read by
+    // the gate's own `subjectId` exactly as the design arm reads its evidence.
+    case 'acceptance_result': {
+      const evidence = await acceptanceEvidenceService.getForGateSubject(
+        { workItemId: gate.workItemId, subjectId: gate.subjectId },
+        ctx,
+      );
+      return evidence
+        ? { state: 'resolved', kind: 'acceptance_result', evidence }
+        : { state: 'gone' };
+    }
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error
        here until it has its own arm. */

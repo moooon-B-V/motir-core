@@ -3,6 +3,7 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
+import { acceptanceResultGateHandler } from '@/lib/approvalGates/acceptanceResultHandler';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
@@ -60,7 +61,10 @@ import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 // the per-pull-request kind has no producer (MOTIR-5611), no decider (MOTIR-5613) and no
 // surface (MOTIR-5615). It moves to the holes below rather than out of the enum: the rows it
 // already wrote are superseded, not deleted, and they still reference the value.
-export type RegisteredGateKind = 'design_result' | 'pull_request_approval';
+// MOTIR-4950 registers the THIRD: `acceptance_result`, a story's acceptance receipt — the
+// kind the approval vocabulary was generalised FROM (§1's evidence table), joining the
+// registry at last (§1's MOTIR-5787 amendment).
+export type RegisteredGateKind = 'design_result' | 'pull_request_approval' | 'acceptance_result';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -127,6 +131,10 @@ export interface GateEffect {
    *  Absent when `statusWritten` is set. */
   statusDeferredReason?:
     | 'merge_writes_done'
+    /** An acceptance approval on a story with live work under it: the parent
+     *  rollup writes `done` when the last child completes (MOTIR-4950;
+     *  `approval-gates.md` §1's MOTIR-5787 amendment, point 7). */
+    | 'rollup_writes_done'
     | 'request_changes_moves_nothing'
     | 'no_status_in_target_category';
 }
@@ -309,6 +317,7 @@ export interface GateHandler<TSubject = unknown> {
 export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   design_result: designResultGateHandler,
   pull_request_approval: pullRequestApprovalGateHandler,
+  acceptance_result: acceptanceResultGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

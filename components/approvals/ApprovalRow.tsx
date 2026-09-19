@@ -3,7 +3,7 @@
 import { useCallback, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { CircleDashed, GitPullRequest, Pencil } from 'lucide-react';
+import { CircleDashed, GitPullRequest, Pencil, Video } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
@@ -133,6 +133,11 @@ function KindGlyph({ kind }: { kind: ApprovalGateKindDTO }) {
       <GitPullRequest className="h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
     );
   }
+  if (kind === 'acceptance_result') {
+    // A story's acceptance receipt (MOTIR-4950): the recording's mark in the STORY
+    // hue — the question is about the story, so the row reads as one.
+    return <Video className="h-4 w-4 shrink-0 text-(--el-type-story)" aria-hidden />;
+  }
   return kind === 'design_result' ? (
     // `lib/issues/workItemTypeMeta.ts`'s own glyph + hue for `design` — a design
     // result IS a design, so the reader already knows this mark.
@@ -186,6 +191,18 @@ function SubjectMeta({
     // the record keeps the set line rather than the design result's *on <version>*.
     return <PullRequestSetLine subject={subject} />;
   }
+  if (subject.kind === 'acceptance_result' && decidedVersion === undefined) {
+    // THE RECORDING the question is about (MOTIR-4950): how many chapters it walks
+    // through, and the commit the recorded run was at.
+    return (
+      <span className="truncate text-xs text-(--el-text-secondary)">
+        {t('acceptanceMeta', {
+          chapters: subject.chapterCount,
+          version: subject.commitSha ? subject.commitSha.slice(0, 8) : t('noVersion'),
+        })}
+      </span>
+    );
+  }
   if (decidedVersion !== undefined) {
     // A RECORD says WHICH bytes were decided (`design/approvals` § The ROW,
     // addition 3): the first 8 characters, the whole value on hover. The tab's
@@ -212,11 +229,12 @@ function SubjectMeta({
   // (MOTIR-5614), and the one row the card contributes is the `pull_request_approval`
   // row above, whose subject names every member. A superseded row reached by URL falls
   // to `notRenderable` below with the rest of the kinds this build does not draw.
-  if (subject.kind !== 'design_result') {
+  if (subject.kind !== 'design_result' && subject.kind !== 'acceptance_result') {
     return (
       <span className="truncate text-xs text-(--el-text-secondary)">{t('notRenderable')}</span>
     );
   }
+  if (subject.kind === 'acceptance_result') return null;
   const design: DesignResultSubjectSummaryDTO = subject;
   return (
     <span className="truncate text-xs text-(--el-text-secondary)">
@@ -292,7 +310,10 @@ export function ApprovalRow({
   // overlay draws both (§ 22 Panels 4a / 4b). What they lack is anything to
   // decide, so their Decide cell keeps § 20's treatment.
   const renderable =
-    row.subject !== null && (row.subject.kind === 'design_result' || pullRequestSet);
+    row.subject !== null &&
+    (row.subject.kind === 'design_result' ||
+      row.subject.kind === 'acceptance_result' ||
+      pullRequestSet);
   const settledState: ApprovalGateStateDTO | null =
     record.section === 'decided' ? record.row.state : announcedState;
   // A HELD row is settled with no state to show: it has left the awaiting set,

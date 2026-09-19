@@ -7509,6 +7509,7 @@
       },
       "review": "查看",
       "subjectMeta": "{files, plural, other {# 个文件}} · {version}",
+      "acceptanceMeta": "{chapters, plural, =0 {无章节} other {# 个章节}} · {version}",
       "noVersion": "无版本号",
       "decidedOn": "基于 <mono>{version}</mono>",
       "subjectGone": "此项针对的设计已不存在",
@@ -7518,7 +7519,8 @@
         "design_result": "设计成果",
         "decision_approval": "决策审批",
         "pull_request_approval": "合并请求审批",
-        "pull_request_merge": "合并请求合并"
+        "pull_request_merge": "合并请求合并",
+        "acceptance_result": "验收视频"
       },
       "reviewRow": "查看 {key} {title}",
       "pullRequest": {
@@ -8460,6 +8462,19 @@
         "movesToDone": "将 {key} 标记为已完成，并解除对其等待中的工作项的阻塞。"
       }
     },
+    "acceptanceResult": {
+      "kindLabel": "验收视频",
+      "meta": {
+        "withVersion": "录制于 {version}",
+        "plain": "已录制的运行"
+      },
+      "consequence": "批准即验收 {key}。其下没有未完成的工作项后，它会标记为已完成。",
+      "confirm": {
+        "records": "记录你已验收，连同时间与该录像；",
+        "freezes": "锁定该录像，之后的运行无法替换它；",
+        "movesToDone": "在 {key} 下没有未完成的工作项后，将其标记为已完成。"
+      }
+    },
     "pullRequestApproval": {
       "kindLabel": "拉取请求",
       "meta": {
@@ -8572,7 +8587,8 @@
         "design_result": "设计审批",
         "pull_request_approval": "合并请求审批",
         "decision_approval": "决策审批",
-        "pull_request_merge": "合并审批"
+        "pull_request_merge": "合并审批",
+        "acceptance_result": "验收审批"
       },
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",
