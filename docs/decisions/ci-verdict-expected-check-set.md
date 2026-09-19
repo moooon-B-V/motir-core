@@ -163,3 +163,63 @@ Rejected, for three reasons:
 MOTIR-3823's own criteria are unchanged and still green (`tests/github/ciGreenPromotion.test.ts`): a
 repository that CANNOT report still counts as green, and a pull request with zero rows in a repository
 that CAN report is still not promoted.
+
+## AMENDMENT 1 — a set claiming to be STILL RUNNING is distrusted too, once it has claimed it too long (MOTIR-5838)
+
+**The decision above is asymmetric, and the missing half cost a green pull request its merge.** It
+taught the reconcile to distrust a recorded set asserting _I am whole_, and left the set asserting
+_I am incomplete_ trusted absolutely. But `running` is exactly what a LOST completion produces:
+`derivePrCiState` folds any live `pending` row at the head to `running`, so a webhook that never
+arrived is indistinguishable — for ever — from a lane that is genuinely still going.
+
+**Observed** (2026-09-19, PR #2994 / MOTIR-5782): GitHub reported 22 `completed/success` and 8
+`completed/skipped` at head `7bf7511e3`, **0 pending**, combined status `success`. Motir's delivery
+row read `ci: "running"`. The card sat at `implemented` from 20:20:41; the 21:00 and 21:30 reconcile
+ticks changed nothing, and re-firing the latch by hand did not repair it. There is no agent path to
+an approval gate and no UI control that re-asks the host, so the only recoveries were pushing another
+commit or an operator writing to the database.
+
+**Every path declined, by design.** The latch's reconcile excluded the case in as many words —
+_"A member with a live pending row is already `running` and already withholds, so there is no claim to
+check."_ The 30-minute tick replays lost CLOSES and re-raises missing GATES, and while the card is not
+promotable **no gate is owed**, so it raised nothing: correctly, and permanently.
+
+**The decision.**
+
+1. **The claim to distrust is AGE, not shape.** `stalePendingSha` names the head sha when a live
+   `pending` row there has been `pending` longer than `STALE_PENDING_MINUTES` (**10**, deliberately
+   the same number as `PULL_REQUEST_RECONCILE_QUIET_MINUTES` and deliberately its own constant — the
+   two measure different clocks and the agreement is a judgement about how long a lane plausibly
+   runs, not a fact either module may read off the other). `shaToReReadFromHost` is the two arms
+   asked as one question.
+2. **The no-cost property of the decision above is KEPT.** A fresh pending row is the ordinary state
+   of every pull request for its first minutes and is believed without a call. A pull request
+   qualifies under neither arm for its whole normal life, and pays exactly what it paid before.
+3. **`reconcileRecordedCheckSet` also SETTLES a row it holds as `pending` that the host reports
+   complete** — the case creating-only structurally cannot reach, because such a row is not missing.
+   **This narrows point 5 above rather than reversing it**, and the guard is what makes it safe:
+   `githubCheckRunRepository.settlePending` puts `conclusion: 'pending'` in the WHERE, so the arbiter
+   is still the row's own current value read in its own statement rather than the snapshot's belief
+   about it. It can only move a row `pending → terminal`; `pending` is the only non-terminal
+   conclusion, so no information can be lost in that direction, and **a terminal row is still never
+   overwritten by this path.**
+4. **The 30-minute tick reaches the same code**, so a card stranded this way repairs itself within
+   the hour — the guarantee that sweep already advertises for a lost merge.
+   `pullRequestReconcileService`'s still-open arm calls `promoteIfCiAlreadyGreen` for each delivered
+   card, which is the SAME edge-2 latch with the same re-read, the same `isPromotable` and the same
+   gate raise. **It adds an OCCASION, not a promotion path**, so there is no second answer to drift
+   from the first; the summary counts it as `promoted`, to be read the way `gatesRaised` asks to be
+   read — a steady trickle is an ingestion defect, and the ingestion is the bug to fix.
+
+   **Its cost is bounded by the sweep's own bounds**, which is why it is affordable on a schedule:
+   the pass already examines at most `PULL_REQUEST_RECONCILE_BATCH_SIZE` (50) candidates, only rows
+   quiet for the threshold, and only rows still delivering a live card — and within that, a card pays
+   a check-runs round trip only when its set makes one of the two claims. The ordinary open pull
+   request with a pending lane makes neither and is not asked about at all.
+
+**What is asserted** — `tests/github/ciStalePendingReread.test.ts` (the predicate, both sides of the
+threshold and its exact boundary, the stranded card promoted with its gate raised, the fresh row not
+re-read at all, a host still reporting `pending` settling nothing, a lost FAILURE recorded as a
+failure, and a terminal row never clobbered by a staler snapshot) and
+`tests/github/pullRequestReconcile.test.ts` (the tick driving the whole repair end to end against a
+stubbed host, and leaving a genuinely-running lane where it is).

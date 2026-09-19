@@ -60,7 +60,13 @@ type HostPr = {
 
 /** What GitHub currently says, per repo name + number. */
 let host: Map<string, HostPr | { status: number }>;
+/** MOTIR-5838 — what GitHub says a commit's check runs are, per `repo@sha`.
+ *  Each entry is the REST triple `[name, status, conclusion]`. */
+let hostChecks: Map<string, [name: string, status: string, conclusion: string | null][]>;
 let fetchMock: ReturnType<typeof vi.fn>;
+
+const CHECK_SUITE_ID = 87626131838;
+const STUCK_HEAD_SHA = '7bf7511e3f774e6f067c1e8bfdc029b9c48e4a89';
 
 function hostPayload(pr: HostPr) {
   return {
@@ -81,6 +87,25 @@ function installFetch() {
     const files = /\/repos\/moooon\/([^/]+)\/pulls\/(\d+)\/files/.exec(url);
     if (files)
       return new Response(JSON.stringify([{ filename: 'lib/changed.ts' }]), { status: 200 });
+    // MOTIR-5838 — what the host says a commit's check runs are. Served from a
+    // mutable map so a test can make the host disagree with the recorded set,
+    // which is the whole of the lost-completion shape.
+    const checks = /\/repos\/moooon\/([^/]+)\/commits\/([0-9a-f]+)\/check-runs/.exec(url);
+    if (checks) {
+      const runs = hostChecks.get(`${checks[1]}@${checks[2]}`) ?? [];
+      return new Response(
+        JSON.stringify({
+          total_count: runs.length,
+          check_runs: runs.map(([name, status, conclusion]) => ({
+            name,
+            status,
+            conclusion,
+            check_suite: { id: CHECK_SUITE_ID },
+          })),
+        }),
+        { status: 200 },
+      );
+    }
     const one = /\/repos\/moooon\/([^/]+)\/pulls\/(\d+)$/.exec(url);
     if (!one) return new Response('not stubbed', { status: 500 });
     const entry = host.get(`${one[1]}#${one[2]}`);
@@ -238,6 +263,7 @@ const hostReads = () =>
 beforeEach(async () => {
   await truncateAuthTables();
   host = new Map();
+  hostChecks = new Map();
   installFetch();
 });
 
@@ -590,6 +616,103 @@ describe('a card whose question went missing is repaired by the sweep', () => {
     const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
 
     expect(summary).toMatchObject({ stillOpen: 1, gatesRaised: 0 });
+    expect(await adminDb.approvalGate.count({ where: { workItemId: card.id } })).toBe(0);
+  });
+});
+
+// MOTIR-5838 — A LOST CHECK COMPLETION IS THE SAME SHAPE ONE LAYER DOWN.
+//
+// The sweep above repairs a lost CLOSE and a missing GATE. This repairs a card
+// whose recorded check set is itself wrong: a `pending` row nothing will ever
+// refresh folds the pull request to `running`, so the card is not promotable, no
+// gate is OWED, and the gate sweep raises nothing — correctly, and for ever.
+//
+// Observed on PR #2994 / MOTIR-5782: GitHub reported 22 `success` + 8 `skipped`
+// and ZERO pending at head `7bf7511e3`, while Motir's delivery row read
+// `ci: "running"`. Both the 21:00 and 21:30 ticks passed with no change.
+describe('a lost CHECK COMPLETION is repaired by the same sweep', () => {
+  /** Seed the stranded set: one lane settled, one stuck at `pending`, both
+   *  back-dated past the stale threshold. `updatedAt` is written explicitly
+   *  because the column is `@updatedAt` and a create would stamp it `now()`. */
+  async function strandedAtPending(m: Member, writtenAt: Date) {
+    const pr = await prRow(m);
+    await adminDb.githubCheckRun.createMany({
+      data: [
+        {
+          pullRequestId: pr.id,
+          commitSha: STUCK_HEAD_SHA,
+          checkName: 'TypeScript build',
+          checkSuiteId: String(CHECK_SUITE_ID),
+          conclusion: 'success',
+        },
+        {
+          pullRequestId: pr.id,
+          commitSha: STUCK_HEAD_SHA,
+          checkName: 'Vitest',
+          checkSuiteId: String(CHECK_SUITE_ID),
+          conclusion: 'pending',
+        },
+      ],
+    });
+    await adminDb.githubCheckRun.updateMany({
+      where: { pullRequestId: pr.id, commitSha: STUCK_HEAD_SHA },
+      data: { createdAt: writtenAt, updatedAt: writtenAt },
+    });
+  }
+
+  const conclusionOf = async (m: Member, checkName: string) =>
+    (
+      await adminDb.githubCheckRun.findFirstOrThrow({
+        where: { pullRequestId: (await prRow(m)).id, commitSha: STUCK_HEAD_SHA, checkName },
+      })
+    ).conclusion;
+
+  it('re-reads the host, settles the stuck row, promotes the card and raises its gate', async () => {
+    const s = await makeScenario('reconcile-stale-check@example.com');
+    const card = await linkedCard(s, 'green on the host, running in Motir', [CORE]);
+    hostOpen(card, CORE);
+    await strandedAtPending(CORE, new Date(Date.now() - 60 * 60_000));
+    await adminDb.githubPullRequest.updateMany({
+      data: { updatedAt: new Date(Date.now() - 60 * 60_000) },
+    });
+
+    // The host has every check complete and green; Motir holds one at `pending`.
+    hostChecks.set(`motir-core@${STUCK_HEAD_SHA}`, [
+      ['TypeScript build', 'completed', 'success'],
+      ['Vitest', 'completed', 'success'],
+    ]);
+
+    // The reproduction: green and mergeable on the host, and nothing on the card.
+    expect(await statusOf(card.id)).toBe('implemented');
+    expect(await adminDb.approvalGate.count({ where: { workItemId: card.id } })).toBe(0);
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ stillOpen: 1, replayed: 0, promoted: 1 });
+    expect(await conclusionOf(CORE, 'Vitest')).toBe('success');
+    expect(await statusOf(card.id)).toBe('in_review');
+    const [gate] = await adminDb.approvalGate.findMany({ where: { workItemId: card.id } });
+    expect(gate).toMatchObject({ kind: 'pull_request_approval', state: 'awaiting' });
+  });
+
+  it('leaves a lane the host still reports RUNNING exactly where it is', async () => {
+    const s = await makeScenario('reconcile-really-running@example.com');
+    const card = await linkedCard(s, 'a genuinely slow lane', [CORE]);
+    hostOpen(card, CORE);
+    await strandedAtPending(CORE, new Date(Date.now() - 60 * 60_000));
+    await adminDb.githubPullRequest.updateMany({
+      data: { updatedAt: new Date(Date.now() - 60 * 60_000) },
+    });
+    hostChecks.set(`motir-core@${STUCK_HEAD_SHA}`, [
+      ['TypeScript build', 'completed', 'success'],
+      ['Vitest', 'in_progress', null],
+    ]);
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ stillOpen: 1, promoted: 0 });
+    expect(await conclusionOf(CORE, 'Vitest')).toBe('pending');
+    expect(await statusOf(card.id)).toBe('implemented');
     expect(await adminDb.approvalGate.count({ where: { workItemId: card.id } })).toBe(0);
   });
 });
