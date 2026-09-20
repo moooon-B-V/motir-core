@@ -64,14 +64,17 @@ import zh from '@/messages/zh.json';
 // ⚠️ EVERY WAIT IS AUTHORITATIVE: a webhook's own response, the server action's response,
 // or a rail's / row's text. The holds are `chapter()` / `beat()`'s, taken after assertions.
 //
-// ⚠️ THE 17xxx BLOCK IS THIS SPEC'S (`tests/e2e-pull-request-number-blocks.test.ts`).
+// ⚠️ THE 18xxx BLOCK IS THIS SPEC'S (`tests/e2e-pull-request-number-blocks.test.ts`).
+// It was 17xxx when this spec was written, and `acceptance-gate.spec.ts` arrived from
+// `main` holding 17101/17201/17301 while this branch was in flight — the exact collision
+// that guard exists to catch, caught by it.
 
 test.describe.configure({ timeout: 600_000 });
 
 const PRS = {
-  retryable: { number: 17101 },
-  conflict: { number: 17201 },
-  setting: { number: 17301 },
+  retryable: { number: 18101 },
+  conflict: { number: 18201 },
+  setting: { number: 18301 },
 } as const;
 type Scenario = keyof typeof PRS;
 
@@ -79,7 +82,7 @@ const CONTROL_PATH = process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH']!;
 const JOURNAL_PATH = process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH']!;
 const WEB = `${WEB_REPO.owner}/${WEB_REPO.name}`;
 const GROUP_SHA = '5e1ec7ed5e1ec7ed5e1ec7ed5e1ec7ed5e1ec7ed';
-const CHECK_URL = 'https://github.com/motir-projects-e2e/amerge-web/actions/runs/17/job/1';
+const CHECK_URL = 'https://github.com/motir-projects-e2e/amerge-web/actions/runs/18/job/1';
 /** The captured merge-group check's own name (`check-run-failed-merge-group.json`). */
 const CHECK_NAME = 'Vitest (7/12)';
 const pra = en.approvalGate.pullRequestApproval;
