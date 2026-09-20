@@ -590,6 +590,8 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
       howToTest?: ReturnType<typeof recordDto>;
       designEvidence?: { id: string } | null;
       isDesignCard?: boolean;
+      acceptanceEvidence?: unknown;
+      acceptanceGate?: unknown;
     } = {},
   ): ApprovalGateOverlayReadDTO {
     return readOf({
@@ -604,10 +606,10 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
         deliveries: [],
         howToTest: over.howToTest ?? recordDto(),
         designEvidence: (over.designEvidence ?? null) as never,
-        // A pull-request subject on a card with no receipt — the story-run arm is
-        // `development-acceptance-primary.test.tsx`'s (MOTIR-5790).
-        acceptanceEvidence: null,
-        acceptanceGate: null,
+        // A pull-request subject on a card with no receipt, unless the caller gives one:
+        // a STORY RUN ports its recording here, leading the block (MOTIR-5790).
+        acceptanceEvidence: (over.acceptanceEvidence ?? null) as never,
+        acceptanceGate: (over.acceptanceGate ?? null) as never,
         isDesignCard: over.isDesignCard ?? false,
         members: [],
       },
@@ -750,6 +752,71 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
     ).toBeTruthy();
   });
 
+  it('a STORY RUN carries its RECORDING inside the same port, leading it (MOTIR-5790)', async () => {
+    // The queue lists such a story by its ACCEPTANCE gate, and its row opens this overlay
+    // — so this port is where that reader meets the pull requests the one press merges.
+    const dialog = await openPullRequestGate({
+      acceptanceEvidence: {
+        id: 'ae-1',
+        workItemId: 'wi-1',
+        status: 'pending',
+        videoUrl: 'https://blob.example/run.webm',
+        mimeType: 'video/webm',
+        sizeBytes: 1024,
+        traceUrl: null,
+        chapters: [{ label: 'Run the whole story', tSeconds: 4 }],
+        commitSha: 'c0ffee1',
+        ciRunUrl: null,
+        producedByKey: 'ACME-24',
+        approvedById: null,
+        approvedAt: null,
+        createdAt: '2026-09-19T14:40:00.000Z',
+      },
+      acceptanceGate: { ...GATE, id: 'gate-acc', kind: 'acceptance_result', state: 'awaiting' },
+    });
+
+    const port = within(dialog).getByRole('group', { name: en.approvalGate.port.label });
+    const slot = within(port).getByTestId('acceptance-development-slot');
+    // …and it LEADS: the recording, then How to test, then the rows (the design's order).
+    const howToTest = within(port).getByRole('group', {
+      name: en.github.development.howToTest.title,
+    });
+    expect(slot.compareDocumentPosition(howToTest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(slot).getByRole('button', { name: /Run the whole story/ })).toBeTruthy();
+  });
+
+  it('an ACCEPTED recording beside the merge question says the video STANDS, not that it is being asked again', async () => {
+    const dialog = await openPullRequestGate({
+      acceptanceEvidence: {
+        id: 'ae-1',
+        workItemId: 'wi-1',
+        status: 'approved',
+        videoUrl: null,
+        mimeType: 'video/webm',
+        sizeBytes: 1024,
+        traceUrl: null,
+        chapters: [],
+        commitSha: 'c0ffee1',
+        ciRunUrl: null,
+        producedByKey: 'ACME-24',
+        approvedById: 'user-2',
+        approvedAt: '2026-09-19T15:02:00.000Z',
+        createdAt: '2026-09-19T14:40:00.000Z',
+      },
+      acceptanceGate: {
+        ...GATE,
+        id: 'gate-acc',
+        kind: 'acceptance_result',
+        state: 'approved',
+        decidedByLabel: 'Ada L.',
+        decidedAt: '2026-09-19T15:02:00.000Z',
+      },
+    });
+
+    const slot = within(dialog).getByTestId('acceptance-development-slot');
+    expect(within(slot).getByText(/the video stands/)).toBeTruthy();
+  });
+
   it('a DESIGN card carries its design result inside the same port (state 7)', async () => {
     const dialog = await openPullRequestGate({
       designEvidence: { id: 'ev-9' },
@@ -766,5 +833,183 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
     expect(
       design.compareDocumentPosition(howToTest) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+});
+
+// ── THE ACCEPTANCE PORT (Story MOTIR-4949 · Subtask MOTIR-5792) ──────────────────────
+//
+// The overlay renders a story's RECORDING in the same frame every other kind uses, with
+// the shared verbs — and it is the one place an acceptance decision is submitted, since
+// MOTIR-5790 took the verbs off the story page. This is that arm, which the route's own
+// tests reach from the other side (`tests/api/approval-gate-route.test.ts`).
+describe('the ACCEPTANCE port — a story\u2019s recording, in the shared frame', () => {
+  const ACCEPTANCE_GATE: ApprovalGateDTO = {
+    ...GATE,
+    id: 'gate-acc',
+    kind: 'acceptance_result',
+    subjectId: 'ae-1',
+    subjectVersion: 'c0ffee1234567890',
+  };
+
+  const RECEIPT = {
+    id: 'ae-1',
+    workItemId: 'wi-1',
+    status: 'pending',
+    videoUrl: 'https://blob.example/run.webm',
+    mimeType: 'video/webm',
+    sizeBytes: 1024,
+    traceUrl: null,
+    chapters: [{ label: 'Open the story', tSeconds: 0 }],
+    commitSha: 'c0ffee1234567890',
+    ciRunUrl: null,
+    producedByKey: 'GATE-24',
+    approvedById: null,
+    approvedAt: null,
+    createdAt: '2026-09-19T14:40:00.000Z',
+  };
+
+  async function openAcceptanceGate() {
+    openAt('GATE-1', 'acceptance_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: ACCEPTANCE_GATE,
+        subject: {
+          state: 'resolved',
+          kind: 'acceptance_result',
+          evidence: RECEIPT,
+        } as never,
+      }),
+    );
+    await renderOverlay();
+    return screen.getByRole('dialog');
+  }
+
+  it('renders the recording as the port, named by the ACCEPTANCE kind and its version', async () => {
+    const dialog = await openAcceptanceGate();
+
+    expect(within(dialog).getByText(en.approvalGate.acceptanceResult.kindLabel)).toBeTruthy();
+    expect(
+      within(dialog).getByText(
+        en.approvalGate.acceptanceResult.meta.withVersion.replace('{version}', 'c0ffee12'),
+      ),
+    ).toBeTruthy();
+    // The recording itself — the same player the story page shows.
+    expect(within(dialog).getByRole('button', { name: /Open the story/ })).toBeTruthy();
+  });
+
+  it('carries the SHARED verbs, and a press submits the decision through the one door', async () => {
+    const dialog = await openAcceptanceGate();
+    decideApprovalGateAction.mockResolvedValue({
+      ok: true,
+      gate: { ...ACCEPTANCE_GATE, state: 'approved', decidedByLabel: 'Ada L.' },
+      filesKept: null,
+    });
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: en.approvalGate.verb.approve }));
+    });
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole('button', {
+          name: en.approvalGate.confirm.proceed.replace('{verb}', en.approvalGate.verb.approve),
+        }),
+      );
+    });
+
+    // ⚠️ THE STAMP THE READ HANDED OVER, never one fetched at press time (MOTIR-5235).
+    expect(decideApprovalGateAction).toHaveBeenCalledWith({
+      gateId: 'gate-acc',
+      decision: 'approve',
+      identifier: 'GATE-1',
+      stamp: 'v1.stamp-the-read-handed-over',
+    });
+    expect(announceGateDecided).toHaveBeenCalled();
+  });
+
+  it('a receipt with NO version names the recording plainly rather than an empty citation', async () => {
+    openAt('GATE-1', 'acceptance_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: { ...ACCEPTANCE_GATE, subjectVersion: null },
+        subject: { state: 'resolved', kind: 'acceptance_result', evidence: RECEIPT } as never,
+      }),
+    );
+    await renderOverlay();
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(en.approvalGate.acceptanceResult.meta.plain)).toBeTruthy();
+  });
+
+  it('a DECIDED acceptance keeps its port and loses its verbs — state `B`, the read\u2019s answer', async () => {
+    openAt('GATE-1', 'acceptance_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: {
+          ...ACCEPTANCE_GATE,
+          state: 'approved',
+          decidedByLabel: 'Ada L.',
+          decidedAt: '2026-09-19T15:02:00.000Z',
+        },
+        canDecide: false,
+        subject: { state: 'resolved', kind: 'acceptance_result', evidence: RECEIPT } as never,
+      }),
+    );
+    await renderOverlay();
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: /Open the story/ })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: en.approvalGate.verb.approve })).toBeNull();
+  });
+
+  it('a STALE press is refused in place, and the recording\u2019s own *Show the current version* re-reads it (MOTIR-5792)', async () => {
+    // The acceptance arm mounts its OWN frame, so its re-read handler is a separate line
+    // of code from the design arm's — asserted here rather than assumed to follow.
+    openAt('GATE-1', 'acceptance_result');
+    const acceptanceRead = (over: Partial<ApprovalGateOverlayReadDTO> = {}) =>
+      readOf({
+        gate: ACCEPTANCE_GATE,
+        subject: { state: 'resolved', kind: 'acceptance_result', evidence: RECEIPT } as never,
+        ...over,
+      });
+    fetchApprovalGateOverlay
+      .mockResolvedValueOnce(acceptanceRead())
+      .mockResolvedValueOnce(acceptanceRead({ stamp: 'v1.the-current-recording' }));
+    decideApprovalGateAction.mockResolvedValue({
+      ok: false,
+      refusal: { tag: 'APPROVAL_GATE_STALE_SUBJECT', moved: ['subject'] },
+    });
+    await renderOverlay();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    });
+    const alert = screen.getByRole('alert');
+    expect(within(alert).getByText(en.approvalGate.refusal.stale.subject)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(
+        within(alert).getByRole('button', { name: en.approvalGate.refusal.stale.control }),
+      );
+    });
+
+    // The SAME read, run again — the recording is re-read in place, never navigated to.
+    expect(fetchApprovalGateOverlay).toHaveBeenCalledTimes(2);
+    expect(fetchApprovalGateOverlay.mock.calls[1]!.slice(0, 2)).toEqual([
+      'GATE-1',
+      'acceptance_result',
+    ]);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a recording that no longer resolves is the GONE state, not an empty player', async () => {
+    openAt('GATE-1', 'acceptance_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({ gate: ACCEPTANCE_GATE, subject: { state: 'gone' } as never }),
+    );
+    await renderOverlay();
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(en.workbench.approvals.subjectGone)).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: en.approvalGate.verb.approve })).toBeNull();
   });
 });

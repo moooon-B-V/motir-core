@@ -50,6 +50,7 @@ const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { approvalGateRepository } = await import('@/lib/repositories/approvalGateRepository');
 const { workItemsService } = await import('@/lib/services/workItemsService');
+const { acceptanceEvidenceService } = await import('@/lib/services/acceptanceEvidenceService');
 
 let fx: WorkItemFixture;
 
@@ -126,6 +127,36 @@ async function publish(card: WorkItem) {
     },
     fx.ctx,
   );
+}
+
+/**
+ * A STORY in review with a published acceptance RECEIPT — a REAL publish through the
+ * mint-then-register door, so the story's `awaiting` acceptance gate is raised by the
+ * product rather than written here (Story MOTIR-4949 · Subtask MOTIR-5792).
+ */
+async function storyWithReceipt() {
+  const created = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'story', title: 'Hold a basket for fifteen minutes' },
+    fx.ctx,
+  );
+  await workItemsService.updateStatus(created.id, 'in_progress', fx.ctx);
+  await workItemsService.updateStatus(created.id, 'in_review', fx.ctx);
+  const story = await adminDb.workItem.findUniqueOrThrow({ where: { id: created.id } });
+  const tokens = await acceptanceEvidenceService.createUploadTokens(
+    { workItemId: story.id, hasTrace: false },
+    fx.ctx,
+  );
+  store.set(tokens.video.pathname, { contentType: 'video/webm', size: 4096 });
+  const receipt = await acceptanceEvidenceService.recordFromPathnames(
+    {
+      workItemId: story.id,
+      videoPathname: tokens.video.pathname,
+      chapters: [{ label: 'Open the story', tSeconds: 0 }],
+      commitSha: shaFor('receipt'),
+    },
+    fx.ctx,
+  );
+  return { story, receipt };
 }
 
 /** A gate row written directly, for the shapes no shipped path creates yet. */
@@ -459,6 +490,57 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
 
     expect(body.subject).toMatchObject({ state: 'resolved', kind: 'design_result' });
     expect(body.subject.evidence.id).toBe(evidence.id);
+  });
+
+  it('an ACCEPTANCE gate beside an awaiting merge gate is ported by the Development block — the reader sees what one press merges (MOTIR-5790)', async () => {
+    // A STORY RUN: the story's own pull requests are what the acceptance press merges, so
+    // the port is the Development block with the recording leading it — the design arm's
+    // rule, one kind over (§1's MOTIR-5787 amendment, point 2).
+    const { story, receipt } = await storyWithReceipt();
+    await deliver(story, { name: 'core', number: 41 });
+    await rawGate(story, 'pull_request_approval', story.id);
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: story.identifier, kind: 'acceptance_result' })
+    ).json();
+
+    // The GATE is still the acceptance gate — it is what the frame presses.
+    expect(body.gate).toMatchObject({ kind: 'acceptance_result', state: 'awaiting' });
+    expect(body.subject.kind).toBe('pull_request_approval');
+    expect(body.subject.pullRequests.map((pr: { number: number }) => pr.number)).toEqual([41]);
+    expect(body.subject.acceptanceEvidence.id).toBe(receipt.id);
+    expect(body.subject.acceptanceGate.kind).toBe('acceptance_result');
+  });
+
+  it('an ACCEPTANCE gate with NO awaiting merge question keeps its own port — the recording alone', async () => {
+    // A SINGLE-CARD run: the story delivers nothing of its own, so there is nothing for
+    // the press to merge and the port is the receipt (point 3).
+    const { story, receipt } = await storyWithReceipt();
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: story.identifier, kind: 'acceptance_result' })
+    ).json();
+
+    expect(body.subject).toMatchObject({ state: 'resolved', kind: 'acceptance_result' });
+    expect(body.subject.evidence.id).toBe(receipt.id);
+    expect(body.subject.evidence.chapters).toHaveLength(1);
+  });
+
+  it('an ACCEPTANCE gate whose recording no longer resolves is GONE — the cross-subject guard holds', async () => {
+    const { story } = await storyWithReceipt();
+    // A gate pointing at a receipt that is not this story's current one — what a reader
+    // meets after the bytes behind a superseded version have been reclaimed.
+    await adminDb.approvalGate.deleteMany({ where: { workItemId: story.id } });
+    await rawGate(story, 'acceptance_result', 'acceptance-evidence-that-was-reclaimed');
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: story.identifier, kind: 'acceptance_result' })
+    ).json();
+
+    expect(body.subject).toEqual({ state: 'gone' });
   });
 
   it('an approve-to-merge gate whose delivery set has EMPTIED is gone — the handler answers null for it', async () => {
