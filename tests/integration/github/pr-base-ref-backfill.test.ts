@@ -55,6 +55,9 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // MOTIR-5843 — the provenance cases stub `GITHUB_FALLBACK_ORG`; an env stub that
+  // outlives its test silently re-classifies every later repository.
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
 });
 
@@ -67,6 +70,7 @@ afterAll(async () => {
  *  `githubInstallationService.persistInstallation` writes them. */
 async function makeConnected(
   repos: Array<typeof CORE> = [CORE],
+  owner = 'moooon-B-V',
 ): Promise<{ fx: WorkItemFixture; repoIds: Record<string, string> }> {
   const fx = await makeWorkItemFixture();
   const inst = await adminDb.githubInstallation.create({
@@ -86,7 +90,7 @@ async function makeConnected(
         workspaceId: fx.workspaceId,
         organizationId: fx.workspace.organizationId,
         repoId: r.providerRepoId,
-        owner: 'moooon-B-V',
+        owner,
         name: r.name,
         defaultBranch: r.defaultBranch,
         archived: false,
@@ -698,5 +702,80 @@ describe('the re-evaluation path, without any delivery', () => {
       'illegal_transition',
     );
     expect(await statusOf(item.id)).toBe('todo');
+  });
+});
+
+// ── PROVENANCE: which App this backfill mints through (MOTIR-5843) ───────────
+//
+// `sweepRepo` holds `repo.owner` and passed the seam nothing, so a hosted
+// repository's sweep minted through the user-facing App — which is not installed
+// on it. The refusal lands in `report.error` as a per-repo string and the rows
+// stay unanswered, so the completion gate keeps holding cards on a base ref that
+// could have been read at any time.
+//
+// ⚠️ MEASURED ON THE TOKEN THE READ CARRIED. `appAuth` is mocked at module scope
+// in this file (a real mint needs an App private key), so the "wire only one App"
+// arm cannot bite here; the mint stamps the resolved ROLE into its token instead.
+describe('the App is chosen by the repository’s provenance', () => {
+  function serveBasesCapturingToken(bases: Record<number, string>): { token: () => string } {
+    let seen = '';
+    fetchMock.mockImplementation(async (url: string, init?: unknown) => {
+      const bearer = (init as { headers?: Record<string, string> } | undefined)?.headers?.[
+        'authorization'
+      ];
+      if (bearer) seen = bearer.replace(/^Bearer /, '');
+      const number = Number(url.split('/').pop());
+      const ref = bases[number];
+      return ref === undefined
+        ? new Response('{}', { status: 404 })
+        : new Response(JSON.stringify({ number, base: { ref } }), { status: 200 });
+    });
+    return { token: () => seen };
+  }
+
+  async function stampTokensWithRole() {
+    const { mintInstallationToken } = await import('@/lib/github/appAuth');
+    vi.mocked(mintInstallationToken).mockImplementation(async (_id, role) => ({
+      token: `ghs_${role ?? 'defaulted'}`,
+      expiresAt: new Date(Date.now() + 3_600_000),
+    }));
+  }
+
+  afterEach(async () => {
+    const { mintInstallationToken } = await import('@/lib/github/appAuth');
+    vi.mocked(mintInstallationToken).mockImplementation(async () => ({
+      token: 'ghs_test',
+      expiresAt: new Date(Date.now() + 3_600_000),
+    }));
+  });
+
+  it('a HOSTED repository is read with a PROVISIONING-App token', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'moooon-B-V');
+    await stampTokensWithRole();
+    const { fx, repoIds } = await makeConnected();
+    const item = await heldItem(fx, ['motir-core']);
+    await preColumnMergedRow({ repoId: repoIds['motir-core']!, number: 2121, workItemId: item.id });
+    const captured = serveBasesCapturingToken({ 2121: 'main' });
+
+    const report = await pullRequestBaseRefBackfillService.backfillMissingBaseRefs(APPLY);
+
+    expect(report.repos[0]!.error).toBeUndefined();
+    expect(report.repos[0]!.filled).toBe(1);
+    expect(captured.token()).toBe('ghs_provisioning');
+  });
+
+  it('CONTROL — a CUSTOMER-OWNED repository is still read with a USER-FACING token, with the provisioning org configured', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
+    await stampTokensWithRole();
+    const { fx, repoIds } = await makeConnected([CORE], 'acme-corp');
+    const item = await heldItem(fx, ['motir-core']);
+    await preColumnMergedRow({ repoId: repoIds['motir-core']!, number: 2121, workItemId: item.id });
+    const captured = serveBasesCapturingToken({ 2121: 'main' });
+
+    const report = await pullRequestBaseRefBackfillService.backfillMissingBaseRefs(APPLY);
+
+    expect(report.repos[0]!.error).toBeUndefined();
+    expect(report.repos[0]!.filled).toBe(1);
+    expect(captured.token()).toBe('ghs_user-facing');
   });
 });

@@ -55,6 +55,9 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // MOTIR-5843 — the provenance cases stub `GITHUB_FALLBACK_ORG`; an env stub that
+  // outlives its test silently re-classifies every later repository.
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
 });
 
@@ -65,7 +68,9 @@ afterAll(async () => {
 
 /** A workspace + project + a connected GitHub repo, mirrored exactly as
  *  `githubInstallationService.persistInstallation` writes them. */
-async function makeConnectedRepo(): Promise<{ fx: WorkItemFixture; repoId: string }> {
+async function makeConnectedRepo(
+  owner = 'moooon-B-V',
+): Promise<{ fx: WorkItemFixture; repoId: string }> {
   const fx = await makeWorkItemFixture();
   const inst = await adminDb.githubInstallation.create({
     data: {
@@ -82,7 +87,7 @@ async function makeConnectedRepo(): Promise<{ fx: WorkItemFixture; repoId: strin
       workspaceId: fx.workspaceId,
       organizationId: fx.workspace.organizationId,
       repoId: REPO_PROVIDER_ID,
-      owner: 'moooon-B-V',
+      owner,
       name: 'motir-core',
       defaultBranch: 'main',
       archived: false,
@@ -597,5 +602,76 @@ describe('composed with the provenance backfill', () => {
     expect(recoveredRow.implementationHarness).toBeNull();
     expect(recoveredRow.implementationModel).toBeNull();
     expect(stampedRow.implementationSource).toBe('manual');
+  });
+});
+
+// ── PROVENANCE: which App this sweep mints through (MOTIR-5843) ──────────────
+//
+// `sweepRepo` holds `repo.owner` and passed the seam nothing, so every hosted
+// repository's sweep minted through the user-facing App — which is not installed
+// on it. The refusal is caught and written into `report.error` as a per-repo
+// string, so the sweep reports a clean run over a repository it never read: the
+// backfill's own silent-success shape.
+//
+// ⚠️ MEASURED ON THE TOKEN THE LISTING CARRIED. `appAuth` is mocked at module
+// scope in this file (see the header — a real mint needs an App private key), so
+// the "wire only one App" arm cannot bite here; instead the mint stamps the
+// resolved ROLE into its token and the listing request is read back for it.
+describe('the App is chosen by the repository’s provenance', () => {
+  /** Serve the listing AND record the bearer it presented. */
+  function serveListingCapturingToken(rows: Record<string, unknown>[]): { token: () => string } {
+    let seen = '';
+    fetchMock.mockImplementation(async (url: string, init?: unknown) => {
+      const bearer = (init as { headers?: Record<string, string> } | undefined)?.headers?.[
+        'authorization'
+      ];
+      if (bearer) seen = bearer.replace(/^Bearer /, '');
+      return url.endsWith('page=1')
+        ? new Response(JSON.stringify(rows), { status: 200 })
+        : new Response('[]', { status: 200 });
+    });
+    return { token: () => seen };
+  }
+
+  /** Stamp the resolved ROLE into the minted token. Restored after each case so
+   *  the implementation cannot outlive the describe that set it. */
+  async function stampTokensWithRole() {
+    const { mintInstallationToken } = await import('@/lib/github/appAuth');
+    vi.mocked(mintInstallationToken).mockImplementation(async (_id, role) => ({
+      token: `ghs_${role ?? 'defaulted'}`,
+      expiresAt: new Date(Date.now() + 3_600_000),
+    }));
+  }
+
+  afterEach(async () => {
+    const { mintInstallationToken } = await import('@/lib/github/appAuth');
+    vi.mocked(mintInstallationToken).mockImplementation(async () => ({
+      token: 'ghs_test',
+      expiresAt: new Date(Date.now() + 3_600_000),
+    }));
+  });
+
+  it('a HOSTED repository is swept with a PROVISIONING-App token', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'moooon-B-V');
+    await stampTokensWithRole();
+    await makeConnectedRepo();
+    const captured = serveListingCapturingToken([ghPull(1)]);
+
+    const report = await historicalPullRequestBackfillService.backfillMergedPullRequests(APPLY);
+
+    expect(report.repos[0]?.error).toBeUndefined();
+    expect(captured.token()).toBe('ghs_provisioning');
+  });
+
+  it('CONTROL — a CUSTOMER-OWNED repository is still swept with a USER-FACING token, with the provisioning org configured', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
+    await stampTokensWithRole();
+    await makeConnectedRepo('acme-corp');
+    const captured = serveListingCapturingToken([ghPull(1)]);
+
+    const report = await historicalPullRequestBackfillService.backfillMergedPullRequests(APPLY);
+
+    expect(report.repos[0]?.error).toBeUndefined();
+    expect(captured.token()).toBe('ghs_user-facing');
   });
 });
