@@ -13,6 +13,7 @@ import {
   seedPendingEvidence,
   setProjectAcceptanceVideo,
 } from './_helpers/acceptance-seed';
+import { acceptanceSection, decideAcceptanceInOverlay } from './_helpers/acceptance-decide';
 
 // The story-acceptance E2E + the SELF-TEST DOGFOOD (Story MOTIR-1627 · Subtask
 // MOTIR-1638). Runs under playwright.acceptance.config.ts (cloud-on + video:'on'):
@@ -72,8 +73,12 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
     await expect(page.getByRole('heading', { name: 'Acceptance', exact: true })).toBeVisible({
       timeout: 60_000,
     });
-    // The chaptered player + the gate buttons are present (State A).
-    await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+    // The chaptered player + the question's one DOOR are present (State A). The page
+    // hands the decision to the approval overlay (MOTIR-5229 · MOTIR-5790), so what it
+    // shows here is the band, never a verb.
+    await expect(
+      acceptanceSection(page).getByRole('link', { name: 'Review & approve' }),
+    ).toBeVisible();
     // BY ROLE: a chapter marker is a `<button>` in `AcceptancePanel`'s chapter
     // list, so the accessibility tree excludes the streamed copy that a
     // page-rooted `getByText` resolves (MOTIR-4822). The name matches on a
@@ -83,14 +88,14 @@ test('paid + on → the reviewer plays the video and Approves → the story goes
   await beat();
 
   await chapter('Review the evidence + Approve', async () => {
-    await page.getByRole('button', { name: 'Approve', exact: true }).click();
-    // Authoritative: the server response reconciles the panel to the Approved
-    // pill (the response IS the confirmation — the inline-edit rule).
-    // SCOPED TO `main`: the pill is a `Pill` with no role of its own, and the
-    // item page streams its late stack behind an in-page `<Suspense>`, so React
-    // leaves a resolved copy in `<div hidden id="S:0">` at the end of `<body>` —
-    // outside `main`, which is what this scope drops (`CLAUDE.md` § *a boundary
-    // makes every unscoped locator a race*).
+    // Through the ONE door, which is where every decision in the product is submitted.
+    await decideAcceptanceInOverlay(page, 'approve');
+    // The panel keeps the RECORD — the shared approval frame since MOTIR-5792, so the
+    // decision reads back on the page it was made from.
+    // SCOPED TO `main`: the item page streams its late stack behind an in-page
+    // `<Suspense>`, so React leaves a resolved copy in `<div hidden id="S:0">` at the end
+    // of `<body>` — outside `main`, which is what this scope drops (`CLAUDE.md` § *a
+    // boundary makes every unscoped locator a race*).
     await expect(acceptance(page).getByText('Approved', { exact: true })).toBeVisible();
   });
   await beat();
@@ -140,7 +145,9 @@ test('the acceptance video is served through the authenticated content route —
   await anon.dispose();
 });
 
-test('paid + on → Request changes sends the story back to In Progress', async ({ page }) => {
+test('paid + on → Request changes records the decision and moves the story NOWHERE', async ({
+  page,
+}) => {
   const seed = await seedBillingOwner(page, 'revise@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
   await setProjectAcceptanceVideo(seed.projectId, true);
@@ -149,23 +156,22 @@ test('paid + on → Request changes sends the story back to In Progress', async 
   await seedPendingEvidence(seed.workspaceId, seed.ownerId, story.id);
 
   await page.goto(`/items/${story.identifier}`);
-  await page.getByRole('button', { name: 'Request changes' }).click();
-  // ⚠️ THIS ASSERTION IS ABOUT THE TOAST, AND ALWAYS WAS — now it says so.
-  // `acceptance.toast.changesRequested` and `acceptance.status.changesRequested`
-  // are the SAME STRING, and only the toast is ever on screen here: the panel's
-  // `changes_requested` pill sits behind the `canDecide` arm, which is still
-  // true for a reviewer who may decide again, so the pill never renders. The
-  // toast does, portalled to the end of `<body>` by Radix's viewport — outside
-  // `<main>`, which is why scoping it there found nothing and took the
-  // `billing-cloud` leg red. `getByRole('status')` is what Radix gives a toast
-  // root, it is this tree's own convention for addressing one (`import.spec.ts`,
-  // `cloud-audit-coverage.spec.ts`), and a portal is unreachable by a lingering
-  // route subtree — so this is a stronger locator than the page-rooted original,
-  // not a retreat to it.
-  await expect(page.getByRole('status').filter({ hasText: 'Changes requested' })).toBeVisible();
+  await decideAcceptanceInOverlay(page, 'request_changes');
+  // ⚠️ THIS ASSERTION WAS ABOUT THE TOAST, and the toast belonged to the panel's own
+  // verbs — which MOTIR-5790 retired when the decision moved to the approval overlay.
+  // What replaces it is not a retreat: the panel now keeps the RECORD in the shared
+  // approval frame (MOTIR-5792), so the decision is readable on the page it was made
+  // from, by the same words, and it SURVIVES — where a toast is gone in seconds and
+  // could only ever be caught in flight.
+  await expect(acceptance(page).getByText('Changes requested', { exact: true })).toBeVisible();
   await page.reload();
+  // ⚠️ `in_review`, NOT `in_progress` (Story MOTIR-4949 · Subtask MOTIR-4950). The bespoke
+  // acceptance path moved the story back on a send-back; joining the ONE approve language
+  // retired that write, because every kind's *Request changes* records a decision and
+  // moves nothing (`approval-gates.md` §3). The committed read is kept, and now pins the
+  // ABSENCE of the write — which is the half a future regression would break silently.
   const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
-  expect(persisted.status).toBe('in_progress');
+  expect(persisted.status).toBe('in_review');
 });
 
 test('paid + on, no evidence yet → the pending "waiting for the video" state', async ({ page }) => {
@@ -182,7 +188,9 @@ test('paid + on, no evidence yet → the pending "waiting for the video" state',
   await expect(
     page.getByRole('heading', { name: 'Waiting for the acceptance video' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+  await expect(acceptanceSection(page).getByRole('link', { name: 'Review & approve' })).toHaveCount(
+    0,
+  );
 });
 
 test('paid + toggle OFF (admin) → the Turn-on switch, and Go to settings lands ON the switch', async ({
@@ -234,7 +242,9 @@ test('no plan → the Upgrade CTA (no player)', async ({ page }) => {
     'href',
     '/settings/organization/billing',
   );
-  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+  await expect(acceptanceSection(page).getByRole('link', { name: 'Review & approve' })).toHaveCount(
+    0,
+  );
 });
 
 test('the board shows the "Awaiting acceptance" badge, cleared on approve', async ({ page }) => {
@@ -254,7 +264,7 @@ test('the board shows the "Awaiting acceptance" badge, cleared on approve', asyn
 
   // Approve from the detail page, then the badge clears on the board.
   await page.goto(`/items/${story.identifier}`);
-  await page.getByRole('button', { name: 'Approve', exact: true }).click();
+  await decideAcceptanceInOverlay(page, 'approve');
   await expect(acceptance(page).getByText('Approved', { exact: true })).toBeVisible();
   await page.goto(`/boards`);
   await expect(boardRegion(page).getByText('Awaiting acceptance')).toHaveCount(0);
