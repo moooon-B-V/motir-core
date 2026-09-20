@@ -41,6 +41,8 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { foldersService } from '@/lib/services/foldersService';
+import { plansService } from '@/lib/services/plansService';
+import { FOLDER_REF_PREFIX } from '@/lib/plans/refs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { waitForDerivedStatus } from './derivedStatus';
 
@@ -703,6 +705,8 @@ export interface FolderRoadmapSeed {
   email: string;
   password: string;
   projectKey: string;
+  projectId: string;
+  ctx: ServiceContext;
   epicTitles: [string, string];
   looseBugTitle: string;
   /** Root folder "Archive" — holds child folder "Imports" and three filed items. */
@@ -774,6 +778,8 @@ export async function seedFolderRoadmap(email: string): Promise<FolderRoadmapSee
     email,
     password: ROADMAP_SEED_PASSWORD,
     projectKey,
+    projectId,
+    ctx,
     epicTitles,
     looseBugTitle,
     archiveId: archive.id,
@@ -783,4 +789,46 @@ export async function seedFolderRoadmap(email: string): Promise<FolderRoadmapSee
     deepBugTitle,
     sprintBugTitle: archivedTitles[1],
   };
+}
+
+export interface FolderPlanSeed {
+  planId: string;
+  /** The `add` filed into "Archive" (`parentRef: folder:<archiveId>`). */
+  filedTitle: string;
+  /** The unfiled ROOT `add`. */
+  rootTitle: string;
+}
+
+/**
+ * A `planned` plan over the folder roadmap (Bug MOTIR-5782 · MOTIR-5796): one `add`
+ * FILED into "Archive" and one unfiled root `add`, through the shipped
+ * `createPlan → addProposals → markPlanned` calls — a folder-filed proposal is a
+ * plan fact, not a planner output, so no planner turn is driven. `sourceJobId`
+ * ties it to a plan-change run for the overlay's stubbed submit.
+ */
+export async function seedFolderPlan(
+  seed: FolderRoadmapSeed,
+  sourceJobId?: string,
+): Promise<FolderPlanSeed> {
+  const filedTitle = 'Filed proposal';
+  const rootTitle = 'Root proposal';
+  const plan = await plansService.createPlan(
+    seed.projectId,
+    { title: 'File the importer work', ...(sourceJobId ? { sourceJobId } : {}) },
+    seed.ctx,
+  );
+  await plansService.addProposals(
+    plan.id,
+    [
+      {
+        op: 'add',
+        proposedFields: { title: filedTitle, kind: 'story' },
+        parentRef: `${FOLDER_REF_PREFIX}${seed.archiveId}`,
+      },
+      { op: 'add', proposedFields: { title: rootTitle, kind: 'story' } },
+    ],
+    seed.ctx,
+  );
+  await plansService.markPlanned(plan.id, seed.ctx);
+  return { planId: plan.id, filedTitle, rootTitle };
 }

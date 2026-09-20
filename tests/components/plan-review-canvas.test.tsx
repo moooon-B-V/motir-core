@@ -174,6 +174,7 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
     folderId: null,
     folderPath: null,
     folderMissing: false,
+    folderTrail: [],
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
     committedBlockedBy: [],

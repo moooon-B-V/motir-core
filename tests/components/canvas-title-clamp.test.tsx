@@ -68,10 +68,18 @@ describe('PlanItemNode — the title clamps at two lines', () => {
   // MOTIR-5310 spends the bottom slot on a folder placement and drops the title
   // to ONE line with `truncate`, which needs the block box `.block` gives it — so
   // `block` rides with `truncate` on that branch and never beside the clamp.
-  it('a FILED title (the slot is spent) is a one-line block ellipsis, not a clamp', () => {
+  // Re-pinned on the case that still SPENDS the slot (Part XVIII decision 2: a
+  // filed add no longer does — it sits on its folder's level). The rule is the
+  // same one: a spent slot makes the title a one-line block ellipsis.
+  it('a title whose bottom slot is spent (a deleted folder) is a one-line block ellipsis, not a clamp', () => {
     renderWithIntl(
       <PlanItemNode
-        item={planReviewItem({ title: LONG_TITLE, folderId: 'fold_1', folderPath: ['Parked'] })}
+        item={planReviewItem({
+          title: LONG_TITLE,
+          folderId: 'fold_1',
+          folderPath: null,
+          folderMissing: true,
+        })}
       />,
     );
     const el = screen.getByText(LONG_TITLE);

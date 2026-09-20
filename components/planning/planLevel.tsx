@@ -6,7 +6,7 @@ import {
 import { GhostAnchor } from '@/components/planning/WorkItemNode';
 import { ghostAnchorNode } from '@/components/planning/workItemLevel';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
-import { proposedParentNodeIds } from '@/lib/planning/planShape';
+import { proposalLevelKey, proposedParentNodeIds } from '@/lib/planning/planShape';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
 // One LEVEL of the plan-detail canvas (MOTIR-3083, redrawing 7.4.5 / MOTIR-847).
@@ -40,12 +40,22 @@ export interface PlanCanvasLevel {
   deps: ProjectCanvasDep[];
 }
 
-/** The plan's proposals that belong at ONE level (`parentId` null = top level). */
+/**
+ * The plan's proposals that belong at ONE level (`parentId` null = top level).
+ *
+ * ⚠️ KEYED ON THE LEVEL, not on `parentNodeId` (Bug MOTIR-5782; design Part XVIII
+ * decision 2). A folder-filed proposal is a ROOT in the review model, and the
+ * canvas now draws its folder as a level, so it sits on `folder:<id>` — beside the
+ * committed work the server read files there — rather than loose at the root. One
+ * rule for every op: a `modify` / `remove` keys by where its target WILL sit, so a
+ * card moving into a folder is drawn on the folder's level (decision 4). A stale
+ * folder has no level, and its proposal stays at the root (decision 6).
+ */
 export function proposalsAtLevel(
   items: PlanReviewItemDto[],
   parentId: string | null,
 ): PlanReviewItemDto[] {
-  return items.filter((i) => (i.parentNodeId ?? null) === parentId);
+  return items.filter((i) => proposalLevelKey(i) === parentId);
 }
 
 /**
@@ -351,7 +361,7 @@ export function mergePlanLevel(
     if (!pending.has(item.nodeId)) continue;
     nodes.push({
       id: item.nodeId,
-      parentId: item.parentNodeId,
+      parentId: proposalLevelKey(item),
       searchText: `${item.identifier ?? ''} ${item.title}`.trim(),
       crumbLabel: item.identifier ?? item.title,
       drillable: item.hasChildren,
