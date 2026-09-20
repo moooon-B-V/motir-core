@@ -107,6 +107,14 @@ export interface GateVerb {
    * and state `X` still render no verbs at all.
    */
   disabled?: boolean;
+  /**
+   * WHAT PROCEEDING RUNS, when it is not a decision on this gate (Story MOTIR-5799 ·
+   * Subtask MOTIR-5806; `design/github/design-notes.md` § 28 panel 8a). A pull-request
+   * row's *Queue again* / *Retry merge* IS an approval, and it takes this frame's ONE
+   * confirm rather than growing a second one beside the rows — so the verb that opens the
+   * band carries its own act. Omitted, `onDecide(verb.decision)` runs, as it always has.
+   */
+  perform?: () => Promise<GateRefusal | null>;
 }
 
 export interface ApprovalGateControlProps {
@@ -240,6 +248,25 @@ export interface ApprovalGateControlProps {
   /** The host has just re-read after *Show the current version*: focus the port on mount
    *  (design Panel 4). Never on an ordinary first render — that would steal focus. */
   focusPortOnMount?: boolean;
+  /**
+   * A verb pressed somewhere ELSE inside the frame — a pull-request row's *Queue again* or
+   * *Retry merge* — which still takes this frame's ONE confirm (§ 28 panel 8a). The host
+   * sets it; the band opens for it; proceeding runs the verb's own `perform`, and the
+   * pending and refused phases that follow are the frame's, not a second set beside the
+   * row. Cleared through {@link ApprovalGateControlProps.onRequestedVerbDone}.
+   */
+  requestedVerb?: GateVerb | null;
+  /** The requested verb left the band — cancelled, or run. The host clears its request. */
+  onRequestedVerbDone?: () => void;
+  /**
+   * A RECORD BAND OVER A QUESTION STILL BEING ASKED (Story MOTIR-5799 · Subtask
+   * MOTIR-5806; § 28 panel 1's `af-record`). Ordinarily the strip belongs to a decided
+   * gate — it is the audit's own row. A gate RE-ASKED after a merge did not land is the
+   * one awaiting state with history behind it, and the reason it came back has to be on
+   * screen while the reader decides, not only after. Rendered above the verbs, in the
+   * same strip a decided gate uses, and only when the kind supplies one.
+   */
+  awaitingRecord?: ReactNode;
 }
 
 type Phase =
@@ -777,11 +804,23 @@ export function ApprovalGateControl({
   onDecide,
   onShowCurrentVersion,
   focusPortOnMount = false,
+  requestedVerb = null,
+  onRequestedVerbDone,
+  awaitingRecord = null,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
   const tGithub = useTranslations('approvalGate.pullRequestApproval.github');
   const tPort = useTranslations('approvalGate.port');
-  const [phase, setPhase] = useState<Phase>({ kind: 'awaiting' });
+  const [ownPhase, setPhase] = useState<Phase>({ kind: 'awaiting' });
+  // ⚠️ A REQUEST FROM OUTSIDE THE VERB ROW OPENS THE SAME BAND (§ 28 panel 8a), and it is
+  // DERIVED rather than written into state: a press is a render's fact here, and an effect
+  // that set the phase would fight every phase the press itself writes (and is what
+  // `react-hooks/set-state-in-effect` exists to stop). Once anything has been pressed the
+  // frame's own phase wins, which is how pending and refused survive the request.
+  const phase: Phase =
+    requestedVerb && ownPhase.kind === 'awaiting'
+      ? { kind: 'confirming', verb: requestedVerb }
+      : ownPhase;
   const [expanded, setExpanded] = useState(false);
   const fill = layout === 'fill';
   const flush = layout === 'flush';
@@ -838,11 +877,14 @@ export function ApprovalGateControl({
 
   async function run(verb: GateVerb) {
     setPhase({ kind: 'pending' });
-    const refusal = await onDecide(verb.decision);
+    // A verb that carries its own act runs THAT (§ 28 panel 8a: a row's *Queue again* is
+    // an approval, and it is this frame's confirm, pending and refusal that report it).
+    const refusal = verb.perform ? await verb.perform() : await onDecide(verb.decision);
     // On success the CALLER has reconciled and re-rendered us with the decided
     // gate, so there is no success branch to draw here — which is what keeps
     // this component free of the write's own state.
     setPhase(refusal ? { kind: 'refused', refusal } : { kind: 'awaiting' });
+    if (verb.perform) onRequestedVerbDone?.();
   }
 
   const stateLabel = withdrawn
@@ -1077,58 +1119,67 @@ export function ApprovalGateControl({
           ) : null}
           {recordDetail ?? null}
         </RecordStrip>
-      ) : phase.kind === 'confirming' ? (
-        // ⚠️ AN INLINE BAND OVER THE VERBS, NEVER A MODAL — a modal would take
-        // the port off screen at exactly the moment the reader wants one last
-        // look, which is the thing the whole frame is arranged to prevent.
-        <div
-          className={`${sectioned ? 'mt-3 ' : ''}border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3`}
-        >
-          <p className="text-[13px] font-semibold text-(--el-text)">{t('confirm.title')}</p>
-          <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
-            {confirmConsequences.map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
-          <div className="mt-3 flex flex-wrap justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPhase({ kind: 'awaiting' })}
-              type="button"
-            >
-              {t('confirm.cancel')}
-            </Button>
-            <Button variant="primary" size="sm" onClick={() => run(phase.verb)} type="button">
-              {t('confirm.proceed', { verb: phase.verb.label })}
-            </Button>
-          </div>
-        </div>
       ) : (
-        <div
-          className={
-            sectioned
-              ? 'mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) pt-3'
-              : 'flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3'
-          }
-        >
-          {settingsDoor ? (
-            // THE SETTINGS DOOR (MOTIR-5513, panel `S`): band 3's LEFT column,
-            // UNDER the consequence line. A column only when a kind supplies one,
-            // so a kind that supplies none renders this row exactly as before.
-            <span className="flex min-w-0 flex-col gap-1">
-              {consequenceLine}
-              <Link
-                href={settingsDoor.href}
-                className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-(--el-link) hover:text-(--el-link-pressed)"
-              >
-                {settingsDoor.label}
-              </Link>
-            </span>
+        <>
+          {/* The re-asked gate's history and reason, above the verbs (§ 28 panel 1). */}
+          {awaitingRecord ? (
+            <RecordStrip sectioned={sectioned}>{awaitingRecord}</RecordStrip>
+          ) : null}
+          {phase.kind === 'confirming' ? (
+            // ⚠️ AN INLINE BAND OVER THE VERBS, NEVER A MODAL — a modal would take
+            // the port off screen at exactly the moment the reader wants one last
+            // look, which is the thing the whole frame is arranged to prevent.
+            <div
+              className={`${sectioned ? 'mt-3 ' : ''}border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3`}
+            >
+              <p className="text-[13px] font-semibold text-(--el-text)">{t('confirm.title')}</p>
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
+                {confirmConsequences.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPhase({ kind: 'awaiting' });
+                    if (phase.verb.perform) onRequestedVerbDone?.();
+                  }}
+                  type="button"
+                >
+                  {t('confirm.cancel')}
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => run(phase.verb)} type="button">
+                  {t('confirm.proceed', { verb: phase.verb.label })}
+                </Button>
+              </div>
+            </div>
           ) : (
-            consequenceLine
-          )}
-          {/* ⚠️ STATE `B` RENDERS NO VERBS AT ALL — not disabled ones. A reader
+            <div
+              className={
+                sectioned
+                  ? 'mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) pt-3'
+                  : 'flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--el-border-soft) px-4 py-3'
+              }
+            >
+              {settingsDoor ? (
+                // THE SETTINGS DOOR (MOTIR-5513, panel `S`): band 3's LEFT column,
+                // UNDER the consequence line. A column only when a kind supplies one,
+                // so a kind that supplies none renders this row exactly as before.
+                <span className="flex min-w-0 flex-col gap-1">
+                  {consequenceLine}
+                  <Link
+                    href={settingsDoor.href}
+                    className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-(--el-link) hover:text-(--el-link-pressed)"
+                  >
+                    {settingsDoor.label}
+                  </Link>
+                </span>
+              ) : (
+                consequenceLine
+              )}
+              {/* ⚠️ STATE `B` RENDERS NO VERBS AT ALL — not disabled ones. A reader
               who may not decide can still SEE what is being decided; a greyed
               button would tell them the control is theirs and broken.
               ⚠️ AND STATE `X` (MOTIR-5032) IS THE SAME ABSENCE FOR THE SAME
@@ -1136,33 +1187,37 @@ export function ApprovalGateControl({
               rendered at all. A `disabled` button here would say the decision is
               yours and the control is broken, when the truth is that the SUBJECT
               is missing — "you cannot approve what cannot be shown". */}
-          {canDecide && portShown ? (
-            <span className="ml-auto flex flex-wrap gap-2">
-              {verbs.map((verb) => (
-                <Button
-                  key={verb.decision}
-                  variant={verb.variant}
-                  size="sm"
-                  type="button"
-                  // ⚠️ DISABLED UNDER ANY REFUSAL, not only while pending (design
-                  // `approval-control--stale-refusal.mock.html`, Panel 1). A second press
-                  // would be refused again — for a stale one, with the same stamp — so the
-                  // refusal's own next action is the only live one. A re-read remounts the
-                  // frame, which is what gives the verbs back.
-                  disabled={
-                    verb.disabled === true || phase.kind === 'pending' || phase.kind === 'refused'
-                  }
-                  aria-disabled={verb.disabled === true ? true : undefined}
-                  onClick={() =>
-                    verb.confirms ? setPhase({ kind: 'confirming', verb }) : void run(verb)
-                  }
-                >
-                  {verb.label}
-                </Button>
-              ))}
-            </span>
-          ) : null}
-        </div>
+              {canDecide && portShown ? (
+                <span className="ml-auto flex flex-wrap gap-2">
+                  {verbs.map((verb) => (
+                    <Button
+                      key={verb.decision}
+                      variant={verb.variant}
+                      size="sm"
+                      type="button"
+                      // ⚠️ DISABLED UNDER ANY REFUSAL, not only while pending (design
+                      // `approval-control--stale-refusal.mock.html`, Panel 1). A second press
+                      // would be refused again — for a stale one, with the same stamp — so the
+                      // refusal's own next action is the only live one. A re-read remounts the
+                      // frame, which is what gives the verbs back.
+                      disabled={
+                        verb.disabled === true ||
+                        phase.kind === 'pending' ||
+                        phase.kind === 'refused'
+                      }
+                      aria-disabled={verb.disabled === true ? true : undefined}
+                      onClick={() =>
+                        verb.confirms ? setPhase({ kind: 'confirming', verb }) : void run(verb)
+                      }
+                    >
+                      {verb.label}
+                    </Button>
+                  ))}
+                </span>
+              ) : null}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

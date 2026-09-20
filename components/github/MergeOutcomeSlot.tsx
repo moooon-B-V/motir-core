@@ -65,12 +65,10 @@ export type RowMergeOutcome =
        *  who may not press it. */
       onRetry: (() => void) | null;
       retrying: boolean;
-      /** The permission the host named, when it named one — the row says which setting. */
-      setting: string | null;
     }
   /** The commits cannot land as they stand — a conflict, or checks the host will not
    *  merge past. No verb: `motir fix` is the way forward (§4 FOURTH AMENDMENT, point 2). */
-  | { kind: 'cannotLand'; reason: 'conflict' | 'checksNotGreen' };
+  | { kind: 'cannotLand' };
 
 const MergeOutcomeContext = createContext<ReadonlyMap<string, RowMergeOutcome> | null>(null);
 
@@ -148,8 +146,8 @@ const READ_ONLY: Record<PersistedRowOutcome, RowMergeOutcome> = {
   removedFromQueue: { kind: 'removedFromQueue', onQueueAgain: null, queueing: false },
   newCommits: { kind: 'newCommits' },
   notMergedYet: { kind: 'notMergedYet', onRetry: null, retrying: false },
-  refusedSetting: { kind: 'refusedSetting', onRetry: null, retrying: false, setting: null },
-  cannotLand: { kind: 'cannotLand', reason: 'conflict' },
+  refusedSetting: { kind: 'refusedSetting', onRetry: null, retrying: false },
+  cannotLand: { kind: 'cannotLand' },
 };
 
 /**
@@ -284,9 +282,14 @@ export function MergeOutcomeSlot({
     case 'refusedSetting':
       return (
         <>
+          {/* ⚠️ THE PILL SAYS THE CLASS; THE BAND SAYS WHICH SETTING (§ 28's slot table).
+              A pill is read at a glance beside a pull request's name, and a permission
+              string in it — *Blocked: contents: write* — reads as the row's own state
+              rather than as something a person can go and change. The record band names
+              the rule, in a sentence with room to say what to do about it. */}
           <Pill severity="warning">
             <ShieldAlert className="h-3 w-3" aria-hidden />
-            {outcome.setting ? t('settingNamed', { setting: outcome.setting }) : t('setting')}
+            {t('settingHeld')}
           </Pill>
           {outcome.onRetry ? (
             <Button
@@ -307,7 +310,7 @@ export function MergeOutcomeSlot({
       return (
         <Pill severity="danger">
           <CircleX className="h-3 w-3" aria-hidden />
-          {t(outcome.reason === 'conflict' ? 'cannotLandConflict' : 'cannotLandChecks')}
+          {t('cannotLand')}
         </Pill>
       );
   }

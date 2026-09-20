@@ -633,8 +633,12 @@ describe('the remaining frame arms (MOTIR-5486 coverage floor)', () => {
     });
     renderFrame({ gate: AWAITING }, actions);
     await pressApproveAndMerge();
-    // Nothing merged: the approval stands alone.
-    expect(screen.getByRole('alert').textContent).toContain(pra.refused.standsAlone);
+    // ⚠️ NOTHING MERGED, SO THE ALERT CLAIMS NOTHING (MOTIR-5834): the *Your approval
+    // stands* line is gone — a press that did not land SPENT the approval — and the
+    // member's own line is the whole of what the band says.
+    const band = screen.getByRole('alert').textContent ?? '';
+    expect(band).toContain(fill(pra.refused.title, { pr: CORE_NAME }));
+    expect(band).not.toContain('approval stands');
     refreshSpy.mockClear();
 
     fireEvent.click(within(rowOf(CORE_PR.title)).getByRole('button', { name: pra.outcome.retry }));

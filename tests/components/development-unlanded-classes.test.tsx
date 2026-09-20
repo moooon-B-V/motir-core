@@ -40,6 +40,17 @@ afterEach(() => {
 });
 
 const pra = en.approvalGate.pullRequestApproval;
+const fill = (text: string, vars: Record<string, string | number>) =>
+  text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key]));
+/** A rich message as the DOM reads it — its tags gone, so one `getByText` matches it. */
+const RICH_TAGS = ['<b>', '</b>', '<code>', '</code>'] as const;
+const plain = (text: string) => RICH_TAGS.reduce((out, tag) => out.split(tag).join(''), text);
+/** Matched WHOLE: `getByText` with a string matches a node whose text is exactly it, and
+ *  a sentence split across `<b>` children is not one node — so the matcher reads the
+ *  element's own `textContent`. */
+const whole = (text: string) => (_: string, el: Element | null) =>
+  el?.textContent === text && Array.from(el.children).every((child) => child.textContent !== text);
+const GATEWAY_NAME = 'moooon/motir-gateway · #57';
 const GATEWAY_SHA = 'aa11bb2000000000000000000000000000000000';
 const CORE_SHA = '3f2a91c0000000000000000000000000000000aa';
 const CORE_V = `moooon/motir-core#131@${CORE_SHA}`;
@@ -198,10 +209,13 @@ describe('the row draws the class, and offers only what that class allows', () =
       { repair: repairOffer(), status: 'implemented' },
     );
 
-    expect(within(gatewayRow()).getByText(pra.outcome.cannotLandConflict)).toBeTruthy();
+    expect(within(gatewayRow()).getByText(pra.outcome.cannotLand)).toBeTruthy();
     expect(rowButton(pra.outcome.queueAgain)).toBeNull();
     expect(rowButton(pra.outcome.retry)).toBeNull();
     expect(fixPart().textContent).toContain('motir fix ACME-12');
+    // The pill says the CLASS; the band beneath says why, because no verb can (§ 28
+    // panel 3). A pill with nothing under it would leave the reason nowhere.
+    expect(screen.getByText(whole(plain(pra.exit.cannotLand)))).toBeTruthy();
   });
 
   it('CAN’T LAND, a host refusal on red checks: the same shape, worded for the checks', () => {
@@ -216,8 +230,13 @@ describe('the row draws the class, and offers only what that class allows', () =
       }),
     });
 
-    expect(within(gatewayRow()).getByText(pra.outcome.cannotLandChecks)).toBeTruthy();
+    // The SAME pill — the class, not the reason (§ 28's slot table) — and the refusal's
+    // own line beneath it, which a host refusal has instead of a queue exit.
+    expect(within(gatewayRow()).getByText(pra.outcome.cannotLand)).toBeTruthy();
     expect(rowButton(pra.outcome.retry)).toBeNull();
+    expect(
+      screen.getByText(whole(plain(fill(pra.cannotLand.line, { pr: GATEWAY_NAME })))),
+    ).toBeTruthy();
   });
 
   it('BLOCKED BY A SETTING: the setting is NAMED and Retry merge is offered', () => {
@@ -233,11 +252,23 @@ describe('the row draws the class, and offers only what that class allows', () =
       }),
     });
 
+    expect(within(gatewayRow()).getByText(pra.outcome.settingHeld)).toBeTruthy();
+    // ⚠️ THE PERMISSION IS NAMED IN THE BAND, NOT IN THE PILL (§ 28's slot table): the
+    // pill is read at a glance, and *Blocked: contents: write* reads as the row's state
+    // rather than as something somebody can go and grant.
     expect(
-      within(gatewayRow()).getByText(
-        pra.outcome.settingNamed.replace('{setting}', 'contents: write'),
+      screen.getByText(
+        whole(
+          plain(
+            fill(pra.setting.linePermission, {
+              pr: GATEWAY_NAME,
+              permission: 'contents: write',
+            }),
+          ),
+        ),
       ),
     ).toBeTruthy();
+    expect(screen.getByText(whole(plain(pra.setting.reasked)))).toBeTruthy();
     expect(rowButton(pra.outcome.retry)).toBeTruthy();
   });
 
@@ -254,11 +285,14 @@ describe('the row draws the class, and offers only what that class allows', () =
       }),
     });
 
-    expect(within(gatewayRow()).getByText(pra.outcome.setting)).toBeTruthy();
+    expect(within(gatewayRow()).getByText(pra.outcome.settingHeld)).toBeTruthy();
+    expect(
+      screen.getByText(whole(plain(fill(pra.setting.line, { pr: GATEWAY_NAME })))),
+    ).toBeTruthy();
     expect(rowButton(pra.outcome.retry)).toBeTruthy();
   });
 
-  it('the row’s press DECIDES the re-asked gate — the gate it was handed, with this read’s stamp', () => {
+  it('the row’s press asks FIRST — one confirm, and it says the press is a NEW approval', () => {
     const retryMember = vi.fn().mockResolvedValue({ ok: true, member: { outcome: 'enqueued' } });
     renderBlock(
       { members: members({ exit: queueExit(), requeueable: true }) },
@@ -268,11 +302,64 @@ describe('the row draws the class, and offers only what that class allows', () =
 
     fireEvent.click(rowButton(pra.outcome.queueAgain)!);
 
+    // ⚠️ NOTHING RAN YET (§ 28 panel 8a): the press IS an approval, so it is asked for the
+    // same way the frame's own Approve is — one band, in the frame, over the verbs.
+    expect(retryMember).not.toHaveBeenCalled();
+    // ICU plural, so the rendered sentence is asserted rather than the template.
+    expect(
+      screen.getByText(
+        'record that you approved these 2 commits again, with the time — a new approval, not the spent one;',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(fill(pra.reasked.confirm.requeue, { pr: GATEWAY_NAME }))).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: fill(en.approvalGate.confirm.proceed, { verb: pra.outcome.queueAgain }),
+      }),
+    );
+
     expect(retryMember).toHaveBeenCalledWith({
       approvalGateId: REASKED.id,
       pullRequestId: GATEWAY_PR.id,
       identifier: 'ACME-12',
       stamp: 'v1.stamp-on-screen',
     });
+  });
+
+  it('CANCEL on that confirm decides nothing, and the row keeps its verb', () => {
+    const retryMember = vi.fn();
+    renderBlock(
+      { members: members({ exit: queueExit(), requeueable: true }) },
+      {},
+      fakeActions(retryMember),
+    );
+
+    fireEvent.click(rowButton(pra.outcome.queueAgain)!);
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.confirm.cancel }));
+
+    expect(retryMember).not.toHaveBeenCalled();
+    expect(rowButton(pra.outcome.queueAgain)).toBeTruthy();
+  });
+
+  it('the re-asked frame SAYS it is a re-ask, and why — band 1, the record band, band 3', () => {
+    renderBlock({ members: members({ exit: queueExit(), requeueable: true }) });
+
+    // Band 1: not *Delivered by run N* — nothing was delivered just now.
+    expect(screen.getByText('Asked again after the merge queue · 2 pull requests')).toBeTruthy();
+    // The record band: the reason, its failing check, and that the approval was SPENT.
+    expect(
+      screen.getByText(
+        whole(plain(fill(pra.exit.left, { pr: GATEWAY_NAME, reason: pra.exit.reason.CI_FAILURE }))),
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: fill(pra.exit.openCheck, { check: 'CI complete' }) }),
+    ).toBeTruthy();
+    expect(screen.getByText(whole(plain(pra.exit.reasked.failure)))).toBeTruthy();
+    // Band 3: what THIS approval does — the member that did not land, not the whole set.
+    expect(
+      screen.getByText(fill(pra.reasked.why, { pr: GATEWAY_NAME, key: 'ACME-12' })),
+    ).toBeTruthy();
   });
 });

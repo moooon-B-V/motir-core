@@ -8536,17 +8536,14 @@
         "retry": "重试合并",
         "leftQueue": "已离开合并队列",
         "removedFromQueue": "已从合并队列中移除",
-        "setting": "有设置阻止了合并",
-        "settingNamed": "被阻止：{setting}",
-        "cannotLandConflict": "无法合并 — 存在冲突",
-        "cannotLandChecks": "无法合并 — 检查未通过",
         "newCommits": "批准后有新提交",
-        "queueAgain": "重新排队"
+        "queueAgain": "重新排队",
+        "settingHeld": "被某项设置阻止",
+        "cannotLand": "无法合并"
       },
       "refused": {
         "title": "{pr} 未合并。",
-        "stands": "你的批准仍然有效，{other} 已合并。",
-        "standsAlone": "你的批准仍然有效。"
+        "stands": "{other} 已合并。"
       },
       "withdrawn": {
         "port": "一次推送变更了 {pr} 的最新提交，因此该问题已被撤回。",
@@ -8574,12 +8571,18 @@
           "unknown": "GitHub 未说明原因。"
         },
         "failingCheck": "未通过的检查：<link>{check}</link>",
-        "unchanged": "你的批准仍覆盖这些提交，<b>重新排队</b>即可放回队列，无需再次批准。",
+        "unchanged": "你这边没有任何改动？<b>重新排队</b>会再次批准这些相同的提交，并把它们放回合并队列。",
         "cannotLand": "这些提交按现状无法合入。<b>motir fix</b> 会把修复交给智能体；推送新的提交后，检查通过时会再次询问。",
         "newCommits": "你批准后它有了新提交。所有检查通过后，Motir 会再次征求批准。",
         "auto": "Motir 会在检查通过后合并本项目的拉取请求。<b>重新排队</b>会以相同的提交将它放回队列。",
         "partTitle": "合并队列",
-        "openCheck": "在 GitHub 上打开未通过的检查 {check}"
+        "openCheck": "在 GitHub 上打开未通过的检查 {check}",
+        "reasked": {
+          "failure": "这些提交未能合并，那次批准已经用掉，因此 Motir 再次征求你的批准。在拉取请求上按下 — 或按下方的<b>批准并合并</b> — 都是一次新的批准，会把它们放回合并队列。"
+        },
+        "neutral": {
+          "reasked": "它们仍未合并，那次批准已经用掉，因此 Motir 再次征求你的批准。在拉取请求上按下 — 或按下方的<b>批准并合并</b> — 都是一次新的批准，会把它们放回合并队列。"
+        }
       },
       "requeue": {
         "progress": "正在将 {pr} 放回合并队列…",
@@ -8599,6 +8602,24 @@
           "changesRequested": "由 {name} 在 GitHub 上请求修改",
           "notMember": "不是 Motir 成员"
         }
+      },
+      "reasked": {
+        "meta": "合并队列退回后再次征求批准 · {count} 个拉取请求",
+        "why": "批准后会把 {pr} 放回其仓库的合并队列，队列检查通过后即合并，并将 {key} 移至“已批准”。",
+        "confirm": {
+          "newApproval": "记录你再次批准了这 {count} 个提交及其时间 — 这是一次新的批准，而不是已用掉的那一次；",
+          "requeue": "将 {pr} 重新加入其仓库的合并队列，队列检查通过后即合并；",
+          "merge": "在设置放行后合并 {pr}；"
+        },
+        "whySetting": "设置放行后，批准会合并 {pr}，并将 {key} 移至“已批准”。"
+      },
+      "cannotLand": {
+        "line": "<b>{pr}</b> 目前无法合并。"
+      },
+      "setting": {
+        "line": "<b>{pr}</b> 未合并：仓库上的某项设置阻止了它。",
+        "linePermission": "<b>{pr}</b> 未合并：Motir 的 GitHub App 在那里缺少 <b>{permission}</b> 权限。",
+        "reasked": "改好设置后再按一次 — 这次按下是一次新的批准，并合并相同的提交。这里不提供 <b>motir fix</b>：没有可让代理修改的代码。"
       }
     },
     "statusHeld": {

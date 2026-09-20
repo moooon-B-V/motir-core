@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, CircleX, Loader2 } from 'lucide-react';
 import {
   ApprovalGateControl,
   useRefusalCopy,
@@ -221,6 +221,18 @@ export function DevelopmentGateFrame({
   // Members whose latest press was *Queue again* rather than *Retry merge* (MOTIR-5635) —
   // what words their progress line and a refusal's title.
   const [requeued, setRequeued] = useState<ReadonlySet<string>>(new Set());
+  // ⚠️ A ROW VERB ON THE RE-ASKED GATE TAKES THE FRAME'S CONFIRM (Story MOTIR-5799 ·
+  // MOTIR-5806; § 28 panel 8a). The press IS a new approval, so it is asked for the same
+  // way the frame's own Approve is — one band, one list of consequences, one pending and
+  // one refusal — rather than acting the instant a row button is clicked. On the DECIDED
+  // gate a row's *Retry merge* carries out a decision already made and still presses
+  // straight through: there is nothing new to agree to.
+  const [rowPress, setRowPress] = useState<{
+    subjectVersion: string;
+    pullRequestId: string;
+    label: string;
+    queueAgain: { failure: boolean } | null;
+  } | null>(null);
 
   const members = membersOf(gate.subjectVersion);
   const count = members.length;
@@ -238,8 +250,11 @@ export function DevelopmentGateFrame({
     subjectVersion: string,
     pullRequestId: string,
     queueAgain: { failure: boolean } | null = null,
-  ) {
-    if (!actions) return;
+    /** The press came through the frame's confirm band, which reports the refusal itself
+     *  (§ 28 panel 8a) — so the row is left as the reload reads it. */
+    throughConfirm = false,
+  ): Promise<GateRefusal | null> {
+    if (!actions) return null;
     setRetrying((prev) => new Set(prev).add(subjectVersion));
     setRequeued((prev) => {
       const next = new Set(prev);
@@ -262,15 +277,18 @@ export function DevelopmentGateFrame({
       });
       if (queueAgain?.failure && !result.ok) clearOptimisticStatus();
       // ONLY THAT ROW: a retry reports one member, and the others keep what they showed.
-      setOutcomes((prev) =>
-        new Map(prev).set(
-          subjectVersion,
-          result.ok
-            ? pressOutcomeOf(result.member)
-            : { outcome: 'refused', refusal: result.refusal, pullRequestId },
-        ),
-      );
+      if (result.ok || !throughConfirm) {
+        setOutcomes((prev) =>
+          new Map(prev).set(
+            subjectVersion,
+            result.ok
+              ? pressOutcomeOf(result.member)
+              : { outcome: 'refused', refusal: result.refusal, pullRequestId },
+          ),
+        );
+      }
       if (result.ok) router.refresh();
+      return result.ok ? null : result.refusal;
     } finally {
       setRetrying((prev) => {
         const next = new Set(prev);
@@ -283,11 +301,29 @@ export function DevelopmentGateFrame({
   const factOf = (member: MemberVersion) =>
     read.members?.find((m) => m.subjectVersion === member.subjectVersion) ?? null;
 
+  /**
+   * What a row verb's press DOES. On the RE-ASKED gate it is a new approval, so it opens
+   * the frame's confirm band and nothing happens until the reader proceeds (§ 28 panel
+   * 8a); on the decided gate it carries out a decision already made and runs at once.
+   */
+  function pressRow(
+    member: MemberVersion,
+    pullRequestId: string,
+    label: string,
+    queueAgain: { failure: boolean } | null,
+  ) {
+    if (gate.state === 'awaiting') {
+      setRowPress({ subjectVersion: member.subjectVersion, pullRequestId, label, queueAgain });
+      return;
+    }
+    void retryMember(member.subjectVersion, pullRequestId, queueAgain);
+  }
+
   function retryFor(member: MemberVersion, pullRequestId: string | null) {
     return {
       onRetry:
         read.canDecide && actions && pullRequestId
-          ? () => void retryMember(member.subjectVersion, pullRequestId)
+          ? () => pressRow(member, pullRequestId, t('outcome.retry'), null)
           : null,
       retrying: retrying.has(member.subjectVersion),
     };
@@ -298,7 +334,7 @@ export function DevelopmentGateFrame({
     return {
       onQueueAgain:
         read.canDecide && actions && fact.pullRequestId
-          ? () => void retryMember(member.subjectVersion, fact.pullRequestId!, { failure })
+          ? () => pressRow(member, fact.pullRequestId!, t('outcome.queueAgain'), { failure })
           : null,
       queueing: retrying.has(member.subjectVersion),
     };
@@ -324,17 +360,14 @@ export function DevelopmentGateFrame({
       ...retryFor(member, fact.pullRequestId),
     }),
     // THE HOST REFUSED (MOTIR-5833 · MOTIR-5834; § 28 panels 3 and 4). A setting somebody
-    // can change is named and offers *Retry merge*, which DECIDES the re-asked gate; a
-    // conflict offers nothing, because no approval can land those commits.
+    // can change offers *Retry merge*, which DECIDES the re-asked gate, and the record
+    // band names the setting; a conflict offers nothing, because no approval can land
+    // those commits.
     refusedSetting: (member, fact) => ({
       kind: 'refusedSetting',
-      setting: fact.refusal?.permission ?? null,
       ...retryFor(member, fact.requeueable ? fact.pullRequestId : null),
     }),
-    cannotLand: (_member, fact) => ({
-      kind: 'cannotLand',
-      reason: fact.refusal?.code === 'checks_not_green' ? 'checksNotGreen' : 'conflict',
-    }),
+    cannotLand: () => ({ kind: 'cannotLand' }),
   };
 
   function outcomeFor(member: MemberVersion): RowMergeOutcome | null {
@@ -429,25 +462,38 @@ export function DevelopmentGateFrame({
     return head !== undefined && head.headSha !== member.headSha;
   });
   const decidedByThisReader = decided !== null && decided.id === read.gate.id;
+  // THE RE-ASKED GATE (Story MOTIR-5799 · MOTIR-5806; § 4 FOURTH AMENDMENT, point 4): a
+  // question still awaiting, standing over commits an earlier press did not land. The
+  // member facts are what say so — an exit nobody put back, or a refusal the host gave —
+  // and three bands read differently for it: the meta, the record band and the
+  // consequence line.
+  const reasked =
+    gate.state === 'awaiting' &&
+    (read.members ?? []).some((fact) => fact.exit !== null || fact.refusal !== null);
   const subjectMeta =
     count === 0
       ? runLabel
-      : gate.state === 'superseded'
-        ? moved.length > 0
-          ? t('meta.withdrawn', { count, pr: nameList(moved.map(nameOf)) })
-          : t('meta.withdrawnSet', { count })
-        : gate.state === 'approved'
-          ? decidedByThisReader
-            ? t('meta.approvedByYou', { count })
-            : gate.decidedByLabel
-              ? // The same fact, said where it happened (MOTIR-5599; design § 23).
-                gate.decisionSource === 'github'
-                ? t('github.meta.approved', { name: gate.decidedByLabel, count })
-                : t('meta.approved', { name: gate.decidedByLabel, count })
-              : t('meta.count', { count })
-          : gate.state === 'awaiting' && runLabel
-            ? t('meta.delivered', { count, run: runLabel })
-            : t('meta.count', { count });
+      : // ⚠️ A RE-ASKED GATE SAYS SO IN BAND 1 (MOTIR-5806; § 28 panel 1). *Delivered by
+        // run N* is true of a first ask and misleading of this one: nothing was delivered
+        // just now — a press did not land, and the question came back.
+        reasked
+        ? t('reasked.meta', { count })
+        : gate.state === 'superseded'
+          ? moved.length > 0
+            ? t('meta.withdrawn', { count, pr: nameList(moved.map(nameOf)) })
+            : t('meta.withdrawnSet', { count })
+          : gate.state === 'approved'
+            ? decidedByThisReader
+              ? t('meta.approvedByYou', { count })
+              : gate.decidedByLabel
+                ? // The same fact, said where it happened (MOTIR-5599; design § 23).
+                  gate.decisionSource === 'github'
+                  ? t('github.meta.approved', { name: gate.decidedByLabel, count })
+                  : t('meta.approved', { name: gate.decidedByLabel, count })
+                : t('meta.count', { count })
+            : gate.state === 'awaiting' && runLabel
+              ? t('meta.delivered', { count, run: runLabel })
+              : t('meta.count', { count });
 
   // ── THE DECISION PORT (MOTIR-5678; design §27) ──────────────────────────────────
   // A decision gate LEADS the frame the way a design gate does, and every band says so in
@@ -514,6 +560,14 @@ export function DevelopmentGateFrame({
         },
       ]
     : [];
+  // The members this re-asked question is actually about, and whether a SETTING is what is
+  // in the way — which changes what approving promises (a merge, not a queue).
+  const unlandedNames = [
+    ...membersIn('leftQueue'),
+    ...membersIn('removedFromQueue'),
+    ...membersIn('refusedSetting'),
+  ].map(nameOf);
+  const settingHeld = membersIn('refusedSetting').length > 0;
   // One or two pull requests are NAMED; three or more are COUNTED, because band 3 is one line
   // and an unbounded list pushes the verbs off the frame. The confirm step names every one.
   const consequence = isDecision
@@ -528,24 +582,60 @@ export function DevelopmentGateFrame({
           : tDecision.rich('consequenceNoPrs', { key: itemIdentifier, b })
         : tDecision('blocked')
       : null
-    : actions && count > 0
-      ? count <= 2
-        ? t('consequence.named', { prs: nameList(members.map(nameOf)), key: itemIdentifier })
-        : t('consequence.counted', { count, key: itemIdentifier })
-      : null;
+    : // ⚠️ THE RE-ASKED GATE PROMISES SOMETHING NARROWER (§ 28 panel 1's `af-why`): the
+      // members that did not land go back where they came from — a merge queue, or the
+      // host once a setting allows it — rather than the whole set being sent for the first
+      // time. The general line is still right for every other awaiting gate.
+      actions && reasked && unlandedNames.length > 0
+      ? t(settingHeld ? 'reasked.whySetting' : 'reasked.why', {
+          pr: nameList(unlandedNames),
+          key: itemIdentifier,
+        })
+      : actions && count > 0
+        ? count <= 2
+          ? t('consequence.named', { prs: nameList(members.map(nameOf)), key: itemIdentifier })
+          : t('consequence.counted', { count, key: itemIdentifier })
+        : null;
+  const rowPressMember = rowPress
+    ? (members.find((member) => member.subjectVersion === rowPress.subjectVersion) ?? null)
+    : null;
   const confirmConsequences = isDecision
     ? [
         tDecision('confirm.records'),
         ...decisionPrs.map((pr) => t('confirm.mergeOrQueue', { pr })),
         tDecision('confirm.moves', { key: itemIdentifier }),
       ]
-    : actions
+    : // ⚠️ A ROW PRESS AGREES TO ITS OWN TWO THINGS (§ 28 panel 8a). The set's list would
+      // name pull requests this press does not touch, and — the point of the whole
+      // amendment — it must say ALOUD that this is a NEW approval, not the spent one.
+      rowPress && rowPressMember
       ? [
-          t('confirm.records', { count }),
-          ...members.map((member) => t('confirm.mergeOrQueue', { pr: nameOf(member) })),
+          t('reasked.confirm.newApproval', { count }),
+          rowPress.queueAgain
+            ? t('reasked.confirm.requeue', { pr: nameOf(rowPressMember) })
+            : t('reasked.confirm.merge', { pr: nameOf(rowPressMember) }),
           t('confirm.movesToApproved', { key: itemIdentifier }),
         ]
-      : [];
+      : actions
+        ? [
+            t('confirm.records', { count }),
+            ...members.map((member) => t('confirm.mergeOrQueue', { pr: nameOf(member) })),
+            t('confirm.movesToApproved', { key: itemIdentifier }),
+          ]
+        : [];
+
+  /** The row verb, as a frame verb: the band opens for it, and proceeding runs its act. */
+  const requestedVerb: GateVerb | null =
+    rowPress && rowPressMember
+      ? {
+          decision: 'approve',
+          label: rowPress.label,
+          variant: 'primary',
+          confirms: true,
+          perform: () =>
+            retryMember(rowPress.subjectVersion, rowPress.pullRequestId, rowPress.queueAgain, true),
+        }
+      : null;
 
   // State `H` for a MEMBER: the approval stands, and the refusal is named in place.
   const refused = members.flatMap((member) => {
@@ -574,11 +664,16 @@ export function DevelopmentGateFrame({
               requeue={requeue}
             />
           ))}
-          <span className="block text-(--el-text-secondary)">
-            {mergedNames.length > 0
-              ? t('refused.stands', { other: nameList(mergedNames) })
-              : t('refused.standsAlone')}
-          </span>
+          {/* ⚠️ *YOUR APPROVAL STANDS* IS GONE, AND ITS ABSENCE IS THE POINT (MOTIR-5834;
+              §4 FOURTH AMENDMENT, point 1). A press that did not land SPENT the approval,
+              whatever the reason class, so the only true thing left to say here is what
+              DID merge — and when nothing did, nothing. Each member's own line already
+              says what to do next. */}
+          {mergedNames.length > 0 ? (
+            <span className="block text-(--el-text-secondary)">
+              {t('refused.stands', { other: nameList(mergedNames) })}
+            </span>
+          ) : null}
         </p>
       </div>
     ) : null;
@@ -599,20 +694,75 @@ export function DevelopmentGateFrame({
   // in words, with its failing check — or, while its *Queue again* is in flight, what is
   // happening instead (E2).
   const bold = (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>;
+  /**
+   * THE SENTENCE UNDER AN UN-LANDED OUTCOME, by class and by where the gate stands
+   * (MOTIR-5806; § 28 panels 1–4).
+   *
+   * ⚠️ ON THE RE-ASKED GATE IT SAYS THE APPROVAL WAS SPENT. That is the whole of what
+   * changed for a reader: the pill and the verb look much as they did, and only this line
+   * says the press ahead of them is a NEW approval rather than the old one still working.
+   */
+  function unlandedSub(kind: RowMergeOutcome['kind'], neutral: boolean): ReactNode {
+    if (kind === 'newCommits') return t('exit.newCommits');
+    if (kind === 'cannotLand') return t.rich('exit.cannotLand', { b: bold });
+    if (kind === 'refusedSetting') return t.rich('setting.reasked', { b: bold });
+    if (!reasked) return t.rich('exit.unchanged', { b: bold });
+    return t.rich(neutral ? 'exit.neutral.reasked' : 'exit.reasked.failure', { b: bold });
+  }
   const exitParts = members.flatMap((member) => {
     const kind = rowOutcomes.get(rowKey(member.repo, member.number))?.kind;
-    // ⚠️ `cannotLand` IS IN THE LIST (MOTIR-5806; § 28 panel 3). The row offers no verb
-    // there, which is exactly why the record band still has to SAY WHY — a pill reading
-    // *Cannot merge* with no sentence under it would leave the reason nowhere.
+    // ⚠️ `cannotLand` AND `refusedSetting` ARE IN THE LIST (MOTIR-5806; § 28 panels 3 and
+    // 4). The first offers no verb at all, which is exactly why the band still has to SAY
+    // WHY; the second's verb cannot explain which setting is in the way.
     if (
       kind !== 'leftQueue' &&
       kind !== 'removedFromQueue' &&
       kind !== 'newCommits' &&
-      kind !== 'cannotLand'
+      kind !== 'cannotLand' &&
+      kind !== 'refusedSetting'
     ) {
       return [];
     }
     const fact = factOf(member);
+    // A HOST REFUSAL HAS NO EXIT ROW (MOTIR-5833): the queue never saw these commits, so
+    // the line is the refusal's own, and the failing check it has no notion of is absent.
+    if (fact && !fact.exit && fact.refusal) {
+      if (retrying.has(member.subjectVersion)) {
+        return [
+          <span key={member.subjectVersion} className="inline-flex items-center gap-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            {t('requeue.progress', { pr: nameOf(member) })}
+          </span>,
+        ];
+      }
+      return [
+        <span
+          key={member.subjectVersion}
+          className="flex w-full min-w-0 basis-full flex-col gap-1"
+          data-merge-refusal
+        >
+          <span className="flex items-start gap-2 leading-snug">
+            <CircleX
+              className="mt-0.5 h-3.5 w-3.5 flex-none text-(--el-danger-on-surface)"
+              aria-hidden
+            />
+            <span>
+              {fact.refusal.permission
+                ? t.rich('setting.linePermission', {
+                    pr: nameOf(member),
+                    permission: fact.refusal.permission,
+                    b: bold,
+                  })
+                : t.rich(kind === 'cannotLand' ? 'cannotLand.line' : 'setting.line', {
+                    pr: nameOf(member),
+                    b: bold,
+                  })}
+            </span>
+          </span>
+          <span className="ml-5.5 text-(--el-text-secondary)">{unlandedSub(kind, false)}</span>
+        </span>,
+      ];
+    }
     if (!fact?.exit) return [];
     if (kind !== 'newCommits' && retrying.has(member.subjectVersion)) {
       return [
@@ -627,17 +777,15 @@ export function DevelopmentGateFrame({
         key={member.subjectVersion}
         name={nameOf(member)}
         exit={fact.exit}
-        sub={
-          kind === 'newCommits'
-            ? t('exit.newCommits')
-            : kind === 'cannotLand'
-              ? // No verb is offered, so the sentence says what WOULD move it: new commits.
-                t.rich('exit.cannotLand', { b: bold })
-              : t.rich('exit.unchanged', { b: bold })
-        }
+        sub={unlandedSub(kind, fact.exit.disposition !== 'failure')}
       />,
     ];
   });
+  // ⚠️ THE RE-ASKED GATE CARRIES A RECORD BAND, which no other awaiting gate does
+  // (§ 28 panel 1). It is the one question with history behind it: the reader is being
+  // asked again because a press of theirs did not land, and the reason has to be on screen
+  // WHILE they decide rather than only after.
+  const awaitingRecord = reasked && exitParts.length > 0 ? <>{exitParts}</> : null;
   const decisionAccepted = isDecision && gate.state === 'approved';
   const acceptedBlob = decisionAccepted ? parseDecisionVersion(gate.subjectVersion)?.blob : null;
   const recordDetail = decisionAccepted ? (
@@ -754,6 +902,9 @@ export function DevelopmentGateFrame({
             (onShowCurrentVersion ?? (() => router.refresh()))();
           }}
           focusPortOnMount={rereadAsked}
+          requestedVerb={requestedVerb}
+          onRequestedVerbDone={() => setRowPress(null)}
+          awaitingRecord={awaitingRecord}
         />,
       )}
     </MergeOutcomeProvider>

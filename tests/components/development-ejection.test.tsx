@@ -293,7 +293,9 @@ describe('manual mode, on the card’s decided approval', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain(fill(pra.requeue.refusedTitle, { pr: GATEWAY_NAME }));
     expect(alert.textContent).toContain(en.approvalGate.refusal.mergeAlreadyRequeued.title);
-    expect(alert.textContent).toContain(pra.refused.standsAlone);
+    // ⚠️ AND CLAIMS NOTHING ABOUT THE APPROVAL (MOTIR-5834): nothing merged, so the band
+    // says only what its member's line says. *Your approval stands* is retired copy.
+    expect(alert.textContent).not.toContain('approval stands');
     expect(within(gatewayRow()).getByText(pra.outcome.leftQueue)).toBeTruthy();
     expect(queueAgain()).toBeTruthy();
     expect(rail()).toBe('implemented');
@@ -536,7 +538,7 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
       failingCheckUrl: null,
     });
     expect(queueAgain()).toBeNull();
-    expect(within(gatewayRow()).getByText(pra.outcome.cannotLandConflict)).toBeTruthy();
+    expect(within(gatewayRow()).getByText(pra.outcome.cannotLand)).toBeTruthy();
     expect(within(fixPart()).getByTestId('repair-which').textContent).toBe(
       sentence(fixMsg.which.conflict),
     );
