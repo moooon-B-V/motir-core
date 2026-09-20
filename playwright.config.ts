@@ -65,6 +65,20 @@ const REUSE_PREBUILT_NEXT = process.env['E2E_REUSE_BUILD'] === '1';
 
 const APP_ROLE_SERVER = process.env['E2E_APP_ROLE'] === '1';
 const OWNER_DATABASE_URL = process.env['DATABASE_URL'] ?? '';
+
+// THE MERGE SEAM, FOR A PROMOTED SPEC (Story MOTIR-5799 · MOTIR-5808). GitHub's merge and
+// merge-queue API, faked in-process behind `E2E_TEST_GITHUB_MERGE=1`
+// (`lib/test-github-merge-mock.ts`). NO REAL PULL REQUEST IS EVER MERGED.
+//
+// ⚠️ INERT UNTIL A SPEC ASKS FOR IT, which is what makes wiring it into this lane safe for
+// every spec already here. The mock claims a GitHub path ONLY for a repository its CONTROL
+// FILE lists, and the file starts empty — an unscoped intercept would shadow the
+// repository-set journey's readiness read, which the seam's own header calls out. A spec
+// that writes no control gets the behaviour it had before this existed.
+const MOTIR_GITHUB_MERGE_CONTROL_PATH = path.resolve('/tmp/motir-main-github-merge-control.json');
+const MOTIR_GITHUB_MERGE_JOURNAL_PATH = path.resolve('/tmp/motir-main-github-merge-journal.jsonl');
+process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH'] ??= MOTIR_GITHUB_MERGE_CONTROL_PATH;
+process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] ??= MOTIR_GITHUB_MERGE_JOURNAL_PATH;
 function appRoleDatabaseUrl(raw: string): string {
   const url = new URL(raw);
   url.username = process.env['TEST_APP_DB_ROLE'] ?? 'motir_app';
@@ -430,6 +444,11 @@ export default defineConfig({
         // synthetic — the code→token exchange + /user read never leave the
         // process (E2E_TEST_OAUTH's MockAgent above intercepts GitHub too).
         GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
+        // The merge seam (see the paths above): the promoted merge-unlanded-classes spec
+        // presses Approve and merge and reads back what the host was asked.
+        E2E_TEST_GITHUB_MERGE: '1',
+        MOTIR_GITHUB_MERGE_CONTROL_PATH,
+        MOTIR_GITHUB_MERGE_JOURNAL_PATH,
         GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
         GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
         GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
