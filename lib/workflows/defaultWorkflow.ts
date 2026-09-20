@@ -232,25 +232,26 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // user story, and this graph is enumerated rather than generated.
   ['todo', 'planning'],
   ['in_progress', 'planning'],
-  // OUT — three, because approving a plan does not decide what happens to the
-  // card that provoked it. A plan may correct this card, split it, or replace
-  // it, and only the human who approves knows which:
-  //   • `todo`        — the card was corrected and belongs back in the queue.
+  // OUT — three, for the moves a PERSON may make:
+  //   • `todo`        — the card belongs back in the queue.
   //   • `in_progress` — the human decided to just do it.
   //   • `cancelled`   — the plan replaces it.
   //
-  // ⚠️ A HUMAN MOVES IT, and plan approval deliberately does NOT. Auto-returning
-  // the card to `todo` on approval would put it back in the pickable set before
-  // anyone corrected it, and the run would re-dispatch the same defective card —
-  // the exact loop this status exists to break.
+  // ⚠️ THE DECISION ON THE PLAN IS WHAT RETURNS THE CARD — superseding this
+  // block's former rule that "a HUMAN moves it, and plan approval deliberately
+  // does NOT" (bug MOTIR-5640, product owner 2026-09-16;
+  // `docs/decisions/agent-authored-plans.md` AMENDMENT 16, D6–D8). Approving the
+  // plan rests each parked target at `blocked` when a live `blocked_by` is still
+  // open and at `todo` otherwise; declining it, or a close that materializes
+  // nothing, restores the status it was parked from.
   //
-  // ⚠️ ONE EXCEPTION, and it does not reopen that loop (bug MOTIR-5359): an
-  // approved plan whose `modify` RE-SCOPES this very card — its title, its body
-  // or its repository — returns it to the initial status, as it does any card in
-  // the `in_progress` category. That is the first outcome above with the
-  // correction already made: the card is not re-dispatched unchanged, it is
-  // re-dispatched as the plan rewrote it. A plan that only splits or replaces the
-  // card does not re-scope it, so the human still moves those.
+  // The superseded rule's warrant was the re-dispatch LOOP — an unchanged,
+  // still-wrong card going straight back into the pickable set. AMENDMENT 16 D7
+  // answers it per plan SHAPE rather than by refusing to move: a `remove`d
+  // target is archived and takes no status, a target that gains a blocker rests
+  // at `blocked`, and for every other shape the approval IS the correction, so
+  // what a run next claims is the card the plan rewrote. MOTIR-5359's
+  // re-scope-only reset is folded into that one predicate.
   ['planning', 'todo'],
   ['planning', 'in_progress'],
   ['planning', 'cancelled'],
