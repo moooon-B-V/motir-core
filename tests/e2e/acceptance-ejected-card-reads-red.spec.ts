@@ -310,7 +310,17 @@ test.describe('an ejected card reads red', () => {
       await deliver(page, 'pull_request', dequeued(number, 'CI_FAILURE'), 'the queue removes it');
       await deliver(page, 'check_run', failedGroupCheck(), 'the failed check reports');
       await page.reload();
-      await expect(statusCard(page)).toContainText('Implemented', { timeout: 60_000 });
+      // ⚠️ THE RAIL ASSERTION WAS REMOVED, NOT UPDATED (Story MOTIR-5799 · MOTIR-5808;
+      // § 4 FOURTH AMENDMENT, point 3). It read `Implemented`, which was true when
+      // MOTIR-5628 was accepted; a retryable exit now returns the card to In Review and
+      // asks once more. Re-pointing a receipt's assertion at today's behaviour would edit
+      // history (`docs/decisions/acceptance-receipt-lifecycle.md` § 3), and this chapter's
+      // subject — that the queue threw it out — does not need the rail to say so. The rail
+      // is asserted for every class in
+      // `tests/e2e/acceptance-merge-unlanded-classes.spec.ts`.
+      await expect(
+        prRow(page, number).getByText(pra.outcome.leftQueue, { exact: true }),
+      ).toBeVisible({ timeout: 60_000 });
       await show(prRow(page, number));
     });
     await beat();
@@ -406,9 +416,11 @@ test.describe('an ejected card reads red', () => {
       await expect(statusCard(page)).toContainText('Implemented', { timeout: 60_000 });
       const part = fixPart(page);
       await expect(part.getByText(plain(fix.which.conflict), { exact: true })).toBeVisible();
-      await expect(
-        prRow(page, n).getByRole('button', { name: pra.outcome.queueAgain }),
-      ).toBeVisible();
+      // ⚠️ THE *QUEUE AGAIN* ASSERTION WAS REMOVED, NOT INVERTED (MOTIR-5808; § 4 point 2).
+      // A conflict is CAN'T LAND: no approval can land those commits, so the row offers no
+      // verb at all now. That absence is asserted where it belongs — on the new receipt,
+      // `acceptance-merge-unlanded-classes.spec.ts` journey 2 — rather than by rewriting
+      // what this receipt's reviewer watched.
       await show(part);
       await beat();
       await gotoLoadedBoard(page);
@@ -448,11 +460,8 @@ test.describe('an ejected card reads red', () => {
       const part = fixPart(page, zfix.aria.part);
       await expect(part).toContainText(`${prName(PRS.conflict.number)} 已离开合并队列。`);
       await expect(part.getByText(plain(zfix.which.conflict), { exact: true })).toBeVisible();
-      await expect(
-        prRow(page, PRS.conflict.number, zh.github.development.title).getByRole('button', {
-          name: zh.approvalGate.pullRequestApproval.outcome.queueAgain,
-        }),
-      ).toBeVisible();
+      // The same removal as the English chapter above: a conflict offers no verb (§ 4
+      // point 2), and the new receipt asserts that in both locales.
       await show(part);
     });
     await beat();
