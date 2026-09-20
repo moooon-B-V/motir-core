@@ -1,4 +1,6 @@
 import { getGitProvider } from '@/lib/git';
+import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
 import { readPullRequest } from '@/lib/github/pullRequestRead';
 import {
   githubPullRequestRepository,
@@ -6,10 +8,13 @@ import {
 } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { githubWebhookService } from './githubWebhookService';
 import { workflowsService } from './workflowsService';
 import { reconcileGatesFor } from './gateSetFor';
+import { promoteIfCiAlreadyGreen } from './ciPromotion';
+import { readReportedCheckSet } from './checkSetReconcile';
 
 // THE OPEN-DELIVERY RECONCILE (MOTIR-5390) — the path that makes a lost
 // `pull_request` delivery recoverable instead of permanent.
@@ -111,6 +116,16 @@ export interface PullRequestReconcileSummary {
    * this fixes a card whose question is missing whatever the reason.
    */
   gatesRaised: number;
+  /**
+   * Cards PROMOTED to In Review because re-asking the host settled a check row
+   * that had been recorded `pending` since a lost completion (MOTIR-5838).
+   *
+   * ⚠️ READ A NON-ZERO VALUE THE WAY `gatesRaised` ASKS TO BE READ: it counts
+   * pull requests whose completion webhook never arrived. One is a lost
+   * delivery repaired; a steady trickle is an ingestion defect, and the
+   * ingestion is the bug to fix.
+   */
+  promoted: number;
 }
 
 /** The sync outcomes that mean a card actually moved. */
@@ -134,6 +149,7 @@ export const pullRequestReconcileService = {
       gone: 0,
       failed: 0,
       gatesRaised: 0,
+      promoted: 0,
     };
 
     const candidates = await withSystemContext((tx) =>
@@ -150,16 +166,32 @@ export const pullRequestReconcileService = {
     );
     summary.examined = candidates.length;
 
-    // One token per installation per pass. A mint that fails is remembered, so the
-    // installation's other rows are counted as failed without asking again.
+    // One token per installation AND ROLE per pass. A mint that fails is remembered,
+    // so the installation's other rows on the same App are counted as failed without
+    // asking again.
+    //
+    // ⚠️ THE ROLE IS IN THE KEY, AND IT HAS TO BE (MOTIR-5843). Two repositories can
+    // sit on ONE installation and differ in provenance — a hosted one mints through
+    // the provisioning App, an imported one through the user-facing App — so a memo
+    // keyed on `installationId` alone hands the second repository the first's token.
+    // That was harmless only while this site passed no repository at all and every
+    // mint here was wrong in the SAME direction; resolving provenance per repository
+    // without widening the key would introduce a cross-repository credential leak
+    // while fixing a refusal, which is the worse defect of the two.
+    //
+    // The key is the same pair `appAuth.mintInstallationToken` caches on one layer
+    // down (`${role}:${installationId}`), because a token IS per installation per
+    // App — so this memo has exactly the granularity of the thing it is memoising.
     const tokens = new Map<string, Promise<string>>();
-    const tokenFor = (installationId: string): Promise<string> => {
-      let token = tokens.get(installationId);
+    const tokenFor = (installationId: string, owner: string): Promise<string> => {
+      const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+      const key = `${role}:${installationId}`;
+      let token = tokens.get(key);
       if (!token) {
         token = getGitProvider('github')
-          .mintInstallationToken(installationId)
+          .mintInstallationToken(installationId, { owner })
           .then((t) => t.token);
-        tokens.set(installationId, token);
+        tokens.set(key, token);
       }
       return token;
     };
@@ -172,7 +204,7 @@ export const pullRequestReconcileService = {
         }
 
         const { repo } = candidate;
-        const token = await tokenFor(repo.installation.installationId);
+        const token = await tokenFor(repo.installation.installationId, repo.owner);
         const read = await readPullRequest(token, repo.owner, repo.name, candidate.number);
 
         if (read.kind === 'gone') {
@@ -198,6 +230,17 @@ export const pullRequestReconcileService = {
           // this adds no rule of its own — it adds an occasion. And because
           // `reconcileGatesFor` only raises what is missing and never supersedes,
           // a sweep over a card that is already right writes nothing at all.
+          //
+          // ⚠️ AND A LOST CHECK-COMPLETION IS THE SAME SHAPE ONE LAYER DOWN
+          // (MOTIR-5838), which is why the re-read runs FIRST. `reconcileGatesFor`
+          // raises what a card's STATE says is owed, and a card stranded that way
+          // has a state that is itself wrong: a `pending` row nothing will ever
+          // refresh folds the pull request to `running`, so the card is not
+          // promotable, no gate is OWED, and the gate sweep raises nothing —
+          // correctly, and for ever. Re-asking the host is what makes the state
+          // right, and doing it before the gate sweep is what lets the gate be
+          // derived from the repaired state in THIS pass rather than the next one.
+          summary.promoted += await promoteDeliveredCardsAfterReRead(candidate, now);
           summary.gatesRaised += await reconcileGatesForDeliveredCards(candidate);
           await markReconciled(candidate);
           continue;
@@ -312,6 +355,65 @@ async function reconcileGatesForDeliveredCards(candidate: ReconcileCandidate): P
     });
   }
   return raised;
+}
+
+/**
+ * Re-ask the host about this pull request's check set and promote any card the
+ * repaired verdict makes reviewable (MOTIR-5838).
+ *
+ * ⚠️ IT ADDS AN OCCASION, NOT A PROMOTION PATH. The whole body of it is
+ * `promoteIfCiAlreadyGreen` — the SAME edge-2 latch a card arriving at
+ * `implemented` fires, with the same host re-read, the same `isPromotable` and
+ * the same gate raise inside the same transaction. That is deliberate and is
+ * the reason this sweep can be trusted: a card promoted here took exactly the
+ * route it would have taken had the delivery arrived, so there is no second
+ * answer to drift from the first. The latch is a no-op for a card that is not
+ * at `implemented`, so no filter of its own is owed here.
+ *
+ * The ACTOR is the workspace owner, which is what the CI-feedback path already
+ * resolves for a promotion nobody is standing behind
+ * (`workspaceMembershipRepository.findOwnerByWorkspace`). A workspace with no
+ * owner promotes nothing rather than guessing at an identity.
+ *
+ * ⚠️ A PER-CARD FAILURE IS COUNTED, NEVER THROWN — the same rule the gate sweep
+ * beside it follows, for the same reason: one card must not cost the other
+ * cards of the same pull request their repair, nor the rest of the pass.
+ */
+async function promoteDeliveredCardsAfterReRead(
+  candidate: ReconcileCandidate,
+  now: Date,
+): Promise<number> {
+  const byWorkspace = new Map<string, string[]>();
+  for (const d of candidate.deliveries) {
+    byWorkspace.set(d.workspaceId, [...(byWorkspace.get(d.workspaceId) ?? []), d.workItemId]);
+  }
+
+  let promoted = 0;
+  for (const [workspaceId, workItemIds] of byWorkspace) {
+    const owner = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, workspaceId);
+      return workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx);
+    });
+    if (!owner) continue;
+
+    for (const workItemId of workItemIds) {
+      try {
+        const moved = await promoteIfCiAlreadyGreen(
+          workItemId,
+          { userId: owner.userId, workspaceId },
+          readReportedCheckSet,
+          now,
+        );
+        if (moved) promoted += 1;
+      } catch (err) {
+        console.error('[pullRequestReconcile] could not re-read a card’s check set', {
+          workItemId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+  return promoted;
 }
 
 /** Stamp the row as heard-from, under the tenant the sync itself writes it under. */

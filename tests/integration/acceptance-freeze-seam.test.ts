@@ -4,6 +4,7 @@ import path from 'node:path';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
+import { decideAcceptance } from '../helpers/acceptanceGate';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
@@ -116,7 +117,7 @@ describe('the freeze seam, end to end', () => {
     // Approve through the SHIPPED path, not a hand-written UPDATE — it is what
     // stamps the approver and moves the story, and this test is about what
     // survives that exact state.
-    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
+    await decideAcceptance(story.id, 'approve', fx.ctx);
     const before = await adminDb.acceptanceEvidence.findFirstOrThrow({
       where: { workItemId: story.id, isCurrent: true },
     });
@@ -161,7 +162,7 @@ describe('the freeze seam, end to end', () => {
   it('ONE code, asserted at all THREE layers — a rename cannot pass by updating two', async () => {
     const story = await inReviewStory();
     await publish(story, 'signed.webm', 'aaaaaaa');
-    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
+    await decideAcceptance(story.id, 'approve', fx.ctx);
 
     // Layer 1 — the SERVICE raises the typed error (not a raw Prisma failure).
     await expect(
@@ -211,10 +212,7 @@ describe('the freeze seam, end to end', () => {
 
     const rejectedStory = await inReviewStory();
     await publish(rejectedStory, 'first.webm', 'ccccccc');
-    await acceptanceEvidenceService.decide(
-      { workItemId: rejectedStory.id, decision: 'request_changes' },
-      fx.ctx,
-    );
+    await decideAcceptance(rejectedStory.id, 'request_changes', fx.ctx);
     expect((await publish(rejectedStory, 'second.webm', 'ddddddd')).status).toBe(201);
     const current = await acceptanceEvidenceService.getCurrentForStory(rejectedStory.id, fx.ctx);
     expect(current!.commitSha).toBe('ddddddd');
@@ -237,7 +235,7 @@ describe('the freeze seam, end to end', () => {
       await publish(story, 'first.webm', `aaaaaa${round}`);
 
       const [approveResult, publishResult] = await Promise.allSettled([
-        acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx),
+        decideAcceptance(story.id, 'approve', fx.ctx),
         publish(story, 'racing.webm', `bbbbbb${round}`),
       ]);
 
@@ -303,10 +301,7 @@ describe('the freeze seam, end to end', () => {
     // the linked bytes, the unmoved story — is the first test in this file.)
     const approvedFirst = await inReviewStory();
     await publish(approvedFirst, 'first.webm', 'aaaaaaa');
-    const decidedFirst = await acceptanceEvidenceService.decide(
-      { workItemId: approvedFirst.id, decision: 'approve' },
-      fx.ctx,
-    );
+    const decidedFirst = await decideAcceptance(approvedFirst.id, 'approve', fx.ctx);
     expect(decidedFirst.evidence.status).toBe('approved');
     expect((await publish(approvedFirst, 'later.webm', 'bbbbbbb')).status).toBe(409);
     expect((await acceptanceEvidenceService.getCurrentForStory(approvedFirst.id, fx.ctx))!.id).toBe(
@@ -323,10 +318,7 @@ describe('the freeze seam, end to end', () => {
     });
     expect((await publish(publishedFirst, 'second.webm', 'ddddddd')).status).toBe(201);
 
-    const decidedSecond = await acceptanceEvidenceService.decide(
-      { workItemId: publishedFirst.id, decision: 'approve' },
-      fx.ctx,
-    );
+    const decidedSecond = await decideAcceptance(publishedFirst.id, 'approve', fx.ctx);
     expect(decidedSecond.storyStatus).toBe('done');
     expect(decidedSecond.evidence.status).toBe('approved');
     expect(decidedSecond.evidence.commitSha).toBe('ddddddd');

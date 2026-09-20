@@ -226,6 +226,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/mentionNotify.ts',
     shape: '{ notifiedUserIds: Array<string> }',
   },
+  // The monitor-configuration probe (MOTIR-5831). Its result is a VERDICT the
+  // handler branches on, so a replayed shape from an older revision would decide
+  // whether the run goes red — which is exactly what this pin exists to catch.
+  'monitor-config-preflight': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ blindSpot: string; detail: string; offenders: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; providers: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; verdict: "incomplete" } | { blindSpot: string; detail: string; providers: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; verdict: "complete" } | { blindSpot: string; detail: string; providers: Array<{ missing: Array<string>; providerId: string; required: Array<string> }>; verdict: "not_applicable" }',
+  },
   'notification-fan-in': {
     file: 'lib/jobs/definitions/notificationFanIn.ts',
     shape: '{ writtenUserIds: Array<string> }',
@@ -278,10 +286,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/monitorIssueResolve.ts',
     shape: '{ failed: number; gone: number; links: number; resolved: number; skipped: number }',
   },
-  'reconcile-open-deliveries-v2': {
+  'reconcile-open-deliveries-v3': {
     file: 'lib/jobs/definitions/pullRequestReconcile.ts',
     shape:
-      '{ examined: number; failed: number; gatesRaised: number; gone: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
+      '{ examined: number; failed: number; gatesRaised: number; gone: number; promoted: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
   },
   'reconcile-github-billed': {
     file: 'lib/jobs/definitions/ciMinutesReconcile.ts',
@@ -414,6 +422,13 @@ export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
     supersededBy: 'reconcile-open-deliveries-v2',
     reason:
       "MOTIR-5671 added `gatesRaised` to the reconcile summary — the sweep now repairs a card whose GATES are wrong as well as one whose merge was never heard about, and counts that separately because it is a different repair. A memo written under the old id carries the narrower shape. The step is a READ and an idempotent repair (`reconcileGatesFor` only raises what is missing, and the job is `retryPolicy: 'idempotent'`), so re-executing it under the new id on a resumed run is safe — which is why the answer is a bump rather than a boundary guard on the replayed value.",
+  },
+  'reconcile-open-deliveries-v2': {
+    shape:
+      '{ examined: number; failed: number; gatesRaised: number; gone: number; replayed: number; skippedNoLiveCard: number; stillOpen: number; transitioned: number }',
+    supersededBy: 'reconcile-open-deliveries-v3',
+    reason:
+      'MOTIR-5838 added `promoted` to the reconcile summary — the sweep now also repairs a card whose recorded CHECK SET is wrong (a `pending` row left behind by a lost completion, which folds the pull request to `running` for ever), and counts that separately because it is a third repair, distinct from a lost merge and a missing gate. A memo written under the old id carries the narrower shape. Every limb of the step is a read or an idempotent repair — `reconcileGatesFor` only raises what is missing, the host check-set read is a read, `settlePending` is guarded on the row still reading `pending` so a second pass matches nothing, and `promoteIfCiAlreadyGreen` moves only a card at `implemented` — so re-executing it under the new id on a resumed run is safe, which is why the answer is a bump rather than a boundary guard on the replayed value.',
   },
   'roll-up-parent': {
     shape:

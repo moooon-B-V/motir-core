@@ -6215,7 +6215,11 @@
         "empty": "Empty",
         "aria": "Folder {name}, {contents}. Open to see what is filed in it.",
         "emptyTitle": "This folder is empty",
-        "emptyDescription": "Work items filed into {name} from Work items will show here."
+        "emptyDescription": "Work items filed into {name} from Work items will show here.",
+        "changes": "{count} changes",
+        "changesOne": "1 change",
+        "changesAria": "{count} proposed changes inside",
+        "changesAriaOne": "1 proposed change inside"
       },
       "more": {
         "label": "+ {count} more",
@@ -6293,6 +6297,7 @@
       "title": "Development",
       "gloss": "Pull requests and how to test them · live PR and CI status",
       "glossWithDesign": "Pull requests, the design and how to test them · live PR and CI status",
+      "glossWithAcceptance": "The acceptance video, the pull requests and how to test them · live PR and CI status",
       "glossWithDecision": "The decision and its pull request · live PR and CI status",
       "pullRequestsGroup": "Pull requests",
       "howToTest": {
@@ -7514,6 +7519,7 @@
       },
       "review": "Review",
       "subjectMeta": "{files, plural, =1 {# file} other {# files}} · {version}",
+      "acceptanceMeta": "{chapters, plural, =0 {No chapters} =1 {# chapter} other {# chapters}} · {version}",
       "noVersion": "no version",
       "decidedOn": "on <mono>{version}</mono>",
       "subjectGone": "The design this asked about is gone",
@@ -7523,7 +7529,8 @@
         "design_result": "Design result",
         "decision_approval": "Decision approval",
         "pull_request_approval": "Pull-request approval",
-        "pull_request_merge": "Pull-request merge"
+        "pull_request_merge": "Pull-request merge",
+        "acceptance_result": "Acceptance video"
       },
       "reviewRow": "Review {key} {title}",
       "pullRequest": {
@@ -7758,8 +7765,8 @@
         },
         "failedJobs": {
           "title": "Failed jobs",
-          "value": "{count} dead-lettered · 24h",
-          "detail": "Failed after their retries and not yet replayed. Replay happens per workspace, in that workspace's own jobs dashboard.",
+          "value": "{standing} unreplayed · {count} in 24h",
+          "detail": "Failed after their retries and not yet replayed. The first number is the STANDING backlog, with no time bound — a window cannot report a backlog. Replay happens per workspace, in that workspace's own jobs dashboard.",
           "unreachable": {
             "probeFailed": "No response"
           },
@@ -8497,6 +8504,24 @@
         "movesToDone": "move {key} to Done, starting the work items waiting on it."
       }
     },
+    "acceptanceResult": {
+      "kindLabel": "Acceptance video",
+      "meta": {
+        "withVersion": "recorded at {version}",
+        "plain": "the recorded run"
+      },
+      "consequence": "Approving accepts {key}. It moves to Done once nothing under it is still open.",
+      "confirm": {
+        "records": "record that you accepted it, with the time and this recording;",
+        "freezes": "lock this recording, so a later run cannot replace it;",
+        "movesToDone": "move {key} to Done once nothing under it is still open.",
+        "merges": "merge {prs} — the video is not part of it."
+      },
+      "consequenceMerges": "Approving accepts {key} and merges {prs}, then moves {key} to Approved. The video is not merged — it is evidence and is never committed.",
+      "accepted": "Acceptance approved by {name} · {when}",
+      "stands": "Acceptance approved by {name} · {when} — the video stands",
+      "mergeHeld": "The pull request merges when its checks pass — no second press."
+    },
     "pullRequestApproval": {
       "kindLabel": "Pull requests",
       "meta": {
@@ -8635,7 +8660,8 @@
         "design_result": "design approval",
         "pull_request_approval": "pull-request approval",
         "decision_approval": "decision approval",
-        "pull_request_merge": "merge approval"
+        "pull_request_merge": "merge approval",
+        "acceptance_result": "acceptance approval"
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",

@@ -1,5 +1,5 @@
 import { PlanChangeDiffFrame, ProposedAddNode } from '@/components/planning/PlanChangeDiffNode';
-import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
+import { PlanItemNode, type PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { RoadmapLevel } from '@/components/planning/ProjectRoadmapCanvas';
 import {
   diffStateForItem,
@@ -52,50 +52,86 @@ export function decoratePlanChangeLevel(
   // node, exactly as before.
   const pendingAdds = new Map(proposedAddsForLevel(index, focusNodeId).map((a) => [a.nodeId, a]));
 
-  const nodes: ProjectCanvasNode[] = base.nodes.map((node) => {
-    // ⚠️ THE DECIDED ADD LANDS ON ITS CARD, NOT BESIDE IT (bug MOTIR-3206;
-    // `design/ai-planning/design-notes.md` Part VI §3 — *"it lands ON the
-    // committed node rather than beside it as a keyless ghost"*). Checked BEFORE
-    // the diff-state pass, because an accepted add is not a `modify` of an
-    // existing card and would otherwise fall through untouched — and then be
-    // appended a second time as a proposal, which is the duplicate this fixes.
-    //
-    // The node keeps its own content — the real card, with its real `MOTIR-<n>`
-    // and its live status pill, which is what Part VI asks an accepted add to
-    // show — wrapped in the SAME add frame the pending proposal wore. One
-    // language across the pending and the decided state, not a second one.
-    const merged = pendingAdds.get(node.id);
-    if (merged) {
-      pendingAdds.delete(node.id);
+  // ⚠️ A FOLDER MOVE IS DRAWN ONCE, AT ITS DESTINATION (Bug MOTIR-5782; design
+  // Part XVIII decision 4 — the re-parent rule MOTIR-3867 set, extended to folders).
+  // The committed read still carries the card at its SOURCE, where it is a card
+  // about to leave; after approve that read no longer has it. So it is taken off
+  // the source level, and drawn on the destination level — which the committed
+  // read does not carry it on yet — as the proposal it is: the change frame around
+  // the shipped `PlanItemNode`, whose bottom slot is §17.4's `Placement` diff line.
+  const departing = new Set(
+    index.relocations
+      .filter((r) => r.fromLevel === focusNodeId && r.toLevel !== focusNodeId)
+      .map((r) => r.item.nodeId),
+  );
+  // Once the plan is APPROVED the move has happened: the committed read already
+  // carries the card HERE, and appending it again would draw it twice (the
+  // MOTIR-3206 shape). A card already on the level keeps its ordinary change frame.
+  const onLevel = new Set(base.nodes.map((n) => n.id));
+  const arriving = index.relocations.filter(
+    (r) => r.toLevel === focusNodeId && r.fromLevel !== focusNodeId && !onLevel.has(r.item.nodeId),
+  );
+
+  const nodes: ProjectCanvasNode[] = base.nodes
+    .filter((node) => !departing.has(node.id))
+    .map((node) => {
+      // ⚠️ THE DECIDED ADD LANDS ON ITS CARD, NOT BESIDE IT (bug MOTIR-3206;
+      // `design/ai-planning/design-notes.md` Part VI §3 — *"it lands ON the
+      // committed node rather than beside it as a keyless ghost"*). Checked BEFORE
+      // the diff-state pass, because an accepted add is not a `modify` of an
+      // existing card and would otherwise fall through untouched — and then be
+      // appended a second time as a proposal, which is the duplicate this fixes.
+      //
+      // The node keeps its own content — the real card, with its real `MOTIR-<n>`
+      // and its live status pill, which is what Part VI asks an accepted add to
+      // show — wrapped in the SAME add frame the pending proposal wore. One
+      // language across the pending and the decided state, not a second one.
+      const merged = pendingAdds.get(node.id);
+      if (merged) {
+        pendingAdds.delete(node.id);
+        return {
+          ...node,
+          searchText: `${node.searchText} add`,
+          content: (
+            <PlanChangeDiffFrame state="add" outcome={outcome}>
+              {node.content}
+            </PlanChangeDiffFrame>
+          ),
+        };
+      }
+      const item = itemById.get(node.id);
+      if (!item) return node; // a ghost anchor / the planning-origin cluster
+      const state = diffStateForItem(index, item);
+      const gainsChild = gainsChildren.has(node.id);
+      if (!state) return gainsChild ? { ...node, drillable: true } : node;
+      const proposal = state === 'locked' ? undefined : proposalForItem(index, item.id);
       return {
         ...node,
-        searchText: `${node.searchText} add`,
+        drillable: node.drillable || gainsChild,
+        // The state joins the node's search text so "changed" / "removed" / "locked"
+        // is findable with the canvas's own search-to-locate, not only visible.
+        searchText: `${node.searchText} ${state}`,
         content: (
-          <PlanChangeDiffFrame state="add" outcome={outcome}>
+          <PlanChangeDiffFrame state={state} outcome={outcome} {...(proposal ? { proposal } : {})}>
             {node.content}
           </PlanChangeDiffFrame>
         ),
       };
-    }
-    const item = itemById.get(node.id);
-    if (!item) return node; // a ghost anchor / the planning-origin cluster
-    const state = diffStateForItem(index, item);
-    const gainsChild = gainsChildren.has(node.id);
-    if (!state) return gainsChild ? { ...node, drillable: true } : node;
-    const proposal = state === 'locked' ? undefined : proposalForItem(index, item.id);
-    return {
-      ...node,
-      drillable: node.drillable || gainsChild,
-      // The state joins the node's search text so "changed" / "removed" / "locked"
-      // is findable with the canvas's own search-to-locate, not only visible.
-      searchText: `${node.searchText} ${state}`,
-      content: (
-        <PlanChangeDiffFrame state={state} outcome={outcome} {...(proposal ? { proposal } : {})}>
-          {node.content}
-        </PlanChangeDiffFrame>
-      ),
-    };
-  });
+    });
+
+  const moved: ProjectCanvasNode[] = arriving.map(({ item }) => ({
+    id: item.nodeId,
+    parentId: focusNodeId,
+    searchText: `${item.title} ${item.kind} change`,
+    crumbLabel: item.title,
+    drillable: false,
+    viewable: false,
+    content: (
+      <PlanChangeDiffFrame state="change" outcome={outcome} proposal={item}>
+        <PlanItemNode item={item} outcome={outcome} />
+      </PlanChangeDiffFrame>
+    ),
+  }));
 
   // Whatever did not merge above is still a proposal — an undecided add, or a
   // declined one, which never became anything and correctly keeps its ghost.
@@ -110,5 +146,10 @@ export function decoratePlanChangeLevel(
     content: <ProposedAddNode add={add} outcome={outcome} />,
   }));
 
-  return { nodes: [...nodes, ...proposed], deps: base.deps };
+  // An edge that touched a departing card leaves with it: the level is drawn as
+  // approving would leave it (the MOTIR-4098 rule the review canvas keeps).
+  const deps = departing.size
+    ? base.deps.filter((d) => !departing.has(d.from) && !departing.has(d.to))
+    : base.deps;
+  return { nodes: [...nodes, ...moved, ...proposed], deps };
 }

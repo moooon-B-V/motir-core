@@ -41,7 +41,7 @@ export const STAMP_COMPONENTS: readonly StampComponent[] = ['subject', 'pull_req
  *  · `companionSubjectVersion` — the `subjectVersion` of the card's awaiting
  *    approve-to-merge gate when the PRESSED gate is a design gate: one press on a
  *    design with pull requests also decides that gate and merges its members
- *    (MOTIR-5652, `pullRequestMergeService.approveDesignAndMerge`), and the frame
+ *    (MOTIR-5652, `pullRequestMergeService.approvePrimaryAndMerge`), and the frame
  *    renders those pull requests as part of the decision. Null for every other kind.
  *  · `descriptionMd` — the card's body, where `## Acceptance criteria` lives.
  */
@@ -55,7 +55,7 @@ export interface StampInputs {
  * THE BYPASS — a decision nobody PRESSED, so there is no rendered page to compare
  * against: the GitHub review sync (a reviewer on GitHub, ADR §8's fourth
  * amendment), and a composer deciding a SECOND gate inside one press whose
- * primary was already checked (the companion inside `approveDesignAndMerge`).
+ * primary was already checked (the companion inside `approvePrimaryAndMerge`).
  *
  * ⚠️ A SYMBOL, NOT A SENTINEL STRING, and that is the whole of its safety. A server
  * action and a route receive what a client SERIALISED, and a symbol cannot be

@@ -9,10 +9,12 @@ import {
 import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
 import {
   buildWorkItemLevel,
+  folderIdFromNodeId,
   isNotInEpicRow,
   LEVEL_MORE_ID,
   NOT_IN_EPIC_ID,
 } from '@/components/planning/workItemLevel';
+import { FolderEmptyLevel } from '@/components/planning/WorkItemNode';
 import { decoratePlanChangeLevel } from '@/components/planning/planChangeLevel';
 import { decorateTargetLevel } from '@/components/planning/PlanningTargetNode';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
@@ -142,12 +144,17 @@ export function PlanChangeCanvas({
     const key = levelCacheKey(null);
     const cached = cacheRef.current.get(key);
     if (cached) return cached;
+    // FOLDERS (Bug MOTIR-5782; design Part XVIII decision 1): the root reads the
+    // folder treatment exactly as `/roadmap` does — filed rows leave the root and
+    // the root folders come back as doors.
     const wi = await fetchRoadmapLevel(
       projectKey,
       null,
       'project',
       undefined,
       showAllRef.current.has(key),
+      undefined,
+      { folders: true },
     );
     cacheRef.current.set(key, wi);
     return wi;
@@ -221,6 +228,47 @@ export function PlanChangeCanvas({
         );
       }
 
+      // A FOLDER'S LEVEL (Bug MOTIR-5782; design Part XVIII decisions 1–2) — a real
+      // read, addressed by the folder: its child folders, then the work items
+      // filed directly in it, and then the proposals that will SIT in it
+      // (`proposedAddsForLevel` keys a folder-placed add on this same
+      // `folder:<id>` focus). No grouped node: inside a folder the folder is
+      // already the drawer. Its cache key is the focus id itself, which no work
+      // item id can collide with.
+      const folderId = folderIdFromNodeId(parentId);
+      if (folderId !== null) {
+        const key = levelCacheKey(parentId);
+        levelKeyRef.current = key;
+        let folderLevel = cacheRef.current.get(key);
+        if (!folderLevel) {
+          folderLevel = await fetchRoadmapLevel(
+            projectKey,
+            null,
+            'project',
+            undefined,
+            showAllRef.current.has(key),
+            undefined,
+            { folders: true, folderId },
+          );
+          cacheRef.current.set(key, folderLevel);
+        }
+        registerItems(folderLevel);
+        return decorateTargetLevel(
+          decoratePlanChangeLevel(
+            buildWorkItemLevel(folderLevel, {
+              markActive: true,
+              levelTotal: folderLevel.levelTotal,
+              folderChanges: diff.folderChanges,
+            }),
+            folderLevel,
+            diff,
+            parentId,
+            outcome,
+          ),
+          targets,
+        );
+      }
+
       const cacheKey = levelCacheKey(parentId);
       // The level the reader is now on OWNS this key — the tile's activation reads
       // it back (bug MOTIR-4501). Written before the await, so an activation can
@@ -229,13 +277,16 @@ export function PlanChangeCanvas({
       let wi = cacheRef.current.get(cacheKey);
       if (!wi) {
         // `all` only for a level the reader explicitly asked to see whole.
-        wi = await fetchRoadmapLevel(
-          projectKey,
-          parentId,
-          'project',
-          undefined,
-          showAllRef.current.has(cacheKey),
-        );
+        wi =
+          parentId === null
+            ? await readRootLevel()
+            : await fetchRoadmapLevel(
+                projectKey,
+                parentId,
+                'project',
+                undefined,
+                showAllRef.current.has(cacheKey),
+              );
         cacheRef.current.set(cacheKey, wi);
       }
       registerItems(wi);
@@ -270,6 +321,8 @@ export function PlanChangeCanvas({
             ...(excluded ? { groupExcludeIds: excluded } : {}),
             groupCrumbLabel: t('group.title'),
             levelTotal: wi.levelTotal,
+            // A closed folder holding proposals says so (Part XVIII decision 3).
+            folderChanges: diff.folderChanges,
           }),
           wi,
           diff,
@@ -345,6 +398,19 @@ export function PlanChangeCanvas({
     setShowAllTick((n) => n + 1);
   }, []);
 
+  // FOLDER CRUMBS navigate (Part XVIII decision 5 — MOTIR-5742's crumb, as
+  // `/roadmap` draws it), and an EMPTY folder's level says so in the folder's own
+  // words rather than the generic "no children" (decision 1, MOTIR-5713 sheet 6).
+  const isFolderCrumb = useCallback(
+    (crumb: CanvasCrumb) => folderIdFromNodeId(crumb.id) !== null,
+    [],
+  );
+  const emptyDrilledFor = useCallback(
+    (focus: { id: string; label: string }) =>
+      folderIdFromNodeId(focus.id) !== null ? <FolderEmptyLevel name={focus.label} /> : null,
+    [],
+  );
+
   return (
     <>
       <ProjectRoadmapCanvas
@@ -371,6 +437,8 @@ export function PlanChangeCanvas({
         ariaLabel={ariaLabel ?? t('ariaWorkItem')}
         loadingFallback={loadingFallback}
         emptyRoot={emptyRoot}
+        isFolderCrumb={isFolderCrumb}
+        emptyDrilledFor={emptyDrilledFor}
       />
       {quickView}
     </>

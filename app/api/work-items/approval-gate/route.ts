@@ -3,6 +3,7 @@ import { getActiveProject } from '@/lib/projects';
 import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
 import { howToTestService } from '@/lib/services/howToTestService';
@@ -137,6 +138,28 @@ async function readSubject(
     // because the kind that arm answered for is no longer registered to reach it.
     case 'pull_request_approval':
       return readDevelopmentBlock(gate, item, ctx);
+    // MOTIR-4950 — the acceptance port is the RECORDING the gate asks about, read by
+    // the gate's own `subjectId` exactly as the design arm reads its evidence.
+    case 'acceptance_result': {
+      // ⚠️ A STORY RUN'S ACCEPTANCE IS PORTED BY THE DEVELOPMENT BLOCK (MOTIR-5790), for
+      // the design arm's reason above: while it awaits beside an awaiting merge question,
+      // one press answers both, so the reader must see what that press merges.
+      if (gate.state === 'awaiting') {
+        const merge = await approvalGatesService.getForWorkItem(
+          { workItemId: gate.workItemId, kind: 'pull_request_approval' },
+          ctx,
+        );
+        if (merge.gate?.state === 'awaiting') return readDevelopmentBlock(gate, item, ctx);
+      }
+      const evidence = await acceptanceEvidenceService.getForGateSubject(
+        { workItemId: gate.workItemId, subjectId: gate.subjectId },
+        ctx,
+      );
+      return evidence
+        ? { state: 'resolved', kind: 'acceptance_result', evidence }
+        : { state: 'gone' };
+    }
+
     // THE DECISION PORT (MOTIR-5678; design §27 Panel 7): the Development block with the
     // decision document FIRST — read here, on the server, through the resolver — and the
     // pull requests one press merges beneath it. The document is read beside the block,
@@ -177,26 +200,41 @@ async function readDevelopmentBlock(
   // set that has emptied — every pull request unlinked — is GONE, exactly as the
   // handler answers null for it. Nothing is read by `subjectId` beyond that: the
   // gate's `subjectId` IS the work item's id.
-  const [pullRequests, deliveryView, howToTest, designEvidence, members, repair] =
-    await Promise.all([
-      workItemsService.listLinkedPullRequests(gate.workItemId, ctx),
-      workItemsService.getDeliveryView(gate.workItemId, item.targetRepos, ctx),
-      howToTestService.getForWorkItem(gate.workItemId, ctx),
-      designEvidenceService.getCurrentForWorkItem(gate.workItemId, ctx),
-      // ⚠️ READ FOR AN AWAITING GATE TOO (MOTIR-5802 · MOTIR-5806). The RE-ASKED gate is
-      // awaiting, and its members are what carry the row's verb — *Queue again* /
-      // *Retry merge*, whose press decides that very gate.
-      gate.state === 'approved' || gate.state === 'awaiting'
-        ? pullRequestMergeService.listApprovalMembers(
-            { workItemId: gate.workItemId, approvalGateId: gate.id },
-            ctx,
-          )
-        : Promise.resolve([]),
-      // ⚠️ `motir fix` BELONGS IN THE OVERLAY TOO (MOTIR-5806; § 28 panel 7). The page
-      // has offered it since MOTIR-5721; the overlay is where most approvals are
-      // actually decided, and a person deciding there saw only the approve.
-      workItemRepairService.getRepairView(gate.workItemId, ctx),
-    ]);
+  const [
+    pullRequests,
+    deliveryView,
+    howToTest,
+    designEvidence,
+    members,
+    repair,
+    acceptanceEvidence,
+    acceptanceRead,
+  ] = await Promise.all([
+    workItemsService.listLinkedPullRequests(gate.workItemId, ctx),
+    workItemsService.getDeliveryView(gate.workItemId, item.targetRepos, ctx),
+    howToTestService.getForWorkItem(gate.workItemId, ctx),
+    designEvidenceService.getCurrentForWorkItem(gate.workItemId, ctx),
+    // ⚠️ READ FOR AN AWAITING GATE TOO (MOTIR-5802 · MOTIR-5806). The RE-ASKED gate is
+    // awaiting, and its members are what carry the row's verb — *Queue again* /
+    // *Retry merge*, whose press decides that very gate. The item page's late stack
+    // reads both for the same reason, and `approval-gate-route.test.ts` COMPARES them.
+    gate.state === 'approved' || gate.state === 'awaiting'
+      ? pullRequestMergeService.listApprovalMembers(
+          { workItemId: gate.workItemId, approvalGateId: gate.id },
+          ctx,
+        )
+      : Promise.resolve([]),
+    // ⚠️ `motir fix` BELONGS IN THE OVERLAY TOO (MOTIR-5806; § 28 panel 7). The page
+    // has offered it since MOTIR-5721; the overlay is where most approvals are
+    // actually decided, and a person deciding there saw only the approve.
+    workItemRepairService.getRepairView(gate.workItemId, ctx),
+    // A story run's receipt and its gate (MOTIR-5790) — the subject when acceptance leads.
+    acceptanceEvidenceService.getCurrentForStory(gate.workItemId, ctx),
+    approvalGatesService.getForWorkItem(
+      { workItemId: gate.workItemId, kind: 'acceptance_result' },
+      ctx,
+    ),
+  ]);
   if (deliveryView.deliveries.length === 0) return { state: 'gone' };
   return {
     state: 'resolved',
@@ -209,6 +247,8 @@ async function readDevelopmentBlock(
     isDesignCard: item.type === 'design',
     members,
     repair,
+    acceptanceEvidence,
+    acceptanceGate: acceptanceRead.gate,
   };
 }
 

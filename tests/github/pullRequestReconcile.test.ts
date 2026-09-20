@@ -45,6 +45,9 @@ const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-reconcile';
 const CORE_REPO_ID = '9301';
 const AI_REPO_ID = '9302';
+const CUSTOMER_REPO_ID = '9303';
+/** Not the provisioning org — a repository the customer connected. */
+const CUSTOMER_OWNER = 'acme-corp';
 const MERGED_AT = '2026-09-13T19:58:55.000Z';
 
 /** Past the quiet threshold, so every row written "now" is a candidate. */
@@ -60,7 +63,15 @@ type HostPr = {
 
 /** What GitHub currently says, per repo name + number. */
 let host: Map<string, HostPr | { status: number }>;
+/** MOTIR-5838 — what GitHub says a commit's check runs are, per `repo@sha`.
+ *  Each entry is the REST triple `[name, status, conclusion]`. */
+let hostChecks: Map<string, [name: string, status: string, conclusion: string | null][]>;
+/** MOTIR-5843 — the installation token each repo's PR read carried, by repo name. */
+let tokensSeen: Map<string, string>;
 let fetchMock: ReturnType<typeof vi.fn>;
+
+const CHECK_SUITE_ID = 87626131838;
+const STUCK_HEAD_SHA = '7bf7511e3f774e6f067c1e8bfdc029b9c48e4a89';
 
 function hostPayload(pr: HostPr) {
   return {
@@ -77,12 +88,44 @@ function hostPayload(pr: HostPr) {
 }
 
 function installFetch() {
-  fetchMock = vi.fn(async (url: string) => {
-    const files = /\/repos\/moooon\/([^/]+)\/pulls\/(\d+)\/files/.exec(url);
+  fetchMock = vi.fn(async (url: string, init?: unknown) => {
+    // ⚠️ The OWNER is a wildcard, not `moooon` (MOTIR-5843). The provenance cases
+    // below put a customer-owned repository on the same installation, and a regex
+    // pinned to one owner answers 500 for it — which reads as a host failure
+    // rather than as the fixture not being wired. Every repo NAME in this file is
+    // unique, so the maps stay keyed on the name.
+    const files = /\/repos\/[^/]+\/([^/]+)\/pulls\/(\d+)\/files/.exec(url);
     if (files)
       return new Response(JSON.stringify([{ filename: 'lib/changed.ts' }]), { status: 200 });
-    const one = /\/repos\/moooon\/([^/]+)\/pulls\/(\d+)$/.exec(url);
+    // MOTIR-5838 — what the host says a commit's check runs are. Served from a
+    // mutable map so a test can make the host disagree with the recorded set,
+    // which is the whole of the lost-completion shape.
+    const checks = /\/repos\/[^/]+\/([^/]+)\/commits\/([0-9a-f]+)\/check-runs/.exec(url);
+    if (checks) {
+      const runs = hostChecks.get(`${checks[1]}@${checks[2]}`) ?? [];
+      return new Response(
+        JSON.stringify({
+          total_count: runs.length,
+          check_runs: runs.map(([name, status, conclusion]) => ({
+            name,
+            status,
+            conclusion,
+            check_suite: { id: CHECK_SUITE_ID },
+          })),
+        }),
+        { status: 200 },
+      );
+    }
+    const one = /\/repos\/[^/]+\/([^/]+)\/pulls\/(\d+)$/.exec(url);
     if (!one) return new Response('not stubbed', { status: 500 });
+    // MOTIR-5843 — WHICH TOKEN this repository's read actually carried. The memo
+    // criterion is about the token a repository RECEIVES, so it is measured here,
+    // on the request, rather than by counting mints (a reconcile pass mints
+    // several times for other, already-correct reasons).
+    const bearer = (init as { headers?: Record<string, string> } | undefined)?.headers?.[
+      'authorization'
+    ];
+    if (bearer) tokensSeen.set(one[1]!, bearer.replace(/^Bearer /, ''));
     const entry = host.get(`${one[1]}#${one[2]}`);
     if (!entry) return new Response('{}', { status: 404 });
     if ('status' in entry) return new Response('{}', { status: entry.status });
@@ -126,16 +169,36 @@ async function makeScenario(email: string) {
         defaultBranch: 'trunk',
         archived: false,
       },
+      // ⚠️ A CUSTOMER-OWNED repository on the SAME installation (MOTIR-5843).
+      // This is the pair the per-pass token memo has to keep apart: two repos,
+      // one installation, different provenance — so one of them mints through
+      // the provisioning App and the other must not receive that token.
+      {
+        providerRepoId: CUSTOMER_REPO_ID,
+        owner: CUSTOMER_OWNER,
+        name: 'acme-web',
+        defaultBranch: 'main',
+        archived: false,
+      },
     ],
   });
   return { user, workspace, project, ctx };
 }
 
-type Member = { repo: 'motir-core' | 'motir-ai'; number: number; baseRef: string };
+type Member = {
+  repo: 'motir-core' | 'motir-ai' | 'acme-web';
+  number: number;
+  baseRef: string;
+};
 const CORE: Member = { repo: 'motir-core', number: 101, baseRef: 'main' };
 const AI: Member = { repo: 'motir-ai', number: 202, baseRef: 'trunk' };
+/** The customer-owned member — owner `acme-corp`, same installation as CORE. */
+const CUSTOMER: Member = { repo: 'acme-web', number: 303, baseRef: 'main' };
 
-const providerIdOf = (m: Member) => (m.repo === 'motir-core' ? CORE_REPO_ID : AI_REPO_ID);
+const ownerOf = (m: Member) => (m.repo === 'acme-web' ? CUSTOMER_OWNER : 'moooon');
+
+const providerIdOf = (m: Member) =>
+  m.repo === 'motir-core' ? CORE_REPO_ID : m.repo === 'motir-ai' ? AI_REPO_ID : CUSTOMER_REPO_ID;
 
 function deliveryPayload(m: Member, headRef: string, opts: { action: string; merged?: boolean }) {
   return {
@@ -173,7 +236,7 @@ async function linkedCard(
       {
         workItemId: item.id,
         projectId: s.project.id,
-        owner: 'moooon',
+        owner: ownerOf(m),
         name: m.repo,
         number: m.number,
         headRef,
@@ -238,12 +301,17 @@ const hostReads = () =>
 beforeEach(async () => {
   await truncateAuthTables();
   host = new Map();
+  hostChecks = new Map();
+  tokensSeen = new Map();
   installFetch();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  // MOTIR-5843 — the provenance cases stub `GITHUB_FALLBACK_ORG`, and an env stub
+  // that outlives its test silently re-classifies every later repository.
+  vi.unstubAllEnvs();
   vi.mocked(mintInstallationToken).mockClear();
 });
 
@@ -591,5 +659,202 @@ describe('a card whose question went missing is repaired by the sweep', () => {
 
     expect(summary).toMatchObject({ stillOpen: 1, gatesRaised: 0 });
     expect(await adminDb.approvalGate.count({ where: { workItemId: card.id } })).toBe(0);
+  });
+});
+
+// MOTIR-5838 — A LOST CHECK COMPLETION IS THE SAME SHAPE ONE LAYER DOWN.
+//
+// The sweep above repairs a lost CLOSE and a missing GATE. This repairs a card
+// whose recorded check set is itself wrong: a `pending` row nothing will ever
+// refresh folds the pull request to `running`, so the card is not promotable, no
+// gate is OWED, and the gate sweep raises nothing — correctly, and for ever.
+//
+// Observed on PR #2994 / MOTIR-5782: GitHub reported 22 `success` + 8 `skipped`
+// and ZERO pending at head `7bf7511e3`, while Motir's delivery row read
+// `ci: "running"`. Both the 21:00 and 21:30 ticks passed with no change.
+describe('a lost CHECK COMPLETION is repaired by the same sweep', () => {
+  /** Seed the stranded set: one lane settled, one stuck at `pending`, both
+   *  back-dated past the stale threshold. `updatedAt` is written explicitly
+   *  because the column is `@updatedAt` and a create would stamp it `now()`. */
+  async function strandedAtPending(m: Member, writtenAt: Date) {
+    const pr = await prRow(m);
+    await adminDb.githubCheckRun.createMany({
+      data: [
+        {
+          pullRequestId: pr.id,
+          commitSha: STUCK_HEAD_SHA,
+          checkName: 'TypeScript build',
+          checkSuiteId: String(CHECK_SUITE_ID),
+          conclusion: 'success',
+        },
+        {
+          pullRequestId: pr.id,
+          commitSha: STUCK_HEAD_SHA,
+          checkName: 'Vitest',
+          checkSuiteId: String(CHECK_SUITE_ID),
+          conclusion: 'pending',
+        },
+      ],
+    });
+    await adminDb.githubCheckRun.updateMany({
+      where: { pullRequestId: pr.id, commitSha: STUCK_HEAD_SHA },
+      data: { createdAt: writtenAt, updatedAt: writtenAt },
+    });
+  }
+
+  const conclusionOf = async (m: Member, checkName: string) =>
+    (
+      await adminDb.githubCheckRun.findFirstOrThrow({
+        where: { pullRequestId: (await prRow(m)).id, commitSha: STUCK_HEAD_SHA, checkName },
+      })
+    ).conclusion;
+
+  it('re-reads the host, settles the stuck row, promotes the card and raises its gate', async () => {
+    const s = await makeScenario('reconcile-stale-check@example.com');
+    const card = await linkedCard(s, 'green on the host, running in Motir', [CORE]);
+    hostOpen(card, CORE);
+    await strandedAtPending(CORE, new Date(Date.now() - 60 * 60_000));
+    await adminDb.githubPullRequest.updateMany({
+      data: { updatedAt: new Date(Date.now() - 60 * 60_000) },
+    });
+
+    // The host has every check complete and green; Motir holds one at `pending`.
+    hostChecks.set(`motir-core@${STUCK_HEAD_SHA}`, [
+      ['TypeScript build', 'completed', 'success'],
+      ['Vitest', 'completed', 'success'],
+    ]);
+
+    // The reproduction: green and mergeable on the host, and nothing on the card.
+    expect(await statusOf(card.id)).toBe('implemented');
+    expect(await adminDb.approvalGate.count({ where: { workItemId: card.id } })).toBe(0);
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ stillOpen: 1, replayed: 0, promoted: 1 });
+    expect(await conclusionOf(CORE, 'Vitest')).toBe('success');
+    expect(await statusOf(card.id)).toBe('in_review');
+    const [gate] = await adminDb.approvalGate.findMany({ where: { workItemId: card.id } });
+    expect(gate).toMatchObject({ kind: 'pull_request_approval', state: 'awaiting' });
+  });
+
+  it('leaves a lane the host still reports RUNNING exactly where it is', async () => {
+    const s = await makeScenario('reconcile-really-running@example.com');
+    const card = await linkedCard(s, 'a genuinely slow lane', [CORE]);
+    hostOpen(card, CORE);
+    await strandedAtPending(CORE, new Date(Date.now() - 60 * 60_000));
+    await adminDb.githubPullRequest.updateMany({
+      data: { updatedAt: new Date(Date.now() - 60 * 60_000) },
+    });
+    hostChecks.set(`motir-core@${STUCK_HEAD_SHA}`, [
+      ['TypeScript build', 'completed', 'success'],
+      ['Vitest', 'in_progress', null],
+    ]);
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ stillOpen: 1, promoted: 0 });
+    expect(await conclusionOf(CORE, 'Vitest')).toBe('pending');
+    expect(await statusOf(card.id)).toBe('implemented');
+    expect(await adminDb.approvalGate.count({ where: { workItemId: card.id } })).toBe(0);
+  });
+});
+
+// ── PROVENANCE: which App the reconcile mints through (MOTIR-5843) ───────────
+//
+// The defect Yue saw by name, in an acceptance transcript:
+//
+//   [pullRequestReconcile] could not reconcile motir-projects-e2e/decision-web#16101;
+//   it is due again next pass: GithubAppNotConfiguredError: GitHub App (user-facing)
+//   is not configured.
+//
+// A hosted repository is on the provisioning App and on NO other, so minting
+// through the user-facing default cannot reach it — the refusal is counted as
+// `failed` and retried for ever, which is why a hosted repository's pull requests
+// never reconcile.
+//
+// ⚠️ MEASURED ON THE TOKEN THE READ CARRIED, not by counting mints. `appAuth` is
+// mocked at module scope here (a real mint needs an RSA key — the header's
+// `historical-pr-backfill` precedent), so the "wire only one App" arm cannot bite
+// in this file. Instead the mock stamps the resolved ROLE into the token it
+// returns and the fetch stub records what each repository's read presented, which
+// is the criterion stated literally: what token did THIS repository receive.
+describe('the App is chosen by the repository’s provenance', () => {
+  /** Make each mint return a token that NAMES the App it came from, so the
+   *  request a repository made identifies the registration behind it. */
+  function stampTokensWithRole() {
+    vi.mocked(mintInstallationToken).mockImplementation(async (_id, role) => ({
+      token: `ghs_${role ?? 'defaulted'}`,
+      expiresAt: new Date(Date.now() + 3_600_000),
+    }));
+  }
+
+  /** A card whose linked pull request is open in Motir and MERGED on the host —
+   *  i.e. exactly one reconcile candidate. */
+  async function candidate(s: Awaited<ReturnType<typeof makeScenario>>, title: string, m: Member) {
+    const card = await linkedCard(s, title, [m]);
+    hostMerged(card, m);
+    return card;
+  }
+
+  it('a HOSTED repository is read with a PROVISIONING-App token', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'moooon');
+    stampTokensWithRole();
+    const s = await makeScenario('prov-hosted@example.com');
+    const card = await candidate(s, 'hosted reconcile', CORE);
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ examined: 1, replayed: 1, failed: 0 });
+    expect(await statusOf(card.id)).toBe('done');
+    // Before the fix this read carried `ghs_defaulted` — the seam was handed no
+    // repository, so the mint fell to the user-facing default.
+    expect(tokensSeen.get('motir-core')).toBe('ghs_provisioning');
+  });
+
+  it('CONTROL — a CUSTOMER-OWNED repository is still read with a USER-FACING token, with the provisioning org configured', async () => {
+    // The provisioning org is SET and is not this repository's owner. Without this
+    // half, an implementation that always reached for the provisioning App would
+    // pass the case above and break every real tenant.
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
+    stampTokensWithRole();
+    const s = await makeScenario('prov-customer@example.com');
+    const card = await candidate(s, 'customer reconcile', CORE);
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ examined: 1, replayed: 1, failed: 0 });
+    expect(await statusOf(card.id)).toBe('done');
+    expect(tokensSeen.get('motir-core')).toBe('ghs_user-facing');
+  });
+
+  // ⚠️ THE MEMO. Both cases above pass with the per-pass cache still keyed on
+  // `installationId` alone — one repository per pass never reveals a shared key.
+  // This is the case that does: TWO repositories, ONE installation, DIFFERENT
+  // provenance, in a SINGLE pass.
+  //
+  // It is also the one regression this change could INTRODUCE rather than remove.
+  // Before the fix the memo was safe only because every mint through it was wrong
+  // in the same direction; resolving provenance per repository without widening
+  // the key hands the second repository the first's credential — a
+  // cross-repository token leak, worse than the refusal being fixed, announcing
+  // itself nowhere.
+  it('two repositories on ONE installation with DIFFERENT provenance do not receive each other’s token', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'moooon'); // moooon hosted, acme-corp not
+    stampTokensWithRole();
+    const s = await makeScenario('prov-memo@example.com');
+    const hosted = await candidate(s, 'hosted member', CORE);
+    const customer = await candidate(s, 'customer member', CUSTOMER);
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ examined: 2, replayed: 2, failed: 0 });
+    expect(await statusOf(hosted.id)).toBe('done');
+    expect(await statusOf(customer.id)).toBe('done');
+
+    // The whole criterion, in two lines: each repository was read with its OWN
+    // App's token. A cache keyed on the installation alone gives BOTH of them
+    // whichever one was minted first.
+    expect(tokensSeen.get('motir-core')).toBe('ghs_provisioning');
+    expect(tokensSeen.get('acme-web')).toBe('ghs_user-facing');
   });
 });

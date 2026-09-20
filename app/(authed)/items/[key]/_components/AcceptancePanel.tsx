@@ -1,34 +1,24 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { Check, CircleAlert, CircleCheck, Clock, Settings, Sparkles, VideoOff } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/Button';
 import {
-  Check,
-  CircleAlert,
-  CircleCheck,
-  Clock,
-  ExternalLink,
-  GitCommitHorizontal,
-  RotateCcw,
-  Settings,
-  Sparkles,
-  VideoOff,
-} from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/Button';
+  AcceptanceReceiptPlayer,
+  AcceptanceReceiptProvenance,
+} from '@/components/acceptance/AcceptanceReceiptPlayer';
 import { Switch } from '@/components/ui/Switch';
 import { Pill } from '@/components/ui/Pill';
-import { useToast } from '@/components/ui/Toast';
 import { BILLING_PLANS_PATH } from '@/components/ai/AiPaywall';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEligibility';
-import {
-  decideAcceptanceAction,
-  turnOnAcceptanceVideoAction,
-} from '@/app/(authed)/items/[key]/acceptanceActions';
-
-const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.5, 2] as const;
+import { turnOnAcceptanceVideoAction } from '@/app/(authed)/items/[key]/acceptanceActions';
+import { ApprovalGateControl } from '@/components/approvals/ApprovalGateControl';
+import { GateCallToActionBand } from '@/components/approvals/GateCallToActionBand';
+import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
 // The acceptance panel body (Story MOTIR-1627 · Subtask MOTIR-1634), built to
 // design/work-items/acceptance-panel.png. Rendered inside a ContentSectionCard
@@ -52,8 +42,19 @@ export interface AcceptancePanelProps {
   projectId: string;
   eligibility: AcceptanceVideoEligibilityDTO;
   initialEvidence: AcceptanceEvidenceDTO | null;
-  /** The reviewer may act (edit permission) AND the story is in_review. */
+  /**
+   * The story's `acceptance_result` gate in whatever state, or null (MOTIR-4950).
+   *
+   * ⚠️ THIS PANEL DOES NOT DECIDE IT (Story MOTIR-4949 · Subtask MOTIR-5790; § *The
+   * item page HANDS THE DECISION OVER*, MOTIR-5228). An awaiting question this
+   * reader may answer renders the shared call-to-action band, which opens the
+   * approval overlay; the overlay is the one place a `GateDecision` is submitted.
+   */
+  gate: ApprovalGateDTO | null;
+  /** The gate read's AUTHORITY answer — never re-derived here. */
   canDecide: boolean;
+  /** Who the gate is routed to, when that is not this reader. */
+  routedElsewhereName: string | null;
 }
 
 /**
@@ -71,51 +72,35 @@ export interface AcceptancePanelProps {
  */
 export const ACCEPTANCE_VIDEO_SETTINGS_HREF = '/settings/project/approvals#acceptance-video';
 
+/** The frame's `onDecide` slot is required, and on this page nothing can call it: the
+ *  verb set is empty and the decision was handed to the overlay (MOTIR-5790). It answers
+ *  nothing rather than pretending to decide — `DesignResultSection`'s own slot, verbatim.
+ *
+ *  ⚠️ UNREACHABLE BY CONSTRUCTION, SO ITS COVERAGE IS AN IGNORE THAT NAMES ITS INVARIANT:
+ *  no approve and no request-changes control exists in this section for ANY gate state ×
+ *  `canDecide`, which `tests/components/acceptance-panel.test.tsx` asserts. A test that
+ *  could call this would be a test that found a verb. */
+/* v8 ignore next 3 */
+async function noDecisionHere(): Promise<null> {
+  return null;
+}
+
 export function AcceptancePanel({
-  workItemId,
   itemIdentifier,
   projectId,
   eligibility,
   initialEvidence,
+  gate,
   canDecide,
+  routedElsewhereName,
 }: AcceptancePanelProps) {
   const t = useTranslations('acceptance');
+  const tGate = useTranslations('approvalGate.acceptanceResult');
   const router = useRouter();
-  const { toast } = useToast();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [evidence, setEvidence] = useState(initialEvidence);
+  // The receipt as the server rendered it — the panel no longer changes it (MOTIR-5790).
+  const evidence = initialEvidence;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [playbackRate, setPlaybackRate] = useState(1);
-
-  function decide(decision: 'approve' | 'request_changes') {
-    setError(null);
-    startTransition(async () => {
-      const res = await decideAcceptanceAction({ workItemId, itemIdentifier, decision });
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setEvidence(res.evidence); // reconcile from the authoritative response
-      // The story's status pill is server-rendered elsewhere on the page → refresh
-      // THAT surface (never the panel's own optimistic state).
-      //
-      // ⚠️ KEPT DELIBERATELY, BESIDE THE ACTION'S OWN `revalidatePath` (Bug
-      // MOTIR-5160). Both halves ship: the action puts the fresh tree on its own
-      // response where nothing can race it, and this reaches the surfaces a
-      // server tree does not cover. Removing it is a SEPARATE claim nobody has
-      // tested — and on the design gate one tier over it was measured NECESSARY,
-      // so it is not a line to tidy away. It is also what this card's guard
-      // breaks to prove itself able to go red: deleting it fails both tests in
-      // `tests/e2e/cloud-acceptance-repaint.spec.ts` at the status-rail
-      // assertion (23.4 s / 22.7 s, measured 2026-09-11).
-      router.refresh();
-      toast({
-        variant: 'success',
-        title: decision === 'approve' ? t('toast.approved') : t('toast.changesRequested'),
-      });
-    });
-  }
 
   function turnOn() {
     setError(null);
@@ -242,62 +227,14 @@ export function AcceptancePanel({
   }
 
   const approved = evidence.status === 'approved';
-  return (
-    <div>
-      <div className="overflow-hidden rounded-(--radius-input) border border-(--el-border)">
-        {evidence.videoUrl ? (
-          <video
-            ref={videoRef}
-            src={evidence.videoUrl}
-            controls
-            className="aspect-video w-full bg-black"
-          />
-        ) : null}
-        <div className="flex items-center gap-1.5 px-3.5 pt-3">
-          <span className="mr-0.5 text-[11px] leading-none text-(--el-text-secondary)">
-            {t('player.speed')}
-          </span>
-          {PLAYBACK_SPEEDS.map((rate) => (
-            <button
-              key={rate}
-              type="button"
-              onClick={() => {
-                if (videoRef.current) videoRef.current.playbackRate = rate;
-                setPlaybackRate(rate);
-              }}
-              aria-pressed={playbackRate === rate}
-              aria-label={`${rate}×`}
-              className={`rounded-(--radius-control) px-1.5 py-0.5 text-[11px] font-semibold leading-tight transition-colors ${playbackRate === rate ? 'bg-(--el-accent) text-(--el-accent-text)' : 'text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)'}`}
-            >
-              {rate}×
-            </button>
-          ))}
-        </div>
-        {evidence.chapters.length > 0 ? (
-          <ul className="flex flex-col gap-0.5 p-3.5 pt-3">
-            {evidence.chapters.map((c, i) => (
-              <li key={`${c.tSeconds}-${i}`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (videoRef.current) videoRef.current.currentTime = c.tSeconds;
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-(--radius-control) px-2 py-1.5 text-left text-[13px] text-(--el-text) hover:bg-(--el-surface)"
-                >
-                  <span className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full bg-(--el-tint-lavender) text-[10px] font-bold text-(--el-text-strong)">
-                    {i + 1}
-                  </span>
-                  {c.label}
-                  <span className="ml-auto font-mono text-xs text-(--el-text-secondary)">
-                    {formatTime(c.tSeconds)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
+  const subjectMeta = gate?.subjectVersion
+    ? tGate('meta.withVersion', { version: gate.subjectVersion.slice(0, 8) })
+    : tGate('meta.plain');
 
+  // BAND 2's SUBJECT — the recording, as every surface that shows it renders it.
+  const port = (
+    <div>
+      <AcceptanceReceiptPlayer evidence={evidence} />
       <div className="mt-3.5 mb-3 flex flex-wrap items-center gap-2 text-[13px] text-(--el-text-secondary)">
         <CircleCheck className="h-[15px] w-[15px] text-(--el-success)" aria-hidden />
         <span>
@@ -306,79 +243,83 @@ export function AcceptancePanel({
             : t('summary.recorded')}
         </span>
       </div>
+      <AcceptanceReceiptProvenance evidence={evidence} />
+    </div>
+  );
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {evidence.commitSha ? (
-          <span className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-text-secondary)">
-            <GitCommitHorizontal className="h-3 w-3 text-(--el-text-faint)" aria-hidden />
-            {evidence.commitSha.slice(0, 7)}
-          </span>
-        ) : null}
-        {evidence.ciRunUrl ? (
-          <a
-            href={evidence.ciRunUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-link)"
-          >
-            <ExternalLink className="h-3 w-3" aria-hidden />
-            {t('provenance.ciRun')}
-          </a>
-        ) : null}
-        {evidence.traceUrl ? (
-          <a
-            href={evidence.traceUrl}
-            className="inline-flex items-center gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-link)"
-          >
-            <ExternalLink className="h-3 w-3" aria-hidden />
-            {t('provenance.trace')}
-          </a>
-        ) : null}
-        {evidence.producedByKey ? (
-          <span className="inline-flex items-center rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface) px-2 py-0.5 font-mono text-[11px] text-(--el-text-secondary)">
-            {evidence.producedByKey}
-          </span>
-        ) : null}
-      </div>
+  // ⚠️ A DECIDED QUESTION IS DRAWN BY THE SHARED FRAME, NOT BY A PILL OF OUR OWN
+  // (Story MOTIR-4949 · Subtask MOTIR-5792; the ONE-CONTROL rule, MOTIR-4796, which
+  // `tests/approval-gate-one-language.test.ts` derives rather than lists).
+  //
+  // MOTIR-5790 handed the DECISION over to the overlay and left the panel drawing the
+  // decided states itself — a success Pill off `evidence.status`, a warning Pill for a
+  // send-back. That is a second language for the one act the frame exists to speak: it
+  // says *approved* without saying by whom, against which recording, or when, and it
+  // drifts from every other kind the moment the frame gains a band. So the frame draws
+  // every state the band does not: the record, who it waits on when the reader may not
+  // press (state `B`), and a withdrawal. The verbs stay EMPTY here — this surface has
+  // handed them over, and `canDecide` is passed for what it SAYS, not what it enables,
+  // exactly as `DesignResultSection` passes it.
+  if (gate && !(gate.state === 'awaiting' && canDecide)) {
+    return (
+      <>
+        <ApprovalGateControl
+          // FLUSH IN THE SECTION: `ContentSectionCard` already carries the border and
+          // the title *Acceptance*. One container, one label.
+          layout="section"
+          gate={gate}
+          canDecide={canDecide}
+          kindLabel={tGate('kindLabel')}
+          subjectMeta={subjectMeta}
+          port={port}
+          verbs={[]}
+          consequence={tGate('consequence', { key: itemIdentifier })}
+          confirmConsequences={[]}
+          routedToLabel={routedElsewhereName}
+          onDecide={noDecisionHere}
+        />
+        {error ? <p className="mt-2 text-[13px] text-(--el-danger)">{error}</p> : null}
+      </>
+    );
+  }
 
-      {approved ? (
-        <Pill severity="success">
-          <Check className="h-3 w-3" aria-hidden />
-          {t('status.approved')}
-        </Pill>
-      ) : canDecide ? (
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            leftIcon={<Check className="h-3.5 w-3.5" aria-hidden />}
-            onClick={() => decide('approve')}
-            disabled={pending}
-          >
-            {t('actions.approve')}
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            leftIcon={<RotateCcw className="h-3.5 w-3.5" aria-hidden />}
-            onClick={() => decide('request_changes')}
-            disabled={pending}
-          >
-            {t('actions.requestChanges')}
-          </Button>
+  return (
+    <div>
+      {port}
+
+      {gate?.state === 'awaiting' && canDecide ? (
+        // THE DOOR, NOT THE VERBS (MOTIR-5790): the question is answered in the
+        // approval overlay, which renders this recording in the acceptance port.
+        <div className="mt-4">
+          <GateCallToActionBand
+            kind="acceptance_result"
+            subjectLabel={subjectMeta}
+            askedAt={gate.createdAt}
+            itemIdentifier={itemIdentifier}
+            routedElsewhereName={routedElsewhereName}
+          />
+        </div>
+      ) : // ⚠️ NO GATE AT ALL, so there is no decision to speak about — a receipt that
+      // predates the kind, or one whose question has not been raised yet. The receipt's
+      // OWN status is all there is to say, and saying it in a pill is not a second
+      // approval language because no gate is being rendered.
+      approved ? (
+        <div className="mt-4">
+          <Pill severity="success">
+            <Check className="h-3 w-3" aria-hidden />
+            {t('status.approved')}
+          </Pill>
         </div>
       ) : evidence.status === 'changes_requested' ? (
-        <Pill severity="warning">
-          <CircleAlert className="h-3 w-3" aria-hidden />
-          {t('status.changesRequested')}
-        </Pill>
+        <div className="mt-4">
+          <Pill severity="warning">
+            <CircleAlert className="h-3 w-3" aria-hidden />
+            {t('status.changesRequested')}
+          </Pill>
+        </div>
       ) : null}
 
       {error ? <p className="mt-2 text-[13px] text-(--el-danger)">{error}</p> : null}
     </div>
   );
-}
-
-function formatTime(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }

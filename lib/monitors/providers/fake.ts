@@ -213,6 +213,21 @@ function guard(operation: string): void {
 export const fakeMonitorProvider: MonitorProvider = {
   id: 'fake',
 
+  /**
+   * NOTHING (MOTIR-5831). The fake answers out of an in-memory map and opens no
+   * socket, so there is no credential for a deployment to install and nothing
+   * for the configuration probe to assert.
+   *
+   * ⚠️ THIS IS LOAD-BEARING FOR THE E2E SWITCH, not a formality. When
+   * `MOTIR_MONITOR_FAKE_PROVIDER=1` re-registers this object UNDER `sentry`
+   * (`lib/monitors/index.ts`), every consumer that asks the seam what it needs —
+   * the START route's refusal and `system.daily-health-check`'s probe — is asking
+   * THIS object and correctly hears that the deployment needs no Sentry secrets.
+   * A fake that inherited Sentry's list would turn every acceptance run red over
+   * credentials the run has no use for.
+   */
+  requiredEnv: [],
+
   async exchangeGrant({ code }): Promise<MonitorCredential> {
     guard('exchangeGrant');
     const credential = state.grants.get(code);

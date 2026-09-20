@@ -38,7 +38,12 @@ function input(over: Partial<GateSetInput> = {}): GateSetInput {
     members: GREEN,
     prMergeMode: 'manual',
     cardIsTerminal: false,
-    designApprovalStandsForMerge: false,
+    // RENAMED BY MOTIR-5789: the boolean covers the design's standing approval AND a
+    // story's acceptance, because both are evidence-carried primaries the loader reads.
+    // The DECISION's own carry is still derived inside the predicate from `decision`.
+    primaryApprovalStandsForMerge: false,
+    currentReceipt: null,
+    latestAcceptanceGate: null,
     workItemId: CARD,
     decision: { identity: ONE, latestGate: null },
     ...over,

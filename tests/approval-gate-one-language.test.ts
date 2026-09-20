@@ -222,6 +222,9 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // `pullRequestApprovalGates.ts` is a thin wrapper over it. `designEvidenceService`
       // stays a declared caller because the publish creates the design gate inside its
       // own evidence transaction, over the row it has just inserted.
+      // MOTIR-5789, 2026-09-19: a receipt publish raises the story's `acceptance_result`
+      // gate through `reconcileGatesFor` (the predicate), so it adds NO caller here —
+      // MOTIR-4950 declared `acceptanceEvidenceService` for one commit and this removes it.
       callers: ['lib/services/designEvidenceService.ts', 'lib/services/gateSetFor.ts'],
     },
     {
@@ -237,12 +240,17 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // with a caller nobody calls.
       // MOTIR-5482: the approve-and-merge gate is withdrawn BY CARD, because its subject is
       // the card's whole delivery set — a moved head, a closed member or a set change.
+      // MOTIR-4950: a newer RECEIPT retires the story's awaiting acceptance question with
+      // cause `republished` — the same write, and the same lock order, as a design
+      // republish (the MOTIR-5787 amendment, point 5).
+      //
       // AMENDED ON THE RECORD — MOTIR-5677, 2026-09-19 (`approval-gates.md` §8's FIFTH
       // AMENDMENT, clause 4): the DECISION gate is withdrawn when a capture shows a push
       // CHANGED the decision document's blob — `head_moved`, product-written, no actor.
       // It lives with the capture because that is the only moment the new version is
       // known; the decision it withdraws is still made only through the door.
       callers: [
+        'lib/services/acceptanceEvidenceService.ts',
         'lib/services/decisionDocumentCaptureService.ts',
         'lib/services/designEvidenceService.ts',
         'lib/services/pullRequestApprovalGates.ts',

@@ -3,6 +3,7 @@ import type { ScheduleHealthReportDTO } from '@/lib/dto/jobSchedules';
 import type { FleetBootableVerdict } from '@/lib/orchestrator';
 import type { ContainerAiAddressVerdict } from '@/lib/ai/containerAiAddress';
 import type { IndexRebuildStreakVerdictDTO } from '@/lib/dto/indexRebuildStreak';
+import type { MonitorConfigVerdict } from '@/lib/monitors';
 
 // The canonical SCHEDULED job (Story 1.6 · Subtask 1.6.4) — the reference for
 // the cron primitive, and the replacement for the 1.6.2 `system.ping` smoke
@@ -90,6 +91,34 @@ import type { IndexRebuildStreakVerdictDTO } from '@/lib/dto/indexRebuildStreak'
 // closes the arm. Do not let a later reader take a green verdict here for a
 // guarantee it was never able to make.
 //
+// As of MOTIR-5831 it carries a SIXTH probe, and it is the first one that asks a
+// question about THIS PROCESS'S OWN ENVIRONMENT rather than about a registry, an
+// address or the ledger. `SENTRY_APP_CLIENT_SECRET` was absent from production
+// for SEVEN DAYS after MOTIR-5257's close-out recorded four values staged and
+// read back; three of its four siblings really were there, and the plausible
+// cause is a clipboard import losing a line break. Every human check available
+// had already been performed and passed. What was never performed is a check the
+// running process could make ABOUT ITSELF — and the only thing that would have
+// held is a scheduled assertion that fails where a person looks. That is the same
+// sentence MOTIR-2006's preflight is here for, one integration over, and it is
+// why this probe is in THIS job rather than in a new one or on the platform
+// health board: this job already has a LOUD, HUMAN-VISIBLE failure surface, and
+// the fault it now also watches for is one whose entire history is having had
+// none.
+//
+// ⚠️ IT REPORTS NAMES, NEVER VALUES. Not the value, not its length, not a digest.
+// The DLQ row is rendered to a human, and a probe that printed a length would put
+// a secret-adjacent artifact on an operator surface to answer a question that
+// only ever needed a yes or a no.
+//
+// ⚠️ AND IT HAS A DECLARED BLIND SPOT, like MOTIR-5027's. It infers OPT-IN from
+// PARTIAL configuration, so a provider that lost EVERY declared name reads as
+// never-configured and is not flagged here — that case surfaces at the OAuth
+// start route instead, which now refuses before a person approves an install.
+// The boundary rides on the verdict and in the error message, for the reason
+// stated there: a reader who takes a green verdict for "the monitor is
+// configured" will be wrong.
+//
 // `retryPolicy: 'none'` (run at most once): a health check is a point-in-time
 // probe — retrying it minutes later would record a stale verdict, so a failed
 // tick dead-letters immediately rather than retrying. That is also what makes
@@ -135,6 +164,15 @@ export interface DailyHealthCheckResult {
    *  run succeeded. Its `blindSpot` rides on every arm; read it before drawing
    *  any conclusion from a green one. */
   indexRebuildStreak: IndexRebuildStreakVerdictDTO;
+  /** Whether every partly-configured monitor provider carries every environment
+   *  variable it DECLARED it needs (MOTIR-5831) — recorded on the healthy tick
+   *  too, so the ledger answers "was the Sentry integration fully configured
+   *  yesterday?". A deployment that never connected a monitor reports
+   *  `not_applicable`; one that did reports `complete`, and the ledger can tell
+   *  those apart, which a result that only appeared on failure could not. Its
+   *  `blindSpot` rides on every arm; read it before drawing any conclusion from a
+   *  green one. NAMES only — no value, length or digest is ever on this row. */
+  monitorConfig: MonitorConfigVerdict;
 }
 
 /** The stable half of the resolved payload. Exported for the test. */
@@ -287,6 +325,46 @@ export class IndexRebuildStreakError extends Error {
   }
 }
 
+/**
+ * Thrown when a monitor provider this deployment has PARTLY configured is missing
+ * an environment variable it declared (MOTIR-5831) — the assertion the seven-day
+ * `SENTRY_APP_CLIENT_SECRET` outage never had.
+ *
+ * A SEPARATE error from the five above, and the message is the reason. Those send
+ * an operator to a registry, to a Fly secret for an ADDRESS, or to the indexer's
+ * engine. This one sends them to a Fly secret for a CREDENTIAL, with the NAME
+ * they have to set — and the fix is `fly secrets set` on a specific app, which is
+ * a different command in a different place from every one of them.
+ *
+ * ⚠️ THE MESSAGE NAMES THE VARIABLE AND THE PROVIDER AND NOTHING ELSE. It carries
+ * no value, no length and no digest: the DLQ row is the whole of what a human
+ * reads, and the question it answers is whether the name is set.
+ *
+ * ⚠️ AND IT CARRIES THE BLIND SPOT, for the reason {@link IndexRebuildStreakError}
+ * states in the same words. A reader who takes this check's silence to mean *the
+ * monitor is configured* will be wrong, because a provider that lost every name
+ * at once reads as never-configured. So the sentence that says what it did NOT
+ * measure travels with the sentence that says what it did.
+ */
+export class MonitorConfigIncompleteError extends Error {
+  constructor(readonly verdict: Extract<MonitorConfigVerdict, { verdict: 'incomplete' }>) {
+    const offenders = verdict.offenders
+      .map((p) => `${p.providerId} is missing ${p.missing.join(' and ')}`)
+      .join('; ');
+    super(
+      `${verdict.offenders.length} monitor provider(s) are PARTLY configured: ${offenders}. ` +
+        `Somebody installed these values and at least one did not land — a partly-set ` +
+        `provider is never a deliberate state. Nobody will find out otherwise until a ` +
+        `person clicks Connect and approves an install in their OWN monitor organisation, ` +
+        `which is where the failure used to arrive (MOTIR-5831). Set the named variable ` +
+        `with \`fly secrets set <NAME>=… -a motir-core\` and read it back from the ` +
+        `PLATFORM (\`fly secrets list -a motir-core\`), never from a config file. ` +
+        `⚠️ SCOPE: ${verdict.blindSpot}`,
+    );
+    this.name = 'MonitorConfigIncompleteError';
+  }
+}
+
 export const dailyHealthCheck = defineJob(
   {
     id: 'system.daily-health-check',
@@ -317,6 +395,9 @@ export const dailyHealthCheck = defineJob(
     );
     const indexRebuildStreak = await ctx.step.run('index-rebuild-streak', () =>
       services.indexRebuildStreak.check(),
+    );
+    const monitorConfig = await ctx.step.run('monitor-config-preflight', () =>
+      services.monitorConfigPreflight.check(),
     );
     // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
     // unpullable runner image and an unpullable indexer image are independent
@@ -373,6 +454,26 @@ export const dailyHealthCheck = defineJob(
       throw new IndexRebuildStreakError(indexRebuildStreak);
     }
 
+    // The ENVIRONMENT probe, reported last and on exactly the same terms as every
+    // one above it: only the DEFINITE arm is loud. `not_applicable` is a
+    // deployment that has not connected an error monitor — a green state, not a
+    // fault — and it is by far the common case for a self-hosted build, where
+    // `sentry` is registered at import in every image whether or not anybody
+    // intends to use it.
+    //
+    // ⚠️ WHY `not_applicable` IS NOT LOUD, stated because the opposite reading is
+    // reasonable and wrong. Failing on "Sentry's names are unset" would
+    // dead-letter this job every morning on every deployment that never wanted an
+    // error monitor, over a state their operator chose deliberately — and a check
+    // that cries wolf is a check somebody silences, which is how MOTIR-3606 spent
+    // 23 days red with nobody reading it. The discriminator is PARTIAL
+    // configuration, which is the shape the defect actually had: three of four
+    // names present, one missing. It is REPORTED on the row either way, so a
+    // reader can see what was not measured without being paged.
+    if (monitorConfig.verdict === 'incomplete') {
+      throw new MonitorConfigIncompleteError(monitorConfig);
+    }
+
     return {
       ...DAILY_HEALTH_CHECK_PAYLOAD,
       schedules,
@@ -380,6 +481,7 @@ export const dailyHealthCheck = defineJob(
       indexFleet,
       indexContainerAi,
       indexRebuildStreak,
+      monitorConfig,
     };
   },
 );

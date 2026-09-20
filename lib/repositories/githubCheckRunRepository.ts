@@ -104,6 +104,44 @@ export const githubCheckRunRepository = {
     return count;
   },
 
+  /**
+   * Settle rows we hold as `pending` that the host reports COMPLETE — the lost
+   * completion (MOTIR-5838).
+   *
+   * ⚠️ IT UPDATES, WHICH `createMissing` REFUSES TO DO — and the guard is what
+   * makes that safe rather than a reversal of its rule. `conclusion: 'pending'`
+   * is in the WHERE, so the arbiter is still the row's own current value read
+   * in this statement rather than the snapshot's belief about it: a delivery
+   * that settled the check between the read and this write leaves a terminal
+   * conclusion, this matches nothing, and the staler answer is discarded. It
+   * can only ever move a row `pending → terminal`, and `pending` is the only
+   * non-terminal conclusion there is, so no information can be lost in that
+   * direction.
+   *
+   * Returns how many rows it actually settled — zero being the healthy answer,
+   * and a non-zero one meaning a check-completion delivery was lost.
+   */
+  async settlePending(
+    inputs: UpsertGithubCheckRunInput[],
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    let settled = 0;
+    for (const input of inputs) {
+      const { count } = await tx.githubCheckRun.updateMany({
+        where: {
+          pullRequestId: input.pullRequestId,
+          commitSha: input.commitSha,
+          checkName: input.checkName,
+          checkSuiteId: input.checkSuiteId,
+          conclusion: 'pending',
+        },
+        data: { conclusion: input.conclusion },
+      });
+      settled += count;
+    }
+    return settled;
+  },
+
   /** Create-or-refresh a check row, keyed on the unique
    *  `(pull_request_id, commit_sha, check_name, check_suite_id)`. Refreshes
    *  `conclusion` so a REDELIVERY of one run's check converges on one row —

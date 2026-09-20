@@ -32,6 +32,7 @@ import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
 import type {
   PlanBlockerStubDto,
   PlanCommittedBlockerDto,
+  PlanFolderCrumbDto,
   PlanHistoryEventDto,
   PlanItemChangeDto,
   PlanItemChangeField,
@@ -780,11 +781,17 @@ export const planReviewService = {
           .filter((id): id is string => !!id),
       ]),
     );
+    // The TRAIL read (MOTIR-5798): ids as well as names, so the planning canvases
+    // can key and navigate a folder LEVEL. The path of names is derived from it,
+    // so `folderPath` is byte-for-byte what `findPathsByIds` returned.
     const folderRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      folderRepository.findPathsByIds(folderIds, ctx.workspaceId, tx),
+      folderRepository.findTrailsByIds(folderIds, ctx.workspaceId, tx),
+    );
+    const folderTrailById = new Map<string, PlanFolderCrumbDto[]>(
+      folderRows.filter((f) => f.projectId === plan.projectId).map((f) => [f.id, f.trail]),
     );
     const folderPathById = new Map(
-      folderRows.filter((f) => f.projectId === plan.projectId).map((f) => [f.id, f.path]),
+      Array.from(folderTrailById, ([id, trail]) => [id, trail.map((t) => t.name)] as const),
     );
     const folderSide = (folderId: string): PlanPlacementSideDto => {
       const path = folderPathById.get(folderId) ?? null;
@@ -970,6 +977,66 @@ export const planReviewService = {
       withNodeIds.map(({ item }) => parentNodeIdOf(item)).filter((p): p is string => p !== null),
     );
 
+    // ── THE FOLDER TRAIL (Bug MOTIR-5782 · MOTIR-5798; design Part XVIII §18.7) ──
+    // The folder chain a proposal sits under, with ids, so a canvas can draw a
+    // folder as a LEVEL. Its LEAF is, in order: the proposal's own folder
+    // (`effectiveFolderIdOf`); else the folder of its ROOT-MOST committed
+    // ancestor — a root's own `folderId` is its effective folder, since it has
+    // no parent to inherit one from; else, under an intra-plan parent, that
+    // proposed parent's leaf, walked up the plan. The ancestor rows are already
+    // in hand (the walk above), so the only extra cost is ONE more batched trail
+    // read, for the leaves the placement read did not cover.
+    const planItemById = new Map(plan.items.map((i) => [i.id, i]));
+    const rootFolderIdOf = (workItemId: string): string | null => {
+      let cursor: string | null = workItemId;
+      const seen = new Set<string>();
+      while (cursor && !seen.has(cursor)) {
+        seen.add(cursor);
+        const row: { parentId: string | null; folderId: string | null } | undefined =
+          targetById.get(cursor) ?? ancestorById.get(cursor);
+        if (!row) return null;
+        if (!row.parentId) return row.folderId ?? null;
+        cursor = row.parentId;
+      }
+      return null;
+    };
+    const tempParentOf = (item: PlanItemDto): PlanItemDto | undefined => {
+      const ref =
+        item.parentRef ??
+        (item.op === 'modify' && item.patch?.parentRef ? item.patch.parentRef : null);
+      return ref && ref.startsWith(TEMP_REF_PREFIX)
+        ? planItemById.get(ref.slice(TEMP_REF_PREFIX.length))
+        : undefined;
+    };
+    const folderLeafOf = (item: PlanItemDto, seen = new Set<string>()): string | null => {
+      if (seen.has(item.id)) return null;
+      seen.add(item.id);
+      const own = effectiveFolderIdOf(item);
+      if (own) return own;
+      const proposedParent = tempParentOf(item);
+      if (proposedParent) return folderLeafOf(proposedParent, seen);
+      const parentId = parentNodeIdOf(item);
+      return parentId ? rootFolderIdOf(parentId) : null;
+    };
+    const folderLeafByItemId = new Map(plan.items.map((i) => [i.id, folderLeafOf(i)]));
+    const unresolvedLeafIds = Array.from(
+      new Set(
+        Array.from(folderLeafByItemId.values()).filter(
+          (id): id is string => !!id && !folderTrailById.has(id),
+        ),
+      ),
+    );
+    if (unresolvedLeafIds.length > 0) {
+      const extra = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        folderRepository.findTrailsByIds(unresolvedLeafIds, ctx.workspaceId, tx),
+      );
+      for (const f of extra) if (f.projectId === plan.projectId) folderTrailById.set(f.id, f.trail);
+    }
+    const folderTrailOf = (item: PlanItemDto): PlanFolderCrumbDto[] => {
+      const leaf = folderLeafByItemId.get(item.id) ?? null;
+      return leaf ? (folderTrailById.get(leaf) ?? []) : [];
+    };
+
     const items: PlanReviewItemDto[] = withNodeIds.map(({ item, nodeId }) => {
       const target = item.workItemId ? targetById.get(item.workItemId) : undefined;
       const stale = staleByItem.get(item.id);
@@ -1058,6 +1125,7 @@ export const planReviewService = {
         folderId,
         folderPath,
         folderMissing: folderId !== null && folderPath === null,
+        folderTrail: folderId !== null && folderPath === null ? [] : folderTrailOf(item),
         blockedByNodeIds: blockedByNodeIdsOf(item),
         blockedByRemovedNodeIds: blockedByRemovedNodeIdsOf(item),
         committedBlockedBy: committedBlockedByOf(item),

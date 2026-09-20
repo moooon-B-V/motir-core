@@ -8,6 +8,7 @@ import {
   encodeMonitorConnectState,
   mintMonitorConnectNonce,
 } from '@/lib/monitors/connectState';
+import { missingProviderEnv } from '@/lib/monitors';
 import {
   parseMonitorReturnSurfaceId,
   resolveMonitorReturnPath,
@@ -72,7 +73,37 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(`${landing}?monitor=forbidden`);
   }
 
+  // ⚠️ REFUSE BEFORE THE REDIRECT (MOTIR-5831) — the whole point is that this
+  // happens BEFORE a nonce is minted, before a cookie is set, and before anybody
+  // is sent to the provider's consent screen.
+  //
+  // The defect: `SENTRY_APP_CLIENT_SECRET` was absent from production for seven
+  // days and this route did not care, because it built the install URL from the
+  // SLUG alone. So Connect worked, Sentry's consent screen rendered, the person
+  // approved an install INSIDE THEIR OWN Sentry organisation — and the failure
+  // arrived one step later, in the grant exchange, as an error about OUR
+  // environment. Everything up to that point was their work. A refusal here costs
+  // them one click.
+  //
+  // ⚠️ IT ASKS THE PROVIDER, and that is the load-bearing half. A literal list of
+  // Sentry's variable names in this route would be the second home that drifts
+  // from the adapter's reads — which is the shape of the original bug one level
+  // up. The names live beside `appCredentials()`; this route asks the seam.
+  //
+  // It sits AFTER the permission gate deliberately: only an actor who may manage
+  // this project's integrations learns anything about the deployment's
+  // configuration, which keeps the no-existence-leak posture the checks above it
+  // hold. `not_configured` already maps to an `info` banner
+  // (`lib/monitors/returnBanner.ts`), so there is no new copy and no new UI.
+  if (missingProviderEnv('sentry').length > 0) {
+    return NextResponse.redirect(`${landing}?monitor=not_configured`);
+  }
+
   const nonce = mintMonitorConnectNonce();
+  // Kept as a belt: the check above makes this unreachable for a provider that
+  // DECLARES the slug, but a provider registered under `sentry` that declares
+  // nothing (the E2E fake) reaches here, and the null guard is what still refuses
+  // if it has no install URL to offer.
   const installUrl = externalInstallUrl(nonce);
   if (!installUrl) return NextResponse.redirect(`${landing}?monitor=not_configured`);
 

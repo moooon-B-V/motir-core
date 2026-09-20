@@ -1,5 +1,6 @@
 import type { ApprovalGateKind, Prisma } from '@/generated/prisma/client';
 import type {
+  AcceptanceResultSubjectSummaryDTO,
   ApprovalGateSubjectSummaryDTO,
   DecisionApprovalSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
@@ -8,6 +9,7 @@ import type {
 } from '@/lib/dto/approvalGate';
 import type { RegisteredGateKind, UnregisteredGateKind } from '@/lib/approvalGates/registry';
 import { isRegisteredGateKind } from '@/lib/approvalGates/registry';
+import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import {
   workItemDeliveryRepository,
@@ -146,6 +148,22 @@ export function excerptNote(noteMd: string | null): string | null {
  * its loader — the same sentence the handler registry enforces, one layer over.
  */
 const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
+  // MOTIR-4950 — the acceptance row names the RECORDING the gate asks about.
+  async acceptance_result(subjectIds, tx) {
+    const rows = await acceptanceEvidenceRepository.findManyByIds(subjectIds, tx);
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const [id, row] of rows) {
+      const summary: AcceptanceResultSubjectSummaryDTO = {
+        kind: 'acceptance_result',
+        acceptanceEvidenceId: row.id,
+        producedByKey: row.producedByKey,
+        commitSha: row.commitSha,
+        chapterCount: Array.isArray(row.chapters) ? row.chapters.length : 0,
+      };
+      out.set(id, summary);
+    }
+    return out;
+  },
   async design_result(subjectIds, tx) {
     const rows = await designEvidenceRepository.findManyByIds(subjectIds, tx);
     const out = new Map<string, ApprovalGateSubjectSummaryDTO>();

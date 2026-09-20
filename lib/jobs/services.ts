@@ -31,6 +31,7 @@ import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { indexRebuildStreakService } from '@/lib/services/indexRebuildStreakService';
+import { monitorConfigPreflightService } from '@/lib/services/monitorConfigPreflightService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { planDriftService } from '@/lib/services/planDriftService';
@@ -87,6 +88,10 @@ export const jobServices = {
   // The rebuild-streak probe (MOTIR-5027) — the daily check's fifth, and the
   // only one that reads the LEDGER rather than a registry or an address.
   indexRebuildStreak: indexRebuildStreakService,
+  // The monitor-configuration probe (MOTIR-5831) — the daily check's sixth, and
+  // the only one that asserts something about this process's OWN ENVIRONMENT
+  // rather than about a registry, an address or the ledger.
+  monitorConfigPreflight: monitorConfigPreflightService,
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
   planDrift: planDriftService,

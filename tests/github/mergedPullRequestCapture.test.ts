@@ -11,9 +11,10 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { toLinkedPullRequestDto } from '@/lib/mappers/githubMappers';
 import { MAX_CAPTURED_PR_PATHS } from '@/lib/github/pullRequestFiles';
 import type { NormalizedChangeRequest } from '@/lib/git/types';
-import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { _resetInstallationTokenCache, type GithubAppRole } from '@/lib/github/appAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
+import { stubAppCredentials } from '../helpers/appCredentials';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
 
@@ -38,10 +39,18 @@ const MERGED_AT = '2026-08-15T09:30:00.000Z';
 
 async function makeScenario(
   email: string,
-  ids: { installationId?: string; providerRepoId?: string; identifier?: string } = {},
+  ids: {
+    installationId?: string;
+    providerRepoId?: string;
+    identifier?: string;
+    /** The repository's OWNER. Defaults to the user-facing case; a HOSTED
+     *  repository is owned by the provisioning org (MOTIR-5811). */
+    owner?: string;
+  } = {},
 ) {
   const installationId = ids.installationId ?? INSTALLATION_ID;
   const providerRepoId = ids.providerRepoId ?? REPO_PROVIDER_ID;
+  const owner = ids.owner ?? 'moooon-B-V';
   const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
   const { workspace } = await workspacesService.createWorkspace({
     name: 'Acme',
@@ -63,13 +72,13 @@ async function makeScenario(
     workspaceId: workspace.id,
     installation: {
       installationId,
-      accountLogin: 'moooon-B-V',
+      accountLogin: owner,
       accountType: 'Organization',
     },
     repos: [
       {
         providerRepoId,
-        owner: 'moooon-B-V',
+        owner,
         name: 'motir-core',
         defaultBranch: 'main',
         archived: false,
@@ -77,7 +86,7 @@ async function makeScenario(
     ],
   });
   const repo = await adminDb.githubRepo.findFirstOrThrow({ where: { repoId: providerRepoId } });
-  return { user, workspace, project, item, ctx, repo, installationId, providerRepoId };
+  return { user, workspace, project, item, ctx, repo, installationId, providerRepoId, owner };
 }
 
 function prPayload(opts: {
@@ -87,10 +96,14 @@ function prPayload(opts: {
   state?: 'open' | 'closed';
   merged?: boolean;
   mergedAt?: string | null;
+  owner?: string;
 }) {
   return {
     action: opts.action,
-    installation: { id: INSTALLATION_ID, account: { login: 'moooon-B-V', type: 'Organization' } },
+    installation: {
+      id: INSTALLATION_ID,
+      account: { login: opts.owner ?? 'moooon-B-V', type: 'Organization' },
+    },
     repository: { id: Number(REPO_PROVIDER_ID) },
     pull_request: {
       number: opts.number ?? 11,
@@ -105,16 +118,9 @@ function prPayload(opts: {
   };
 }
 
-/** Wire the GitHub App credentials the installation-token mint needs. */
-function stubAppCredentials() {
-  const { privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-  });
-  vi.stubEnv('GITHUB_APP_ID', '999');
-  vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
-}
+// `stubAppCredentials` moved to `tests/helpers/appCredentials.ts` (MOTIR-5843) —
+// the provenance sweep asserts the same property at several call sites, so the
+// one-App-wired arm that makes the assertion bite is shared rather than copied.
 
 function tokenResponse(): Response {
   return new Response(
@@ -129,8 +135,8 @@ function tokenResponse(): Response {
 /** Stub the App-auth mint + the files endpoint, PAGINATING `files` the way GitHub
  *  does. `files: null` makes the files read fail with a non-retryable status —
  *  the "GitHub blip" case. */
-function stubGithub(opts: { files: string[] | null }) {
-  stubAppCredentials();
+function stubGithub(opts: { files: string[] | null; app?: GithubAppRole }) {
+  stubAppCredentials(opts.app);
   const calls: string[] = [];
   const fetchMock = vi.fn(async (url: string): Promise<Response> => {
     const u = String(url);
@@ -176,16 +182,108 @@ afterAll(async () => {
 });
 
 /** MOTIR-3674 — the link that used to come from the head ref. */
-async function linkFor(identifier: string, number = 11) {
+async function linkFor(identifier: string, number = 11, owner = 'moooon-B-V') {
   await linkPrByIdentifier({
     identifier,
-    owner: 'moooon-B-V',
+    owner,
     name: 'motir-core',
     number,
     headRef: `subtask/${identifier}-a-change`,
     title: `Some change (${identifier})`,
   });
 }
+
+// MOTIR-5811 — WHICH GitHub App the capture mints through.
+//
+// Motir runs TWO App registrations (`docs/decisions/project-repository-set.md`'s
+// 2026-07-30 amendment): the user-facing App every customer installs, and the
+// provisioning App installed ONLY on Motir's own org. A HOSTED repository — one
+// owned by that org — is on the provisioning App and on no other, so a mint
+// through the user-facing default cannot reach it at all. `mergeChangeRequest`,
+// the review-permission read and the decision capture already choose by
+// provenance; this capture did not.
+//
+// ⚠️ WHAT MADE THE DEFECT INVISIBLE is the arm these tests share with the block
+// below: the capture's catch turns the refusal into a row with NO changed paths,
+// and every reader of `changed_paths` sees that as a pull request that touched
+// nothing. Nothing goes red; the only witness is a log line. So the assertion
+// here is on the ROW, exactly as the MOTIR-2922 block's is.
+//
+// ⚠️ AND THE CREDENTIAL STUB IS THE ASSERTION. `stubGithub({ app: 'provisioning' })`
+// wires the studio App and blanks the user-facing one, so a mint that ignored
+// the repository's provenance could not have produced a token at all. A
+// populated `changedPaths` is therefore a fact about WHICH App was asked, not
+// merely that the fetch was reached.
+const HOSTED_ORG = 'motir-projects';
+
+describe('the capture picks the App by the repository PROVENANCE (MOTIR-5811)', () => {
+  it('a HOSTED repository stores the changed paths on a MERGED delivery', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', HOSTED_ORG);
+    const s = await makeScenario('hosted-merge-capture@example.com', { owner: HOSTED_ORG });
+    await linkFor(s.item.identifier, 11, HOSTED_ORG);
+    const { calls } = stubGithub({
+      files: ['lib/services/githubWebhookService.ts'],
+      app: 'provisioning',
+    });
+
+    const result = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({
+        action: 'closed',
+        identifier: s.item.identifier,
+        state: 'closed',
+        merged: true,
+        owner: HOSTED_ORG,
+      }),
+    );
+
+    expect(result).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
+    const row = await prRow(11);
+    expect(row!.changedPaths).toEqual(['lib/services/githubWebhookService.ts']);
+    expect(row!.changedPathsTruncated).toBe(false);
+    expect(row!.mergedAt?.toISOString()).toBe(MERGED_AT);
+    expect(calls.some((u) => u.includes('/pulls/11/files'))).toBe(true);
+  });
+
+  // The card reports the failure on `opened` deliveries as well as merged ones,
+  // and the two reach the capture by different arms — so both are asserted.
+  it('a HOSTED repository stores them on an OPEN delivery too', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', HOSTED_ORG);
+    const s = await makeScenario('hosted-open-capture@example.com', { owner: HOSTED_ORG });
+    stubGithub({ files: ['lib/git/providers/github.ts'], app: 'provisioning' });
+
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'opened', identifier: s.item.identifier, owner: HOSTED_ORG }),
+    );
+
+    const row = await prRow(11);
+    expect(row!.state).toBe('open');
+    expect(row!.changedPaths).toEqual(['lib/git/providers/github.ts']);
+    expect(row!.mergedAt).toBeNull();
+  });
+
+  // The CONTROL, and it is the half that makes the pair mean something: with the
+  // provisioning org CONFIGURED — so provenance is being evaluated rather than
+  // skipped — a repository the customer owns still resolves to the user-facing
+  // App. Without this, an implementation that always minted through the
+  // provisioning App would pass the two tests above and break every real tenant.
+  it('a repository the CUSTOMER owns still mints through the user-facing App', async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', HOSTED_ORG);
+    const s = await makeScenario('user-facing-capture@example.com');
+    await linkFor(s.item.identifier);
+    stubGithub({ files: ['lib/services/workflowsService.ts'] });
+
+    const result = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'closed', identifier: s.item.identifier, state: 'closed', merged: true }),
+    );
+
+    expect(result).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
+    const row = await prRow(11);
+    expect(row!.changedPaths).toEqual(['lib/services/workflowsService.ts']);
+  });
+});
 
 describe('the merge capture writes the row (MOTIR-2922)', () => {
   it('a MERGED delivery stores the changed paths and the merge instant', async () => {

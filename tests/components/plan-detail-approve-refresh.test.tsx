@@ -131,6 +131,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         folderId: null,
         folderPath: null,
         folderMissing: false,
+        folderTrail: [],
         blockedByNodeIds: [],
         blockedByRemovedNodeIds: [],
         committedBlockedBy: [],

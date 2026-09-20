@@ -35,6 +35,7 @@ const ALL_KINDS = [
   'decision_approval',
   'pull_request_approval',
   'pull_request_merge',
+  'acceptance_result',
 ] as const satisfies readonly ApprovalGateKind[];
 
 describe('the approval-gate registry — totality at runtime', () => {
@@ -47,16 +48,19 @@ describe('the approval-gate registry — totality at runtime', () => {
     expect(registered.filter((k) => unregistered.includes(k as never))).toEqual([]);
   });
 
-  it('registers `design_result`, `decision_approval` and `pull_request_approval`, and NOT the retired merge kind', () => {
+  it('registers `design_result`, `decision_approval`, `acceptance_result` and `pull_request_approval`, and NOT the retired merge kind', () => {
     expect(Object.keys(APPROVAL_GATE_HANDLERS)).toEqual([
       'design_result',
       'decision_approval',
       'pull_request_approval',
+      'acceptance_result',
     ]);
     expect(isRegisteredGateKind('design_result')).toBe(true);
     // MOTIR-5676 (Story MOTIR-4907): the DECISION gate left the holes it was declared in.
     expect(isRegisteredGateKind('decision_approval')).toBe(true);
     expect(isRegisteredGateKind('pull_request_approval')).toBe(true);
+    // MOTIR-4950: a story's acceptance receipt joins the contract (§1's MOTIR-5787 amendment).
+    expect(isRegisteredGateKind('acceptance_result')).toBe(true);
     // Bug MOTIR-5603 · MOTIR-5616: registered by MOTIR-4793, retired here. A card holds
     // ONE approve-to-merge gate, so the per-pull-request kind has no producer, no
     // decider and no surface — and a registry entry for it would promise all three.

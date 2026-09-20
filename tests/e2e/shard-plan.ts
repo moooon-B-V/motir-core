@@ -456,6 +456,16 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // measurement. These are conservative, complexity-relative first-run costs;
   // replace them from the first green bulk artifacts, as for every new entry.
   'agent-authored-plan.spec.ts': 18.0,
+  // Bug MOTIR-5782 · MOTIR-5796 — PROMOTED out of the acceptance lane (it was
+  // `acceptance-agent-folder-placement.spec.ts`, MOTIR-5310's receipt; the
+  // disposition is in docs/acceptance-lane-triage.md). Two tests: an integration
+  // files over /api/v1, an agent proposes into the folder over the MCP, a reviewer
+  // approves it into place; and the deleted-folder refusal. MEASURED locally on
+  // 2026-09-19 against a PRODUCTION build (list reporter, the tests' own times):
+  // 5.5 s + 2.0 s = **7.5 s**, warm — recorded as **15.0**, rounded UP for the
+  // lane's slower runner because under-estimating is the direction that unbalances
+  // a bin-packer. RE-MEASURE from the first green bulk artifact that includes it.
+  'agent-folder-placement.spec.ts': 15.0,
   'activity.spec.ts': 13.8,
   // Story MOTIR-4337 · Subtask MOTIR-4566 — the operator's org lookup and org
   // page, plus the 404 a tenant user gets on both. MEASURED locally on
@@ -654,6 +664,16 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // Re-measure from the first green run that includes it.
   'planner-bug-destination.spec.ts': 8.0,
   'planning-anchor-level.spec.ts': 11.0,
+  // Bug MOTIR-5782 · MOTIR-5796 — folders on the plan-review canvas: one test that
+  // seeds the folder roadmap plus a two-proposal plan, arrives on a folder, crumbs
+  // to the root and drills two folders deep. MEASURED locally on 2026-09-19 against
+  // a PRODUCTION build (list reporter, the test's own time): **2.9 s**, warm — so
+  // recorded as **5.0**, rounded UP because under-estimating is the direction that
+  // unbalances a bin-packer. RE-MEASURE from the first green bulk artifact that
+  // includes it, as for every new entry. (Its overlay twin,
+  // `cloud-plan-change-folders.spec.ts`, runs on the cloud lane, which this plan
+  // does not shard.)
+  'plans-review-folders.spec.ts': 5.0,
   'plans-review.spec.ts': 14.8,
   // MOTIR-5539. Promoted from the acceptance lane (it was
   // `acceptance-pr-merge-mode.spec.ts`). ESTIMATED, not measured — it has never

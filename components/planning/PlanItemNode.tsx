@@ -108,12 +108,18 @@ export function PlanItemNode({
 }) {
   const t = useTranslations('planReview');
   const kind = toKind(item.kind);
-  // THE BOTTOM SLOT (Part XVII §17.2). A `modify` spends it on its diff line; a
-  // FILED `add` — which never has a diff — spends it on where it will be filed;
-  // a proposal naming a DELETED folder spends it on saying so. At most one tenant.
+  // THE BOTTOM SLOT (Part XVII §17.2, amended by Part XVIII decision 2). A
+  // `modify` spends it on its diff line; a proposal naming a DELETED folder spends
+  // it on saying so. At most one tenant.
+  //
+  // ⚠️ A FILED `add` NO LONGER SPENDS IT ON ITS FOLDER (Bug MOTIR-5782). Part XVII
+  // drew the placement line because a filed proposal was drawn among the ROOTS —
+  // no canvas level was a folder. Both planning canvases now draw it ON its
+  // folder's level, where the breadcrumb already says where the reader is
+  // standing, so the line would repeat the crumb and cost the title its second
+  // line. The LIST body keeps its `in [folder]` fact (§17.3), unchanged.
   const showDiff = item.op === 'modify' && item.changes.length > 0;
-  const showPlacement =
-    !showDiff && (item.folderMissing || (item.op === 'add' && (item.folderPath?.length ?? 0) > 0));
+  const showPlacement = !showDiff && item.folderMissing;
   const hasSlot = showDiff || showPlacement;
   // A deleted folder is a STALE fact the staleness read does not report (MOTIR-5415
   // carries it as `folderMissing`), so the node adds its reason beside the shipped ones.

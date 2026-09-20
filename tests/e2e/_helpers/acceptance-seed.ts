@@ -1,5 +1,6 @@
 import { adminDb, db } from './db-reset';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // E2E seed helpers for the story-acceptance flow (Story MOTIR-1627 · Subtask
@@ -66,6 +67,17 @@ export async function seedPendingEvidence(
       isCurrent: true,
     },
   });
+
+  // ⚠️ AND THE QUESTION THE RECEIPT RAISES (Story MOTIR-4949 · Subtask MOTIR-5792).
+  // A receipt is not a row on its own: a publish ends by asking the predicate what the
+  // story should now be asking, and `reconcileGatesFor` raises the `acceptance_result`
+  // gate. Planting the bytes WITHOUT it built a state the product cannot produce — a
+  // recording nobody was asked about — and every consumer of this seed then drove a
+  // panel with no question in it. That was invisible for as long as the panel carried
+  // its own verbs; once MOTIR-5790 handed the decision to the approval overlay, the
+  // DOOR became the thing a gate switches on, and these specs had nothing to press.
+  const story = await adminDb.workItem.findUniqueOrThrow({ where: { id: storyId } });
+  await adminDb.$transaction((tx) => reconcileGatesFor(story, tx));
 }
 
 /**
