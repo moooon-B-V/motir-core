@@ -3570,6 +3570,30 @@ export const plansService = {
         ? await workflowsService.getTerminalStatusKeys(plan.projectId, ctx.workspaceId)
         : (revisionTerminalStatusKeys ?? new Set<string>());
 
+    // ⚠️ THE PLAN'S OWN SESSION, so the park does not refuse its own output.
+    // A planning conversation acquires its anchors at OPEN and then submits; the
+    // plan that comes back names those anchors, and treating the session's lock
+    // as a competitor refuses a session's own plan (the whole contextual
+    // planning loop — `contextualPlanningConfirmGate.test.ts`).
+    //
+    // Resolved by the same `sourceJobId → lastJobId` link the release path walks,
+    // and a MISS is harmless in both directions: a plan with no session, or one
+    // whose session has moved on, simply parks its targets itself, which is what
+    // an MCP-authored plan wants.
+    const ownSessionId =
+      planTargets.length > 0 && plan.sourceJobId
+        ? ((
+            await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+              planChangeSessionRepository.findByProjectAndLastJobId(
+                plan.projectId,
+                plan.sourceJobId!,
+                ctx.workspaceId,
+                tx,
+              ),
+            )
+          )?.id ?? null)
+        : null;
+
     let result: { row: Plan; items: PlanItem[] };
     try {
       result = await withWorkspaceContext(
@@ -3706,6 +3730,7 @@ export const plansService = {
             planId,
             planTargets,
             parkTerminalStatusKeys,
+            ownSessionId,
             { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: fresh.projectId },
             new Date(),
             tx,
