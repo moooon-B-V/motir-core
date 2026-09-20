@@ -476,7 +476,13 @@ export function DevelopmentGateFrame({
   // member facts are what say so — an exit nobody put back, or a refusal the host gave —
   // and three bands read differently for it: the meta, the record band and the
   // consequence line.
+  // ⚠️ THE MERGE GATE'S OWN KIND IS PART OF THE TEST (MOTIR-5787's acceptance primary
+  // made this reachable): a design, decision or acceptance gate awaiting over a card
+  // whose members carry a standing exit is NOT a re-asked merge question — the primary
+  // LEADS the frame, and the merge rides on it. Without the kind check this frame would
+  // answer a receipt's question with the merge queue's words.
   const reasked =
+    gate.kind === 'pull_request_approval' &&
     gate.state === 'awaiting' &&
     (read.members ?? []).some((fact) => fact.exit !== null || fact.refusal !== null);
   const subjectMeta =
