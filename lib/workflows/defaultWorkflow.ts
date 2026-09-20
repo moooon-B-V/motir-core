@@ -250,8 +250,10 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   //
   // ⚠️ AND NOTHING FROM `done` OR `cancelled`, deliberately (D2). We plan
   // forward: a terminal card is superseded by a new one, never re-planned in
-  // place, and `validateProposals.ts` already refuses a terminal target with
-  // `PlanTargetImmutableError` before any status is written.
+  // place. The absence here is one of TWO guards, not the only one —
+  // `planTargetLockService.acquireForPlanWithin` skips a terminal target
+  // outright, because `validateProposals`' `PlanTargetImmutableError` fires at
+  // the plan's CLOSE rather than at its append (MOTIR-5645).
   //
   // The park itself is a `{ system: true }` write and would not be refused
   // either way. These are declared so a PERSON can make the same move, and so a

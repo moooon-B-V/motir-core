@@ -75,6 +75,7 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { patchRescopes, resetsOnRescope } from '@/lib/plans/rescopeReset';
+import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
 import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTodos/normalize';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
@@ -3452,6 +3453,24 @@ export const plansService = {
       ? await workflowsService.getTerminalStatusKeys(plan.projectId, ctx.workspaceId)
       : null;
 
+    // ⚠️ THE PARK'S TERMINAL SET, resolved OUT HERE for the reason the block
+    // above gives: `getTerminalStatusKeys` opens its own workspace context and
+    // Prisma cannot nest interactive transactions.
+    //
+    // The park needs it because a terminal target is NEVER parked (AMENDMENT 16
+    // D2) and nothing before the park refuses one: `validatePlanProposals`'s
+    // `PlanTargetImmutableError` needs `liveById` and so runs at the CLOSE, not
+    // at the append. MOTIR-5645's card asserted otherwise; it was falsified by
+    // `tests/planning/planTargetParkDoor.test.ts`, which is why that test exists.
+    //
+    // Computed here rather than inside, and only when there is something to
+    // park, so an append that names no committed target pays nothing.
+    const planTargets = committedPlanTargets(proposals);
+    const parkTerminalStatusKeys =
+      planTargets.length > 0 && !revisionTerminalStatusKeys
+        ? await workflowsService.getTerminalStatusKeys(plan.projectId, ctx.workspaceId)
+        : (revisionTerminalStatusKeys ?? new Set<string>());
+
     let result: { row: Plan; items: PlanItem[] };
     try {
       result = await withWorkspaceContext(
@@ -3564,6 +3583,34 @@ export const plansService = {
           if (collectReferencedFolderIds(withIncoming).length > 0) {
             await assertFolderPlacementsLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
           }
+
+          // ⚠️ PARK THE PLAN'S COMMITTED TARGETS — BEFORE THE FIRST INSERT
+          // (MOTIR-5645; `docs/decisions/agent-authored-plans.md` AMENDMENT 16
+          // D1). This is the ONE park door: every authoring path reaches the
+          // tree through this method — the MCP's `create_plan` /
+          // `add_plan_items` via `authorPlan`, and generation, `expand_item` and
+          // every motir-ai job via `aiGenerationService.appendProposals` — so
+          // parking here covers the doors that exist and the ones added later,
+          // with no per-caller rule to keep in step.
+          //
+          // BEFORE the inserts, so a refusal leaves the plan byte-identical, the
+          // same property `assertTempRefsResolvable` above is placed for. And
+          // INSIDE this transaction, so the park and the proposals it guards
+          // commit or roll back together: a plan that parked a card and then
+          // failed to append would hold it for a day.
+          //
+          // A target held by ANOTHER plan or session raises
+          // `PlanTargetLockedError` from here, naming the holder — the same
+          // refusal two planning conversations have always given each other, now
+          // reaching the doors that never took the lock.
+          await planTargetLockService.acquireForPlanWithin(
+            planId,
+            planTargets,
+            parkTerminalStatusKeys,
+            { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: fresh.projectId },
+            new Date(),
+            tx,
+          );
 
           for (const p of proposals) {
             if (p.op !== 'add' && p.workItemId) {

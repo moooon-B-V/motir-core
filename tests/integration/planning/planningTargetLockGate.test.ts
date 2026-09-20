@@ -248,8 +248,13 @@ async function heldItems(): Promise<string[]> {
 
 /** The leases WITH their holder's thread — what `heldItems` cannot tell you.
  *  A row's `sessionId` is the only thing that separates "the winner holds its own
- *  scope" from "the loser leaked a lease", and the two produce the same id list. */
-async function heldLeases(): Promise<Array<{ workItemId: string; sessionId: string }>> {
+ *  scope" from "the loser leaked a lease", and the two produce the same id list.
+ *
+ *  ⚠️ `sessionId` IS NULLABLE since MOTIR-5645 — a lock is held by a session OR
+ *  by a PLAN, and the database CHECK keeps it to exactly one. Every lease in
+ *  THIS file is session-held (its subject is the conversation gate), so the null
+ *  arm never arrives here; the type widens because the column did. */
+async function heldLeases(): Promise<Array<{ workItemId: string; sessionId: string | null }>> {
   return adminDb.planTargetLock.findMany({
     where: { projectId: fx.projectId },
     orderBy: { workItemId: 'asc' },

@@ -2905,9 +2905,18 @@ Plan SESSIONS keep their own acquire at open. This adds a door; it removes none.
 ### D2 — parkable is every NON-TERMINAL status; `done` and `cancelled` are never parked
 
 `todo`, `blocked`, `in_progress`, `implemented`, `in_review` and `approved` park. The two
-done-category statuses do not, by the owner's correction above — which matches the shipped refusal
-one layer down: `validateProposals.ts` already raises `PlanTargetImmutableError` for a proposal
-whose target is terminal, so a plan cannot name one as a target in the first place.
+done-category statuses do not, by the owner's correction above.
+
+⚠️ **THE PARK ENFORCES THIS ITSELF, and the obvious assumption that it need not is FALSE.**
+`validateProposals.ts` does raise `PlanTargetImmutableError` on a terminal target — but from
+`validatePlanProposals`, which needs `liveById` and therefore, in its own words, "cannot move earlier
+than the CLOSE". **An APPEND naming a `done` card is accepted.** So a park that inherited that refusal
+would take a lock on shipped work, and the owner's exclusion would hold at approve and nowhere else.
+`acquireForPlanWithin` reads the project's own terminal status keys and skips those targets: no lock
+row, no status write, and the rest of the batch parks normally.
+
+This was found by building it — `tests/planning/planTargetParkDoor.test.ts` failed on exactly this
+case, against MOTIR-5645's card, which asserted the inherited refusal.
 
 ### D3 — the park does NOT withdraw an `awaiting` approval gate, and that needs no code
 
