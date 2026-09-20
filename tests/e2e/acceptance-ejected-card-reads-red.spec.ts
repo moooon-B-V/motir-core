@@ -395,8 +395,21 @@ test.describe('an ejected card reads red', () => {
       await page.reload();
       const row = prRow(page, number);
       await show(row);
-      const action = serverAction(page);
+      // ⚠️ THE PRESS ASKS FIRST NOW (MOTIR-5806; § 28 panel 8a), and this is an
+      // INTERACTION change, not an assertion one. Every assertion below is the one this
+      // receipt recorded: the row reads *Queued to merge*, the card reads Approved, and
+      // the board's red is gone. What changed is that *Queue again* IS a new approval, so
+      // it takes the frame's confirm before it acts — so the spec now presses twice to
+      // reach the same state, rather than being re-pointed at a different one.
       await row.getByRole('button', { name: pra.outcome.queueAgain }).click();
+      const dev = developmentCard(page);
+      const action = serverAction(page);
+      await dev
+        .getByRole('button', {
+          name: en.approvalGate.confirm.proceed.replace('{verb}', pra.outcome.queueAgain),
+          exact: true,
+        })
+        .click();
       expect((await action).status()).toBe(200);
       await expect(row.getByText(pra.outcome.queued, { exact: true })).toBeVisible();
       await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
