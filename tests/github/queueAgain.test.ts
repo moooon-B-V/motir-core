@@ -767,3 +767,68 @@ describe('the card’s ciState follows Queue again (MOTIR-5717)', () => {
     expect(await ciStateOf(item.id)).toBe('passing');
   });
 });
+
+// ── THE TWO PLACES A CARD DOES NOT MOVE (MOTIR-5805) ────────────────────────────
+//
+// A queue exit's job is to leave the card where the reason says it belongs. Both of
+// these leave it exactly where it was, and each is a different KIND of not-moving: one
+// because the reason carries no verdict about the code, the other because the project's
+// own workflow has no edge to move along.
+describe('a removal that moves nothing', () => {
+  it('auto mode, a NEUTRAL removal: nothing is recorded as moved, and the card stays implemented', async () => {
+    const s = await makeScenario('auto-neutral@example.com', 'auto');
+    const item = await card(s, [23]);
+    await ci(23, 'sha-auto-neutral');
+    await markQueued(23, 'auto_mode');
+    // The status an ENQUEUED card sits at in `auto` — the one a removal is read against.
+    expect(await statusOf(item.id)).toBe('in_review');
+
+    // ⚠️ ONLY A FAILURE MOVES AN AUTO CARD (§ 4 THIRD AMENDMENT, decision 3, which the
+    // FOURTH leaves standing for `auto`). Somebody taking the pull request out by hand
+    // says nothing about the commits, and in auto mode there is no approval to spend and
+    // nobody to ask — so unlike `manual`, where a neutral removal now re-asks, the exit
+    // is recorded and the card is left exactly where it was.
+    const result = await eject(23, 'sha-auto-neutral', 'MANUAL');
+
+    expect(result).toMatchObject({ outcome: 'recorded', disposition: 'neutral', moved: [] });
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingGates(item.id)).toEqual([]);
+  });
+
+  it('Queue again on a project whose workflow has no `implemented → in_review` edge re-dispatches anyway', async () => {
+    const s = await makeScenario('auto-no-edge@example.com', 'auto');
+    const item = await card(s, [24]);
+    await ci(24, 'sha-auto');
+    await markQueued(24, 'auto_mode');
+    await eject(24, 'sha-auto');
+    expect(await statusOf(item.id)).toBe('implemented');
+    const prId = (await pr(24)).id;
+    sent.length = 0;
+    // A project that EDITED its workflow: the rung this return would walk is not there.
+    // The re-dispatch is the point of the press and must still happen — the card simply
+    // stays where it is, and the refusal is logged rather than thrown, because a person
+    // pressing *Queue again* is asking for a merge attempt, not for a status change.
+    const workflow = await adminDb.workflowStatus.findMany({
+      where: { projectId: s.project.id, key: { in: ['implemented', 'in_review'] } },
+    });
+    const from = workflow.find((w) => w.key === 'implemented')!;
+    const to = workflow.find((w) => w.key === 'in_review')!;
+    await adminDb.workflowTransition.deleteMany({
+      where: { projectId: s.project.id, fromStatusId: from.id, toStatusId: to.id },
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await pullRequestMergeService.requeueAutoMember(
+      { workItemId: item.id, pullRequestId: prId },
+      s.ctx,
+    );
+
+    expect(result).toMatchObject({ pullRequestId: prId, headSha: 'sha-auto' });
+    expect(sent.some((e) => e.name === 'pull-request/auto-merge.requested')).toBe(true);
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(warn).toHaveBeenCalledWith(
+      '[mergeQueueExitService] Queue again could not return the card',
+      expect.objectContaining({ workItemId: item.id, to: 'in_review' }),
+    );
+  });
+});
