@@ -2937,11 +2937,33 @@ that genuinely abandons the work `remove`s its target, and D7 archives it.
 refused with it, naming the holding plan and its author. Nothing new is invented for the collision;
 what changes is that far more plans now take the lock, so it will actually fire.
 
-### D5 — the lock is held by the PLAN, not only by a session
+### D5 — the lock is held by the PLAN, not only by a session — and a CONVERSATION is ONE holder
 
 The row names the plan, and the status is held while that plan is `generating` or `planned`. A
 session-held lock keeps its existing meaning; the two coexist on one table because they answer the
 same question — _who is rewriting this card right now_.
+
+⚠️ **A PLAN PRODUCED BY A CONVERSATION PARKS NOTHING — the SESSION is its holder.** This is a
+correction to D5 as first written, and it was forced by evidence rather than argument: five at-scale
+E2E cases (`cloud-plan-change-conversation.spec.ts`, `cloud-contextual-plan-confirm.spec.ts`) failed
+with `PlanTargetLockedError` on the user's own anchor, in the browser, in the shipped
+_describe → refine → approve_ loop.
+
+**The REFINE is what proves it.** One conversation produces SUCCESSIVE plans over the same targets —
+that is what refining IS — so treating each plan as its own holder made a conversation collide with
+itself on the second submit. The two plans are ONE actor, and the session is the thing that says so.
+A session already acquires its anchors at open and gives them back on the decision (MOTIR-2786), so
+a second lock for one actor buys nothing and breaks the loop.
+
+So the rule is: **the plan parks only when it resolves to NO session.** That is exactly the
+population the bug was reported for — `create_plan` / `add_plan_items` through the MCP, which is
+every runbook planning pass.
+
+⚠️ **THE RESIDUAL GAP, stated rather than discovered:** a plan carrying a `sourceJobId` whose session
+cannot be resolved — a generation or `expand_item` job that opened no conversation — parks nothing
+and is held by nothing. Its targets are as claimable as they were before this amendment. That is not
+a regression (it is the shipped behaviour), and closing it needs the plan→session link to be a
+column rather than a `lastJobId` lookup. Left open deliberately.
 
 ### D6 — APPROVE rests each target at Blocked or To Do
 
@@ -3060,9 +3082,10 @@ matching the `baseRevision` its author had captured correctly seconds earlier. T
 on that rule's own terms — it asks whether applying the patch _"may conflict with a newer edit /
 clobber it"_, and a content patch cannot clobber a status change.
 
-**3. A CARD CAN NOW HAVE AT MOST ONE OPEN PLAN, which leaves one shipped display unreachable.** D4
-and D5 together mean a `generating`, `planned` or `stale` plan holds its targets, so a second plan
-naming one of them is refused. `plansService.listPendingProposalsForWorkItem` and the pending-plan
+**3. A CARD CAN HAVE AT MOST ONE OPEN _SESSION-LESS_ PLAN, which leaves one shipped display nearly
+unreachable.** D4 and D5 together mean a `generating`, `planned` or `stale` plan with no session
+holds its targets, so a second such plan naming one of them is refused. Plans from ONE conversation
+are exempt (D5's correction), so a refining conversation still stacks plans over one card. `plansService.listPendingProposalsForWorkItem` and the pending-plan
 indicator it feeds are built to render N pending plans per card and to COUNT them; that N is now
 always 0 or 1. Nothing is broken and nothing was removed — the read is still correct — but the
 multi-plan arm is dead in a tenant, and its tests now reach it only by deleting lock rows in a

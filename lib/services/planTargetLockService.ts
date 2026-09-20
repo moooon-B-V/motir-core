@@ -412,6 +412,12 @@ export const planTargetLockService = {
    * nothing, which is safe only because all three ship on one parent pull
    * request.
    *
+   * ⚠️ IT IS ONLY EVER CALLED FOR A PLAN WITH NO SESSION. A plan produced by a
+   * planning CONVERSATION is already held by that conversation (MOTIR-2786), so
+   * `plansService.addProposals` hands this an EMPTY list for one — successive
+   * plans of one conversation are ONE actor, and making each its own holder made
+   * a conversation collide with itself on every refine (MOTIR-5648).
+   *
    * `tx` is REQUIRED — this never opens a transaction of its own, because the
    * park and the proposals it guards must commit or roll back together. A plan
    * that parked a card and then failed to append would hold it for a day.
@@ -420,7 +426,6 @@ export const planTargetLockService = {
     planId: string,
     workItemIds: readonly string[],
     terminalStatusKeys: ReadonlySet<string>,
-    ownSessionId: string | null,
     pctx: PlanTargetLockContext,
     now: Date,
     tx: Prisma.TransactionClient,
@@ -458,27 +463,6 @@ export const planTargetLockService = {
       // `statusHeld: false`, because the row is the exclusion. This asks whether
       // the card may be HELD AT ALL, and the answer for terminal work is no row.
       if (terminalStatusKeys.has(item.status)) continue;
-      // ⚠️ A PLAN IS NEVER REFUSED BY THE LOCK ITS OWN SESSION HOLDS, and this
-      // is not a courtesy — without it the whole CONTEXTUAL PLANNING loop is
-      // broken.
-      //
-      // A planning conversation acquires its anchors when it OPENS, then submits;
-      // the plan that comes back names those very anchors. Treating the session's
-      // lock as a competitor means a session's own output is refused by the
-      // session that produced it — `PlanTargetLockedError` on the anchor, from
-      // the plan the anchor exists to hold. (Found by
-      // `tests/integration/planning/contextualPlanningConfirmGate.test.ts`, whose
-      // ten cases all failed this way.)
-      //
-      // LEFT AS THE SESSION'S rather than converted to the plan's: the session
-      // is still live, it still refreshes its own lease on each submit, and
-      // `releasePlanTargetLocks` already gives a session's locks back when its
-      // plan is decided. Converting would take the lock out from under a thread
-      // that is still running and break that release. The exclusion is
-      // undamaged — the row still exists, and every OTHER holder still collides
-      // with it.
-      const existing = await planTargetLockRepository.findByWorkItemId(item.id, tx);
-      if (ownSessionId && existing?.sessionId === ownSessionId) continue;
       outcomes.push(await acquireOne(item, { kind: 'plan', planId }, pctx, now, tx));
     }
     return outcomes;

@@ -557,21 +557,20 @@ describe('no approve ⇒ no write — a completed run proposes everything and wr
     ).toBeNull();
     expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
 
-    // ⚠️ THE DIFFERENCE FROM BEFORE THE RUN IS NOW EVERY TARGET'S LOCK, not only
-    // the anchor's (MOTIR-5645). The anchor is parked because the conversation
-    // holds it; `doomed` is parked because this plan proposes to REMOVE it, and a
-    // plan parks every committed target it names (AMENDMENT 16 D1).
+    // ⚠️ STILL ONE LOCK, and the reason is D5's correction (MOTIR-5648). A plan
+    // produced by a CONVERSATION parks nothing — the session is its holder — so
+    // the only thing held here is the conversation's own anchor, exactly as
+    // before this bug. `doomed` is a `remove` TARGET of the plan and is NOT
+    // parked, because parking it would be a second lock for ONE actor, and that
+    // is what broke the shipped refine loop.
     //
-    // So "no approve ⇒ no write" is now precisely "no approve ⇒ no CONTENT
-    // write": the park writes a status, deliberately and at the product owner's
-    // instruction, so that nobody builds a card whose plan is being rewritten.
-    // Everything this case was written to catch still holds — nothing was
-    // created, renamed or archived — and the parked statuses are projected out
-    // rather than the comparison being dropped.
-    expect((await lockedAnchors()).sort()).toEqual([story.id, doomed.id].sort());
+    // A plan with NO session does park every committed target it names
+    // (AMENDMENT 16 D1) — that is the MCP door, and it has its own coverage in
+    // `tests/planning/planTargetParkDoor.test.ts`.
+    expect(await lockedAnchors()).toEqual([story.id]);
     const duringTheRun = await treeSnapshot();
-    expect(await treeSnapshotExceptStatusOf(story.id, doomed.id)).toEqual(
-      snapshotExceptStatusOf(beforeTheRun, story.id, doomed.id),
+    expect(await treeSnapshotExceptStatusOf(story.id)).toEqual(
+      snapshotExceptStatusOf(beforeTheRun, story.id),
     );
 
     // …and it is the APPROVE, not the run, that writes.

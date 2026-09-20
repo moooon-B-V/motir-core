@@ -221,12 +221,22 @@ describe('approve — an MCP plan with NO source job releases its own targets', 
   );
 
   it(
-    'a SESSION plan whose `lastJobId` has since moved on still releases its own targets',
+    'a plan produced by a CONVERSATION parks nothing — the session is its holder',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
-      // The other half of the old resolution's failure: it looked the session up
-      // by `lastJobId`, which every later submit overwrites — so an EARLIER plan
-      // of the same session resolved to nothing. Resolving by PLAN cannot miss.
+      // ⚠️ THIS CASE WAS REWRITTEN BY MOTIR-5648's E2E evidence. It used to
+      // assert that a session's EARLIER plan still released its own targets,
+      // because the release used to resolve a session by `lastJobId` and miss for
+      // any plan but the latest.
+      //
+      // That scenario can no longer arise: a plan that resolves to a session
+      // parks NOTHING, so it has no targets of its own to release (AMENDMENT 16
+      // D5). One conversation produces successive plans over the same cards —
+      // that is what refining is — and making each plan its own holder made a
+      // conversation collide with itself in the browser.
+      //
+      // The release's robustness is unchanged and still covered: it resolves a
+      // PLAN's locks by `plan_id`, which is what the MCP cases above exercise.
       const card = await seedCard();
       await setStatus(card, 'implemented');
 
@@ -240,7 +250,7 @@ describe('approve — an MCP plan with NO source job releases its own targets', 
       });
       const plan = await plansService.createPlan(
         fx.projectId,
-        { title: 'The earlier plan', sourceJobId: 'job-1' },
+        { title: 'The conversation\u2019s plan', sourceJobId: 'job-1' },
         fx.ctx,
       );
       await plansService.addProposals(
@@ -248,13 +258,11 @@ describe('approve — an MCP plan with NO source job releases its own targets', 
         [{ op: 'modify', workItemId: card, patch: { descriptionMd: 'Re-scoped.' } }],
         fx.ctx,
       );
-      await plansService.markPlanned(plan.id, fx.ctx);
 
-      // A later submit moves the session on.
-      await adminDb.planChangeSession.update({
-        where: { id: session.id },
-        data: { lastJobId: 'job-2' },
-      });
+      // No park, no lock: the session holds what it opened with, and this plan
+      // adds nothing of its own.
+      expect(await statusOf(card)).toBe('implemented');
+      expect(await lockCount(card)).toBe(0);
       expect(
         await planChangeSessionRepository.findByProjectAndLastJobId(
           fx.projectId,
@@ -262,12 +270,12 @@ describe('approve — an MCP plan with NO source job releases its own targets', 
           fx.workspaceId,
           adminDb,
         ),
-      ).toBeNull();
+      ).toMatchObject({ id: session.id });
 
+      // And approving it moves no status, because nothing was parked.
+      await plansService.markPlanned(plan.id, fx.ctx);
       await plansService.approvePlan(plan.id, fx.ctx);
-
-      expect(await statusOf(card)).toBe(RESTING_TODO_KEY);
-      expect(await lockCount(card)).toBe(0);
+      expect(await statusOf(card)).toBe('implemented');
     },
   );
 });

@@ -3552,47 +3552,52 @@ export const plansService = {
       ? await workflowsService.getTerminalStatusKeys(plan.projectId, ctx.workspaceId)
       : null;
 
-    // ⚠️ THE PARK'S TERMINAL SET, resolved OUT HERE for the reason the block
-    // above gives: `getTerminalStatusKeys` opens its own workspace context and
-    // Prisma cannot nest interactive transactions.
+    // ⚠️ WHO HOLDS THIS PLAN'S TARGETS — the SESSION, or the PLAN (MOTIR-5645,
+    // amended by MOTIR-5648's E2E evidence).
+    //
+    // A plan produced by a planning CONVERSATION is already held: the session
+    // acquires its anchors when it opens and gives them back when the plan is
+    // decided (MOTIR-2786). Such a plan parks NOTHING — the session is the
+    // holder, and a second lock for one actor is what broke the shipped
+    // "describe, refine, approve" loop.
+    //
+    // ⚠️ AND THE CASE THAT PROVED IT IS THE REFINE. One conversation produces
+    // SUCCESSIVE plans over the same targets — that is what refining IS — so
+    // treating each plan as its own holder made a conversation collide with
+    // itself: `PlanTargetLockedError` on the second submit, in the browser, on
+    // the user's own anchor. Five at-scale E2E cases caught it
+    // (`cloud-plan-change-conversation.spec.ts`,
+    // `cloud-contextual-plan-confirm.spec.ts`). The two plans are ONE actor and
+    // the session is the thing that says so.
+    //
+    // A plan with NO session parks its own targets, and that is the whole of the
+    // reported bug: `create_plan` / `add_plan_items` through the MCP, which is
+    // every runbook planning pass.
+    const sessionHoldingThisPlan = plan.sourceJobId
+      ? await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          planChangeSessionRepository.findByProjectAndLastJobId(
+            plan.projectId,
+            plan.sourceJobId!,
+            ctx.workspaceId,
+            tx,
+          ),
+        )
+      : null;
+    const planTargets = sessionHoldingThisPlan ? [] : committedPlanTargets(proposals);
+
+    // The park's TERMINAL SET, resolved OUT HERE for the reason the block above
+    // gives: `getTerminalStatusKeys` opens its own workspace context and Prisma
+    // cannot nest interactive transactions.
     //
     // The park needs it because a terminal target is NEVER parked (AMENDMENT 16
     // D2) and nothing before the park refuses one: `validatePlanProposals`'s
     // `PlanTargetImmutableError` needs `liveById` and so runs at the CLOSE, not
     // at the append. MOTIR-5645's card asserted otherwise; it was falsified by
     // `tests/planning/planTargetParkDoor.test.ts`, which is why that test exists.
-    //
-    // Computed here rather than inside, and only when there is something to
-    // park, so an append that names no committed target pays nothing.
-    const planTargets = committedPlanTargets(proposals);
     const parkTerminalStatusKeys =
       planTargets.length > 0 && !revisionTerminalStatusKeys
         ? await workflowsService.getTerminalStatusKeys(plan.projectId, ctx.workspaceId)
         : (revisionTerminalStatusKeys ?? new Set<string>());
-
-    // ⚠️ THE PLAN'S OWN SESSION, so the park does not refuse its own output.
-    // A planning conversation acquires its anchors at OPEN and then submits; the
-    // plan that comes back names those anchors, and treating the session's lock
-    // as a competitor refuses a session's own plan (the whole contextual
-    // planning loop — `contextualPlanningConfirmGate.test.ts`).
-    //
-    // Resolved by the same `sourceJobId → lastJobId` link the release path walks,
-    // and a MISS is harmless in both directions: a plan with no session, or one
-    // whose session has moved on, simply parks its targets itself, which is what
-    // an MCP-authored plan wants.
-    const ownSessionId =
-      planTargets.length > 0 && plan.sourceJobId
-        ? ((
-            await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-              planChangeSessionRepository.findByProjectAndLastJobId(
-                plan.projectId,
-                plan.sourceJobId!,
-                ctx.workspaceId,
-                tx,
-              ),
-            )
-          )?.id ?? null)
-        : null;
 
     let result: { row: Plan; items: PlanItem[] };
     try {
@@ -3730,7 +3735,6 @@ export const plansService = {
             planId,
             planTargets,
             parkTerminalStatusKeys,
-            ownSessionId,
             { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: fresh.projectId },
             new Date(),
             tx,
