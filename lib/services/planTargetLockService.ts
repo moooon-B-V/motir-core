@@ -7,6 +7,7 @@ import {
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -124,10 +125,16 @@ export interface PlanTargetHandOff {
   acquire: readonly string[];
 }
 
-/** One expired lease the sweep dealt with. */
+/** One expired lease the sweep dealt with.
+ *
+ *  `plan_awaiting_review` is MOTIR-5647's: the lease is a dead-author detector,
+ *  and a plan that reached `planned` is waiting for a PERSON rather than for a
+ *  crashed author — so its lock is left standing however old the lease is
+ *  (AMENDMENT 16 D9). Reported rather than silently skipped, so the sweep's own
+ *  output says why it walked past a row its read had selected. */
 export interface PlanTargetLockSweepEntry {
   workItemId: string;
-  outcome: 'restored' | 'left_as_is' | 'unattributable';
+  outcome: 'restored' | 'left_as_is' | 'unattributable' | 'plan_awaiting_review';
 }
 
 /**
@@ -618,6 +625,31 @@ export const planTargetLockService = {
 
     const entries: PlanTargetLockSweepEntry[] = [];
     for (const lock of expired) {
+      // ⚠️ A `planned` PLAN'S LOCK NEVER EXPIRES (MOTIR-5647; AMENDMENT 16 D9).
+      //
+      // The lease is a DEAD-AUTHOR detector: it exists because a planner that
+      // crashes leaves a plan `generating` with no terminal event, so the only
+      // signal left is the passage of time. A plan that reached `planned` is not
+      // that case — it is waiting for a PERSON, a review queue has no deadline,
+      // and its release is the decision itself (D6 / D8).
+      //
+      // Without this, a plan sitting in review for longer than the window would
+      // have its targets swept out from under it and become claimable while a
+      // reviewer was still deciding, which is the exact failure the park exists
+      // to prevent. The card would then be built from the shape the plan is
+      // replacing.
+      //
+      // A `generating` plan still expires, which is the whole point of D9.
+      if (lock.planId) {
+        const planStatus = await withWorkspaceServiceContext(lock.workspaceId, async (tx) => {
+          const plan = await planRepository.findById(lock.planId!, lock.workspaceId, tx);
+          return plan?.status ?? null;
+        });
+        if (planStatus === 'planned') {
+          entries.push({ workItemId: lock.workItemId, outcome: 'plan_awaiting_review' });
+          continue;
+        }
+      }
       // Resolve the signer in ITS OWN workspace-bound read, then release in a
       // second bound transaction. Two short transactions rather than one bare one
       // that binds mid-flight: the workspace is already known here (it came off
