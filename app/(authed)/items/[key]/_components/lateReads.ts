@@ -71,7 +71,19 @@ export interface LateReads {
   acceptanceEvidence: Awaited<
     ReturnType<typeof acceptanceEvidenceService.getCurrentForStory>
   > | null;
-  canDecideAcceptance: boolean;
+  /**
+   * The story's AWAITING `acceptance_result` gate, whether THIS reader may decide it,
+   * and the stamp they were shown (MOTIR-4950) — what the acceptance panel's verbs
+   * press, through the contract's one decide door. `gate: null` when nothing awaits.
+   */
+  acceptanceGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>>;
+  /**
+   * Whether the Acceptance section renders at all (MOTIR-5790): a story in review or
+   * done, as before — OR any story holding a receipt, because on a single-card run
+   * the story can still be In Progress while the recording already waits on it
+   * (`approval-gates.md` §1, the MOTIR-5787 amendment, point 3).
+   */
+  showAcceptance: boolean;
   /** The item's own project — the acceptance panel's Turn on flips THIS project's
    *  switch (MOTIR-5172). Already resolved for the page; carried, never re-read. */
   projectId: string;
@@ -247,8 +259,8 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
   const { itemId, ctx, projectId, activityTab } = input;
   // A story at in_review / done is the only shape that has an acceptance panel.
   // The ternaries stay: skipping a query is cheaper than parallelising it.
-  const showAcceptance =
-    input.itemKind === 'story' && (input.itemStatus === 'in_review' || input.itemStatus === 'done');
+  const inReviewBand = input.itemStatus === 'in_review' || input.itemStatus === 'done';
+  const readAcceptance = input.itemKind === 'story';
 
   return (async (): Promise<LateReads> => {
     const [
@@ -259,6 +271,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       initialAttachments,
       acceptanceEligibility,
       acceptanceEvidence,
+      acceptanceGate,
       designEvidence,
       designGate,
       runs,
@@ -305,7 +318,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           return null;
         }
       })(),
-      showAcceptance
+      readAcceptance
         ? acceptanceVideoEligibilityService.resolve({
             actorUserId: ctx.userId,
             workspaceId: ctx.workspaceId,
@@ -314,7 +327,28 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
             projectId,
           })
         : null,
-      showAcceptance ? acceptanceEvidenceService.getCurrentForStory(itemId, ctx) : null,
+      readAcceptance ? acceptanceEvidenceService.getCurrentForStory(itemId, ctx) : null,
+      // Contained like the design gate's read: a failed read renders the panel
+      // without verbs, never an error the reader cannot act on.
+      (async () => {
+        const none = {
+          gate: null,
+          canDecide: false,
+          routedToLabel: null,
+          settingsDoor: null,
+          stamp: null,
+          movedSince: [],
+        };
+        if (!readAcceptance) return none;
+        try {
+          return await approvalGatesService.getForWorkItem(
+            { workItemId: itemId, kind: 'acceptance_result' },
+            ctx,
+          );
+        } catch {
+          return none;
+        }
+      })(),
       designEvidenceService.getCurrentForWorkItem(itemId, ctx),
       // Contained like its neighbours: a failed gate read must not take the
       // whole late stack down, and "nothing awaiting" is the honest fallback —
@@ -456,7 +490,8 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       initialAttachments,
       acceptanceEligibility,
       acceptanceEvidence,
-      canDecideAcceptance: input.canEdit && input.itemStatus === 'in_review',
+      acceptanceGate,
+      showAcceptance: readAcceptance && (inReviewBand || acceptanceEvidence !== null),
       projectId,
       designEvidence,
       isDesignCard: input.itemType === 'design',

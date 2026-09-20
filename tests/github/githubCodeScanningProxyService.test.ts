@@ -7,6 +7,13 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubCodeScanningProxyService } from '@/lib/services/githubCodeScanningProxyService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
+import {
+  PROVISIONING_APP_ID,
+  USER_FACING_APP_ID,
+  mintedAppIds,
+  stubAppCredentials,
+  stubBothAppCredentials,
+} from '../helpers/appCredentials';
 import { truncateAuthTables } from '../helpers/db';
 import type { NormalizedRepo } from '@/lib/git/types';
 
@@ -239,5 +246,83 @@ describe('githubCodeScanningProxyService — no cross-tenant leakage (AC1)', () 
       repos: await adminDb.githubRepo.findMany(),
     };
     expect(JSON.stringify(rows)).not.toContain('ghs_installtoken');
+  });
+});
+
+// ── PROVENANCE: which App this site mints through (MOTIR-5843) ───────────────
+//
+// `githubCodeScanningProxyService` holds `connected.owner` and returns it two
+// lines below the mint as the canonical coordinate — so it is a caller that KNOWS
+// its repository, and it passed nothing. A hosted repository is on the
+// provisioning App and on NO other, so the user-facing default cannot reach it;
+// the refusal is caught and degraded to `null`, which is indistinguishable here
+// from "this repo has no analyses".
+//
+// Each case wires ONE App so a mint that ignored provenance could not produce a
+// token at all, and each is paired with a CONTROL wiring BOTH — without which an
+// implementation that always minted through the provisioning App would pass and
+// break every real tenant.
+describe('the App is chosen by the repository’s provenance', () => {
+  /** A fetch mock answering the mint + the analyses read, with NO credentials
+   *  wired — the caller stubs exactly the registration(s) its case is about. */
+  function stubTransport(): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(async (url: string): Promise<Response> => {
+      const json = (b: unknown) =>
+        new Response(JSON.stringify(b), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      if (url.endsWith('/access_tokens'))
+        return json({
+          token: 'ghs_installtoken',
+          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        });
+      if (url.includes('/code-scanning/analyses')) return json(ANALYSES_BODY);
+      return new Response('not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('a HOSTED repository mints through the provisioning App — with the user-facing App UNCONFIGURED', async () => {
+    // The repository's owner IS the provisioning org, so this is a repository
+    // Motir hosts. Only the provisioning App is wired: before the fix this call
+    // minted through the user-facing default, which `resolveConfig` refuses on an
+    // empty value, so the service degraded to null and the analyses never loaded.
+    vi.stubEnv('GITHUB_FALLBACK_ORG', REPO.owner);
+    stubAppCredentials('provisioning');
+    const fetchMock = stubTransport();
+
+    const { user, workspace } = await makeWorkspace('prov-hosted@example.com');
+    await connectRepo(workspace.id, 'inst-prov-1');
+
+    const analyses = await githubCodeScanningProxyService.listAnalyses(
+      { userId: user.id, workspaceId: workspace.id },
+      REPO_REF,
+    );
+
+    expect(analyses).not.toBeNull();
+    expect(mintedAppIds(fetchMock)).toEqual([PROVISIONING_APP_ID]);
+  });
+
+  it('CONTROL — a CUSTOMER-OWNED repository still mints through the user-facing App, with the provisioning org configured', async () => {
+    // The provisioning org is set and is NOT this repository's owner, and BOTH
+    // Apps are wired — so nothing but the resolved role can decide which was
+    // used. This is the half that fails an implementation which always reaches
+    // for the provisioning App.
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
+    stubBothAppCredentials();
+    const fetchMock = stubTransport();
+
+    const { user, workspace } = await makeWorkspace('prov-customer@example.com');
+    await connectRepo(workspace.id, 'inst-prov-2');
+
+    const analyses = await githubCodeScanningProxyService.listAnalyses(
+      { userId: user.id, workspaceId: workspace.id },
+      REPO_REF,
+    );
+
+    expect(analyses).not.toBeNull();
+    expect(mintedAppIds(fetchMock)).toEqual([USER_FACING_APP_ID]);
   });
 });

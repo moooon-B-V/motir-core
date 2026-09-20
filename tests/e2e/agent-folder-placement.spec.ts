@@ -2,7 +2,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from '@playwright/test';
 import { actionWrite } from './_helpers/authoritative-signal';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
@@ -14,9 +14,23 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { ADD_PLAN_ITEMS_TOOL_NAME, CREATE_PLAN_TOOL_NAME } from '@/lib/mcp/tools/authorPlan';
 
-// AGENTS AND INTEGRATIONS FILE INTO FOLDERS — THE ACCEPTANCE RECEIPT
-// (Story MOTIR-5310 · Subtask MOTIR-5421). The story's verification recipe as one
-// journey, against a production build and a real database.
+// AGENTS AND INTEGRATIONS FILE INTO FOLDERS
+// (Story MOTIR-5310 · Subtask MOTIR-5421).
+//
+// ── PROMOTED FROM THE ACCEPTANCE LANE (Bug MOTIR-5782 · MOTIR-5796) ─────────
+//
+// This was `acceptance-agent-folder-placement.spec.ts`, the receipt for
+// MOTIR-5310. That story is `done`, so the spec has discharged its purpose and,
+// per docs/decisions/acceptance-receipt-lifecycle.md §3, leaves the lane rather
+// than being edited in place. It went RED in the merge queue on bug MOTIR-5782,
+// whose design (Part XVIII decision 2) retires the plan-review canvas's
+// PLACEMENT LINE for a card filed into a folder that still exists — the folder
+// is a level there now, so the breadcrumb says where the reviewer is standing
+// and the line would repeat it. The receipt's `chapter()` / `beat()` pacing and
+// its `acceptanceStory()` tag are gone (`test.step` keeps the structure), and
+// the two moments that read the retired line are restated on top of this
+// promotion, never inside it. Disposition recorded in
+// docs/acceptance-lane-triage.md.
 //
 // ── WHERE THE JOURNEY STARTS ────────────────────────────────────────────────
 //
@@ -28,25 +42,15 @@ import { ADD_PLAN_ITEMS_TOOL_NAME, CREATE_PLAN_TOOL_NAME } from '@/lib/mcp/tools
 // the same call). The only service-layer reach is the tenant itself — a person,
 // a workspace, a project, one committed epic and the token.
 //
-// ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
-//
-// Three moments, each held with a `beat()` named at the line that holds it:
-// the folder path on a proposal, the move into the folder under Show changes,
-// and the three items inside the folder once the plan is approved.
-//
 // ── THE WAITS ───────────────────────────────────────────────────────────────
 //
 // Every write waits on its own answer: an `/api/v1` status, an MCP tool result,
 // the approve POST, and the folder level's lazy Server Action read in `/items`.
-// The review surface's landmark is asserted before any folder crumb, so a spec
-// run against a surface that never mounted cannot pass on a stray string.
+// The review surface's landmark is asserted before any folder assertion, so a
+// spec run against a surface that never mounted cannot pass on a stray string.
 //
 // The rules behind each step are proven below the browser, in the story's vitest
 // gate (MOTIR-5420). This spec proves the journey.
-//
-// ⚠️ THE CARD NAMED THIS FILE `acceptance-folder-placement.spec.ts`. That name was
-// taken by MOTIR-5309's receipt, which merged after the card was written, so this
-// receipt carries the agent in its name. Recorded on MOTIR-5421.
 
 const PASSWORD = 'acceptance-agent-folders-e2e-pass-123';
 const V1 = '/api/v1';
@@ -154,18 +158,17 @@ const node = (page: Page, nodeId: string) => page.locator(`[data-node-id="${node
 const nodeTitled = (page: Page, title: string) =>
   page.locator('[data-node-id]').filter({ hasText: title });
 const tree = (page: Page) => page.getByRole('treegrid', { name: 'Work Items', exact: true });
+const crumbs = (page: Page) =>
+  page
+    .getByRole('main')
+    .getByTestId('roadmap-canvas')
+    .getByRole('navigation', { name: 'Breadcrumb' });
 
 test('an integration files work, an agent proposes into the folder, and a reviewer approves it into place', async ({
   page,
   request,
   baseURL,
-  chapter,
-  beat,
-  acceptanceStory,
 }) => {
-  // The receipt belongs to the STORY, not to this subtask.
-  acceptanceStory('MOTIR-5310');
-
   await resetDatabase();
   const seed = await seedProject('acceptance-agent-folders@example.com', 'LEGACY');
   const ctx = { userId: seed.userId, workspaceId: seed.workspaceId };
@@ -210,7 +213,7 @@ test('an integration files work, an agent proposes into the folder, and a review
   await signIn(page, seed.email, PASSWORD);
 
   // ── Step 3 — the reviewer sees where each card lands ─────────────────────
-  await chapter('An agent’s plan says which folder each card will be filed into', async () => {
+  await test.step('An agent’s plan opens INSIDE the folder each card will be filed into', async () => {
     await page.goto(`/plans/${planId}?view=canvas`);
     await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
       'Ready to review',
@@ -218,14 +221,20 @@ test('an integration files work, an agent proposes into the folder, and a review
     // The landmark FIRST: nothing below may pass against a page that never mounted.
     await expect(reviewCanvas(page)).toBeVisible();
 
+    // ⚠️ RESTATED by bug MOTIR-5782 (design Part XVIII decision 2). A folder is a
+    // LEVEL on this canvas now, so both proposals sit on Backlog ideas' level and
+    // the plan ARRIVES there (§18.2). What tells the reviewer where the work lands
+    // is therefore the BREADCRUMB — the placement line would repeat the level the
+    // reader is already standing on, and is kept only for the stale case
+    // (decision 6, asserted in the second test below). The list body keeps the
+    // placement fact unchanged, which is where `folderPath` is still read.
+    await expect(crumbs(page).getByRole('button', { name: `Folder: ${FOLDER}` })).toBeVisible();
     const mapFields = nodeTitled(page, 'Map legacy fields');
     await expect(mapFields).toHaveCount(1);
-    await expect(mapFields.getByTestId('placement-line')).toContainText(FOLDER);
-    // MOMENT 1 — the folder path on the proposal.
-    await beat();
+    await expect(mapFields.getByTestId('placement-line')).toHaveCount(0);
   });
 
-  await chapter('Show changes: Old reports moves from the root into Backlog ideas', async () => {
+  await test.step('Show changes: Old reports moves from the root into Backlog ideas', async () => {
     const toggle = page.getByRole('main').getByTestId('show-changes-toggle');
     // Armed on arrival (MOTIR-4020), so the reader lands on the marked changes.
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
@@ -233,12 +242,10 @@ test('an integration files work, an agent proposes into the folder, and a review
     await expect(move).toContainText('Placement');
     await expect(move).toContainText('Project root');
     await expect(move).toContainText(FOLDER);
-    // MOMENT 2 — the move into the folder, under Show changes.
-    await beat();
   });
 
   // ── Step 4 — approve, and all three sit inside the folder ────────────────
-  await chapter('Approve — and the plan’s cards become filed work', async () => {
+  await test.step('Approve — and the plan’s cards become filed work', async () => {
     const approve = page.getByRole('button', { name: /^Approve/ });
     await expect(approve).toBeEnabled();
     const approved = page.waitForResponse(
@@ -249,7 +256,7 @@ test('an integration files work, an agent proposes into the folder, and a review
     await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Approved');
   });
 
-  await chapter('In the tree, all three items are inside Backlog ideas', async () => {
+  await test.step('In the tree, all three items are inside Backlog ideas', async () => {
     const mapFields = await db.workItem.findFirstOrThrow({
       where: { projectId: seed.projectId, title: 'Map legacy fields' },
     });
@@ -267,8 +274,6 @@ test('an integration files work, an agent proposes into the folder, and a review
     for (const key of [importKey, oldReports.identifier, mapFields.identifier]) {
       await expect(tree(page).getByTestId(`issue-row-${key}`)).toHaveAttribute('aria-level', '2');
     }
-    // MOMENT 3 — the three items inside Backlog ideas after approve.
-    await beat();
   });
 });
 
@@ -294,8 +299,12 @@ test('a folder deleted after the plan was written refuses the approve and create
   await signIn(page, seed.email, PASSWORD);
   await page.goto(`/plans/${planId}?view=canvas`);
   await expect(reviewCanvas(page)).toBeVisible();
+  // RESTATED with the moment above: the plan arrives inside Scratch, so the crumb
+  // names the folder and the card spends no slot on saying so (decision 2).
+  await expect(crumbs(page).getByRole('button', { name: 'Folder: Scratch' })).toBeVisible();
   const card = nodeTitled(page, 'Draft scratch notes');
-  await expect(card.getByTestId('placement-line')).toContainText('Scratch');
+  await expect(card).toHaveCount(1);
+  await expect(card.getByTestId('placement-line')).toHaveCount(0);
 
   // The folder goes while the reviewer has the plan open.
   const deleted = await request.delete(`${V1}/folders/${scratch.id}`, { headers: bearer(seed) });

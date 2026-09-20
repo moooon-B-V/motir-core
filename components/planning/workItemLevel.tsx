@@ -154,6 +154,13 @@ export interface BuildWorkItemLevelOptions {
    */
   levelTotal?: number;
   /**
+   * How many of a pending plan's proposals will sit beneath each folder, by
+   * FOLDER id (Bug MOTIR-5782; design `design/ai-planning/design-notes.md` Part
+   * XVIII decision 3) — the planning canvases' closed-folder badge. Absent, and
+   * a folder missing from it, draw the shipped card unchanged.
+   */
+  folderChanges?: ReadonlyMap<string, number>;
+  /**
    * Each work item's DISPOSITION in a dispatch run, by work-item id (MOTIR-3895)
    * — the run modal's canvas pane, and nothing else, supplies it.
    *
@@ -664,10 +671,16 @@ export function buildWorkItemLevel(
     // NOT decorative (decision 5): a folder holds real work, so it counts toward
     // `autoDescendSingleParent`'s "does this level offer a CHOICE?" — a root with
     // one epic and one folder must not auto-descend into the epic.
-    searchText: f.name,
+    // A folder holding proposed changes is findable as one (decision 3).
+    searchText: (opts.folderChanges?.get(f.id) ?? 0) > 0 ? `${f.name} changed` : f.name,
     crumbLabel: f.name,
     content: (
-      <FolderNode name={f.name} childFolderCount={f.childFolderCount} itemCount={f.itemCount} />
+      <FolderNode
+        name={f.name}
+        childFolderCount={f.childFolderCount}
+        itemCount={f.itemCount}
+        changes={opts.folderChanges?.get(f.id) ?? 0}
+      />
     ),
   }));
 

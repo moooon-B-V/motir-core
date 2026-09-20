@@ -77,8 +77,30 @@ const DAILY_HEALTH_CHECK_EVENT_NAME = 'scheduled.system.daily-health-check';
 /** How many overdue schedules the list renders before the pager elides the rest. */
 const OVERDUE_PAGE_SIZE = 10;
 
-/** The window the "Failed jobs" card counts dead-letters over. */
+/**
+ * The window the "Failed jobs" card counts ARRIVALS over.
+ *
+ * ⚠️ A WINDOW ANSWERS A RATE AND CANNOT ANSWER A BACKLOG (MOTIR-5840). This
+ * constant is correct for the question it was written for — *how many jobs died
+ * today?* — and it is the reason the card read `0 dead-lettered · 24h` in green
+ * while 1,381 unreplayed rows stood behind it, the newest of them four days old.
+ * The fix was not to widen it: a wider window is still a window, and a backlog
+ * has no age at which it stops mattering. The card carries STANDING depth beside
+ * this, read with no time bound at all.
+ */
 const DLQ_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Standing unreplayed dead letters at or above this read as a BACKLOG.
+ *
+ * One, deliberately: a dead letter that nobody has replayed is a job whose work
+ * never happened, so there is no count of them that is fine. It is a named
+ * constant rather than a literal `> 0` because the threshold is exactly the knob
+ * a paging policy would want to raise, and the reading publishes it so a consumer
+ * can apply its own (MOTIR-3765 owns the external alert; MOTIR-5845 owns whether
+ * a dead letter should file a work item).
+ */
+const DLQ_BACKLOG_THRESHOLD = 1;
 
 /**
  * Above this, the database ping reads as `degraded` rather than `healthy`.
@@ -180,6 +202,26 @@ export const platformHealthService = {
     const { depth, oldestRunAt } = await withSystemContext((tx) =>
       jobQueueRepository.readDueBacklog(tx),
     );
+
+    // ⚠️ THE DEAD-LETTER LIMB IS TOLERANT WHERE THE QUEUE READ ABOVE IS NOT, and
+    // the asymmetry is the decision (MOTIR-5840). The queue verdict is what pages
+    // somebody, so an unreadable database must reach the caller as a 503 — that
+    // is the header's rule and it is unchanged. The backlog reading is a second,
+    // slower question riding along on the same request, and letting IT throw
+    // would take down the page-worthy signal to report a ticket-worthy one. So it
+    // absorbs its own failure and SAYS SO, in the only way that cannot be
+    // mistaken for good news: `state: 'unreadable'` with a null count.
+    const standing = await probe(() =>
+      withSystemContext((tx) => jobRunDlqRepository.countActiveSince(null, tx)),
+    );
+    const deadLetters: PlatformQueueHealthDTO['deadLetters'] =
+      standing === null
+        ? { state: 'unreadable', unreplayed: null, threshold: DLQ_BACKLOG_THRESHOLD }
+        : {
+            state: standing >= DLQ_BACKLOG_THRESHOLD ? 'backlogged' : 'healthy',
+            unreplayed: standing,
+            threshold: DLQ_BACKLOG_THRESHOLD,
+          };
     // `max(0, …)` because `run_at` is a DUE time, and a row due one millisecond
     // ago has a negative age against a clock read a moment earlier.
     const oldestPendingAgeMs =
@@ -193,6 +235,7 @@ export const platformHealthService = {
       oldestPendingAgeMs,
       stallThresholdMs: QUEUE_STALL_MS,
       checkedAt: now.toISOString(),
+      deadLetters,
     };
   },
 };
@@ -280,15 +323,27 @@ async function scheduleSignalFrom(
 
 async function failedJobsSignal(now: Date): Promise<PlatformSignalDTO> {
   const since = new Date(now.getTime() - DLQ_WINDOW_MS);
-  const count = await probe(() =>
-    withSystemContext((tx) => jobRunDlqRepository.countActiveSince(since, tx)),
+  // ⚠️ ONE probe for BOTH numbers, not one each. `probe()` is the single place a
+  // failure becomes `unreachable`, and two of them could half-succeed — which
+  // would put a real number beside an invented one on the same card, the precise
+  // shape this panel's three-state rule exists to forbid. Either the card reports
+  // both readings or it reports neither.
+  const read = await probe(() =>
+    withSystemContext(async (tx) => ({
+      count: await jobRunDlqRepository.countActiveSince(since, tx),
+      standing: await jobRunDlqRepository.countActiveSince(null, tx),
+    })),
   );
-  if (count === null) return unreachable('failedJobs', 'probeFailed', null);
+  if (read === null) return unreachable('failedJobs', 'probeFailed', null);
 
   return {
     id: 'failedJobs',
-    state: count > 0 ? 'degraded' : 'healthy',
-    values: { count },
+    // STANDING depth decides, and the windowed count is context — the inversion
+    // of the queue card one field down, where age decides and depth is context.
+    // A backlog nobody has touched for a week is the case this card was blind to,
+    // so a zero in the window may not make it green on its own.
+    state: read.standing >= DLQ_BACKLOG_THRESHOLD || read.count > 0 ? 'degraded' : 'healthy',
+    values: { count: read.count, standing: read.standing },
     linkOut: null,
   };
 }

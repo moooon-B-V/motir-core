@@ -64,7 +64,13 @@ async function resolveRepoToken(
 
   try {
     const provider = getGitProvider(connected.installation.provider as GitProviderId);
-    const { token } = await provider.mintInstallationToken(connected.installation.installationId);
+    // The App is chosen by the repository's PROVENANCE (MOTIR-5843) — the owner is
+    // already in hand, and is returned two lines below as the canonical coordinate.
+    // A host that runs only one App ignores `forRepo`, so this is safe for every
+    // provider the discriminator can resolve to, not only GitHub.
+    const { token } = await provider.mintInstallationToken(connected.installation.installationId, {
+      owner: connected.owner,
+    });
     // Use the STORED canonical coordinates (GitHub casing), not the caller's ref.
     return { token, owner: connected.owner, name: connected.name };
   } catch {

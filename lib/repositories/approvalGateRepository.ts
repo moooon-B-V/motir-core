@@ -830,7 +830,7 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
  *
  * A design card with an open pull request holds TWO `awaiting` gates, and
  * `resolveGateSet` names the design gate PRIMARY: one press on it decides the
- * design AND the merge (`approveDesignAndMerge`). The merge gate is still a real
+ * design AND the merge (`approvePrimaryAndMerge`). The merge gate is still a real
  * row — its lifecycle is its own (Q2) — but while the design question is open it
  * is CARRIED by that press, not asked beside it. Q4: *"not a second question."*
  *
@@ -850,10 +850,14 @@ const CARRIED_MERGE_GATE_EXCLUDED = {
     kind: 'pull_request_approval',
     workItem: {
       approvalGates: {
-        // A DECISION gate is a primary too (Story MOTIR-4907 · MOTIR-5677; `approval-gates.md`
-        // §8's FIFTH AMENDMENT, clause 5): its one press carries the merge the same way, so
-        // the merge gate beside an open decision is not a second question either.
-        some: { kind: { in: ['design_result', 'decision_approval'] }, state: 'awaiting' },
+        // EVERY primary carries the merge, so the merge gate beside an open one is not a
+        // second question: the design gate (MOTIR-5712), the DECISION gate (Story
+        // MOTIR-4907 · MOTIR-5677; §8's FIFTH AMENDMENT, clause 5) and a story's
+        // ACCEPTANCE gate (MOTIR-5789; §1's MOTIR-5787 amendment, point 2).
+        some: {
+          kind: { in: ['design_result', 'decision_approval', 'acceptance_result'] },
+          state: 'awaiting',
+        },
       },
     },
   },

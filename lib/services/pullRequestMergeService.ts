@@ -313,7 +313,7 @@ export const pullRequestMergeService = {
    * plain door, decided the design alone, and left the merge gate for a SECOND press Q4
    * forbids. Once the queue lists that card by its design gate only, this is the one press
    * it offers, so it has to mean what the frame's press means. A design gate with no merge
-   * gate beside it decides exactly as before: `approveDesignAndMerge` finds no companion and
+   * gate beside it decides exactly as before: `approvePrimaryAndMerge` finds no companion and
    * merges nothing.
    */
   async decideGate(
@@ -330,7 +330,7 @@ export const pullRequestMergeService = {
         return { ...approval, members };
       }
       if (gate && isPrimaryKind(gate.kind)) {
-        const { approval, members } = await approveDesignAndMerge(input, ctx);
+        const { approval, members } = await approvePrimaryAndMerge(input, ctx);
         return { ...approval, members };
       }
     }
@@ -429,9 +429,10 @@ export const pullRequestMergeService = {
     // stops a gate of some future kind merging things by accident, and a kind admitted
     // by name is a decision somebody made — a guard deleted is a decision nobody will
     // remember making.
-    // `decision_approval` is admitted the same way, by name, for the same reason (Story
-    // MOTIR-4907 · MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT, clause 5).
-    if (gate && isPrimaryKind(gate.kind)) return approveDesignAndMerge(input, ctx);
+    // `decision_approval` and `acceptance_result` are admitted the same way, by name,
+    // for the same reason (Story MOTIR-4907 · MOTIR-5677, `approval-gates.md` §8's FIFTH
+    // AMENDMENT clause 5; Story MOTIR-4949 · MOTIR-5789, §1's MOTIR-5787 amendment).
+    if (gate && isPrimaryKind(gate.kind)) return approvePrimaryAndMerge(input, ctx);
     if (gate && gate.kind !== APPROVAL_KIND) {
       throw new Error(`approveAndMerge was handed a ${gate.kind} gate (${input.gateId})`);
     }
@@ -661,15 +662,20 @@ async function approveAndMergeGate(
 /**
  * The PRIMARY kinds — a question a person answers ABOVE the merge, whose one press also
  * decides the approve-to-merge gate beside it: the design (`design-result.md` AMENDMENT
- * 6) and the decision (`approval-gates.md` §8's FIFTH AMENDMENT). Named, never inferred.
+ * 6), the decision (`approval-gates.md` §8's FIFTH AMENDMENT) and a story's acceptance
+ * (§1's MOTIR-5787 amendment, point 2). Named, never inferred.
  */
-const PRIMARY_KINDS: ReadonlySet<string> = new Set(['design_result', 'decision_approval']);
+const PRIMARY_KINDS: ReadonlySet<string> = new Set([
+  'design_result',
+  'decision_approval',
+  'acceptance_result',
+]);
 
 function isPrimaryKind(kind: string): boolean {
   return PRIMARY_KINDS.has(kind);
 }
 
-async function approveDesignAndMerge(
+async function approvePrimaryAndMerge(
   input: Omit<DecideGateInput, 'decision'>,
   ctx: ServiceContext,
 ): Promise<ApproveAndMergeResult> {

@@ -3,6 +3,7 @@ import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
 // and this DTO is imported by client components. An `import type` is erased.
 import type { StampComponent } from '@/lib/approvalGates/stamp';
+import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
@@ -36,7 +37,8 @@ export type ApprovalGateKindDTO =
   | 'design_result'
   | 'decision_approval'
   | 'pull_request_approval'
-  | 'pull_request_merge';
+  | 'pull_request_merge'
+  | 'acceptance_result';
 
 /**
  * The payload every status door carries when the approval-gate guard refuses a
@@ -273,6 +275,23 @@ export interface PullRequestApprovalSubjectSummaryDTO {
 }
 
 /**
+ * WHICH RECORDING an acceptance gate is asking about, at row scale (MOTIR-4950) — the
+ * card that recorded it, the commit the run was at, and how many chapters it walks
+ * through. The video itself is on the story; a row links there.
+ */
+export interface AcceptanceResultSubjectSummaryDTO {
+  kind: 'acceptance_result';
+  /** The `AcceptanceEvidence` row the gate asks about — THIS recording. */
+  acceptanceEvidenceId: string;
+  /** The E2E card whose run recorded it (e.g. `MOTIR-5792`), when the publish named it. */
+  producedByKey: string | null;
+  /** The commit the recorded run was at, when the publish had one. */
+  commitSha: string | null;
+  /** How many chapters the recording is marked into. */
+  chapterCount: number;
+}
+
+/**
  * WHICH DECISION is waiting, at row scale (Story MOTIR-4907 · MOTIR-5676) — read
  * from the capture on the card's pull request, never from the host, so a queue of
  * decisions costs no Git call.
@@ -305,7 +324,7 @@ export interface DecisionApprovalSubjectSummaryDTO {
  * A gate whose KIND THIS BUILD REGISTERS NO RENDERER FOR — a real row on the
  * day this ships, not a defensive branch.
  *
- * `lib/approvalGates/registry.ts` registers three kinds and names the fourth as a
+ * `lib/approvalGates/registry.ts` registers four kinds and names the fifth as a
  * declared hole: `pull_request_merge`, which MOTIR-5616 RETIRED — built once,
  * withdrawn, and never to be registered again. (`decision_approval` was the other
  * hole until MOTIR-5676 built it.) A gate carrying it can exist — one of the
@@ -316,7 +335,7 @@ export interface DecisionApprovalSubjectSummaryDTO {
 export interface UnregisteredSubjectSummaryDTO {
   kind: Exclude<
     ApprovalGateKindDTO,
-    'design_result' | 'decision_approval' | 'pull_request_approval'
+    'design_result' | 'decision_approval' | 'acceptance_result' | 'pull_request_approval'
   >;
 }
 
@@ -334,6 +353,7 @@ export type ApprovalGateSubjectSummaryDTO =
   | DesignResultSubjectSummaryDTO
   | DecisionApprovalSubjectSummaryDTO
   | PullRequestApprovalSubjectSummaryDTO
+  | AcceptanceResultSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */
@@ -540,6 +560,16 @@ export type ApprovalGateOverlaySubjectDTO =
     }
   | {
       state: 'resolved';
+      kind: 'acceptance_result';
+      /**
+       * The RECORDING the gate asks about — read by the gate's own `subjectId`, so a
+       * decided gate shows the receipt that was decided on, never whichever one is
+       * current now (MOTIR-4950).
+       */
+      evidence: AcceptanceEvidenceDTO;
+    }
+  | {
+      state: 'resolved';
       kind: 'pull_request_approval';
       /**
        * THE DEVELOPMENT BLOCK'S DATA (Story MOTIR-5437 · Subtask MOTIR-5439) — the
@@ -562,6 +592,13 @@ export type ApprovalGateOverlaySubjectDTO =
       deliveries: WorkItemDeliveryDto[];
       /** The block's second part. `record_missing` is an ANSWER here, not an error. */
       howToTest: HowToTestDto;
+      /**
+       * A STORY RUN's receipt and its gate (MOTIR-5790), or null — the Development block's
+       * SUBJECT when the story's acceptance leads, exactly as `designEvidence` is a design
+       * card's. Read for every card and null for any card with no receipt.
+       */
+      acceptanceEvidence: AcceptanceEvidenceDTO | null;
+      acceptanceGate: ApprovalGateDTO | null;
       /**
        * The card's CURRENT design result, or null. On a card with an open linked pull
        * request the result renders inside this block rather than as its own section

@@ -42,8 +42,15 @@ import { decisionSubjectVersion, type DecisionIdentity } from '@/lib/approvalGat
 // and the WITHDRAWERS are MOTIR-5663's.
 
 /** The kinds this predicate decides between. `decision_approval` joined with Story
- *  MOTIR-4907 (MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT). */
-export type AwaitableGateKind = 'design_result' | 'decision_approval' | 'pull_request_approval';
+ *  MOTIR-4907 (MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT) and
+ *  `acceptance_result` with Story MOTIR-4949 (MOTIR-5789; §1's MOTIR-5787 amendment).
+ *  THREE of the four are PRIMARY carriers; the merge question leads only when it is
+ *  asked alone. */
+export type AwaitableGateKind =
+  | 'design_result'
+  | 'decision_approval'
+  | 'acceptance_result'
+  | 'pull_request_approval';
 
 /** One member of the card's delivery set, reduced to what the answer depends on. */
 export interface GateSetMember {
@@ -80,6 +87,15 @@ export interface GateSetInput {
   currentDesignEvidence: { id: string; commitSha: string | null } | null;
   /** The card's most recent `design_result` gate, whatever its state, or null. */
   latestDesignGate: ExistingGate | null;
+  /**
+   * The card's CURRENT acceptance receipt, or null — a STORY's (Story MOTIR-4949 · Subtask
+   * MOTIR-5789; `approval-gates.md` §1, the MOTIR-5787 amendment). Current-ness is right here
+   * for the reason it is for the design result above: this answers what a gate raised NOW
+   * would ask about.
+   */
+  currentReceipt: { id: string; commitSha: string | null } | null;
+  /** The card's most recent `acceptance_result` gate, whatever its state, or null. */
+  latestAcceptanceGate: ExistingGate | null;
   /** The card's most recent approve-to-merge gate, whatever its state, or null. */
   latestMergeGate: ExistingGate | null;
   /** Every pull request the card delivers. Empty when it delivers none. */
@@ -93,9 +109,11 @@ export interface GateSetInput {
    */
   cardIsTerminal: boolean;
   /**
-   * Whether a STANDING DESIGN APPROVAL already authorises the merge — the card's
-   * latest `design_result` gate is `approved` over its CURRENT result
-   * (AMENDMENT 6 Q4; Story MOTIR-5652 · Subtask MOTIR-5664).
+   * Whether a STANDING PRIMARY APPROVAL already authorises the merge — the card's
+   * latest `design_result` gate is `approved` over its CURRENT result (AMENDMENT 6
+   * Q4; Story MOTIR-5652 · Subtask MOTIR-5664), or its latest `acceptance_result`
+   * gate is `approved` over its CURRENT receipt (the MOTIR-5787 amendment, point 4;
+   * Subtask MOTIR-5789) — {@link primaryApprovalStandsForMerge}.
    *
    * The design gate rises on PUBLISH and the merge gate on GREEN, so the primary
    * can be pressed before CI has spoken. Q4 settles that the press is not refused:
@@ -103,7 +121,13 @@ export interface GateSetInput {
    * second press**. A merge gate raised at that moment would BE the second press —
    * a question whose answer is already on the record.
    */
-  designApprovalStandsForMerge: boolean;
+  /**
+   * ⚠️ THE TWO EVIDENCE-CARRIED PRIMARIES ONLY — the design's standing approval or the
+   * acceptance's (MOTIR-5789). The DECISION's is derived here from `decision` below,
+   * because its subject is the card's own captured head rather than an evidence row the
+   * loader can read; one boolean for all three would hide which of them is carrying.
+   */
+  primaryApprovalStandsForMerge: boolean;
   /**
    * THE DECISION QUESTION'S INPUTS (Story MOTIR-4907 · MOTIR-5677; `approval-gates.md`
    * §8's FIFTH AMENDMENT). Absent on every card that is not a `decision` +
@@ -201,13 +225,31 @@ function setVersion(members: readonly GateSetMember[]): string | null {
 }
 
 /**
- * Does a decided design approval already authorise this card's merge (AMENDMENT 6
- * Q4)? True only when the card's latest `design_result` gate is `approved` AND its
- * subject is the result the card currently carries.
+ * Does a decided approval of ONE subject authorise the merge that rides on it? True only
+ * when the gate is `approved` AND its subject is the one the card currently carries —
+ * the pair check every PRIMARY kind shares (AMENDMENT 6 Q4; the MOTIR-5787 amendment,
+ * point 4).
  *
  * ⚠️ BOTH HALVES. An approval of v1 authorises nothing once v2 is current — that
  * is the same substitution MOTIR-5661's refusal exists to prevent, read from the
  * other side.
+ */
+export function approvalStandsForSubject(
+  current: { id: string } | null,
+  latestGate: { state: string; subjectId: string } | null,
+): boolean {
+  if (!current || !latestGate) return false;
+  return latestGate.state === 'approved' && latestGate.subjectId === current.id;
+}
+
+/**
+ * Does a decided PRIMARY approval already authorise this card's merge — the design's
+ * (AMENDMENT 6 Q4) or the acceptance's (the MOTIR-5787 amendment, point 4)?
+ *
+ * ⚠️ ONE READER FOR EVERY PRIMARY KIND, generalised rather than twinned (MOTIR-5789). A
+ * second acceptance-specific boolean beside the design one would be two answers to *may
+ * this merge follow on the next green?*, which is how MOTIR-5652's two suppressors each
+ * came to assume the other.
  *
  * ⚠️ IT LIVES IN THE PURE MODULE because `settleGreenVerdict` asks the same
  * question, and `gateSetFor` already imports `mergeGates` for `mergeCandidateHead`
@@ -215,12 +257,16 @@ function setVersion(members: readonly GateSetMember[]): string | null {
  * answers *no merge gate is owed*, and something still has to merge. One reader
  * would leave a card with neither.
  */
-export function designApprovalStandsForMerge(
-  currentDesign: { id: string } | null,
-  latestDesignGate: { state: string; subjectId: string } | null,
-): boolean {
-  if (!currentDesign || !latestDesignGate) return false;
-  return latestDesignGate.state === 'approved' && latestDesignGate.subjectId === currentDesign.id;
+export function primaryApprovalStandsForMerge(args: {
+  currentDesign: { id: string } | null;
+  latestDesignGate: { state: string; subjectId: string } | null;
+  currentReceipt: { id: string } | null;
+  latestAcceptanceGate: { state: string; subjectId: string } | null;
+}): boolean {
+  return (
+    approvalStandsForSubject(args.currentDesign, args.latestDesignGate) ||
+    approvalStandsForSubject(args.currentReceipt, args.latestAcceptanceGate)
+  );
 }
 
 /**
@@ -241,7 +287,7 @@ export function designHoldsMerge(
   currentDesign: { id: string } | null,
   latestDesignGate: { state: string; subjectId: string } | null,
 ): boolean {
-  return currentDesign !== null && !designApprovalStandsForMerge(currentDesign, latestDesignGate);
+  return currentDesign !== null && !approvalStandsForSubject(currentDesign, latestDesignGate);
 }
 
 /**
@@ -312,6 +358,23 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     });
   }
 
+  // THE ACCEPTANCE QUESTION (Story MOTIR-4949 · Subtask MOTIR-5789; the MOTIR-5787
+  // amendment, points 1–2) — owed whenever the card carries a current receipt no
+  // decision has answered, with exactly the design question's stance: it does not
+  // depend on pull requests, on CI, or on the run target. A receipt row is immutable
+  // like an evidence row, so its id is the whole identity (`versionIdentifies: false`).
+  const receipt = input.currentReceipt;
+  if (
+    receipt !== null &&
+    !alreadyDecided(input.latestAcceptanceGate, receipt.id, receipt.commitSha, false)
+  ) {
+    awaited.push({
+      kind: 'acceptance_result',
+      subjectId: receipt.id,
+      subjectVersion: receipt.commitSha,
+    });
+  }
+
   // THE DECISION QUESTION (clauses 1–4). Owed whenever the card asks it and a captured
   // head gives it something to ask about — INCLUDING an unresolvable one, which raises
   // a gate that cannot be approved and holds the merge (clause 3). `subjectId` is the
@@ -342,10 +405,11 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // about new commits. Without this clause the design approval would go on
   // authorising every future green, merging code nobody approved.
   //
-  // The DECISION approval carries the merge on exactly the same one-time terms
-  // (clause 5): a primary answered before the set went green, followed once.
+  // EVERY primary carries the merge on exactly the same one-time terms — the design's
+  // (Q4), the decision's (clause 5) and the acceptance's (the MOTIR-5787 amendment,
+  // point 4): a primary answered before the set went green, followed once.
   const carriedByPrimary =
-    (input.designApprovalStandsForMerge || decisionStands) && input.latestMergeGate === null;
+    (input.primaryApprovalStandsForMerge || decisionStands) && input.latestMergeGate === null;
   const answered =
     carriedByPrimary || alreadyDecided(input.latestMergeGate, input.workItemId, version, true);
   const everyMemberMergeable =
@@ -358,11 +422,25 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     });
   }
 
+  // ⚠️ A CARD CANNOT HOLD BOTH A DESIGN AND AN ACCEPTANCE PRIMARY — a design result
+  // belongs to the design LEAF that produced it and a receipt to a STORY
+  // (`design-result.md` §3; the MOTIR-5787 amendment, point 2). ASSERTED, never ranked:
+  // a card that arrives here with both is a defect upstream, and choosing one would
+  // quietly hide the other question.
+  const designOwed = awaited.some((gate) => gate.kind === 'design_result');
+  const acceptanceOwed = awaited.some((gate) => gate.kind === 'acceptance_result');
+  if (designOwed && acceptanceOwed) {
+    throw new Error(
+      `gate set: work item ${input.workItemId} owes BOTH a design and an acceptance question`,
+    );
+  }
   // A PRIMARY question leads whenever it is owed — the design, else the decision
-  // (clause 5); the merge question leads only when it is asked alone.
+  // (clause 5), else the acceptance (the MOTIR-5787 amendment, point 2); the merge
+  // question leads only when it is asked alone.
   const primary: AwaitableGateKind | null =
     awaited.find((gate) => gate.kind === 'design_result')?.kind ??
     awaited.find((gate) => gate.kind === 'decision_approval')?.kind ??
+    awaited.find((gate) => gate.kind === 'acceptance_result')?.kind ??
     awaited[0]?.kind ??
     null;
 

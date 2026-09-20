@@ -41,6 +41,15 @@ export function toFolderTreeRowDto(row: FolderTreeRow): FolderTreeRowDto {
   };
 }
 
+/** The row `folderRepository.findTrailsByIds` projects (Bug MOTIR-5782 · MOTIR-5798): a
+ *  folder's chain ROOT FIRST, each step its id and name. `projectId` rides along so a
+ *  caller can refuse a folder in another project rather than name it. */
+export interface FolderTrailRow {
+  id: string;
+  projectId: string;
+  trail: Array<{ id: string; name: string }>;
+}
+
 /** The row `folderRepository.countDirectContents` projects (Bug MOTIR-5710). */
 export interface FolderDirectCountRow {
   id: string;

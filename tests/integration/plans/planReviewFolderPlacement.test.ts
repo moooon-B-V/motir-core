@@ -154,7 +154,10 @@ describe('planReviewService.getPlanReview — folder placements', () => {
       fx.ctx,
     );
 
-    const batched = vi.spyOn(folderRepository, 'findPathsByIds');
+    // MOTIR-5798 moved the review onto the id-carrying twin: the ONE-read
+    // guarantee is restated against it, and the names-only read is not called.
+    const batched = vi.spyOn(folderRepository, 'findTrailsByIds');
+    const namesOnly = vi.spyOn(folderRepository, 'findPathsByIds');
     const single = vi.spyOn(folderRepository, 'findPathNames');
     try {
       const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
@@ -167,9 +170,11 @@ describe('planReviewService.getPlanReview — folder placements', () => {
         ['Parked', '2025'],
       ]);
       expect(batched).toHaveBeenCalledTimes(1);
+      expect(namesOnly).not.toHaveBeenCalled();
       expect(single).not.toHaveBeenCalled();
     } finally {
       batched.mockRestore();
+      namesOnly.mockRestore();
       single.mockRestore();
     }
   });
@@ -305,5 +310,147 @@ describe('get_plan and the /api/v1 plan proposal — folder placements', () => {
       { folderId: parked, folderPath: ['Parked'], parentKey: null },
       { folderId: null, folderPath: null, parentKey: epic.identifier },
     ]);
+  });
+});
+
+// ── The FOLDER TRAIL (Bug MOTIR-5782 · MOTIR-5798; design Part XVIII §18.7) ──
+// The planning canvases draw a folder as a LEVEL, so the review read carries each
+// proposal's folder chain WITH IDS — root first — for its own folder, else its
+// root-most committed ancestor's, else its root-most proposed ancestor's.
+describe('planReviewService.getPlanReview — folderTrail', () => {
+  it('carries the chain for a filed add, a modify moving into a folder, an add under a filed committed epic, and an add under a filed PROPOSED story', async () => {
+    const fx = await makeWorkItemFixture();
+    const { parked, y2025 } = await parkedTree(fx);
+    const filedEpic = await seed(fx, 'epic', 'Parked epic');
+    const storyUnderFiledEpic = await seed(fx, 'story', 'Story under a filed epic', filedEpic.id);
+    await foldersService.fileWorkItem(filedEpic.id, { folderId: parked }, fx.ctx);
+    const loose = await seed(fx, 'story', 'Loose story');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Trails' }, fx.ctx);
+    const first = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Filed story', kind: 'story' },
+          parentRef: `folder:${y2025}`,
+        },
+        { op: 'modify', workItemId: loose.id, patch: { parentRef: `folder:${parked}` } },
+        {
+          op: 'add',
+          proposedFields: { title: 'Subtask under a filed epic’s story', kind: 'subtask' },
+          parentRef: storyUnderFiledEpic.id,
+        },
+        { op: 'add', proposedFields: { title: 'Unfiled root', kind: 'task' } },
+      ],
+      fx.ctx,
+    );
+    const filedStoryRef = `planItem:${first.items[0]!.id}`;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Subtask under the proposed filed story', kind: 'subtask' },
+          parentRef: filedStoryRef,
+        },
+      ],
+      fx.ctx,
+    );
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const [filedAdd, movingIn, underFiledEpic, unfiled, underProposed] = review.items;
+    const both = [
+      { id: parked, name: 'Parked' },
+      { id: y2025, name: '2025' },
+    ];
+
+    expect(filedAdd!.folderTrail).toEqual(both);
+    expect(movingIn!.folderTrail).toEqual([{ id: parked, name: 'Parked' }]);
+    expect(underFiledEpic!.folderTrail).toEqual([{ id: parked, name: 'Parked' }]);
+    expect(unfiled!.folderTrail).toEqual([]);
+    expect(underProposed!.folderTrail).toEqual(both);
+
+    // The names ARE the path for every folder-placed proposal — one read, one source.
+    for (const item of review.items.filter((i) => i.folderId !== null)) {
+      expect(item.folderTrail.map((t) => t.name)).toEqual(item.folderPath);
+    }
+  });
+
+  it('reads [] for a proposal whose folder was deleted — there is no chain left to walk', async () => {
+    const fx = await makeWorkItemFixture();
+    const { plan, y2025 } = await mixedPlan(fx);
+    await foldersService.deleteFolder({ projectId: fx.projectId, folderId: y2025 }, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]).toMatchObject({ folderMissing: true, folderTrail: [] });
+  });
+
+  it('does not grow its folder reads with the size of the plan — the same count for 1 and 10 filed proposals', async () => {
+    const fx = await makeWorkItemFixture();
+    const { parked, y2025 } = await parkedTree(fx);
+    const filedEpic = await seed(fx, 'epic', 'Parked epic');
+    await foldersService.fileWorkItem(filedEpic.id, { folderId: y2025 }, fx.ctx);
+
+    const readsFor = async (n: number): Promise<number> => {
+      const plan = await plansService.createPlan(fx.projectId, { title: `Plan ${n}` }, fx.ctx);
+      await plansService.addProposals(
+        plan.id,
+        Array.from({ length: n }, (_, i) =>
+          i % 2 === 0
+            ? {
+                op: 'add' as const,
+                proposedFields: { title: `Filed ${i}`, kind: 'story' as const },
+                parentRef: `folder:${parked}`,
+              }
+            : {
+                op: 'add' as const,
+                proposedFields: { title: `Under the filed epic ${i}`, kind: 'story' as const },
+                parentRef: filedEpic.id,
+              },
+        ),
+        fx.ctx,
+      );
+      const spy = vi.spyOn(folderRepository, 'findTrailsByIds');
+      try {
+        await planReviewService.getPlanReview(plan.id, fx.ctx);
+        return spy.mock.calls.length;
+      } finally {
+        spy.mockRestore();
+      }
+    };
+
+    const one = await readsFor(1);
+    const ten = await readsFor(10);
+    expect(ten).toBe(await readsFor(2));
+    expect(one).toBeLessThanOrEqual(2);
+    expect(ten).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('folderRepository.findTrailsByIds', () => {
+  it('returns root-first id + name trails for many folders in one read, and nothing for a deleted one', async () => {
+    const fx = await makeWorkItemFixture();
+    const { parked, y2025 } = await parkedTree(fx);
+    const gone = await foldersService.createFolder(
+      { projectId: fx.projectId, parentFolderId: null, name: 'Gone' },
+      fx.ctx,
+    );
+    await foldersService.deleteFolder({ projectId: fx.projectId, folderId: gone.id }, fx.ctx);
+
+    const rows = await adminDb.$transaction((tx) =>
+      folderRepository.findTrailsByIds([y2025, parked, gone.id], fx.workspaceId, tx),
+    );
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(y2025)).toEqual({
+      id: y2025,
+      projectId: fx.projectId,
+      trail: [
+        { id: parked, name: 'Parked' },
+        { id: y2025, name: '2025' },
+      ],
+    });
+    expect(byId.get(parked)!.trail).toEqual([{ id: parked, name: 'Parked' }]);
+    expect(byId.has(gone.id)).toBe(false);
   });
 });

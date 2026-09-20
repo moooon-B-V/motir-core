@@ -12,6 +12,7 @@ import {
   seedPendingEvidence,
   setProjectAcceptanceVideo,
 } from './_helpers/acceptance-seed';
+import { acceptanceSection } from './_helpers/acceptance-decide';
 
 // THE GUARD FOR *TURNING THE ACCEPTANCE VIDEO ON REPAINTS THE PANEL IN PLACE*
 // (Bug MOTIR-5196) — the third and last surface in the family that begins with
@@ -200,7 +201,12 @@ test.describe('turning the acceptance video on repaints the panel in place', () 
     // after-state look like a no-op.
     const offHeading = page.getByRole('heading', { name: 'Acceptance video is off' });
     await expect(offHeading).toBeVisible();
-    await expect(detail(page).getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+    // State A's own mark, which since MOTIR-5229 · MOTIR-5790 is the call-to-action band's
+    // DOOR rather than a verb on this page: the panel shows the question and hands the
+    // decision to the approval overlay.
+    await expect(
+      acceptanceSection(page).getByRole('link', { name: 'Review & approve' }),
+    ).toHaveCount(0);
 
     const turnOn = detail(page).getByRole('switch');
     await expect(turnOn).toBeVisible();
@@ -225,7 +231,9 @@ test.describe('turning the acceptance video on repaints the panel in place', () 
     // The page-state contract's case 2 (`motir-core/CLAUDE.md`). The panel is a
     // Server-Component surface seeded from `eligibility`; the press changed it,
     // so the press owes it a repaint. This is the assertion the defect fails.
-    await expect(detail(page).getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+    await expect(
+      acceptanceSection(page).getByRole('link', { name: 'Review & approve' }),
+    ).toBeVisible();
     // And the terminal direction: State B is GONE, so a repaint that lands the
     // wrong tree fails as loudly as one that never lands.
     await expect(offHeading).toHaveCount(0);

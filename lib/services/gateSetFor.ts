@@ -1,7 +1,7 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { deliveryMemberVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
-  designApprovalStandsForMerge,
+  primaryApprovalStandsForMerge,
   resolveGateSet,
   type AwaitableGateKind,
   type GateSet,
@@ -12,6 +12,7 @@ import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { decisionMembersOf } from '@/lib/approvalGates/decisionApprovalHandler';
 import { decisionIdentityOf } from '@/lib/approvalGates/decisionSubject';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -74,9 +75,9 @@ export interface GateSetForResult extends GateSet {
  * WHICH GATES this card should be asking, read from the database and decided by
  * {@link resolveGateSet}.
  *
- * Six reads, all on `tx`: the current design result, the latest gate of each kind,
- * the delivery set with its check runs, the project's merge mode, and the
- * project's terminal status keys.
+ * Nine reads, all on `tx`: the current design result and receipt, the latest gate of each
+ * kind (the decision's only when the card asks that question), the delivery set with its
+ * check runs, the project's merge mode, and the project's terminal status keys.
  */
 export async function gateSetFor(
   item: WorkItem,
@@ -87,6 +88,8 @@ export async function gateSetFor(
   const [
     currentDesign,
     latestDesignGate,
+    currentReceipt,
+    latestAcceptanceGate,
     latestMergeGate,
     latestDecisionGate,
     deliveries,
@@ -95,6 +98,10 @@ export async function gateSetFor(
   ] = await Promise.all([
     designEvidenceRepository.findCurrentByWorkItem(item.id, tx),
     approvalGateRepository.findLatestByWorkItem(item.id, 'design_result', tx),
+    // MOTIR-5789 — a STORY's acceptance receipt and its latest gate, loaded here in the
+    // predicate's ONE loader so no caller answers half the question itself.
+    acceptanceEvidenceRepository.findCurrentByWorkItem(item.id, tx),
+    approvalGateRepository.findLatestByWorkItem(item.id, 'acceptance_result', tx),
     approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
     // Only a card that asks the decision question reads its gate (clause 10), so every
     // other card's reads — and its answer — are what they were before the kind existed.
@@ -144,7 +151,16 @@ export async function gateSetFor(
     currentDesignEvidence: currentDesign
       ? { id: currentDesign.id, commitSha: currentDesign.commitSha }
       : null,
-    designApprovalStandsForMerge: designApprovalStandsForMerge(currentDesign, latestDesignGate),
+    currentReceipt: currentReceipt
+      ? { id: currentReceipt.id, commitSha: currentReceipt.commitSha }
+      : null,
+    latestAcceptanceGate,
+    primaryApprovalStandsForMerge: primaryApprovalStandsForMerge({
+      currentDesign,
+      latestDesignGate,
+      currentReceipt,
+      latestAcceptanceGate,
+    }),
     latestDesignGate,
     latestMergeGate,
     members,

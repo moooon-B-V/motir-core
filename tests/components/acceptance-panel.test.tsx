@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
+import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEligibility';
 
 // AcceptancePanel (Story MOTIR-1627 · Subtask MOTIR-1634) — the three eligibility
@@ -11,14 +12,16 @@ import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEli
 // are mocked; the panel's branching + the optimistic reconcile are under test.
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
-const { decideAcceptanceAction, turnOnAcceptanceVideoAction } = vi.hoisted(() => ({
-  decideAcceptanceAction: vi.fn(),
+const { turnOnAcceptanceVideoAction } = vi.hoisted(() => ({
   turnOnAcceptanceVideoAction: vi.fn(async () => ({ ok: true })),
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh }),
+  usePathname: () => '/items/MOTIR-1',
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock('@/app/(authed)/items/[key]/acceptanceActions', () => ({
-  decideAcceptanceAction,
   turnOnAcceptanceVideoAction,
 }));
 
@@ -76,12 +79,23 @@ const baseProps = {
   // the eligibility DTO's `organizationId`, so a panel that went back to passing
   // the organisation fails the call assertion below rather than coinciding.
   projectId: 'proj_1',
+  // The story's awaiting `acceptance_result` gate (MOTIR-4950). The panel does not
+  // decide it (MOTIR-5790): it opens the approval overlay on it.
+  gate: {
+    id: 'gate_1',
+    kind: 'acceptance_result',
+    state: 'awaiting',
+    subjectVersion: 'a981c09abc',
+    createdAt: '2026-09-19T10:00:00.000Z',
+    routedToId: 'u_1',
+  } as unknown as ApprovalGateDTO,
+  routedElsewhereName: null,
 };
 
 afterEach(cleanup);
 
 describe('AcceptancePanel', () => {
-  it('eligible + evidence → player, chapters, provenance, and the gate buttons', () => {
+  it('eligible + evidence + a question this reader may answer → player, provenance, and the Review & approve DOOR — no verbs (MOTIR-5790)', () => {
     renderPanel({
       ...baseProps,
       eligibility: eligibility({}),
@@ -90,39 +104,50 @@ describe('AcceptancePanel', () => {
     });
     expect(screen.getByText('Open the story')).toBeTruthy();
     expect(screen.getByText('a981c09')).toBeTruthy(); // short commit
-    expect(screen.getByRole('button', { name: /approve/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /request changes/i })).toBeTruthy();
+    // § *The item page HANDS THE DECISION OVER*: the door opens the overlay on THIS
+    // gate's kind, and the overlay is the one place a decision is submitted.
+    const door = screen.getByRole('link', { name: /review & approve/i });
+    const href = door.getAttribute('href') ?? '';
+    expect(href).toContain('approval=MOTIR-1');
+    expect(href).toContain('approvalKind=acceptance_result');
+    expect(screen.queryByRole('button', { name: /^approve$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /request changes/i })).toBeNull();
   });
 
-  it('Approve calls the action + reconciles from the response (no self-refresh of state)', async () => {
-    decideAcceptanceAction.mockResolvedValueOnce({
-      ok: true,
-      storyStatus: 'done',
-      evidence: evidence({ status: 'approved', approvedById: 'Yue' }),
-    });
+  it('a reader who may NOT decide gets no door — the SHARED FRAME says who it waits on', () => {
     renderPanel({
       ...baseProps,
       eligibility: eligibility({}),
-      initialEvidence: evidence(),
+      initialEvidence: evidence({ status: 'approved', approvedById: 'Yue' }),
+      canDecide: false,
+      routedElsewhereName: 'Ada L.',
+    });
+    expect(screen.queryByRole('link', { name: /review & approve/i })).toBeNull();
+    // State `B`: the port is live and there are no verbs — and the sentence is the
+    // frame's, not a pill of this panel's own (MOTIR-5792; the ONE-CONTROL rule).
+    expect(screen.getByText('Ada L.', { exact: false })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^approve$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /request changes/i })).toBeNull();
+  });
+
+  it('a DECIDED question is drawn by the shared frame, never by a pill of our own (MOTIR-5792)', () => {
+    renderPanel({
+      ...baseProps,
+      eligibility: eligibility({}),
+      initialEvidence: evidence({ status: 'approved', approvedById: 'Yue' }),
+      gate: {
+        ...baseProps.gate,
+        state: 'approved',
+        decidedByLabel: 'Ada L.',
+        decidedAt: '2026-09-19T12:00:00.000Z',
+      } as unknown as ApprovalGateDTO,
       canDecide: true,
     });
-    fireEvent.click(screen.getByRole('button', { name: /approve/i }));
-    // ⚠️ THE IDENTIFIER IS PART OF THE CONTRACT NOW, so it is asserted rather
-    // than spread past (Bug MOTIR-5160). The action revalidates the card's path
-    // on its success branch, and the path comes from THIS argument — a panel
-    // that stopped passing it would still approve, still reconcile, and silently
-    // stop repainting the page.
-    await waitFor(() =>
-      expect(decideAcceptanceAction).toHaveBeenCalledWith({
-        workItemId: 'wi_1',
-        itemIdentifier: 'MOTIR-1',
-        decision: 'approve',
-      }),
-    );
-    // After approval the buttons are gone and the Approved pill shows.
-    await waitFor(() => expect(screen.getByText('Approved')).toBeTruthy());
-    expect(screen.queryByRole('button', { name: /request changes/i })).toBeNull();
-    expect(refresh).toHaveBeenCalled();
+    // The recording is still the subject — it is the frame's port now.
+    expect(screen.getByRole('button', { name: /1×/ })).toBeTruthy();
+    // And the decision is stated in the one approve language, with its decider.
+    expect(screen.getByText('Ada L.', { exact: false })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /review & approve/i })).toBeNull();
   });
 
   it('pending (eligible, no evidence) → the waiting state', () => {

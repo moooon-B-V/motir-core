@@ -28,6 +28,7 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     folderId: null,
     folderPath: null,
     folderMissing: false,
+    folderTrail: [],
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
     committedBlockedBy: [],

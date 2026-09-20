@@ -3,15 +3,28 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { AcceptanceEvidenceNotInReviewError } from '@/lib/acceptanceEvidence/errors';
+import { linkPr } from '../helpers/prLink';
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
+import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
 
-// acceptanceEvidenceService.decide — the acceptance GATE (Story MOTIR-1627 ·
-// Subtask MOTIR-1634) against a REAL Postgres. Approve/Request-changes move BOTH
-// the story (via the workflow) and the evidence. The IN-REVIEW precondition for
-// `approve` is enforced by the service itself since MOTIR-1625 (which made
-// `in_progress → done` legal, so the workflow no longer refuses it incidentally);
-// the workflow still gates the move it is asked to make. Blob is the one mocked
-// external.
+// THE ACCEPTANCE GATE ON THE CONTRACT (Story MOTIR-4949 · Subtask MOTIR-4950;
+// ADR `approval-gates.md` §1, the MOTIR-5787 amendment) against a REAL Postgres.
+//
+// This file replaced the suite for `acceptanceEvidenceService.decide`, which is
+// retired: a story's receipt is now decided as an `acceptance_result` approval gate
+// through the ONE decide door every kind uses. What is proved here:
+//
+//   · PLACEMENT (point 1) — a publish raises an `awaiting` gate on the STORY, whether
+//     the publisher named the story or a LEAF under it, and the leaf holds none;
+//   · SUPERSEDE (point 5) — a newer receipt retires the awaiting question with cause
+//     `republished` and asks a fresh one about the new recording;
+//   · THE EFFECT (point 7) — approval stamps the receipt, and writes `done` ONLY when
+//     nothing under the story is left for the cascade to close: an open child, or an
+//     open delivery of the story's own, leaves the status alone;
+//   · THE FREEZE (point 6) — a receipt approved through the gate refuses a republish
+//     exactly as it did through the old path.
+//
+// Blob is the one mocked external.
 
 vi.mock('@/lib/blob/uploader', () => {
   let seq = 0;
@@ -26,40 +39,18 @@ vi.mock('@/lib/blob/uploader', () => {
 });
 
 const { acceptanceEvidenceService } = await import('@/lib/services/acceptanceEvidenceService');
+const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
+const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
+const { resolveAcceptanceStory } = await import('@/lib/acceptanceEvidence/publishAuth');
 
 const video = () => new File([new Uint8Array(1024)], 'run.webm', { type: 'video/webm' });
-
-async function makeStory(fx: WorkItemFixture) {
-  // The real create path so the story gets the project's initial workflow status
-  // (todo), which the todo→in_progress→in_review edges then move.
-  return workItemsService.createWorkItem(
-    { projectId: fx.projectId, kind: 'story', title: 'Gate story' },
-    fx.ctx,
-  );
-}
-
-async function storyWithEvidence(fx: WorkItemFixture, status: 'in_review' | 'in_progress') {
-  const story = await makeStory(fx);
-  await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
-  if (status === 'in_review') await workItemsService.updateStatus(story.id, 'in_review', fx.ctx);
-  await acceptanceEvidenceService.recordFromUpload(
-    { workItemId: story.id, video: video() },
-    fx.ctx,
-  );
-  return story;
-}
-
-const statusKeyOf = async (id: string): Promise<string> => {
-  const row = await adminDb.workItem.findUniqueOrThrow({ where: { id } });
-  return row.status;
-};
 
 let fx: WorkItemFixture;
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "acceptance_evidence", "attachment" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "acceptance_evidence", "attachment", "approval_gate" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
   fx = await makeWorkItemFixture();
@@ -70,62 +61,264 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('acceptanceEvidenceService.decide', () => {
-  it('approve → story in_review → done + evidence approved (stamped)', async () => {
-    const story = await storyWithEvidence(fx, 'in_review');
-    const { evidence, storyStatus } = await acceptanceEvidenceService.decide(
-      { workItemId: story.id, decision: 'approve' },
+async function makeStory(status: 'todo' | 'in_progress' | 'in_review' = 'in_review') {
+  const story = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'story', title: 'Accepted story' },
+    fx.ctx,
+  );
+  if (status !== 'todo') await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+  if (status === 'in_review') await workItemsService.updateStatus(story.id, 'in_review', fx.ctx);
+  return story;
+}
+
+async function makeChild(storyId: string, title = 'E2E + acceptance video') {
+  return workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'subtask', title, parentId: storyId },
+    fx.ctx,
+  );
+}
+
+async function publish(storyId: string, commitSha?: string) {
+  return acceptanceEvidenceService.recordFromUpload(
+    { workItemId: storyId, video: video(), commitSha },
+    fx.ctx,
+  );
+}
+
+const gatesOn = (workItemId: string) =>
+  adminDb.approvalGate.findMany({
+    where: { workItemId, kind: 'acceptance_result' },
+    orderBy: { createdAt: 'asc' },
+  });
+
+const awaitingGate = async (workItemId: string) =>
+  adminDb.approvalGate.findFirstOrThrow({
+    where: { workItemId, kind: 'acceptance_result', state: 'awaiting' },
+  });
+
+const statusOf = async (id: string) =>
+  (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
+
+const decide = (gateId: string, decision: 'approve' | 'request_changes') =>
+  approvalGatesService.decide(
+    { gateId, decision, noteMd: null, source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
+    fx.ctx,
+  );
+
+describe('placement — the gate hangs on the STORY (point 1)', () => {
+  it('a publish on the story raises ONE awaiting `acceptance_result` gate on the story, about this recording', async () => {
+    const story = await makeStory();
+    const evidence = await publish(story.id, 'a'.repeat(40));
+
+    const gates = await gatesOn(story.id);
+    expect(gates).toHaveLength(1);
+    expect(gates[0]).toMatchObject({
+      state: 'awaiting',
+      subjectId: evidence.id,
+      subjectVersion: 'a'.repeat(40),
+      // ADR §2 — `assigneeId ?? reporterId`, answered at creation. The story has no
+      // assignee, so the reporter (the fixture's actor) is asked.
+      routedToId: fx.ctx.userId,
+    });
+  });
+
+  it('a publish addressed to a LEAF lands on its story, and the leaf holds no acceptance gate — the single-card-run shape', async () => {
+    const story = await makeStory();
+    const leaf = await makeChild(story.id);
+
+    // The doors resolve a leaf key UP before anything is written; this is that hop.
+    const target = await resolveAcceptanceStory(leaf.identifier, fx.ctx);
+    if (target instanceof Response) throw new Error('the leaf did not resolve');
+    expect(target.id).toBe(story.id);
+    await publish(target.id);
+
+    expect(await gatesOn(story.id)).toHaveLength(1);
+    expect(await gatesOn(leaf.id)).toHaveLength(0);
+  });
+
+  it('a newer recording SUPERSEDES the awaiting question with cause `republished` and asks about the new one (point 5)', async () => {
+    const story = await makeStory();
+    const first = await publish(story.id);
+    const second = await publish(story.id);
+
+    const gates = await gatesOn(story.id);
+    expect(gates.map((g) => [g.subjectId, g.state, g.supersededCause])).toEqual([
+      [first.id, 'superseded', 'republished'],
+      [second.id, 'awaiting', null],
+    ]);
+  });
+});
+
+describe('the effect — approval writes `done` only when nothing is left for the cascade (point 7)', () => {
+  it('a story with nothing under it: approval stamps the receipt and writes `done` — TERMINAL', async () => {
+    const story = await makeStory('in_review');
+    const evidence = await publish(story.id);
+
+    const result = await decide((await awaitingGate(story.id)).id, 'approve');
+
+    expect(result.effect).toEqual({ statusWritten: 'done' });
+    expect(result.gate.state).toBe('approved');
+    expect(await statusOf(story.id)).toBe('done');
+    const receipt = await adminDb.acceptanceEvidence.findUniqueOrThrow({
+      where: { id: evidence.id },
+    });
+    expect(receipt.status).toBe('approved');
+    expect(receipt.approvedById).toBe(fx.ctx.userId);
+  });
+
+  it('a story with a child still OPEN — the single-card run: the receipt is approved, the story does NOT move, and the child is untouched', async () => {
+    const story = await makeStory('in_progress');
+    const child = await makeChild(story.id);
+    await workItemsService.updateStatus(child.id, 'in_progress', fx.ctx);
+    await publish(story.id);
+
+    const result = await decide((await awaitingGate(story.id)).id, 'approve');
+
+    // Writing `done` here would have `childStatusCascadeService` close the child
+    // whose work has not landed. The rollup writes `done` when it does.
+    expect(result.effect).toEqual({
+      statusWritten: null,
+      statusDeferredReason: 'rollup_writes_done',
+    });
+    expect(await statusOf(story.id)).toBe('in_progress');
+    expect(await statusOf(child.id)).toBe('in_progress');
+    expect(result.gate.state).toBe('approved');
+  });
+
+  it('a story every child of which is DONE is terminal again: approval writes `done`', async () => {
+    const story = await makeStory('in_review');
+    const child = await makeChild(story.id);
+    await workItemsService.updateStatus(child.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(child.id, 'done', fx.ctx);
+    await publish(story.id);
+
+    const result = await decide((await awaitingGate(story.id)).id, 'approve');
+
+    expect(result.effect).toEqual({ statusWritten: 'done' });
+    expect(await statusOf(story.id)).toBe('done');
+  });
+
+  it('a story with an OPEN delivery of its own — the story run: approval writes no status, the merge will', async () => {
+    await githubInstallationService.persistInstallation({
+      workspaceId: fx.workspaceId,
+      installation: {
+        installationId: `inst-${fx.workspaceId}`,
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: [
+        {
+          providerRepoId: `${fx.workspaceId}-0`,
+          owner: 'moooon',
+          name: 'motir-core',
+          defaultBranch: 'main',
+          archived: false,
+        },
+      ],
+    });
+    const story = await makeStory('in_review');
+    await linkPr(
+      {
+        workItemId: story.id,
+        projectId: fx.projectId,
+        owner: 'moooon',
+        name: 'motir-core',
+        number: 4949,
+        headRef: 'parent/MOTIR-4949-acceptance-gate',
+      },
       fx.ctx,
     );
-    expect(storyStatus).toBe('done');
-    expect(evidence.status).toBe('approved');
-    expect(evidence.approvedById).toBe(fx.ownerId);
-    expect(await statusKeyOf(story.id)).toBe('done');
+    await publish(story.id);
+
+    const result = await decide((await awaitingGate(story.id)).id, 'approve');
+
+    expect(result.effect).toEqual({
+      statusWritten: null,
+      statusDeferredReason: 'merge_writes_done',
+    });
+    expect(await statusOf(story.id)).toBe('in_review');
   });
 
-  it('request_changes → story in_review → in_progress + evidence changes_requested', async () => {
-    const story = await storyWithEvidence(fx, 'in_review');
-    const { evidence, storyStatus } = await acceptanceEvidenceService.decide(
-      { workItemId: story.id, decision: 'request_changes' },
+  it('REQUEST CHANGES stamps the receipt and moves nothing — the old path moved the story back to In progress, and no longer does', async () => {
+    const story = await makeStory('in_review');
+    const evidence = await publish(story.id);
+
+    const result = await decide((await awaitingGate(story.id)).id, 'request_changes');
+
+    expect(result.effect).toEqual({
+      statusWritten: null,
+      statusDeferredReason: 'request_changes_moves_nothing',
+    });
+    expect(await statusOf(story.id)).toBe('in_review');
+    const receipt = await adminDb.acceptanceEvidence.findUniqueOrThrow({
+      where: { id: evidence.id },
+    });
+    expect(receipt.status).toBe('changes_requested');
+    expect(receipt.approvedById).toBeNull();
+  });
+});
+
+describe('the freeze — an APPROVED receipt closes (point 6)', () => {
+  it('a receipt approved through the gate refuses a republish with the existing error, and asks nothing new', async () => {
+    const story = await makeStory('in_review');
+    await publish(story.id);
+    await decide((await awaitingGate(story.id)).id, 'approve');
+
+    await expect(publish(story.id)).rejects.toBeInstanceOf(AcceptanceEvidenceAlreadyApprovedError);
+    // The refused publish rolled back with its supersede: the approved gate stands,
+    // and no second question was raised.
+    const gates = await gatesOn(story.id);
+    expect(gates.map((g) => g.state)).toEqual(['approved']);
+  });
+
+  it('a PENDING receipt is what a fresh gate would ask about — `currentSubject` names it', async () => {
+    const story = await makeStory('in_review');
+    const evidence = await publish(story.id);
+    const { acceptanceResultGateHandler } =
+      await import('@/lib/approvalGates/acceptanceResultHandler');
+    const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } });
+    const subject = await adminDb.$transaction((tx) =>
+      acceptanceResultGateHandler.currentSubject({ item, ctx: fx.ctx, tx }),
+    );
+    expect(subject).toBe(evidence.id);
+  });
+
+  it('the gate never asks about an approved receipt again — `currentSubject` answers nothing once it is signed', async () => {
+    const story = await makeStory('in_review');
+    await publish(story.id);
+    await decide((await awaitingGate(story.id)).id, 'approve');
+
+    const { acceptanceResultGateHandler } =
+      await import('@/lib/approvalGates/acceptanceResultHandler');
+    const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } });
+    const subject = await adminDb.$transaction((tx) =>
+      acceptanceResultGateHandler.currentSubject({ item, ctx: fx.ctx, tx }),
+    );
+    expect(subject).toBeNull();
+  });
+});
+
+describe('the Approvals tab — the row names the recording', () => {
+  it('an awaiting acceptance gate is decidable by its reporter and its subject summarises the recording', async () => {
+    const story = await makeStory('in_review');
+    const evidence = await publish(story.id, 'b'.repeat(40));
+
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: story.id, kind: 'acceptance_result' },
       fx.ctx,
     );
-    expect(storyStatus).toBe('in_progress');
-    expect(evidence.status).toBe('changes_requested');
-    expect(evidence.approvedById).toBeNull();
-    expect(await statusKeyOf(story.id)).toBe('in_progress');
-  });
+    expect(read.gate?.state).toBe('awaiting');
+    expect(read.canDecide).toBe(true);
 
-  it('approve when the story is NOT in_review is rejected by the service gate — no stamp', async () => {
-    // MOTIR-1625 made `in_progress → done` a legal edge, so the workflow no
-    // longer refuses this move for us — the gate is now explicit in the service.
-    const story = await storyWithEvidence(fx, 'in_progress');
-    await expect(
-      acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx),
-    ).rejects.toThrow(AcceptanceEvidenceNotInReviewError);
-    // The evidence was NOT stamped and the story did NOT move.
-    expect(await statusKeyOf(story.id)).toBe('in_progress');
-    const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
-    expect(current!.status).toBe('pending');
-  });
-
-  it('findAwaitingIds returns a story with pending evidence, and clears on approve (MOTIR-1636)', async () => {
-    const story = await storyWithEvidence(fx, 'in_review');
-    const other = await makeStory(fx); // no evidence
-    let awaiting = await acceptanceEvidenceService.findAwaitingIds([story.id, other.id], fx.ctx);
-    expect(awaiting.has(story.id)).toBe(true);
-    expect(awaiting.has(other.id)).toBe(false);
-
-    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
-    awaiting = await acceptanceEvidenceService.findAwaitingIds([story.id], fx.ctx);
-    expect(awaiting.has(story.id)).toBe(false); // approved → no longer pending
-  });
-
-  it('decide with no current evidence → not found', async () => {
-    const story = await makeStory(fx);
-    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
-    await workItemsService.updateStatus(story.id, 'in_review', fx.ctx);
-    await expect(
-      acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx),
-    ).rejects.toMatchObject({ code: 'ACCEPTANCE_EVIDENCE_NOT_FOUND' });
+    const { summarizeGateSubjects } = await import('@/lib/approvalGates/subjectSummary');
+    const gate = await awaitingGate(story.id);
+    const summaries = await adminDb.$transaction((tx) => summarizeGateSubjects([gate], tx));
+    expect(summaries.get(gate.id)).toEqual({
+      kind: 'acceptance_result',
+      acceptanceEvidenceId: evidence.id,
+      producedByKey: null,
+      commitSha: 'b'.repeat(40),
+      chapterCount: 0,
+    });
   });
 });

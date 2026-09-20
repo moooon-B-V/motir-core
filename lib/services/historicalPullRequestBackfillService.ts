@@ -211,8 +211,15 @@ async function sweepRepo(
     // The installation token, minted through the seam — never persisted, and
     // scoped by GitHub to this installation's repos. `installation.installationId`
     // is the HOST's numeric id (the row's `id` is our cuid).
+    //
+    // `forRepo` is what picks the App by the repository's PROVENANCE (MOTIR-5843):
+    // a hosted repository is on the provisioning App and on no other, so a mint
+    // through the user-facing default cannot reach it — and the refusal is caught
+    // below and reported as a per-repo error, which reads exactly like a repository
+    // that had nothing to backfill.
     ({ token } = await getGitProvider('github').mintInstallationToken(
       repo.installation.installationId,
+      { owner: repo.owner },
     ));
   } catch (err) {
     report.error = `could not mint an installation token: ${errorDetail(err)}`;

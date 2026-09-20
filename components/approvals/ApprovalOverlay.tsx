@@ -19,6 +19,11 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from '@/app/(authed)/items/[key]/_components/DesignResultPanel';
+import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
+import {
+  AcceptanceReceiptPlayer,
+  AcceptanceReceiptProvenance,
+} from '@/components/acceptance/AcceptanceReceiptPlayer';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
 import {
   approveAndMergeAction,
@@ -281,6 +286,7 @@ export function ApprovalOverlay() {
   const tRow = useTranslations('workbench.approvals');
   const tGate = useTranslations('approvalGate');
   const tDesign = useTranslations('approvalGate.designResult');
+  const tAcceptance = useTranslations('approvalGate.acceptanceResult');
   const tPullRequest = useTranslations('approvalGate.pullRequestApproval');
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -569,6 +575,20 @@ export function ApprovalOverlay() {
                   isDesignCard={subject.isDesignCard}
                   placement="development"
                 />
+              ) : subject.acceptanceEvidence && subject.acceptanceGate ? (
+                // A STORY RUN (MOTIR-5790): the receipt leads, the pull requests beneath it.
+                <AcceptanceDevelopmentSlot
+                  evidence={subject.acceptanceEvidence}
+                  accepted={
+                    subject.acceptanceGate.state === 'approved'
+                      ? {
+                          name: subject.acceptanceGate.decidedByLabel ?? '',
+                          at: subject.acceptanceGate.decidedAt ?? '',
+                        }
+                      : null
+                  }
+                  mergeAwaiting={gate.kind === 'pull_request_approval' && !decidedState}
+                />
               ) : undefined
             }
             mergeGate={{
@@ -588,6 +608,48 @@ export function ApprovalOverlay() {
             // The approve-to-merge port re-reads through the SAME overlay read.
             onShowCurrentVersion={() => setReread((n) => n + 1)}
             gateKey={settled?.outcome === 'read' ? settled.reread : 0}
+          />
+        ) : subject.kind === 'acceptance_result' ? (
+          // THE ACCEPTANCE PORT (MOTIR-4950) — the recording the gate asks about, read
+          // by the gate's own `subjectId`, in the same player and provenance the story
+          // page shows. The frame, its verbs, its confirm step and its refusals are
+          // `ApprovalGateControl`'s, exactly as for a design: one approve control.
+          <ApprovalGateControl
+            key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}
+            layout="fill"
+            gate={gate}
+            canDecide={read.canDecide && !decidedState}
+            kindLabel={tAcceptance('kindLabel')}
+            subjectMeta={
+              gate.subjectVersion
+                ? tAcceptance('meta.withVersion', { version: gate.subjectVersion.slice(0, 8) })
+                : tAcceptance('meta.plain')
+            }
+            port={
+              <div className="flex flex-col gap-(--spacing-sm)">
+                <AcceptanceReceiptPlayer evidence={subject.evidence} />
+                <AcceptanceReceiptProvenance evidence={subject.evidence} />
+              </div>
+            }
+            verbs={verbs}
+            consequence={tAcceptance('consequence', { key: identifier })}
+            confirmConsequences={[
+              tAcceptance('confirm.records'),
+              tAcceptance('confirm.freezes'),
+              tAcceptance('confirm.movesToDone', { key: identifier }),
+            ]}
+            routedToLabel={read.routedToLabel}
+            // A receipt is FROZEN on approval rather than pinned (§6c defers to
+            // `acceptance-receipt-lifecycle.md`), so there is no files-kept answer.
+            filesKept={null}
+            alert={
+              moved.length > 0 && gate.state === 'awaiting' && !decidedState ? (
+                <SubjectMovedNotice moved={moved} onShow={() => setReread((n) => n + 1)} />
+              ) : undefined
+            }
+            onDecide={onDecide}
+            onShowCurrentVersion={() => setReread((n) => n + 1)}
+            focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
           />
         ) : (
           <ApprovalGateControl

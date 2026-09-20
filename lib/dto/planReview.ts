@@ -257,6 +257,12 @@ export type PlanPlacementSideDto =
   | { kind: 'workItem'; id: string; identifier: string | null }
   | { kind: 'folder'; folderId: string; folderPath: string[] | null; folderMissing: boolean };
 
+/** One folder on a proposal's {@link PlanReviewItemDto.folderTrail} (MOTIR-5798). */
+export interface PlanFolderCrumbDto {
+  id: string;
+  name: string;
+}
+
 /**
  * One crumb on the COMMITTED ancestor path a proposal's parent sits on — the
  * breadcrumb the plan canvas opens with (bug MOTIR-3152).
@@ -387,6 +393,24 @@ export interface PlanReviewItemDto {
    * (MOTIR-5423); the review surface draws the stale state (MOTIR-5406).
    */
   folderMissing: boolean;
+  /**
+   * The FOLDER CHAIN this proposal sits under, ROOT FIRST, each step its id and
+   * name (Bug MOTIR-5782 · MOTIR-5798; `design/ai-planning/design-notes.md`
+   * Part XVIII decision 7). The planning canvases draw a folder as a LEVEL, so
+   * they need what {@link folderPath} cannot carry: an id per folder, to key an
+   * ancestor folder's level, count a closed folder's proposals DEEP, and make
+   * each folder crumb navigate.
+   *
+   * Resolved, in order: the proposal's own folder when it is folder-placed (its
+   * {@link folderId}); else the folder of its ROOT-MOST committed ancestor — the
+   * first link of {@link parentTrail}, whose own folder is its effective one
+   * because a root has no parent; else, under an intra-plan (`planItem:`) parent,
+   * the root-most PROPOSED ancestor's; else `[]`. `[]` too when
+   * {@link folderMissing}: the folder is gone and there is no chain to walk.
+   * For a folder-placed proposal `folderTrail.map((t) => t.name)` equals
+   * {@link folderPath} — both come from one read.
+   */
+  folderTrail: PlanFolderCrumbDto[];
   /** Resolved blocked-by node ids (within the proposed forest). */
   blockedByNodeIds: string[];
   /**
