@@ -7762,8 +7762,8 @@
         },
         "failedJobs": {
           "title": "Failed jobs",
-          "value": "{count} dead-lettered · 24h",
-          "detail": "Failed after their retries and not yet replayed. Replay happens per workspace, in that workspace's own jobs dashboard.",
+          "value": "{standing} unreplayed · {count} in 24h",
+          "detail": "Failed after their retries and not yet replayed. The first number is the STANDING backlog, with no time bound — a window cannot report a backlog. Replay happens per workspace, in that workspace's own jobs dashboard.",
           "unreachable": {
             "probeFailed": "No response"
           },

@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET as queueHealthRoute } from '@/app/api/health/queue/route';
 import { db } from '@/lib/db';
 import { platformHealthService } from '@/lib/services/platformHealthService';
+import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateJobRuns } from '../helpers/db';
 
@@ -99,6 +100,85 @@ describe('the reading itself', () => {
     expect(queue.oldestPendingAgeMs).not.toBe(0);
   });
 
+  describe('the STANDING dead-letter backlog it carries (MOTIR-5840)', () => {
+    const deadLetter = (lastFailedAt: Date, replayedAt: Date | null = null) => ({
+      functionId: 'email.send',
+      eventName: 'email.send',
+      eventData: {},
+      failure: { message: 'boom' },
+      attempts: 3,
+      firstFailedAt: lastFailedAt,
+      lastFailedAt,
+      replayedAt,
+    });
+
+    it('counts every UNREPLAYED dead letter with no time bound, however old', async () => {
+      // ⚠️ THE WHOLE POINT OF THE FIELD. The board's own card counts a 24-hour
+      // window, so a backlog whose newest row is days old renders there as a
+      // green zero. This reading has no window, which is why it is the one an
+      // external monitor can trust to mean "nobody has dealt with these".
+      const sixWeeksAgo = new Date(Date.now() - 42 * 24 * 60 * 60 * 1000);
+      await adminDb.jobRunDlq.createMany({
+        data: [
+          deadLetter(sixWeeksAgo),
+          deadLetter(sixWeeksAgo),
+          // Replayed — an operator dealt with it, so it is not standing.
+          deadLetter(sixWeeksAgo, new Date()),
+        ],
+      });
+
+      const queue = await platformHealthService.readQueueHealth();
+
+      expect(queue.deadLetters).toEqual({
+        state: 'backlogged',
+        unreplayed: 2,
+        threshold: 1,
+      });
+    });
+
+    it('a MEASURED empty backlog is healthy and reports 0 — the good-news case', async () => {
+      const queue = await platformHealthService.readQueueHealth();
+      expect(queue.deadLetters).toEqual({ state: 'healthy', unreplayed: 0, threshold: 1 });
+    });
+
+    it('an UNREADABLE dead-letter probe reports null — never a zero — and does NOT take the queue verdict down', async () => {
+      // ⚠️ THE ASYMMETRY IS THE DESIGN. The queue read throws to a 503 because it
+      // is what pages somebody; this limb absorbs its own failure so a
+      // ticket-worthy question cannot silence a page-worthy one. What it may not
+      // do is invent a number: `unreplayed` is null, and a reader that only knows
+      // how to compare integers sees no backlog claim at all rather than a false
+      // all-clear.
+      vi.spyOn(jobRunDlqRepository, 'countActiveSince').mockRejectedValue(new Error('gone'));
+      await enqueueDue(1_000);
+
+      const queue = await platformHealthService.readQueueHealth();
+
+      expect(queue.deadLetters).toEqual({ state: 'unreadable', unreplayed: null, threshold: 1 });
+      expect(queue.deadLetters.unreplayed).not.toBe(0);
+      // The queue half still answered, and still decides the verdict.
+      expect(queue.state).toBe('healthy');
+      expect(queue.depth).toBe(1);
+    });
+
+    it('a standing backlog does NOT flip the route to 503 — the status code still means "is the queue draining"', async () => {
+      // The E2E at `tests/e2e/cascade-under-load.spec.ts` asserts a 200 from this
+      // route while a job runs, and an external monitor is configured on the
+      // status code. A backlog is real but it is not a page, and it would hold
+      // this endpoint at 503 for as long as triage takes — which is how a monitor
+      // gets muted. Depth rides in the body; the verdict stays the queue's.
+      await adminDb.jobRunDlq.createMany({
+        data: [deadLetter(new Date()), deadLetter(new Date())],
+      });
+
+      const response = await queueHealthRoute();
+      const body = (await response.json()) as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      expect(body['state']).toBe('healthy');
+      expect(body['deadLetters']).toMatchObject({ state: 'backlogged', unreplayed: 2 });
+    });
+  });
+
   it('READS ONLY — it enqueues nothing and depends on no run', async () => {
     await enqueueDue(1_000);
     const before = await adminDb.jobQueueRun.findMany({ orderBy: { id: 'asc' } });
@@ -179,8 +259,28 @@ describe('the route an external monitor polls', () => {
     // The whole payload, asserted as a SET rather than by absence of a few names:
     // a field added later cannot slip through a `not.toHaveProperty` list.
     expect(Object.keys(body).sort()).toEqual(
-      ['checkedAt', 'depth', 'oldestPendingAgeMs', 'stallThresholdMs', 'state'].sort(),
+      [
+        'checkedAt',
+        'deadLetters',
+        'depth',
+        'oldestPendingAgeMs',
+        'stallThresholdMs',
+        'state',
+      ].sort(),
     );
+
+    // ⚠️ AND THE SET IS ASSERTED ONE LEVEL DOWN TOO, because `deadLetters`
+    // (MOTIR-5840) made this payload nested for the first time and a top-level
+    // key set cannot see inside an object. On an UNGATED route every added field
+    // is a disclosure decision, so the nested shape gets the same ratchet rather
+    // than inheriting the parent's.
+    expect(Object.keys(body['deadLetters'] as Record<string, unknown>).sort()).toEqual(
+      ['state', 'threshold', 'unreplayed'].sort(),
+    );
+    // Three scalars about the deployment's own backlog: a count, the threshold it
+    // was judged against, and a verdict. No workspace, no job id, no function
+    // name, no row — nothing that says WHOSE work failed.
+    expect(typeof (body['deadLetters'] as Record<string, unknown>)['threshold']).toBe('number');
   });
 
   it('an UNREADABLE database is a 503, never a healthy-looking zero', async () => {
