@@ -389,10 +389,17 @@ describe('planReviewService.getPlanReview — folderTrail', () => {
   it('does not grow its folder reads with the size of the plan — the same count for 1 and 10 filed proposals', async () => {
     const fx = await makeWorkItemFixture();
     const { parked, y2025 } = await parkedTree(fx);
-    const filedEpic = await seed(fx, 'epic', 'Parked epic');
-    await foldersService.fileWorkItem(filedEpic.id, { folderId: y2025 }, fx.ctx);
 
+    // ⚠️ ONE FILED EPIC PER CALL, since MOTIR-5645. This helper runs three times,
+    // and every plan it builds names the epic as a committed `parentRef` — which
+    // a plan now PARKS, so the second and third calls were refused with
+    // `PlanTargetLockedError` (AMENDMENT 16 D1/D4). What this case measures is
+    // the READ COUNT against the plan's SIZE, and that is unaffected by which
+    // epic the proposals hang under. A `folder:` parentRef parks nothing, so the
+    // filed half of each batch was never the problem.
     const readsFor = async (n: number): Promise<number> => {
+      const filedEpic = await seed(fx, 'epic', `Parked epic ${n}`);
+      await foldersService.fileWorkItem(filedEpic.id, { folderId: y2025 }, fx.ctx);
       const plan = await plansService.createPlan(fx.projectId, { title: `Plan ${n}` }, fx.ctx);
       await plansService.addProposals(
         plan.id,
