@@ -1,5 +1,5 @@
-import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { stubBothAppCredentials } from '../helpers/appCredentials';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -61,13 +61,13 @@ function jobsPayload(jobs = STARTER_JOBS, labels = ['ubuntu-latest']) {
 /** Stub the GitHub App token mint + the workflow-jobs read. Returns the mock so
  *  a test can assert the API was (or was NOT) called. */
 function stubGithub(jobsBody: unknown = jobsPayload()): ReturnType<typeof vi.fn> {
-  const { privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-  });
-  vi.stubEnv('GITHUB_APP_ID', '999');
-  vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+  // ⚠️ BOTH registrations, because this suite's repository is MOTIR-OWNED
+  // (`GITHUB_FALLBACK_ORG` is stubbed to the provisioning org above), and since
+  // MOTIR-5861 the low-level mints resolve their App from the repository's
+  // PROVENANCE — so a hosted repository here mints through `motir-studio`.
+  // Wiring only the user-facing App made every one of these reads throw
+  // `GithubAppNotConfiguredError: GitHub App (provisioning)`.
+  stubBothAppCredentials();
   const fetchMock = vi.fn(async (url: string): Promise<Response> => {
     const u = String(url);
     if (u.includes('/access_tokens')) {
