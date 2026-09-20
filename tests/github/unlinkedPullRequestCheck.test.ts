@@ -8,7 +8,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { LINK_CHECK_NAME, NO_WORK_ITEM_LABEL } from '@/lib/services/pullRequestLinkCheckService';
-import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { _resetInstallationTokenCache, mintInstallationToken } from '@/lib/github/appAuth';
 import { readPullRequestHeadSha, writeCheckRun } from '@/lib/github/checkRuns';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -193,6 +193,9 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // MOTIR-5861 — the provenance cases stub `GITHUB_FALLBACK_ORG`, and an env stub
+  // that outlives its test silently re-classifies every later repository.
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
 });
 
@@ -335,6 +338,71 @@ describe('an UNLINKED pull request fails its checks (MOTIR-3675)', () => {
     // deployment state, not an error.
     expect(writes()).toHaveLength(1);
     expect(result).toMatchObject({ outcome: 'transitioned', toStatus: 'implemented' });
+  });
+});
+
+// ── PROVENANCE: the check on a HOSTED repository (MOTIR-5861) ────────────────
+//
+// `pullRequestLinkCheckService` runs on EVERY repository a project plans work in
+// — the existential `projectRepoRepository.listByGithubRepoId` check the scenario
+// above wires — which is exactly where Motir's own hosted repositories live. A
+// hosted repository is installed on the provisioning App and on NO other, and
+// `writeCheckRun` minted through the user-facing default: the mint threw
+// `GithubAppNotConfiguredError`, the catch returned `'unavailable'` — documented
+// as *"no check was written and nothing is wrong"* — and so
+// `Motir / work item link` had NEVER been written on a hosted repository. An
+// unlinked pull request there carried no red check at all, which means the one
+// mechanism that catches the costliest omission a run can make was silently
+// absent on the repositories Motir hosts.
+//
+// ⚠️ MEASURED ON THE ROLE THE MINT RECEIVED, not by wiring one App. `appAuth` is
+// mocked at module scope in this file (a real check-run write needs an App private
+// key the test environment has no business carrying — the header says so), so the
+// "wire only one App" arm cannot bite here; that arm is asserted per call site in
+// `tests/github/lowLevelMintProvenance.test.ts`. What this case adds is the one
+// thing that file cannot show: the whole service reaching the write.
+describe('the link check is written on a HOSTED repository (MOTIR-5861)', () => {
+  it('reaches the PROVISIONING App, so the check is written rather than `unavailable`', async () => {
+    // `moooon` is the scenario's repository owner, so configuring it as the
+    // provisioning org is what makes that repository HOSTED.
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'moooon');
+    await makeScenario('lc-hosted@example.com');
+
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ headRef: 'feat/ACME-1-hosted' }),
+    );
+
+    // The check exists at all — before the fix this was zero writes.
+    expect(writes()).toHaveLength(1);
+    expect(writes()[0]!.body).toMatchObject({
+      name: LINK_CHECK_NAME,
+      conclusion: 'failure',
+    });
+    // And it was minted from the provisioning registration. Every mint this
+    // delivery makes resolves the same repository, so the whole set is checked
+    // rather than one call of it.
+    const roles = vi.mocked(mintInstallationToken).mock.calls.map(([, role]) => role);
+    expect(roles.length).toBeGreaterThan(0);
+    expect(new Set(roles)).toEqual(new Set(['provisioning']));
+  });
+
+  it('CONTROL — a CUSTOMER-OWNED repository still mints USER-FACING, with the provisioning org configured', async () => {
+    // Set, and NOT this repository's owner. Without this half an implementation
+    // that always reached for the provisioning App would pass the case above and
+    // break every real tenant.
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'some-other-org');
+    await makeScenario('lc-customer@example.com');
+
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ headRef: 'feat/ACME-1-customer' }),
+    );
+
+    expect(writes()).toHaveLength(1);
+    const roles = vi.mocked(mintInstallationToken).mock.calls.map(([, role]) => role);
+    expect(roles.length).toBeGreaterThan(0);
+    expect(new Set(roles)).toEqual(new Set(['user-facing']));
   });
 });
 

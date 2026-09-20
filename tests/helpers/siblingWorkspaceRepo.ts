@@ -1,5 +1,5 @@
-import { generateKeyPairSync } from 'node:crypto';
 import { vi } from 'vitest';
+import { stubBothAppCredentials } from './appCredentials';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -240,13 +240,13 @@ function jobsPayload() {
 /** Stub the App token mint + the workflow-jobs read — the shipped convention for
  *  these suites is that the GitHub HTTP boundary is the only thing mocked. */
 export function stubGithub(): void {
-  const { privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-  });
-  vi.stubEnv('GITHUB_APP_ID', '999');
-  vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+  // ⚠️ BOTH registrations, because this suite's repository is MOTIR-OWNED
+  // (`GITHUB_FALLBACK_ORG` is stubbed to the provisioning org above), and since
+  // MOTIR-5861 the low-level mints resolve their App from the repository's
+  // PROVENANCE — so a hosted repository here mints through `motir-studio`.
+  // Wiring only the user-facing App made every one of these reads throw
+  // `GithubAppNotConfiguredError: GitHub App (provisioning)`.
+  stubBothAppCredentials();
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string): Promise<Response> => {

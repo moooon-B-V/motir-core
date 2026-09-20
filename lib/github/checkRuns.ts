@@ -1,4 +1,6 @@
 import { mintInstallationToken } from './appAuth';
+import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
+import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import { mapGithubCiConclusion } from '@/lib/git/providers/github';
 import type { CiConclusion } from '@/lib/git/types';
 
@@ -173,8 +175,17 @@ async function findExistingRun(
  */
 export async function writeCheckRun(spec: CheckRunSpec): Promise<CheckRunWriteOutcome> {
   let token: string;
+  // ⚠️ THE APP IS CHOSEN BY THE REPOSITORY'S PROVENANCE (MOTIR-5861). A hosted
+  // repository is installed on the provisioning App ONLY, so minting through the
+  // user-facing default throws GithubAppNotConfiguredError — which the catch below
+  // turns into `'unavailable'`, documented as "nothing is wrong". The consequence
+  // is not cosmetic: `Motir / work item link` had never been written on a hosted
+  // repository at all, so an unlinked pull request there carried no red check and
+  // the one mechanism that catches the costliest omission a run can make was
+  // silently absent on Motir's own project repositories.
+  const role = githubAppRoleForRepo({ owner: spec.owner }, provisioningOrgLogin());
   try {
-    ({ token } = await mintInstallationToken(spec.installationId));
+    ({ token } = await mintInstallationToken(spec.installationId, role));
   } catch {
     // Unconfigured App, unmintable token, unreachable host — all the same answer
     // to the caller, which is "no check was written and nothing is wrong".
@@ -238,8 +249,13 @@ export async function readPullRequestHeadSha(
   number: number,
 ): Promise<string | null> {
   let token: string;
+  // Provenance, as `writeCheckRun` (MOTIR-5861). This read feeds the link check,
+  // so on a hosted repository it returned `null` for the same reason the check was
+  // never written — and `null` here is indistinguishable from a pull request the
+  // host does not have.
+  const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
   try {
-    ({ token } = await mintInstallationToken(installationId));
+    ({ token } = await mintInstallationToken(installationId, role));
   } catch {
     return null;
   }
@@ -330,8 +346,12 @@ export async function readCommitCheckRuns(
   headSha: string,
 ): Promise<ReportedCheckRun[] | null> {
   let token: string;
+  // Provenance, as above (MOTIR-5861). `null` means "no answer", not "no checks"
+  // — its own header says so — so on a hosted repository the reconcile worker was
+  // told to ask again for ever, which it duly did.
+  const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
   try {
-    ({ token } = await mintInstallationToken(installationId));
+    ({ token } = await mintInstallationToken(installationId, role));
   } catch {
     return null;
   }
