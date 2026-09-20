@@ -179,6 +179,10 @@ describe('the seed and the backfill migration AGREE', () => {
     for (const migration of [
       '20260819090000_add_implemented_default_status',
       '20260916180000_add_queue_ejection_default_edges',
+      // MOTIR-5643's parking edges include `implemented → planning`, which the
+      // status deletion above cascades away and only this backfill restores. Its
+      // presence in the CHAIN is what proves that backfill complete.
+      '20260920090000_add_planning_parking_edges',
     ]) {
       await adminDb.$executeRawUnsafe(
         readFileSync(join(ROOT, `prisma/migrations/${migration}/migration.sql`), 'utf8'),
