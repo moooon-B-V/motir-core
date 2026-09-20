@@ -3082,15 +3082,25 @@ matching the `baseRevision` its author had captured correctly seconds earlier. T
 on that rule's own terms — it asks whether applying the patch _"may conflict with a newer edit /
 clobber it"_, and a content patch cannot clobber a status change.
 
-**3. A CARD CAN HAVE AT MOST ONE OPEN _SESSION-LESS_ PLAN, which leaves one shipped display nearly
-unreachable.** D4 and D5 together mean a `generating`, `planned` or `stale` plan with no session
-holds its targets, so a second such plan naming one of them is refused. Plans from ONE conversation
-are exempt (D5's correction), so a refining conversation still stacks plans over one card. `plansService.listPendingProposalsForWorkItem` and the pending-plan
-indicator it feeds are built to render N pending plans per card and to COUNT them; that N is now
-always 0 or 1. Nothing is broken and nothing was removed — the read is still correct — but the
-multi-plan arm is dead in a tenant, and its tests now reach it only by deleting lock rows in a
-fixture. **Recorded rather than tidied away:** whether that surface should be simplified is a product
-question, not this bug's.
+**3. A CARD IS PLANNED BY ONE PLANNER AT A TIME — and a CONVERSATION is one planner.** This is the
+owner's ruling of 2026-09-21, taken after the merge queue showed what the first reading cost:
+
+> _"makes no sense a card can be planned multiple times. The user wants to make a second plan should
+> check the plan made already, or if someone else is planning it right now the user should respect
+> that."_
+
+So D4's refusal STANDS, and it is a rule about a second PLANNER rather than about a second plan:
+
+| the second comer                                            | outcome                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------- |
+| another SESSION, or a session-less plan, naming a held card | **refused** — `PlanTargetLockedError`, naming the holder |
+| the SAME conversation taking its next turn                  | **allowed** — one planner, one hold (D5)                 |
+
+**The pending-plan indicator is therefore NOT dead**, which the first draft of this point got wrong.
+`listPendingProposalsForWorkItem` still returns several rows for one card, because a conversation
+that refines produces successive plans over the same targets and all of them stay pending until they
+are decided. What cannot happen is two DIFFERENT planners stacking plans on one card, which is
+exactly what the ruling forbids.
 
 ### What this amendment does NOT change
 

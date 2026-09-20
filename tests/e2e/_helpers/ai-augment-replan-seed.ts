@@ -18,6 +18,8 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { plansService } from '@/lib/services/plansService';
+import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
+import { recordConversationTurn } from './planChangeConversation';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestPerson } from './testPerson';
 
@@ -159,6 +161,23 @@ export async function seedAiAugmentReplan(email: string): Promise<AiAugmentRepla
  * runs `plansService.approvePlan → materialize` against Postgres.
  *
  * `sourceJobId` binds the plan to the stubbed job exactly as the submit does.
+ *
+ * ⚠️ AND IT RECORDS THE CONVERSATION, which it did not before (MOTIR-5640). The
+ * real submit does two things: it opens the Plan bound to the job AND it stamps
+ * that job onto the plan-change SESSION as its `lastJobId`
+ * (`planChangeSessionsService.submit`). This helper only did the first, so the
+ * plans it seeded belonged to no conversation at all — a state the product
+ * cannot reach.
+ *
+ * That was invisible until a plan began PARKING its targets: a card may be
+ * planned by only one planner at a time, so the second seeded plan naming the
+ * same card read as a SECOND planner rather than as the same conversation
+ * refining, and was refused with `PlanTargetLockedError`. Recording the session
+ * makes successive turns what they are — one planner, one hold.
+ *
+ * `scopeKey` selects WHICH conversation. The default is the project-wide one the
+ * augment flow uses; a CONTEXTUAL run passes the anchor's key, exactly as the
+ * contextual route does.
  */
 export async function seedPlanChangeProposal(
   ctx: ServiceContext,
@@ -174,8 +193,16 @@ export async function seedPlanChangeProposal(
     addShape?: { kind?: string; type?: string; parentRef?: string };
     /** An existing item to propose a rename of (`modify`). */
     rename?: { workItemId: string; title: string };
+    /** The conversation this turn belongs to. Defaults to the project-wide
+     *  scope the augment flow opens; a contextual run passes its anchor's key. */
+    scopeKey?: string;
   },
 ): Promise<string> {
+  // The SESSION half of a real submit: one conversation per scope, whose
+  // `lastJobId` moves to the job this turn just started.
+  const scopeKey = args.scopeKey ?? PROJECT_SCOPE_KEY;
+  await recordConversationTurn(ctx, projectId, scopeKey, args.jobId);
+
   const plan = await plansService.createPlan(
     projectId,
     { title: args.title, sourceJobId: args.jobId },
