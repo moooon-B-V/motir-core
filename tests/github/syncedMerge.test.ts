@@ -214,7 +214,12 @@ describe('a synced approval MERGES, through the press’s own path (MOTIR-5608)'
     });
   });
 
-  it('leaves the approval STANDING when the host refuses one member, and still merges the other', async () => {
+  // ⚠️ THE DECISION STANDS; THE CARD DOES NOT (MOTIR-5833 · MOTIR-5834; §4 FOURTH
+  // AMENDMENT, point 2). This used to assert the card stayed `approved` after a host
+  // refusal. A decided gate is immutable, so the DECISION is still `approved` — but a
+  // `conflict` is `cant_land`, and the card it was decided for falls back to
+  // `implemented`, where `motir fix` is the way forward.
+  it('keeps the DECISION when the host refuses one member, drops the card to implemented, and still merges the other', async () => {
     const { item, gate, members } = await approvable();
     stubHost({
       7: { outcome: 'merged', commitSha: 'merge-web' },
@@ -225,9 +230,9 @@ describe('a synced approval MERGES, through the press’s own path (MOTIR-5608)'
     await approve(members.api, 'second-reviewer', '9999');
     await evaluateForWorkItem(item.id, fx.workspaceId);
 
-    // Neither the decision nor the card's status is rolled back by a host refusal.
+    // The decision is not rolled back by a host refusal — it was made, and it is spent.
     expect((await gateRow(gate.id)).state).toBe('approved');
-    expect(await statusOf(item.id)).toBe('approved');
+    expect(await statusOf(item.id)).toBe('implemented');
     // The other member still merged.
     expect((await prRecord(members.web.pullRequestId)).mergeOutcomeRef).toBe('merge-web');
     expect((await prRecord(members.api.pullRequestId)).mergeOutcomeRef).toBeNull();

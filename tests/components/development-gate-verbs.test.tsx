@@ -308,7 +308,11 @@ describe('after a reload (Panels 12s, 12u′)', () => {
     expect(screen.getByText(/Approved by Ada L\. · 2 pull requests/)).toBeTruthy();
   });
 
-  it('a gate that still awaits reports no outcome on any row', () => {
+  // ⚠️ A FIRST ASK, not a re-asked one (MOTIR-5802): nothing has been attempted under this
+  // gate, so the read carries no outcome to draw — `retryable` is false on every `awaiting`
+  // member (`pullRequestApprovalMembersService`). The re-asked gate, which DOES draw the
+  // reason its predecessor did not land, is `development-unlanded-classes.test.tsx`.
+  it('a gate that still awaits, with nothing attempted, reports no outcome on any row', () => {
     renderFrame(
       {
         gate: AWAITING,
@@ -317,7 +321,7 @@ describe('after a reload (Panels 12s, 12u′)', () => {
             subjectVersion: CORE_V,
             pullRequestId: CORE_PR.id,
             queued: false,
-            retryable: true,
+            retryable: false,
             exit: null,
             exitAtApprovedHead: false,
             requeueable: false,

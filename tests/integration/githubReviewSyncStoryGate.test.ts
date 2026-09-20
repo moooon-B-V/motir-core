@@ -263,7 +263,11 @@ describe('§2 seam — delivery → row → verdict → door → status → MERG
     });
   });
 
-  it('a REFUSED member leaves the gate approved, and the other member still merges', async () => {
+  // ⚠️ THE DECISION STANDS; THE CARD FALLS BACK (MOTIR-5833 · MOTIR-5834; §4 FOURTH
+  // AMENDMENT, point 2). This asserted the card stayed `approved` after a host refusal.
+  // A decided gate is immutable, so the decision is untouched — but a `conflict` is
+  // `cant_land`, and the card returns to `implemented` with no question re-asked.
+  it('a REFUSED member keeps the DECISION, drops the card to implemented, and the other member still merges', async () => {
     const s = await scenario('gate-refused@example.com');
     const item = await card(s);
     stubMerge({
@@ -274,9 +278,9 @@ describe('§2 seam — delivery → row → verdict → door → status → MERG
     await review({ number: 11, commitSha: 'sha-a' });
     await review({ number: 12, commitSha: 'sha-b', login: 'grace-h', userId: 9999 });
 
-    // Neither the decision nor the card's status is rolled back by a host refusal.
+    // The decision is not rolled back by a host refusal — it was made, and it is spent.
     expect((await gateOf(item.id)).state).toBe('approved');
-    expect(await statusOf(item.id)).toBe('approved');
+    expect(await statusOf(item.id)).toBe('implemented');
     expect((await prRow(11)).mergeOutcomeRef).toBe('merge-11');
     expect((await prRow(12)).mergeOutcomeRef).toBeNull();
   });

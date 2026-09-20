@@ -214,7 +214,13 @@ async function ejectedManual(email: string, reason = 'CI_FAILURE') {
 
 const queueAgain = async (s: Scenario, gateId: string, number: number) =>
   pullRequestMergeService.retryApproveAndMergeMember(
-    { approvalGateId: gateId, pullRequestId: (await prRow(number)).id, noteMd: null, source: 'ui' },
+    {
+      approvalGateId: gateId,
+      pullRequestId: (await prRow(number)).id,
+      noteMd: null,
+      source: 'ui',
+      stamp: DECIDED_WITHOUT_A_READER,
+    },
     s.ctx,
   );
 

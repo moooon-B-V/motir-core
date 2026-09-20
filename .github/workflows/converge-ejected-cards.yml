@@ -41,8 +41,11 @@ jobs:
   converge:
     name: Re-ask the merge question on cards ejected before the re-ask shipped
     runs-on: ubuntu-latest
-    # Production held 6 standing failure exits on 2026-09-19; the sweep reads one card
-    # per transaction, so this is generous headroom rather than a measured duration.
+    # NO HEALTHY RUN TO QUOTE — this lane has never run. Production held 6 standing
+    # failure exits on 2026-09-19 and the sweep reads one card per transaction, so the
+    # work itself is seconds; the install + `migrate deploy` ahead of it are what take
+    # minutes. 20 minutes is the floor taken, generous headroom rather than a measured
+    # duration — re-cut it against a real run once MOTIR-5810 has applied one.
     timeout-minutes: 20
     env:
       DATABASE_URL: ${{ secrets.SEED_DATABASE_URL }}

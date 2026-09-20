@@ -615,7 +615,7 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
 
   it('carries the awaiting gate’s members, with no verbs on them (MOTIR-5802)', async () => {
     const { item } = await pressable();
-    const members = (await peek(item.identifier)).mergeMembers;
+    const members = (await peek(item.identifier)).mergeMembers ?? [];
     expect(members).toHaveLength(2);
     expect(members.every((m) => !m.queued && !m.retryable && !m.requeueable)).toBe(true);
   });

@@ -95,29 +95,20 @@ function members(over: Partial<PullRequestApprovalMemberDTO>): PullRequestApprov
   ];
 }
 
+/** F1: the part offers `motir fix ACME-12` for the member the queue threw out. */
 const repairOffer = (): WorkItemRepairViewDto => ({
   state: 'offer',
-  command: 'motir fix ACME-12',
   failing: [
     {
       repo: 'moooon/motir-gateway',
       number: 57,
-      url: 'https://github.com/moooon/motir-gateway/pull/57',
+      // Its OWN checks are green — it is failing only because the queue removed it
+      // (MOTIR-5719), which is what the which-to-use line reads.
       ci: 'passing',
-      failingChecks: [],
-      queueExit: {
-        rawReason: 'CI_FAILURE',
-        exitedAt: '2026-09-19T15:00:00.000Z',
-        headSha: GATEWAY_SHA,
-        failingCheckName: 'CI complete',
-        failingCheckUrl: 'https://github.com/moooon/motir-gateway/actions/runs/1/job/2',
-      },
+      queueExit: { rawReason: 'CI_FAILURE', failingCheckName: 'CI complete' },
     },
   ],
-  runTargetKey: null,
-  attempts: null,
-  startedAt: null,
-  holder: null,
+  lastGaveUp: null,
 });
 
 function fakeActions(retryMember: ReturnType<typeof vi.fn> = vi.fn()) {

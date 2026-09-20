@@ -330,7 +330,12 @@ describe('§2 seam 3 — press → enqueued → approved → webhook → done', 
 });
 
 describe('§2 seam 4 — one refused', () => {
-  it('the approval and the card stay approved; the refused merge gate awaits; the other shares the approval’s actor and instant', async () => {
+  // ⚠️ REWRITTEN AGAINST THE FOURTH AMENDMENT (MOTIR-5833 · MOTIR-5834; point 2). The
+  // decision is immutable and still reads `approved`; the CARD does not stay there. The
+  // host's 405 is a CONFLICT, which is `cant_land` — the approval is spent, the card
+  // falls back to `implemented`, and nothing is asked again, because no yes can land
+  // these commits. `motir fix` is the way forward.
+  it('the DECISION stays approved, the card falls back to implemented, and nothing is asked again', async () => {
     const { s, item, gate } = await greenCard('seam-4@example.com');
     host.merge = (n) =>
       n === 12
@@ -346,9 +351,10 @@ describe('§2 seam 4 — one refused', () => {
     expect(members[1]).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
     const approval = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
     expect(approval.state).toBe('approved');
-    expect(await statusOf(item.id)).toBe('approved');
-    // The refused member simply has no outcome yet — which is what makes it retryable —
-    // and the merged one carries its own. ONE gate throughout, holding the one decision.
+    expect(await statusOf(item.id)).toBe('implemented');
+    // The refused member has no outcome — and no verb either, because the commits cannot
+    // land as they stand — and the merged one carries its own. ONE gate throughout: a
+    // `cant_land` outcome raises none, so there is nothing new to hold a decision.
     expect(await prRow(12)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
     expect(await prRow(11)).toMatchObject({ mergeAuthority: 'gate' });
     expect((await allGates(item.id)).map((g) => [g.kind, g.state])).toEqual([

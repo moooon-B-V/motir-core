@@ -674,6 +674,9 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       'designEvidenceService.getForGateSubject',
       'howToTestService.getForWorkItem',
       'pullRequestMergeService.listApprovalMembers',
+      // `motir fix`, beside the row whose reason a person cannot act on (MOTIR-5806) —
+      // the same read `lateReads.ts` makes for the item page's own Development block.
+      'workItemRepairService.getRepairView',
       'workItemsService.getDeliveryView',
       'workItemsService.getWorkItemByIdentifier',
       'workItemsService.listLinkedPullRequests',
@@ -689,6 +692,7 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       'designEvidenceService.getCurrentForWorkItem',
       'howToTestService.getForWorkItem',
       'pullRequestMergeService.listApprovalMembers',
+      'workItemRepairService.getRepairView',
       'workItemsService.getDeliveryView',
       'workItemsService.listLinkedPullRequests',
     ]) {

@@ -601,7 +601,12 @@ describe('approving the re-asked gate', () => {
     ).toMatchObject({ state: 'approved' });
   });
 
-  it('a HOST REFUSAL leaves the approval standing and the exit un-stamped, and the retry re-queues under it — no third ask', async () => {
+  // ⚠️ REWRITTEN FROM THE OPPOSITE RULE (MOTIR-5834; §4 FOURTH AMENDMENT, points 2 and 8).
+  // It used to read *the approval stands and the retry re-queues under it*. A host
+  // CONFLICT is `cant_land`: the same commits cannot land however many times anyone says
+  // yes, so the approval is spent, the card falls back to `implemented`, NOTHING is asked
+  // again, and the retry is refused rather than re-queueing on a spent yes.
+  it('a CONFLICT the host refuses spends the approval, drops the card to implemented, asks nothing, and refuses the retry', async () => {
     const { s, item, reasked } = await ejected('reask-refused@example.com');
     vi.spyOn(github, 'mergeChangeRequest').mockResolvedValue({
       outcome: 'refused',
@@ -618,21 +623,25 @@ describe('approving the re-asked gate', () => {
       refusal: { tag: 'MERGE_CONFLICT' },
     });
     expect((await exits(11))[0]!.requeuedAt).toBeNull();
-    expect(await statusOf(item.id)).toBe('approved');
+    expect(await statusOf(item.id)).toBe('implemented');
     expect(await awaitingGates(item.id)).toEqual([]);
 
-    // The approval post-dates the exit, so Retry re-queues under it.
+    // The refusal stands at this head, so the retry acts on nothing and calls no host.
     vi.restoreAllMocks();
-    vi.spyOn(github, 'mergeChangeRequest').mockResolvedValue({
-      outcome: 'enqueued',
-      entryId: 'MQE_retry',
-    });
+    const host = vi.spyOn(github, 'mergeChangeRequest');
     const retried = await pullRequestMergeService.retryApproveAndMergeMember(
-      { approvalGateId: reasked.id, pullRequestId: (await pr(11)).id, noteMd: null, source: 'ui' },
+      {
+        approvalGateId: reasked.id,
+        pullRequestId: (await pr(11)).id,
+        noteMd: null,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
       s.ctx,
     );
-    expect(retried).toMatchObject({ outcome: 'enqueued' });
-    expect((await exits(11))[0]!.requeuedAt).not.toBeNull();
+    expect(retried).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
+    expect(host).not.toHaveBeenCalled();
+    expect((await exits(11))[0]!.requeuedAt).toBeNull();
   });
 
   it('a STALE stamp is refused by the shipped stamp check, and nothing is enqueued', async () => {

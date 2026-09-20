@@ -356,7 +356,12 @@ export function DevelopmentGateFrame({
           return null;
       }
     }
-    if (gate.state !== 'approved') return null;
+    // ⚠️ AN UN-LANDED OUTCOME OUTLIVES THE APPROVAL THAT SPENT IT (MOTIR-5802): the
+    // approval that authorized the action is gone the moment it did not land, and a
+    // RE-ASKED gate stands in its place — so the row draws its reason under `awaiting`
+    // exactly as it did under `approved`. Anything later (a push, a withdrawal) is a
+    // different subject, and its facts are not about these commits.
+    if (gate.state !== 'approved' && gate.state !== 'awaiting') return null;
     const fact = factOf(member);
     if (!fact) return null;
     // The same reading the quick view applies (`persistedRowOutcome`, Bug MOTIR-5650).
