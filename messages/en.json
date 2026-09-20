@@ -8699,7 +8699,7 @@
   "approvals": {
     "acceptanceVideo": {
       "title": "Acceptance video approval",
-      "desc": "A story that has an acceptance video is held until a person approves it. It makes no difference where the video came from: a Motir agent run publishes one, and so does anything using the acceptance API.",
+      "desc": "A story that has an acceptance video is held until a person approves it — it cannot be finished, and its status cannot be moved by hand, until they do. It makes no difference where the video came from: a Motir agent run publishes one, and so does anything using the acceptance API.",
       "on": "On",
       "off": "Off",
       "onWhat": "Any story with an acceptance video waits for approval — whoever published it.",
