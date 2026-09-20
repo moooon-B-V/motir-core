@@ -13,6 +13,7 @@ import {
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
+import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
 import type { DevelopmentGateRead } from '@/components/github/DevelopmentGateFrame';
 import { DesignResultPanel } from './DesignResultPanel';
 import { RunSection } from './RunSection';
@@ -98,7 +99,7 @@ import { RUN_HISTORY_PAGE, type LateReads } from './lateReads';
  * card with no merge question left keeps its own gate in the frame (§27 Panels 4, 5a, 6a,
  * 6b): its record is the frame's record.
  */
-function frameGateFor(r: LateReads): DevelopmentGateRead | null {
+function frameGateFor(r: LateReads, acceptanceLeads: boolean): DevelopmentGateRead | null {
   const primary = (read: {
     gate: DevelopmentGateRead['gate'] | null;
     canDecide: boolean;
@@ -127,6 +128,15 @@ function frameGateFor(r: LateReads): DevelopmentGateRead | null {
     return decision.state === 'approved' && r.mergeGate.gate?.state === 'awaiting'
       ? merge
       : primary(r.decisionGate);
+  }
+  // THE STORY RUN'S PRIMARY (Story MOTIR-4949 · Subtask MOTIR-5790): the acceptance gate
+  // is what the frame names and the press addresses while it awaits — its stamp covers
+  // the pull requests beneath it, and the MEMBERS are the merge gate's. It also carries
+  // `mergeSubjectVersion`, because the sentence names what the press merges and that is
+  // the merge gate's subject, never the recording's.
+  if (acceptanceLeads && r.mergeGate.gate && r.acceptanceGate.gate) {
+    const read = primary(r.acceptanceGate);
+    return read ? { ...read, mergeSubjectVersion: r.mergeGate.gate.subjectVersion } : null;
   }
   if (r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate) return primary(r.designGate);
   return merge;
@@ -242,12 +252,35 @@ export async function LateUpperSections({
     r.designGate.gate !== null &&
     hasOpenPullRequest(r.pullRequests, deliveries ?? []);
   const showDesignResult = !designInDevelopment && (r.designEvidence !== null || r.isDesignCard);
+  // THE STORY RUN (Story MOTIR-4949 · Subtask MOTIR-5790; the MOTIR-5787 amendment, point
+  // 2). A story holding an acceptance question AND an open pull request of its own was
+  // run as a whole: the receipt LEADS the Development block exactly as a design does,
+  // and the pull requests beneath it are what the one press merges. The standalone
+  // Acceptance section is then not drawn — one question, one place. A story with no
+  // pull request of its own (a single-card run) keeps the section, alone (point 3).
+  //
+  // ⚠️ AND ONLY WHEN THE BLOCK CAN CARRY THE QUESTION (Subtask MOTIR-5792). The frame is
+  // the MERGE gate's — `DevelopmentSectionBody` draws no bands without one — so a story
+  // whose pull requests are open but NOT YET GREEN has no frame to lead. Suppressing the
+  // standalone section there took the last door to an awaiting question off the item page:
+  // the receipt rendered as a subject nobody could answer, and the only remaining door was
+  // the To-approve row. An ANSWERED acceptance is different and stays here: panels B and C
+  // are lines about a decision already made, not a question, and the block is where they
+  // belong beside the commits they cover.
+  const acceptanceAwaiting = r.acceptanceGate.gate?.state === 'awaiting';
+  const acceptanceInDevelopment =
+    r.acceptanceEvidence !== null &&
+    r.acceptanceGate.gate !== null &&
+    hasOpenPullRequest(r.pullRequests, deliveries ?? []) &&
+    (!acceptanceAwaiting || r.mergeGate.gate !== null);
+  const acceptanceLeads = acceptanceInDevelopment && acceptanceAwaiting;
+
   // THE DECISION PORT (Story MOTIR-4907 · Subtask MOTIR-5678; design `design/github` §27).
   // A card that asks the decision question and holds a decision gate shows its document
   // FIRST in the Development block — the PRIMARY question, with the pull requests beneath
   // as what accepting it merges. `decisionGate` is read only for such a card.
   const decisionInDevelopment = r.decisionGate.gate !== null;
-  const developmentFrame = frameGateFor(r);
+  const developmentFrame = frameGateFor(r, acceptanceLeads);
   return (
     <>
       {/* THE RUN — above Development, because the run is what produced it. It
@@ -284,7 +317,9 @@ export async function LateUpperSections({
                 ? 'development.glossWithDecision'
                 : designInDevelopment
                   ? 'development.glossWithDesign'
-                  : 'development.gloss',
+                  : acceptanceInDevelopment
+                    ? 'development.glossWithAcceptance'
+                    : 'development.gloss',
             )}
             headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
           >
@@ -329,6 +364,19 @@ export async function LateUpperSections({
                     evidence={r.designEvidence}
                     isDesignCard={r.isDesignCard}
                     placement="development"
+                  />
+                ) : acceptanceInDevelopment && r.acceptanceEvidence && r.acceptanceGate.gate ? (
+                  <AcceptanceDevelopmentSlot
+                    evidence={r.acceptanceEvidence}
+                    accepted={
+                      r.acceptanceGate.gate.state === 'approved'
+                        ? {
+                            name: r.acceptanceGate.gate.decidedByLabel ?? '',
+                            at: r.acceptanceGate.gate.decidedAt ?? '',
+                          }
+                        : null
+                    }
+                    mergeAwaiting={r.mergeGate.gate?.state === 'awaiting'}
                   />
                 ) : undefined
               }
@@ -381,7 +429,7 @@ export async function LateUpperSections({
         identifier={itemIdentifier}
         unlinkAction={unlinkMonitorIssueAction}
       />
-      {r.acceptanceEligibility ? (
+      {r.acceptanceEligibility && r.showAcceptance && !acceptanceInDevelopment ? (
         <ContentSectionCard title={tAcceptance('title')} subtitle={tAcceptance('gloss')}>
           <AcceptancePanel
             workItemId={itemId}
@@ -389,7 +437,13 @@ export async function LateUpperSections({
             projectId={r.projectId}
             eligibility={r.acceptanceEligibility}
             initialEvidence={r.acceptanceEvidence}
-            canDecide={r.canDecideAcceptance}
+            gate={r.acceptanceGate.gate}
+            canDecide={r.acceptanceGate.canDecide}
+            routedElsewhereName={
+              r.acceptanceGate.gate?.routedToId === currentUserId
+                ? null
+                : r.acceptanceGate.routedToLabel
+            }
           />
         </ContentSectionCard>
       ) : null}

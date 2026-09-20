@@ -12,6 +12,7 @@ import {
   seedPendingEvidence,
   setProjectAcceptanceVideo,
 } from './_helpers/acceptance-seed';
+import { acceptanceSection, decideAcceptanceInOverlay } from './_helpers/acceptance-decide';
 
 // THE GUARD FOR *DECIDING THE ACCEPTANCE GATE REPAINTS THE PAGE* (Bug
 // MOTIR-5160), the sibling of `approval-gate-repaint.spec.ts` (Bug MOTIR-5118)
@@ -138,7 +139,11 @@ async function arriveAtTheGate(page: Page, email: string, title: string) {
   // question is open. Asserted rather than assumed, so a seed that drifted fails
   // here instead of making the after-state look like a no-op.
   await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+  // The question is OPEN, which on this page is the call-to-action band's one door rather
+  // than a verb — the item page hands the decision over (MOTIR-5229 · MOTIR-5790).
+  await expect(
+    acceptanceSection(page).getByRole('link', { name: 'Review & approve' }),
+  ).toBeVisible();
 
   return story;
 }
@@ -158,12 +163,14 @@ test.describe('deciding the acceptance gate repaints the item page in place', ()
   test('approving moves the status rail to Done, with no reload', async ({ page }) => {
     await arriveAtTheGate(page, 'repaint-approve@example.com', 'Repaint on approve');
 
-    await page.getByRole('button', { name: 'Approve', exact: true }).click();
+    // ⚠️ THE DECISION IS MADE IN THE OVERLAY, not on this page (MOTIR-5229 · MOTIR-5790).
+    // The page shows the question and ONE door; the helper presses through it and waits on
+    // the decided record the frame draws from the action's own response. Everything after
+    // this line is a claim about a SERVER-rendered surface the same decision moved.
+    await decideAcceptanceInOverlay(page, 'approve');
 
-    // ⚠️ THE AUTHORITATIVE SIGNAL — the panel's own state, reconciled from the
-    // decide action's response (`setEvidence(res.evidence)`). Everything after
-    // this line is a claim about a SERVER-rendered surface the same decision
-    // moved.
+    // The panel keeps the RECORD — the shared frame, since MOTIR-5792 — so the decision
+    // is still readable on the page it was made from.
     await expect(detail(page).getByText('Approved', { exact: true })).toBeVisible();
 
     // The page-state contract's case 2 (`motir-core/CLAUDE.md`). The rail is a
@@ -173,26 +180,32 @@ test.describe('deciding the acceptance gate repaints the item page in place', ()
     await expect(statusCard(page).getByText('In Review', { exact: true })).toHaveCount(0);
   });
 
-  test('requesting changes moves the status rail to In Progress, with no reload', async ({
+  test('requesting changes records the decision and deliberately moves NOTHING', async ({
     page,
   }) => {
     await arriveAtTheGate(page, 'repaint-changes@example.com', 'Repaint on request changes');
 
-    await page.getByRole('button', { name: 'Request changes' }).click();
+    // Sent back through the same one door (MOTIR-5229 · MOTIR-5790). The helper waits on
+    // the overlay's own decided record, which is this branch's authoritative signal — the
+    // toast this test used to read belonged to the panel's retired verbs.
+    await decideAcceptanceInOverlay(page, 'request_changes');
 
-    // The authoritative signal for this branch is the TOAST, not a pill: the
-    // panel's `changes_requested` pill sits behind the `canDecide` arm, which is
-    // still true for a reviewer who may decide again, so it never renders
-    // (`cloud-video.spec.ts` states the same finding). Radix portals the toast
-    // to the end of `<body>`, outside `main` — hence the page-level read here,
-    // by ROLE, which is this tree's own convention for addressing one.
-    await expect(page.getByRole('status').filter({ hasText: 'Changes requested' })).toBeVisible();
-
-    // Sending a story back is terminal for the gate in the other direction: the
-    // service moves it to `in_progress`, so the rail must land THERE — not
-    // merely leave In Review. A repaint that arrives with the wrong tree fails
-    // this as loudly as one that never arrives.
-    await expect(statusCard(page).getByText('In Progress', { exact: true })).toBeVisible();
-    await expect(statusCard(page).getByText('In Review', { exact: true })).toHaveCount(0);
+    // ⚠️ THE RAIL DOES NOT MOVE, AND THAT IS THE CONTRACT (Story MOTIR-4949 · Subtask
+    // MOTIR-4950). The retired bespoke path moved the story `in_review → in_progress`;
+    // joining the ONE approve language retired that write with it, because every kind's
+    // *Request changes* is a RECORD rather than a second status writer
+    // (`acceptanceResultHandler.requestChanges` → `statusDeferredReason:
+    // 'request_changes_moves_nothing'`, `approval-gates.md` §3).
+    //
+    // So this half of the guard inverted: it used to prove a repaint ARRIVED, and now it
+    // proves one does NOT — which is worth asserting for the same reason, because a
+    // status write sneaking back in is exactly the defect the retirement was for.
+    await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
+    await expect(statusCard(page).getByText('In Progress', { exact: true })).toHaveCount(0);
+    // …and the DECISION is on the page, in the shared frame's record (MOTIR-5792), so
+    // *moved nothing* is distinguishable from *did nothing*.
+    await expect(
+      acceptanceSection(page).getByText('Changes requested', { exact: true }),
+    ).toBeVisible();
   });
 });

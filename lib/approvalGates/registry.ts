@@ -3,6 +3,7 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
+import { acceptanceResultGateHandler } from '@/lib/approvalGates/acceptanceResultHandler';
 import { decisionApprovalGateHandler } from '@/lib/approvalGates/decisionApprovalHandler';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
@@ -66,7 +67,15 @@ import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 // (Story MOTIR-4907; `approval-gates.md` §8's FIFTH AMENDMENT). It left the holes below
 // the way §1 says a kind should arrive: a handler, a summary loader and a renderer, and
 // no second vocabulary.
-export type RegisteredGateKind = 'design_result' | 'decision_approval' | 'pull_request_approval';
+//
+// MOTIR-4950 registers the FOURTH: `acceptance_result`, a story's acceptance receipt —
+// the kind the approval vocabulary was generalised FROM (§1's evidence table), joining
+// the registry at last (§1's MOTIR-5787 amendment).
+export type RegisteredGateKind =
+  | 'design_result'
+  | 'decision_approval'
+  | 'acceptance_result'
+  | 'pull_request_approval';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -131,6 +140,10 @@ export interface GateEffect {
    *  Absent when `statusWritten` is set. */
   statusDeferredReason?:
     | 'merge_writes_done'
+    /** An acceptance approval on a story with live work under it: the parent
+     *  rollup writes `done` when the last child completes (MOTIR-4950;
+     *  `approval-gates.md` §1's MOTIR-5787 amendment, point 7). */
+    | 'rollup_writes_done'
     | 'request_changes_moves_nothing'
     | 'no_status_in_target_category';
 }
@@ -314,6 +327,7 @@ export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   design_result: designResultGateHandler,
   decision_approval: decisionApprovalGateHandler,
   pull_request_approval: pullRequestApprovalGateHandler,
+  acceptance_result: acceptanceResultGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

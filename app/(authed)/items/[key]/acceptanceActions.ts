@@ -4,14 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { redirect } from 'next/navigation';
-import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
 import { getErrorsTranslator, getServerTranslator } from '@/lib/i18n/errorsTranslator';
-import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
-import { WorkItemError } from '@/lib/workItems/errors';
-import { AcceptanceEvidenceError } from '@/lib/acceptanceEvidence/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
-import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 
 // Server Actions for the acceptance panel (Story MOTIR-1627 · Subtask
 // MOTIR-1634). One service call each; the success branch returns the new state
@@ -61,44 +56,11 @@ async function requireContext() {
   return { userId: ctx.userId, workspaceId: ctx.workspaceId };
 }
 
-export type AcceptanceDecisionResult =
-  | { ok: true; storyStatus: 'done' | 'in_progress'; evidence: AcceptanceEvidenceDTO }
-  | { ok: false; error: string };
-
-/** Approve or request changes on the current evidence — the gate (in_review → done / in_progress). */
-export async function decideAcceptanceAction(input: {
-  workItemId: string;
-  /** The card whose page the panel is on — the path revalidated on success.
-   *  A PARAMETER rather than a lookup: the action knows a work-item id, the path
-   *  is the card's identifier, and `LateSections` already holds it, so passing it
-   *  costs nothing and keeps this action free of a read it would otherwise need
-   *  (the shape `approvalGateActions.ts` settled on). */
-  itemIdentifier: string;
-  decision: 'approve' | 'request_changes';
-}): Promise<AcceptanceDecisionResult> {
-  const { workItemId, itemIdentifier, decision } = input;
-  const ctx = await requireContext();
-  try {
-    const { evidence, storyStatus } = await acceptanceEvidenceService.decide(
-      { workItemId, decision },
-      ctx,
-    );
-    // The server half, on the action's own response. BOTH decisions move the
-    // story (`done` on approve, `in_progress` on request_changes), so both owe
-    // the rail a repaint — unlike the design gate, where only approval is
-    // terminal. A REFUSAL revalidates nothing: no surface moved, and re-rendering
-    // the page under a reader who is about to be shown why their press did not
-    // land helps nobody. That is why this sits on the success branch and the
-    // catch below does not have it.
-    revalidatePath(`/items/${itemIdentifier}`);
-    return { ok: true, storyStatus, evidence };
-  } catch (err) {
-    const t = await getErrorsTranslator();
-    if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };
-    if (err instanceof AcceptanceEvidenceError) return { ok: false, error: err.message };
-    throw err;
-  }
-}
+// ⚠️ `decideAcceptanceAction` WAS HERE (Story MOTIR-1627 · Subtask MOTIR-1634) and
+// is RETIRED (MOTIR-4950), with the service method it called. The acceptance panel's
+// verbs now press the story's `acceptance_result` gate through
+// `decideApprovalGateAction` — the same action, door and refusal vocabulary every gate
+// kind uses. Its revalidation reasoning (Bug MOTIR-5160) lives on in that action.
 
 export type TurnOnAcceptanceVideoResult = { ok: true } | { ok: false; error: string };
 

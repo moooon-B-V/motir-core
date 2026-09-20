@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
   designHoldsMerge,
+  primaryApprovalStandsForMerge,
   resolveGateSet,
   type ExistingGate,
   type GateSetInput,
@@ -33,11 +34,13 @@ const GREEN_TWO = [member('moooon/motir-core#10@aaa1'), member('moooon/motir-ai#
 const input = (over: Partial<GateSetInput> = {}): GateSetInput => ({
   currentDesignEvidence: null,
   latestDesignGate: null,
+  currentReceipt: null,
+  latestAcceptanceGate: null,
   latestMergeGate: null,
   members: [],
   prMergeMode: 'manual',
   cardIsTerminal: false,
-  designApprovalStandsForMerge: false,
+  primaryApprovalStandsForMerge: false,
   workItemId: WORK_ITEM,
   ...over,
 });
@@ -297,7 +300,7 @@ describe("resolveGateSet — MOTIR-5666: Q4's carry is ONE-TIME", () => {
       input({
         currentDesignEvidence: evidence,
         latestDesignGate: decided('ev-1', 'sha-design'),
-        designApprovalStandsForMerge: true,
+        primaryApprovalStandsForMerge: true,
         members: GREEN_ONE,
       }),
     );
@@ -313,7 +316,7 @@ describe("resolveGateSet — MOTIR-5666: Q4's carry is ONE-TIME", () => {
       input({
         currentDesignEvidence: evidence,
         latestDesignGate: decided('ev-1', 'sha-design'),
-        designApprovalStandsForMerge: true,
+        primaryApprovalStandsForMerge: true,
         latestMergeGate: decided(WORK_ITEM, 'moooon/motir-core#10@old'),
         members: GREEN_ONE,
       }),
@@ -385,5 +388,115 @@ describe('designHoldsMerge — MOTIR-5762: only an approval of the CURRENT resul
   it('an approval of a SUPERSEDED result holds; an approval of the current one releases', () => {
     expect(designHoldsMerge(current, gate('approved', 'ev-1'))).toBe(true);
     expect(designHoldsMerge(current, gate('approved'))).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE ACCEPTANCE QUESTION (Story MOTIR-4949 · Subtask MOTIR-5789; `approval-gates.md`
+// §1, the MOTIR-5787 amendment) — a STORY's receipt is a PRIMARY, exactly where the
+// design result is, and every case below is a story state.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789)', () => {
+  const RECEIPT = { id: 'ae_1', commitSha: 'c0ffee1' };
+
+  it('(a) a story with a current receipt and NO pull requests asks acceptance alone, and it leads', () => {
+    const set = resolveGateSet(input({ currentReceipt: RECEIPT }));
+    expect(set.awaited).toEqual([
+      { kind: 'acceptance_result', subjectId: 'ae_1', subjectVersion: 'c0ffee1' },
+    ]);
+    expect(set.primary).toBe('acceptance_result');
+  });
+
+  it('(b) a STORY RUN — receipt + a green set — asks BOTH, and acceptance is the primary', () => {
+    const set = resolveGateSet(input({ currentReceipt: RECEIPT, members: GREEN_ONE }));
+    expect(set.awaited.map((gate) => gate.kind)).toEqual([
+      'acceptance_result',
+      'pull_request_approval',
+    ]);
+    expect(set.primary).toBe('acceptance_result');
+  });
+
+  it('(c) an APPROVED acceptance over the current receipt carries the merge — no merge gate is asked (Q4)', () => {
+    const latestAcceptanceGate = decided('ae_1', 'c0ffee1');
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        latestAcceptanceGate,
+        members: GREEN_ONE,
+        primaryApprovalStandsForMerge: primaryApprovalStandsForMerge({
+          currentDesign: null,
+          latestDesignGate: null,
+          currentReceipt: RECEIPT,
+          latestAcceptanceGate,
+        }),
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+    expect(set.primary).toBeNull();
+  });
+
+  it('(d) after a merge gate has existed and the merge failed, a new green asks the MERGE alone — acceptance is not re-asked (Q2)', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        latestAcceptanceGate: decided('ae_1', 'c0ffee1'),
+        // An approved merge gate over OLD commits; a push has moved the set since.
+        latestMergeGate: decided(WORK_ITEM, 'moooon/motir-core#10@old0'),
+        members: GREEN_ONE,
+        primaryApprovalStandsForMerge: true,
+      }),
+    );
+    expect(set.awaited.map((gate) => gate.kind)).toEqual(['pull_request_approval']);
+    expect(set.primary).toBe('pull_request_approval');
+  });
+
+  it('(e) a TERMINAL story asks nothing, receipt or not', () => {
+    const set = resolveGateSet(
+      input({ currentReceipt: RECEIPT, members: GREEN_ONE, cardIsTerminal: true }),
+    );
+    expect(set).toEqual({ awaited: [], primary: null });
+  });
+
+  it('a NEWER receipt than the one approved is a new question — the approval of v1 answers nothing about v2', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: { id: 'ae_2', commitSha: 'd00d002' },
+        latestAcceptanceGate: decided('ae_1', 'c0ffee1'),
+      }),
+    );
+    expect(set.awaited.map((gate) => gate.subjectId)).toEqual(['ae_2']);
+  });
+
+  it('REFUSES a card owing both a design and an acceptance question — asserted, never ranked', () => {
+    expect(() =>
+      resolveGateSet(
+        input({ currentReceipt: RECEIPT, currentDesignEvidence: { id: 'de_1', commitSha: 'abc' } }),
+      ),
+    ).toThrow(/BOTH a design and an acceptance question/);
+  });
+
+  it('`primaryApprovalStandsForMerge` is ONE reader for both primaries, and needs the approval to be over the CURRENT subject', () => {
+    const none = { currentDesign: null, latestDesignGate: null };
+    expect(
+      primaryApprovalStandsForMerge({
+        ...none,
+        currentReceipt: RECEIPT,
+        latestAcceptanceGate: decided('ae_1', 'c0ffee1'),
+      }),
+    ).toBe(true);
+    expect(
+      primaryApprovalStandsForMerge({
+        ...none,
+        currentReceipt: { id: 'ae_2' },
+        latestAcceptanceGate: decided('ae_1', 'c0ffee1'),
+      }),
+    ).toBe(false);
+    expect(
+      primaryApprovalStandsForMerge({
+        ...none,
+        currentReceipt: RECEIPT,
+        latestAcceptanceGate: decided('ae_1', 'c0ffee1', 'changes_requested'),
+      }),
+    ).toBe(false);
   });
 });

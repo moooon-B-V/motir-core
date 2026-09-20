@@ -41,6 +41,7 @@ export const APPROVAL_GATE_KINDS = [
   // registry, and MOTIR-5614's backfill left those rows superseded). A parser
   // that stopped recognising the spelling would fail to address a real row.
   'pull_request_merge',
+  'acceptance_result',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 
 // Exhaustiveness: a member added to `ApprovalGateKindDTO` and not to the tuple

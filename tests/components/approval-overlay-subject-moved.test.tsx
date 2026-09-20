@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { ApprovalGateOverlayReadDTO } from '@/lib/dto/approvalGate';
 
@@ -199,6 +199,55 @@ describe('the DISCRIMINATION — a tab moving is not this gate moving', () => {
     expect(notice.textContent).toContain('the published version');
     expect(notice.textContent).toContain('changed since you opened this');
     expect(notice.textContent).toContain('Approving now would be refused');
+  });
+
+  it('an ACCEPTANCE question draws the same notice — the mechanism is the frame\u2019s, not the design\u2019s (MOTIR-5792)', async () => {
+    // The acceptance arm mounts its own `ApprovalGateControl` with its own alert slot, so
+    // the notice is a separate line of code from the design arm's and is asserted here
+    // rather than assumed to follow. A receipt is FROZEN on approval rather than pinned,
+    // which is why its frame passes `filesKept={null}` — but nothing about the moved
+    // notice differs.
+    const RECEIPT = {
+      id: 'ae-1',
+      workItemId: 'wi-1',
+      status: 'pending',
+      videoUrl: 'https://blob.example/run.webm',
+      mimeType: 'video/webm',
+      sizeBytes: 1024,
+      traceUrl: null,
+      chapters: [{ label: 'Open the story', tSeconds: 0 }],
+      commitSha: '9840d00ea1b2',
+      ciRunUrl: null,
+      producedByKey: 'MOTIR-5792',
+      approvedById: null,
+      approvedAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    const acceptance = (over: Partial<ApprovalGateOverlayReadDTO> = {}) => {
+      const base = read(over);
+      return {
+        ...base,
+        gate: { ...base.gate, kind: 'acceptance_result', subjectId: 'ae-1' },
+        subject: { state: 'resolved', kind: 'acceptance_result', evidence: RECEIPT },
+      } as ApprovalGateOverlayReadDTO;
+    };
+    const h = harness([acceptance(), acceptance({ movedSince: ['subject'] })]);
+    await mount();
+
+    await h.nudge(['approvals']);
+
+    const notice = screen.getByTestId('approval-subject-moved');
+    expect(notice.textContent).toContain('changed since you opened this');
+    // The recording is still the port beneath it.
+    expect(screen.getByRole('button', { name: /Open the story/ })).toBeTruthy();
+
+    // …and *Show the current version* is the reader's OWN act, which re-reads rather
+    // than deciding anything — the acceptance arm's own handler, not the design arm's.
+    const before = h.gateReadCount();
+    await act(async () => {
+      fireEvent.click(within(notice).getByRole('button', { name: 'Show the current version' }));
+    });
+    expect(h.gateReadCount()).toBeGreaterThan(before);
   });
 
   it('names SEVERAL things when several moved', async () => {

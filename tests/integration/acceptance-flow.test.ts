@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
+import { decideAcceptance } from '../helpers/acceptanceGate';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
@@ -125,10 +126,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     const story = await inReviewStory(fx);
     await publishVia(token, story, {});
 
-    const { storyStatus, evidence } = await acceptanceEvidenceService.decide(
-      { workItemId: story.id, decision: 'approve' },
-      fx.ctx,
-    );
+    const { storyStatus, evidence } = await decideAcceptance(story.id, 'approve', fx.ctx);
     expect(storyStatus).toBe('done');
     expect(evidence.status).toBe('approved');
 
@@ -175,7 +173,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
   it('an APPROVED receipt is FROZEN — a republish is refused and writes NOTHING', async () => {
     const story = await inReviewStory(fx);
     await publishVia(token, story, { videoName: 'signed.webm', commitSha: 'aaaaaaa' });
-    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
+    await decideAcceptance(story.id, 'approve', fx.ctx);
     const approved = await adminDb.acceptanceEvidence.findFirstOrThrow({
       where: { workItemId: story.id, isCurrent: true },
     });
@@ -211,10 +209,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
   it('a `changes_requested` receipt stays REPLACEABLE — the rule narrows, it does not stop supersede', async () => {
     const story = await inReviewStory(fx);
     await publishVia(token, story, { videoName: 'first.webm', commitSha: 'aaaaaaa' });
-    await acceptanceEvidenceService.decide(
-      { workItemId: story.id, decision: 'request_changes' },
-      fx.ctx,
-    );
+    await decideAcceptance(story.id, 'request_changes', fx.ctx);
 
     // The whole point of requesting changes is that the next run should differ.
     const res = await publishVia(token, story, { videoName: 'second.webm', commitSha: 'bbbbbbb' });
@@ -232,7 +227,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     // conflict. Getting this order wrong would fail a retry that changed nothing.
     const story = await inReviewStory(fx);
     await publishVia(token, story, { commitSha: 'aaaaaaa', producedByKey: 'MOTIR-1638' });
-    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
+    await decideAcceptance(story.id, 'approve', fx.ctx);
 
     // 201, like every other success on this route — the idempotent path returns
     // the EXISTING receipt rather than a conflict. What proves it short-circuited
@@ -254,7 +249,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     // service directly — no route, no token — and it still refuses.
     const story = await inReviewStory(fx);
     await publishVia(token, story, { videoName: 'signed.webm', commitSha: 'aaaaaaa' });
-    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
+    await decideAcceptance(story.id, 'approve', fx.ctx);
 
     await expect(
       acceptanceEvidenceService.recordFromPathnames(

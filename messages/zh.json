@@ -6293,6 +6293,7 @@
       "title": "开发",
       "gloss": "拉取请求及其测试方法 · 实时 PR 与 CI 状态",
       "glossWithDesign": "拉取请求、设计及其测试方法 · 实时 PR 与 CI 状态",
+      "glossWithAcceptance": "验收视频、拉取请求及其测试方法 · 实时 PR 与 CI 状态",
       "glossWithDecision": "决策及其拉取请求 · 实时 PR 与 CI 状态",
       "pullRequestsGroup": "拉取请求",
       "howToTest": {
@@ -7514,6 +7515,7 @@
       },
       "review": "查看",
       "subjectMeta": "{files, plural, other {# 个文件}} · {version}",
+      "acceptanceMeta": "{chapters, plural, =0 {无章节} other {# 个章节}} · {version}",
       "noVersion": "无版本号",
       "decidedOn": "基于 <mono>{version}</mono>",
       "subjectGone": "此项针对的设计已不存在",
@@ -7523,7 +7525,8 @@
         "design_result": "设计成果",
         "decision_approval": "决策审批",
         "pull_request_approval": "合并请求审批",
-        "pull_request_merge": "合并请求合并"
+        "pull_request_merge": "合并请求合并",
+        "acceptance_result": "验收视频"
       },
       "reviewRow": "查看 {key} {title}",
       "pullRequest": {
@@ -8493,6 +8496,24 @@
         "movesToDone": "将 {key} 标记为已完成，并解除对其等待中的工作项的阻塞。"
       }
     },
+    "acceptanceResult": {
+      "kindLabel": "验收视频",
+      "meta": {
+        "withVersion": "录制于 {version}",
+        "plain": "已录制的运行"
+      },
+      "consequence": "批准即验收 {key}。其下没有未完成的工作项后，它会标记为已完成。",
+      "confirm": {
+        "records": "记录你已验收，连同时间与该录像；",
+        "freezes": "锁定该录像，之后的运行无法替换它；",
+        "movesToDone": "在 {key} 下没有未完成的工作项后，将其标记为已完成。",
+        "merges": "合并 {prs} — 视频不在其中。"
+      },
+      "consequenceMerges": "批准即验收 {key} 并合并 {prs}，随后将 {key} 移至“已批准”。视频不会被合并——它是证据，从不提交。",
+      "accepted": "{name} 于 {when} 批准了验收",
+      "stands": "{name} 于 {when} 批准了验收 — 视频保持不变",
+      "mergeHeld": "拉取请求在检查通过后自动合并，无需再次点击。"
+    },
     "pullRequestApproval": {
       "kindLabel": "拉取请求",
       "meta": {
@@ -8605,7 +8626,8 @@
         "design_result": "设计审批",
         "pull_request_approval": "合并请求审批",
         "decision_approval": "决策审批",
-        "pull_request_merge": "合并审批"
+        "pull_request_merge": "合并审批",
+        "acceptance_result": "验收审批"
       },
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",

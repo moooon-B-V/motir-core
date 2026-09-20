@@ -3,6 +3,7 @@ import { getActiveProject } from '@/lib/projects';
 import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
 import { howToTestService } from '@/lib/services/howToTestService';
@@ -135,6 +136,28 @@ async function readSubject(
     // because the kind that arm answered for is no longer registered to reach it.
     case 'pull_request_approval':
       return readDevelopmentBlock(gate, item, ctx);
+    // MOTIR-4950 — the acceptance port is the RECORDING the gate asks about, read by
+    // the gate's own `subjectId` exactly as the design arm reads its evidence.
+    case 'acceptance_result': {
+      // ⚠️ A STORY RUN'S ACCEPTANCE IS PORTED BY THE DEVELOPMENT BLOCK (MOTIR-5790), for
+      // the design arm's reason above: while it awaits beside an awaiting merge question,
+      // one press answers both, so the reader must see what that press merges.
+      if (gate.state === 'awaiting') {
+        const merge = await approvalGatesService.getForWorkItem(
+          { workItemId: gate.workItemId, kind: 'pull_request_approval' },
+          ctx,
+        );
+        if (merge.gate?.state === 'awaiting') return readDevelopmentBlock(gate, item, ctx);
+      }
+      const evidence = await acceptanceEvidenceService.getForGateSubject(
+        { workItemId: gate.workItemId, subjectId: gate.subjectId },
+        ctx,
+      );
+      return evidence
+        ? { state: 'resolved', kind: 'acceptance_result', evidence }
+        : { state: 'gone' };
+    }
+
     // THE DECISION PORT (MOTIR-5678; design §27 Panel 7): the Development block with the
     // decision document FIRST — read here, on the server, through the resolver — and the
     // pull requests one press merges beneath it. The document is read beside the block,
@@ -175,7 +198,15 @@ async function readDevelopmentBlock(
   // set that has emptied — every pull request unlinked — is GONE, exactly as the
   // handler answers null for it. Nothing is read by `subjectId` beyond that: the
   // gate's `subjectId` IS the work item's id.
-  const [pullRequests, deliveryView, howToTest, designEvidence, members] = await Promise.all([
+  const [
+    pullRequests,
+    deliveryView,
+    howToTest,
+    designEvidence,
+    members,
+    acceptanceEvidence,
+    acceptanceRead,
+  ] = await Promise.all([
     workItemsService.listLinkedPullRequests(gate.workItemId, ctx),
     workItemsService.getDeliveryView(gate.workItemId, item.targetRepos, ctx),
     howToTestService.getForWorkItem(gate.workItemId, ctx),
@@ -187,6 +218,12 @@ async function readDevelopmentBlock(
           ctx,
         )
       : Promise.resolve([]),
+    // A story run's receipt and its gate (MOTIR-5790) — the subject when acceptance leads.
+    acceptanceEvidenceService.getCurrentForStory(gate.workItemId, ctx),
+    approvalGatesService.getForWorkItem(
+      { workItemId: gate.workItemId, kind: 'acceptance_result' },
+      ctx,
+    ),
   ]);
   if (deliveryView.deliveries.length === 0) return { state: 'gone' };
   return {
@@ -199,6 +236,8 @@ async function readDevelopmentBlock(
     designEvidence,
     isDesignCard: item.type === 'design',
     members,
+    acceptanceEvidence,
+    acceptanceGate: acceptanceRead.gate,
   };
 }
 

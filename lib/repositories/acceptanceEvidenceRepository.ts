@@ -47,6 +47,29 @@ export const acceptanceEvidenceRepository = {
   },
 
   /**
+   * Many receipts by id, in ONE query — the Approvals tab's row summary for every
+   * `acceptance_result` gate on a page (MOTIR-4950). The row names the recording,
+   * so only the columns it prints are read. Keyed by id; a receipt that no longer
+   * resolves is simply absent.
+   */
+  async findManyByIds(
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Map<
+      string,
+      { id: string; producedByKey: string | null; commitSha: string | null; chapters: unknown }
+    >
+  > {
+    if (ids.length === 0) return new Map();
+    const rows = await tx.acceptanceEvidence.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, producedByKey: true, commitSha: true, chapters: true },
+    });
+    return new Map(rows.map((row) => [row.id, row]));
+  },
+
+  /**
    * Lock the story's CURRENT receipt FOR UPDATE and return its status — the
    * freeze gate's read (MOTIR-2764). The service reads the status under the lock
    * before deriving whether it may supersede (the lock-before-read-derived-update

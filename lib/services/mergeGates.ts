@@ -7,10 +7,11 @@ import {
   githubPullRequestRepository,
   type GithubPullRequestWithInstallation,
 } from '@/lib/repositories/githubPullRequestRepository';
-import { designApprovalStandsForMerge, designHoldsMerge } from '@/lib/approvalGates/gateSet';
+import { designHoldsMerge, primaryApprovalStandsForMerge } from '@/lib/approvalGates/gateSet';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -85,16 +86,27 @@ export function mergeCandidateHead(
  *
  * Either way only the RUN TARGET's members count, and only merge candidates.
  */
-/** {@link designApprovalStandsForMerge}, read from the card's own rows. */
-async function designApprovalHolds(
+/** {@link primaryApprovalStandsForMerge}, read from the card's own rows — a standing
+ *  DESIGN or ACCEPTANCE approval (MOTIR-5789). The one-time clause is NOT here: it is
+ *  {@link primaryApprovalCarries}'s, so all three primaries share one statement of it. */
+async function primaryApprovalHolds(
   workItemId: string,
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
-  const [currentDesign, latestDesignGate] = await Promise.all([
-    designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
-    approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
-  ]);
-  return designApprovalStandsForMerge(currentDesign, latestDesignGate);
+  const [currentDesign, latestDesignGate, currentReceipt, latestAcceptanceGate] = await Promise.all(
+    [
+      designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
+      approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
+      acceptanceEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
+      approvalGateRepository.findLatestByWorkItem(workItemId, 'acceptance_result', tx),
+    ],
+  );
+  return primaryApprovalStandsForMerge({
+    currentDesign,
+    latestDesignGate,
+    currentReceipt,
+    latestAcceptanceGate,
+  });
 }
 
 /**
@@ -110,7 +122,8 @@ async function decisionApprovalHolds(
 }
 
 /**
- * Does a PRIMARY approval — the design's or the decision's — carry this card's merge?
+ * Does a PRIMARY approval — the design's, the acceptance's or the decision's — carry
+ * this card's merge?
  * The same ONE-TIME clause the predicate applies: once a merge gate has existed, the
  * commits are the merge gate's question and a later green is not the primary's to carry
  * (MOTIR-5666).
@@ -125,7 +138,7 @@ async function primaryApprovalCarries(
     tx,
   );
   if (latestMergeGate !== null) return false;
-  return (await designApprovalHolds(item.id, tx)) || (await decisionApprovalHolds(item, tx));
+  return (await primaryApprovalHolds(item.id, tx)) || (await decisionApprovalHolds(item, tx));
 }
 
 /**
@@ -163,7 +176,8 @@ export async function settleGreenVerdict(
     // The predicate has already answered *no merge gate is owed* for the same
     // reason, so without this arm the card would go green holding an approval
     // nobody carried out. Both readers ask the one question, in
-    // `designApprovalStandsForMerge` — and, for a DECISION card, in
+    // `primaryApprovalStandsForMerge` — which covers the design's approval and the
+    // ACCEPTANCE's (MOTIR-5789) — and, for a DECISION card, in
     // `decisionApprovalStandsForMerge` (MOTIR-5677, clause 5).
     if (!(await primaryApprovalCarries(args.item, tx))) return [];
   } else if (mode?.prMergeMode !== 'auto') {
