@@ -698,6 +698,25 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
     ]) {
       expect(`${lateReads}\n${page}`, `${call} is not one the item page makes`).toContain(call);
     }
+
+    // ⚠️ AND BOTH READ THE MEMBERS FOR AN **AWAITING** GATE (Story MOTIR-5799 ·
+    // MOTIR-5806; § 4 FOURTH AMENDMENT, point 4). The re-asked gate is awaiting, and its
+    // member facts are the whole of what the row draws: the class pill, the verb whose
+    // press decides that gate, and the reason band. MOTIR-5806 widened the ROUTE and left
+    // `lateReads.ts` on `state === 'approved'`, so the OVERLAY drew the re-ask and the
+    // ITEM PAGE drew a plain *Checks passing* row on a card Motir had just asked again —
+    // with `motir fix` beside it saying the pull request had left the merge queue. Caught
+    // by MOTIR-5808's acceptance run, and pinned here because the two reads are supposed
+    // to be the same set and only a comparison says so.
+    for (const [name, source] of [
+      ['the route', code],
+      ['the item page’s late stack', lateReads],
+    ] as const) {
+      const guard = new RegExp(
+        String.raw`state === 'approved' \|\| \S*\s*state === 'awaiting'[\s\S]{0,200}?listApprovalMembers`,
+      );
+      expect(source, `${name} reads the members for an awaiting gate too`).toMatch(guard);
+    }
   });
 
   it('holds the 2FA gate AFTER the no-project arm and BEFORE the parameter arms', () => {

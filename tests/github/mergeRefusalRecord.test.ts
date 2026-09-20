@@ -562,7 +562,7 @@ describe('the edges of the class map', () => {
 // others their merge. These are the doors `checkMember` closes before a host is ever
 // called, each returning the refusal that is TRUE of it.
 describe('the set merger refuses per member, and calls no host', () => {
-  const merge = (s: Scenario, gateId: string, subjectVersion: string) =>
+  const merge = (s: Scenario, gateId: string, subjectVersion: string | null) =>
     mergeApprovedSetMembers(gateId, subjectVersion, s.ctx);
 
   it.each([

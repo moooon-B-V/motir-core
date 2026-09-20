@@ -53,7 +53,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //        SAME calls the item page's late stack makes (`lateReads.ts`):
 //        `workItemsService.listLinkedPullRequests` + `getDeliveryView`,
 //        `howToTestService.getForWorkItem`, `designEvidenceService.getCurrentForWorkItem`,
-//        and — for an approved gate only — `pullRequestMergeService.listApprovalMembers`.
+//        and — for an approved OR AWAITING gate (MOTIR-5806: the re-asked gate's members
+//        carry the row's verb) — `pullRequestMergeService.listApprovalMembers`.
 //
 // No `db` / no `$transaction` here.
 //
