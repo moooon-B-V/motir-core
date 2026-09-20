@@ -142,7 +142,9 @@ describe('the six signals', () => {
         dlq({}),
         // Replayed — an operator has already dealt with it.
         dlq({ replayedAt: now }),
-        // Older than 24h — outside the card's window.
+        // Older than 24h — outside the WINDOWED count, and deliberately still
+        // inside the STANDING one. An unreplayed dead letter does not stop
+        // mattering at midnight (MOTIR-5840).
         dlq({ lastFailedAt: new Date('2026-08-24T12:00:00.000Z') }),
       ],
     });
@@ -150,6 +152,38 @@ describe('the six signals', () => {
     const health = await platformHealthService.read(currentPrincipal, now);
     const failed = signal(health.signals, 'failedJobs');
     expect(failed.values['count']).toBe(2);
+    // Every unreplayed row, whatever its age: the two in the window plus the old
+    // one. The replayed row is excluded from BOTH — an operator dealt with it.
+    expect(failed.values['standing']).toBe(3);
+    expect(failed.state).toBe('degraded');
+  });
+
+  it('is NOT healthy when every dead letter is OLDER than the window — the backlog the 24h count cannot see', async () => {
+    // ⚠️ THE REGRESSION THIS CARD EXISTS FOR (MOTIR-5840). Production stood at
+    // 1,381 unreplayed rows whose newest was four days old, so this card rendered
+    // `0 dead-lettered · 24h` in GREEN with the whole backlog behind it — the
+    // panel's own "a probe must never read as a zero" rule, failing on the window
+    // axis instead of the unreachable one. This test fails on `origin/main`:
+    // there, `count` is 0 and the state is `healthy`.
+    const now = new Date('2026-08-26T12:00:00.000Z');
+    const longAgo = new Date('2026-08-01T09:00:00.000Z');
+    await adminDb.jobRunDlq.createMany({
+      data: [1, 2, 3].map(() => ({
+        functionId: 'email.send',
+        eventName: 'email.send',
+        eventData: {},
+        failure: { message: 'boom' },
+        attempts: 3,
+        firstFailedAt: longAgo,
+        lastFailedAt: longAgo,
+        replayedAt: null,
+      })),
+    });
+
+    const health = await platformHealthService.read(currentPrincipal, now);
+    const failed = signal(health.signals, 'failedJobs');
+    expect(failed.values['count']).toBe(0);
+    expect(failed.values['standing']).toBe(3);
     expect(failed.state).toBe('degraded');
   });
 
@@ -161,6 +195,7 @@ describe('the six signals', () => {
     const failed = signal(health.signals, 'failedJobs');
     expect(failed.state).toBe('healthy');
     expect(failed.values['count']).toBe(0);
+    expect(failed.values['standing']).toBe(0);
   });
 
   it('says the daily health check has NEVER RUN rather than reporting a stale time', async () => {
@@ -284,6 +319,10 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
     );
     expect(failed.state).toBe('unreachable');
     expect(failed.values).not.toHaveProperty('count');
+    // NEITHER number, not just the windowed one: the two readings share one
+    // probe precisely so a half-success cannot put a real figure beside an
+    // invented one on the same card (MOTIR-5840).
+    expect(failed.values).not.toHaveProperty('standing');
   });
 
   it('dead letters in the window read DEGRADED, with the count', async () => {
@@ -293,7 +332,7 @@ describe('the remaining probe arms (coverage floor, MOTIR-3766)', () => {
       (await platformHealthService.read(currentPrincipal)).signals,
       'failedJobs',
     );
-    expect(failed).toMatchObject({ state: 'degraded', values: { count: 3 } });
+    expect(failed).toMatchObject({ state: 'degraded', values: { count: 3, standing: 3 } });
   });
 
   it('an unreachable LEDGER read is distinguishable from a check that never ran', async () => {
