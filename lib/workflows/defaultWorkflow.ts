@@ -188,6 +188,17 @@ export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map
 // (`20260916180000_add_queue_ejection_default_edges`). They are the merge-queue
 // EJECTION's (`docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 7),
 // and each is justified beside the `approved` block below.
+//
+// MOTIR-5643 adds FIVE more, again with no new status — `blocked → planning`,
+// `implemented → planning`, `in_review → planning`, `approved → planning` and
+// `planning → blocked` — bringing the total to FORTY-ONE, with a backfill of the
+// edges alone (`20260920090000_add_planning_parking_edges`). They are the
+// PLAN-TARGET STATUS contract's (`docs/decisions/agent-authored-plans.md`
+// AMENDMENT 16, D10): every NON-terminal status may be parked while a plan
+// rewrites the card, and a parked card may rest at `blocked` when the approved
+// plan leaves it gated. `done` and `cancelled` get no edge in — a terminal card
+// is not re-planned, which `lib/plans/validateProposals.ts` already refuses one
+// layer down with `PlanTargetImmutableError`.
 export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // Forward main path
   ['todo', 'in_progress'],
@@ -221,17 +232,37 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   ['in_review', 'cancelled'],
   ['blocked', 'cancelled'],
   // ── Re-planning (MOTIR-2425) ───────────────────────────────────────────────
-  // IN from the two states a card can be in when its plan turns out to be
-  // wrong. `in_progress` is the agent's path — it claims a card, starts work,
-  // discovers the card is not implementable, and submits a re-plan. `todo` is
-  // the human's — noticing before anyone starts.
+  // IN from EVERY non-terminal status (MOTIR-5643). Two of these are the
+  // original pair: `in_progress` is the agent's path — it claims a card, starts
+  // work, discovers the card is not implementable, and submits a re-plan — and
+  // `todo` is the human's, noticing before anyone starts.
   //
-  // ⚠️ NOT from `in_review`: a card in review whose plan is wrong goes back
-  // through `in_review → in_progress` first, which already exists. Adding a
-  // second path to the same place would be an edge nobody could justify from a
-  // user story, and this graph is enumerated rather than generated.
+  // ⚠️ THE OTHER FOUR SUPERSEDE THIS BLOCK'S FORMER "NOT from `in_review`" RULE
+  // (`docs/decisions/agent-authored-plans.md` AMENDMENT 16, D2 and D10; product
+  // owner, 2026-09-16: "all the statuses can be changed to planning … done and
+  // cancelled should be excluded"). That rule reasoned from ONE user story — a
+  // person noticing a card was wrong — for which routing through
+  // `in_review → in_progress` really was enough. What it did not cover is the
+  // PRODUCT parking a target on its own: a plan now parks every committed card
+  // it names, whatever status that card is in, so a `blocked`, `implemented`,
+  // `in_review` or `approved` card has to be reachable. Without these four, the
+  // one path is not an inconvenience — a plan simply cannot hold those cards.
+  //
+  // ⚠️ AND NOTHING FROM `done` OR `cancelled`, deliberately (D2). We plan
+  // forward: a terminal card is superseded by a new one, never re-planned in
+  // place, and `validateProposals.ts` already refuses a terminal target with
+  // `PlanTargetImmutableError` before any status is written.
+  //
+  // The park itself is a `{ system: true }` write and would not be refused
+  // either way. These are declared so a PERSON can make the same move, and so a
+  // `restricted` policy does not silently downgrade the product's own write to
+  // the second-class `plan_reset` arm MOTIR-5359 had to invent.
   ['todo', 'planning'],
   ['in_progress', 'planning'],
+  ['blocked', 'planning'],
+  ['implemented', 'planning'],
+  ['in_review', 'planning'],
+  ['approved', 'planning'],
   // OUT — three, for the moves a PERSON may make:
   //   • `todo`        — the card belongs back in the queue.
   //   • `in_progress` — the human decided to just do it.
@@ -252,9 +283,21 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // at `blocked`, and for every other shape the approval IS the correction, so
   // what a run next claims is the card the plan rewrote. MOTIR-5359's
   // re-scope-only reset is folded into that one predicate.
+  //
+  // ⚠️ AND A FOURTH OUT, `planning → blocked` (MOTIR-5643, AMENDMENT 16 D6 and
+  // D10). It is the resting status half of the contract: approving a plan puts
+  // each parked target at `blocked` when one of its live `blocked_by` edges is
+  // still open, and at `todo` otherwise. Without this edge the approve could
+  // write only one of its two answers.
+  //
+  // It is also why `blocked` is the ONE downward move §6d keeps an approval
+  // gate's question through (`withdrawsPendingQuestion`,
+  // `lib/workItems/statusLadder.ts`): blocking pauses the work, it does not
+  // abandon it.
   ['planning', 'todo'],
   ['planning', 'in_progress'],
   ['planning', 'cancelled'],
+  ['planning', 'blocked'],
   // ── Implemented (MOTIR-3003) ───────────────────────────────────────────────
   // IN, two:
   //   • `in_progress → implemented` — the forward path a run takes when its agent
