@@ -1,4 +1,6 @@
 import { getGitProvider } from '@/lib/git';
+import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
 import { readPullRequest } from '@/lib/github/pullRequestRead';
 import {
   githubPullRequestRepository,
@@ -164,16 +166,32 @@ export const pullRequestReconcileService = {
     );
     summary.examined = candidates.length;
 
-    // One token per installation per pass. A mint that fails is remembered, so the
-    // installation's other rows are counted as failed without asking again.
+    // One token per installation AND ROLE per pass. A mint that fails is remembered,
+    // so the installation's other rows on the same App are counted as failed without
+    // asking again.
+    //
+    // ⚠️ THE ROLE IS IN THE KEY, AND IT HAS TO BE (MOTIR-5843). Two repositories can
+    // sit on ONE installation and differ in provenance — a hosted one mints through
+    // the provisioning App, an imported one through the user-facing App — so a memo
+    // keyed on `installationId` alone hands the second repository the first's token.
+    // That was harmless only while this site passed no repository at all and every
+    // mint here was wrong in the SAME direction; resolving provenance per repository
+    // without widening the key would introduce a cross-repository credential leak
+    // while fixing a refusal, which is the worse defect of the two.
+    //
+    // The key is the same pair `appAuth.mintInstallationToken` caches on one layer
+    // down (`${role}:${installationId}`), because a token IS per installation per
+    // App — so this memo has exactly the granularity of the thing it is memoising.
     const tokens = new Map<string, Promise<string>>();
-    const tokenFor = (installationId: string): Promise<string> => {
-      let token = tokens.get(installationId);
+    const tokenFor = (installationId: string, owner: string): Promise<string> => {
+      const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+      const key = `${role}:${installationId}`;
+      let token = tokens.get(key);
       if (!token) {
         token = getGitProvider('github')
-          .mintInstallationToken(installationId)
+          .mintInstallationToken(installationId, { owner })
           .then((t) => t.token);
-        tokens.set(installationId, token);
+        tokens.set(key, token);
       }
       return token;
     };
@@ -186,7 +204,7 @@ export const pullRequestReconcileService = {
         }
 
         const { repo } = candidate;
-        const token = await tokenFor(repo.installation.installationId);
+        const token = await tokenFor(repo.installation.installationId, repo.owner);
         const read = await readPullRequest(token, repo.owner, repo.name, candidate.number);
 
         if (read.kind === 'gone') {

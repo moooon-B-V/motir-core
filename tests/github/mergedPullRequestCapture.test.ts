@@ -14,6 +14,7 @@ import type { NormalizedChangeRequest } from '@/lib/git/types';
 import { _resetInstallationTokenCache, type GithubAppRole } from '@/lib/github/appAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
+import { stubAppCredentials } from '../helpers/appCredentials';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
 
@@ -117,25 +118,9 @@ function prPayload(opts: {
   };
 }
 
-/** Wire the GitHub App credentials the installation-token mint needs.
- *
- *  ⚠️ IT WIRES EXACTLY ONE OF THE TWO REGISTRATIONS, and the other is stubbed
- *  EMPTY rather than left alone. `resolveConfig` refuses on a falsy value, so an
- *  empty string is "not configured" — which is what lets a test assert that the
- *  capture reached the App it was supposed to reach, instead of reading an
- *  ambient one out of the environment and passing either way (MOTIR-5811). */
-function stubAppCredentials(app: GithubAppRole = 'user-facing') {
-  const { privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-  });
-  const hosted = app === 'provisioning';
-  vi.stubEnv('GITHUB_APP_ID', hosted ? '' : '999');
-  vi.stubEnv('GITHUB_APP_PRIVATE_KEY', hosted ? '' : privateKey);
-  vi.stubEnv('GITHUB_STUDIO_APP_ID', hosted ? '888' : '');
-  vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', hosted ? privateKey : '');
-}
+// `stubAppCredentials` moved to `tests/helpers/appCredentials.ts` (MOTIR-5843) —
+// the provenance sweep asserts the same property at several call sites, so the
+// one-App-wired arm that makes the assertion bite is shared rather than copied.
 
 function tokenResponse(): Response {
   return new Response(
