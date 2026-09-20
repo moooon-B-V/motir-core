@@ -42,6 +42,8 @@ import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import { workItemCiStateBackfillService } from '@/lib/services/workItemCiStateBackfillService';
+import { mergeQueueExitService } from '@/lib/services/mergeQueueExitService';
+import type { NormalizedMergeQueueExit } from '@/lib/git/types';
 
 // THE EJECTION ARM (Story MOTIR-5461 · MOTIR-5632; `docs/decisions/approval-gates.md`
 // §4 THIRD AMENDMENT, decisions 1–4, 6 and 9 — and, since Story MOTIR-5799 · MOTIR-5805,
@@ -960,5 +962,102 @@ describe('an ejected card reads RED (MOTIR-5717)', () => {
     const real = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
     expect(real.changed).toEqual(rehearsal.changed);
     expect(await ciStateOf(item.id)).toBe('failing');
+  });
+});
+
+// ── THE DELIVERIES THAT REACH NO CARD (MOTIR-5805) ──────────────────────────────
+//
+// `recordExit` is the ONE entry point every un-landed queue outcome goes through, so its
+// refusals are load-bearing in a way a webhook handler's usually are not: each one names
+// a different missing row, and a delivery that cannot be tied to a card must say WHICH
+// link is missing rather than failing anonymously. Driven directly, because a signed
+// delivery cannot carry an installation the tenant has never heard of.
+describe('a removal that reaches no card says which link is missing', () => {
+  const exitFor = (over: Partial<NormalizedMergeQueueExit> = {}): NormalizedMergeQueueExit => ({
+    providerRepoId: REPO_PROVIDER_ID,
+    number: 11,
+    headSha: 'sha-a',
+    rawReason: 'CI_FAILURE',
+    ...over,
+  });
+
+  it('with no delivery id it is MALFORMED — never recorded without an idempotency key', async () => {
+    const result = await mergeQueueExitService.recordExit({
+      installationId: INSTALLATION_ID,
+      exit: exitFor(),
+      deliveryId: null,
+    });
+    expect(result).toMatchObject({ outcome: 'malformed', disposition: 'failure' });
+  });
+
+  it('with no installation id at all, and with one nobody has installed', async () => {
+    for (const installationId of [null, 'inst-nobody-installed']) {
+      const result = await mergeQueueExitService.recordExit({
+        installationId,
+        exit: exitFor(),
+        deliveryId: `guid-unknown-inst-${installationId ?? 'null'}`,
+      });
+      expect(result, `installationId=${installationId}`).toMatchObject({
+        outcome: 'unknown_installation',
+      });
+    }
+  });
+
+  it('a repository the installation does not carry is UNKNOWN REPO, not an unknown card', async () => {
+    await makeScenario('exit-unknown-repo@example.com');
+    const result = await mergeQueueExitService.recordExit({
+      installationId: INSTALLATION_ID,
+      exit: exitFor({ providerRepoId: '424242' }),
+      deliveryId: 'guid-unknown-repo',
+    });
+    expect(result).toMatchObject({ outcome: 'unknown_repo' });
+  });
+
+  it('a pull request Motir has never mirrored is UNKNOWN PULL REQUEST', async () => {
+    await makeScenario('exit-unknown-pr@example.com');
+    const result = await mergeQueueExitService.recordExit({
+      installationId: INSTALLATION_ID,
+      exit: exitFor({ number: 9999 }),
+      deliveryId: 'guid-unknown-pr',
+    });
+    expect(result).toMatchObject({ outcome: 'unknown_pull_request' });
+  });
+});
+
+describe('a CAN’T-LAND exit is never re-queued, whatever anyone approved', () => {
+  it('a conflict that PRE-DATES the approval still refuses — the class decides, not the clock', async () => {
+    const { s, item, approved } = await approvedAndQueued('cantland-predates@example.com');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: 'MERGE_CONFLICT' }),
+      'guid-cantland-predates',
+    );
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaitingGates(item.id)).toEqual([]);
+
+    // ⚠️ TWO RULES MEET HERE, AND ONLY ONE OF THEM IS ABOUT TIME. *No exit is re-queued on
+    // an approval given before it* (point 1) would let this one through, because the exit
+    // is backdated to before the approval — so what refuses it is the CLASS (point 2): the
+    // same commits cannot land however many times anyone says yes. Backdated rather than
+    // staged, because the order is the whole point and a second approval would change it.
+    await adminDb.githubPullRequestQueueExit.updateMany({
+      where: { pullRequestId: (await pr(11)).id },
+      data: { exitedAt: new Date(approved.decidedAt!.getTime() - 60_000) },
+    });
+    const host = vi.spyOn(getGitProvider('github') as Required<GitProvider>, 'mergeChangeRequest');
+
+    const outcome = await pullRequestMergeService.retryApproveAndMergeMember(
+      {
+        approvalGateId: approved.id,
+        pullRequestId: (await pr(11)).id,
+        noteMd: null,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      s.ctx,
+    );
+
+    expect(outcome).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
+    expect(host).not.toHaveBeenCalled();
+    expect((await exits(11))[0]!.requeuedAt).toBeNull();
   });
 });

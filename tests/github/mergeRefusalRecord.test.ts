@@ -14,7 +14,10 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
-import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
+import {
+  mergeApprovedSetMembers,
+  pullRequestMergeService,
+} from '@/lib/services/pullRequestMergeService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -70,7 +73,7 @@ async function scenario(email: string, mode: 'manual' | 'auto' = 'manual') {
       },
     ],
   });
-  return { user, project, ctx: { userId: user.id, workspaceId: workspace.id } };
+  return { user, project, workspace, ctx: { userId: user.id, workspaceId: workspace.id } };
 }
 
 type Scenario = Awaited<ReturnType<typeof scenario>>;
@@ -394,5 +397,246 @@ describe('§8’s Retry merge on the standing approval is CLOSED (MOTIR-5834)', 
 
     expect(outcome).toMatchObject({ outcome: 'merged' });
     expect(host).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── THE ARMS AT THE EDGES OF THE CLASS MAP (MOTIR-5833 · MOTIR-5834) ────────────
+//
+// Three doors the ordinary walk never opens, each of which decides something a person
+// sees. They are here rather than in a journey because reaching them takes a state the
+// happy path cannot produce — a code with no class, a row backdated past its approval,
+// a press naming a pull request the gate does not.
+describe('the edges of the class map', () => {
+  const retry = (s: Scenario, approvalGateId: string, pullRequestId: string) =>
+    pullRequestMergeService.retryApproveAndMergeMember(
+      {
+        approvalGateId,
+        pullRequestId,
+        noteMd: null,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      s.ctx,
+    );
+
+  it('a SUBJECT-CHANGED refusal records NOTHING — the approval was never spent', async () => {
+    const { s, item, gate } = await approvedCard('refuse-classless@example.com');
+    // ⚠️ `subject_changed` IS THE ONE REFUSAL THAT WRITES NO ROW, and it is why
+    // `classOfMergeRefusal` answers NULL for it rather than picking a class. The host's
+    // 409 means the head moved between the check and the merge: nothing was merged and
+    // nothing was attempted against these commits, so the approval was not spent and
+    // there is no un-landed outcome to settle. It reads as the withdrawn question it is.
+    expect(classOfMergeRefusal('subject_changed')).toBeNull();
+    stubHost({ outcome: 'refused', refusal: { code: 'subject_changed' } });
+
+    const { members } = await press(s, gate!.id);
+
+    expect(members[0]).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'APPROVAL_GATE_SUPERSEDED' },
+    });
+    expect(await refusalsOf(41)).toEqual([]);
+    expect(await statusOf(item.id)).toBe('approved');
+    expect(await awaitingGates(item.id)).toEqual([]);
+  });
+
+  it('a refusal recorded BEFORE the approval does not spend it — the retry still merges', async () => {
+    const { s, item, gate } = await approvedCard('refuse-backdated@example.com');
+    stubHost({ outcome: 'refused', refusal: { code: 'branch_protected' } });
+    await press(s, gate!.id);
+    const prId = (await prRow(41)).id;
+
+    // ⚠️ THE PREDICATE IS *OUTRANKS*, NOT *EXISTS* (`unlandedOutcomeOutranksApproval`).
+    // A refusal from BEFORE the approval was decided is about an earlier press, so it
+    // cannot have spent this one — the same rule a stale queue exit gets. Backdated
+    // rather than staged, because producing the order honestly needs two approvals and
+    // the point is the comparison, not the journey.
+    await adminDb.githubPullRequestMergeRefusal.updateMany({
+      where: { pullRequestId: prId },
+      data: { refusedAt: new Date('2020-01-01T00:00:00.000Z') },
+    });
+    const [reasked] = await awaitingGates(item.id);
+    // Decide the re-asked gate away, so the retry below runs on the DECIDED gate rather
+    // than being routed to it as the new approval.
+    await adminDb.approvalGate.update({
+      where: { id: reasked!.id },
+      data: { state: 'superseded', supersededCause: 'head_moved' },
+    });
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+    host.mockClear();
+
+    expect(await retry(s, gate!.id, prId)).toMatchObject({ outcome: 'merged' });
+    expect(host).toHaveBeenCalledTimes(1);
+  });
+
+  it('a member whose HEAD MOVED since the approval has NOTHING TO MERGE — no host call, no new row', async () => {
+    const { s, item, gate } = await approvedCard('refuse-stale-head@example.com');
+    stubHost({ outcome: 'refused', refusal: { code: 'branch_protected' } });
+    await press(s, gate!.id);
+    const prId = (await prRow(41)).id;
+    // The gate the press DECIDED — read back rather than assumed, because a refused
+    // press leaves a fresh awaiting one beside it.
+    const decided = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: item.id, kind: KIND, state: 'approved' },
+    });
+    // A new commit reports green. The DECIDED gate names the OLD head, so it no longer
+    // describes this pull request — and the refusal recorded against the old head stops
+    // standing at the same moment. `checkMember` answers `stale`, and the retry reports
+    // the withdrawn question rather than merging commits nobody approved.
+    await ci(41, 'sha-41-moved');
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+    host.mockClear();
+
+    const outcome = await retry(s, decided.id, prId);
+
+    // ⚠️ `no_merge_gate`, NOT a refusal (MOTIR-5613): nothing was refused — this card no
+    // longer delivers that member at the head it was approved at, so there is nothing to
+    // merge and nothing to report against the approval. The next green raises the
+    // question again, over the new commits.
+    expect(outcome).toMatchObject({ outcome: 'no_merge_gate', pullRequestId: null });
+    expect(host).not.toHaveBeenCalled();
+    // The press's own refusal is still on the record — it happened — and it is simply no
+    // longer standing at this head.
+    expect(await refusalsOf(41)).toHaveLength(1);
+  });
+
+  it('a press naming a pull request the DECIDED gate never covered is refused, not merged', async () => {
+    const { s, item, gate } = await approvedCard('refuse-foreign-pr@example.com');
+    // A SECOND pull request, linked after the question was asked: the card delivers it,
+    // and the approval says nothing about it. Matching is by `owner/name#number`, so the
+    // door finds the delivery and then finds no member — and refuses rather than merging
+    // a pull request on the strength of a yes about a different one.
+    const headRef = `subtask/${item.identifier}-42`;
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: 42,
+      headRef,
+    });
+    await githubWebhookService.handleEvent('pull_request', {
+      action: 'opened',
+      installation: INSTALLATION,
+      repository: { id: Number(REPO_PROVIDER_ID) },
+      pull_request: {
+        number: 42,
+        state: 'open',
+        merged: false,
+        title: `Another change (${headRef})`,
+        head: { ref: headRef },
+        base: { ref: 'main' },
+        user: { id: 4242 },
+      },
+    });
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-42' });
+    host.mockClear();
+
+    await expect(retry(s, gate!.id, (await prRow(42)).id)).rejects.toMatchObject({
+      tag: 'APPROVAL_GATE_SUPERSEDED',
+    });
+    expect(host).not.toHaveBeenCalled();
+  });
+
+  it('a press naming a pull request the RE-ASKED gate does not cover answers `no_merge_gate`', async () => {
+    const { s, item, gate } = await approvedCard('refuse-other-pr@example.com');
+    stubHost({ outcome: 'refused', refusal: { code: 'branch_protected' } });
+    await press(s, gate!.id);
+    const [reasked] = await awaitingGates(item.id);
+    stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+
+    // The row's press decides the WHOLE gate and then reports ITS member — so a stale
+    // tab pressing for a pull request the gate never named still decides the gate, and
+    // is told there is no outcome of its own to report.
+    const outcome = await retry(s, reasked!.id, 'a-pull-request-this-gate-never-named');
+
+    expect(outcome).toMatchObject({ outcome: 'no_merge_gate', pullRequestId: null });
+    expect(await statusOf(item.id)).toBe('approved');
+  });
+});
+
+// ── THE SET MERGER'S OWN DOORS (MOTIR-4882 · MOTIR-5608) ────────────────────────
+//
+// `mergeApprovedSetMembers` is called AFTER a decision commits — by the press, and by the
+// synced-review runner — with a gate id it did not validate itself. Its contract is that a
+// per-member refusal is a RESULT rather than a throw, so one bad member never costs the
+// others their merge. These are the doors `checkMember` closes before a host is ever
+// called, each returning the refusal that is TRUE of it.
+describe('the set merger refuses per member, and calls no host', () => {
+  const merge = (s: Scenario, gateId: string, subjectVersion: string) =>
+    mergeApprovedSetMembers(gateId, subjectVersion, s.ctx);
+
+  it.each([
+    [
+      'superseded',
+      { state: 'superseded', supersededCause: 'head_moved' },
+      'APPROVAL_GATE_SUPERSEDED',
+    ],
+    ['changes requested', { state: 'changes_requested' }, 'APPROVAL_GATE_ALREADY_DECIDED'],
+  ] as const)('a gate that is %s merges nothing', async (label, data, tag) => {
+    const { s, gate } = await approvedCard(`set-${label.replace(/\s/g, '-')}@example.com`);
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+    host.mockClear();
+    await adminDb.approvalGate.update({ where: { id: gate!.id }, data });
+
+    const [member] = await merge(s, gate!.id, gate!.subjectVersion);
+
+    expect(member, label).toMatchObject({ outcome: 'refused', refusal: { tag } });
+    expect(host, label).not.toHaveBeenCalled();
+  });
+
+  it('a gate nobody has ever raised is NOT FOUND, per member', async () => {
+    const { s, gate } = await approvedCard('set-no-gate@example.com');
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+    host.mockClear();
+
+    const [member] = await merge(s, 'cmthisisnotagateatall0001', gate!.subjectVersion);
+
+    expect(member).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'APPROVAL_GATE_NOT_FOUND' },
+    });
+    expect(host).not.toHaveBeenCalled();
+  });
+
+  it('a gate still AWAITING is a programming error, and is thrown rather than reported', async () => {
+    const { s, gate } = await approvedCard('set-awaiting@example.com');
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+    host.mockClear();
+
+    // ⚠️ NOT a refusal: every caller decides first, so reaching here with an undecided
+    // gate means the CALLER is wrong. A refusal would report it as something the host or
+    // the reader did, and it is neither.
+    await expect(merge(s, gate!.id, gate!.subjectVersion)).rejects.toThrow(
+      /merge was attempted under an awaiting gate/,
+    );
+    expect(host).not.toHaveBeenCalled();
+  });
+});
+
+describe('the set merger asks WHO is pressing', () => {
+  it('a workspace member who may not decide this card merges nothing', async () => {
+    const { s, gate } = await approvedCard('set-bystander@example.com');
+    // A colleague in the same workspace, neither the card's assignee nor its reporter
+    // and holding no `approval:decide_any`. The authority check is `checkMember`'s, so
+    // it runs per member and refuses per member — the same answer the door gives.
+    const bystander = await usersService.createUser({
+      email: 'set-bystander-other@example.com',
+      password: PASSWORD,
+      name: 'Bea',
+    });
+    await workspacesService.addMember({ userId: bystander.id, workspaceId: s.workspace.id });
+    const host = stubHost({ outcome: 'merged', commitSha: 'merged-41' });
+    host.mockClear();
+
+    const [member] = await mergeApprovedSetMembers(gate!.id, gate!.subjectVersion, {
+      userId: bystander.id,
+      workspaceId: s.workspace.id,
+    });
+
+    expect(member).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'APPROVAL_GATE_NOT_AUTHORISED' },
+    });
+    expect(host).not.toHaveBeenCalled();
   });
 });
