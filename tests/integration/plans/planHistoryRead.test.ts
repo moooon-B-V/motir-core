@@ -89,16 +89,39 @@ async function planWith(
   const plan = await plansService.createPlan(fx.projectId, title === null ? {} : { title }, fx.ctx);
   await stamp(plan.id);
   await plansService.addProposals(plan.id, proposals, fx.ctx);
-  if (status === 'generating') return plan.id;
+  if (status === 'generating') return freeTargets(plan.id);
   await plansService.markPlanned(plan.id, fx.ctx);
-  if (status === 'planned') return plan.id;
+  if (status === 'planned') return freeTargets(plan.id);
   if (status === 'stale') {
     await adminDb.plan.update({ where: { id: plan.id }, data: { status: 'stale' } });
-    return plan.id;
+    return freeTargets(plan.id);
   }
+  // A DECIDED plan releases its own targets, so these two need nothing.
   if (status === 'approved') await plansService.approvePlan(plan.id, fx.ctx);
   else await plansService.declinePlan(plan.id, fx.ctx);
   return plan.id;
+}
+
+/**
+ * Drop the target locks an UN-DECIDED plan still holds, so the next plan in a
+ * fixture can name the same card (MOTIR-5645).
+ *
+ * ⚠️ FIXTURE SURGERY, and it is admitting something true rather than working
+ * around a defect. A plan PARKS every committed target it names and holds it
+ * while the plan is open, so a real tenant can have at most ONE open plan per
+ * card — a second is refused with `PlanTargetLockedError`, which is the whole
+ * point of D4. Several cases in this file need a card with plans sitting at
+ * `generating`, `planned` AND `stale` at once, which no tenant can produce.
+ *
+ * That is fine because this file's subject is the HISTORY READ's projection over
+ * plan statuses, not the lock: it already stamps `stale` straight onto the row
+ * for the same reason. The lock has its own coverage in
+ * `tests/planning/planTargetParkDoor.test.ts`, including the refusal this
+ * bypasses.
+ */
+async function freeTargets(planId: string): Promise<string> {
+  await adminDb.planTargetLock.deleteMany({ where: { planId } });
+  return planId;
 }
 
 const children = (parent: string, n: number): Proposals =>

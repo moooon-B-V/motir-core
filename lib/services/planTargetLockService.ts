@@ -529,6 +529,44 @@ export const planTargetLockService = {
   },
 
   /**
+   * Give back everything one PLAN holds, RESTORING each target's prior status
+   * (MOTIR-5646; AMENDMENT 16 D8) — the twin of the release above, for the
+   * DECLINE side of a decision.
+   *
+   * ⚠️ THIS IS THE RESTORE PATH ONLY, and the asymmetry with approve is the whole
+   * of D6 vs D8. A decline, a withdraw that empties the plan and a close that
+   * materializes nothing have changed NOTHING about the card, so the card goes
+   * back to the status it was parked from. An APPROVE does not come through here
+   * at all: it has already given each target its RESTING status inside its own
+   * transaction (`plansService.restPlanTargets`) and deleted the lock, so this
+   * finds nothing left to do — which is what makes calling it on every decision
+   * safe and idempotent.
+   *
+   * Idempotent and total, like `releaseForSession`: a plan holding nothing
+   * releases nothing and returns an empty list, so every caller can call it
+   * unconditionally rather than deciding whether there is anything to release. A
+   * release that callers have to remember to guard is one that gets skipped on
+   * the error path, which is the path that matters.
+   */
+  async releaseForPlan(
+    planId: string,
+    pctx: PlanTargetLockContext,
+  ): Promise<Array<{ workItemId: string; outcome: 'restored' | 'left_as_is' }>> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locks = await planTargetLockRepository.listByPlanId(planId, tx);
+        const results: Array<{ workItemId: string; outcome: 'restored' | 'left_as_is' }> = [];
+        for (const lock of locks) {
+          results.push({ workItemId: lock.workItemId, outcome: await releaseOne(lock, ctx, tx) });
+        }
+        return results;
+      },
+    );
+  },
+
+  /**
    * Push the session's leases out by a fresh window — the heartbeat, called when
    * the thread does something (a submit).
    *

@@ -55,20 +55,6 @@ export function patchRescopes(
   );
 }
 
-/**
- * Whether a card at a status of this CATEGORY is reset when re-scoped: only the
- * `in_progress` category (`in_progress`, `implemented`, `planning`, `in_review`,
- * `approved` in the default workflow) — the statuses that CLAIM work matching the
- * body is under way or built. A `todo`-category card already claims nothing, and a
- * `done`-category one is out of scope (the persist gate refuses a modify on it).
- *
- * Keyed on the CATEGORY, never a key list, so a project's own in-progress statuses
- * are covered without being named.
- */
-export function resetsOnRescope(statusCategory: string | null | undefined): boolean {
-  return statusCategory === 'in_progress';
-}
-
 function blankToNull(value: string | null | undefined): string | null {
   if (value == null) return null;
   const trimmed = value.trim();

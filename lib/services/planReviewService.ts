@@ -17,7 +17,8 @@ import {
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { patchRescopes, resetsOnRescope } from '@/lib/plans/rescopeReset';
+import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
+import { RESTING_BLOCKED_KEY, RESTING_TODO_KEY } from '@/lib/plans/restingStatus';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 
 import type {
@@ -414,21 +415,35 @@ function buildChanges(
       to: `${parts.join(' / ')} blocker${added + removed === 1 ? '' : 's'}`,
     });
   }
-  // THE RE-SCOPE RESET (bug MOTIR-5359) — the one row no patch key produces,
-  // because the approve DERIVES it: a patch that re-scopes a card in the
-  // `in_progress` category walks it back to the initial status, and the reviewer
-  // sees that here BEFORE pressing approve. `patchRescopes` / `resetsOnRescope`
-  // are the approve's own predicates (`plansService.applyModify`), so this row
-  // appears exactly when the approve will write the reset.
-  if (target && patchRescopes(patch, target)) {
+  // THE RESTING STATUS (bug MOTIR-5640 · MOTIR-5646, superseding MOTIR-5359's
+  // re-scope reset) — the one row no patch key produces, because the approve
+  // DERIVES it. A target its plan has PARKED comes back when the plan is
+  // approved, and the reviewer sees that here BEFORE pressing approve.
+  //
+  // ⚠️ IT NAMES BOTH OUTCOMES RATHER THAN PREDICTING ONE, and that is deliberate.
+  // The resting status is decided AT APPROVE from the card's live `blocked_by`
+  // edges — including the edges the plan itself wires — so a row promising `To Do`
+  // could be falsified by an edge landing between this read and the press, which
+  // is exactly the review-shows-what-approve-does drift `rescopeReset.ts`'s header
+  // was written about (MOTIR-3868, MOTIR-3070). Naming both cannot drift.
+  //
+  // The TRIGGER is the card being parked, not the patch's contents: the previous
+  // row keyed on `patchRescopes` (*did the body change?*), which is a narrower
+  // question than the one the park poses and missed every plan that only splits,
+  // re-sizes or re-wires its target.
+  if (target && target.status === PLANNING_STATUS_KEY) {
     const from = statusByKey.get(target.status);
-    const initial = [...statusByKey.values()].find((s) => s.isInitial);
-    if (from && initial && initial.key !== from.key && resetsOnRescope(from.category)) {
-      changes.push({
-        field: 'status',
-        from: from.label,
-        to: `${initial.label} (re-scoped while ${from.label})`,
-      });
+    if (from) {
+      const blocked = statusByKey.get(RESTING_BLOCKED_KEY);
+      const todo = [...statusByKey.values()].find((s) => s.key === RESTING_TODO_KEY);
+      const both = [todo?.label, blocked?.label].filter((l): l is string => Boolean(l));
+      if (both.length > 0) {
+        changes.push({
+          field: 'status',
+          from: from.label,
+          to: `${both.join(' or ')} (returned when this plan is approved)`,
+        });
+      }
     }
   }
   return leadingPlacement ? [leadingPlacement, ...changes] : changes;

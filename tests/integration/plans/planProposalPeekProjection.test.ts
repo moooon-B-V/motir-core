@@ -101,8 +101,10 @@ describe('the proposal envelope the peek reads (MOTIR-4183)', () => {
     expect([...item.proposal.changedFields].sort()).toEqual(
       [...item.changes.map((c) => c.field)].sort(),
     );
-    // …and it is not vacuously empty: this patch moves three fields.
-    expect([...item.proposal.changedFields].sort()).toEqual(
+    // …and it is not vacuously empty: this patch moves three fields. The
+    // resting-status row rides both sides, so the agreement above is unaffected
+    // and only this literal set needs it dropped (MOTIR-5646).
+    expect([...item.proposal.changedFields].filter((f) => f !== 'status').sort()).toEqual(
       ['priority', 'storyPoints', 'title'].sort(),
     );
   });
@@ -128,7 +130,12 @@ describe('the proposal envelope the peek reads (MOTIR-4183)', () => {
     );
     // "this is not changing" and "there is nothing here" are different facts:
     // the rail still REPORTS the untouched values, and the marker stays off them.
-    expect(item.proposal.changedFields).toEqual(['priority']);
+    // ⚠️ The resting-status row is dropped: a plan PARKS its committed targets, so
+    // every `modify` now carries `status → To Do or Blocked (returned when this
+    // plan is approved)` in addition to the fields the patch touched
+    // (MOTIR-5646). This case is about those other fields, and its exact-set
+    // assertion is the point.
+    expect(item.proposal.changedFields.filter((f) => f !== 'status')).toEqual(['priority']);
     expect(item.storyPoints).toBe(5);
     expect(item.estimateMinutes).toBe(45);
   });
@@ -360,7 +367,8 @@ describe('the proposal envelope the peek reads (MOTIR-4183)', () => {
     // spells old→new (Part VIII §3).
     expect(item.title).toBe('Invoice templates + branding');
     expect(item.identifier).toBe(target.identifier);
-    expect(item.changes).toEqual([
+    // The resting-status row is dropped — see the note on AC 2 (MOTIR-5646).
+    expect(item.changes.filter((c) => c.field !== 'status')).toEqual([
       { field: 'title', from: 'Invoice templates', to: 'Invoice templates + branding' },
     ]);
   });

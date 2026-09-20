@@ -14,6 +14,24 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
+/**
+ * Drop the target locks an UN-DECIDED plan holds, so a fixture can build a
+ * SECOND open plan over the same card (MOTIR-5645).
+ *
+ * ⚠️ FIXTURE SURGERY, and it records a real consequence rather than dodging a
+ * defect. A plan PARKS every committed target it names and holds it while the
+ * plan is open, so a tenant can have at most ONE open plan per card — a second
+ * is refused with `PlanTargetLockedError` (AMENDMENT 16 D4). The cases here need
+ * several open plans over one card, which no tenant can now produce.
+ *
+ * The lock's own behaviour, including that refusal, is covered in
+ * `tests/planning/planTargetParkDoor.test.ts`.
+ */
+async function freePlanTargets(planId: string): Promise<string> {
+  await adminDb.planTargetLock.deleteMany({ where: { planId } });
+  return planId;
+}
+
 // The work-item page's PENDING-PLAN read (bug MOTIR-4197 · design MOTIR-4256
 // §3 / §5) over real Postgres — `plansService.listPendingProposalsForWorkItem`.
 //
@@ -75,13 +93,14 @@ async function planNaming(
     ],
     fx.ctx,
   );
-  if (status === 'generating') return plan.id;
+  if (status === 'generating') return freePlanTargets(plan.id);
   await plansService.markPlanned(plan.id, fx.ctx);
-  if (status === 'planned') return plan.id;
+  if (status === 'planned') return freePlanTargets(plan.id);
   if (status === 'stale') {
     await adminDb.plan.update({ where: { id: plan.id }, data: { status: 'stale' } });
-    return plan.id;
+    return freePlanTargets(plan.id);
   }
+  // A DECIDED plan releases its own targets.
   if (status === 'approved') await plansService.approvePlan(plan.id, fx.ctx);
   else await plansService.declinePlan(plan.id, fx.ctx);
   return plan.id;
@@ -111,13 +130,14 @@ async function planUnder(
     });
   }
   await plansService.addProposals(plan.id, proposals, fx.ctx);
-  if (status === 'generating') return plan.id;
+  if (status === 'generating') return freePlanTargets(plan.id);
   await plansService.markPlanned(plan.id, fx.ctx);
-  if (status === 'planned') return plan.id;
+  if (status === 'planned') return freePlanTargets(plan.id);
   if (status === 'stale') {
     await adminDb.plan.update({ where: { id: plan.id }, data: { status: 'stale' } });
-    return plan.id;
+    return freePlanTargets(plan.id);
   }
+  // A DECIDED plan releases its own targets.
   if (status === 'approved') await plansService.approvePlan(plan.id, fx.ctx);
   else await plansService.declinePlan(plan.id, fx.ctx);
   return plan.id;

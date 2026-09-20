@@ -3038,6 +3038,37 @@ invent.
 | `tests/planning/planTargetLockService.test.ts` _"restores the prior status…"_ | **re-pointed** at the decline path; its approve arm is replaced by D6's cases                                 |
 | `tests/integration/plans/approveRescopeResetsStatus.test.ts`                  | **rewritten** to assert D6's two outcomes instead of the initial-status reset                                 |
 
+### D12 — THREE MORE REFERRERS, found by BUILDING it rather than by reading
+
+D11 was written from the record. These three were found when the code ran, and each is named here
+because the next reader would otherwise re-derive it from a red test.
+
+**1. MOTIR-3050's rule (1) is superseded** — `materialize`'s _"FOR AN EDGE, A `modify` NEVER MOVES
+THE STATUS ON ITS OWN ACCOUNT"_. Its warrant was that a `modify` target carries a status somebody
+RECORDED, which an approve cannot see behind — _"that card may be `in_progress` with a live
+worktree."_ **The PREMISE changed, not the argument:** the card no longer reaches the approve wearing
+that status, because its own append parked it and stored it on the lock. So the approve is not
+overwriting a fact it cannot see; it is answering the question the park deferred. The half of
+MOTIR-3050 that STANDS is the one about `blocked` not being a projection of the edges — nothing
+recomputes this column later, and no human's externally-motivated block is ever cleared.
+
+**2. A PURE STATUS MOVE NO LONGER ANCHORS `base_revision_drift`** —
+`workItemRevisionRepository.findLatestIdsByWorkItemIds` skips a revision whose diff carries `status`
+and nothing else. **Without it, every plan read as STALE the moment it was authored:** the park
+records a status revision on the very card the plan is about, so the target's latest revision stopped
+matching the `baseRevision` its author had captured correctly seconds earlier. The skip is also right
+on that rule's own terms — it asks whether applying the patch _"may conflict with a newer edit /
+clobber it"_, and a content patch cannot clobber a status change.
+
+**3. A CARD CAN NOW HAVE AT MOST ONE OPEN PLAN, which leaves one shipped display unreachable.** D4
+and D5 together mean a `generating`, `planned` or `stale` plan holds its targets, so a second plan
+naming one of them is refused. `plansService.listPendingProposalsForWorkItem` and the pending-plan
+indicator it feeds are built to render N pending plans per card and to COUNT them; that N is now
+always 0 or 1. Nothing is broken and nothing was removed — the read is still correct — but the
+multi-plan arm is dead in a tenant, and its tests now reach it only by deleting lock rows in a
+fixture. **Recorded rather than tidied away:** whether that surface should be simplified is a product
+question, not this bug's.
+
 ### What this amendment does NOT change
 
 - **`CLI_TOKEN_GRANT` is not widened.** A sandboxed run still cannot author a plan, so it cannot

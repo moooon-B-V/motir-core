@@ -16,6 +16,7 @@ import type { ProposalInput } from '@/lib/dto/plans';
 import type { RawPreplanStateResponse } from '@/lib/ai/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { contentRevisions } from '../../helpers/planTargetRevisions';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Approve MATERIALIZES folder placements (Story MOTIR-5310 · MOTIR-5423).
@@ -81,11 +82,12 @@ async function byTitle(fx: WorkItemFixture, title: string) {
   return adminDb.workItem.findFirstOrThrow({ where: { projectId: fx.projectId, title } });
 }
 
+/** CONTENT revisions only — a plan parks its target at `planning` and rests it
+ *  afterwards, so two pure status moves now sit either side of the modify's own
+ *  entry (MOTIR-5646). What these cases measure is the modify landing as ONE
+ *  entry, which is unchanged. */
 async function updatedRevisions(workItemId: string) {
-  return adminDb.workItemRevision.findMany({
-    where: { workItemId, changeKind: 'updated' },
-    orderBy: { changedAt: 'asc' },
-  });
+  return contentRevisions(workItemId);
 }
 
 async function repoNames(workItemId: string): Promise<string[]> {

@@ -17,6 +17,24 @@ import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '..
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
+/**
+ * Drop the target locks an UN-DECIDED plan holds, so a fixture can build a
+ * SECOND open plan over the same card (MOTIR-5645).
+ *
+ * ⚠️ FIXTURE SURGERY, and it records a real consequence rather than dodging a
+ * defect. A plan PARKS every committed target it names and holds it while the
+ * plan is open, so a tenant can have at most ONE open plan per card — a second
+ * is refused with `PlanTargetLockedError` (AMENDMENT 16 D4). The cases here need
+ * several open plans over one card, which no tenant can now produce.
+ *
+ * The lock's own behaviour, including that refusal, is covered in
+ * `tests/planning/planTargetParkDoor.test.ts`.
+ */
+async function freePlanTargets(planId: string): Promise<string> {
+  await adminDb.planTargetLock.deleteMany({ where: { planId } });
+  return planId;
+}
+
 // `planValidityService` (Story 7.28 · Subtask 7.28.1 / MOTIR-1386) over real
 // Postgres — the PROJECTION-aware finishability engine. It answers the shipped
 // validate_work_item / validate_sprint question over the live tree ⊕ a Plan's
@@ -1338,6 +1356,11 @@ describe('planValidityService.validateProjectedWorkItem — THE ESTIMATION GATE,
 
     // The mirror: the stored row is now the over-sized one, and the SPLIT the
     // plan proposes is what clears the finding.
+    //
+    // The first plan still HOLDS the card (MOTIR-5645), so the second over the
+    // same card would be refused. Free it — this case is about the advisory's
+    // reading of a projected patch, not about the lock.
+    await freePlanTargets(growPlan);
     await adminDb.workItem.update({
       where: { id: child.id },
       data: { storyPoints: 13, estimateMinutes: 600 },

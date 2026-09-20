@@ -74,8 +74,10 @@ import {
 } from '@/lib/plans/validateProposals';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
-import { patchRescopes, resetsOnRescope } from '@/lib/plans/rescopeReset';
+import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
+import { restingStatusFor } from '@/lib/plans/restingStatus';
+import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
 import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTodos/normalize';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
@@ -2188,8 +2190,6 @@ async function materialize(
   const touchedWorkItemIds: string[] = createdAdds.map(({ created }) => created.id);
   /** The re-parents this pass performed (MOTIR-3859) — see {@link ReparentMove}. */
   const reparented: ReparentMove[] = [];
-  /** The re-scope resets this pass performed (MOTIR-5359) — see {@link RescopeResetMove}. */
-  const rescopeResets: RescopeResetMove[] = [];
 
   // modify + remove against existing targets (locked + re-read inside the tx).
   //
@@ -2207,7 +2207,7 @@ async function materialize(
   // `normalizeBodyRefs` are for; only the edge write is withheld.
   for (const item of items) {
     if (item.op === 'modify') {
-      const { reparent: moved, reset } = await applyModify(
+      const { reparent: moved } = await applyModify(
         item,
         ctx,
         resolveRef,
@@ -2219,7 +2219,6 @@ async function materialize(
         plan.id,
       );
       if (moved) reparented.push(moved);
-      if (reset) rescopeResets.push(reset);
       // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
       // target, so this is non-null by the time we get here — asserted rather
       // than re-guarded, which would add a branch nothing can take.
@@ -2260,7 +2259,136 @@ async function materialize(
     tx,
   );
 
-  return { touchedWorkItemIds, reparented, rescopeResets };
+  // ⚠️ THE RESTING STATUS — the half the product owner asked for (bug
+  // MOTIR-5640 · MOTIR-5646; AMENDMENT 16 D6/D7). Every target THIS PLAN parked
+  // and still holds goes back to `blocked` when a live `blocked_by` of it is
+  // open and to `todo` otherwise, and its lock row is deleted.
+  //
+  // LAST, after the container rollup, deliberately: the blocker read has to see
+  // the edges this very plan wired (a `blockedByAdd` is what makes its target
+  // rest at `blocked`), and the rollup must not then recompute over a status
+  // this pass is about to change.
+  //
+  // INSIDE the transaction, unlike the release the decline path makes
+  // post-commit. The asymmetry is the point: a decline restores the status the
+  // sweep would also restore, so losing that write is recoverable, while the
+  // resting status is an answer ONLY the approve knows — a post-commit failure
+  // would leave the sweep to restore `in_progress` on a card whose body just
+  // changed, which is the state MOTIR-5359 was filed about.
+  const restingMoves = await restPlanTargets(plan, ctx, tx);
+
+  return { touchedWorkItemIds, reparented, restingMoves };
+}
+
+/**
+ * Give every target this plan PARKED its resting status, and drop the lock
+ * (MOTIR-5646; AMENDMENT 16 D6–D8). Runs inside `approvePlan`'s transaction, as
+ * materialize's last pass.
+ *
+ * ⚠️ IT WRITES THE STATUS ITSELF rather than going through
+ * `workItemsService.applyStatusTransition`, for the reason
+ * `resolveRescopeReset` recorded before it: that funnel asserts
+ * `work_item:edit`, and the approve is gated by `ai:decide_plan` ALONE — every
+ * other write a plan makes to a card rides that one key. Routing only this
+ * through the edit gate would refuse the whole approve for a custom role holding
+ * `ai:decide_plan` without `work_item:edit`. What the funnel guarantees is kept
+ * by hand: the row lock, a real project status as the target, the legality read,
+ * and the status on a revision.
+ */
+async function restPlanTargets(
+  plan: Plan,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<RestingMove[]> {
+  const locks = await planTargetLockRepository.listByPlanId(plan.id, tx);
+  if (locks.length === 0) return [];
+
+  const moves: RestingMove[] = [];
+  // The project's own statuses, read ONCE: every decision below is about the
+  // same project, and a per-target read would be one round trip per card.
+  const statuses = await workflowsRepository.findStatuses(plan.projectId, ctx.workspaceId, tx);
+  const project = await projectRepository.findById(plan.projectId, tx);
+  const openPolicy = project?.workflowPolicyMode === 'open';
+
+  for (const lock of locks) {
+    // Locks arrive in work-item-id order (the repository's own `orderBy`), which
+    // is the one fixed lock order every path in `planTargetLockService` takes.
+    await workItemRepository.lockById(lock.workItemId, tx);
+    const item = await workItemRepository.findById(lock.workItemId, tx);
+    if (!item) {
+      // Deleted outright while the plan was open. Nothing to rest; the row goes
+      // with it (the FK would cascade anyway).
+      await planTargetLockRepository.deleteById(lock.id, tx);
+      continue;
+    }
+
+    // The SAME predicate the ready set and Pass 2b use, so `blocked` here can
+    // never mean something different from "not ready" there.
+    const blockerRows = await workItemLinkRepository.findBlockerStatesForItems([item.id], tx);
+    const terminalByProject =
+      blockerRows.length > 0
+        ? await workflowsService.getTerminalStatusKeysByProjects(
+            blockerRows.map((b) => b.projectId),
+            ctx.workspaceId,
+            tx,
+          )
+        : new Map<string, Set<string>>();
+    const hasOpenBlocker = !classifyBlockerReadiness(blockerRows, terminalByProject).ready;
+
+    const decision = restingStatusFor({
+      archived: item.archivedAt !== null,
+      currentStatus: item.status,
+      hasOpenBlocker,
+    });
+    if (!decision.write) {
+      await planTargetLockRepository.deleteById(lock.id, tx);
+      continue;
+    }
+
+    const from = statuses.find((s) => s.key === item.status);
+    const to = statuses.find((s) => s.key === decision.toKey);
+    // A project whose workflow has no such status, or whose `restricted` graph
+    // does not declare the hop, keeps the card where it is — the same
+    // conservative arm Pass 2b takes, and for the same reason: a status the
+    // workflow does not offer is never written, and a graph somebody reshaped is
+    // not overridden here. MOTIR-5643 declares `planning → todo` and
+    // `planning → blocked` for every default project, so this is the custom case.
+    const legal =
+      from != null &&
+      to != null &&
+      from.key !== to.key &&
+      (openPolicy ||
+        (await workflowsRepository.findTransition(
+          plan.projectId,
+          from.id,
+          to.id,
+          ctx.workspaceId,
+          tx,
+        )) !== null);
+    if (!legal) {
+      await planTargetLockRepository.deleteById(lock.id, tx);
+      continue;
+    }
+
+    await workItemRepository.update(item.id, { status: to.key }, tx);
+    const revisionId = await workItemRevisionsService.recordRevision(
+      {
+        workItemId: item.id,
+        changedById: ctx.userId,
+        changeKind: 'updated',
+        diff: { status: { from: from.key, to: to.key } },
+      },
+      tx,
+    );
+    await planTargetLockRepository.deleteById(lock.id, tx);
+    moves.push({
+      workItemId: item.id,
+      fromStatusKey: from.key,
+      toStatusKey: to.key,
+      revisionId,
+    });
+  }
+  return moves;
 }
 
 /** What one `materialize` pass did to the tree — the ids it touched (the
@@ -2269,7 +2397,20 @@ async function materialize(
 interface MaterializeResult {
   touchedWorkItemIds: string[];
   reparented: ReparentMove[];
-  rescopeResets: RescopeResetMove[];
+  /** The resting statuses this pass wrote over its plan's parked targets
+   *  (MOTIR-5646) — see {@link RestingMove}. */
+  restingMoves: RestingMove[];
+}
+
+/** One resting status an approve wrote over a target its plan had parked
+ *  (MOTIR-5646) — the payload its post-commit `work-item/transitioned` carries,
+ *  the shape MOTIR-5359's retired `RescopeResetMove` had, and for the same
+ *  reason: a status change announces itself after the transaction commits. */
+interface RestingMove {
+  workItemId: string;
+  fromStatusKey: string;
+  toStatusKey: string;
+  revisionId: string;
 }
 
 /**
@@ -2370,7 +2511,7 @@ async function applyModify(
   // already has its row and the map is complete by the time we are called.
   planItemToWorkItem: ReadonlyMap<string, string>,
   planId: string,
-): Promise<{ reparent: ReparentMove | null; reset: RescopeResetMove | null }> {
+): Promise<{ reparent: ReparentMove | null }> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
   if (!locked) throw new PlanItemTargetMissingError(item.workItemId);
@@ -2630,21 +2771,28 @@ async function applyModify(
     }
   }
 
-  // THE RE-SCOPE RESET (bug MOTIR-5359) — see the status rule below the write.
-  const statusReset = await resolveRescopeReset(current, patch, ctx, tx);
-  if (statusReset) {
-    update.status = statusReset.toStatusKey;
-    // The integration branch goes with the claim, as it does on a `done` write in
-    // `applyStatusTransition`: readiness treats a blocker carrying a
-    // `sessionBranch` as satisfied (`isOpenBlocker`), so a reset card that kept it
-    // would go on unblocking its dependents on the OLD body's branch. Bookkeeping,
-    // not a content edit — kept out of the diff, the same convention.
+  // ⚠️ THE RE-SCOPE RESET IS GONE FROM HERE (MOTIR-5646 supersedes MOTIR-5359).
+  // `resolveRescopeReset` used to run at this point and move a re-scoped
+  // in-progress-category card to the project's INITIAL status.
+  //
+  // It is replaced rather than kept beside its successor, because the two would
+  // fight over the same column with different answers. Its question was *did
+  // this patch change the card's title, body or repository?* — narrower than the
+  // one the park poses (*was this card parked?*), and blind to the card's
+  // blockers, so it sent a card with an open prerequisite to `todo`. Every
+  // `modify` target is now parked by its own append, and `restPlanTargets`
+  // rests ALL of them from their live edges as materialize's last pass
+  // (AMENDMENT 16 D6, and D11's disposition for MOTIR-5359).
+  //
+  // ⚠️ ONE THING THAT RESET DID IS KEPT, and it is not about the status: a card
+  // whose body just changed must not go on unblocking its dependents on the OLD
+  // body's branch. Readiness treats a blocker carrying a `sessionBranch` as
+  // satisfied (`isOpenBlocker`), so the branch is cleared with the re-scope
+  // exactly as `applyStatusTransition` clears it on a `done` write. Bookkeeping
+  // rather than a content edit, so it stays out of the diff — the same
+  // convention as before.
+  if (patchRescopes(patch, current)) {
     update.sessionBranch = null;
-    diff.status = { from: statusReset.fromStatusKey, to: statusReset.toStatusKey };
-    // The REASON, on the same one revision: which plan re-scoped the card, and
-    // whether the workflow declares the edge (`transition`) or the approve wrote
-    // it as a plan-driven reset past a `restricted` graph (`plan_reset`).
-    diff.statusReset = { planId, reason: 'rescoped', arm: statusReset.arm };
   }
 
   if (Object.keys(update).length > 0) {
@@ -2720,105 +2868,27 @@ async function applyModify(
 
   // ONE revision for the whole modify (same id — lands as a single entry in the
   // existing work-item revision/activity log; identity is never re-minted).
-  const revisionId = await workItemRevisionsService.recordRevision(
+  //
+  // Its id is no longer RETURNED: the only caller that wanted it was MOTIR-5359's
+  // re-scope reset, which rode this revision's `status` cell to its post-commit
+  // `work-item/transitioned`. The resting status records its own revision and
+  // reports its own id (MOTIR-5646), so there is nothing left here to announce.
+  await workItemRevisionsService.recordRevision(
     { workItemId: item.workItemId, changedById: ctx.userId, changeKind: 'updated', diff },
     tx,
   );
 
-  // Handed back rather than acted on here: BOTH of a move's consequences are
-  // whole-pass facts. The repo-set recompute has to run once per container after
-  // every op has landed (the rollup below), and the `child-set.changed` event has
-  // to be emitted AFTER the approve transaction commits, like every `work-item/*`
-  // event on this path. The status reset's `work-item/transitioned` is the same:
-  // a rolled-back approve must not have announced a transition.
-  return {
-    reparent,
-    reset: statusReset
-      ? {
-          workItemId: item.workItemId,
-          fromStatusKey: statusReset.fromStatusKey,
-          toStatusKey: statusReset.toStatusKey,
-          revisionId,
-        }
-      : null,
-  };
-}
-
-/** A re-scope reset the approve performed (bug MOTIR-5359) — the payload its
- *  post-commit `work-item/transitioned` carries. */
-interface RescopeResetMove {
-  workItemId: string;
-  fromStatusKey: string;
-  toStatusKey: string;
-  revisionId: string;
-}
-
-/**
- * Decide the RE-SCOPE RESET for one `modify` target (bug MOTIR-5359), inside the
- * approve transaction, against the row `applyModify` has just locked and re-read —
- * so the status judged is the status written over, never a snapshot from before
- * the lock.
- *
- * Returns null when the patch does not re-scope the card (`patchRescopes`), when
- * its status is outside the `in_progress` CATEGORY (`resetsOnRescope` — a `todo` /
- * `blocked` card claims nothing, a `done` one never reaches here), or when the
- * project has no initial status to return to.
- *
- * ⚠️ WHY THIS IS NOT `workItemsService.applyStatusTransition`. That funnel asserts
- * `work_item:edit` (`assertCanEdit`), and the approve is gated by `ai:decide_plan`
- * alone — every other write a plan makes to a card (its title, its body, its
- * parent, its edges, Pass 2b's birth status) rides that key. Routing only the
- * reset through the edit gate would refuse the whole approve for a custom role
- * holding `ai:decide_plan` without `work_item:edit`. So the approve makes the
- * write itself, the way Pass 2b does, and keeps what the funnel guarantees: the
- * row lock (taken by the caller), a real project status as the target, the
- * legality read, and the status on a revision.
- *
- * THE TWO ARMS. Under an `open` policy, or where a `restricted` workflow DECLARES
- * the edge, the reset is an ordinary `transition`. Where it does not, it is still
- * written — as a `plan_reset` — rather than failing the approve: a person approved
- * the re-scope, and refusing it would strand the plan for a graph that was never
- * drawn with re-planning in mind. In the default workflow (`DEFAULT_TRANSITIONS`)
- * `in_progress → todo` and `planning → todo` are declared, so those two are
- * `transition`s; `implemented`, `in_review` and `approved` have no edge to `todo`
- * and take the `plan_reset` arm.
- */
-async function resolveRescopeReset(
-  current: WorkItem,
-  patch: PlanItemPatch,
-  ctx: ServiceContext,
-  tx: Prisma.TransactionClient,
-): Promise<{
-  fromStatusKey: string;
-  toStatusKey: string;
-  arm: 'transition' | 'plan_reset';
-} | null> {
-  if (!patchRescopes(patch, current)) return null;
-  const statuses = await workflowsRepository.findStatuses(current.projectId, ctx.workspaceId, tx);
-  const from = statuses.find((s) => s.key === current.status);
-  if (!from || !resetsOnRescope(from.category)) return null;
-  const initial = statuses.find((s) => s.isInitial);
-  // …and only INTO the `todo` category. The source is `in_progress`-category by
-  // the check above, so the write can never LEAVE the done category; this makes
-  // it unable to ENTER it either, even under a custom workflow whose initial
-  // status is not a to-do one — so no `completedAt` stamp is ever owed
-  // (`tests/work-items/status-write-guard.test.ts` rules on it as never-terminal).
-  if (!initial || initial.key === from.key || initial.category !== 'todo') return null;
-  const project = await projectRepository.findById(current.projectId, tx);
-  const declared =
-    project?.workflowPolicyMode === 'open' ||
-    (await workflowsRepository.findTransition(
-      current.projectId,
-      from.id,
-      initial.id,
-      ctx.workspaceId,
-      tx,
-    )) !== null;
-  return {
-    fromStatusKey: from.key,
-    toStatusKey: initial.key,
-    arm: declared ? 'transition' : 'plan_reset',
-  };
+  // Handed back rather than acted on here: a move's consequences are whole-pass
+  // facts. The repo-set recompute has to run once per container after every op
+  // has landed (the rollup below), and the `child-set.changed` event has to be
+  // emitted AFTER the approve transaction commits, like every `work-item/*`
+  // event on this path.
+  //
+  // The STATUS is no longer one of them: `restPlanTargets` writes the resting
+  // status for every parked target as materialize's last pass and returns its
+  // own moves, so this function has no status change left to report
+  // (MOTIR-5646).
+  return { reparent };
 }
 
 /**
@@ -3083,6 +3153,35 @@ async function releasePlanTargetLocks(
   plan: { id: string; projectId: string; sourceJobId: string | null },
   ctx: ServiceContext,
 ): Promise<void> {
+  // ⚠️ THE PLAN'S OWN LOCKS FIRST, AND UNCONDITIONALLY (MOTIR-5646). This
+  // function used to open with `if (!plan.sourceJobId) return;` — and
+  // `sourceJobId` is null for EVERY MCP-authored plan, which is every runbook
+  // planning pass, so the one line above this comment is where the reported bug
+  // actually lived: a plan written through `create_plan` released nothing at
+  // all, for ever, and no sweep reached it either because a hand-parked card had
+  // no lock row to expire.
+  //
+  // A plan-held lock is now released by the plan's own id. On a DECLINE, a
+  // withdraw that empties the plan or a discarded close, this RESTORES each
+  // target's prior status (D8). On an APPROVE there is nothing here to find:
+  // `restPlanTargets` gave each target its resting status and deleted the lock
+  // inside the approve transaction (D6), so this call is a no-op — which is what
+  // makes it safe on every decision path.
+  try {
+    await planTargetLockService.releaseForPlan(plan.id, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectId: plan.projectId,
+    });
+  } catch (err) {
+    console.warn(
+      `[plansService] releasing PLAN-held target locks for plan ${plan.id} failed; the lease will expire and the sweep will clear it`,
+      err,
+    );
+  }
+
+  // The SESSION half, unchanged: a plan produced by a planning conversation also
+  // hands that conversation's own leases back when it is decided.
   if (!plan.sourceJobId) return;
   try {
     const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -5307,7 +5406,7 @@ export const plansService = {
         projectKey,
         touchedWorkItemIds,
         reparented,
-        rescopeResets,
+        restingMoves,
       } = await withWorkspaceContext(
         { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
         async (tx) => {
@@ -5340,7 +5439,7 @@ export const plansService = {
           // AUTHOR (MOTIR-3604). Same placement, same reason: on the fresh set,
           // under the lock, before a single row is materialized.
           assertRepoPinsUnmoved(snapshotPins, proposals, snapshotRepoSets);
-          const { touchedWorkItemIds, reparented, rescopeResets } = await materialize(
+          const { touchedWorkItemIds, reparented, restingMoves } = await materialize(
             proposals,
             fresh,
             ctx,
@@ -5423,7 +5522,7 @@ export const plansService = {
             projectKey: project?.identifier ?? null,
             touchedWorkItemIds,
             reparented,
-            rescopeResets,
+            restingMoves,
           };
         },
         // The raised budget, argued at {@link APPROVE_TX_BUDGET}. Second of the
@@ -5479,22 +5578,24 @@ export const plansService = {
         });
       }
 
-      // THE RE-SCOPE RESETS' TRANSITIONS (bug MOTIR-5359). Every other status write
-      // in the product announces itself with `work-item/transitioned` after its
-      // transaction commits — the watcher email, the bell, automation's
-      // `transitioned` trigger and status derivation all ride it — and a card the
-      // approve walked back from `implemented` to To Do is a status change like any
-      // other: its parent's derived status can move with it. POST-COMMIT and
-      // best-effort, for the two reasons the events above give. `revisionId` is the
-      // modify's ONE revision, which carries the `status` cell.
-      for (const reset of rescopeResets) {
+      // THE RESTING STATUSES' TRANSITIONS (bug MOTIR-5640 · MOTIR-5646, which
+      // supersedes MOTIR-5359's re-scope resets and inherits this loop). Every
+      // other status write in the product announces itself with
+      // `work-item/transitioned` after its transaction commits — the watcher
+      // email, the bell, automation's `transitioned` trigger and status
+      // derivation all ride it — and a card the approve returned from `planning`
+      // to To Do or Blocked is a status change like any other: its parent's
+      // derived status can move with it. POST-COMMIT and best-effort, for the two
+      // reasons the events above give. `revisionId` is the one revision
+      // `restPlanTargets` recorded, which carries the `status` cell.
+      for (const move of restingMoves) {
         await sendEvent('work-item/transitioned', {
           workspaceId: ctx.workspaceId,
-          workItemId: reset.workItemId,
+          workItemId: move.workItemId,
           actorId: ctx.userId,
-          fromStatusKey: reset.fromStatusKey,
-          toStatusKey: reset.toStatusKey,
-          revisionId: reset.revisionId,
+          fromStatusKey: move.fromStatusKey,
+          toStatusKey: move.toStatusKey,
+          revisionId: move.revisionId,
         });
       }
 
