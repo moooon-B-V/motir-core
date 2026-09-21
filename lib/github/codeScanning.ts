@@ -16,7 +16,7 @@
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_TIMEOUT_MS = 10_000;
 // One page is plenty: we only need "does code scanning exist" + the newest
-// analysis per tool, and the API returns newest-first.
+// analysis per (tool, category), and the API returns newest-first.
 const ANALYSES_PER_PAGE = 50;
 
 /** One analysis row off `GET /repos/{o}/{r}/code-scanning/analyses` — the wire
@@ -24,8 +24,14 @@ const ANALYSES_PER_PAGE = 50;
 export interface CodeScanningAnalysisSummary {
   id: number;
   toolName: string;
-  /** ISO `created_at` — motir-ai picks the newest per tool. */
+  /** ISO `created_at` — motir-ai picks the newest per (tool, category). */
   createdAt: string;
+  /** The Git ref the analysis ran on — `refs/heads/<branch>`, or
+   *  `refs/pull/<n>/head|merge` for a pull request (MOTIR-5922). */
+  ref: string | null;
+  /** The analysis category — CodeQL uploads one analysis per LANGUAGE
+   *  (`/language:actions`, …) under one tool name (MOTIR-5922). */
+  category: string | null;
 }
 
 /**
@@ -67,18 +73,21 @@ async function ghRequest(token: string, path: string, accept: string): Promise<R
 
 /**
  * List the code-scanning analyses for `owner/name` with the installation
- * `token`. Null = code scanning not enabled / no access / unavailable (the
- * detector treats null as "source absent"). Parses GitHub's raw rows into the
- * clean wire shape motir-ai consumes.
+ * `token`, narrowed to `ref` when one is given (a full ref, e.g.
+ * `refs/heads/main`). Null = code scanning not enabled / no access /
+ * unavailable (the detector treats null as "source absent"). Parses GitHub's
+ * raw rows into the clean wire shape motir-ai consumes.
  */
 export async function fetchCodeScanningAnalyses(
   token: string,
   owner: string,
   name: string,
+  ref?: string,
 ): Promise<CodeScanningAnalysisSummary[] | null> {
+  const refParam = ref ? `&ref=${encodeURIComponent(ref)}` : '';
   const res = await ghRequest(
     token,
-    `/repos/${owner}/${name}/code-scanning/analyses?per_page=${ANALYSES_PER_PAGE}`,
+    `/repos/${owner}/${name}/code-scanning/analyses?per_page=${ANALYSES_PER_PAGE}${refParam}`,
     'application/vnd.github+json',
   );
   // 404 = code scanning not enabled / no access; any !ok = unavailable.
@@ -101,6 +110,8 @@ export async function fetchCodeScanningAnalyses(
         id: o['id'],
         toolName,
         createdAt: typeof o['created_at'] === 'string' ? o['created_at'] : '',
+        ref: typeof o['ref'] === 'string' ? o['ref'] : null,
+        category: typeof o['category'] === 'string' ? o['category'] : null,
       });
     }
   }

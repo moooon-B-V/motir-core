@@ -41,12 +41,19 @@ export interface CodeScanningProxyContext {
   workspaceId: string;
 }
 
+/** The analyses answer: the rows, plus the connected repo's default branch so
+ *  motir-ai can tell a trunk analysis from a pull-request one (MOTIR-5922). */
+export interface CodeScanningAnalysesView {
+  analyses: CodeScanningAnalysisSummary[];
+  defaultBranch: string;
+}
+
 /** Resolve `repoRef` to the connected repo's coordinates + a freshly-minted
  *  installation token, or null when it can't be resolved (degrade). */
 async function resolveRepoToken(
   ctx: CodeScanningProxyContext,
   repoRef: string,
-): Promise<{ token: string; owner: string; name: string } | null> {
+): Promise<{ token: string; owner: string; name: string; defaultBranch: string } | null> {
   const gh = parseRepoRef(repoRef);
   if (!gh) return null;
 
@@ -72,7 +79,12 @@ async function resolveRepoToken(
       owner: connected.owner,
     });
     // Use the STORED canonical coordinates (GitHub casing), not the caller's ref.
-    return { token, owner: connected.owner, name: connected.name };
+    return {
+      token,
+      owner: connected.owner,
+      name: connected.name,
+      defaultBranch: connected.defaultBranch,
+    };
   } catch {
     // App not configured on this deploy / token-mint failure — degrade, never gate.
     return null;
@@ -80,15 +92,28 @@ async function resolveRepoToken(
 }
 
 export const githubCodeScanningProxyService = {
-  /** The code-scanning analyses for `repoRef`, read with the tenant's
-   *  installation token. Null when unresolvable / unavailable. */
+  /** The code-scanning analyses on `repoRef`'s DEFAULT BRANCH, read with the
+   *  tenant's installation token, plus that branch's name. Null when
+   *  unresolvable / unavailable.
+   *
+   *  Narrowed to the default branch at the source (MOTIR-5922): CodeQL default
+   *  setup also scans every pull request, and the unfiltered list is
+   *  newest-first across every ref — so on an active repo one page was mostly
+   *  PR analyses, which carry few or no results, and the audit ingested one of
+   *  those instead of the trunk's. */
   async listAnalyses(
     ctx: CodeScanningProxyContext,
     repoRef: string,
-  ): Promise<CodeScanningAnalysisSummary[] | null> {
+  ): Promise<CodeScanningAnalysesView | null> {
     const resolved = await resolveRepoToken(ctx, repoRef);
     if (!resolved) return null;
-    return fetchCodeScanningAnalyses(resolved.token, resolved.owner, resolved.name);
+    const analyses = await fetchCodeScanningAnalyses(
+      resolved.token,
+      resolved.owner,
+      resolved.name,
+      `refs/heads/${resolved.defaultBranch}`,
+    );
+    return analyses ? { analyses, defaultBranch: resolved.defaultBranch } : null;
   },
 
   /** The SARIF document for one analysis of `repoRef`, read with the tenant's
