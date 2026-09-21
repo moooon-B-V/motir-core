@@ -6759,6 +6759,8 @@
       "findingsHeader": "未达到你的规范 · 最严重的在前",
       "findingsCount": "{count, plural, other {# 个问题}}",
       "noFindings": "没有问题——你的代码符合规范。",
+      "notMeasuredTitle": "未测量：无法读取代码索引",
+      "notMeasuredDescription": "Motir 无法读取此仓库的代码索引，因此本次审计未测量任何内容，也没有评级。请重新审计后再试。",
       "loadMore": "加载更多问题",
       "severity": {
         "critical": "严重",
@@ -6786,6 +6788,7 @@
         "stateDeriving": "正在推导…",
         "stateNotAudited": "尚未审核",
         "stateUnavailable": "无法加载此报告",
+        "stateNotMeasured": "未测量",
         "startedWhen": "{when}开始",
         "startedRecently": "刚刚开始",
         "retry": "重试",

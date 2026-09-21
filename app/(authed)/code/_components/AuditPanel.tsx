@@ -105,6 +105,26 @@ export function AuditPanel({
   }
 
   const summary = audit.healthSummary;
+  // MOTIR-5921: the audit could not read the code graph, so it measured nothing.
+  // Say so — no grade, and never "your code meets the convention", which is what
+  // an empty findings list over no graph used to read as. Findings an external
+  // scanner supplied are still real, so they still render.
+  if (summary.notMeasured) {
+    return (
+      <div className="flex flex-col gap-4">
+        <NotMeasuredState reauditing={reauditing} onReaudit={onReaudit} />
+        {findings.length > 0 ? (
+          <FindingsList
+            findings={findings}
+            total={total}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={onLoadMore}
+          />
+        ) : null}
+      </div>
+    );
+  }
   // The "Deepen this audit" affordance is NON-BLOCKING: shown ONLY when the backend
   // reports no external scanner, sits BETWEEN the summary and the findings, and is
   // fully dismissible (a quiet re-open link remains). The report renders unchanged
@@ -177,6 +197,37 @@ function UnavailableRepoState({ repoRef, onRetry }: { repoRef: string; onRetry: 
       action={
         <Button variant="secondary" size="sm" leftIcon={<RefreshCw />} onClick={onRetry}>
           {t('audit.repos.retry')}
+        </Button>
+      }
+    />
+  );
+}
+
+// MOTIR-5921: an audit exists, but it could not read the code graph and so measured
+// nothing. Composed like its sibling `UnavailableRepoState` (the shipped
+// `EmptyState`), with the re-audit as the way out.
+function NotMeasuredState({
+  reauditing,
+  onReaudit,
+}: {
+  reauditing: boolean;
+  onReaudit: () => void;
+}) {
+  const t = useTranslations('codeHealth');
+  return (
+    <EmptyState
+      icon={<TriangleAlert className="text-(--el-warning)" aria-hidden />}
+      title={t('audit.notMeasuredTitle')}
+      description={t('audit.notMeasuredDescription')}
+      action={
+        <Button
+          variant="secondary"
+          size="sm"
+          leftIcon={reauditing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          disabled={reauditing}
+          onClick={onReaudit}
+        >
+          {t('audit.repos.reauditOne')}
         </Button>
       }
     />

@@ -80,9 +80,16 @@ function toHealthSummary(raw: unknown): CodeHealthSummaryDTO {
         detail: str(c['detail']),
       }))
     : undefined;
+  // MOTIR-5921: an audit that read no graph composes no verdict. motir-ai records
+  // `sources.graph: false` and a null grade; audits recorded before that fix carry
+  // the placeholder grade 'unknown' — neither is a grade to render.
+  const sources = (s['sources'] ?? {}) as Record<string, unknown>;
+  const notMeasured = sources['graph'] === false;
+  const grade = str(s['grade']);
   return {
-    grade: str(s['grade']),
-    conformancePct: num(s['conformancePct']),
+    grade: notMeasured || grade === 'unknown' ? undefined : grade,
+    ...(notMeasured ? { notMeasured: true } : {}),
+    conformancePct: notMeasured ? undefined : num(s['conformancePct']),
     score: num(s['score']),
     totalFindings: num(s['totalFindings']),
     conventionVersion: num(s['conventionVersion']),
