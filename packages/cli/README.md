@@ -656,3 +656,5 @@ this workflow filename). Provenance is still requested explicitly with
 > `dry_run` path cannot catch this: it packs but skips the publish, so it
 > rehearses everything except auth. OIDC removes the credential that could
 > expire in the first place.
+
+<!-- CI probe (MOTIR-5324): a package-only diff to verify the package lanes are path-gated. This pull request is closed unmerged. -->
