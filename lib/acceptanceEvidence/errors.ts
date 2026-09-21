@@ -96,34 +96,52 @@ export class AcceptanceEvidenceCommitShaError extends AcceptanceEvidenceError {
 }
 
 /**
- * The story's CURRENT receipt is `approved` — a human watched that recording and
- * signed it — so it is FROZEN and a publish may not supersede it (MOTIR-2764).
+ * The story takes no new receipt right now (MOTIR-5872) — the acceptance twin of
+ * `DesignCardClosedError`, and it refuses for exactly the two reasons that one
+ * does. → 409: the caller is not wrong, the story's state conflicts with a new
+ * recording.
  *
- * This is the layer that cannot be bypassed. `markSupersededByWorkItem` carries
- * no status predicate, so before this error existed ANY publish flipped the
- * approved row `isCurrent: false`, unlinked its attachments, and left the
- * orphan-GC to reclaim the very bytes the approval was given on — triggered by
- * something as small as a one-line fix to an `acceptance*.spec.ts`.
+ * · **The story is CLOSED** — in a terminal status. Its acceptance is decided and
+ *   it has shipped; a later recording would be a question nobody can answer.
+ *   Reopening the story by hand is the way back.
+ * · **The story is still STANDING ON an approved receipt** — the current receipt
+ *   is `approved`, the story is at or above `implemented`, and a pull request of
+ *   its is still open. That merge would ship with whatever receipt is current,
+ *   so a republish in that window would carry a recording nobody approved to
+ *   `done` ({@link AcceptanceEvidenceStoryClosedError.becauseApproved}).
  *
- * **This is NOT a failure condition.** An accepted story is the expected steady
- * state for most specs most of the time, so the CI publisher recognises this
- * `code`, reports the skip and exits 0 (MOTIR-2768). It is a 409 because the
- * request conflicts with the resource's current state — the caller is not wrong,
- * there is simply nothing left to write.
- *
- * `pending` and `changes_requested` receipts remain freely replaceable: a story
- * still in review must keep getting the current truth on every run.
- *
- * Policy: `docs/decisions/acceptance-receipt-lifecycle.md` §2 and §4.
+ * ⚠️ IT REPLACES `AcceptanceEvidenceAlreadyApprovedError` (MOTIR-2764), which
+ * refused EVERY publish over an approved receipt, for ever. That froze the STORY
+ * rather than the recording: a story whose merge did not land and came back to
+ * be reworked could never record again. What MOTIR-2764 actually protected — the
+ * approved recording's BYTES — is now protected by the supersede keeping them
+ * (`acceptanceEvidenceService`'s `persistEvidence`), the way an approved design
+ * version is pinned. Policy: `docs/decisions/acceptance-receipt-lifecycle.md`
+ * AMENDMENT 1.
  */
-export class AcceptanceEvidenceAlreadyApprovedError extends AcceptanceEvidenceError {
-  readonly code = 'ACCEPTANCE_EVIDENCE_ALREADY_APPROVED' as const;
+export class AcceptanceEvidenceStoryClosedError extends AcceptanceEvidenceError {
+  readonly code = 'ACCEPTANCE_EVIDENCE_STORY_CLOSED' as const;
   readonly status = 409;
   constructor(
-    /** The story whose receipt is frozen — the CI log names it, so a reader can act. */
+    /** The story — the log names it, so a reader can act. */
     readonly storyKey: string,
+    statusKey: string,
+    reason?: string,
   ) {
-    super(`${storyKey} has an approved acceptance receipt; it is frozen and was not superseded.`);
-    this.name = 'AcceptanceEvidenceAlreadyApprovedError';
+    super(
+      `${storyKey} ${reason ?? `is ${statusKey}`}, so it takes no new acceptance receipt. ` +
+        `To record again, reopen the story by hand (move it out of ${statusKey}) and redo ` +
+        'the work; the approved recording stays on record either way.',
+    );
+    this.name = 'AcceptanceEvidenceStoryClosedError';
+  }
+
+  /** The story stands on an APPROVED receipt while its pull request is still open. */
+  static becauseApproved(storyKey: string, statusKey: string): AcceptanceEvidenceStoryClosedError {
+    return new AcceptanceEvidenceStoryClosedError(
+      storyKey,
+      statusKey,
+      `has an APPROVED acceptance receipt and an open pull request that would ship with it`,
+    );
   }
 }

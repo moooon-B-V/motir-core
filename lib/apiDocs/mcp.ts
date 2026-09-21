@@ -465,7 +465,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'reviewer watches and the gate rests on. Nothing else publishes it, and a missing publish ' +
       'looks exactly like a successful run.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '8fd1253a91cf',
+    descriptionFingerprint: '7b8814f69f72',
   },
   publish_test_instructions: {
     summary:

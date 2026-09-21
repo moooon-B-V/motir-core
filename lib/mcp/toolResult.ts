@@ -335,8 +335,8 @@ export function toToolError(err: unknown): CallToolResult {
   // matters most is reachable on an ordinary first attempt: a key that resolves
   // to a container with no story parent (`ACCEPTANCE_EVIDENCE_NOT_A_STORY`,
   // 422). A blob the caller never actually PUT to its grant, a pathname outside
-  // the story's own prefix, and a receipt already APPROVED and therefore frozen
-  // are the others, and each is something the agent can act on in one hop —
+  // the story's own prefix, and a story that takes no receipt right now (closed,
+  // or still standing on an approved one — MOTIR-5872) are the others, and each is something the agent can act on in one hop —
   // upload it, use the pathname you were given, stop. Unmapped they would reach
   // the agent as an opaque JSON-RPC internal error at the last step of a run,
   // holding a recording it cannot re-make.

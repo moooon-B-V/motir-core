@@ -1763,15 +1763,16 @@ null). `publish_acceptance_result`: `id`, `workItemKey`, `status`,
 **Refusals** — every one comes from the shipped acceptance-evidence service, so
 these tools and the HTTP publish routes answer one rule:
 
-| Refusal                           | When                                                                                                                            |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCEPTANCE_EVIDENCE_NOT_A_STORY` | `key` resolves to a container that is not a story and has no story parent. A receipt is a story-level artifact (Principle #18). |
-| `ACCEPTANCE_VIDEO_INELIGIBLE`     | The org has no paid AI plan, or the acceptance-video toggle is off. Checked BEFORE any object-store spend.                      |
-| blob missing                      | The `pathname` names no object — the PUT never happened, or went somewhere else. The register step HEADs every artifact.        |
-| pathname outside the prefix       | A key that is not under this story's own acceptance prefix. A lying or cross-tenant pathname can never be recorded.             |
-| oversize file                     | The object's AUTHORITATIVE size exceeds the org's per-file cap. Read from the store, never from what the caller reports.        |
-| disallowed media type             | Anything but `video/webm` / `video/mp4`. `text/html` is refused here exactly as video is refused by the design publisher.       |
-| unknown / cross-workspace `key`   | A 404, indistinguishable from a work item the token cannot reach.                                                               |
+| Refusal                            | When                                                                                                                                                                                                                                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCEPTANCE_EVIDENCE_NOT_A_STORY`  | `key` resolves to a container that is not a story and has no story parent. A receipt is a story-level artifact (Principle #18).                                                                                                                                                         |
+| `ACCEPTANCE_VIDEO_INELIGIBLE`      | The org has no paid AI plan, or the acceptance-video toggle is off. Checked BEFORE any object-store spend.                                                                                                                                                                              |
+| blob missing                       | The `pathname` names no object — the PUT never happened, or went somewhere else. The register step HEADs every artifact.                                                                                                                                                                |
+| pathname outside the prefix        | A key that is not under this story's own acceptance prefix. A lying or cross-tenant pathname can never be recorded.                                                                                                                                                                     |
+| oversize file                      | The object's AUTHORITATIVE size exceeds the org's per-file cap. Read from the store, never from what the caller reports.                                                                                                                                                                |
+| disallowed media type              | Anything but `video/webm` / `video/mp4`. `text/html` is refused here exactly as video is refused by the design publisher.                                                                                                                                                               |
+| unknown / cross-workspace `key`    | A 404, indistinguishable from a work item the token cannot reach.                                                                                                                                                                                                                       |
+| `ACCEPTANCE_EVIDENCE_STORY_CLOSED` | 409. The story is closed, or it still stands on an APPROVED receipt: at or above Implemented with a pull request open, which would merge with it. Reopen the story (move it below Implemented) to record again. An approved recording is never deleted by a later publish (MOTIR-5872). |
 
 **Permission** — `work_item:edit`. `ACCEPTANCE_PUBLISH_PERMISSION` _is_ that key,
 the same one `publish_design_result` asserts and one `CLI_TOKEN_GRANT` already

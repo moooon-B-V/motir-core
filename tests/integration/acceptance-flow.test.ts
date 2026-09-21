@@ -5,7 +5,7 @@ import { adminDb } from '../helpers/adminDb';
 import { decideAcceptance } from '../helpers/acceptanceGate';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
-import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
+import { AcceptanceEvidenceStoryClosedError } from '@/lib/acceptanceEvidence/errors';
 
 // The story-acceptance INTEGRATION SEAM (Story MOTIR-1627 · Subtask MOTIR-1637)
 // against a REAL Postgres — the assembled flow across the subtasks, not each
@@ -161,16 +161,19 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     expect(unlinked).toBe(1);
   });
 
-  // ── THE FREEZE (MOTIR-2764) ────────────────────────────────────────────────
+  // ── AN APPROVED RECEIPT (MOTIR-2764, re-keyed by MOTIR-5872) ─────────────────
   //
-  // The regression these four hold: `markSupersededByWorkItem` carries no status
+  // The regression these hold: `markSupersededByWorkItem` carries no status
   // predicate, so before the service gate ANY publish flipped an APPROVED row
   // `isCurrent: false` and unlinked its attachments, handing the approved video's
-  // bytes to the orphan-GC. The trigger was as small as a one-line fix to an
-  // `acceptance*.spec.ts` — a test-only change destroying a production record.
-  // Policy: docs/decisions/acceptance-receipt-lifecycle.md §2.
+  // bytes to the orphan-GC. MOTIR-2764 answered it by refusing every publish over
+  // an approved receipt; MOTIR-5872 keys the refusal on the STORY instead (closed,
+  // or still standing on the approval) and keeps an approved recording's bytes
+  // when a reworked story does supersede it. Approving with no pull request is
+  // terminal, so every story below is `done` — CLOSED — when it is republished.
+  // Policy: docs/decisions/acceptance-receipt-lifecycle.md AMENDMENT 1.
 
-  it('an APPROVED receipt is FROZEN — a republish is refused and writes NOTHING', async () => {
+  it('an approved receipt CLOSES a story with no pull request — a republish is refused and writes NOTHING', async () => {
     const story = await inReviewStory(fx);
     await publishVia(token, story, { videoName: 'signed.webm', commitSha: 'aaaaaaa' });
     await decideAcceptance(story.id, 'approve', fx.ctx);
@@ -180,10 +183,10 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
 
     const res = await publishVia(token, story, { videoName: 'later.webm', commitSha: 'bbbbbbb' });
 
-    // Refused at the service boundary, by CODE — the uploader branches on this
-    // rather than on the status number (MOTIR-2768).
+    // Refused at the service boundary, by CODE — a caller branches on this rather
+    // than on the status number (MOTIR-2768).
     expect(res.status).toBe(409);
-    expect((await res.json()).code).toBe('ACCEPTANCE_EVIDENCE_ALREADY_APPROVED');
+    expect((await res.json()).code).toBe('ACCEPTANCE_EVIDENCE_STORY_CLOSED');
 
     // The approved row is untouched: still current, still approved, same row.
     const stillCurrent = await adminDb.acceptanceEvidence.findFirstOrThrow({
@@ -261,7 +264,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
         },
         fx.ctx,
       ),
-    ).rejects.toThrow(AcceptanceEvidenceAlreadyApprovedError);
+    ).rejects.toThrow(AcceptanceEvidenceStoryClosedError);
   });
 
   it('a token WITHOUT the integration scope cannot publish (403)', async () => {

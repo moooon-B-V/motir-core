@@ -338,7 +338,7 @@ describe('the lifecycles', () => {
 
     const refused = await publishVia(e2e.identifier, 'd00d002');
     expect(refused.isError).toBe(true);
-    expect(JSON.stringify(refused)).toContain('ACCEPTANCE_EVIDENCE_ALREADY_APPROVED');
+    expect(JSON.stringify(refused)).toContain('ACCEPTANCE_EVIDENCE_STORY_CLOSED');
     expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'approved']]);
   });
 });

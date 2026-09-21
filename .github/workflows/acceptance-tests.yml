@@ -134,6 +134,11 @@ name: Acceptance tests
 #   in review  the story's receipt is `pending`; a fresh recording supersedes it.
 #              This is correct — the reviewer must see current truth, and this
 #              lane is why the spec is here.
+#   ⚠️ AMENDED by MOTIR-5872 (the ADR's AMENDMENT 1): approval now PINS the
+#   recording and evicts nothing — a reworked story records again, and a spec
+#   leaves this lane when its author promotes or retires it, not on approval.
+#   The lines below are the 2026-08-13 record.
+#
 #   APPROVED   the receipt is FROZEN. A republish against it is REFUSED by the
 #              service (MOTIR-2764), the publisher reports the skip rather than
 #              failing (MOTIR-2768), and the spec has discharged the job it was
