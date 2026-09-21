@@ -49,10 +49,9 @@ export const workItemRevisionRepository = {
    */
   async findCreatedDescription(
     workItemId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<string | null> {
-    const client = tx ?? dbRead;
-    const row = await client.workItemRevision.findFirst({
+    const row = await tx.workItemRevision.findFirst({
       where: { workItemId, changeKind: 'created' },
       orderBy: { changedAt: 'asc' },
       select: { diff: true },
