@@ -934,13 +934,15 @@ executor === 'coding_agent'`, and its subject is a `docs/decisions/*.md`
 > - **Superseded `republished`** when an edit moves `subjectVersion`, followed by
 >   a fresh gate from the new body; when the body stops parsing, superseded and
 >   none raised. No new `ApprovalGateSupersedeCause` value is needed.
-> - **Superseded `withdrawn` when the work item enters a `done`-category status by
->   any other path.** A hand move to `done` is HELD while the gate awaits (§6d's
->   rule 1 — the kind's status intent resolves to the `done` category), but
->   `cancelled` is never held (`heldMoves.ts`, `CANCELLED_STATUS_KEY`). **A
->   person cancelling the work item WITHDRAWS the question; it is not an
->   overturn**, and the record says so by carrying no decider — an overturn is a
->   decision with a note, a cancel is the question going away.
+> - **A hand move to `cancelled` WITHDRAWS the question; it is not an overturn.**
+>   A hand move to `done` is HELD while the gate awaits (§6d's rule 1 — the kind's
+>   status intent resolves to the `done` category), but `cancelled` is never held
+>   (`heldMoves.ts`, `CANCELLED_STATUS_KEY`), and the shipped pull-back rule
+>   already supersedes every awaiting gate on that move with cause `pulled_back`
+>   (§6d's amendment, rule 6 — `workItemsService.applyStatusTransition`). Nothing
+>   new is built for it; it is stated because the two look alike from outside:
+>   an overturn is a DECISION with a decider and a note, a cancel is the question
+>   going away, and the record tells them apart by carrying no decider.
 > - `raiseOnReviewEntry` skips this kind, as it skips `decision_choice`: the raise
 >   is the reconcile's, never a review-entry side effect.
 >
