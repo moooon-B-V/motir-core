@@ -1,34 +1,25 @@
 #!/usr/bin/env node
-// What `vitest --changed` would select, what its import graph cannot see, and —
-// on a pull request — which Vitest files to run
-// (MOTIR-5322 / MOTIR-5325 · docs/decisions/ci-affected-tests.md).
+// What `vitest --changed` would select on real pull-request diffs, and what its
+// import graph cannot see (MOTIR-5322 · docs/decisions/ci-affected-tests.md).
 //
-// ── Two modes, one rule ─────────────────────────────────────────────────────
-// MEASURE (the default) prints §3's table: for each of the last merged pull
-// requests, what the rule would have selected.
+// It prints §3's table: for each of the last merged pull requests, what the rule
+// would have selected.
 //
 //   pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs
 //   pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --at f59db9679 --limit 30
 //   pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --json
 //
-// SELECT is what `ci.yml`'s `test` legs run on a pull request: the files the
-// diff from `<base>` reaches, plus every always-run test, one per line.
+// ⚠️ NO CI STEP RUNS IT. A pull request runs the whole Vitest suite again: the
+// ADR's Amendment 1 measured the subset past §4's 50% no-go line and reverted
+// the lane (MOTIR-5948). This script is kept as the instrument that RE-OPENS
+// that decision — re-run it over at least the last 100 pull requests, and if the
+// median selected / total over the non-force-full ones is back under 50%, subset
+// selection can return without re-deriving §1–§2.
 //
-//   pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --select 'HEAD^1' --out <file>
-//
-// On a leg `<base>` is `HEAD^1` — the merge commit's first parent, never the
-// event payload's `base.sha`, which can be older than the tree under test
-// (MOTIR-5923; `selectionDiff.mjs` says why). `--head <ref>` (default `HEAD`)
-// diffs to another commit instead, which is how the selection for an
-// already-merged pull request is reproduced by hand: `--select <sha>^ --head <sha>`.
-//
-// It exits NON-ZERO — and the leg then runs its full shard — when the diff is
-// empty or unreadable, or when it touches a force-full path. The `changes` job
-// has already routed a force-full diff to the full suite; refusing here too means
-// a disagreement between the two readers can only ever run MORE.
-//
-// The two modes share every line that decides what a pull request selects, which
-// is the point: the rule that was measured is the rule that is enforced.
+// The SELECT mode the pull-request legs used to run (`--select <base> --out
+// <file>`) was removed with the lane. Its last version, with MOTIR-5923's
+// first-parent diff, is at `aa26372e6` — restore it from there rather than from
+// memory if the lane comes back.
 //
 // `tsx` rather than `node` because the cost column imports the shard plan's own
 // `costSeconds` (a TypeScript module) instead of restating its numbers. Run it
@@ -46,17 +37,16 @@
 // Vitest's own `getTestDependencies` and its own `picomatch` are called, not
 // copies of them.
 //
-// ⚠️ IN MEASURE MODE THE GRAPH IS BUILT ONCE, AT THE CHECKOUT, not at each pull
+// ⚠️ THE GRAPH IS BUILT ONCE, AT THE CHECKOUT, not at each pull
 // request's merge base — see the ADR's §3 for why that approximation is safe.
 // `main` squash-merges, so each first-parent commit whose subject ends `(#<n>)`
 // IS one merged pull request, and `<sha>^..<sha>` is its diff as merged.
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve } from 'node:path';
 import { createVitest } from 'vitest/node';
-import { changedFiles } from './selectionDiff.mjs';
 
 const ROOT = process.cwd();
 const args = process.argv.slice(2);
@@ -64,16 +54,13 @@ const option = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : u
 const LIMIT = Number(option('--limit') || 30);
 const AT = option('--at') || 'HEAD';
 const AS_JSON = args.includes('--json');
-const SELECT_BASE = option('--select');
-const SELECT_OUT = option('--out');
-const SELECT_HEAD = option('--head') || 'HEAD';
 // A variable, not a literal: `tsconfig.scripts.json` type-checks this file, and a
 // literal specifier would pull a `tests/` module into that project (TS6307).
 const SHARD_PLAN = '../../tests/helpers/vitestShardPlan.ts';
 
 // §2 of the ADR, part 1 — a change under any of these runs the WHOLE suite. The
-// list lives in one data file, read by this script, by `ci.yml`'s `changes` job
-// and by the guard; the reason for each entry is in the ADR.
+// list lives in one data file, read by this script and by the guard; the reason
+// for each entry is in the ADR.
 export const FORCE_FULL_FILE = '.github/ci/full-suite-paths.txt';
 export const FORCE_FULL_GLOBS = readFileSync(join(ROOT, FORCE_FULL_FILE), 'utf8')
   .split('\n')
@@ -189,130 +176,106 @@ try {
     return { graphFiles, union: [...new Set([...graphFiles, ...alwaysRun])].sort() };
   };
 
-  if (SELECT_BASE !== undefined) {
-    // ── SELECT ──────────────────────────────────────────────────────────────
-    // Two-dot from `--select` to `--head`. The legs pass the merge commit's
-    // first parent, so this is the pull request's own change to the tree under
-    // test — see `selectionDiff.mjs` for why a stale payload base is not.
-    if (!SELECT_OUT) throw new Error('--select needs --out <file>');
-    const changed = changedFiles(SELECT_BASE, SELECT_HEAD, ROOT);
-    if (changed.length === 0) {
-      console.error('select: empty diff against the base — refusing, so the leg runs in full');
-      process.exitCode = 3;
-    } else if (forceFullPath(changed)) {
-      console.error(`select: ${forceFullPath(changed)} is a force-full path — refusing`);
-      process.exitCode = 3;
-    } else {
-      const { graphFiles, union } = select(changed);
-      writeFileSync(SELECT_OUT, `${union.join('\n')}\n`);
-      console.error(
-        `select: ${changed.length} changed files → ${graphFiles.length} by the import graph + ` +
-          `${alwaysRun.size} always-run = ${union.length} of ${total} spec files`,
-      );
-    }
-  } else {
-    // ── MEASURE ─────────────────────────────────────────────────────────────
-    const plan = await import(SHARD_PLAN);
-    const costOf = (files) => files.reduce((sum, f) => sum + plan.costSeconds(f), 0);
-    const totalCost = costOf([...graphs.keys()]);
-    const pinned = git('rev-parse', AT);
+  const plan = await import(SHARD_PLAN);
+  const costOf = (files) => files.reduce((sum, f) => sum + plan.costSeconds(f), 0);
+  const totalCost = costOf([...graphs.keys()]);
+  const pinned = git('rev-parse', AT);
 
-    const commits = git('log', '--first-parent', '--format=%H%x09%s', `-n${LIMIT * 3}`, AT)
-      .split('\n')
-      .map((line) => {
-        const [sha, subject] = line.split('\t');
-        const m = /\(#(\d+)\)$/.exec(subject ?? '');
-        return m ? { sha, pr: Number(m[1]) } : null;
-      })
-      .filter(Boolean)
-      .slice(0, LIMIT);
+  const commits = git('log', '--first-parent', '--format=%H%x09%s', `-n${LIMIT * 3}`, AT)
+    .split('\n')
+    .map((line) => {
+      const [sha, subject] = line.split('\t');
+      const m = /\(#(\d+)\)$/.exec(subject ?? '');
+      return m ? { sha, pr: Number(m[1]) } : null;
+    })
+    .filter(Boolean)
+    .slice(0, LIMIT);
 
-    const rows = commits.map(({ sha, pr }) => {
-      const changed = git('diff', '--name-only', `${sha}^`, sha).split('\n').filter(Boolean);
-      const { graphFiles, union } = select(changed);
-      return {
-        pr,
-        sha: sha.slice(0, 9),
-        changed: changed.length,
-        app: isAppChange(changed),
-        forceFull: forceFullPath(changed),
-        graphSelected: graphFiles.length,
-        selected: union.length,
-        ratio: union.length / total,
-        costShare: costOf(union) / totalCost,
-      };
-    });
-
-    const measured = rows.filter((r) => r.app && !r.forceFull);
-    const ratios = measured.map((r) => r.ratio).sort((a, b) => a - b);
-    const costs = measured.map((r) => r.costShare).sort((a, b) => a - b);
-    const graphOnly = measured.map((r) => r.graphSelected / total).sort((a, b) => a - b);
-    const summary = {
-      pinned,
-      vitest: vitestRequire('./package.json').version,
-      total,
-      alwaysRun: alwaysRun.size,
-      setupClosure: [...setupClosure].sort(),
-      // Git-ignored files (the generated Prisma client) never appear in a diff,
-      // so they need no glob; anything else here is a hole in the force-full list.
-      setupClosureUncovered: [...setupClosure]
-        .filter((f) => !forceFull(f) && !f.startsWith('generated/'))
-        .sort(),
-      runtimeReaders: [...runtimeReaders].sort((a, b) => b[1] - a[1]),
-      pullRequests: rows.length,
-      appFalse: rows.filter((r) => !r.app).length,
-      forceFullHits: rows.filter((r) => r.app && r.forceFull).length,
-      measured: measured.length,
-      medianRatio: nearestRank(ratios, 0.5),
-      p90Ratio: nearestRank(ratios, 0.9),
-      medianCostShare: nearestRank(costs, 0.5),
-      p90CostShare: nearestRank(costs, 0.9),
-      medianGraphOnlyRatio: nearestRank(graphOnly, 0.5),
+  const rows = commits.map(({ sha, pr }) => {
+    const changed = git('diff', '--name-only', `${sha}^`, sha).split('\n').filter(Boolean);
+    const { graphFiles, union } = select(changed);
+    return {
+      pr,
+      sha: sha.slice(0, 9),
+      changed: changed.length,
+      app: isAppChange(changed),
+      forceFull: forceFullPath(changed),
+      graphSelected: graphFiles.length,
+      selected: union.length,
+      ratio: union.length / total,
+      costShare: costOf(union) / totalCost,
     };
+  });
 
-    if (AS_JSON) {
-      console.log(JSON.stringify({ summary, rows }, null, 2));
-    } else {
-      const pct = (x) => (x === null ? '—' : `${(100 * x).toFixed(1)}%`);
-      console.log(`Pinned at ${pinned} · vitest ${summary.vitest} · ${total} spec files`);
+  const measured = rows.filter((r) => r.app && !r.forceFull);
+  const ratios = measured.map((r) => r.ratio).sort((a, b) => a - b);
+  const costs = measured.map((r) => r.costShare).sort((a, b) => a - b);
+  const graphOnly = measured.map((r) => r.graphSelected / total).sort((a, b) => a - b);
+  const summary = {
+    pinned,
+    vitest: vitestRequire('./package.json').version,
+    total,
+    alwaysRun: alwaysRun.size,
+    setupClosure: [...setupClosure].sort(),
+    // Git-ignored files (the generated Prisma client) never appear in a diff,
+    // so they need no glob; anything else here is a hole in the force-full list.
+    setupClosureUncovered: [...setupClosure]
+      .filter((f) => !forceFull(f) && !f.startsWith('generated/'))
+      .sort(),
+    runtimeReaders: [...runtimeReaders].sort((a, b) => b[1] - a[1]),
+    pullRequests: rows.length,
+    appFalse: rows.filter((r) => !r.app).length,
+    forceFullHits: rows.filter((r) => r.app && r.forceFull).length,
+    measured: measured.length,
+    medianRatio: nearestRank(ratios, 0.5),
+    p90Ratio: nearestRank(ratios, 0.9),
+    medianCostShare: nearestRank(costs, 0.5),
+    p90CostShare: nearestRank(costs, 0.9),
+    medianGraphOnlyRatio: nearestRank(graphOnly, 0.5),
+  };
+
+  if (AS_JSON) {
+    console.log(JSON.stringify({ summary, rows }, null, 2));
+  } else {
+    const pct = (x) => (x === null ? '—' : `${(100 * x).toFixed(1)}%`);
+    console.log(`Pinned at ${pinned} · vitest ${summary.vitest} · ${total} spec files`);
+    console.log(
+      `Always-run (reads the tree / spawns): ${alwaysRun.size} · setup closure: ${setupClosure.size} files\n`,
+    );
+    console.log(
+      '| PR | commit | changed | app | force-full on | graph | + always-run | files | cost |',
+    );
+    console.log('| --- | --- | ---: | :---: | --- | ---: | ---: | ---: | ---: |');
+    for (const r of rows) {
+      const lane = !r.app ? 'skipped' : r.forceFull ? `\`${r.forceFull}\`` : '—';
+      const sel = !r.app ? '—' : r.forceFull ? `${total}` : `${r.selected}`;
+      const files = !r.app ? '—' : r.forceFull ? '100%' : pct(r.ratio);
+      const cost = !r.app ? '—' : r.forceFull ? '100%' : pct(r.costShare);
       console.log(
-        `Always-run (reads the tree / spawns): ${alwaysRun.size} · setup closure: ${setupClosure.size} files\n`,
-      );
-      console.log(
-        '| PR | commit | changed | app | force-full on | graph | + always-run | files | cost |',
-      );
-      console.log('| --- | --- | ---: | :---: | --- | ---: | ---: | ---: | ---: |');
-      for (const r of rows) {
-        const lane = !r.app ? 'skipped' : r.forceFull ? `\`${r.forceFull}\`` : '—';
-        const sel = !r.app ? '—' : r.forceFull ? `${total}` : `${r.selected}`;
-        const files = !r.app ? '—' : r.forceFull ? '100%' : pct(r.ratio);
-        const cost = !r.app ? '—' : r.forceFull ? '100%' : pct(r.costShare);
-        console.log(
-          `| #${r.pr} | \`${r.sha}\` | ${r.changed} | ${r.app ? 'yes' : 'no'} | ${lane} | ${r.app && !r.forceFull ? r.graphSelected : '—'} | ${sel} | ${files} | ${cost} |`,
-        );
-      }
-      console.log(
-        `\n${summary.pullRequests} pull requests · ${summary.appFalse} run no Vitest lane (app=false) · ` +
-          `${summary.forceFullHits} hit the force-full set · ${summary.measured} measured`,
-      );
-      console.log(
-        `selected/total over the measured: median ${pct(summary.medianRatio)} · p90 ${pct(summary.p90Ratio)} ` +
-          `(graph alone: median ${pct(summary.medianGraphOnlyRatio)})`,
-      );
-      console.log(
-        `cost share over the measured:     median ${pct(summary.medianCostShare)} · p90 ${pct(summary.p90CostShare)}`,
-      );
-      console.log(`\nSetup closure:\n${summary.setupClosure.map((f) => `  ${f}`).join('\n')}`);
-      console.log(
-        `Setup-closure files ${FORCE_FULL_FILE} does not cover: ${summary.setupClosureUncovered.length ? summary.setupClosureUncovered.join(', ') : 'none'}`,
-      );
-      console.log(
-        `\nNon-test modules that read the tree at run time (specs reaching each):\n${summary.runtimeReaders
-          .slice(0, 25)
-          .map(([f, n]) => `  ${n}\t${f}`)
-          .join('\n')}`,
+        `| #${r.pr} | \`${r.sha}\` | ${r.changed} | ${r.app ? 'yes' : 'no'} | ${lane} | ${r.app && !r.forceFull ? r.graphSelected : '—'} | ${sel} | ${files} | ${cost} |`,
       );
     }
+    console.log(
+      `\n${summary.pullRequests} pull requests · ${summary.appFalse} run no Vitest lane (app=false) · ` +
+        `${summary.forceFullHits} hit the force-full set · ${summary.measured} measured`,
+    );
+    console.log(
+      `selected/total over the measured: median ${pct(summary.medianRatio)} · p90 ${pct(summary.p90Ratio)} ` +
+        `(graph alone: median ${pct(summary.medianGraphOnlyRatio)})`,
+    );
+    console.log(
+      `cost share over the measured:     median ${pct(summary.medianCostShare)} · p90 ${pct(summary.p90CostShare)}`,
+    );
+    console.log(`\nSetup closure:\n${summary.setupClosure.map((f) => `  ${f}`).join('\n')}`);
+    console.log(
+      `Setup-closure files ${FORCE_FULL_FILE} does not cover: ${summary.setupClosureUncovered.length ? summary.setupClosureUncovered.join(', ') : 'none'}`,
+    );
+    console.log(
+      `\nNon-test modules that read the tree at run time (specs reaching each):\n${summary.runtimeReaders
+        .slice(0, 25)
+        .map(([f, n]) => `  ${n}\t${f}`)
+        .join('\n')}`,
+    );
   }
 } finally {
   await ctx.close();

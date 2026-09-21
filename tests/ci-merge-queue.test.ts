@@ -165,8 +165,6 @@ const contextFor = (event: Event): Record<string, string> => ({
   'needs.changes.outputs.pkg_cli': 'true',
   'needs.changes.outputs.pkg_orchestrator': 'true',
   'needs.changes.outputs.pkg_design_system': 'true',
-  // The Vitest lane's width (MOTIR-5325) — `'true'`, the value that runs MORE.
-  'needs.changes.outputs.vitest_full': 'true',
 });
 
 /**

@@ -3,7 +3,6 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { SELECT_BASE_REF, changedFiles } from '../scripts/ci/selectionDiff.mjs';
 
 // Guard for MOTIR-3148. The expensive lanes in `ci.yml` used to decide whether
 // to run from the BRANCH NAME — a `startsWith` test against the `seed/` /
@@ -49,15 +48,12 @@ const IMAGE_WORKFLOWS = [
   '.github/workflows/runner-image.yml',
 ];
 
-/** The Vitest force-full globs (MOTIR-5325) — one file, read here as the job reads it. */
+/** The Vitest force-full globs (MOTIR-5325) — kept for the measuring script (MOTIR-5948). */
 const FORCE_FULL_FILE = '.github/ci/full-suite-paths.txt';
 const forceFullGlobs = read(FORCE_FULL_FILE)
   .split('\n')
   .map((line) => line.trim())
   .filter((line) => line !== '' && !line.startsWith('#'));
-
-/** A concrete path under a glob — every `*` / `**` becomes one segment name. */
-const pathUnder = (glob: string): string => glob.replace(/\*\*/g, 'x').replace(/\*/g, 'x');
 
 /** Split a workflow's `jobs:` mapping into { jobId → body }. */
 function jobsOf(yaml: string): Map<string, string> {
@@ -213,12 +209,10 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       // lands here. Every one of the three is EXECUTED in `the merge-queue arm`
       // below; this count is what catches an arm added with no case written for
       // it.
-      // Six flags — `app`, `images`, the three package lanes' (MOTIR-5323) and
-      // `vitest_full` (MOTIR-5325) — so an early exit that forgets a newer one
-      // is not counted.
-      expect([...changesCode.matchAll(/^\s*emit true true true true true true$/gm)]).toHaveLength(
-        3,
-      );
+      // Five flags — `app`, `images` and the three package lanes' (MOTIR-5323)
+      // — so an early exit that forgets a newer one is not counted. (There was a
+      // sixth, `vitest_full`, from MOTIR-5325 until MOTIR-5948 removed it.)
+      expect([...changesCode.matchAll(/^\s*emit true true true true true$/gm)]).toHaveLength(3);
     });
 
     it('stops on the first failure', () => {
@@ -322,10 +316,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       'cli-package-only': ['packages/cli/src/index.ts'],
       'lib-only': ['lib/db.ts'],
       'lockfile-only': ['pnpm-lock.yaml'],
-      // One head per force-full glob (MOTIR-5325), derived from the list.
-      ...Object.fromEntries(
-        forceFullGlobs.map((glob) => [`force-full:${glob}`, [pathUnder(glob)]]),
-      ),
     };
 
     let repo: string;
@@ -353,10 +343,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         writeFileSync(full, `${path}\n`);
       };
       write('README.md');
-      // The classifier reads the force-full list from the checkout (MOTIR-5325),
-      // so the fixture carries the real file — a copy, not a restatement.
-      mkdirSync(join(repo, dirname(FORCE_FULL_FILE)), { recursive: true });
-      writeFileSync(join(repo, FORCE_FULL_FILE), read(FORCE_FULL_FILE));
       git('add', '-A');
       git('commit', '-qm', 'base');
       base = git('rev-parse', 'HEAD');
@@ -383,7 +369,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       pkg_cli: string;
       pkg_orchestrator: string;
       pkg_design_system: string;
-      vitest_full: string;
       stdout: string;
     };
 
@@ -394,7 +379,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       HEAD_SHA?: string;
       MERGE_BASE_SHA?: string;
       MERGE_HEAD_SHA?: string;
-      FULL_LABEL?: string;
     }): Outputs {
       const outPath = join(repo, 'github-output');
       writeFileSync(outPath, '');
@@ -411,8 +395,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
             HEAD_SHA: '',
             MERGE_BASE_SHA: '',
             MERGE_HEAD_SHA: '',
-            // `contains()` over an absent label list renders `false`.
-            FULL_LABEL: 'false',
             ...env,
             GITHUB_OUTPUT: outPath,
           },
@@ -440,7 +422,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         pkg_cli: outputs.pkg_cli!,
         pkg_orchestrator: outputs.pkg_orchestrator!,
         pkg_design_system: outputs.pkg_design_system!,
-        vitest_full: outputs.vitest_full!,
         stdout,
       };
     }
@@ -488,19 +469,12 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       // edit that gives the queue its own arm — a different exclusion set, a
       // different default — fails here rather than in the queue.
       //
-      // ⚠️ EXCEPT `vitest_full`, and on purpose (MOTIR-5325): the queue runs the
-      // whole Vitest suite whatever the diff, and a pull request runs what its
-      // diff reaches. That one flag is asserted per event in its own block below.
-      const withoutVitestFull = ({ vitest_full, ...rest }: Outputs) => {
-        void vitest_full;
-        // The classifier also PRINTS the flag, so its log line differs by exactly it.
-        return { ...rest, stdout: rest.stdout.replace(/ vitest_full=\w+/, '') };
-      };
+      // ⚠️ WITHOUT EXCEPTION AGAIN (MOTIR-5948). From MOTIR-5325 the Vitest
+      // width flag was the one output allowed to differ — the queue ran the
+      // whole suite and a pull request only what its diff reached. That flag is
+      // gone, so every output, and the line the classifier prints, is compared.
       for (const name of Object.keys(HEADS)) {
-        const queue = asMergeGroup(name);
-        const pr = asPullRequest(name);
-        expect(queue.vitest_full, `${name} runs the whole suite in the queue`).toBe('true');
-        expect({ name, ...withoutVitestFull(queue) }).toEqual({ name, ...withoutVitestFull(pr) });
+        expect({ name, ...asMergeGroup(name) }).toEqual({ name, ...asPullRequest(name) });
       }
     });
 
@@ -544,44 +518,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       });
     });
 
-    describe('the Vitest width flag, executed (MOTIR-5325)', () => {
-      it('lets a pull request that touches no force-full path run the affected subset', () => {
-        // The saving, and the control: if this flips, every `true` below passes
-        // for the wrong reason.
-        expect(asPullRequest('lib-only').vitest_full).toBe('false');
-        expect(asPullRequest('app-only').vitest_full).toBe('false');
-      });
-
-      it('runs the whole suite on every queue entry, whatever it touches', () => {
-        expect(asMergeGroup('lib-only').vitest_full).toBe('true');
-        expect(asMergeGroup('design-and-docs-only').vitest_full).toBe('true');
-      });
-
-      it('reads a force-full list with entries in it', () => {
-        // Without this the per-glob cases below would be an empty `it.each`.
-        expect(forceFullGlobs.length).toBeGreaterThan(10);
-      });
-
-      it.each(forceFullGlobs)('runs the whole suite for a pull request touching %s', (glob) => {
-        // One case per glob, derived from the list the job reads rather than
-        // typed out here, so a glob added to the file is exercised the day it
-        // lands.
-        expect(asPullRequest(`force-full:${glob}`).vitest_full).toBe('true');
-      });
-
-      it('runs the whole suite for a pull request carrying the `vitest-full` label', () => {
-        // The diagnosis door after a queue ejection (`ci-affected-tests.md` §5).
-        expect(
-          classify({
-            EVENT: 'pull_request',
-            BASE_SHA: base,
-            HEAD_SHA: head['lib-only']!,
-            FULL_LABEL: 'true',
-          }).vitest_full,
-        ).toBe('true');
-      });
-    });
-
     /** What a fail-open arm must emit: every lane runs. */
     const EVERY_FLAG_TRUE = {
       app: 'true',
@@ -589,7 +525,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       pkg_cli: 'true',
       pkg_orchestrator: 'true',
       pkg_design_system: 'true',
-      vitest_full: 'true',
     };
 
     describe('and every fail-open arm still fires — executed, not asserted in prose', () => {
@@ -893,9 +828,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       ['design-system', 'pkg_design_system'],
       ['cli', 'pkg_cli'],
       ['orchestrator', 'pkg_orchestrator'],
-      // Coverage only merges a WHOLE suite's blobs (MOTIR-5325), so it reads
-      // the width flag as well as `app`.
-      ['coverage', 'vitest_full'],
     ])('%s is gated on needs.changes.outputs.%s', (job, flag) => {
       const code = codeOf(ciJobs.get(job) ?? '');
       expect(code, `${job} exists`).not.toBe('');
@@ -906,14 +838,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
     });
 
     it('declares every output it is read for', () => {
-      for (const flag of [
-        'app',
-        'images',
-        'pkg_cli',
-        'pkg_orchestrator',
-        'pkg_design_system',
-        'vitest_full',
-      ]) {
+      for (const flag of ['app', 'images', 'pkg_cli', 'pkg_orchestrator', 'pkg_design_system']) {
         expect(changesCode, flag).toMatch(
           new RegExp(`^\\s*${flag}: \\$\\{\\{ steps\\.classify\\.outputs\\.${flag} \\}\\}$`, 'm'),
         );
@@ -921,33 +846,78 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
     });
   });
 
-  describe('a PULL REQUEST runs the Vitest files its diff reaches (MOTIR-5325)', () => {
+  // ── A PULL REQUEST runs the WHOLE Vitest suite again (MOTIR-5948) ──────────
+  //
+  // MOTIR-5325 narrowed a pull request's Vitest legs to the files its diff could
+  // reach, on a measured promise that the typical one would run about a fifth of
+  // the suite. `docs/decisions/ci-affected-tests.md` Amendment 1 re-measured it
+  // at a median of 66.5%, past that record's own 50% no-go line, and reverted the
+  // lane. This block pins the reverted shape, so the selection cannot come back
+  // piecemeal — a select step with no coverage gate behind it, or a width flag
+  // nothing reads — without somebody re-opening the decision it contradicts.
+  describe('a PULL REQUEST runs the whole Vitest suite (MOTIR-5948 reverts MOTIR-5325)', () => {
     const ADR = 'docs/decisions/ci-affected-tests.md';
     const SCRIPT = 'scripts/ci/measure-affected-tests.mjs';
 
     /** The `test` job's steps, one text each, comments dropped. */
-    const testSteps = codeOf(ciJobs.get('test') ?? '')
-      .split(/^ {6}- /m)
-      .slice(1);
+    const testCode = codeOf(ciJobs.get('test') ?? '');
+    const testSteps = testCode.split(/^ {6}- /m).slice(1);
     const stepNamed = (name: string): string =>
       testSteps.find((s) => new RegExp(`^name: ${escapeRe(name)}$`, 'm').test(s)) ?? '';
-    const selectStep = stepNamed('Select the affected test files');
-    const subsetStep = stepNamed('Vitest — the affected files');
     const fullStep = testSteps.find((s) => s.includes('--reporter=blob')) ?? '';
     const uploadStep = stepNamed('Upload coverage blob');
+    const coverageCode = codeOf(ciJobs.get('coverage') ?? '');
 
     it('finds the steps it guards', () => {
       // Without this every assertion below could pass against an empty string.
-      for (const [label, step] of Object.entries({
-        selectStep,
-        subsetStep,
+      for (const [label, text] of Object.entries({
+        testCode,
         fullStep,
         uploadStep,
+        coverageCode,
       })) {
-        expect(step, label).not.toBe('');
+        expect(text, label).not.toBe('');
       }
     });
 
+    it('has no selection step and no subset step', () => {
+      expect(stepNamed('Select the affected test files')).toBe('');
+      expect(stepNamed('Vitest — the affected files')).toBe('');
+      // Whatever the steps are called: nothing in the job runs the selection,
+      // reads a selected list, or branches on a selection's outcome.
+      expect(testCode).not.toContain(SCRIPT);
+      expect(testCode).not.toContain('vitest-affected');
+      expect(testCode).not.toContain('steps.select');
+      expect(testCode).not.toContain('--passWithNoTests');
+    });
+
+    it('runs every leg in full, with coverage, on every event — no `if:` on the step', () => {
+      expect(fullStep).toContain(
+        'run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/12 --reporter=default --reporter=blob --coverage',
+      );
+      expect(fullStep).not.toMatch(/^\s*if:/m);
+      expect(uploadStep).not.toMatch(/^\s*if:/m);
+    });
+
+    it('runs the coverage merge on every pull request with an app change', () => {
+      expect(coverageCode).toMatch(
+        /^\s*if: \$\{\{ needs\.changes\.outputs\.app == 'true' && github\.event_name != 'push' \}\}$/m,
+      );
+    });
+
+    it('carries no Vitest width flag and no `vitest-full` label', () => {
+      // The flag's only readers were the two steps and the coverage `if:` above.
+      // A flag nothing reads is a knob that looks live, so the classifier does
+      // not compute it, declare it, or read the label and the list it came from.
+      expect(ci).not.toMatch(/vitest_full/);
+      expect(ci).not.toMatch(/vitest-full/);
+      expect(changesCode).not.toContain(FORCE_FULL_FILE);
+    });
+
+    // ⚠️ THE FORCE-FULL LIST AND THE MEASURING SCRIPT ARE KEPT (Amendment 1,
+    // A1.5 point 3): re-running the measurement is what re-opens the decision.
+    // So what the list still owes is to agree with the ADR table that justifies
+    // each entry, and to be READ by the script rather than restated in it.
     it('keeps the force-full globs in ONE file, equal to the ADR §2.1 table', () => {
       const adr = read(ADR);
       const section = adr.slice(adr.indexOf('### §2.1'), adr.indexOf('### §2.2'));
@@ -959,8 +929,7 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       expect([...new Set(tableGlobs)].sort()).toEqual([...new Set(forceFullGlobs)].sort());
     });
 
-    it('is READ by the classifier and the selection script, never restated', () => {
-      expect(changesCode).toContain(FORCE_FULL_FILE);
+    it('is READ by the measuring script, never restated', () => {
       const source = read(SCRIPT);
       expect(source).toContain(FORCE_FULL_FILE);
       // No second copy: none of the list's wildcard globs is a string literal there.
@@ -969,230 +938,12 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       }
     });
 
-    it('selects only when the flag says so, splicing nothing into the script', () => {
-      expect(selectStep).toMatch(/^\s*if: needs\.changes\.outputs\.vitest_full != 'true'$/m);
-      const body = selectStep.split(/^\s*run: \|$/m)[1] ?? '';
-      expect(body, 'a block `run:` body').not.toBe('');
-      expect(body).not.toMatch(/\$\{\{/);
-    });
-
-    // MOTIR-5923. The legs check out `refs/pull/<n>/merge`, built on a `main`
-    // that can be NEWER than the payload's `base.sha`; a two-dot diff from that
-    // sha counted what `main` gained in the gap as the pull request's change,
-    // and a force-full path there refused the subset (run 35600662955: #3019's
-    // `ci.yml` refused PR #3020, whose ten files were `lib/`, `app/`, `tests/`).
-    it('diffs the merge commit against its FIRST PARENT, never the payload base sha', () => {
-      const body = selectStep.split(/^\s*run: \|$/m)[1] ?? '';
-      expect(body).toContain(`${SCRIPT} --select 'HEAD^1'`);
-      expect(body, 'the parents are fetched').toMatch(/git fetch [^\n]*--depth=2 origin /);
-      expect(body, 'HEAD is checked to be a merge').toContain(
-        "git rev-parse --verify --quiet 'HEAD^2'",
-      );
-      // The two-dot `BASE_SHA HEAD` form, in any spelling, is the defect.
-      expect(selectStep).not.toContain('pull_request.base.sha');
-      expect(body).not.toMatch(/--select "?\$\{?BASE_SHA/);
-      // The script reads the diff through the one helper the test below executes.
-      expect(read(SCRIPT)).toContain('changedFiles(SELECT_BASE, SELECT_HEAD, ROOT)');
-      expect(read(SCRIPT)).not.toMatch(/git\('diff', '--name-only', SELECT_BASE/);
-    });
-
-    it('runs the selected files in ONE invocation, with --passWithNoTests and no coverage', () => {
-      expect(subsetStep).toMatch(/^\s*if: steps\.select\.outputs\.mode == 'subset'$/m);
-      expect(subsetStep).toContain('--passWithNoTests');
-      expect(subsetStep).toContain('--shard=${{ matrix.leg }}/12 ');
-      expect(subsetStep).not.toContain('--coverage');
-      expect(subsetStep).not.toContain('--reporter=blob');
-      // `xargs` may split a long list into several runs, and each would be
-      // partitioned across the legs on its own.
-      expect(subsetStep).not.toMatch(/\bxargs\b/);
-    });
-
-    it('keeps the unchanged full-shard command, with coverage, for everything else', () => {
-      expect(fullStep).toContain(
-        'run: pnpm vitest run --config vitest.collect.config.ts --shard=${{ matrix.leg }}/12 --reporter=default --reporter=blob --coverage',
-      );
-      expect(fullStep).toMatch(/^\s*if: steps\.select\.outputs\.mode != 'subset'$/m);
-      expect(uploadStep).toMatch(/^\s*if: steps\.select\.outputs\.mode != 'subset'$/m);
-    });
-
-    describe('the selection step, executed — it FAILS OPEN', () => {
-      /** The step's shell body, de-dented, exactly as it ships. */
-      const selectScript = (selectStep.split(/^\s*run: \|$/m)[1] ?? '')
-        .split('\n')
-        .map((line) => line.replace(/^ {10}/, ''))
-        .join('\n');
-
-      let dir: string;
-      beforeAll(() => {
-        dir = mkdtempSync(join(tmpdir(), 'vitest-select-'));
-        mkdirSync(join(dir, 'bin'));
-      });
-      afterAll(() => {
-        if (dir) rmSync(dir, { recursive: true, force: true });
-      });
-
-      /** Run the shipped step with fake `git` and `pnpm`, and read back `mode`. */
-      function runSelect(pnpm: string, git: string): string {
-        writeFileSync(join(dir, 'bin', 'git'), `#!/bin/sh\n${git}\n`, { mode: 0o755 });
-        writeFileSync(join(dir, 'bin', 'pnpm'), `#!/bin/sh\n${pnpm}\n`, { mode: 0o755 });
-        const output = join(dir, 'github-output');
-        writeFileSync(output, '');
-        rmSync(join(dir, 'vitest-affected.txt'), { force: true });
-        execFileSync('bash', ['-c', selectScript], {
-          cwd: dir,
-          env: {
-            ...process.env,
-            PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}`,
-            RUNNER_TEMP: dir,
-            GITHUB_OUTPUT: output,
-          },
-          stdio: 'pipe',
-        });
-        return /^mode=(.*)$/m.exec(readFileSync(output, 'utf8'))?.[1] ?? '';
-      }
-
-      /** A fake selection that writes `content` to the path after `--out`. */
-      const writesList = (content: string): string =>
-        `while [ $# -gt 0 ]; do if [ "$1" = --out ]; then printf '${content}' >"$2"; fi; shift; done; exit 0`;
-
-      it('lifted a script that actually runs', () => {
-        expect(selectScript).toMatch(/^set -uo pipefail$/m);
-      });
-
-      it('answers `subset` only when the base fetched and a list was written', () => {
-        expect(runSelect(writesList('tests/a.test.ts\\n'), 'exit 0')).toBe('subset');
-      });
-
-      it.each([
-        [
-          "the merge commit's parents cannot be fetched",
-          writesList('tests/a.test.ts\\n'),
-          'exit 1',
-        ],
-        [
-          'HEAD is not a merge commit',
-          writesList('tests/a.test.ts\\n'),
-          'case "$*" in *HEAD^2*) exit 1;; esac; exit 0',
-        ],
-        ['the selection exits non-zero', 'exit 3', 'exit 0'],
-        ['the selection writes an empty list', writesList(''), 'exit 0'],
-      ])('answers `full` when %s', (label, pnpm, git) => {
-        expect(runSelect(pnpm, git), label).toBe('full');
-      });
-    });
-    // MOTIR-5923 — the reproduction, on a real history rather than a fake `git`.
-    // `main` moves past the payload's base with a force-full path (`ci.yml`)
-    // before GitHub builds the merge ref; the pull request itself touches one
-    // `lib/` file. The selection must see that one file and nothing of `main`'s.
-    describe('the selection diff, on a history where `main` moved past the payload base', () => {
-      let dir: string;
-      let origin: string;
-      let payloadBase: string;
-      let mergeSha: string;
-
-      const gitIn = (cwd: string, ...args: string[]): string =>
-        execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
-          cwd,
-          encoding: 'utf8',
-          env: {
-            ...process.env,
-            GIT_AUTHOR_NAME: 'CI',
-            GIT_AUTHOR_EMAIL: 'ci@example.com',
-            GIT_COMMITTER_NAME: 'CI',
-            GIT_COMMITTER_EMAIL: 'ci@example.com',
-          },
-        }).trim();
-      const commitFile = (path: string, content: string, message: string): void => {
-        mkdirSync(dirname(join(origin, path)), { recursive: true });
-        writeFileSync(join(origin, path), content);
-        gitIn(origin, 'add', path);
-        gitIn(origin, 'commit', '-q', '-m', message);
-      };
-
-      beforeAll(() => {
-        dir = mkdtempSync(join(tmpdir(), 'vitest-select-history-'));
-        origin = join(dir, 'origin');
-        mkdirSync(origin);
-        gitIn(origin, 'init', '-q', '-b', 'main');
-        // The legs fetch the merge commit's parents BY SHA, as GitHub allows.
-        gitIn(origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true');
-        commitFile('lib/x.ts', 'export const x = 1;\n', 'base');
-        commitFile('.github/workflows/ci.yml', 'name: CI\n', 'ci');
-        payloadBase = gitIn(origin, 'rev-parse', 'HEAD');
-        // The pull request: one `lib/` file.
-        gitIn(origin, 'checkout', '-q', '-b', 'pr');
-        commitFile('lib/x.ts', 'export const x = 2;\n', 'the change');
-        // `main` moves on AFTER the event: a force-full path, and an ordinary one.
-        gitIn(origin, 'checkout', '-q', 'main');
-        commitFile('.github/workflows/ci.yml', 'name: CI\non: push\n', 'main moves');
-        commitFile('app/y.ts', 'export const y = 1;\n', 'main moves again');
-        // `refs/pull/<n>/merge`: first parent the NEW tip of `main`.
-        gitIn(origin, 'merge', '-q', '--no-ff', '-m', 'Merge pr into main', 'pr');
-        mergeSha = gitIn(origin, 'rev-parse', 'HEAD');
-      });
-      afterAll(() => {
-        if (dir) rmSync(dir, { recursive: true, force: true });
-      });
-
-      it('reproduces the defect with the payload base (the control)', () => {
-        const stale = changedFiles(payloadBase, mergeSha, origin);
-        expect(stale).toContain('.github/workflows/ci.yml');
-        expect(stale).toContain('app/y.ts');
-        expect(
-          stale.some((f) => covers(forceFullGlobs, f)),
-          'the stale diff refuses',
-        ).toBe(true);
-      });
-
-      it("selects the pull request's own files from the first parent, and does not refuse", () => {
-        expect(SELECT_BASE_REF).toBe('HEAD^1');
-        const own = changedFiles(SELECT_BASE_REF, 'HEAD', origin);
-        expect(own).toEqual(['lib/x.ts']);
-        expect(own.filter((f) => covers(forceFullGlobs, f))).toEqual([]);
-      });
-
-      it('the shipped step reaches `HEAD^1` from a depth-1 checkout and answers `subset`', () => {
-        // What `actions/checkout` leaves behind: the merge commit, depth 1.
-        const leg = join(dir, 'leg');
-        mkdirSync(join(leg, 'bin'), { recursive: true });
-        gitIn(leg, 'init', '-q');
-        gitIn(leg, 'remote', 'add', 'origin', `file://${origin}`);
-        gitIn(leg, 'fetch', '-q', '--no-tags', '--depth=1', 'origin', mergeSha);
-        gitIn(leg, 'checkout', '-q', '--detach', 'FETCH_HEAD');
-        expect(() => gitIn(leg, 'rev-parse', '--verify', '--quiet', 'HEAD^1')).toThrow();
-
-        // A `pnpm` that stands in for the script: the diff it was TOLD to take.
-        writeFileSync(
-          join(leg, 'bin', 'pnpm'),
-          [
-            '#!/bin/sh',
-            'while [ $# -gt 0 ]; do',
-            '  case "$1" in --select) base=$2 ;; --out) out=$2 ;; esac',
-            '  shift',
-            'done',
-            'git diff --name-only "$base" HEAD >"$out"',
-          ].join('\n'),
-          { mode: 0o755 },
-        );
-        const output = join(leg, 'github-output');
-        writeFileSync(output, '');
-        const selectScript = (selectStep.split(/^\s*run: \|$/m)[1] ?? '')
-          .split('\n')
-          .map((line) => line.replace(/^ {10}/, ''))
-          .join('\n');
-        execFileSync('bash', ['-c', selectScript], {
-          cwd: leg,
-          env: {
-            ...process.env,
-            PATH: `${join(leg, 'bin')}:${process.env.PATH ?? ''}`,
-            RUNNER_TEMP: leg,
-            GITHUB_OUTPUT: output,
-          },
-          stdio: 'pipe',
-        });
-        expect(readFileSync(output, 'utf8')).toMatch(/^mode=subset$/m);
-        expect(readFileSync(join(leg, 'vitest-affected.txt'), 'utf8')).toBe('lib/x.ts\n');
-      });
+    it('keeps only the MEASURE mode of the script', () => {
+      // SELECT mode left with the lane; its last version is at `aa26372e6`.
+      const source = codeOf(read(SCRIPT).replace(/^\s*\/\/.*$/gm, '#'));
+      expect(source).not.toContain("'--select'");
+      expect(source).not.toContain("'--out'");
+      expect(source).not.toContain('selectionDiff');
     });
   });
 
