@@ -191,6 +191,9 @@ export function toGateRefusal(
     case 'APPROVAL_GATE_ALREADY_AWAITING':
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
+      return { tag: code };
+    // Only the conflict carries where it was found and which members (MOTIR-5915) — the
+    // tags above keep their bare shape.
     case 'MERGE_CONFLICT':
       return {
         tag: code,
