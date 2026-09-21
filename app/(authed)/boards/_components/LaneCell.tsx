@@ -133,6 +133,11 @@ export function LaneCell({
                   assigneeName={
                     card.assigneeId ? (assigneeNameById.get(card.assigneeId) ?? null) : null
                   }
+                  routedToName={
+                    card.pendingDecision
+                      ? (assigneeNameById.get(card.pendingDecision.routedToId ?? '') ?? null)
+                      : null
+                  }
                   onOpenQuickView={onOpenQuickView}
                 />
               </div>

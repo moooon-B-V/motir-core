@@ -42,6 +42,33 @@ export type ApprovalGateKindDTO =
   | 'acceptance_result';
 
 /**
+ * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
+ * decision-waiting marker draws on the board card, the `/items` rows and the item
+ * page header (Story MOTIR-4908 · MOTIR-5876). Absent (`null` / no map entry) when
+ * nothing is waiting.
+ *
+ * - `yours` — the gate is in this reader's To-approve tab AND they hold the kind's
+ *   permission floor, so they could press it. Exactly the rows the tab offers to
+ *   decide.
+ * - `others` — any other awaiting gate: routed elsewhere (an admin who COULD
+ *   decide it is still not the one asked), or routed to this reader while they sit
+ *   below the floor.
+ *
+ * `kind` is the gate the entry was chosen from — the first `yours` by age, else the
+ * oldest `others` — and is what the item header anchors its jump on. `routedToId`
+ * is an id only: every surface already holds its member list to name the person.
+ * It is never null in practice — `work_item.reporter_id` is `NOT NULL` with
+ * `onDelete: Restrict`, so `assigneeId ?? reporterId` always names someone, and the
+ * design draws no *routed to nobody* state (MOTIR-5875, amended 2026-09-21). The
+ * type stays nullable only because `routingTargetId`'s signature is.
+ */
+export interface PendingDecisionDTO {
+  state: 'yours' | 'others';
+  kind: ApprovalGateKindDTO;
+  routedToId: string | null;
+}
+
+/**
  * The payload every status door carries when the approval-gate guard refuses a
  * move (`APPROVAL_GATE_PENDING` — Story MOTIR-4887 · Subtask MOTIR-5526; ADR
  * `approval-gates.md` §6d AMENDMENT, rule 4). ONE shape on the board move, the

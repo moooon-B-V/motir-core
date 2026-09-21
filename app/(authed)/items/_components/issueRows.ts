@@ -7,6 +7,7 @@ import type {
 } from '@/lib/dto/workItems';
 import type { StatusCategoryDto, WorkflowStatusDto, WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import type { PendingDecisionDTO } from '@/lib/dto/approvalGate';
 import type { TreeTableRow } from '@/components/ui/TreeTable';
 import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
@@ -90,6 +91,35 @@ export interface IssueRowData {
    * carries the description body.
    */
   hasDescription: boolean;
+  /**
+   * Whether a decision is waiting on this row's item, and whether it is the
+   * READER's (Story MOTIR-4908 · MOTIR-5881) — `pendingDecisionsFor`'s answer for
+   * this id, `null` when none. It arrives BESIDE the row DTOs as a map
+   * ({@link PendingDecisionMap}), never inside them: the list/tree DTOs are shared
+   * with `/api/v1` and the AI search, where a per-reader field would be wrong.
+   */
+  pendingDecision: PendingDecisionDTO | null;
+  /** The routed person's display name, resolved here like the assignee's; `null`
+   *  when no marker, or when the member list cannot name them (the marker then
+   *  reads *this work item's assignee*). */
+  pendingRoutedToName: string | null;
+}
+
+/** `pendingDecisionsFor`'s answer for one load, keyed by work-item id — serializable,
+ *  so it crosses the Server → Client boundary and the level actions' results. */
+export type PendingDecisionMap = Record<string, PendingDecisionDTO>;
+
+/** Every work-item id in a forest, for the ONE `pendingDecisionsFor` call its load owes. */
+export function collectTreeIds(nodes: WorkItemTreeNodeDto[]): string[] {
+  const ids: string[] = [];
+  const walk = (list: WorkItemTreeNodeDto[]) => {
+    for (const node of list) {
+      ids.push(node.id);
+      walk(node.children);
+    }
+  };
+  walk(nodes);
+  return ids;
 }
 
 /**
@@ -124,8 +154,10 @@ function shapeRowData(
   statusByKey: Map<string, WorkflowStatusDto>,
   nameById: Map<string, string>,
   locale: Locale,
+  pending: PendingDecisionMap = {},
 ): IssueRowData {
   const status = statusByKey.get(item.status);
+  const pendingDecision = pending[item.id] ?? null;
   return {
     id: item.id,
     identifier: item.identifier,
@@ -152,6 +184,10 @@ function shapeRowData(
     storyPointsLabel: item.storyPoints != null ? formatStoryPoints(item.storyPoints) : null,
     hasChildren: item.hasChildren ?? false,
     hasDescription: item.hasDescription,
+    pendingDecision,
+    pendingRoutedToName: pendingDecision?.routedToId
+      ? (nameById.get(pendingDecision.routedToId) ?? null)
+      : null,
   };
 }
 
@@ -166,9 +202,9 @@ export function makeRowShaper(
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
   locale: Locale = defaultLocale,
-): (item: WorkItemListItemDto) => IssueRowData {
+): (item: WorkItemListItemDto, pending?: PendingDecisionMap) => IssueRowData {
   const { statusByKey, nameById } = buildLookups(workflow, members);
-  return (item) => shapeRowData(item, statusByKey, nameById, locale);
+  return (item, pending) => shapeRowData(item, statusByKey, nameById, locale, pending);
 }
 
 export function toIssueRows(
@@ -176,12 +212,13 @@ export function toIssueRows(
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
   locale: Locale = defaultLocale,
+  pending: PendingDecisionMap = {},
 ): TreeTableRow<IssueRowData>[] {
   const { statusByKey, nameById } = buildLookups(workflow, members);
 
   const shape = (node: WorkItemTreeNodeDto): TreeTableRow<IssueRowData> => ({
     id: node.id,
-    data: shapeRowData(node, statusByKey, nameById, locale),
+    data: shapeRowData(node, statusByKey, nameById, locale, pending),
     children: node.children.map(shape),
   });
 
@@ -199,7 +236,8 @@ export function toIssueListRows(
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
   locale: Locale = defaultLocale,
+  pending: PendingDecisionMap = {},
 ): IssueRowData[] {
   const { statusByKey, nameById } = buildLookups(workflow, members);
-  return items.map((item) => shapeRowData(item, statusByKey, nameById, locale));
+  return items.map((item) => shapeRowData(item, statusByKey, nameById, locale, pending));
 }

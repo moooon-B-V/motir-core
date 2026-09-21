@@ -9,7 +9,6 @@ import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
-import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
@@ -384,11 +383,14 @@ export const boardsService = {
       ctx,
     );
 
-    // The board "Awaiting acceptance" badge (MOTIR-1636): a story in_review whose
-    // CURRENT AcceptanceEvidence is pending. ONE batched query over the candidate
-    // ids only (no N+1), mirroring the readiness batch above.
-    const awaitingAcceptanceIds = await acceptanceEvidenceService.findAwaitingIds(
-      allRows.filter((r) => r.kind === 'story' && r.status === 'in_review').map((r) => r.id),
+    // The decision-waiting marker (Story MOTIR-4908 · MOTIR-5876): which cards have
+    // an awaiting gate, and whether it is this reader's. ONE gate query over every
+    // card on the board, beside the readiness batch — never a lookup per card. It
+    // REPLACED the "Awaiting acceptance" batch (MOTIR-1636, retired by MOTIR-5877):
+    // every pending receipt raises an `acceptance_result` gate, so this read already
+    // knows it, and the board's query count is what it was before the marker.
+    const pendingById = await approvalGatesService.pendingDecisionsFor(
+      { projectId, workItemIds: allRows.map((r) => r.id) },
       ctx,
     );
 
@@ -451,7 +453,7 @@ export const boardsService = {
       cards: b.rows.map((r) =>
         toBoardCardDto(r, {
           ready: readyById.get(r.id) ?? true,
-          awaitingAcceptance: awaitingAcceptanceIds.has(r.id),
+          pendingDecision: pendingById.get(r.id) ?? null,
           swimlaneKey: swimlaneKeyByCard.get(r.id),
           statusCategory: categoryByStatusKey.get(r.status) ?? null,
         }),
@@ -707,9 +709,17 @@ export const boardsService = {
       [row],
       ctx,
     );
+    // The dropped card keeps its decision-waiting marker (MOTIR-5876): the board
+    // reconciles the moved card from this DTO, so a card that returned without the
+    // field would lose its marker until the next reload.
+    const pendingById = await approvalGatesService.pendingDecisionsFor(
+      { projectId: row.projectId, workItemIds: [row.id] },
+      ctx,
+    );
     return {
       card: toBoardCardDto(row, {
         ready,
+        pendingDecision: pendingById.get(row.id) ?? null,
         swimlaneKey: swimlaneKeyByCard.get(row.id),
         statusCategory: appliedStatusCategory,
       }),

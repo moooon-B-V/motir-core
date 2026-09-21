@@ -108,7 +108,15 @@ async function arriveAtTheGate(
   // question is open. Asserted rather than assumed, so a seed that drifted
   // fails here instead of making the after-state look like a no-op.
   await expect(statusCard(page).getByText('In Progress', { exact: true })).toBeVisible();
-  await expect(page.getByText('Awaiting you', { exact: true })).toBeVisible();
+  // Scoped to the section cards: since MOTIR-4908 (MOTIR-5878) the page HEADER carries
+  // the decision-waiting marker, which also reads "Awaiting you" — the question this
+  // asserts is the one the gate's own section asks.
+  await expect(
+    page
+      .getByRole('main')
+      .locator('[data-surface="card"]')
+      .getByText('Awaiting you', { exact: true }),
+  ).toBeVisible();
 }
 
 /** The approval overlay, named for the card it decides. */

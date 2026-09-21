@@ -78,6 +78,8 @@ const ROW: IssueRowData = {
   estimateLabel: null,
   storyPointsLabel: null,
   hasChildren: false,
+  pendingDecision: null,
+  pendingRoutedToName: null,
 };
 const TREE_ROWS: TreeTableRow<IssueRowData>[] = [{ id: ROW.id, data: ROW }];
 

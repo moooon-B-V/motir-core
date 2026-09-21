@@ -27,7 +27,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     storyPoints: null,
     position: 'a0',
     ready: true,
-    awaitingAcceptance: false,
+    pendingDecision: null,
     ciState: null,
     statusCategory: 'todo',
     ...over,
@@ -142,28 +142,149 @@ describe('BoardCard', () => {
     expect(screen.queryByTitle(/^Estimate/)).toBeNull();
   });
 
-  it('a story in review shows the "Awaiting acceptance" pill instead of the priority (MOTIR-1636)', () => {
+  // THE DECISION-WAITING MARKER (MOTIR-5877; design MOTIR-5875) — it took the
+  // retired `Awaiting acceptance` pill's slot. The exclusive slot's precedence is
+  // Yours › Blocked › Someone else's › priority.
+  it('a decision waiting on YOU shows the LOUD marker in place of the priority', () => {
     render(
       <BoardCard
-        card={card({ id: 's1', key: 3, kind: 'story', priority: 'high', awaitingAcceptance: true })}
+        card={card({
+          id: 's1',
+          key: 3,
+          kind: 'story',
+          priority: 'high',
+          pendingDecision: { state: 'yours', kind: 'design_result', routedToId: 'u-me' },
+        })}
         assigneeName={null}
+        routedToName="Me"
         onOpenQuickView={() => {}}
       />,
     );
-    expect(screen.getByText('Awaiting acceptance')).toBeTruthy();
-    expect(screen.queryByText('High')).toBeNull(); // the acceptance pill takes the slot
+    const marker = document.querySelector('[data-decision-marker="yours"]');
+    expect(marker?.textContent).toBe('Awaiting you');
+    expect(marker?.getAttribute('data-decision-kind')).toBe('design_result');
+    expect(screen.queryByText('High')).toBeNull(); // the marker takes the slot
   });
 
-  it('without the awaiting-acceptance flag the priority chip shows (no pill)', () => {
+  it('a decision waiting on someone else shows the QUIET marker naming them — a different treatment, not only different words', () => {
     render(
       <BoardCard
-        card={card({ id: 't1', key: 4, kind: 'task', priority: 'high', awaitingAcceptance: false })}
+        card={card({
+          id: 's2',
+          key: 8,
+          kind: 'story',
+          priority: 'high',
+          pendingDecision: { state: 'others', kind: 'acceptance_result', routedToId: 'u-ana' },
+        })}
+        assigneeName={null}
+        routedToName="Ana Ruiz"
+        onOpenQuickView={() => {}}
+      />,
+    );
+    const quiet = document.querySelector('[data-decision-marker="others"]');
+    expect(quiet?.textContent).toBe('Waiting on Ana Ruiz');
+    // The tone differs on the element itself (fill + ink), and so does the glyph.
+    expect(quiet?.className).toContain('--el-chip-bg');
+    expect(quiet?.className).not.toContain('--el-tint-yellow');
+    expect(quiet?.querySelector('.lucide-hourglass')).toBeTruthy();
+    expect(quiet?.querySelector('.lucide-stamp')).toBeNull();
+    expect(screen.queryByText('High')).toBeNull();
+  });
+
+  it('a routed person the board cannot name reads as this work item’s assignee', () => {
+    render(
+      <BoardCard
+        card={card({
+          id: 's3',
+          key: 9,
+          pendingDecision: { state: 'others', kind: 'acceptance_result', routedToId: 'u-ana' },
+        })}
+        assigneeName={null}
+        routedToName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(document.querySelector('[data-decision-marker="others"]')?.textContent).toBe(
+      "Waiting on this work item's assignee",
+    );
+  });
+
+  it('with no decision waiting the priority chip shows and no marker renders', () => {
+    render(
+      <BoardCard
+        card={card({ id: 't1', key: 4, kind: 'task', priority: 'high' })}
         assigneeName={null}
         onOpenQuickView={() => {}}
       />,
     );
-    expect(screen.queryByText('Awaiting acceptance')).toBeNull();
+    expect(document.querySelector('[data-decision-marker]')).toBeNull();
     expect(screen.getByText('High')).toBeTruthy();
+    expect(
+      screen.getByTestId('board-card-PROD-4').getAttribute('aria-describedby') ?? '',
+    ).not.toMatch(/decision-marker/);
+  });
+
+  it('PRECEDENCE — a BLOCKED card with a gate that is yours shows the marker, not Blocked', () => {
+    render(
+      <BoardCard
+        card={card({
+          id: 'b1',
+          key: 10,
+          ready: false,
+          pendingDecision: { state: 'yours', kind: 'design_result', routedToId: 'u-me' },
+        })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(document.querySelector('[data-decision-marker="yours"]')).toBeTruthy();
+    expect(screen.queryByText('Blocked')).toBeNull();
+  });
+
+  it('PRECEDENCE — a BLOCKED card with someone else’s gate shows Blocked, not the quiet marker', () => {
+    render(
+      <BoardCard
+        card={card({
+          id: 'b2',
+          key: 11,
+          ready: false,
+          pendingDecision: { state: 'others', kind: 'acceptance_result', routedToId: 'u-ana' },
+        })}
+        assigneeName={null}
+        routedToName="Ana Ruiz"
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(screen.getByText('Blocked')).toBeTruthy();
+    expect(document.querySelector('[data-decision-marker]')).toBeNull();
+    expect(
+      screen.getByTestId('board-card-PROD-11').getAttribute('aria-describedby') ?? '',
+    ).not.toMatch(/decision-marker/);
+  });
+
+  it('the card button is DESCRIBED BY its marker, which its own label would otherwise hide', () => {
+    render(
+      <BoardCard
+        card={card({
+          id: 'd1',
+          key: 12,
+          pendingDecision: { state: 'yours', kind: 'design_result', routedToId: 'u-me' },
+        })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    // JOINED with dnd-kit's own instructions id, never replacing it.
+    const ids = (
+      screen.getByTestId('board-card-PROD-12').getAttribute('aria-describedby') ?? ''
+    ).split(' ');
+    const markerIds = ids.filter((id) =>
+      document.getElementById(id)?.hasAttribute('data-decision-marker'),
+    );
+    expect(markerIds).toHaveLength(1);
+    expect(document.getElementById(markerIds[0]!)?.getAttribute('data-decision-marker')).toBe(
+      'yours',
+    );
   });
 
   it('shows the assignee initial avatar when assigned', () => {
@@ -291,15 +412,20 @@ describe('BoardCard — the CI badge (MOTIR-5474)', () => {
     expect(screen.getByText('Checks failing')).toBeTruthy();
   });
 
-  it('renders the badge BESIDE Awaiting acceptance — neither hides the other', () => {
+  it('renders the badge BESIDE the decision-waiting marker — neither hides the other', () => {
     render(
       <BoardCard
-        card={card({ id: 'c-await', key: 5, ciState: 'running', awaitingAcceptance: true })}
+        card={card({
+          id: 'c-await',
+          key: 5,
+          ciState: 'running',
+          pendingDecision: { state: 'yours', kind: 'design_result', routedToId: 'u-me' },
+        })}
         assigneeName={null}
         onOpenQuickView={vi.fn()}
       />,
     );
-    expect(screen.getByText('Awaiting acceptance')).toBeTruthy();
+    expect(screen.getByText('Awaiting you')).toBeTruthy();
     expect(screen.getByText('Checks running')).toBeTruthy();
   });
 
@@ -310,7 +436,12 @@ describe('BoardCard — the CI badge (MOTIR-5474)', () => {
     // the class because a happy-dom render has no layout to measure.
     const { container } = render(
       <BoardCard
-        card={card({ id: 'c-wrap', key: 6, ciState: 'running', awaitingAcceptance: true })}
+        card={card({
+          id: 'c-wrap',
+          key: 6,
+          ciState: 'running',
+          pendingDecision: { state: 'yours', kind: 'design_result', routedToId: 'u-me' },
+        })}
         assigneeName={null}
         onOpenQuickView={vi.fn()}
       />,

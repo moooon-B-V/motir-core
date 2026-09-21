@@ -247,7 +247,13 @@ test('no plan → the Upgrade CTA (no player)', async ({ page }) => {
   );
 });
 
-test('the board shows the "Awaiting acceptance" badge, cleared on approve', async ({ page }) => {
+// MOTIR-4908 (MOTIR-5877) RETIRED the board's "Awaiting acceptance" pill into the
+// decision-waiting marker: the pending receipt raises an `acceptance_result` gate
+// (`seedPendingEvidence` → `reconcileGatesFor`), routed to the story's owner, so the
+// card now carries the LOUD marker — the same fact, stated once.
+test('the board shows the decision-waiting marker for the receipt, cleared on approve', async ({
+  page,
+}) => {
   const seed = await seedBillingOwner(page, 'board@example.com');
   setOrgBillingState(seed.organizationId, paidOrgState());
   await setProjectAcceptanceVideo(seed.projectId, true);
@@ -256,16 +262,20 @@ test('the board shows the "Awaiting acceptance" badge, cleared on approve', asyn
   await seedPendingEvidence(seed.workspaceId, seed.ownerId, story.id);
 
   await page.goto(`/boards`);
-  // SCOPED TO THE BOARD: the badge is a `Pill` on a `BoardCard`, so there is no
+  // SCOPED TO THE BOARD: the marker is a `Pill` on a `BoardCard`, so there is no
   // role to ask for — but `BoardContainer`'s scroll row IS `role="group"` +
-  // `aria-label`, and reading the badge through it also says what the assertion
-  // is actually about (the badge is ON THE BOARD).
-  await expect(boardRegion(page).getByText('Awaiting acceptance')).toBeVisible();
+  // `aria-label`, and reading the marker through it also says what the assertion
+  // is actually about (the marker is ON THE BOARD).
+  const marker = boardRegion(page).locator(
+    '[data-decision-marker="yours"][data-decision-kind="acceptance_result"]',
+  );
+  await expect(marker).toBeVisible();
+  await expect(marker).toHaveText('Awaiting you');
 
   // Approve from the detail page, then the badge clears on the board.
   await page.goto(`/items/${story.identifier}`);
   await decideAcceptanceInOverlay(page, 'approve');
   await expect(acceptance(page).getByText('Approved', { exact: true })).toBeVisible();
   await page.goto(`/boards`);
-  await expect(boardRegion(page).getByText('Awaiting acceptance')).toHaveCount(0);
+  await expect(boardRegion(page).locator('[data-decision-marker]')).toHaveCount(0);
 });
