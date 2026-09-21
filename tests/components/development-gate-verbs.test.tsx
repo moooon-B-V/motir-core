@@ -377,6 +377,9 @@ describe('who else sees it (Panels 12w, 12v)', () => {
         gate: {
           ...AWAITING,
           state: 'superseded',
+          // The cause the row records (MOTIR-5884): a NULL cause reads as *not recorded*
+          // and never borrows one from a moved head (§ 29's cause table).
+          supersededCause: 'head_moved',
           subjectVersion: [MOVED_CORE_V, GATEWAY_V].sort().join(','),
         },
       },
@@ -386,6 +389,93 @@ describe('who else sees it (Panels 12w, 12v)', () => {
     expect(screen.getByText(fill(pra.withdrawn.port, { pr: CORE_NAME }))).toBeTruthy();
     expect(screen.getByText(pra.withdrawn.portCite)).toBeTruthy();
     expect(screen.queryByRole('button', { name: pra.verb.approveAndMerge })).toBeNull();
+  });
+
+  // STATE `G` KEEPS THE RECORD (Bug MOTIR-5884; § 29, Panel 1 — the MOTIR-5604 case). The
+  // withdrawal takes the verbs; the rows and How to test stay, beneath the withdrawn band.
+  it('a push withdrawal keeps the rows and How to test under the band, with no Expand and no verbs', () => {
+    const MOVED_CORE_V = 'moooon/motir-core#131@0000000000000000000000000000000000000001';
+    const { container } = renderFrame(
+      {
+        gate: {
+          ...AWAITING,
+          state: 'superseded',
+          supersededCause: 'head_moved',
+          subjectVersion: [MOVED_CORE_V, GATEWAY_V].sort().join(','),
+        },
+      },
+      fakeActions(),
+    );
+    const band = container.querySelector('[data-withdrawn-band]') as HTMLElement;
+    expect(band.getAttribute('role')).toBe('status');
+    expect(band.textContent).toContain(fill(pra.withdrawn.port, { pr: CORE_NAME }));
+    // Both rows and How to test render — and AFTER the band, which sits above the port.
+    const port = screen.getByRole('group', { name: en.approvalGate.port.label });
+    expect(within(port).getByText(CORE_PR.title)).toBeTruthy();
+    expect(within(port).getByText(GATEWAY_PR.title)).toBeTruthy();
+    expect(
+      within(port).getByRole('group', { name: en.github.development.howToTest.title }),
+    ).toBeTruthy();
+    expect(band.compareDocumentPosition(port) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Floorless: nothing is being decided, so no decision surface is held open.
+    expect(port.className).toContain('min-h-0');
+    expect(port.className).not.toContain('min-h-[12.25rem]');
+    expect(screen.queryByRole('button', { name: en.approvalGate.port.expand })).toBeNull();
+    expect(screen.queryByRole('button', { name: pra.verb.approveAndMerge })).toBeNull();
+    expect(screen.queryByRole('button', { name: en.approvalGate.verb.requestChanges })).toBeNull();
+  });
+
+  it('a member closed without merging names it and says unlinking re-asks (Panel 3c)', () => {
+    const { container } = render(
+      <DevelopmentSectionBody
+        pullRequests={[{ ...CORE_PR, state: 'closed' }, GATEWAY_PR]}
+        itemIdentifier="ACME-12"
+        howToTest={TWO_REPO_STORY}
+        mergeGate={{
+          canDecide: true,
+          routedToLabel: 'Mara S.',
+          members: [],
+          stamp: null,
+          gate: { ...AWAITING, state: 'superseded', supersededCause: 'member_closed' },
+        }}
+        gateActions={fakeActions()}
+      />,
+    );
+    const band = container.querySelector('[data-withdrawn-band]') as HTMLElement;
+    expect(band.textContent).toContain(fill(pra.withdrawn.portClosed, { pr: CORE_NAME }));
+    expect(band.textContent).toContain(
+      fill(pra.withdrawn.citeUnlink, { pr: CORE_NAME, key: 'ACME-12' }),
+    );
+    expect(container.textContent).toContain(
+      `2 pull requests · ${CORE_NAME} closed without merging`,
+    );
+    expect(screen.getByText(CORE_PR.title)).toBeTruthy();
+  });
+
+  it('on a DONE-category card the cite promises no re-ask, whatever the cause', () => {
+    const { container } = render(
+      <DevelopmentSectionBody
+        pullRequests={[{ ...CORE_PR, state: 'merged' }, GATEWAY_PR]}
+        itemIdentifier="ACME-12"
+        howToTest={TWO_REPO_STORY}
+        cardTerminal
+        mergeGate={{
+          canDecide: true,
+          routedToLabel: 'Mara S.',
+          members: [],
+          stamp: null,
+          gate: { ...AWAITING, state: 'superseded', supersededCause: 'member_closed' },
+        }}
+        gateActions={fakeActions()}
+      />,
+    );
+    const band = container.querySelector('[data-withdrawn-band]') as HTMLElement;
+    expect(band.textContent).toContain(
+      fill(pra.withdrawn.portMerged, { pr: CORE_NAME, host: pra.host }),
+    );
+    expect(band.textContent).toContain(en.approvalGate.withdrawn.portCite);
+    expect(band.textContent).not.toContain(pra.withdrawn.portCite);
+    expect(container.textContent).toContain(`2 pull requests · ${CORE_NAME} merged on GitHub`);
   });
 });
 
@@ -539,7 +629,10 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
   });
 
   it('a withdrawal with no moved head says the set changed', () => {
-    renderFrame({ gate: { ...AWAITING, state: 'superseded' } }, fakeActions());
+    renderFrame(
+      { gate: { ...AWAITING, state: 'superseded', supersededCause: 'set_changed' } },
+      fakeActions(),
+    );
     expect(screen.getByText(pra.withdrawn.portSet)).toBeTruthy();
   });
 });

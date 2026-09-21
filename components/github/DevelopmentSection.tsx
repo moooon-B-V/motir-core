@@ -413,6 +413,7 @@ export function DevelopmentSectionBody({
   gateLayout = 'flush',
   onShowCurrentVersion,
   gateKey,
+  cardTerminal = false,
   designResult = null,
   repair = null,
   autoQueueExits = null,
@@ -503,6 +504,12 @@ export function DevelopmentSectionBody({
   onShowCurrentVersion?: () => void;
   /** Which of that host's re-reads is on screen — the frame remounts on a new one. */
   gateKey?: number;
+  /**
+   * The card sits in a DONE-category status (Bug MOTIR-5884; § 29's cite table). A
+   * withdrawn merge question on such a card is never asked again, so its cite promises
+   * nothing. Omitted — every host but the item page — the frame reads the card as live.
+   */
+  cardTerminal?: boolean;
   /**
    * The card's DESIGN RESULT, rendered by the host as the Development block's
    * slot (Story MOTIR-5488 · MOTIR-5498; `design-result.md` AMENDMENT 4 Q8,
@@ -707,6 +714,10 @@ export function DevelopmentSectionBody({
         // the band falls back to its count.
         runLabel={howToTest?.record?.author.kind === 'run' ? howToTest.record.author.label : null}
         currentHeads={currentHeads}
+        // What splits a `member_closed` withdrawal into merged and closed (MOTIR-5884):
+        // the state each ROW already draws, never a second read.
+        rowStates={rows.map((row) => ({ repo: row.repo, number: row.number, state: row.pr.state }))}
+        terminal={cardTerminal}
         actions={gateActions}
         layout={gateLayout}
         onShowCurrentVersion={onShowCurrentVersion}
