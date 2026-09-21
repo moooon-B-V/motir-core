@@ -349,13 +349,13 @@ describe('4 — THE WHOLE WALK, per status', () => {
     );
   }
 
-  it(
-    'a card with an open blocker rests at Blocked from EVERY parked status',
-    { timeout: DB_TEST_TIMEOUT_MS },
-    async () => {
-      for (const from of PARKABLE) {
-        await truncateAuthTables();
-        fx = await makeWorkItemFixture();
+  // One case per status, like the walks above. It was one loop in one case, and
+  // each walk costs 8–19s on a CI shard — the loop cannot fit any sane budget.
+  for (const from of PARKABLE) {
+    it(
+      `\`${from}\` with an open blocker → park → APPROVE → Blocked`,
+      { timeout: DB_TEST_TIMEOUT_MS },
+      async () => {
         const card = await seedCard();
         const blocker = await seedCard('An open blocker');
         await workItemsService.linkWorkItems(
@@ -374,7 +374,7 @@ describe('4 — THE WHOLE WALK, per status', () => {
         await plansService.approvePlan(plan.id, fx.ctx);
 
         expect(await statusOf(card)).toBe('blocked');
-      }
-    },
-  );
+      },
+    );
+  }
 });
