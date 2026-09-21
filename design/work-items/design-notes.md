@@ -8494,3 +8494,136 @@ board's query count where it was.
 | **MOTIR-5878** | the header marker as a button in the eyebrow (and the cell's `flex-wrap gap-y-2`); `data-decision-anchor` on every section card that draws a gate's frame; the press, the wait and the focus |
 
 Panel 9 is shared: every form above in dark and in `zh`.
+
+## ⭐ THE CHOICE PORT — a person PICKS one of N options, each with its why, and what they chose is stamped (Story MOTIR-4914 · MOTIR-5888 — `approval-control--choice.mock.html`, DATED 2026-09-21)
+
+**Assets.** Three DELTA mocks, one per base they amend; no base file is edited:
+
+- **`design/work-items/approval-control--choice.mock.html`** — the port, band 3, the defect state, the read-only state, the record and the access path (Panels 1–7). Amends `approval-control.mock.html` (§ the universal approval frame, MOTIR-4789), whose GIVES/TAKES row for MOTIR-4914 reads _"the option rows, their named axes and the stamp"_ — which is this section.
+- **`design/workbench/approvals-row--choice.mock.html`** — the To-approve row and the Approvals-room rows (Panels 7a–7c). Amends `design/workbench/approvals-row.mock.html` as `approvals-row--decision.mock.html` did for the decision kind.
+- **`design/work-items/type-executor-picker--choice.mock.html`** — the `choice` type chip and its place in the picker (Panels 1–2). Amends `type-executor-picker.mock.html`.
+
+**The behaviour is the ADRs', not this section's.** `docs/decisions/approval-gates.md` §1's MOTIR-5887 amendment fixes the subject (the parsed `## Options` section), the four defect reasons, raise and supersede, the verb set (the options plus _None of these_), Workflow A and the `chosenOption` record. `docs/decisions/work-item-type-taxonomy.md` Amendment 3 (MOTIR-5886) admits the type. Where either disagrees with this section, the ADR wins.
+
+**Rendered from shipped reality.** Before anything was drawn, the real `ApprovalGateControl` was rendered to static HTML (react-dom/server, the real `en` catalogue, `layout="section"`) in states A, B, E and F, and the real `WorkItemTypeChip` for the five Govern members. Every frame in the mocks is that emitted markup; only the port's contents and the kind-supplied strings are new. The stylesheets are the bases' own, carried byte for byte.
+
+**For whom, and the access path.** A signed-in project member facing a decision the planner declined to make. They meet it in three places, all shipped, none new:
+
+1. **`/items/[key]`** — a **Choice** section in the item page's late stack, in the slot a design result takes (`LateSections.tsx`). It shows the options read-only and ONE door, the shipped `GateCallToActionBand`, whose button reads **Review & choose** (Panel 6a). Per MOTIR-5215 the page keeps the record and none of the verbs.
+2. **The full-screen overlay** (`?approval=<key>`, MOTIR-5214) — the frame with its verbs (Panel 6b).
+3. **The To-approve tab and the Approvals room** — a row that opens the same overlay (`approvals-row--choice.mock.html`).
+
+### The port (Panel 1)
+
+| element                  | treatment                                                                                                      | tokens                                                                                                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the question             | an eyebrow _Question_ and the `## Question` text, `text-sm font-medium`                                        | `--el-text`; eyebrow `--el-text-secondary`                                                                                                                               |
+| the option list          | an eyebrow _Options · {n}_, then one row per `### <label>`, a **radio group**; the whole row is the hit target | —                                                                                                                                                                        |
+| an option row            | a card-radius box: radio dot, the LABEL, then **wins on** + the AXIS as a chip, then the WHY                   | box `--el-border` on `--el-page-bg`; selected `--el-accent` border on `--el-surface-soft`; radio `--el-border-strong`, selected `--el-accent`; WHY `--el-text-secondary` |
+| the axis chip            | the shipped `Pill` shape, ONE tint for every axis (axes are not categories, so colour would invent a meaning)  | `--el-tint-sky` + `--el-text-strong`                                                                                                                                     |
+| _What this choice gates_ | a soft box below the options, eyebrow + the section's text                                                     | `--el-surface-soft`, `--el-border-soft`, `--el-text`                                                                                                                     |
+
+**The axis is RENDERED, not implied.** The story's point is that a reader choosing between two names is guessing, so every row carries its axis as a visible chip beside the label. The port keeps the frame's shipped floor (12.25rem), ceiling (34rem, scrolling itself) and **Expand** (MOTIR-5032), so 6+ options scroll inside the port and never push band 3 off screen (Panel 1c).
+
+### Band 3 — SELECT, then COMMIT (Panel 2)
+
+**The decision:** a person selects an option ROW in the port, and band 3 carries ONE commit verb, **Choose {label}**, plus the one refusal, **None of these — revise the options**. Committing opens the frame's shipped inline confirm band.
+
+**Why this satisfies "the verbs are the options themselves".** Each option IS a verb: `choose(optionId)`. A row of N buttons would put the options in TWO places — once in the port with their axis and WHY, once in band 3 as bare names — and a person would press a NAME, which is exactly the guess the axis exists to prevent. Selecting presses the option where its reason is written; band 3 then names what will be recorded. The shape is the same at 2 options and at 6, which is what the story's _"a 2-option and a 4-option work item through the same component"_ criterion needs.
+
+- **Before a pick, Choose is drawn DISABLED with its reason as the consequence line** (_"Pick an option above to choose it."_, Panel 1a). That is the frame's shipped honest-disabled rule (`GateVerb.disabled`, MOTIR-5678), not a new one.
+- **A long label truncates inside the button** (`max-w-[16rem] truncate`); the row it names is always visible above it. At ~400px the verbs wrap below the consequence line, as every kind's do (Panel 2b).
+- **None of these does not confirm**, like the shipped _Request changes_: it is reversible — the reporter revises the options and the question is asked again.
+
+### States
+
+| state                                 | panel   | what renders                                                                                                                                            |
+| ------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A** awaiting, yours, nothing picked | 1a      | port live; _Choose_ disabled with its reason                                                                                                            |
+| **A** awaiting, yours, picked         | 1b · 1c | the picked row accent-bordered; _Choose {label}_ live                                                                                                   |
+| **C** confirming                      | 2a      | the shipped inline band: _Choosing this will:_ — record {label} on {axis}, move to Done, leave the follow-up owed                                       |
+| **D** recording                       | —       | the shipped frame, unchanged                                                                                                                            |
+| **B** read-only                       | 4       | port live, rows WITHOUT radios (not disabled ones), band 3 is _Waiting on {name}._                                                                      |
+| **E** chosen                          | 5a      | the pill **Chosen** (mint); the chosen row carries the accent `circle-check` glyph and a **Chosen** pill; other rows NOT dimmed; the record strip below |
+| **F** None of these                   | 5b      | the shipped **Changes requested** pill; the record's last line is the kind's _the options will be revised_                                              |
+| **G** withdrawn                       | —       | the shipped frame words; the cause is `republished` (the ADR's point 3)                                                                                 |
+| **H** stale                           | 5c      | the shipped `approval-control--stale-refusal.mock.html` treatment, reused: _The options changed while you were reading._                                |
+| **defect** — no gate                  | 3       | NOT a frame: the **Choice** section with a _Can't be decided yet_ pill, the reason callout, and the options as parsed, read-only; no band 1, no band 3  |
+
+**The record (Panel 5a) is read from `chosenOption`, never from the body.** The frame's `recordLead` is _Chosen by {name} · {when}_; its `recordDetail` is _Chose_ + the label pill + the axis chip, and **Follow-up planning owed — {what this choice gates}**. The version is the shipped `subjectVersion` line. Every word survives a later edit to the body, which is the story's _"readable months later without re-reading the body"_.
+
+**The defect state (Panel 3), one per reason.** No gate is raised, so there are no verbs anywhere. `option_without_axis` NAMES the option and flags its row with a `circle-alert` line; the other three state the reason in the callout. Every reason ends with the same sentence: nobody can choose until the description is fixed, and the question is asked as soon as it reads complete.
+
+### Copy — every new string, en and zh
+
+| key                                                 | en                                                                                                          | zh                                                                                         |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `approvalGate.choice.kindLabel`                     | Choice                                                                                                      | 选择                                                                                       |
+| `approvalGate.choice.meta`                          | {count, plural, =1 {# option} other {# options}}                                                            | {count} 个选项                                                                             |
+| `approvalGate.choice.question`                      | Question                                                                                                    | 问题                                                                                       |
+| `approvalGate.choice.options`                       | Options · {count}                                                                                           | 选项 · {count}                                                                             |
+| `approvalGate.choice.winsOn`                        | wins on                                                                                                     | 胜在                                                                                       |
+| `approvalGate.choice.gates`                         | What this choice gates                                                                                      | 此选择决定的后续工作                                                                       |
+| `approvalGate.choice.verb.choose`                   | Choose {label}                                                                                              | 选择「{label}」                                                                            |
+| `approvalGate.choice.verb.chooseEmpty`              | Choose                                                                                                      | 选择                                                                                       |
+| `approvalGate.choice.verb.noneOfThese`              | None of these — revise the options                                                                          | 都不合适 — 修改选项                                                                        |
+| `approvalGate.choice.consequence.pick`              | Pick an option above to choose it. Choosing moves {key} to Done.                                            | 请先在上方选中一个选项。选择后，{key} 将移至“已完成”。                                     |
+| `approvalGate.choice.consequence.picked`            | Choosing moves {key} to Done and leaves a follow-up planning pass owed.                                     | 选择后，{key} 将移至“已完成”，并留下一轮待进行的后续规划。                                 |
+| `approvalGate.choice.confirm.title`                 | Choosing this will:                                                                                         | 选择此项将会：                                                                             |
+| `approvalGate.choice.confirm.record`                | Record {label} — wins on {axis} — as the answer.                                                            | 将「{label}」（胜在：{axis}）记录为答案。                                                  |
+| `approvalGate.choice.confirm.done`                  | Move {key} to Done.                                                                                         | 将 {key} 移至“已完成”。                                                                    |
+| `approvalGate.choice.confirm.followUp`              | Leave a follow-up planning pass owed: {gates}.                                                              | 留下一轮待进行的后续规划：{gates}。                                                        |
+| `approvalGate.choice.confirm.proceed`               | Yes, choose {label}                                                                                         | 是，选择「{label}」                                                                        |
+| `approvalGate.choice.state.chosen`                  | Chosen                                                                                                      | 已选择                                                                                     |
+| `approvalGate.choice.record.lead`                   | Chosen by {name} · {when}                                                                                   | 由 {name} 选择 · {when}                                                                    |
+| `approvalGate.choice.record.chose`                  | Chose                                                                                                       | 选择了                                                                                     |
+| `approvalGate.choice.record.followUp`               | Follow-up planning owed — {gates}                                                                           | 待进行后续规划 — {gates}                                                                   |
+| `approvalGate.choice.record.willRevise`             | the options will be revised                                                                                 | 选项将被修改                                                                               |
+| `approvalGate.choice.cta.body`                      | Review the options full screen, then choose one.                                                            | 全屏查看选项，然后选择一个。                                                               |
+| `approvalGate.choice.cta.button`                    | Review & choose                                                                                             | 查看并选择                                                                                 |
+| `approvalGate.choice.defect.title`                  | Can't be decided yet                                                                                        | 暂时无法决定                                                                               |
+| `approvalGate.choice.defect.fewer_than_two_options` | This choice lists only one option. A choice needs at least two.                                             | 此选择只列出了一个选项。一个选择至少需要两个选项。                                         |
+| `approvalGate.choice.defect.option_without_axis`    | “{label}” says what it is, not what it wins on. Every option needs an Axis: line.                           | 「{label}」只说明了它是什么，没有说明它胜在何处。每个选项都需要一行 Axis:。                |
+| `approvalGate.choice.defect.duplicate_option`       | Two options are both called “{label}”. Give each a distinct name.                                           | 有两个选项都叫「{label}」。请为每个选项取不同的名字。                                      |
+| `approvalGate.choice.defect.no_follow_up_section`   | This choice doesn't say what it gates. Add a “What this choice gates” section naming the work that follows. | 此选择没有说明它决定哪些后续工作。请添加 “What this choice gates” 一节，写明接下来的工作。 |
+| `approvalGate.choice.defect.fix`                    | No one can choose until the description is fixed; the question is asked as soon as it reads complete.       | 在描述修正之前，任何人都无法选择；描述完整后会立即发起提问。                               |
+| `approvalGate.choice.defect.flag`                   | No axis — add an Axis: line                                                                                 | 缺少胜出维度 — 请添加一行 Axis:                                                            |
+| `approvalGate.choice.stale`                         | The options changed while you were reading.                                                                 | 你阅读期间选项已更改。                                                                     |
+| `workbench.approvals.choiceMeta`                    | {count} options · {question}                                                                                | {count} 个选项 · {question}                                                                |
+| `workbench.approvals.choiceDecided`                 | Chose {label} · {axis}                                                                                      | 选择了「{label}」· {axis}                                                                  |
+| `workbench.approvals.choiceNoneChosen`              | {count} options · none chosen                                                                               | {count} 个选项 · 未选择                                                                    |
+| the type label (`workItemType` catalogue)           | Choice                                                                                                      | 选择                                                                                       |
+
+The Markdown headings the parser reads (`## Question`, `## Options`, `**Axis:**`, `## What this choice gates`) are STRUCTURE, not copy, and are not translated — which is why the zh defect strings name them in English. An option's label, axis and WHY are authored text and render as written.
+
+### Tokens
+
+- **`--el-type-choice: var(--color-charcoal)`** — added to `packages/design-system/theme.css`'s `[data-appearance-scope]` block beside `--el-type-decision` (declared there, not on `:root` alone, so it re-resolves in a dark scope; the rows mock's first draft declared it on `:root` and its dark glyph went invisible). It shares charcoal with `decision` and `legal` — the Govern precedent, _hue names the family; the glyph names the member_ — and gets its OWN token.
+- **Glyph:** lucide `signpost`, EXTRACTED from the installed `lucide-react` (the sprite audit checks it).
+- Everything else composes shipped tokens: `--el-tint-sky` (the axis chip), `--el-tint-mint` (Chosen), `--el-tint-peach` (the defect callout and pill, the stale alert), `--el-accent` (the selected row and radio), `--el-accent-on-surface` (the chosen glyph — a graphic, 3:1), `--el-danger-on-surface` (the defect flag line). No `--el-text-muted` on a tinted surface and no `--el-text-faint` on text.
+
+### TAKES — three things this kind needs from the shipped frame
+
+1. **The confirm band's title is approve-specific** (`approvalGate.confirm.title`, _"Approving this will:"_). A choice needs _Choosing this will:_. → The title becomes kind-supplied (a `confirmTitle` beside `confirmConsequences`).
+2. **The changes-requested record line is agent-specific** (`record.willRepublish`, _"the agent will publish a new version"_), rendered unconditionally on `changes_requested`. False for a choice, whose reporter revises the options. → Kind-supplied, with the shipped words as the default.
+3. **Band 3 keys its verbs by `verb.decision`.** With select-then-commit there is ONE `choose` verb, so no collision arises. A future kind that renders several verbs sharing one `decision` must key by the verb's identity.
+
+### GIVES / TAKES — who builds what
+
+| element                                                                                                                                                                                                                                       | built by       | note                                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the port (question, option rows, axis chip, gates box), band 3 (select-then-commit, the disabled-with-reason verb, the confirm), states A–H, the defect state, the record strip, the item page's **Choice** section and its band, the overlay | **MOTIR-5896** | plus the three TAKES above, and the en + zh strings under `approvalGate.choice.*`                                                                                        |
+| the decision-waiting marker's destination for `decision_choice` — the **Choice** section                                                                                                                                                      | **MOTIR-5896** | MOTIR-4908's marker maps each gate kind to the section it scrolls to (`decision-waiting.mock.html`); the fifth kind's row is the Choice section, which only 5896 renders |
+| the To-approve row and the Approvals-room rows                                                                                                                                                                                                | **MOTIR-5897** | renders inside the overlay's door; the strings under `workbench.approvals.choice*`                                                                                       |
+| the `choice` type chip, its glyph, `--el-type-choice`, its place in the picker, and the type label                                                                                                                                            | **MOTIR-5890** | the chip renders inside the rows' and the item header's type slot                                                                                                        |
+| the parser's defect reasons (the words the defect state renders)                                                                                                                                                                              | **MOTIR-5891** | the reason codes are the ADR's; the words are this section's                                                                                                             |
+| the `choose` verb on the decide door                                                                                                                                                                                                          | **MOTIR-5893** | the port's select-then-commit sends `{ decision: 'choose', optionId }`                                                                                                   |
+
+### Checked against the siblings
+
+`git grep -c -e decision_choice -e choice origin/main -- design/work-items/ design/workbench/` returns 12 files. Every hit but three is the English word in prose (_"a style choice"_, _"View choice is URL-driven"_). The three that are about this kind:
+
+- `design/work-items/approval-control.mock.html:2260` — the frame's sentence that a choice gate's N options reach the same band. Honoured: band 3 is the frame's.
+- `design/work-items/design-notes.md:6647` and `:6657` — the frame's GIVES/TAKES rows allocating the option rows, the axes and the stamp to MOTIR-4914. This section is that allocation.
+
+No sibling asset draws a choice row, so nothing here is redrawn and nothing elsewhere needs a pointer.

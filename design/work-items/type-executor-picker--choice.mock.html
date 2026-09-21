@@ -1,0 +1,1386 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Work-item type picker — the fifteenth member, choice (MOTIR-5888, a delta)
+    </title>
+    <!-- DELTA MOCK — Subtask MOTIR-5888 (Story MOTIR-4914); MOTIR-5890 builds it. Amends design/work-items/type-executor-picker.mock.html, whose stylesheet and icon defs are carried byte for byte; the base is not edited. -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --height-btn-md: 40px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-warning: var(--color-warning);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-sidebar-item-bg-hover: #eeede9;
+
+        /* Existing issue-type hues (work-item KIND identity — finding #54) */
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* ── PROPOSED by THIS design (2.7.4 adds these to globals.css Tier 3) ──
+           The ten per-TYPE hues — the work-NATURE palette, parallel to the
+           per-KIND hues above. Mapped to existing Tier-0 values (NO new Tier-0
+           colour needed): the seven "produces an artifact" types take the seven
+           saturated hues; the three "meta / admin" types (decision, manual,
+           chore) take the three greys — desaturation is semantically apt. The
+           dark block re-skins them automatically (each is a --color-* ref). */
+        --el-type-code: var(--color-info); /* blue   — implementation */
+        --el-type-design: var(--color-accent); /* pink   — UI/UX design */
+        --el-type-test: var(--color-success); /* green  — automated tests */
+        --el-type-content: var(--color-accent-teal); /* teal   — copy / docs / translate */
+        --el-type-research: var(--color-primary); /* purple — spike / investigation */
+        --el-type-review: var(--color-accent-orange); /* orange — QA / review */
+        --el-type-deploy: var(--color-destructive); /* red    — infra / ops / release */
+        --el-type-decision: var(--color-charcoal); /* ink    — decision record */
+        --el-type-manual: var(--color-stone); /* stone  — human provisioning */
+        --el-type-chore: var(--color-slate); /* slate  — housekeeping */
+
+        /* ── PROPOSED by THIS design (MOTIR-2633 adds these to
+           packages/design-system/theme.css Tier 3 — NOT app/globals.css; the
+           design system was extracted since 2.7.4 wrote the block above) ──
+           The four members admitted by ADR Amendment 1 (MOTIR-2629). All seven
+           saturated Tier-0 hues and all three greys were spent at ten, and
+           inventing an eighth is forbidden — so each newcomer POINTS AT the
+           Tier-0 hue of the member the amendment named as its nearest
+           neighbour. Its own token, so a future palette can split them; the
+           glyph, not the hue, is what distinguishes it today. */
+        --el-type-copy: var(--color-accent-teal); /* teal     — with content */
+        --el-type-translate: var(--color-accent-teal); /* teal     — with content */
+        --el-type-verification: var(--color-accent-orange); /* orange   — with review */
+        --el-type-legal: var(--color-charcoal); /* ink      — with decision */
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #f0742a;
+        --color-accent-teal: #3bb6b1;
+        --color-accent-green: #2bc24a;
+        --color-success: #2bc24a;
+        --color-warning: #f0742a;
+        --color-destructive: #f0564a;
+        --color-info: #4d9fff;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 760px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .board {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+      }
+      .panel-band {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .band-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .band-title b {
+        color: var(--el-text-secondary);
+      }
+      .panel-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        align-items: flex-start;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-text-secondary);
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        max-width: 320px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+
+      /* ── Modal (components/ui/Modal.tsx) chrome ─────────────────────────── */
+      .modal {
+        position: relative;
+        width: 448px; /* max-w-[28rem] (size="md") */
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal.compact {
+        width: 360px;
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 var(--spacing-md);
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+      }
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: var(--spacing-md);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid var(--el-border);
+      }
+
+      /* ── Field row grammar ──────────────────────────────────────────────── */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .field.is-new > label::after {
+        content: 'NEW · 2.7';
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-accent);
+      }
+      /* Representative (already-shipped) control — shown for context only */
+      .control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .control .chev {
+        margin-left: auto;
+        color: var(--el-text-muted);
+        display: inline-flex;
+      }
+
+      /* ── Combobox (components/ui/Combobox.tsx) ──────────────────────────── */
+      .cbx {
+        position: relative;
+      }
+      .cbx-trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .cbx-trigger.is-open {
+        border-color: var(--el-accent);
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .cbx-trigger .val {
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-trigger .placeholder {
+        color: var(--el-text-muted);
+      }
+      .cbx-trigger .updown {
+        margin-left: auto;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        flex: none;
+      }
+      /* The in-dialog inline menu (role=dialog → inline, not portaled) */
+      .cbx-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 20;
+        width: max-content;
+        min-width: 100%;
+        max-width: 18rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        /* The SHIPPED ceiling. Combobox's listbox is `max-h-64 overflow-y-auto`
+           and its inline (in-dialog) branch clamps to
+           `Math.max(80, Math.min(256, avail - 12))` — so 256px is a CAP the
+           menu never grows past, in either host. This asset previously said
+           320px, which is why ten rows looked like they fit. They never did. */
+        max-height: 256px;
+        overflow-y: auto;
+      }
+      /* Same menu with the cap lifted — NOT a state the product renders; it
+         exists so a reader of the PNG can read all fourteen rows at once. */
+      .cbx-menu.is-unrolled {
+        max-height: none;
+        position: static;
+        box-shadow: var(--shadow-card);
+      }
+      /* The Combobox's shipped group header (a role="presentation" row):
+         px-(--spacing-control-x) pt-2 pb-1 font-mono text-[11px] font-semibold
+         tracking-wider text-(--el-text-eyebrow) uppercase. */
+      .cbx-group {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .cbx-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .cbx-opt.is-active {
+        background: var(--el-surface);
+      }
+      .cbx-opt .opt-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-opt .opt-check {
+        margin-left: 4px;
+        color: var(--el-text);
+        flex: none;
+        display: inline-flex;
+      }
+
+      /* ── Type glyph — the IssueTypeIcon-adjacent saturated stroke ───────── */
+      .tglyph {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .t-code {
+        color: var(--el-type-code);
+      }
+      /* MOTIR-4944 — the one member of the `t-*` family this asset left out. The
+         glyph carried the ink inline instead; declaring it here matches the 32
+         assets that hold the family in the stylesheet, and the inline value is
+         the same token, so nothing moves. */
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-design {
+        color: var(--el-type-design);
+      }
+      .t-test {
+        color: var(--el-type-test);
+      }
+      .t-content {
+        color: var(--el-type-content);
+      }
+      .t-research {
+        color: var(--el-type-research);
+      }
+      .t-review {
+        color: var(--el-type-review);
+      }
+      .t-deploy {
+        color: var(--el-type-deploy);
+      }
+      .t-decision {
+        color: var(--el-type-decision);
+      }
+      .t-manual {
+        color: var(--el-type-manual);
+      }
+      .t-chore {
+        color: var(--el-type-chore);
+      }
+      /* The four members admitted by ADR Amendment 1 (MOTIR-2629). Each takes
+         the hue of the member the amendment named as its NEAREST NEIGHBOUR —
+         the seven saturated Tier-0 hues were already exhausted at ten, so hue
+         names the FAMILY and the glyph names the member. No new Tier-0 colour,
+         and no existing mapping moved. */
+      .t-copy {
+        color: var(--el-type-copy);
+      }
+      .t-translate {
+        color: var(--el-type-translate);
+      }
+      .t-verification {
+        color: var(--el-type-verification);
+      }
+      .t-legal {
+        color: var(--el-type-legal);
+      }
+
+      /* ── Type CHIP — Pill recipe: hue in the TINT background (a color-mix of
+           the type hue) + --el-text-strong label (AA, finding #35) + the
+           saturated glyph. One saturated --el-type-* token yields its own tint,
+           so no 10 separate tint pairs are needed. ─────────────────────────── */
+      .tchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .tchip .tglyph {
+        width: 13px;
+        height: 13px;
+      }
+      .tchip.code {
+        background: color-mix(in srgb, var(--el-type-code) 14%, var(--el-page-bg));
+      }
+      .tchip.design {
+        background: color-mix(in srgb, var(--el-type-design) 14%, var(--el-page-bg));
+      }
+      .tchip.test {
+        background: color-mix(in srgb, var(--el-type-test) 14%, var(--el-page-bg));
+      }
+      .tchip.content {
+        background: color-mix(in srgb, var(--el-type-content) 14%, var(--el-page-bg));
+      }
+      .tchip.research {
+        background: color-mix(in srgb, var(--el-type-research) 14%, var(--el-page-bg));
+      }
+      .tchip.review {
+        background: color-mix(in srgb, var(--el-type-review) 14%, var(--el-page-bg));
+      }
+      .tchip.deploy {
+        background: color-mix(in srgb, var(--el-type-deploy) 14%, var(--el-page-bg));
+      }
+      .tchip.decision {
+        background: color-mix(in srgb, var(--el-type-decision) 14%, var(--el-page-bg));
+      }
+      .tchip.manual {
+        background: color-mix(in srgb, var(--el-type-manual) 18%, var(--el-page-bg));
+      }
+      .tchip.chore {
+        background: color-mix(in srgb, var(--el-type-chore) 18%, var(--el-page-bg));
+      }
+      .tchip.copy {
+        background: color-mix(in srgb, var(--el-type-copy) 14%, var(--el-page-bg));
+      }
+      .tchip.translate {
+        background: color-mix(in srgb, var(--el-type-translate) 14%, var(--el-page-bg));
+      }
+      .tchip.verification {
+        background: color-mix(in srgb, var(--el-type-verification) 14%, var(--el-page-bg));
+      }
+      .tchip.legal {
+        background: color-mix(in srgb, var(--el-type-legal) 18%, var(--el-page-bg));
+      }
+
+      /* ── Segmented executor control (components/ui/Segmented.tsx) ────────── */
+      .seg {
+        /* The shipped Segmented is content-width (inline-flex). In a flex-column
+           field the parent's align-items:stretch would blow it full-width, so
+           pin it to its content like the real component. */
+        display: inline-flex;
+        align-self: flex-start;
+        width: fit-content;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 2px;
+      }
+      .seg button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: none;
+        background: transparent;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg button .seg-ic {
+        display: inline-flex;
+        color: var(--el-text-faint);
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg button[aria-pressed='true'] .seg-ic {
+        color: var(--el-accent);
+      }
+
+      /* ── Executor indicator (read mode — detail rail) ───────────────────── */
+      .exec-ind {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .exec-ind .seg-ic {
+        display: inline-flex;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Buttons (components/ui/Button.tsx) ─────────────────────────────── */
+      .btn {
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      /* ── A standalone field cluster card (panel 2) ──────────────────────── */
+      .cluster {
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+      }
+
+      /* ── Detail rail (panel 3) — issue detail right-rail metadata column ─── */
+      .rail {
+        width: 300px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 6px 4px;
+      }
+      .rail-row {
+        position: relative;
+        display: grid;
+        grid-template-columns: 92px 1fr;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 14px;
+        border-radius: var(--radius-control);
+        min-height: 40px;
+      }
+      .rail-row + .rail-row {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .rail-row > .rk {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+      }
+      .rail-row.is-new > .rk::after {
+        content: ' ·';
+        color: var(--el-accent);
+      }
+      .rail-val {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      /* the editable affordance — a quiet hover target, like the shipped inline
+         pickers (2.5.5): the static chip/indicator IS the click target */
+      .editable {
+        cursor: pointer;
+        border-radius: var(--radius-badge);
+      }
+      .set-affordance {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        padding: 3px 12px;
+        cursor: pointer;
+      }
+      .set-affordance .plus {
+        display: inline-flex;
+        color: var(--el-text-faint);
+      }
+      .rail-editing {
+        position: absolute;
+        top: calc(100% - 4px);
+        left: 14px;
+        z-index: 20;
+      }
+
+      /* ── Panel 5 — the measurement table + the filter bar + entrances ───── */
+      .measure {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        font-size: 12.5px;
+        min-width: 320px;
+      }
+      .measure-row {
+        display: contents;
+      }
+      .measure-row > span {
+        padding: 6px 10px;
+        border-top: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+      }
+      .measure-row > span + span {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: var(--el-text);
+      }
+      .measure-row.head > span {
+        border-top: 0;
+        background: var(--el-surface);
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .measure-row.is-verdict > span {
+        background: var(--el-surface-soft);
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .filterbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        min-width: 320px;
+      }
+      .fb-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        font-size: 12px;
+        color: var(--el-text);
+        white-space: nowrap;
+      }
+      .fb-chip b {
+        color: var(--el-text-secondary);
+        font-weight: 500;
+      }
+      .fb-chip.is-active {
+        border-color: var(--el-border-strong);
+      }
+      .fb-x {
+        display: inline-flex;
+        color: var(--el-text-secondary);
+      }
+      .fb-add {
+        font-size: 12px;
+        color: var(--el-link);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+      }
+      .entrances {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+        max-width: 420px;
+      }
+      .entrances b {
+        color: var(--el-text-strong);
+      }
+      .legend-row.is-new-member .tok b {
+        color: var(--el-accent-on-surface);
+      }
+      /* ── Legend (panel 4) ───────────────────────────────────────────────── */
+      .legend {
+        width: 100%;
+        max-width: 1120px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 6px 8px;
+      }
+      .legend-row {
+        display: grid;
+        grid-template-columns: 150px 1fr 200px 250px;
+        align-items: center;
+        gap: 16px;
+        padding: 9px 14px;
+        font-size: 13px;
+      }
+      .legend-row + .legend-row {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .legend-row.head {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+      }
+      .legend-row .gloss {
+        color: var(--el-text-secondary);
+      }
+      .legend-row .tok {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .legend-row .tok b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .legend-row .exec {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--el-text);
+      }
+      .legend-row .exec .seg-ic {
+        color: var(--el-text-secondary);
+        display: inline-flex;
+      }
+      .legend-row .exec .either {
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+    </style>
+    <style>
+      /* The fifteenth member's hue and chip — the Govern precedent: it shares
+         --color-charcoal with `decision` and `legal`, and gets its OWN token. */
+      :root,
+      [data-appearance-scope] {
+        --el-type-choice: var(--color-charcoal);
+      }
+      .t-choice {
+        color: var(--el-type-choice);
+      }
+      .tchip.choice {
+        background: color-mix(in srgb, var(--el-type-choice) 18%, var(--el-page-bg));
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Work-item type + executor picker — the fifteenth member, <code>choice</code></h1>
+        <p>
+          MOTIR-5888, for MOTIR-5890. A DELTA on <code>type-executor-picker.mock.html</code> (Story
+          2.7, amended by MOTIR-2631 for fourteen). Taxonomy ADR Amendment 3 admits
+          <code>choice</code> directly after <code>decision</code> in the Govern group, executor
+          <b>human</b>. Only the panels that change are drawn.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-updown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5M7 9l5-5 5 5" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </g>
+        <g
+          id="i-chevD"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14M12 5v14" />
+        </g>
+        <!-- kind glyphs (representative) -->
+        <g
+          id="k-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="k-story"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </g>
+        <!-- the fourteen TYPE glyphs -->
+        <g
+          id="t-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />
+        </g>
+        <g
+          id="t-design"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="t-test"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"
+          />
+          <path d="M6.453 15h11.094M8.5 2h7" />
+        </g>
+        <g
+          id="t-content"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4M16 13H8M16 17H8M10 9H8" />
+        </g>
+        <g
+          id="t-research"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+          />
+          <path d="M9 18h6M10 22h4" />
+        </g>
+        <g
+          id="t-review"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="8" y="2" width="8" height="4" rx="1" />
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+          <path d="m9 14 2 2 4-4" />
+        </g>
+        <g
+          id="t-deploy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
+          />
+          <path
+            d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+          />
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+        </g>
+        <g
+          id="t-decision"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1zM2 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"
+          />
+          <path d="M7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+        </g>
+        <g
+          id="t-manual"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2" />
+          <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2" />
+          <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8" />
+          <path
+            d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+          />
+        </g>
+        <g
+          id="t-chore"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+          />
+        </g>
+        <g
+          id="t-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 4v16" />
+          <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
+          <path d="M9 20h6" />
+        </g>
+        <g
+          id="t-translate"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="t-verification"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="t-legal"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381" />
+          <path d="m16 16 6-6" />
+          <path d="m21.5 10.5-8-8" />
+          <path d="m8 8 6-6" />
+          <path d="m8.5 7.5 8 8" />
+        </g>
+        <!-- executor glyphs -->
+        <g
+          id="e-agent"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8V4H8" />
+          <rect x="4" y="8" width="16" height="12" rx="2" />
+          <path d="M2 14h2M20 14h2M15 13v2M9 13v2" />
+        </g>
+        <g
+          id="e-human"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </g>
+        <!-- lucide `signpost` — EXTRACTED from the installed `lucide-react@1.16.0`
+             (node_modules/lucide-react/dist/esm/icons/signpost.mjs), not hand-typed. It is what
+             WORK_ITEM_TYPE_META.choice.icon = Signpost will render (MOTIR-5890). -->
+        <symbol
+          id="t-choice"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 13v8" />
+          <path d="M12 3v3" />
+          <path
+            d="M2.354 10.354a1.207 1.207 0 0 1 0-1.708l2.06-2.06A2 2 0 0 1 5.828 6h12.344a2 2 0 0 1 1.414.586l2.06 2.06a1.207 1.207 0 0 1 0 1.708l-2.06 2.06a2 2 0 0 1-1.414.586H5.828a2 2 0 0 1-1.414-.586z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="board">
+      <div class="panel-band">
+        <div class="band-title">
+          Panel 1 · <b>The Type combobox — the Govern group</b> · <code>choice</code> directly after
+          <code>decision</code>
+        </div>
+        <div class="panel-row">
+          <div class="panel">
+            <div class="panel-label">
+              1 · the open menu, Govern &amp; operate only (the other three groups are unchanged)
+            </div>
+            <div class="cbx" style="max-width: 320px">
+              <div class="cbx-menu" role="listbox" aria-label="Type" style="position: static">
+                <div class="cbx-group" role="presentation">Govern &amp; operate</div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-decision"
+                    ><svg width="16" height="16" viewBox="0 0 24 24">
+                      <use href="#t-decision" /></svg></span
+                  ><span class="opt-label">Decision</span>
+                </div>
+                <div class="cbx-opt is-active" role="option" aria-selected="true">
+                  <span class="tglyph t-choice"
+                    ><svg width="16" height="16" viewBox="0 0 24 24">
+                      <use href="#t-choice" /></svg></span
+                  ><span class="opt-label">Choice</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-deploy"
+                    ><svg width="16" height="16" viewBox="0 0 24 24">
+                      <use href="#t-deploy" /></svg></span
+                  ><span class="opt-label">Deploy</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-manual"
+                    ><svg width="16" height="16" viewBox="0 0 24 24">
+                      <use href="#t-manual" /></svg></span
+                  ><span class="opt-label">Manual</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-legal"
+                    ><svg width="16" height="16" viewBox="0 0 24 24">
+                      <use href="#t-legal" /></svg></span
+                  ><span class="opt-label">Legal</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-chore"
+                    ><svg width="16" height="16" viewBox="0 0 24 24">
+                      <use href="#t-chore" /></svg></span
+                  ><span class="opt-label">Chore</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-label">Notes</div>
+            <p class="panel-note">
+              <b>Order.</b> The ADR's §1e list:
+              <code>… decision · choice · deploy · manual · legal · chore</code>. The group stays
+              one contiguous run, so the menu's section heading and
+              <code>WORK_ITEM_TYPE_GROUP</code> need no reshuffle.
+            </p>
+            <p class="panel-note">
+              <b>Glyph.</b> lucide <code>signpost</code> — a fork in the road, one sign pointing
+              each way. It is deliberately NOT a variant of <code>decision</code>'s
+              <code>scale</code>: the two share a hue, so the glyph is what tells them apart.
+            </p>
+            <p class="panel-note">
+              <b>Hue.</b> <code>--el-type-choice: var(--color-charcoal)</code>, declared beside
+              <code>--el-type-decision</code> in <code>packages/design-system/theme.css</code>'s
+              <code>[data-appearance-scope]</code> block. The palette's seven saturated hues and
+              three greys are spent; the precedent (<code>legal</code> joins <code>decision</code>,
+              <code>copy</code>/<code>translate</code> join <code>content</code>) is that a newcomer
+              takes its nearest neighbour's hue and its OWN token.
+              <b>Hue names the family; the glyph names the member.</b>
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="panel-band">
+        <div class="band-title">
+          Panel 2 · <b>The legend rows that change</b> · chip, gloss, token, executor default
+        </div>
+        <div class="legend">
+          <div class="legend-row head">
+            <span>Type chip</span><span>What it is</span><span>--el-type-* → Tier-0</span
+            ><span>Executor default</span>
+          </div>
+          <div class="legend-row">
+            <span class="tchip decision"
+              ><span class="tglyph t-decision"
+                ><svg viewBox="0 0 24 24"><use href="#t-decision" /></svg></span
+              >Decision</span
+            ><span class="gloss">A decided record a person accepts</span
+            ><span class="tok"><b>decision</b> → --color-charcoal</span
+            ><span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg></span
+              >Human</span
+            >
+          </div>
+          <div class="legend-row is-new-member">
+            <span class="tchip choice"
+              ><span class="tglyph t-choice"
+                ><svg viewBox="0 0 24 24"><use href="#t-choice" /></svg></span
+              >Choice</span
+            ><span class="gloss">A pick among options on named axes — a person chooses one</span
+            ><span class="tok"><b>choice</b> → --color-charcoal</span
+            ><span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg></span
+              >Human</span
+            >
+          </div>
+          <div class="legend-row">
+            <span class="tchip legal"
+              ><span class="tglyph t-legal"
+                ><svg viewBox="0 0 24 24"><use href="#t-legal" /></svg></span
+              >Legal</span
+            ><span class="gloss">A binding artifact — ToS, privacy, licence, DPA</span
+            ><span class="tok"><b>legal</b> → --color-charcoal</span
+            ><span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg></span
+              >Human</span
+            >
+          </div>
+        </div>
+        <p class="panel-note" style="max-width: 1120px">
+          The shipped <code>WorkItemTypeChip</code> renders the chip as
+          <code>color-mix(in srgb, var(--el-type-choice) 18%, var(--el-page-bg))</code> behind
+          <code>--el-text-strong</code>, the same 18% it gives <code>decision</code> and
+          <code>legal</code> (read from the component's render, not from this base mock's 14%).
+          <code>decision</code>'s gloss is restated per ADR Amendment 3 §1d. Executor default for
+          <code>choice</code> is <b>human</b>, always-human: there is no coding-agent arm.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
