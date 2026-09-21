@@ -24,6 +24,8 @@ export interface RepoAuditRow {
   /** The letter grade, when this repo has an audit that reported one. */
   grade: string | null;
   conformancePct: number | null;
+  /** MOTIR-5921: the audit read no code graph, so it has no verdict to show. */
+  notMeasured?: boolean;
   /** This repo's TOTAL finding count — off the surface's `total`, never the
    *  length of the findings page (the list reads at `findingsLimit=1`). */
   findingCount: number;
@@ -110,6 +112,7 @@ export function buildRepoAuditRows(
       state: 'audited' as const,
       grade: summary.grade ?? null,
       conformancePct: summary.conformancePct ?? null,
+      ...(summary.notMeasured ? { notMeasured: true } : {}),
       findingCount: surface.total,
       auditedAt: surface.audit.createdAt,
     };

@@ -6767,6 +6767,8 @@
       "findingsHeader": "Not up to your convention · worst first",
       "findingsCount": "{count, plural, one {# finding} other {# findings}}",
       "noFindings": "No findings — your code meets the convention.",
+      "notMeasuredTitle": "Not measured: the code index couldn’t be read",
+      "notMeasuredDescription": "Motir couldn’t read this repository’s code index, so this audit measured nothing and has no grade. Re-audit to try again.",
       "loadMore": "Load more findings",
       "severity": {
         "critical": "Critical",
@@ -6794,6 +6796,7 @@
         "stateDeriving": "Deriving…",
         "stateNotAudited": "Not audited yet",
         "stateUnavailable": "Couldn’t load this report",
+        "stateNotMeasured": "Not measured",
         "startedWhen": "started {when}",
         "startedRecently": "just started",
         "retry": "Try again",

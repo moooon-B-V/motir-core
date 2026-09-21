@@ -70,6 +70,10 @@ export interface CodeHealthCategoryDTO {
 
 export interface CodeHealthSummaryDTO {
   grade?: string;
+  // MOTIR-5921: the audit could not read the code graph (`healthSummary.sources.graph
+  // === false`), so it measured nothing. The report renders "not measured", never a
+  // grade and never "your code meets the convention". Absent ⇒ measured.
+  notMeasured?: boolean;
   conformancePct?: number;
   score?: number;
   totalFindings?: number;

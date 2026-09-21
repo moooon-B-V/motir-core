@@ -77,6 +77,16 @@ describe('buildRepoAuditRows — the four row states', () => {
     expect(row).toMatchObject({ state: 'audited', grade: null, conformancePct: null });
   });
 
+  // MOTIR-5921: an audit that read no code graph is audited-but-NOT-MEASURED.
+  it('carries notMeasured onto the row, with no grade', () => {
+    const surface = audited('a/one', undefined).surface!;
+    surface.audit!.healthSummary = { notMeasured: true };
+
+    const [row] = buildRepoAuditRows([{ repoKey: 'a/one', surface }]);
+
+    expect(row).toMatchObject({ state: 'audited', grade: null, notMeasured: true });
+  });
+
   it('marks a queued repo as deriving, whether or not it already had an audit', () => {
     const rows = buildRepoAuditRows(
       [audited('a/one', 78), neverAudited('a/two'), audited('a/three', 40)],
