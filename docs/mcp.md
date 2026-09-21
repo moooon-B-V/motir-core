@@ -416,15 +416,15 @@ can read, does not say so.
 A **`shape`** entry has no far end at all: the card contradicts itself. Four
 severities, each with its own remedy:
 
-| severity                      | what it found                                                                                                                | remedy                                                     |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `likely-ordering-violation`   | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                         | CUT the card at that criterion                             |
-| `likely-repo-straddle`        | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                              | SPLIT the card per repo (one repo, one PR)                 |
-| `likely-over-gate-sizing`     | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)  | SPLIT the card by size                                     |
-| `likely-self-blocking-design` | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws | LIFT the design criterion onto its own `type: design` card |
+| severity                      | what it found                                                                                                                | remedy                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `likely-ordering-violation`   | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                         | CUT the card at that criterion                                       |
+| `likely-repo-straddle`        | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                              | SPLIT the card per repo (one repo, one PR)                           |
+| `likely-over-gate-sizing`     | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)  | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
+| `likely-self-blocking-design` | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws | LIFT the design criterion onto its own `type: design` card           |
 
 **`likely-over-gate-sizing`'s two arms do not carry the same authority.**
-`storyPoints >= 13` IS the gate's rule — its literal split signal, read off the
+`storyPoints >= 8` IS the gate's rule — its literal split signal, read off the
 card's own column. `estimateMinutes > 70` is a **PROXY** for the gate's other
 ceiling and not that ceiling: the gate ceilings a `coding_agent` **run** at one
 hour **excluding CI**, while `estimateMinutes` is defined as agent run time
@@ -436,8 +436,9 @@ behind a heavy CI leg can fire, and a long run with a trivial CI leg can stay
 quiet (MOTIR-3271).
 
 **`likely-over-gate-sizing` is the one member that carries no `criterionIndex`**,
-because its finding is about two COLUMNS rather than a criterion and its remedy
-is _split the card_, not _cut it at line N_. It carries `storyPoints` and
+because its finding is about two COLUMNS rather than a criterion. At dispatch it
+is a warning only: the agent builds the card and reports the sizing, and size
+never stops a run (MOTIR-5372, `docs/decisions/over-gate-sizing-never-stops-a-run.md`). It carries `storyPoints` and
 `estimateMinutes` as observed (either may be `null` — unestimated crosses no
 ceiling) plus `threshold`: `"story_points"`, `"estimate_minutes"`, or `"both"`
 when the card is past each. So **narrow on `severity` before reading

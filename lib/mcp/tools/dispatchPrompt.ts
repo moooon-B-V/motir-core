@@ -128,8 +128,8 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
         `${s.storyPoints ?? '—'} story points / ${s.estimateMinutes ?? '—'} estimated minutes, ` +
         'over the estimation gate (8+ points is the SPLIT signal; a coding_agent run must fit ' +
         'in 60 minutes, and the MINUTES figure is a PROXY for that — the estimate column sums ' +
-        'agent time and CI time while the ceiling is on the agent run alone). Split it before ' +
-        'starting.',
+        'agent time and CI time while the ceiling is on the agent run alone). It still runs: ' +
+        'build it and report the sizing — size never stops a run (MOTIR-5372).',
     );
   }
   // THE DESIGN GATE (MOTIR-3178).

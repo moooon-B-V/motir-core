@@ -386,6 +386,12 @@ function repoStraddleAdvisory(
  * with a real false-positive class (a short run behind a heavy CI leg). The
  * absent predicate is still the right call — see the DTO's corrected paragraph
  * for why a mute is the wrong remedy — but the reason given for it was not.
+ *
+ * ⚠️ IT STAYS AN ADVISORY, AND IT NEVER STOPS A RUN (MOTIR-5372). Whether the
+ * points arm should become a hard refusal when a card is saved was decided in
+ * `docs/decisions/over-gate-sizing-never-stops-a-run.md`: no. Not when a card is
+ * saved, not in readiness, and not at dispatch, where the agent builds the card
+ * and reports the sizing. Read that doc before reopening the question.
  */
 function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto | null {
   const found = overGateSizing({
