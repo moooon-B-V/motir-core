@@ -145,11 +145,14 @@ const inputSchema = {
     .optional()
     .describe(
       'Optional: WHICH REPO this item ships in — the bare repo name (e.g. ' +
-        '"motir-core") or the "owner/name" form. Must name one of the workspace\'s ' +
-        'CONNECTED repositories; an unknown name is rejected. This is what routes ' +
-        'the CLI to the right checkout at dispatch (one subtask = one repo = one ' +
-        'PR). Omit (or null) to leave it unpinned — dispatch then falls back to the ' +
-        "workspace's single connected repo, or reports no repo when ambiguous.",
+        '"motir-core") or the "owner/name" form. Must name one of the PROJECT\'s ' +
+        'repositories — a row of its repository set, including one not created ' +
+        'yet. A repository connected to the workspace but not linked to this ' +
+        'project is rejected, as is an unknown name. This is what routes the CLI ' +
+        'to the right checkout at dispatch (one subtask = one repo = one PR). Omit ' +
+        '(or null) to leave it unpinned — dispatch then falls back to the ' +
+        "project's single established repository, or reports no repo when the " +
+        'project has none or several.',
     ),
   targetRepos: z
     .array(z.string())

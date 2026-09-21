@@ -818,7 +818,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       targetRepo: {
         type: ['string', 'null'],
         description:
-          'Optional: WHICH REPO this item ships in — the bare repo name (e.g. "motir-core") or the "owner/name" form. Must name one of the workspace\'s CONNECTED repositories; an unknown name is rejected. This is what routes the CLI to the right checkout at dispatch (one subtask = one repo = one PR). Omit (or null) to leave it unpinned — dispatch then falls back to the workspace\'s single connected repo, or reports no repo when ambiguous.',
+          'Optional: WHICH REPO this item ships in — the bare repo name (e.g. "motir-core") or the "owner/name" form. Must name one of the PROJECT\'s repositories — a row of its repository set, including one not created yet. A repository connected to the workspace but not linked to this project is rejected, as is an unknown name. This is what routes the CLI to the right checkout at dispatch (one subtask = one repo = one PR). Omit (or null) to leave it unpinned — dispatch then falls back to the project\'s single established repository, or reports no repo when the project has none or several.',
       },
       targetRepos: {
         type: 'array',
@@ -2306,7 +2306,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       targetRepo: {
         type: ['string', 'null'],
         description:
-          '`add` only: re-pin WHICH REPO this proposal ships in, validated against the project’s connected repositories; `null` unpins it.',
+          '`add` only: re-pin WHICH REPO this proposal ships in, validated against the project’s repository set (a repository connected to the workspace but not linked to the project is rejected); `null` unpins it.',
       },
       targetRepos: {
         type: 'array',
@@ -2542,7 +2542,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       targetRepo: {
         type: ['string', 'null'],
         description:
-          'WHICH REPO this item ships in — the bare repo name (e.g. "motir-core") or the "owner/name" form; must name one of the workspace\'s CONNECTED repositories. Routes the CLI to the right checkout at dispatch (one subtask = one repo = one PR). null clears the pin.',
+          'WHICH REPO this item ships in — the bare repo name (e.g. "motir-core") or the "owner/name" form; must name one of the PROJECT\'s repositories — a row of its repository set, including one not created yet. A repository connected to the workspace but not linked to this project is rejected. Routes the CLI to the right checkout at dispatch (one subtask = one repo = one PR). null clears the pin.',
       },
       targetRepos: {
         type: 'array',

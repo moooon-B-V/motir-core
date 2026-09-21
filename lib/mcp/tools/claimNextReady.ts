@@ -209,7 +209,7 @@ export async function runClaimNextReady(
         // The REPO-STRADDLE pin (MOTIR-2177). This is the RESOLVED repo, not the
         // raw column, and the two are interchangeable for this check: they can
         // only differ on an UNPINNED card, where resolution falls back to the
-        // workspace's SINGLE connected repo — and with one candidate repo there
+        // project's SINGLE established repo — and with one candidate repo there
         // is nothing to contradict and no second repo to be unpinnable between,
         // so both values emit nothing. With two or more repos an unpinned card
         // resolves to `null`, which is the raw column exactly.

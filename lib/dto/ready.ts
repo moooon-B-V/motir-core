@@ -169,9 +169,9 @@ export interface ReadyItemDispatchDto extends ReadyItemDto {
    * or more repos and no pin, dispatching into an arbitrary checkout is worse
    * than admitting the gap.
    *
-   * The domain is the PROJECT's repository set (MOTIR-1783); a project that has
-   * no set — every project predating `project_repository` — still resolves
-   * against the workspace's connected repos, the compatibility rung.
+   * The domain is the PROJECT's repository set (MOTIR-1783) and nothing else: a
+   * project with no set resolves to `null` — it never inherits the workspace's
+   * connected repos (MOTIR-4955 retired that compatibility rung).
    */
   targetRepo: string | null;
   /**

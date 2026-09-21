@@ -92,9 +92,9 @@ export interface DispatchPromptDto {
   prompt: string;
   /**
    * WHICH repo to run this in — the RESOLVED bare repo name (the item's explicit
-   * pin, else the single repo of its PROJECT's repository set, else the
-   * workspace's single connected repo for a project with no set), or `null` when
-   * Motir cannot say. Identical resolution to `ReadyItemDispatchDto.targetRepo`
+   * pin, else the single established repo of its PROJECT's repository set), or
+   * `null` when Motir cannot say — including a project with no set, which never
+   * inherits the workspace's connected repos (MOTIR-4955). Identical resolution to `ReadyItemDispatchDto.targetRepo`
    * (MOTIR-1804 · MOTIR-1783), so the two dispatch surfaces can never route
    * differently.
    */

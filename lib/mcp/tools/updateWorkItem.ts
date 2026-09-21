@@ -90,9 +90,11 @@ const inputSchema = {
     .optional()
     .describe(
       'WHICH REPO this item ships in — the bare repo name (e.g. "motir-core") or ' +
-        'the "owner/name" form; must name one of the workspace\'s CONNECTED ' +
-        'repositories. Routes the CLI to the right checkout at dispatch (one ' +
-        'subtask = one repo = one PR). null clears the pin.',
+        'the "owner/name" form; must name one of the PROJECT\'s repositories — a ' +
+        'row of its repository set, including one not created yet. A repository ' +
+        'connected to the workspace but not linked to this project is rejected. ' +
+        'Routes the CLI to the right checkout at dispatch (one subtask = one repo ' +
+        '= one PR). null clears the pin.',
     ),
   targetRepos: z
     .array(z.string())
@@ -237,7 +239,7 @@ export function registerUpdateWorkItem(
         'Edit a work item (by identifier, e.g. "ACME-7"): patch any subset of title, ' +
         'description, explanation, priority, type, executor, estimate, story points, target ' +
         'repo, assignee, or due date. Use transition_status for the workflow status. Honors ' +
-        'the same leaf-only type rules, connected-repo validation, assignee-membership check, ' +
+        'the same leaf-only type rules, project-repository validation, assignee-membership check, ' +
         'and access checks as the UI.',
       inputSchema,
     },

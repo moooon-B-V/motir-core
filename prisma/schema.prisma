@@ -2328,11 +2328,11 @@ model WorkItem {
   // `owner/name`) is deliberate — it is exactly the key the CLI's `repos`
   // override map and its `<root>/<repoName>` checkout convention use, so the two
   // halves fit with zero translation. VALIDATED at the write layer against the
-  // workspace's CONNECTED repo set (the 7.10.3 installation mirror — one repo
-  // registry, not two); no DB constraint, since the domain lives in another
-  // table and changes as repos connect/disconnect. The DISPATCH payload's
-  // `targetRepo` is this value RESOLVED (an unpinned item falls back to the
-  // workspace's single connected repo, and stays null when ambiguous) — the
+  // PROJECT's repository set (MOTIR-4955 — a workspace-connected repo the project
+  // never linked is rejected); no DB constraint, since the domain lives in
+  // another table and changes as rows are linked and unlinked. The DISPATCH
+  // payload's `targetRepo` is this value RESOLVED (an unpinned item falls back to
+  // the project's single established repo, and stays null otherwise) — the
   // column itself only ever holds an explicit pin. A plain `String?` matching
   // this table's camelCase, no-`@map` columns; unindexed (never a lookup key).
   // See docs/decisions/target-repo-attribution.md.
