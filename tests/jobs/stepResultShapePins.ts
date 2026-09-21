@@ -364,6 +364,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/dataExportExpirySweep.ts',
     shape: '{ expired: number; failed: number; scanned: number }',
   },
+  'sweep-standing-dead-letters': {
+    file: 'lib/jobs/definitions/dlqStandingDepthSweep.ts',
+    shape:
+      '{ alreadyFiled: number; filed: Array<string>; qualifying: number; rearmed: number; skipped: "no-system-principal" | null; standing: number }',
+  },
   'sweep-orphans': {
     file: 'lib/jobs/definitions/attachmentGc.ts',
     shape: '{ deleted: number; failed: number; scanned: number }',

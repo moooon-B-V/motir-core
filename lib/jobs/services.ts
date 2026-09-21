@@ -2,6 +2,7 @@ import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService'
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
+import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
 import { monitorSyncService } from '@/lib/services/monitorSyncService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
@@ -124,6 +125,9 @@ export const jobServices = {
   // Resolve-back (Story MOTIR-4931 · MOTIR-5703): the transitioned consumer's
   // one call. The poll's backstop sweep reaches the same service directly.
   monitorSync: monitorSyncService,
+  // The DLQ standing-depth filer (MOTIR-5869): the dead-letter queue is a job's
+  // subject a second time, read for what nobody has disposed of.
+  dlqStandingDepth: dlqStandingDepthService,
 };
 
 export type JobServices = typeof jobServices;

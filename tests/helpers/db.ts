@@ -79,7 +79,7 @@ export async function truncateJobRuns(): Promise<void> {
   // it. Any suite that sends an email writes one, so clearing it here is what
   // keeps those rows from leaking into the next test.
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "job_run", "job_run_dlq", "job_event", "job_queue", "job_step", "job_supervision", "email_delivery" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "job_run", "job_run_dlq", "job_event", "job_queue", "job_step", "job_supervision", "email_delivery", "job_dlq_standing_filing" RESTART IDENTITY CASCADE',
   );
 }
 

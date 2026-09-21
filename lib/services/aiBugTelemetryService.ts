@@ -7,6 +7,7 @@ import {
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { metaProjectKey } from '@/lib/ai/systemPrincipal';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -31,9 +32,9 @@ import { readProject } from '@/lib/workspaces/tenantRead';
 
 // The Motir META project key. A bug filed HERE is owned by the INWARD loop
 // (MOTIR-965) — the outward analyzer never files a self-referential meta-bug —
-// so it is skipped. Mirrors motir-ai's `MOTIR_META_PROJECT_KEY` (same default),
-// so both sides of the boundary agree on the skip (motir-ai backstops it).
-const META_PROJECT_KEY = process.env['MOTIR_META_PROJECT_KEY'] ?? 'MOTIR';
+// so it is skipped. `metaProjectKey()` mirrors motir-ai's `MOTIR_META_PROJECT_KEY`
+// (same default), so both sides of the boundary agree on the skip (motir-ai
+// backstops it).
 
 /** The event fields the trigger forwards (a `work-item/created` payload). */
 export interface OutwardBugAnalysisTrigger {
@@ -96,7 +97,7 @@ export const aiBugTelemetryService = {
     const project = await readProject(trigger.projectId, ctx);
     const projectKey = project?.identifier;
     if (!projectKey) return { dispatched: false, reason: 'not-a-bug' };
-    if (projectKey === META_PROJECT_KEY) return { dispatched: false, reason: 'meta-project' };
+    if (projectKey === metaProjectKey()) return { dispatched: false, reason: 'meta-project' };
 
     // Assemble the analysis context INLINE (motir-ai does not re-read the bug).
     const planNeighborhood = await this.assembleNeighborhood(bug, ctx);
