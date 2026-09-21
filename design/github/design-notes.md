@@ -2974,3 +2974,156 @@ provenance verbatim and GIVE or TAKE nothing here): MOTIR-5232, 5437, 5604, 5634
 | MOTIR-5801                      | this card                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 Fixture items use `ACME-n` keys, so they link to nothing.
+
+## 29 · State G keeps the RECORD — a withdrawn merge gate draws its pull requests and How to test beside the withdrawn sentence, the sentence follows `supersededCause`, and a merge made on GitHub with nothing left open renders no frame (MOTIR-5885, 2026-09-21)
+
+**AMENDS § 20's Panel 12v** (state `G`, _withdrawn by a push_, in
+[`approve-and-merge.mock.html`](./approve-and-merge.mock.html), drawn by MOTIR-5480). The delta is
+**[`approve-and-merge--withdrawn-keeps-record.mock.html`](./approve-and-merge--withdrawn-keeps-record.mock.html)**,
+Panels **1, 2, 3a–3c** at desktop, dark and ~400px, and the **Panel 4** cause strip in light and
+dark. **No existing mock is edited.** Card MOTIR-5885; the component that builds it is
+**MOTIR-5884**; the re-ask Panels 3a and 3b stand on is **MOTIR-5901**'s.
+
+**Why it is owed.** 12v drew the withdrawn sentence **in place of** the port, and the shipped frame
+does exactly that (`ApprovalGateControl.tsx:1008`, `withdrawn ? <placeholder> : port`). For a push
+the loss was temporary — the next green re-raised the gate and the rows came back (MOTIR-5604). For a
+**merge made on GitHub** it is permanent: `withdrawPullRequestApprovalGatesOnClose` supersedes the
+gate `member_closed`, nothing is left to re-raise, the card goes Done, and `frameGateFor`
+(`LateSections.tsx:102`) keeps handing the superseded gate to the frame. A done card then shows a
+grey box that says _"Motir asks again when every check is green"_ and never draws the pull request
+that shipped (MOTIR-5884, observed on MOTIR-5860 / motir-meta#469). And 12v's words assumed a push:
+the merge kind's withdrawn copy never read `supersededCause`
+(`DevelopmentGateFrame.tsx:921–927`), although the decision kind beside it does (§ 27).
+
+**Shipped reality, read before drawing.** The withdrawn frame as `origin/main` `de31060f1` ships it
+is 12v exactly: band 1 with the _Withdrawn_ pill, the centred `--el-muted` box, the record band. § 23
+(MOTIR-5592) draws an **approval** given on GitHub followed by Motir's own merge (G4–G6); nothing
+draws a **merge** made with GitHub's button while Motir's gate awaited. That is this section.
+
+### The rule, in one sentence each
+
+1. **A withdrawal takes the VERBS, never the RECORD.** Under `G` the port keeps rendering — the
+   pull-request rows with their derived pills, How to test, a design result or decision document
+   where the card has one — and the withdrawn sentence moves into a band **above** it.
+2. **A withdrawn merge gate over a set with NO member left open is TERMINAL and renders NO frame.**
+   Every row merged or closed ⇒ `frameGateFor` returns no merge frame, and the block is the shipped
+   ungated body (§ 21 Panel F1): the rows with their own pills, How to test beneath. This holds for
+   any cause — a gate withdrawn by a push whose pull request was later merged on GitHub lands here too.
+3. **The sentence and band 1's meta follow `supersededCause`**, and `member_closed` is split into
+   **merged** and **closed without merging** by reading the rows the block already renders (each
+   row's derived state), not by a new stored cause.
+4. **The cite appears only where a re-ask is possible, and it names what re-asks.**
+
+### The panels
+
+| panel | state                                                                                                                                        | status    | frame                   | built by                |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ----------------------- | ----------------------- |
+| 1     | **Withdrawn by a push on an OPEN member** — #88's head moved, its row reads _Checks running_; rows and How to test stay under the band       | In Review | `G`, record kept        | MOTIR-5884              |
+| 2     | **Merged on GitHub, nothing left open** — the one pull request merged while its gate awaited; the card is Done                               | Done      | **none** (ungated body) | MOTIR-5884              |
+| 3a    | **One merged on GitHub, one open and running** — withdrawn `member_closed`, read as _merged_; the cite stands because a re-ask is owed       | In Review | `G`, record kept        | MOTIR-5884 · MOTIR-5901 |
+| 3b    | **…after #88 goes green** — ONE fresh gate at rest; #131 is _Merged_ and settled (no outcome slot); the consequence names only #88           | In Review | rest (12p)              | MOTIR-5901 · MOTIR-5884 |
+| 3c    | **One closed without merging, one open** — withdrawn `member_closed`, read as _closed_; the cite says unlinking re-asks, which is true today | In Review | `G`, record kept        | MOTIR-5884              |
+| 4     | **The cause strip** — band 1's meta, the sentence and the cite for every cause value, including a `pulled_back` card that was Cancelled      | —         | `G` head + band only    | MOTIR-5884              |
+
+**Panel 3a is only honest once MOTIR-5901 lands.** On `de31060f1` a merged member makes the set
+unmergeable outside a queue ejection (`lib/approvalGates/gateSet.ts:497–502`, pinned by
+`gateSet.test.ts:475`), so no gate is ever raised again and the cite would be a false promise.
+MOTIR-5901 makes a merged member **settled**, as MOTIR-5805 already did for an ejection; MOTIR-5884 is
+`blocked_by` it for this reason. In the ordinary case — the open member is already green when the
+other merges — the withdraw and the re-raise happen in one transaction and the reader lands straight
+on 3b; 3a is what they see while the open member's checks are still running.
+
+### Decisions
+
+| decision                                   | chosen                                                                                                                                                   | why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| where the withdrawn sentence sits          | a **band between band 1 and the port**, full width, left-aligned                                                                                         | the reader learns why there is no button before reading the rows it would have merged; below the port it would be read last and look like a footnote. It replaces nothing band 3 held, because a withdrawn frame has no band 3                                                                                                                                                                                                                                                                |
+| the band's treatment                       | § 20's withdrawn tokens unchanged — `--el-muted` fill, `--el-text-secondary` ink, 13px sentence, 12px cite — reshaped from a centred 120px box to a band | the state already has a colour; only its shape was wrong. Colourless and verb-less, so decision 4 of § 20 still holds                                                                                                                                                                                                                                                                                                                                                                         |
+| the port under the band                    | **no floor** (`min-h-0`) and **no Expand**                                                                                                               | the 196px floor holds open a decision surface, and nothing is being decided; Expand opens the full-screen review of a question that no longer exists (the shipped `showExpand` already drops it under `withdrawn`)                                                                                                                                                                                                                                                                            |
+| the terminal case                          | **(a) no frame** — not (b) a record line                                                                                                                 | nothing was decided and nothing is left to ask, and that is what a frame is for. The merged row already says _Merged_. A line could not name the merger: `pull_request` stores `merged_at` and **no `merged_by`** (0 hits for `mergedBy\|merged_by` in `prisma/schema.prisma`). And it hides nothing recorded elsewhere: the Approvals room lists awaiting and decided gates only (`recordsDecidedWhere`: `approved`, `changes_requested`), so a superseded gate was never shown there either |
+| _merged_ vs _closed_ under `member_closed` | read from the rows' **derived state** (`merged` / `closed`, `PR_STATE_META`)                                                                             | the block already holds it, and a superseded gate is never the result of Motir's own merge — an approval decides the gate before it merges — so a merged member under a superseded gate was merged outside a Motir decision. No new stored cause, no data work                                                                                                                                                                                                                                |
+| which pull request the sentence names      | the rows in that state (merged / closed / draft); two or more are joined with the shipped `nameList`                                                     | the reader finds the named row directly beneath the band                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| the host in _merged on {host}_             | the row's provider name, as _Open on {host}_ already renders it                                                                                          | GitLab members say GitLab                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+
+### The cite — when it shows, and what it says
+
+| cause                                | condition                                 | cite                                                            |
+| ------------------------------------ | ----------------------------------------- | --------------------------------------------------------------- |
+| any                                  | **no member open**                        | — (Panel 2: no frame at all)                                    |
+| any                                  | the card is in a **done-category** status | shared `approvalGate.withdrawn.portCite` (_Nobody decided it._) |
+| `head_moved` · `set_changed`         | a member is open                          | `withdrawn.portCite` (_…asks again when every check is green_)  |
+| `member_closed`, a member **merged** | another member is open                    | `withdrawn.portCite` — **true only with MOTIR-5901**            |
+| `member_closed`, a member **closed** | another member is open                    | `withdrawn.citeUnlink`                                          |
+| `member_drafted`                     | —                                         | `withdrawn.citeDrafted`                                         |
+| `pulled_back`                        | —                                         | `withdrawn.citePulledBack`                                      |
+| `unknown` / null                     | —                                         | shared `approvalGate.withdrawn.portCite`                        |
+
+`citeUnlink` states today's behaviour: a closed-unmerged member blocks the re-ask, and unlinking it
+(`set_changed`) is what re-asks. **MOTIR-5901's ADR amendment decides whether a closed member is also
+settled**; if it is, this row's cite becomes `withdrawn.portCite` and Panel 3c reads as 3a.
+
+### Access path
+
+**The item page → the Development block** (§ 20), reached from any board card, list row or Workbench
+row that opens the work item — no new entry point. The approval overlay composes the same block
+(`DevelopmentSectionBody` in its `fill` port) and so inherits the band; a withdrawn gate is not in To
+approve, so the overlay is reached with it only from a stale tab.
+
+### Tokens
+
+`--el-*` colour and element-semantic shape tokens only, in the panel markup and the sheet's own
+`<style>` block. The only new rules are the `wk-` block: `wk-why` (the band — `--el-muted`,
+`--el-border` rule, `--el-text-secondary`), `wk-port` (the floorless port) and the strip's layout.
+Pills ride the shipped `Pill` axes: _Merged_ mint + `git-merge`, _Closed_ rose + `git-pull-request-closed`,
+_Checks running_ peach + `dots`. No new sprite symbol; `audit-mock-sprites.mjs --strict` reports
+0 drift.
+
+### Copy — `en` + `zh`
+
+New strings only, under **`approvalGate.pullRequestApproval`**. The shared
+`approvalGate.withdrawn.cause.*` strings are reused where their words fit — `pulled_back` and
+`unknown` as the sentence, and `head_moved` when no moved member can be named — and are **not** used
+where they do not: `member_closed` (_"A pull request closed…"_ is wrong for a merge and names no pull
+request) and `member_drafted` (names none). The existing `withdrawn.port`, `withdrawn.portSet`,
+`withdrawn.portCite`, `meta.withdrawn` and `meta.withdrawnSet` are unchanged.
+
+| key                        | en                                                                                          | zh                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `withdrawn.portMerged`     | {pr} was merged on {host}, so this question was withdrawn.                                  | {pr} 已在 {host} 上合并，因此该问题已被撤回。                           |
+| `withdrawn.portClosed`     | {pr} was closed without merging, so this question was withdrawn.                            | {pr} 未合并即被关闭，因此该问题已被撤回。                               |
+| `withdrawn.portDrafted`    | {pr} went back to draft, so this question was withdrawn.                                    | {pr} 已转回草稿，因此该问题已被撤回。                                   |
+| `withdrawn.citeUnlink`     | Nobody decided it. Unlink {pr} from {key} to be asked again.                                | 没有人对它做出决定。将 {pr} 与 {key} 取消关联后，Motir 会再次请求审批。 |
+| `withdrawn.citeDrafted`    | Nobody decided it. Motir asks again when {pr} is marked ready for review.                   | 没有人对它做出决定。{pr} 标记为可供审查后，Motir 会再次请求审批。       |
+| `withdrawn.citePulledBack` | Nobody decided it. Motir asks again when {key} is back in review.                           | 没有人对它做出决定。{key} 回到评审中后，Motir 会再次请求审批。          |
+| `meta.withdrawnMerged`     | {count, plural, one {# pull request} other {# pull requests}} · {pr} merged on {host}       | {count} 个拉取请求 · {pr} 已在 {host} 上合并                            |
+| `meta.withdrawnClosed`     | {count, plural, one {# pull request} other {# pull requests}} · {pr} closed without merging | {count} 个拉取请求 · {pr} 未合并即关闭                                  |
+| `meta.withdrawnDrafted`    | {count, plural, one {# pull request} other {# pull requests}} · {pr} is a draft again       | {count} 个拉取请求 · {pr} 已转回草稿                                    |
+| `meta.withdrawnPulledBack` | {count, plural, one {# pull request} other {# pull requests}} · taken out of review         | {count} 个拉取请求 · 已撤出评审                                         |
+| `meta.withdrawnUnknown`    | {count, plural, one {# pull request} other {# pull requests}} · withdrawn                   | {count} 个拉取请求 · 已撤回                                             |
+
+### Scope
+
+**Drawn:** the withdrawn frame keeping its record (1), the terminal merge on GitHub (2), the mixed set
+in its three shapes (3a–3c) and every cause's words (4), each in light and dark and — for 1–3 — at
+~400px. **Not drawn, and whose it is:** the re-ask over a set holding a merged member, and the
+closed-member disposition — MOTIR-5901; the frame, `frameGateFor`'s terminal rule, the cause and cite
+selection and the copy keys — MOTIR-5884. The decision kind's withdrawn port (§ 27) is already
+cause-driven and is not redrawn; the PR row (§ 19) and the ejection states (§ 22, § 28) are
+unchanged. How to test is abbreviated on the sheet.
+
+### GIVES / TAKES
+
+Scope: `grep -o 'MOTIR-[0-9]*' approve-and-merge--withdrawn-keeps-record.mock.html | sort -u` plus
+this section. The mock's own keys, outside the carried stylesheet and sprite (which carry the base
+sheet's provenance verbatim and GIVE or TAKE nothing here): MOTIR-5884, 5885, 5901.
+
+| key        | GIVES / TAKES                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-5884 | **GIVES** every panel, the band, the terminal rule, the cause and cite tables and eleven copy keys in two languages. **Re-sized against it:** its criteria already asked for the rows, the terminal case and one sentence per cause; this adds the band-1 meta per cause, the cite rule, the merged/closed split read from the rows (which needs the rows' states handed to the frame) and the mixed panels. Amended on the card from 3 points / 60 minutes to **5 points / 70 minutes**, with its criteria, in the same pass |
+| MOTIR-5901 | **GIVES** Panels 3a and 3b their premise: a merged member is settled and the open ones are asked about. **TAKES** nothing from this design; its ADR amendment decides Panel 3c's cite (see the cite table)                                                                                                                                                                                                                                                                                                                    |
+| MOTIR-5480 | **TAKES** Panel 12v's port — superseded by Panel 1. Done, not re-opened; its mock stays as a record                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| MOTIR-5604 | **TAKES** its withdrawal state's rendering: the temporary case (a push, then the next green) now keeps its rows too. Its re-raise is unchanged                                                                                                                                                                                                                                                                                                                                                                                |
+| MOTIR-5592 | nothing either way — § 23 draws an approval on GitHub; this draws a merge                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| MOTIR-5885 | this card                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+
+Fixture items use `ACME-n` keys, so they link to nothing.
