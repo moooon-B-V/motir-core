@@ -339,6 +339,18 @@ describe('AuditRepoList — the states an audit’s own numbers can be missing',
     expect(names).toContain('Show the audit for a/one · Audited');
   });
 
+  // MOTIR-5921: an audit that read no code graph measured nothing — the row says
+  // so, rather than the bare "Audited" that reads as a finished report.
+  it('says "Not measured" for an audit that read no code graph', () => {
+    const notMeasured = ungraded('a/one', 0);
+    notMeasured.surface!.audit!.healthSummary = { notMeasured: true };
+    renderList([notMeasured, audited('a/two', 90, 7)]);
+
+    expect(screen.getByText('Not measured')).toBeTruthy();
+    const names = rowButtons().map((b) => b.getAttribute('aria-label'));
+    expect(names).toContain('Show the audit for a/one · Not measured');
+  });
+
   it('times a deriving row from the audit it is replacing', () => {
     // A repo whose PREVIOUS audit is on screen while a fresh one derives keeps
     // its `createdAt`, so the row can say WHEN rather than "just started".

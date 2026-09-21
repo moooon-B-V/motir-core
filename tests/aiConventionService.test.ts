@@ -296,6 +296,53 @@ describe('aiConventionService — project-admin gate', () => {
     expect(dto.nextOffset).toBe(1);
   });
 
+  // MOTIR-5921: an audit that read no code graph has no verdict. motir-ai records
+  // `sources.graph: false` and a null grade; audits recorded before that carry the
+  // placeholder grade 'unknown'. Neither may reach the page as a grade.
+  it('maps an audit that read NO graph to notMeasured, with no grade', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const raw = rawAuditSurface();
+    getCodeAuditMock.mockResolvedValue({
+      ...raw,
+      audit: {
+        ...raw.audit!,
+        healthSummary: {
+          grade: 'unknown',
+          score: null,
+          totalFindings: 0,
+          sources: { graph: false, graphUnavailable: { reason: 'hydrate_failed' } },
+        },
+      },
+    });
+
+    const dto = await aiConventionService.getAudit(project.id, {
+      userId: owner.id,
+      workspaceId: workspace.id,
+    });
+
+    expect(dto.audit?.healthSummary.notMeasured).toBe(true);
+    expect(dto.audit?.healthSummary.grade).toBeUndefined();
+  });
+
+  it('a measured audit is not flagged notMeasured', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const raw = rawAuditSurface();
+    getCodeAuditMock.mockResolvedValue({
+      ...raw,
+      audit: { ...raw.audit!, healthSummary: { grade: 'B', sources: { graph: true } } },
+    });
+
+    const dto = await aiConventionService.getAudit(project.id, {
+      userId: owner.id,
+      workspaceId: workspace.id,
+    });
+
+    expect(dto.audit?.healthSummary.notMeasured).toBeUndefined();
+    expect(dto.audit?.healthSummary.grade).toBe('B');
+  });
+
   // The `findingsLimit` PASSTHROUGH (MOTIR-2207 · Panel 7 §3). The multi-repo
   // list needs `healthSummary` + `total` for every connected repo and `findings`
   // for only the selected one, so reading N surfaces at the full page size would

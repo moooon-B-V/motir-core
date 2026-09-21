@@ -166,9 +166,11 @@ function RepoRow({
   // repo name whose meaning lives only in a colour.
   const stateLabel =
     row.state === 'audited'
-      ? row.grade !== null && row.conformancePct !== null
-        ? t('grade', { grade: row.grade, pct: row.conformancePct })
-        : t('stateAudited')
+      ? row.notMeasured
+        ? t('stateNotMeasured')
+        : row.grade !== null && row.conformancePct !== null
+          ? t('grade', { grade: row.grade, pct: row.conformancePct })
+          : t('stateAudited')
       : row.state === 'deriving'
         ? t('stateDeriving')
         : row.state === 'not_audited'
