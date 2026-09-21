@@ -141,6 +141,11 @@ async function file(target: MonitorReconcileConnection, externalId: string) {
     environment: 'production',
     release: '2.4.1',
     frames: [],
+    exception: null,
+    tags: [],
+    request: null,
+    eventId: null,
+    eventAt: null,
   });
   const created = cap.events
     .slice(from)

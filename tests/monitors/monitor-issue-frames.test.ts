@@ -119,7 +119,16 @@ describe('Sentry adapter — frames on getIssueContext', () => {
         orgSlug: 'm',
         externalIssueId: '2',
       }),
-    ).resolves.toEqual({ environment: 'staging', release: '1.0.0', frames: [] });
+    ).resolves.toEqual({
+      environment: 'staging',
+      release: '1.0.0',
+      frames: [],
+      exception: null,
+      tags: [{ key: 'environment', value: 'staging' }],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    });
   });
 
   it('malformed exception shapes are absence, never a guess', () => {
@@ -222,7 +231,16 @@ describe('fake provider — frames', () => {
     withFrames.frames[0]!.lineNumber = 1;
     expect((await read('with')).frames[0]!.lineNumber).toBe(318);
 
-    expect(await read('without')).toEqual({ environment: null, release: null, frames: [] });
+    expect(await read('without')).toEqual({
+      environment: null,
+      release: null,
+      frames: [],
+      exception: null,
+      tags: [],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    });
     // Frames are a CONTEXT fact only: the issue shape the poll reads never carries them.
     const page = await fakeMonitorProvider.listIssuesSince({
       accessToken: 'x',

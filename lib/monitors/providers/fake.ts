@@ -1,10 +1,12 @@
 import { MonitorIssueGoneError, MonitorProviderCallError } from '../errors';
 import type { MonitorProvider } from '../provider';
+import { boundExceptionMessage, filterEvidenceTags, requestPathOf } from '../evidence';
 import { registerMonitorProvider } from '../registry';
 import type {
   MonitorCredential,
   NormalizedMonitorHealth,
   NormalizedMonitorIssue,
+  NormalizedMonitorException,
   NormalizedMonitorIssueContext,
   NormalizedMonitorIssuePage,
   NormalizedMonitorProject,
@@ -32,7 +34,8 @@ import type {
 /**
  * A seeded issue: the normalized issue plus what only the fake needs to know
  * about it (MOTIR-5728). `shortId` is what a person pastes into the link search;
- * `environment` / `release` / `frames` are what `getIssueContext` answers;
+ * `environment` / `release` / `frames` and the evidence fields (MOTIR-5977) are
+ * what `getIssueContext` answers;
  * `externalProjectId` scopes a SEARCH to one monitored project (an issue with
  * none matches every project, which is what every pre-existing seed means).
  * None of the four leaks out: every method returns the normalized shape.
@@ -44,6 +47,19 @@ export interface FakeMonitorIssue extends NormalizedMonitorIssue {
   /** The latest event's stack, returned AS SEEDED — already in the order and
    *  length the real adapter would produce (MOTIR-5846). Absent = `[]`. */
   frames?: NormalizedMonitorStackFrame[];
+  /** The latest event's surfaced exception (MOTIR-5977). Its message is bounded
+   *  on the way out exactly as the real adapter bounds it. Absent = `null`. */
+  exception?: NormalizedMonitorException | null;
+  /** The latest event's tags UNFILTERED, as a provider would send them — so a
+   *  test can seed a `user.email` and watch it disappear through the SAME
+   *  `filterEvidenceTags` the real adapter calls (MOTIR-5977). Absent = `[]`. */
+  rawTags?: { key: string; value: string }[];
+  /** The latest event's request URL, query string and all; answered as its path
+   *  through the same `requestPathOf`. `requestMethod` is its method. */
+  requestUrl?: string | null;
+  requestMethod?: string | null;
+  eventId?: string | null;
+  eventAt?: Date | null;
   externalProjectId?: string | null;
 }
 
@@ -368,10 +384,24 @@ export const fakeMonitorProvider: MonitorProvider = {
         'The requested resource does not exist',
       );
     }
+    const path = requestPathOf(issue.requestUrl);
+    const exception = issue.exception ?? null;
     return {
       environment: issue.environment ?? null,
       release: issue.release ?? null,
       frames: (issue.frames ?? []).map((frame) => ({ ...frame })),
+      // The SAME filters the Sentry adapter runs, so the fake cannot answer what
+      // the real adapter would drop (MOTIR-5977).
+      exception: exception
+        ? {
+            type: exception.type,
+            message: exception.message === null ? null : boundExceptionMessage(exception.message),
+          }
+        : null,
+      tags: filterEvidenceTags(issue.rawTags ?? []),
+      request: path === null ? null : { method: issue.requestMethod?.toUpperCase() ?? null, path },
+      eventId: issue.eventId ?? null,
+      eventAt: issue.eventAt ?? null,
     };
   },
 };
