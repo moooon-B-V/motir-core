@@ -3675,8 +3675,8 @@
       <p>
         MOTIR-5888, for MOTIR-5897. A choice waiting on you lists as ONE row — the choice type's
         glyph, the kind <b>Choice</b>, and the question with its option count — and the row opens
-        the approval overlay. A decided choice says what was chosen and on which axis. The row is
-        not redrawn: it is <code>ApprovalRow</code>'s markup.
+        the approval overlay. A decided choice says what was chosen and what it was best for. The
+        row is not redrawn: it is <code>ApprovalRow</code>'s markup.
       </p>
     </div>
     <p class="ar-label">
@@ -3795,8 +3795,8 @@
       6b); <b>Review</b> is the same door.
     </p>
     <p class="ar-label">
-      Panel 7b — the Approvals room: a choice waiting, a choice DECIDED (what was chosen, on which
-      axis), and one sent back
+      Panel 7b — the Approvals room: a choice waiting, a choice DECIDED (what was chosen, and what
+      it was best for), and one sent back
     </p>
     <div class="ar-frame" style="width: 1000px">
       <div class="ar-bar">the Approvals room · full view · APPROVALS_FULL_VIEW_GRID_TEMPLATE</div>
@@ -4047,8 +4047,8 @@
     </div>
     <p class="ar-note">
       A decided choice's subject line is the STAMP, read from <code>chosenOption</code> —
-      <i>Chose {label} · {axis}</i> — never the options' current text, so it stays true after the
-      body is edited. Its state cell says <b>Chosen</b> (mint), not <i>Approved</i>: nothing was
+      <i>Chose {label} · {best for}</i> — never the options' current text, so it stays true after
+      the body is edited. Its state cell says <b>Chosen</b> (mint), not <i>Approved</i>: nothing was
       approved, an option was picked. A choice sent back with <i>None of these</i> reads
       <i>{n} options · none chosen</i> and the shipped <b>Changes requested</b> pill.
     </p>

@@ -2320,7 +2320,7 @@ Fixture items use `ACME-n` keys, so they link to nothing.
 A delta of `approvals-row.mock.html`, drawn the way `approvals-row--decision.mock.html` is for the decision kind, from `ApprovalRow`'s emitted markup as `design/approvals/approvals-room.mock.html` carries it. **The rules, the copy table (`workbench.approvals.choice*`, en + zh) and the GIVES/TAKES are in `design/work-items/design-notes.md` § _THE CHOICE PORT_**, beside the port the row opens; this section is the pointer from this area.
 
 - **7a — waiting:** the `choice` type's glyph (lucide `signpost` in `--el-type-choice`), the kind **Choice**, and _{n} options · {question}_. The whole row and its **Review** button open the approval overlay.
-- **7b — the Approvals room:** a decided choice's subject line is the STAMP from `chosenOption` — _Chose {label} · {axis}_ — and its state cell is **Chosen** (mint), not _Approved_. One sent back reads _{n} options · none chosen_ with the shipped **Changes requested** pill.
+- **7b — the Approvals room:** a decided choice's subject line is the STAMP from `chosenOption` — _Chose {label} · {what it was best for}_ — and its state cell is **Chosen** (mint), not _Approved_. One sent back reads _{n} options · none chosen_ with the shipped **Changes requested** pill.
 - **7c — dark.** The hue token is declared in the `[data-appearance-scope]` block so it re-resolves in a dark scope.
 
 Built by MOTIR-5897.
