@@ -333,11 +333,9 @@ describe('the acceptance lane is story-scoped (MOTIR-1949)', () => {
 // every PR.
 //
 // ⚠️ THE PREDICATE IS SCOPED TO WORKFLOWS AND ACTIONS, NOT TO THE REPOSITORY.
-// `tests/e2e/_helpers/acceptance-video.ts` (the recording harness) and
-// `tests/e2e-acceptance-lane-membership.test.ts` (MOTIR-2770's lifecycle guard,
-// which reads `MOTIR_GUARD_TOKEN ?? MOTIR_UPLOAD_TOKEN` from its own environment)
-// both legitimately keep those names. What must not come back is a CI JOB that
-// publishes, or one that is handed a Motir credential.
+// `tests/e2e/_helpers/acceptance-video.ts` (the recording harness) legitimately
+// keeps those names. What must not come back is a CI JOB that publishes, or one
+// that is handed a Motir credential.
 describe('the lane records and does not publish (MOTIR-4096)', () => {
   const workflowsDir = join(process.cwd(), '.github/workflows');
   const actionsDir = join(process.cwd(), '.github/actions');
@@ -375,14 +373,14 @@ describe('the lane records and does not publish (MOTIR-4096)', () => {
     // PAT into a job that had nothing left to do with it, and a credential with
     // no consumer is one nobody thinks about when deciding whether to rotate it.
     //
-    // ⚠️ The secret itself is NOT deleted — MOTIR-4093 wires the SAME secret into
-    // the Vitest lane for MOTIR-2770's lifecycle guard, and whichever of the two
-    // cards lands second must leave that credential working. This asserts that
-    // no job carries it TODAY; when MOTIR-4093 lands, this expectation moves to
-    // "only the lane that runs the lifecycle guard carries it", which is a
-    // deliberate narrowing rather than a deletion.
+    // ⚠️ AND THE SAME FOR THE LANE GUARD'S CREDENTIAL (MOTIR-5874). MOTIR-4093
+    // wired the guard's token — a production PAT — plus its origin and a binding
+    // declaration into the Vitest job, so every file in the suite could read it.
+    // MOTIR-5872 removed the one read that needed it, and MOTIR-5874 removed the
+    // wiring. Nothing in the repository reads any of the guard's env names now,
+    // so a job that sets one is handing a credential to nobody.
     const offenders = ciYaml()
-      .filter(([, text]) => /MOTIR_UPLOAD_TOKEN/.test(codeOf(text)))
+      .filter(([, text]) => /MOTIR_UPLOAD_TOKEN|MOTIR_GUARD_[A-Z_]+/.test(codeOf(text)))
       .map(([f]) => f);
     expect(offenders).toEqual([]);
   });

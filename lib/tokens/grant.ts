@@ -57,28 +57,11 @@ export const ACCEPTANCE_PUBLISH_PERMISSION: PermissionKey = 'work_item:edit';
  */
 export const DESIGN_PUBLISH_PERMISSION: PermissionKey = 'work_item:edit';
 
-/**
- * The permission the acceptance-receipt STATUS READ requires
- * (`GET /api/work-items/[id]/acceptance-evidence`, MOTIR-4144) — the THIRD
- * token-reachable operation that is neither MCP nor `/api/v1`, and the first one
- * of the three that only READS.
- *
- * `project:browse`, deliberately NOT {@link ACCEPTANCE_PUBLISH_PERMISSION}. The
- * route answers one field of one work item, which is the question every other
- * work-item read answers, and `project:browse` is the key the whole MCP read
- * surface asserts for it (`get_work_item`, `search_work_items`, `list_ready`).
- * Asking for `work_item:edit` instead would mean the lane guard's read-only
- * credential could rewrite any work item in the project — a write permission
- * handed out to satisfy a read is the shape least privilege exists to refuse.
- *
- * It is already grantable through {@link TOOL_PERMISSIONS}, so naming it here
- * adds nothing to {@link GRANTABLE_PERMISSIONS} today. It is named for the
- * reason the two publish constants give for existing at all: the set stays
- * TOTAL only while every token-reachable caller outside the two big seams is a
- * DERIVATION SOURCE here, and a caller that is covered by coincidence today
- * stops being covered the day its permission changes.
- */
-export const ACCEPTANCE_STATUS_READ_PERMISSION: PermissionKey = 'project:browse';
+// (The acceptance-receipt STATUS READ, MOTIR-4144, was a third route here. Its
+// one caller was the acceptance-lane guard's product read, which MOTIR-5872
+// removed; MOTIR-5874 retired the route and its permission constant. It asked
+// for `project:browse`, which the MCP read surface already makes grantable, so
+// the derived set below is unchanged by its removal.)
 
 /**
  * Permissions reachable ONLY through `/api/v1` — i.e. asserted by some v1
@@ -118,7 +101,7 @@ export const V1_ONLY_PERMISSIONS: readonly PermissionKey[] = ['ai:decide_plan'];
  * operation behind it, and a picker switch that gates nothing is that same lie
  * one level up. So the set is computed from the three sources a token can
  * reach — the MCP tool map, the `/api/v1` declarations (via
- * {@link V1_ONLY_PERMISSIONS}, guarded), and the three publish/read routes — and
+ * {@link V1_ONLY_PERMISSIONS}, guarded), and the two publish routes — and
  * returned in catalog order so every surface renders it the same way.
  *
  * `tests/tokens/grant.test.ts` proves the derivation in BOTH directions: no
@@ -128,7 +111,6 @@ export const GRANTABLE_PERMISSIONS: readonly PermissionKey[] = sortByCatalogOrde
   ...Object.values(TOOL_PERMISSIONS),
   ...V1_ONLY_PERMISSIONS,
   ACCEPTANCE_PUBLISH_PERMISSION,
-  ACCEPTANCE_STATUS_READ_PERMISSION,
   DESIGN_PUBLISH_PERMISSION,
 ]);
 
