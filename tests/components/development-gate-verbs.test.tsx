@@ -237,6 +237,8 @@ describe('the press (Panels 12s, 12t, 12u)', () => {
       approvalGateId: APPROVED.id,
       pullRequestId: GATEWAY_PR.id,
       identifier: 'ACME-12',
+      // As above: the row's press carries the stamp (MOTIR-5802).
+      stamp: 'v1.stamp-on-screen',
     });
     expect(screen.queryByRole('alert')).toBeNull();
     expect(within(rowOf(CORE_PR.title)).getByText(pra.outcome.merged)).toBeTruthy();
@@ -275,7 +277,10 @@ describe('after a reload (Panels 12s, 12u′)', () => {
             queued: true,
             retryable: false,
             exit: null,
+            exitAtApprovedHead: false,
             requeueable: false,
+            refusal: null,
+            retryDecidesGateId: null,
           },
           {
             subjectVersion: GATEWAY_V,
@@ -283,7 +288,10 @@ describe('after a reload (Panels 12s, 12u′)', () => {
             queued: false,
             retryable: true,
             exit: null,
+            exitAtApprovedHead: false,
             requeueable: false,
+            refusal: null,
+            retryDecidesGateId: null,
           },
         ],
       },
@@ -300,7 +308,11 @@ describe('after a reload (Panels 12s, 12u′)', () => {
     expect(screen.getByText(/Approved by Ada L\. · 2 pull requests/)).toBeTruthy();
   });
 
-  it('a gate that still awaits reports no outcome on any row', () => {
+  // ⚠️ A FIRST ASK, not a re-asked one (MOTIR-5802): nothing has been attempted under this
+  // gate, so the read carries no outcome to draw — `retryable` is false on every `awaiting`
+  // member (`pullRequestApprovalMembersService`). The re-asked gate, which DOES draw the
+  // reason its predecessor did not land, is `development-unlanded-classes.test.tsx`.
+  it('a gate that still awaits, with nothing attempted, reports no outcome on any row', () => {
     renderFrame(
       {
         gate: AWAITING,
@@ -309,9 +321,12 @@ describe('after a reload (Panels 12s, 12u′)', () => {
             subjectVersion: CORE_V,
             pullRequestId: CORE_PR.id,
             queued: false,
-            retryable: true,
+            retryable: false,
             exit: null,
+            exitAtApprovedHead: false,
             requeueable: false,
+            refusal: null,
+            retryDecidesGateId: null,
           },
         ],
       },
@@ -337,7 +352,10 @@ describe('who else sees it (Panels 12w, 12v)', () => {
             queued: false,
             retryable: true,
             exit: null,
+            exitAtApprovedHead: false,
             requeueable: false,
+            refusal: null,
+            retryDecidesGateId: null,
           },
         ],
       },
@@ -504,7 +522,10 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
             queued: false,
             retryable: false,
             exit: null,
+            exitAtApprovedHead: false,
             requeueable: false,
+            refusal: null,
+            retryDecidesGateId: null,
           },
         ],
       },
@@ -612,8 +633,12 @@ describe('the remaining frame arms (MOTIR-5486 coverage floor)', () => {
     });
     renderFrame({ gate: AWAITING }, actions);
     await pressApproveAndMerge();
-    // Nothing merged: the approval stands alone.
-    expect(screen.getByRole('alert').textContent).toContain(pra.refused.standsAlone);
+    // ⚠️ NOTHING MERGED, SO THE ALERT CLAIMS NOTHING (MOTIR-5834): the *Your approval
+    // stands* line is gone — a press that did not land SPENT the approval — and the
+    // member's own line is the whole of what the band says.
+    const band = screen.getByRole('alert').textContent ?? '';
+    expect(band).toContain(fill(pra.refused.title, { pr: CORE_NAME }));
+    expect(band).not.toContain('approval stands');
     refreshSpy.mockClear();
 
     fireEvent.click(within(rowOf(CORE_PR.title)).getByRole('button', { name: pra.outcome.retry }));

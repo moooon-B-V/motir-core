@@ -5,6 +5,7 @@ import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import type { StampComponent } from '@/lib/approvalGates/stamp';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
+import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
@@ -621,6 +622,15 @@ export type ApprovalGateOverlaySubjectDTO =
        * is null when nothing has been captured yet.
        */
       decision?: { document: DecisionDocumentViewDTO | null };
+      /**
+       * `motir fix` AS THE PAGE OFFERS IT (Story MOTIR-5799 · MOTIR-5806; § 28 panel 7).
+       * The overlay composes the same Development block, and before this it composed it
+       * WITHOUT the repair part — so a person deciding in the overlay was shown the
+       * approve and not the repair, on exactly the failures where the repair is the
+       * answer. `hidden` when the claim would refuse, which is the predicate the page
+       * and the claim already share.
+       */
+      repair?: WorkItemRepairViewDto | null;
     };
 
 /** The overlay's one read. */
@@ -677,10 +687,38 @@ export interface PullRequestApprovalMemberDTO {
   /** The pull request's latest merge-queue EXIT (MOTIR-5632), or null when the queue
    *  never removed it. The failing check's name and link are MOTIR-5633's. */
   exit: PullRequestQueueExitDTO | null;
-  /** *Queue again* is offered (MOTIR-5634; `approval-gates.md` §4 THIRD AMENDMENT,
-   *  decision 5): the approval stands, the latest exit has not been put back, and the
-   *  pull request is still at the head the approval named. */
+  /** The latest exit has not been put back, and the pull request is still at the head
+   *  the approval named — the exit still describes the approved code, whatever its
+   *  disposition. False once a push moved the head (*New commits since approval*). */
+  exitAtApprovedHead: boolean;
+  /** The row's verb — *Queue again* for a queue exit, *Retry merge* for a refused merge —
+   *  is offered: {@link exitAtApprovedHead}, and the pull request is open.
+   *  ⚠️ NEVER ON A SPENT APPROVAL (MOTIR-5802; §4 FOURTH AMENDMENT, points 1 and 4).
+   *  An un-landed outcome of ANY disposition, NEUTRAL included, spends the approval that
+   *  preceded it, so the DECIDED gate offers no verb at all; the card is asked again and
+   *  the verb rides on the re-asked gate, whose id is {@link retryDecidesGateId}. The
+   *  frame reads `exit.disposition` to word the row, never to decide this. */
   requeueable: boolean;
+  /** The HOST's latest refusal of this member, while it still STANDS — nothing
+   *  superseded it and the head it names is still the pull request's (MOTIR-5833;
+   *  §4 FOURTH AMENDMENT, point 5). Null when the host has refused nothing, or when a
+   *  push or a later successful press has retired it. It is what lets a RELOAD say why
+   *  the merge did not land: before this the refusal lived only in the press's
+   *  response. `landingClass` is the shared class map's answer, so the row can say
+   *  whether anything can be done about it. */
+  refusal: {
+    /** The host's own code, verbatim (`MergeRefusalCode`). */
+    code: string;
+    landingClass: 'retryable' | 'cant_land' | 'setting' | 'landed';
+    refusedAt: string;
+    /** `app_permission_missing` only — the permission the host said it needed. */
+    permission: string | null;
+  } | null;
+  /** WHICH GATE the row's press DECIDES (MOTIR-5802; §4 FOURTH AMENDMENT, point 4) — the
+   *  re-asked `awaiting` gate, so pressing *Queue again* / *Retry merge* IS the new
+   *  approval. Null on a decided gate, where a press carries out a decision already made
+   *  and never re-decides it. */
+  retryDecidesGateId: string | null;
 }
 
 /** One merge-queue removal as a surface reads it (MOTIR-5632 · MOTIR-5634). */

@@ -1,6 +1,6 @@
-import type { Prisma } from '@/generated/prisma/client';
+import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import type { GitProviderId, NormalizedMergeQueueExit } from '@/lib/git/types';
-import { classifyQueueExit } from '@/lib/mergeQueue/queueExit';
+import { classifyQueueExit, classOfQueueExit, type LandingClass } from '@/lib/mergeQueue/queueExit';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubMergeQueueAttemptRepository } from '@/lib/repositories/githubMergeQueueAttemptRepository';
@@ -19,20 +19,27 @@ import {
 import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
 import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { workItemsService } from './workItemsService';
+import { reconcileGatesFor } from './gateSetFor';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
 
 // A MERGE QUEUE REMOVED A PULL REQUEST (Story MOTIR-5461 · MOTIR-5632).
 //
-// `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decisions 1–4 and 9. The
-// queue tested the pull request together with everything ahead of it and took it
-// out. Motir records that on the PULL REQUEST, stops saying it is queued, and — when
-// the reason is a FAILURE — moves every card it delivers back to `implemented`:
-// committed code whose build (the queue's merge commit) has not passed.
+// `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decisions 1–4 and 9, as the
+// FOURTH AMENDMENT (MOTIR-5805) amends them. The queue tested the pull request
+// together with everything ahead of it and took it out. Motir records that on the
+// PULL REQUEST, stops saying it is queued, and — when the reason is a FAILURE —
+// moves every card it delivers:
+//   * in a `manual` project, `approved → in_review`, and RE-ASKS the merge question
+//     on ONE fresh awaiting approve-to-merge gate over the same commits. The yes that
+//     sent them to the queue was about them landing, and they did not;
+//   * in an `auto` project, `in_review → implemented` — committed code whose build
+//     (the queue's merge commit) has not passed. No person is asked there.
 //
 // What it deliberately leaves alone:
-//   * the card's DECIDED `pull_request_approval` gate — a decided gate is a record,
-//     and while the heads are unchanged it still describes the code (decision 5);
+//   * the card's DECIDED `pull_request_approval` gate — a decided gate is a record
+//     and is never edited; the re-ask is computed from the exit row instead;
+//   * the card's DECIDED design gate — the design was never the problem;
 //   * the card's OTHER pull requests still in the queue — approved at their own
 //     heads, which have not moved;
 //   * any card at a status other than the one the mode puts an enqueued card in —
@@ -50,12 +57,23 @@ import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/erro
 // (decision 6) stops that on every other door; here the latch is simply not asked.
 
 const PROVIDER: GitProviderId = 'github';
-const IMPLEMENTED = 'implemented';
 
 /** Where an enqueued card sits, per merge mode — and so the one status a failure
  *  moves it FROM. `manual`: a person approved it. `auto`: nobody decides, so CI's
  *  promotion is the last move before the merge. */
 const ENQUEUED_STATUS = { manual: 'approved', auto: 'in_review' } as const;
+
+/** Where a FAILURE moves it TO (§4 FOURTH AMENDMENT, point 1). `manual`: back to
+ *  review, where the merge question is asked again. `auto`: to `implemented`, as
+ *  before — no person decides, and a push re-arms it. */
+const EJECTED_STATUS = { manual: 'in_review', auto: 'implemented' } as const;
+
+/**
+ * WHERE A MANUAL CARD GOES when its merge did not land, by class (§4 FOURTH AMENDMENT,
+ * point 2): back to review where a person can answer again, or to `implemented` where
+ * `motir fix` claims it and nothing is asked until the head moves.
+ */
+const UNLANDED_STATUS = { reask: 'in_review', cantLand: 'implemented' } as const;
 
 export type MergeQueueExitOutcome =
   /** A `landed` reason — nothing written, the merge webhook owns `done`. */
@@ -75,8 +93,10 @@ export interface MergeQueueExitResult {
   outcome: MergeQueueExitOutcome;
   disposition?: 'failure' | 'neutral' | 'landed';
   rawReason?: string | null;
-  /** Keys of the cards moved to `implemented`. */
+  /** Keys of the cards a failure moved (`in_review` in manual, `implemented` in auto). */
   moved?: string[];
+  /** Keys of the cards a manual failure RE-ASKED — ONE fresh approve-to-merge gate raised. */
+  reasked?: string[];
   /** Cards the pull request delivers that were NOT moved, and why. */
   skipped?: { key: string; status: string; reason: 'not_enqueued_status' | 'no_actor' }[];
   /** Whether a queued merge record was cleared. */
@@ -148,7 +168,7 @@ export const mergeQueueExitService = {
     const ctx = found.ownerUserId
       ? { userId: found.ownerUserId, workspaceId: found.workspaceId }
       : null;
-    const moved: { id: string; key: string; revisionId: string; from: string }[] = [];
+    const moved: { id: string; key: string; revisionId: string; from: string; to: string }[] = [];
 
     const write = async (tx: Prisma.TransactionClient): Promise<MergeQueueExitResult> => {
       const pr = await githubPullRequestRepository.findByRepoAndNumber(
@@ -195,10 +215,15 @@ export const mergeQueueExitService = {
         ...base,
         outcome: 'recorded',
         moved: [],
+        reasked: [],
         skipped: [],
         clearedQueuedOutcome: cleared,
       };
-      if (disposition !== 'failure') return result;
+      // ⚠️ EVERY DISPOSITION BUT `landed` REACHES THE CARDS NOW (§4 FOURTH AMENDMENT,
+      // points 1–2; MOTIR-5805). A NEUTRAL removal spends the approval exactly as a
+      // failure does — Yue, 2026-09-19: *"re-ask too"* — so it is settled by class like
+      // any other. `landed` returned above, before anything was written.
+      const landingClass = classOfQueueExit(exit.rawReason);
 
       for (const ref of await resolveDeliveredWorkItems(pr.id, tx)) {
         if (!ctx) {
@@ -221,9 +246,31 @@ export const mergeQueueExitService = {
           });
           continue;
         }
+        if (mode === 'manual') {
+          // §4 FOURTH AMENDMENT, points 1–2 (MOTIR-5805): settled by the reason's
+          // CLASS — back to review with one fresh question, or held at `implemented`
+          // where the commits cannot land. The same entry point the host refusal
+          // (MOTIR-5833) and the convergence of stranded cards (MOTIR-5809) call.
+          const settled = await settleUnlandedOutcome(item, landingClass, ctx, tx);
+          if (settled.transition) {
+            moved.push({
+              id: item.id,
+              key: item.identifier,
+              revisionId: settled.transition.revisionId,
+              from: settled.transition.fromStatusKey,
+              to: settled.transition.toStatusKey,
+            });
+            result.moved!.push(item.identifier);
+          }
+          if (settled.raised) result.reasked!.push(item.identifier);
+          continue;
+        }
+        // AUTO mode is unchanged: no gate, no person to ask, and only a FAILURE moves
+        // the card (THIRD AMENDMENT, decision 3).
+        if (disposition !== 'failure') continue;
         const { transition } = await workItemsService.applyStatusTransition(
           item.id,
-          IMPLEMENTED,
+          EJECTED_STATUS.auto,
           ctx,
           tx,
           { system: true },
@@ -234,21 +281,11 @@ export const mergeQueueExitService = {
             key: item.identifier,
             revisionId: transition.revisionId,
             from: transition.fromStatusKey,
+            to: transition.toStatusKey,
           });
           result.moved!.push(item.identifier);
         }
-        // ⚠️ AND NOTHING IS RE-RAISED HERE (Subtask MOTIR-5666). An ejection is
-        // news about the COMMITS, and the merge question comes back the way §4's
-        // THIRD AMENDMENT decision 6 already says: the card is HELD at
-        // `implemented` with no awaiting gate, and the routes back are *Queue
-        // again* — which reuses the decision that already stands — and a PUSH,
-        // whose new head is a new question. `design-result.md` AMENDMENT 6 Q2
-        // names that mechanism itself.
-        //
-        // The DESIGN gate is untouched, and cannot be worked around either:
-        // publish, upload and withdraw are refused while the design approval
-        // stands (MOTIR-5661), which is what makes *a failure is about the
-        // commits* true rather than merely intended.
+        // `auto` raises nothing: no person decides, and a PUSH re-arms the card.
       }
       return result;
     };
@@ -277,13 +314,70 @@ export const mergeQueueExitService = {
         workItemId: m.id,
         actorId: ctx!.userId,
         fromStatusKey: m.from,
-        toStatusKey: IMPLEMENTED,
+        toStatusKey: m.to,
         revisionId: m.revisionId,
       });
     }
     return result;
   },
 };
+
+/**
+ * SETTLE AN UN-LANDED MERGE BY ITS REASON CLASS, in the caller's transaction
+ * (`approval-gates.md` §4 FOURTH AMENDMENT, points 1–3; Story MOTIR-5799 · MOTIR-5802 ·
+ * MOTIR-5805).
+ *
+ * ⚠️ THE CLASS IS THE WHOLE OF THE DECISION, and it answers one question: could
+ * re-running these SAME commits land them?
+ *
+ *  · `retryable` / `setting` — YES (a flaky check, a cleared queue, a hand removal, a
+ *    setting somebody can change). The card moves to `in_review` as a SYSTEM write —
+ *    the status for *CI spoke and a person must decide*, and the only one a fresh
+ *    approval can leave for `approved` — and {@link reconcileGatesFor} then raises
+ *    exactly ONE awaiting `pull_request_approval` gate over the current set, because
+ *    `resolveGateSet` reads the standing outcome as outranking the approval given
+ *    before it. A decided design gate is not re-asked; the old merge gate row is never
+ *    touched.
+ *  · `cant_land` — NO. The commits cannot combine as they stand, so asking would offer
+ *    a button guaranteed to fail. The card moves to `implemented`, where `motir fix`
+ *    claims it (MOTIR-5803), and the promotion is HELD at that head: no gate is raised
+ *    here and none is raised by a green check at the same commits. A PUSH is what ends
+ *    the hold, and the next green asks about the new commits (MOTIR-5604's path).
+ *  · `landed` — nothing happened that anybody has to answer.
+ *
+ * ⚠️ THE ONE ENTRY POINT for every source: a live queue exit (`recordExit`), a host
+ * refusal at the press (MOTIR-5833) and the operator convergence of cards stranded
+ * BEFORE this shipped (`scripts/converge-ejected-cards.ts`; MOTIR-5809). None of them
+ * re-implements the move or the raise, which is what keeps one rule in one place.
+ *
+ * The caller holds the card's lock ({@link lockCard}) and has checked the mode. A card
+ * already at the target status is not moved again; the raise is idempotent either way
+ * (the reconciler never writes a second awaiting row).
+ */
+export async function settleUnlandedOutcome(
+  item: WorkItem,
+  landingClass: LandingClass,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<{ transition: AppliedMove; raised: boolean }> {
+  if (landingClass === 'landed') return { transition: null, raised: false };
+  const target = landingClass === 'cant_land' ? UNLANDED_STATUS.cantLand : UNLANDED_STATUS.reask;
+  let transition: AppliedMove = null;
+  if (item.status !== target) {
+    ({ transition } = await workItemsService.applyStatusTransition(item.id, target, ctx, tx, {
+      system: true,
+    }));
+  }
+  const fresh = (await workItemRepository.findById(item.id, tx)) ?? item;
+  await reconcileGatesFor(fresh, tx);
+  // Asked as a FACT rather than read off the reconcile's return: arriving at
+  // `in_review` may already have raised the gate through the transition's own
+  // reconcile, and either way the answer is whether the card is now asking.
+  const raised = (await approvalGateRepository.findAwaitingByWorkItem(item.id, tx)).some(
+    (gate) => gate.kind === 'pull_request_approval',
+  );
+  return { transition, raised };
+}
 
 // ── The card moves Queue again makes (MOTIR-5634) ───────────────────────────────
 //
@@ -327,14 +421,16 @@ async function recomputeDeliveredCiState(
 }
 
 /**
- * Return a card a merge-queue failure moved to `implemented` to the status it was moved
- * from, when it is still there. A card somebody has since moved elsewhere is left where
+ * Return a card an `auto`-mode merge-queue failure moved to `implemented` to `in_review`,
+ * the status it was moved from, when it is still there (*Queue again* in `auto` mode).
+ * ⚠️ `approved` is no longer a target (MOTIR-5802): a manual failure is re-asked on a
+ * fresh gate, and nothing writes `implemented → approved`. A card somebody has since moved elsewhere is left where
  * they put it, and a workflow that refuses the move leaves it too — the re-enqueue has
  * happened either way, and the move is secondary to it.
  */
 async function returnCard(
   item: { id: string; status: string },
-  to: 'approved' | 'in_review',
+  to: 'in_review',
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
   opts: { decidingGateId?: string },

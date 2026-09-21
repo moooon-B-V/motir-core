@@ -116,16 +116,14 @@ async function backdate(id: string, days: number): Promise<void> {
 // ───────────────────────────────────────────────────────────────────────────
 
 describe('the integration seams', () => {
-  it('REFUSES a hand `implemented → approved` while an open pull request delivers the card, and the refusal classifies as 422', async () => {
-    // ⚠️ `approved` is a PERSON's yes; `implemented` is the agent reporting it
-    // finished. Approving straight from one to the other would let a card be
-    // approved before any build looked at it. Until MOTIR-5630 that was held by
-    // the ABSENCE of this edge. The edge is now declared for Queue again
-    // (`approval-gates.md` §4 THIRD AMENDMENT, decision 7), so the protection is
-    // asserted where it now lives: §6d rule 2b refuses the hand move while an
-    // open pull request — a build to skip — delivers the card.
+  it('REFUSES a hand `in_review → approved` while an open pull request delivers the card, and the refusal classifies as 422', async () => {
+    // ⚠️ `approved` is a PERSON's yes, and while an open pull request delivers
+    // the card only a deciding gate may write it — §6d rule 2b. Asserted on
+    // `in_review → approved`, the one declared way in: `implemented → approved`
+    // is ABSENT again (MOTIR-5630 declared it for Queue again; MOTIR-5804
+    // removed it under §4's FOURTH AMENDMENT, point 6), asserted below.
     const c = await card('a card the agent has built');
-    await move(c.id, 'in_progress', 'implemented');
+    await move(c.id, 'in_progress', 'implemented', 'in_review');
     const installation = await adminDb.githubInstallation.create({
       data: {
         workspaceId: fx.workspaceId,
@@ -179,14 +177,15 @@ describe('the integration seams', () => {
     expect(classifyApiV1Error(err)?.status).toBe(422);
 
     // The card did not move.
-    expect(await statusOf(c.id)).toBe('implemented');
+    expect(await statusOf(c.id)).toBe('in_review');
 
-    // The edge itself is declared (decision 7) beside the ordinary way in, so
-    // the refusal above is the guard's, not the workflow table's.
-    const canReach = async (to: string) =>
-      workflowsService.canTransition(fx.projectId, 'implemented', to, fx.workspaceId);
-    expect(await canReach('in_review')).toBe(true);
-    expect(await canReach('approved')).toBe(true);
+    // The edge itself is declared, so the refusal above is the guard's, not the
+    // workflow table's — and `implemented → approved` is not declared at all.
+    const canReach = async (from: string, to: string) =>
+      workflowsService.canTransition(fx.projectId, from, to, fx.workspaceId);
+    expect(await canReach('in_review', 'approved')).toBe(true);
+    expect(await canReach('implemented', 'in_review')).toBe(true);
+    expect(await canReach('implemented', 'approved')).toBe(false);
   });
 
   it('accepts EVERY declared hop out of approved', async () => {

@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { classifyQueueExit, QUEUE_EXIT_REASONS } from '@/lib/mergeQueue/queueExit';
+import {
+  classifyQueueExit,
+  classOfQueueExit,
+  QUEUE_EXIT_REASONS,
+  type LandingClass,
+} from '@/lib/mergeQueue/queueExit';
 import { getGitProvider } from '@/lib/git';
 
 // THE REASON MAP (Story MOTIR-5461 · MOTIR-5632; `docs/decisions/approval-gates.md` §4
@@ -96,5 +101,48 @@ describe('GitHub’s parseMergeQueueExitEvent, over the captured deliveries', ()
 
   it('GitLab does not declare the capability', () => {
     expect(getGitProvider('gitlab').parseMergeQueueExitEvent).toBeUndefined();
+  });
+});
+
+// THE CLASS MAP (§4 FOURTH AMENDMENT, point 2; MOTIR-5802) — what a person can DO about
+// an un-landed merge, which is a different question from what the removal did to the card.
+// Stated here row for row, from the record rather than from the module under test.
+const CLASSES: ReadonlyArray<[string, LandingClass]> = [
+  ['CI_FAILURE', 'retryable'],
+  ['CI_TIMEOUT', 'retryable'],
+  ['INVALID_MERGE_COMMIT', 'retryable'],
+  ['GIT_TREE_INVALID', 'retryable'],
+  ['MANUAL', 'retryable'],
+  ['QUEUE_CLEARED', 'retryable'],
+  ['ROLL_BACK', 'retryable'],
+  ['UNKNOWN_REMOVAL_REASON', 'retryable'],
+  ['MERGE_CONFLICT', 'cant_land'],
+  ['BRANCH_PROTECTIONS', 'setting'],
+  ['MERGE', 'landed'],
+  ['ALREADY_MERGED', 'landed'],
+];
+
+describe('what can be DONE about an un-landed merge — the class map', () => {
+  it.each(CLASSES)('%s → %s', (reason, expected) => {
+    expect(classOfQueueExit(reason)).toBe(expected);
+  });
+
+  it('is TOTAL over the reason map — every reason it names has a class', () => {
+    expect(CLASSES.map(([reason]) => reason).sort()).toEqual(
+      Object.keys(QUEUE_EXIT_REASONS).sort(),
+    );
+  });
+
+  it('an unmapped reason is RETRYABLE, so a person is asked rather than offered nothing', () => {
+    expect(classOfQueueExit('SOME_NEW_REASON')).toBe('retryable');
+    expect(classOfQueueExit(null)).toBe('retryable');
+    expect(classOfQueueExit(undefined)).toBe('retryable');
+  });
+
+  it('the class is not the disposition — BRANCH_PROTECTIONS and MANUAL are the tells', () => {
+    expect(classifyQueueExit('BRANCH_PROTECTIONS').disposition).toBe('failure');
+    expect(classOfQueueExit('BRANCH_PROTECTIONS')).toBe('setting');
+    expect(classifyQueueExit('MANUAL').disposition).toBe('neutral');
+    expect(classOfQueueExit('MANUAL')).toBe('retryable');
   });
 });

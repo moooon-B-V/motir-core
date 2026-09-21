@@ -102,6 +102,10 @@ export type GateRefusal =
   | { tag: 'MERGE_ALREADY_MERGED' }
   // Queue again lost the claim to another press (MOTIR-5634).
   | { tag: 'MERGE_ALREADY_REQUEUED' }
+  // Queue again on a manual FAILURE exit (MOTIR-5802; `approval-gates.md` §4 FOURTH
+  // AMENDMENT, point 4): the pull request left the queue for a failure, so the old
+  // approval is not reused — a fresh approval of the re-asked gate re-queues it.
+  | { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' }
   | {
       tag: 'MERGE_APP_PERMISSION_MISSING';
       /**
@@ -179,6 +183,7 @@ export function toGateRefusal(
     case 'MERGE_CONFLICT':
     case 'MERGE_ALREADY_MERGED':
     case 'MERGE_ALREADY_REQUEUED':
+    case 'MERGE_REQUEUE_NEEDS_APPROVAL':
       return { tag: code };
     case 'MERGE_BRANCH_PROTECTED':
       return extra?.reason ? { tag: code, reason: extra.reason } : { tag: code };

@@ -626,7 +626,8 @@ export type WorkItemRepairRefusal =
   | 'repair_on_run_target'
   | 'no_pull_requests'
   | 'ci_running'
-  | 'not_failing';
+  | 'not_failing'
+  | 'repair_not_code';
 
 /** One failing pull request a repair is handed. */
 export interface RepairPullRequest {
