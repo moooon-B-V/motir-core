@@ -546,9 +546,9 @@ same pair that also means _"accept this written record."_
 
 ### 1c. The fifteenth member — `choice`
 
-| Member   | Authoritative gloss                                                                                                                                                                                                                      | Nearest neighbour, and the boundary                                                                                                                                                                                                                                                            |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `choice` | A question the planner correctly declined to decide — two or more options, each carrying its WHY on a named axis, and a person PICKS one. It has no artifact but the pick, and it always decides FOLLOW-UP work that is not yet planned. | vs `decision`: a `decision` is already decided and is written down for a person to ACCEPT; a `choice` is undecided and a person PICKS among its options. If a recommendation exists, it is a `decision`. If the work item's body is a set of options with no recommendation, it is a `choice`. |
+| Member   | Authoritative gloss                                                                                                                                                                                                                          | Nearest neighbour, and the boundary                                                                                                                                                                                                                                                            |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `choice` | A question the planner correctly declined to decide — two or more options, each with its WHY and what it is best for, and a person PICKS one. It has no artifact but the pick, and it always decides FOLLOW-UP work that is not yet planned. | vs `decision`: a `decision` is already decided and is written down for a person to ACCEPT; a `choice` is undecided and a person PICKS among its options. If a recommendation exists, it is a `decision`. If the work item's body is a set of options with no recommendation, it is a `choice`. |
 
 **Kind.** Leaf-only, like every type (§2). The shape a planner lays is a
 **`task` under an epic, laid in the place a story would have taken** — the
@@ -562,7 +562,8 @@ not yet laid.
 **Its body STRUCTURE is not `decision`'s.** A `decision` states a decision and
 its consequences; a `choice` states a question, WHY it is a choice — which of
 the three situations `kind-container.md`'s choice rule names brought it back —
-its options with each option's axis and WHY, and what the pick gates. The canonical structure, and what the
+its options with each option's WHY and what it is best for, and what the pick
+gates. The canonical structure, and what the
 gate does with a body that deviates from it, are the approval gates ADR's to
 fix (its `decision_choice` amendment, MOTIR-5887). The per-type authoring bar
 that teaches a planner to write that structure is the `type-choice` pack
@@ -708,7 +709,7 @@ rows. A row is a file that **states the set itself**.
 
 | Layer     | Home                                                                                                   | What moves                                                      | Owner      |
 | --------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | ---------- |
-| Rule pack | `prompts/plan-rules/type-choice.md` (new)                                                              | the option-axis authoring bar                                   | MOTIR-5889 |
+| Rule pack | `prompts/plan-rules/type-choice.md` (new)                                                              | the options authoring bar                                       | MOTIR-5889 |
 | Routing   | `prompts/plan-rules/split.py` · `DECISION.numbers.py` · `COMPRESSION.measure.py` · `SELECTOR.check.py` | `type = choice` → `type-choice`                                 | MOTIR-5889 |
 | Placement | `prompts/plan-rules/kind-container.md` — the MOTIR-4915 unit                                           | one clause naming the shape it lays: a `task` of `type: choice` | MOTIR-5889 |
 | Generated | `prompts/plan-rules/MANIFEST.md` · `MIRROR.md`                                                         | regenerated / new rows                                          | MOTIR-5889 |
