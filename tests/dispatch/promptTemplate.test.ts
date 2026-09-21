@@ -12,8 +12,10 @@ import {
   NO_INJECTIONS,
   parseFindingsPolicy,
   RENDERED_SURFACE_TRIGGER,
+  renderErrorEvidence,
   type DispatchPromptSource,
 } from '@/lib/dispatch/promptTemplate';
+import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME } from '@/lib/mcp/tools/publishTestInstructions';
 import { GET_DESIGN_TOOL_NAME as REGISTERED_GET_DESIGN } from '@/lib/mcp/tools/getDesign';
@@ -58,6 +60,7 @@ function source(over: Partial<DispatchPromptSource> = {}): DispatchPromptSource 
     ].join('\n'),
     blockerKeys: ['PROD-3', 'PROD-5'],
     openDependentKeys: [],
+    errorEvidence: [],
     parent: { key: 'PROD-2', title: 'Ready surface' },
     projectName: 'Motir',
     projectKey: 'PROD',
@@ -2129,5 +2132,130 @@ describe('a BUG card is REPRODUCED before THE CARD IS WRONG is reachable (MOTIR-
     const { prompt } = assembleDispatchPrompt(bug({ type: 'manual', executor: 'human' }));
     expect(prompt).not.toContain('THIS IS A BUG CARD');
     expect(prompt).not.toContain(EXIT_HEADING);
+  });
+});
+
+describe('assembleDispatchPrompt — the ERROR EVIDENCE section (MOTIR-5975 · MOTIR-5982)', () => {
+  function link(overrides: Partial<MonitorIssueLinkDto> = {}): MonitorIssueLinkDto {
+    return {
+      id: 'mi-1',
+      title: 'PrismaClientKnownRequestError: expired transaction',
+      level: 'error',
+      culprit: 'lib/services/githubWebhookService.ts',
+      permalink: null,
+      eventCount: 112,
+      firstSeenAt: '2026-09-19T00:00:00.000Z',
+      lastSeenAt: '2026-09-20T18:04:11.000Z',
+      environment: 'production',
+      release: '2026.09.20-1',
+      connection: { id: 'c1', orgSlug: 'acme', projectSlug: 'web' },
+      resolve: { state: null, attemptedAt: null, resolvedAt: null, error: null },
+      assigneeNote: null,
+      evidence: {
+        state: 'present',
+        stale: false,
+        exception: {
+          type: 'PrismaClientKnownRequestError',
+          message: 'Transaction API error: A commit cannot be executed on an expired transaction.',
+        },
+        frames: [
+          {
+            filePath: 'lib/services/githubWebhookService.ts',
+            function: 'handle',
+            lineNumber: 88,
+            inApp: true,
+          },
+          { filePath: 'node_modules/next/server.js', function: null, lineNumber: 12, inApp: false },
+        ],
+        tags: [
+          { key: 'transaction', value: 'POST /api/github/webhook' },
+          { key: 'route', value: '/api/github/webhook' },
+        ],
+        request: { method: 'POST', path: '/api/github/webhook' },
+        eventId: 'ev-1',
+        eventAt: '2026-09-20T18:04:11.000Z',
+        readAt: '2026-09-20T18:30:00.000Z',
+        lastFailedAt: null,
+      },
+      ...overrides,
+    };
+  }
+  const HEADING = 'ERROR EVIDENCE';
+
+  it('an EMPTY list renders a prompt byte-identical to one without the field', () => {
+    const { errorEvidence: _dropped, ...withoutField } = source();
+    expect(assembleDispatchPrompt(source({ errorEvidence: [] })).prompt).toBe(
+      assembleDispatchPrompt(withoutField as DispatchPromptSource).prompt,
+    );
+    expect(assembleDispatchPrompt(source()).prompt).not.toContain(HEADING);
+    expect(renderErrorEvidence([])).toEqual([]);
+  });
+
+  it('a PRESENT link renders the exception, every frame in order with in-app marked, every tag, the request and the event', () => {
+    const { prompt } = assembleDispatchPrompt(source({ errorEvidence: [link()] }));
+    const at = prompt.indexOf(HEADING);
+    expect(at).toBeGreaterThan(-1);
+    // With the card's WHAT — after its acceptance criteria, before the git workflow.
+    expect(at).toBeGreaterThan(prompt.indexOf('ACCEPTANCE CRITERIA'));
+    expect(at).toBeLessThan(prompt.indexOf('GIT WORKFLOW'));
+    const block = prompt.slice(at, prompt.indexOf('GIT WORKFLOW'));
+    expect(block).toContain('Exception: PrismaClientKnownRequestError');
+    expect(block).toContain(
+      'Transaction API error: A commit cannot be executed on an expired transaction.',
+    );
+    const first = block.indexOf('[app] lib/services/githubWebhookService.ts:88 handle');
+    const second = block.indexOf('node_modules/next/server.js:12');
+    expect(first).toBeGreaterThan(-1);
+    expect(second).toBeGreaterThan(first);
+    expect(block).not.toContain('[app] node_modules/next/server.js');
+    expect(block).toContain('transaction = POST /api/github/webhook');
+    expect(block).toContain('route = /api/github/webhook');
+    expect(block).toContain('Request: POST /api/github/webhook');
+    expect(block).toContain('Event: ev-1 at 2026-09-20T18:04:11.000Z');
+    expect(block).toContain('Error 1 of 1: PrismaClientKnownRequestError: expired transaction');
+  });
+
+  it('a NEVER-READ link renders one sentence saying so, and no empty headings', () => {
+    const lines = renderErrorEvidence([
+      link({
+        evidence: {
+          ...link().evidence,
+          state: 'never_read',
+          exception: null,
+          frames: [],
+          tags: [],
+          request: null,
+          eventId: null,
+          eventAt: null,
+          readAt: null,
+        },
+      }),
+    ]);
+    const text = lines.join('\n');
+    expect(text).toContain('The latest event has not been read yet');
+    for (const heading of ['Exception:', 'Stack frames', 'Tags:', 'Request:', 'Event:']) {
+      expect(text).not.toContain(heading);
+    }
+  });
+
+  it('a STALE link renders its evidence plus one sentence naming when the last check failed', () => {
+    const text = renderErrorEvidence([
+      link({
+        evidence: { ...link().evidence, stale: true, lastFailedAt: '2026-09-21T09:00:00.000Z' },
+      }),
+    ]).join('\n');
+    expect(text).toContain('the last check of this error failed at 2026-09-21T09:00:00.000Z');
+    expect(text).toContain('Exception: PrismaClientKnownRequestError');
+  });
+
+  it('a NO-EXCEPTION link says so and still shows its tags and request', () => {
+    const text = renderErrorEvidence([
+      link({
+        evidence: { ...link().evidence, state: 'no_exception', exception: null, frames: [] },
+      }),
+    ]).join('\n');
+    expect(text).toContain('No exception');
+    expect(text).toContain('Request: POST /api/github/webhook');
+    expect(text).not.toContain('Stack frames');
   });
 });
