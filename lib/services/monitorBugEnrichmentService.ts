@@ -8,6 +8,7 @@ import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { BugAuthoringContext } from '@/lib/ai/types';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import { getMonitorProvider } from '@/lib/monitors';
+import { isStillAsFiled } from '@/lib/monitors/asFiled';
 import { MonitorLinkNotYetVisibleError } from '@/lib/monitors/errors';
 import type { NormalizedMonitorIssueContext } from '@/lib/monitors/types';
 import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
@@ -309,9 +310,7 @@ export const monitorBugEnrichmentService = {
     const filedBody = await withWorkspaceContext({ ...binder, projectId: bug.projectId }, (tx) =>
       workItemRevisionRepository.findCreatedDescription(bug.id, tx),
     );
-    if (bug.descriptionMd !== filedBody || (bug.explanationMd ?? null) !== null) {
-      return { status: 'skipped', reason: 'card-changed' };
-    }
+    if (!isStillAsFiled(bug, filedBody)) return { status: 'skipped', reason: 'card-changed' };
 
     try {
       // AS THE BINDER, through the gated write path — every rule the tree

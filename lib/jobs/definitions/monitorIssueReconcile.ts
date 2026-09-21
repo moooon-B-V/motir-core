@@ -106,9 +106,10 @@ export const monitorConnectionPoll = defineJob(
   async (ctx, services) => {
     const { connectionId } = ctx.event.data as MonitorConnectionPollRequestedData;
     try {
-      // `poll-v2` since MOTIR-5729 added `refreshed` to the summary; the old id
-      // is retired in `tests/jobs/stepResultShapePins.ts` with its reason.
-      return await ctx.step.run('poll-v2', () =>
+      // `poll-v3` since MOTIR-5983 added the backfill sweep's two counts to the
+      // summary (`poll-v2` since MOTIR-5729 added `refreshed`); each old id is
+      // retired in `tests/jobs/stepResultShapePins.ts` with its reason.
+      return await ctx.step.run('poll-v3', () =>
         services.monitorIngestion.pollConnection(connectionId),
       );
     } catch (err) {

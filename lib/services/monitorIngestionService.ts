@@ -1,7 +1,9 @@
 import type { MonitorIssue } from '@/generated/prisma/client';
 import { getMonitorProvider } from '@/lib/monitors';
+import { isStillAsFiled } from '@/lib/monitors/asFiled';
 import { MonitorBinderUnavailableError, MonitorProviderCallError } from '@/lib/monitors/errors';
 import { meetsMinimumLevel } from '@/lib/monitors/levels';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { MONITOR_ISSUES_PAGE_LIMIT } from '@/lib/monitors/provider';
 import type { NormalizedMonitorIssue, NormalizedMonitorIssuePage } from '@/lib/monitors/types';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -12,10 +14,12 @@ import {
 import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
 import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
 import {
   contextFactsOf,
   MONITOR_CONTEXT_SKIPPED,
+  writeLinkContext,
   writeLinkFacts,
   type MonitorContextRead,
 } from '@/lib/services/monitorContextRead';
@@ -189,6 +193,28 @@ export const MONITOR_POLL_MAX_PAGES = 20;
  */
 export const MONITOR_CONTEXT_READS_PER_POLL = 50;
 
+/**
+ * The most ENRICHMENT BACKFILLS one poll requests (Story MOTIR-5975 · Subtask
+ * MOTIR-5983): monitor-filed bugs the `work-item/created` enrichment never
+ * reached, each of which costs one `author_bug` model call. A few at a time, on
+ * the poll that already runs every half hour, so a backlog of old bugs can never
+ * spend the AI budget in one burst.
+ */
+export const MONITOR_ENRICHMENT_BACKFILL_PER_POLL = 10;
+
+/**
+ * How old a filed bug must be before the backfill sweep may offer it enrichment
+ * (MOTIR-5983). ⚠️ THIS IS WHAT KEEPS THE TWO TRIGGERS FROM RACING. A bug filed by
+ * THIS poll has its own `work-item/created` enrichment in flight, and
+ * `dispatchEnrichment` reads the link's `authoringJobId`, submits, then writes it —
+ * so a second trigger arriving inside that window could submit a second
+ * `author_bug`. The created-trigger's whole bounded life (five attempts, then a
+ * five-minute wait) is far inside an hour, so the sweep reaches only the bugs that
+ * trigger never finished: the ones filed before it shipped, and the ones whose
+ * run dead-lettered.
+ */
+export const MONITOR_ENRICHMENT_BACKFILL_GRACE_MS = 60 * 60 * 1000;
+
 /** What one poll did — the per-connection run's ledger output. */
 export interface MonitorPollSummary {
   status: 'ok' | 'failed';
@@ -204,6 +230,11 @@ export interface MonitorPollSummary {
    */
   refreshed: number;
   pages: number;
+  /** Never-read links whose evidence the standing sweep read and stored this
+   *  poll, from the context-read budget the page walk left (MOTIR-5983). */
+  evidenceBackfilled: number;
+  /** Monitor-filed bugs the sweep asked the enrichment to author (MOTIR-5983). */
+  enrichmentRequested: number;
 }
 
 /** A poll that never started: the connection is gone (deleted between the tick
@@ -216,6 +247,8 @@ const NOTHING_POLLED: MonitorPollSummary = {
   skipped: 0,
   refreshed: 0,
   pages: 0,
+  evidenceBackfilled: 0,
+  enrichmentRequested: 0,
 };
 
 /**
@@ -246,6 +279,116 @@ async function readContextQuietly(
   } catch {
     return { outcome: 'failed', at: new Date() };
   }
+}
+
+/**
+ * THE STANDING BACKFILL SWEEP (Story MOTIR-5975 · Subtask MOTIR-5983), run at the
+ * end of every poll whose listing succeeded, AFTER the page walk's writes have
+ * committed. It reaches the two populations nothing else revisits:
+ *
+ * (a) EVIDENCE — links to a live work item whose latest event was never read.
+ *     The poll lists only issues seen since its watermark, so an issue that has
+ *     not recurred is never visited again. Read with the poll's OWN credential,
+ *     from the context-read budget the page walk left, each outside any lock and
+ *     written under the row lock through the same three-outcome path.
+ * (b) ENRICHMENT — bugs the reconciler filed that were never offered
+ *     `author_bug` (filed before the enrichment shipped, which rides only
+ *     `work-item/created`). Up to {@link MONITOR_ENRICHMENT_BACKFILL_PER_POLL}
+ *     are emitted as `monitor-issue/enrichment-backfill`, after the read that
+ *     chose them has committed.
+ *
+ * It CONVERGES: once every link is read and every eligible bug offered, both
+ * queries return nothing. And it is QUIET: a failure here is logged and left for
+ * the next poll, and never changes what the poll records — the sweep is an
+ * enrichment of the reconcile, never a gate on it.
+ */
+async function sweepBackfill(
+  connection: {
+    id: string;
+    projectId: string;
+    workspaceId: string;
+    boundByUserId: string | null;
+  },
+  credential: MonitorAccessToken | null,
+  remainingReads: number,
+  pollStartedAt: Date,
+): Promise<{ evidenceBackfilled: number; enrichmentRequested: number }> {
+  const done = { evidenceBackfilled: 0, enrichmentRequested: 0 };
+  try {
+    const doneKeys = [...(await doneKeysOf(connection.projectId, connection.workspaceId))];
+
+    // ── (a) EVIDENCE ─────────────────────────────────────────────────────────
+    if (credential && remainingReads > 0) {
+      const neverRead = await withSystemContext(async (tx) => {
+        await bindWorkspaceContext(tx, connection.workspaceId);
+        return monitorIssueRepository.listNeverReadLinked(
+          connection.id,
+          doneKeys,
+          pollStartedAt,
+          remainingReads,
+          tx,
+        );
+      });
+      for (const link of neverRead) {
+        const read = await readContextQuietly(credential, link.externalIssueId);
+        const wrote = await withSystemContext(async (tx) => {
+          await bindWorkspaceContext(tx, connection.workspaceId);
+          const row = await monitorIssueRepository.lockById(link.id, tx);
+          if (!row) return false;
+          return writeLinkContext(row.id, read, tx);
+        });
+        if (wrote) done.evidenceBackfilled += 1;
+      }
+    }
+
+    // ── (b) ENRICHMENT ───────────────────────────────────────────────────────
+    const binderId = connection.boundByUserId;
+    if (binderId) {
+      const eligible = await withSystemContext(async (tx) => {
+        await bindWorkspaceContext(tx, connection.workspaceId);
+        const candidates = await monitorIssueRepository.listEnrichmentBackfillCandidates(
+          connection.id,
+          doneKeys,
+          new Date(Date.now() - MONITOR_ENRICHMENT_BACKFILL_GRACE_MS),
+          MONITOR_ENRICHMENT_BACKFILL_PER_POLL,
+          tx,
+        );
+        const keep: Array<{ id: string; workItemId: string }> = [];
+        for (const candidate of candidates) {
+          const bug = await workItemRepository.findById(candidate.workItemId, tx);
+          const filedBody = await workItemRevisionRepository.findCreatedDescription(
+            candidate.workItemId,
+            tx,
+          );
+          // The write's OWN predicate, so the sweep never asks for a body the
+          // write would then refuse to apply.
+          if (bug && isStillAsFiled(bug, filedBody)) keep.push(candidate);
+        }
+        return keep;
+      });
+      // Emitted AFTER the read committed. `sendEvent` is best-effort: a failed
+      // enqueue writes no queue row, so the link is still undispatched and the
+      // next poll finds it again.
+      for (const candidate of eligible) {
+        await sendEvent('monitor-issue/enrichment-backfill', {
+          workspaceId: connection.workspaceId,
+          projectId: connection.projectId,
+          workItemId: candidate.workItemId,
+          actorId: binderId,
+          viaMonitorConnectionId: connection.id,
+          idempotencyKey: `monitor-enrich-backfill:${candidate.id}`,
+        });
+        done.enrichmentRequested += 1;
+      }
+    }
+  } catch (err) {
+    console.warn(
+      `[monitor-backfill] the backfill sweep for connection ${connection.id} stopped early; ` +
+        'the next poll resumes it:',
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+  return done;
 }
 
 async function recordOutcome(
@@ -649,6 +792,7 @@ export const monitorIngestionService = {
    * the boundary MOTIR-5261 drew. The poll's own success is its health signal.
    */
   async pollConnection(connectionId: string): Promise<MonitorPollSummary> {
+    const pollStartedAt = new Date();
     const connection = await withSystemContext((tx) =>
       monitorConnectionRepository.findById(connectionId, tx),
     );
@@ -787,6 +931,18 @@ export const monitorIngestionService = {
         failures.push(`Issue ${issue.externalId} (“${issue.title}”) was not filed: ${why}`);
       }
     }
+
+    // ── 4b. THE STANDING BACKFILL SWEEP (MOTIR-5983) ─────────────────────────
+    // After the page walk's own writes, with its credential and what is left of
+    // its read budget. It never changes the outcome recorded below.
+    const backfill = await sweepBackfill(
+      connection,
+      credentialForContext,
+      MONITOR_CONTEXT_READS_PER_POLL - contextReads,
+      pollStartedAt,
+    );
+    summary.evidenceBackfilled = backfill.evidenceBackfilled;
+    summary.enrichmentRequested = backfill.enrichmentRequested;
 
     // ── 5. RECORD ─────────────────────────────────────────────────────────────
     if (failures.length > 0) {

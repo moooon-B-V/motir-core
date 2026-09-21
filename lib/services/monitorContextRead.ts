@@ -86,3 +86,21 @@ export async function writeLinkFacts(
   const evidence = evidenceOf(read);
   if (evidence) await monitorIssueRepository.updateEvidenceIfNotOlder(rowId, evidence, tx);
 }
+
+/**
+ * Write a read's context facts and evidence onto a link the page walk did NOT
+ * list — the backfill sweep's write (MOTIR-5983). Same outcome rules as
+ * {@link writeLinkFacts}; there are simply no issue facts to go with them.
+ */
+export async function writeLinkContext(
+  rowId: string,
+  read: MonitorContextRead,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const facts = contextFactsOf(read);
+  if (Object.keys(facts).length > 0) {
+    await monitorIssueRepository.updateContextFacts(rowId, facts, tx);
+  }
+  const evidence = evidenceOf(read);
+  return evidence ? monitorIssueRepository.updateEvidenceIfNotOlder(rowId, evidence, tx) : false;
+}

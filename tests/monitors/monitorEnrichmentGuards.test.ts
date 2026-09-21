@@ -42,10 +42,15 @@ describe('the enrichment surface — what coverage cannot see', () => {
     const body = applyBody();
     // The decision reads the body the item was created with…
     expect(body).toContain('findCreatedDescription(');
-    expect(body).toMatch(/bug\.descriptionMd !== filedBody/);
+    // …through the ONE as-filed predicate (MOTIR-5983 moved it out so the backfill
+    // sweep applies the same rule), which compares the BODY…
+    expect(body).toContain('isStillAsFiled(bug, filedBody)');
+    const predicate = code(read('lib/monitors/asFiled.ts'));
+    expect(predicate).toMatch(/bug\.descriptionMd === filedBody/);
     // …and consults NO enrichment column, flag or timestamp to decide.
     for (const remembered of ['authoringJobId', 'enrichedAt', 'authoredAt', 'isEnriched']) {
       expect(body, remembered).not.toContain(remembered);
+      expect(predicate, remembered).not.toContain(remembered);
     }
   });
 
