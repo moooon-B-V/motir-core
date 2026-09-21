@@ -1218,6 +1218,43 @@ describe('assembleDispatchPrompt — FOUND A DEFECT', () => {
     expect(branch).toContain('which has no parent of its own');
   });
 
+  it('opens the bug description with the literal found-while line, key filled in (MOTIR-5994)', () => {
+    // The agent COPIES a line rather than composing one, so every dispatched
+    // bug opens the same way — and the activity is `running` by construction,
+    // because a dispatched agent is only ever running a card.
+    const branch = defectBranch(assembleDispatchPrompt(source()).prompt);
+    expect(branch).toContain('**Found while:** running PROD-7');
+    expect(branch).toContain('description OPENS with this exact line');
+    // It comes BEFORE the reproduction and the evidence, which keep their order.
+    const line = branch.indexOf('**Found while:** running PROD-7');
+    const repro = branch.indexOf('THE REPRODUCTION');
+    const evidence = branch.indexOf('THE EVIDENCE');
+    expect(line).toBeLessThan(repro);
+    expect(repro).toBeLessThan(evidence);
+    // The branch/commit reason survives the fold, and the old free-form bullet is gone.
+    expect(branch).toContain('the branch or commit');
+    expect(branch).toContain('A number measured on an unmerged branch is not a number');
+    expect(branch).not.toContain('WHERE IT WAS SEEN');
+  });
+
+  it('renders the found-while line with the IN-FLIGHT key for a top-level card too', () => {
+    // The two `parentNote` arms: the parent key differs, the found-while key does not.
+    const withParent = defectBranch(assembleDispatchPrompt(source()).prompt);
+    const topLevel = defectBranch(assembleDispatchPrompt(source({ parent: null })).prompt);
+    expect(withParent).toContain('parentKey: PROD-2');
+    expect(withParent).toContain('**Found while:** running PROD-7');
+    expect(topLevel).toContain('parentKey: PROD-7');
+    expect(topLevel).toContain('**Found while:** running PROD-7');
+    expect(topLevel).not.toContain('**Found while:** running PROD-2');
+  });
+
+  it('keeps the comment branch free of the found-while line when filing is off', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ findingsPolicy: { logBug: false, replan: true, autoApproveReplan: false } }),
+    );
+    expect(defectBranch(prompt)).not.toContain('**Found while:**');
+  });
+
   it('requires the relates_to trace and forbids the bug blocking anything', () => {
     const branch = defectBranch(assembleDispatchPrompt(source()).prompt);
     expect(branch).toContain('relates_to');

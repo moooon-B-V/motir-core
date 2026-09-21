@@ -1354,10 +1354,11 @@ appeared until the widget also bumped a tick the inbox refetches on.)
       LIVES; the link says where it was FOUND. It blocks nothing, joins no
       sprint and claims no scope — filing is purely additive, which is what
       makes it safe to do mid-run at all.
-    - Its description carries the **reproduction**, the **evidence** (the
-      command you ran and its output verbatim, or the file and line you read),
-      and the **card and branch it was seen on** — a number measured on an
-      unmerged branch is not a number about `main`.
+    - Its description OPENS with the line `**Found while:** running <KEY>`
+      (the in-flight card's key) plus the branch or commit it was seen on — a
+      number measured on an unmerged branch is not a number about `main` —
+      then carries the **reproduction** and the **evidence** (the command you
+      ran and its output verbatim, or the file and line you read).
     - ⚠️ **This clause used to say "log it in the plan seed (the bug-logging
       `seed/*` PR with the `[reseed]` marker)". That channel is RETIRED** —
       every mutation goes through the live tenant now — so for a long stretch
