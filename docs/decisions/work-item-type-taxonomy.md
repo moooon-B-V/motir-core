@@ -499,3 +499,264 @@ INDEPENDENTLY TYPED transcription of the table above (`ADR_SCOPE` /
 - `motir-ai` `tests/cardTerminologyGuard.test.ts` — THE GUARD (MOTIR-4288) that
   found this, and whose `KNOWN_UPSTREAM_STRAGGLERS` exemption MOTIR-4298 removes.
 - MOTIR-4201 (the parent sweep), MOTIR-4288 (the guard), MOTIR-4298 (this).
+
+---
+
+## Amendment 3 (2026-09-21) — `choice` is admitted as the FIFTEENTH member, and `decision` stops meaning two things
+
+> **Written by Story MOTIR-4914 · Subtask MOTIR-5886.** This is the explicit
+> enum addition §1 reserves as the only legal way to grow the set. It decides
+> the member, its gloss, its place in the canonical order and its executor
+> default, and it restates `decision`'s gloss so the two words stop overlapping.
+> It ships no code, no migration and no rule pack: each mirror named in the
+> consumer sweep below is its own subtask, `blocked_by` this one.
+>
+> **Numbered 3** — verified before numbering: `origin/main` (`c4c62a837`)
+> carries Amendments 1 and 2 only, and no open pull request in this repository
+> touches `docs/decisions/work-item-type-taxonomy.md`
+> (`gh pr list --state open --json files`), so no sibling is racing an
+> Amendment 3 to this ADR.
+
+**Amends §1** (the `decision` gloss, and a new `choice` row), **§1b** (the
+canonical order, restated in full), **§3** (the `decision` executor rationale)
+and **§3a** (a new `choice` row), and reconciles one sentence of **§1a** (the
+`legal` boundary). §2's leaf-only rule, §4's Jira-mirror deviation, and the
+closedness of the enum stand exactly as written.
+
+### The problem this fixes
+
+`decision` has been defined twice, and the two definitions disagree
+(MOTIR-4155):
+
+- **§1** says a `decision` IS an artifact — _"A decision record (ADR) — fixing a
+  choice the rest of the work builds against."_
+- **§3**'s rationale (_"A judgement call / sign-off a human owns"_) and
+  **§1a**'s `legal` boundary (_"A decision **about** legal posture with no
+  artifact is `decision`"_) say it is the JUDGEMENT, with no artifact at all.
+
+Those are two different acts with two different actors. In the first, the
+decision has already been made — by an agent that researched it, or by the
+planner with a person in the conversation — and what is left is to write it
+down so a person can accept it. In the second, nobody has decided: the planner
+correctly declined to choose between options that are all correct, and a person
+has to PICK one. The approval gates ADR already gives the second act its own
+gate kind (`decision_choice`), and until this amendment there was no type it
+could key on — so it was keyed on `type: decision` with a human executor, the
+same pair that also means _"accept this written record."_
+
+### 1c. The fifteenth member — `choice`
+
+| Member   | Authoritative gloss                                                                                                                                                                                                                      | Nearest neighbour, and the boundary                                                                                                                                                                                                                                                            |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `choice` | A question the planner correctly declined to decide — two or more options, each carrying its WHY on a named axis, and a person PICKS one. It has no artifact but the pick, and it always decides FOLLOW-UP work that is not yet planned. | vs `decision`: a `decision` is already decided and is written down for a person to ACCEPT; a `choice` is undecided and a person PICKS among its options. If a recommendation exists, it is a `decision`. If the work item's body is a set of options with no recommendation, it is a `choice`. |
+
+**Kind.** Leaf-only, like every type (§2). The shape a planner lays is a
+**`task` under an epic, laid in the place a story would have taken** — the
+placement rule MOTIR-4915 shipped (`motir-meta`
+`prompts/plan-rules/kind-container.md`, and its twin in `motir-ai`'s
+`SHARED_PLANNING_RULES`). That rule is the reason every `choice` decides
+follow-up work: a `choice` may not sit inside the scope a person asked to have
+planned — there, the planner decides — so what it governs is, by construction,
+not yet laid.
+
+**Its body STRUCTURE is not `decision`'s.** A `decision` states a decision and
+its consequences; a `choice` states a question, its options with each option's
+axis and WHY, and what the pick gates. The canonical structure, and what the
+gate does with a body that deviates from it, are the approval gates ADR's to
+fix (its `decision_choice` amendment, MOTIR-5887). The per-type authoring bar
+that teaches a planner to write that structure is the `type-choice` pack
+(MOTIR-5889 in `motir-meta`, MOTIR-5892 in `motir-ai`).
+
+### 1d. `decision` is restated as the DECIDED RECORD
+
+§1's `decision` gloss is amended to:
+
+> `decision` — A decision already made — by the agent researching it, or by the
+> planner with the person in conversation — written down so a person can accept
+> it.
+
+And the two sentences that described the artifact-free judgement are
+reconciled with it:
+
+- **§3's rationale for `decision` → `human`** was _"A judgement call / sign-off a
+  human owns."_ It now reads: _"Accepting a written decision is a person's
+  sign-off."_ The default executor does not move — `decision` stays in the
+  **always-human** group — because accepting a decided record is still a
+  person's act. What moved is which act: the PICK among undecided options is
+  `choice` (§1c), not `decision`.
+- **§1a's `legal` boundary** said _"A decision **about** legal posture with no
+  artifact is `decision`."_ It now reads: _"A decision **about** legal posture
+  that has been made is `decision`; one still to be picked among options is
+  `choice`."_ A `legal` work item still produces a document that binds the
+  company and needs a signatory; that half of the boundary is unchanged.
+
+**This settles the §1 half of MOTIR-4155 — and only that half.** MOTIR-4155
+also asks whether §1a's enumeration of what `content` is should be replaced by
+the question _"has this already been accepted by somebody?"_ That `content` half
+is **NOT decided here**; it stays on MOTIR-4155. Silence about it in this
+amendment is not a decision about it.
+
+### 1e. The canonical order of the fifteen
+
+`choice` joins the **Govern** group, **immediately after `decision`**, the
+member it was split from. The other fourteen keep their relative order exactly,
+so no downstream list is reshuffled, and the four groups stay contiguous runs
+(`lib/issues/workItemTypeMeta.ts`'s `WORK_ITEM_TYPE_GROUP` reads them as runs):
+
+| #   | Member         | Group            |
+| --- | -------------- | ---------------- |
+| 1   | `code`         | Build            |
+| 2   | `design`       | Build            |
+| 3   | `test`         | Build            |
+| 4   | `content`      | Author           |
+| 5   | `copy`         | Author           |
+| 6   | `translate`    | Author           |
+| 7   | `research`     | Investigate      |
+| 8   | `review`       | Investigate      |
+| 9   | `verification` | Investigate      |
+| 10  | `decision`     | Govern & operate |
+| 11  | **`choice`**   | Govern & operate |
+| 12  | `deploy`       | Govern & operate |
+| 13  | `manual`       | Govern & operate |
+| 14  | `legal`        | Govern & operate |
+| 15  | `chore`        | Govern & operate |
+
+As one list, for downstream code to be read against verbatim:
+
+```
+code · design · test · content · copy · translate · research · review ·
+verification · decision · choice · deploy · manual · legal · chore
+```
+
+**The migration anchors on the same position** —
+`ALTER TYPE "work_item_type" ADD VALUE 'choice' AFTER 'decision'` — for the
+reason Amendment 1's migration
+(`prisma/migrations/20260810220000_work_item_type_admit_four`) used explicit
+anchors: an unanchored `ADD VALUE` appends, and Postgres's enum order would then
+disagree with the datamodel order this list fixes. The same anchor applies to
+`motir-ai`'s own `LessonWorkType` enum, which mirrors this set.
+
+### 3b. The executor default for `choice`
+
+| `type`       | Default `executor` | Group            | Routing rationale                                                                                                       |
+| ------------ | ------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **`choice`** | **`human`**        | **always-human** | A pick among options is a person's by definition. There is no `coding_agent` arm: nothing is left to research or write. |
+
+`defaultExecutorForType` stays **total** over fifteen, and the
+`Record<WorkItemTypeDto, ExecutorDto>` typing keeps a sixteenth member a compile
+error until its default lands — the guarantee §3 was built for, unchanged.
+
+### Consequences — the consumer sweep for `choice`
+
+**Enumerated from two searches, run on each repository's `origin/main`**, per
+the lesson that a sweep over a vocabulary's SYMBOL finds its callers and only a
+search over its member VALUES finds a surface holding its own copy. The list
+this subtask was handed is where the survey started; the table is what the two
+commands returned, and every hit is either a row or a named exclusion below.
+
+```sh
+# refs: motir-core c4c62a837 · motir-ai 4fbd2be · motir-meta 185a41d
+# 1 — the SYMBOL (the callers, and the typed homes)
+git grep -l -w -E 'WorkItemType|WorkItemTypeDto|WorkItemTypeName|WORK_ITEM_TYPES|WORK_ITEM_TYPE_GLOSSES|WORK_ITEM_TYPE_GROUP|DEFAULT_EXECUTOR_BY_TYPE|defaultExecutorForType|LessonWorkType|LESSON_TYPES' origin/main -- . ':!prisma/migrations'
+#     → motir-core 90 files · motir-ai 27 · motir-meta 2
+# 2 — the member VALUES (the private copies)
+git grep -l -E "['\"\`]chore['\"\`]" origin/main -- . ':!prisma/migrations'
+#     → motir-core 24 files · motir-ai 20 · motir-meta 19
+# 2b — the files that ENUMERATE the set (≥ 8 of the 14 members as quoted
+#      literals or table cells), to separate a home from a mention
+#     → 20 · 16 · 12, listed per row below
+# 2c — the unquoted spellings a quoted search cannot see
+git grep -n -E '^enum (WorkItemType|LessonWorkType)|el-type-chore|type-chore' origin/main
+```
+
+Most symbol hits are **importers** — they read the type or the constant and
+follow a new member with no edit (`lib/filters/registry.ts`'s facet reads
+`WORK_ITEM_TYPES`; `motir-ai` `src/llm/treeGeneration.ts` interpolates
+`WORK_ITEM_TYPES` into `propose_node`'s schema and error text). They are not
+rows. A row is a file that **states the set itself**.
+
+#### `motir-core`
+
+| Layer                 | Home                                                                                                                                                                     | What moves                                                                                                                          | Owner                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Schema                | `prisma/schema.prisma` `enum WorkItemType` + a new additive migration                                                                                                    | `choice` after `decision`; `ADD VALUE 'choice' AFTER 'decision'`. No column change, no backfill                                     | MOTIR-5890                      |
+| Domain                | `lib/issues/executorDefaults.ts` — `WORK_ITEM_TYPES`, `DEFAULT_EXECUTOR_BY_TYPE`                                                                                         | the §1e order; `choice → human`                                                                                                     | MOTIR-5890                      |
+| DTO                   | `lib/dto/workItems.ts` — `WorkItemTypeDto`                                                                                                                               | the member                                                                                                                          | MOTIR-5890                      |
+| Published contracts   | `lib/api/v1/workItems/schema.ts` · `lib/api/v1/ready/schema.ts`                                                                                                          | the enum in both schemas                                                                                                            | MOTIR-5890                      |
+| Generated contracts   | `lib/apiDocs/mcpToolSchemas.ts` (`pnpm generate:mcp-tool-schemas`) · `packages/cli/src/api/schema.d.ts` + `packages/cli/src/api/validators.js` (`pnpm generate:cli-api`) | regenerated, never hand-edited                                                                                                      | MOTIR-5890                      |
+| Dispatch              | `lib/dispatch/promptTemplate.ts` — `WHAT_TO_DO: Record<WorkItemTypeDto, …>` and `branchPrefix`                                                                           | a `choice` entry (total `Record`, so the build fails until it exists). A `choice` is never dispatched to an agent; its steps say so | MOTIR-5890                      |
+| Seed                  | `scripts/plan-seed/mapItem.ts`                                                                                                                                           | accepts `choice`; still fails loudly on an unknown string                                                                           | MOTIR-5890                      |
+| Presentation metadata | `lib/issues/workItemTypeMeta.ts` — glyph, `--el-type-*` hue, `WORK_ITEM_TYPE_GROUP`                                                                                      | `choice` in the `govern` run, directly after `decision` (total `Record`)                                                            | MOTIR-5890, drawn by MOTIR-5888 |
+| Tokens                | `packages/design-system/theme.css` — the Tier-3 `--el-type-*` block                                                                                                      | `--el-type-choice`, value named by the design                                                                                       | MOTIR-5890, drawn by MOTIR-5888 |
+| i18n                  | `messages/en.json` · `messages/zh.json`                                                                                                                                  | a label per locale                                                                                                                  | MOTIR-5890                      |
+| Lesson axis mirror    | `lib/mcp/tools/addLesson.ts` · `lib/mcp/tools/searchLessons.ts` — `LESSON_TYPES`                                                                                         | the member, after `motir-ai`'s `LessonWorkType` has it                                                                              | MOTIR-5894                      |
+| Design record         | `design/work-items/design-notes.md` (the type-executor section) · a delta of `design/work-items/type-executor-picker.mock.html`                                          | the `choice` chip drawn in the Govern group                                                                                         | MOTIR-5888                      |
+| Guards                | `tests/integration/work-items/work-item-type-story-gate.test.ts` · `tests/issues/executorDefaults.test.ts`                                                               | the story gate covers `choice` with no edit (it iterates `WORK_ITEM_TYPES`); the executor-default suite gains its row               | MOTIR-5890 / MOTIR-5898         |
+
+#### `motir-ai`
+
+| Layer       | Home                                                                                                                                                                                                   | What moves                                                                  | Owner                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ----------------------- |
+| Vocabulary  | `src/llm/workItemTypes.ts` — `WORK_ITEM_TYPES`, `WORK_ITEM_TYPE_GLOSSES`                                                                                                                               | the member, and its gloss **verbatim from §1c** (and `decision`'s from §1d) | MOTIR-5892              |
+| Rule packs  | `src/llm/planningRulePacks.ts` — the `type-*` pack table                                                                                                                                               | a `type-choice` pack, in the same words as `motir-meta`'s                   | MOTIR-5892              |
+| Lesson axis | `prisma/schema.prisma` `enum LessonWorkType` + migration (`ADD VALUE 'choice' AFTER 'decision'`) · `src/app.ts` `LESSON_TYPES` · `src/jobs/plannerInputs.ts` `LESSON_TYPES` · `src/llm/lessonTools.ts` | the member in the enum and all three hand-listed mirrors                    | MOTIR-5892              |
+| Baselines   | `tests/fixtures/sharedPlanningRules.baseline.txt` and the frozen corpora that carry the type set                                                                                                       | regenerated by their own scripts                                            | MOTIR-5892              |
+| Guards      | `tests/workItemTypeVocabulary.test.ts` (`ADR_SCOPE` / `ADR_BOUNDARY`) · `tests/lessonRoutingAxes.test.ts` · `tests/planningRulePacks.test.ts`                                                          | the transcription of §1c / §1d; the axis at fifteen                         | MOTIR-5892 / MOTIR-5895 |
+
+#### `motir-meta`
+
+| Layer     | Home                                                                                                   | What moves                                                      | Owner      |
+| --------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- | ---------- |
+| Rule pack | `prompts/plan-rules/type-choice.md` (new)                                                              | the option-axis authoring bar                                   | MOTIR-5889 |
+| Routing   | `prompts/plan-rules/split.py` · `DECISION.numbers.py` · `COMPRESSION.measure.py` · `SELECTOR.check.py` | `type = choice` → `type-choice`                                 | MOTIR-5889 |
+| Placement | `prompts/plan-rules/kind-container.md` — the MOTIR-4915 unit                                           | one clause naming the shape it lays: a `task` of `type: choice` | MOTIR-5889 |
+| Generated | `prompts/plan-rules/MANIFEST.md` · `MIRROR.md`                                                         | regenerated / new rows                                          | MOTIR-5889 |
+
+#### Hits that are NOT homes, each with its reason
+
+- **Every `design/**/_.mock.html`inline token block** carrying`--el-type-_`(the 2c search returns ~80 mocks). A mock is a record of the moment it was
+drawn and is never edited (the delta-mock rule in`CLAUDE.md`); only the new
+delta MOTIR-5888 draws carries `--el-type-choice`.
+- **`motir-ai` `src/seed/lessons.base.ts`** — its hits are lesson rows' own
+  `types` axis values, not a statement of the set.
+- **`motir-meta` `prompts/plan-rules/CLASSIFICATION.build.py`** — its
+  `SETTABLE` list is the pre-split MEASUREMENT of the corpus and is frozen by
+  design; MOTIR-5889 leaves it untouched and says so.
+- **`scripts/plan-seed/data/story-2.7.ts`**, the frozen bootstrap seed, and the
+  two test files that assert Amendment 1's history
+  (`tests/integration/work-items/work-item-type-admitted-four.test.ts`,
+  `tests/integration/plan-seed/loader-mapping.test.ts`) — records of an earlier
+  set, not homes of the current one.
+- **`docs/mcp.md`, `CLAUDE.md` and `docs/decisions/public-follow-and-changelog.md`**
+  in `motir-core`, and **`CLAUDE.md`** in `motir-ai` — prose that mentions
+  members (Conventional Commits' `chore`, one member named in passing), not an
+  enumeration. `motir-ai` `docs/contract.md` names the set as _"the fourteen
+  work types"_; that sentence moves to fifteen with MOTIR-5892.
+
+### The guards that hold the mirrors to this text
+
+- **`motir-core` `tests/integration/work-items/work-item-type-story-gate.test.ts`**
+  — parameterised over `WORK_ITEM_TYPES` rather than a fixed list, it asserts
+  that seven of the homes above (the Prisma enum, the ordered list, the DTO
+  union, the executor map, the presentation map and group, the colour token,
+  both message catalogues) stay in step for EVERY member. It needs no edit to
+  cover `choice`: it goes red at whichever of those homes the admission
+  forgets. The generated contracts, the dispatch map and the seed are outside
+  its seven and are held by their own compile-time totality or suites.
+- **`motir-ai` `tests/workItemTypeVocabulary.test.ts`** — holds an
+  independently typed transcription of this ADR's glosses and asserts
+  `WORK_ITEM_TYPE_GLOSSES` matches it verbatim. **This document is therefore
+  the first edit**, exactly as Amendment 2 records: amending the mirror first
+  would make the two copies agree with each other and disagree with the
+  authority.
+
+### References added by this amendment
+
+- MOTIR-4914 (the story), MOTIR-5886 (this amendment), MOTIR-5887 (the
+  `decision_choice` gate amendment in `approval-gates.md`), MOTIR-5888 (the
+  design), MOTIR-5889 (the `motir-meta` pack), MOTIR-5890 (the type in this
+  repository), MOTIR-5892 (the `motir-ai` vocabulary), MOTIR-5894 (the lesson
+  axis mirror).
+- MOTIR-4155 — `decision` defined twice; its §1 half is settled here, its
+  `content` half is not.
+- MOTIR-4915 — where a `choice` is laid.
