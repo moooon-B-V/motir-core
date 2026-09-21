@@ -71,6 +71,8 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     estimateLabel: null,
     storyPointsLabel: null,
     hasChildren: false,
+    pendingDecision: null,
+    pendingRoutedToName: null,
     ...over,
   };
 }
@@ -192,7 +194,9 @@ describe('IssueListTable — sortable headers', () => {
     expect(template).toMatch(/minmax\(\s*10rem/);
     expect(template).not.toMatch(/minmax\(\s*0[\s,]/);
     expect(template).toContain('72px'); // Est. (was 90)
-    expect(template).toContain('108px'); // Status (was 130)
+    // Status: 130 → 108 (MOTIR-1307) → 144, which also holds the decision-waiting
+    // glyph (MOTIR-5881; design MOTIR-5875 measured the widest pairing at 138px).
+    expect(template).toContain('144px');
   });
 });
 

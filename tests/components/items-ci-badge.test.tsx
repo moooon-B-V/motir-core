@@ -108,6 +108,8 @@ function listRow(ciState: string | null): IssueRowData {
     estimateLabel: null,
     storyPointsLabel: null,
     hasChildren: false,
+    pendingDecision: null,
+    pendingRoutedToName: null,
   };
 }
 

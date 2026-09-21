@@ -110,6 +110,8 @@ function listRow(status: string, statusCategory: 'in_progress' | 'done'): IssueR
     estimateLabel: null,
     storyPointsLabel: null,
     hasChildren: false,
+    pendingDecision: null,
+    pendingRoutedToName: null,
   };
 }
 
