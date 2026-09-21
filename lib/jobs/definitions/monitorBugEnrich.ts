@@ -65,8 +65,10 @@ export const monitorBugEnrichOnCreated = defineJob(
     // write. Each sleep is the engine's durable yield, so a waiting run holds no
     // worker slot; each read is its own memoized step, so a resume after a deploy
     // never writes twice (and the write's own predicate would refuse it anyway).
+    // The FIRST read is immediate — a job that finished while the dispatch step
+    // was committing lands at once — and each later read follows a sleep.
     for (let poll = 0; poll < MONITOR_AUTHORING_POLLS; poll += 1) {
-      await ctx.step.sleep(`await-bug-authoring-${poll}`, MONITOR_AUTHORING_POLL_MS);
+      if (poll > 0) await ctx.step.sleep(`await-bug-authoring-${poll}`, MONITOR_AUTHORING_POLL_MS);
       const applied = await ctx.step.run(`apply-authored-bug-${poll}`, () =>
         services.monitorBugEnrichment.applyAuthoredBug(trigger, dispatch.jobId),
       );

@@ -96,8 +96,10 @@ export interface AiJobsFixture {
    * declare one sees an unenriched card rather than an invented one.
    */
   authorBug?: AuthorBugJobOutcome[];
-  /** Appended to by the mock: the job kind of every submit, in order. */
-  submitted?: { kind: string }[];
+  /** Appended to by the mock: the job kind of every submit, in order — and
+   *  whether it carried a repository set (`context.code`), which is how a walk
+   *  shows a CODE-BLIND project's dispatch went without one (MOTIR-5853). */
+  submitted?: { kind: string; hasCode?: boolean }[];
 }
 
 const json = { headers: { 'content-type': 'application/json' } } as const;
@@ -120,13 +122,13 @@ function readFixture(): AiJobsFixture {
 }
 
 /** Record a submit so the SPEC can read back which job kinds actually ran. */
-function recordSubmit(kind: string): number {
+function recordSubmit(kind: string, hasCode: boolean): number {
   const p = fixturePath();
   const f = readFixture();
   const index = (f.submitted ?? []).filter((s) => s.kind === kind).length;
   if (!p) return index;
   try {
-    f.submitted = [...(f.submitted ?? []), { kind }];
+    f.submitted = [...(f.submitted ?? []), { kind, hasCode }];
     writeFixtureFileSync(p, JSON.stringify(f, null, 2));
   } catch {
     // Recording is diagnostic only — never fail the request over it.
@@ -139,6 +141,16 @@ function askOutcomeAt(n: number): AskJobOutcome {
   const queue = readFixture().ask ?? [];
   if (queue.length === 0) return { intent: 'ask', answer: 'No answer was declared.' };
   return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** Whether a submit body carried a repository set — `context.code`. */
+function submitCarriesCode(rawBody: string): boolean {
+  try {
+    const body = JSON.parse(rawBody) as { context?: { code?: unknown } };
+    return body.context?.code !== undefined && body.context.code !== null;
+  } catch {
+    return false;
+  }
 }
 
 /** The author outcome for the `n`-th `author_bug` job, with the last entry repeating. */
@@ -240,7 +252,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       const rawBody = String(req.body ?? '{}');
       const kind = kindOfSubmit(rawBody);
       notifySubmitObservers(rawBody);
-      const index = recordSubmit(kind);
+      const index = recordSubmit(kind, submitCarriesCode(rawBody));
       return { statusCode: 202, data: { jobId: jobIdFor(kind, index) }, responseOptions: json };
     })
     .persist();

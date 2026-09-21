@@ -233,6 +233,44 @@ describe('DISPATCH edges', () => {
   });
 });
 
+describe('triggerForFiledBug — the trigger rebuilt from the link row', () => {
+  it('rebuilds exactly the event the reconciler’s create emitted', async () => {
+    const { target } = await seed();
+    const { workItemId, event } = await file(target, 'trigger-1');
+    await expect(
+      monitorBugEnrichmentService.triggerForFiledBug(workItemId, target.workspaceId),
+    ).resolves.toEqual({
+      workspaceId: event.workspaceId,
+      projectId: event.projectId,
+      workItemId: event.workItemId,
+      actorId: event.actorId,
+      viaMonitorConnectionId: event.viaMonitorConnectionId,
+    });
+  });
+
+  it('is null for another workspace, for a bug no binding filed, and for a binding with no binder', async () => {
+    const { fx, target } = await seed();
+    const { workItemId } = await file(target, 'trigger-2');
+    await expect(
+      monitorBugEnrichmentService.triggerForFiledBug(workItemId, 'another-workspace'),
+    ).resolves.toBeNull();
+    const byHand = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'bug', title: 'By hand' },
+      fx.ctx,
+    );
+    await expect(
+      monitorBugEnrichmentService.triggerForFiledBug(byHand.id, target.workspaceId),
+    ).resolves.toBeNull();
+    await adminDb.monitorConnection.update({
+      where: { id: target.id },
+      data: { boundByUserId: null },
+    });
+    await expect(
+      monitorBugEnrichmentService.triggerForFiledBug(workItemId, target.workspaceId),
+    ).resolves.toBeNull();
+  });
+});
+
 describe('APPLY edges', () => {
   it('no provenance, or a binding with no binder, is bug-gone', async () => {
     const { target } = await seed();

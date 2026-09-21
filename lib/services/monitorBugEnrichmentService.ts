@@ -212,6 +212,33 @@ export const monitorBugEnrichmentService = {
   },
 
   /**
+   * The trigger the `work-item/created` event carried for a bug the reconciler
+   * FILED, rebuilt from its link row — or `null` when no binding in this workspace
+   * filed it. The acceptance lane's `_test` enrichment door uses it to run the SAME
+   * dispatch-and-apply the job runs, in the one process that holds the lane's
+   * motir-ai fake (`app/api/_test/monitors/enrich/route.ts`).
+   */
+  async triggerForFiledBug(
+    workItemId: string,
+    workspaceId: string,
+  ): Promise<MonitorBugEnrichmentTrigger | null> {
+    return withSystemContext(async (tx) => {
+      const links = await monitorIssueRepository.listByWorkItem(workItemId, tx);
+      const link = links.find((row) => row.workspaceId === workspaceId);
+      if (!link) return null;
+      const connection = await monitorConnectionRepository.findById(link.connectionId, tx);
+      if (!connection?.boundByUserId) return null;
+      return {
+        workspaceId,
+        projectId: link.projectId,
+        workItemId,
+        actorId: connection.boundByUserId,
+        viaMonitorConnectionId: connection.id,
+      };
+    });
+  },
+
+  /**
    * Read a dispatched `author_bug` and, if it has finished with a valid answer,
    * WRITE it onto the bug (MOTIR-5851). `pending` while the job is still running;
    * the job function calls this after each durable sleep, up to its bound.
