@@ -933,7 +933,7 @@ describe('SEARCH and the latest event’s CONTEXT (MOTIR-4932 · MOTIR-5728)', (
     expect(new URL(calls[0]!.url).pathname).toBe(
       '/api/0/organizations/m/issues/4501/events/latest/',
     );
-    expect(context).toEqual({ environment: 'production', release: '1.4.2' });
+    expect(context).toEqual({ environment: 'production', release: '1.4.2', frames: [] });
   });
 
   it('answers NULL for each fact the latest event does not carry', async () => {
@@ -944,15 +944,15 @@ describe('SEARCH and the latest event’s CONTEXT (MOTIR-4932 · MOTIR-5728)', (
         orgSlug: 'm',
         externalIssueId: '1',
       }),
-    ).resolves.toEqual({ environment: null, release: null });
+    ).resolves.toEqual({ environment: null, release: null, frames: [] });
     // Malformed shapes are absence, never a guess.
-    expect(normalizeIssueContext({})).toEqual({ environment: null, release: null });
+    expect(normalizeIssueContext({})).toEqual({ environment: null, release: null, frames: [] });
     expect(
       normalizeIssueContext({
         tags: [null, 'x', { key: 'environment', value: '' }],
         release: { version: 7 },
       }),
-    ).toEqual({ environment: null, release: null });
+    ).toEqual({ environment: null, release: null, frames: [] });
   });
 
   it('a 404 from events/latest/ is the typed GONE answer; a 500 is the provider’s reason verbatim', async () => {
@@ -1076,8 +1076,8 @@ describe('SEARCH and the latest event’s CONTEXT (MOTIR-4932 · MOTIR-5728)', (
 
     const context = (externalIssueId: string) =>
       fakeMonitorProvider.getIssueContext({ accessToken: 'x', orgSlug: 'y', externalIssueId });
-    expect(await context('a')).toEqual({ environment: 'production', release: '1.4.2' });
-    expect(await context('b')).toEqual({ environment: null, release: null });
+    expect(await context('a')).toEqual({ environment: 'production', release: '1.4.2', frames: [] });
+    expect(await context('b')).toEqual({ environment: null, release: null, frames: [] });
     await expect(context('nope')).rejects.toBeInstanceOf(MonitorIssueGoneError);
     state.deletedIssues.add('a');
     await expect(context('a')).rejects.toBeInstanceOf(MonitorIssueGoneError);

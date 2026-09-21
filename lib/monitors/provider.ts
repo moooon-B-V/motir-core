@@ -364,13 +364,25 @@ export interface MonitorProvider {
   }): Promise<NormalizedMonitorIssue[]>;
 
   /**
-   * The ENVIRONMENT and RELEASE of ONE issue's latest event (Story MOTIR-4932 ·
-   * MOTIR-5728).
+   * The ENVIRONMENT, RELEASE and STACK FRAMES of ONE issue's latest event (Story
+   * MOTIR-4932 · MOTIR-5728; frames by MOTIR-4930 · MOTIR-5846).
    *
    * `GET /api/0/organizations/{orgSlug}/issues/{issueId}/events/latest/` —
    * Sentry's "Retrieve an Issue Event" accepts `latest` as the event id.
    * `environment` is the value of the event's `environment` TAG, `release` is
-   * `release.version`; either is `null` when absent.
+   * `release.version`; either is `null` when absent. `frames` come from the
+   * event's `entries[]` item of `type: "exception"` — its `data.values[]` chain,
+   * the LAST value carrying a `stacktrace.frames[]` (Sentry lists a chain cause
+   * first, so the last is the exception that surfaced) — each frame's
+   * `filename` (else `absPath`, else `module`), `function`, `lineNo` and
+   * `inApp`. Sentry orders frames oldest call first; the answer is re-ordered
+   * in-app first, then most-recent call first, and cut at
+   * `MONITOR_ISSUE_FRAMES_MAX`. No exception entry is `frames: []`.
+   *
+   * ⚠️ THE FRAMES RIDE THE SAME REQUEST. The event is already fetched for the
+   * two facts above, so carrying its stack costs nothing extra against
+   * `MONITOR_CONTEXT_READS_PER_POLL` — which is why this is one method and not
+   * a second `getIssueFrames` that would double the per-issue request count.
    *
    * ⚠️ WHY A PER-ISSUE CALL: the list response {@link listIssuesSince} parses
    * carries neither fact (the list can filter BY environment and still does not
@@ -383,9 +395,12 @@ export interface MonitorProvider {
    * `MonitorProviderCallError` carrying the provider's reason.
    *
    * A DOCUMENTED EXPECTATION (read 2026-09-19,
-   * https://docs.sentry.io/api/events/retrieve-an-issue-event/). Consumed by
-   * the reconciler's context read (MOTIR-5729) and LINK BY HAND (MOTIR-5731).
-   * Bounded by {@link MONITOR_ISSUE_CONTEXT_TIMEOUT_MS}.
+   * https://docs.sentry.io/api/events/retrieve-an-issue-event/; the exception
+   * entry's shape per https://develop.sentry.dev/sdk/data-model/event-payloads/stacktrace/,
+   * read 2026-09-21). Consumed by the reconciler's context read (MOTIR-5729)
+   * and LINK BY HAND (MOTIR-5731), which use the first two keys; the frames'
+   * consumer is the bug ENRICHMENT (MOTIR-5849). Bounded by
+   * {@link MONITOR_ISSUE_CONTEXT_TIMEOUT_MS}.
    */
   getIssueContext(input: {
     accessToken: string;

@@ -8,6 +8,7 @@ import type {
   NormalizedMonitorIssueContext,
   NormalizedMonitorIssuePage,
   NormalizedMonitorProject,
+  NormalizedMonitorStackFrame,
 } from '../types';
 
 // The FAKE implementation of the `MonitorProvider` seam (Story MOTIR-4926 ·
@@ -31,7 +32,7 @@ import type {
 /**
  * A seeded issue: the normalized issue plus what only the fake needs to know
  * about it (MOTIR-5728). `shortId` is what a person pastes into the link search;
- * `environment` / `release` are what `getIssueContext` answers;
+ * `environment` / `release` / `frames` are what `getIssueContext` answers;
  * `externalProjectId` scopes a SEARCH to one monitored project (an issue with
  * none matches every project, which is what every pre-existing seed means).
  * None of the four leaks out: every method returns the normalized shape.
@@ -40,6 +41,9 @@ export interface FakeMonitorIssue extends NormalizedMonitorIssue {
   shortId?: string | null;
   environment?: string | null;
   release?: string | null;
+  /** The latest event's stack, returned AS SEEDED — already in the order and
+   *  length the real adapter would produce (MOTIR-5846). Absent = `[]`. */
+  frames?: NormalizedMonitorStackFrame[];
   externalProjectId?: string | null;
 }
 
@@ -350,8 +354,9 @@ export const fakeMonitorProvider: MonitorProvider = {
       .map(normalized);
   },
 
-  /** The seeded issue's `environment` / `release` (`null` when unseeded); a
-   *  deleted or unknown id is the typed GONE answer, as the real 404 is. */
+  /** The seeded issue's `environment` / `release` (`null` when unseeded) and
+   *  `frames` (`[]` when unseeded); a deleted or unknown id is the typed GONE
+   *  answer, as the real 404 is. */
   async getIssueContext({ externalIssueId }): Promise<NormalizedMonitorIssueContext> {
     state.contextReads.push(externalIssueId);
     guard('getIssueContext');
@@ -363,7 +368,11 @@ export const fakeMonitorProvider: MonitorProvider = {
         'The requested resource does not exist',
       );
     }
-    return { environment: issue.environment ?? null, release: issue.release ?? null };
+    return {
+      environment: issue.environment ?? null,
+      release: issue.release ?? null,
+      frames: (issue.frames ?? []).map((frame) => ({ ...frame })),
+    };
   },
 };
 
