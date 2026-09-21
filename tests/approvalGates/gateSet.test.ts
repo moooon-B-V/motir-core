@@ -472,10 +472,59 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
     ]);
   });
 
-  it('…and WITHOUT an ejection a merged member still blocks, exactly as before', () => {
+  // ⚠️ …AND WITHOUT ONE TOO (MOTIR-5901; §4 SECOND AMENDMENT, decision 4's amendment).
+  // This case used to pin the opposite — *"a merged member still blocks, exactly as
+  // before"* — and that WAS the defect: a member merged with GitHub's own button made
+  // the rest of the set unaskable for ever, so the withdrawn frame's *"Motir asks again"*
+  // could never be kept. What made the member merge does not change what it is: settled.
+  it('…and WITHOUT an ejection a merged member is settled too — the rest is still asked about (MOTIR-5901)', () => {
+    const TWO = 'moooon/motir-ai#4@bbb2,' + SET;
     const set = resolveGateSet(
       input({
         members: [member(SET), { ...member('moooon/motir-ai#4@bbb2', false), merged: true }],
+      }),
+    );
+    expect(set).toEqual({
+      awaited: [{ kind: 'pull_request_approval', subjectId: WORK_ITEM, subjectVersion: TWO }],
+      primary: 'pull_request_approval',
+    });
+  });
+
+  it('a set whose EVERY member merged asks nothing — there is nothing left to land (MOTIR-5901)', () => {
+    const merged = (version: string) => ({ ...member(version, false), merged: true });
+    expect(
+      resolveGateSet(input({ members: [merged(SET), merged('moooon/motir-ai#4@bbb2')] })).awaited,
+    ).toEqual([]);
+    // …and an ejection does not change that: it re-asks about commits that did not land,
+    // and here there are none.
+    expect(
+      resolveGateSet(
+        input({
+          latestMergeGate: approvedMerge,
+          members: [merged(SET)],
+          standingUnlandedOutcome: { at: EXIT_AFTER, landingClass: 'retryable' },
+        }),
+      ).awaited,
+    ).toEqual([]);
+  });
+
+  it('a merged member beside an open one that is NOT green asks nothing yet (MOTIR-5901)', () => {
+    const set = resolveGateSet(
+      input({
+        members: [member(SET, false), { ...member('moooon/motir-ai#4@bbb2', false), merged: true }],
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+  });
+
+  // ⚠️ CLOSED WITHOUT MERGING STILL BLOCKS — decided, not inherited (MOTIR-5901; the §4
+  // amendment says why). A closed member can be REOPENED or UNLINKED, and both put the
+  // question back; a merged one can do neither. Its commits will never land, so a gate
+  // naming them would ask a person to approve a merge the set cannot finish.
+  it('a member CLOSED WITHOUT MERGING still blocks — it is not settled (MOTIR-5901)', () => {
+    const set = resolveGateSet(
+      input({
+        members: [member(SET), { ...member('moooon/motir-ai#4@bbb2', false), merged: false }],
       }),
     );
     expect(set.awaited).toEqual([]);

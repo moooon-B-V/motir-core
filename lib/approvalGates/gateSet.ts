@@ -69,11 +69,11 @@ export interface GateSetMember {
    */
   isMergeCandidate: boolean;
   /**
-   * Whether this member's pull request has already MERGED. Read only by the re-ask
-   * (§4 FOURTH AMENDMENT; MOTIR-5805): the queue can eject one member of a set after
-   * another has landed, and a merged member is then settled — nothing about it is asked
-   * again — rather than a reason the question cannot be asked at all. Optional; absent
-   * reads as not merged.
+   * Whether this member's pull request has already MERGED. A merged member is SETTLED —
+   * nothing about it is asked again — rather than a reason the question cannot be asked
+   * at all. MOTIR-5805 read it so after a queue ejection (§4 FOURTH AMENDMENT); MOTIR-5901
+   * extends it to every merge, including one made on the host (§4 SECOND AMENDMENT,
+   * decision 4's amendment). Optional; absent reads as not merged.
    */
   merged?: boolean;
 }
@@ -376,9 +376,11 @@ export function decisionApprovalStandsForMerge(
  *     suppression, and MOTIR-5652's run-target refusal is not represented here at
  *     all because a card with something to decide has a gate regardless of it.
  *  3. **The MERGE question** is owed in a `manual` project when the card delivers at
- *     least one pull request, EVERY member could be merged now, no decision has
- *     already answered these exact commits, and no standing design approval already
- *     authorises the merge (Q4 — asking there would be the second press Q4 forbids).
+ *     least one pull request, EVERY member could be merged now or has already merged
+ *     (a merged member is settled — MOTIR-5901), at least one is still open to merge,
+ *     no decision has already answered these exact commits, and no standing design
+ *     approval already authorises the merge (Q4 — asking there would be the second
+ *     press Q4 forbids).
  *
  *     ⚠️ **A MERGE THAT DID NOT LAND PUTS THE QUESTION BACK — UNLESS THE COMMITS
  *     CANNOT LAND AT ALL** — §4's FOURTH AMENDMENT, points 1–3 (MOTIR-5802 ·
@@ -492,14 +494,20 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   const answered =
     !reaskedByEjection &&
     (carriedByPrimary || alreadyDecided(input.latestMergeGate, input.workItemId, version, true));
-  // A member that has already MERGED is settled, not blocking, when an ejection re-asks:
-  // the question is about the commits that did not land (MOTIR-5805). Everywhere else a
-  // merged member still makes the set unmergeable, exactly as MOTIR-5604 wrote it.
+  // ⚠️ A member that has already MERGED is SETTLED, not blocking — whatever made it merge
+  // (MOTIR-5901; §4 SECOND AMENDMENT, decision 4's amendment). MOTIR-5805 read it this way
+  // for an ejection only, and everywhere else a merged member kept the set unaskable for
+  // ever: a member merged with the host's own button withdrew the gate (`member_closed`)
+  // and no later verdict could re-raise it, so the rest could only be merged on the host.
+  // The question is about the commits that have NOT landed; the set version still names
+  // every member, merged ones included.
+  //
+  // ⚠️ AND AT LEAST ONE MEMBER MUST STILL BE OPEN AND MERGEABLE. A set with nothing left
+  // to land asks nothing — ejection or not. A member CLOSED WITHOUT MERGING is neither,
+  // and still blocks: reopening or unlinking it is what puts the question back.
   const everyMemberMergeable =
-    input.members.length > 0 &&
-    input.members.every(
-      (member) => member.isMergeCandidate || (reaskedByEjection && member.merged === true),
-    );
+    input.members.some((member) => member.isMergeCandidate) &&
+    input.members.every((member) => member.isMergeCandidate || member.merged === true);
   if (input.prMergeMode === 'manual' && !answered && everyMemberMergeable && version !== null) {
     awaited.push({
       kind: 'pull_request_approval',
