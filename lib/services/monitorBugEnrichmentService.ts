@@ -1,6 +1,8 @@
 import 'server-only';
 
-import { submitJob } from '@/lib/ai/motirAiClient';
+import { getJob, submitJob } from '@/lib/ai/motirAiClient';
+import { describedForWrite, InvalidAuthoredBugError, parseAuthoredBug } from '@/lib/ai/authoredBug';
+import { MotirAiError } from '@/lib/ai/errors';
 import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { BugAuthoringContext } from '@/lib/ai/types';
@@ -11,9 +13,11 @@ import type { NormalizedMonitorIssueContext } from '@/lib/monitors/types';
 import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
 import { monitorIssueRepository } from '@/lib/repositories/monitorIssueRepository';
 import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
+import { StaleWorkItemError, WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { readProject } from '@/lib/workspaces/tenantRead';
 
 // The bug ENRICHMENT trigger's dispatch (Story MOTIR-4930 · Subtask MOTIR-5849) —
@@ -21,9 +25,11 @@ import { readProject } from '@/lib/workspaces/tenantRead';
 // the issue's facts, re-read its latest event for the stack frames, resolve the
 // project's repository set, and submit exactly ONE `author_bug` job.
 //
-// ⚠️ IT WRITES NOTHING ONTO THE CARD AND READS NO RESULT. Its outcome is a
-// dispatch, recorded as the job id on the link row. Carrying the answer back onto
-// the bug is MOTIR-5851's.
+// TWO HALVES, one per work item. `dispatchEnrichment` (MOTIR-5849) submits and
+// records the job id on the link row, and writes nothing onto the card.
+// `applyAuthoredBug` (MOTIR-5851) reads the finished job, RE-VALIDATES its answer
+// and writes it onto the bug as the binder — only while the card is still exactly
+// as it was filed.
 //
 // ⚠️ IT RUNS IN ITS OWN JOB, AFTER THE FILING COMMITTED — the whole safety
 // property. `lib/jobs/definitions/monitorBugEnrich.ts` rides `work-item/created`,
@@ -71,6 +77,31 @@ function motirAiConfigured(): boolean {
 }
 
 const iso = (d: Date) => d.toISOString();
+
+/** Why an answer was NOT written. Each leaves the bug filed and unenriched, with
+ *  no partial write — a value, never an error. */
+export type MonitorAuthoringSkip =
+  /** motir-ai reports the job failed or was cancelled. */
+  | 'job-failed'
+  /** The answer failed re-validation at this boundary — one field is enough. */
+  | 'invalid-answer'
+  /** motir-ai could not be reached when the result was read. */
+  | 'ai-unreachable'
+  /** The bounded wait elapsed with the job still running (the job function's
+   *  `MONITOR_AUTHORING_POLLS`, `lib/jobs/definitions/monitorBugEnrich.ts`). */
+  | 'timed-out'
+  /** The card is no longer the thin card that was filed — written already, or
+   *  edited by a person. Either way it is left exactly as it stands. */
+  | 'card-changed'
+  /** The bug is in a done-category status (`done`, `cancelled`, or a team's own). */
+  | 'terminal-status'
+  /** The bug, its link or its binder is gone. */
+  | 'bug-gone';
+
+export type MonitorAuthoringOutcome =
+  | { status: 'applied' }
+  | { status: 'pending' }
+  | { status: 'skipped'; reason: MonitorAuthoringSkip };
 
 export const monitorBugEnrichmentService = {
   /**
@@ -178,6 +209,105 @@ export const monitorBugEnrichmentService = {
       monitorIssueRepository.markAuthoringDispatched(link.id, jobId, tx),
     );
     return { dispatched: true, jobId, framesRead: context !== null };
+  },
+
+  /**
+   * Read a dispatched `author_bug` and, if it has finished with a valid answer,
+   * WRITE it onto the bug (MOTIR-5851). `pending` while the job is still running;
+   * the job function calls this after each durable sleep, up to its bound.
+   *
+   * ⚠️ ONE PREDICATE CARRIES BOTH THE IDEMPOTENCY AND THE NEVER-OVERWRITE RULE:
+   * the write happens only while the bug's description is still EXACTLY the body
+   * it was created with and its explanation is still empty. A second delivery
+   * finds an enriched body and skips; a person who edited the card first finds
+   * the edit untouched. The comparison is against the `created` revision — an
+   * immutable record of what the reconciler wrote — so it cannot drift when a
+   * recurrence moves the issue's facts on. The write then carries
+   * `expectedUpdatedAt`, so an edit landing between this read and the write is
+   * refused rather than overwritten.
+   *
+   * The status is read only for the done category: `done` / `cancelled` (or a
+   * team's own terminal status) is never written. Every other status is decided
+   * by the predicate alone — a card somebody started but has not edited still
+   * gets its body. Nothing here transitions a status.
+   */
+  async applyAuthoredBug(
+    trigger: MonitorBugEnrichmentTrigger,
+    jobId: string,
+  ): Promise<MonitorAuthoringOutcome> {
+    const connectionId = trigger.viaMonitorConnectionId;
+    if (!connectionId) return { status: 'skipped', reason: 'bug-gone' };
+    const { link, connection } = await withSystemContext(async (tx) => ({
+      link: await monitorIssueRepository.findByWorkItemId(connectionId, trigger.workItemId, tx),
+      connection: await monitorConnectionRepository.findById(connectionId, tx),
+    }));
+    if (!link || !connection?.boundByUserId) return { status: 'skipped', reason: 'bug-gone' };
+    const binder = { userId: connection.boundByUserId, workspaceId: trigger.workspaceId };
+
+    let view;
+    try {
+      view = await getJob(jobId, trigger.projectId);
+    } catch (err) {
+      if (err instanceof MotirAiError) return { status: 'skipped', reason: 'ai-unreachable' };
+      throw err;
+    }
+    if (view.status === 'queued' || view.status === 'running') return { status: 'pending' };
+    if (view.status !== 'succeeded') return { status: 'skipped', reason: 'job-failed' };
+
+    let answer;
+    try {
+      answer = parseAuthoredBug(view.result?.authoredBug);
+    } catch (err) {
+      if (err instanceof InvalidAuthoredBugError) {
+        return { status: 'skipped', reason: 'invalid-answer' };
+      }
+      throw err;
+    }
+
+    let bug: WorkItemDto;
+    try {
+      bug = await workItemsService.getWorkItem(trigger.workItemId, binder);
+    } catch (err) {
+      if (err instanceof WorkItemNotFoundError) return { status: 'skipped', reason: 'bug-gone' };
+      throw err;
+    }
+
+    const statuses = await workflowsService.listStatusesByProject(
+      bug.projectId,
+      binder.workspaceId,
+    );
+    const category = statuses.find((s) => s.key === bug.status)?.category;
+    if (category === 'done') return { status: 'skipped', reason: 'terminal-status' };
+
+    const filedBody = await withWorkspaceContext({ ...binder, projectId: bug.projectId }, (tx) =>
+      workItemRevisionRepository.findCreatedDescription(bug.id, tx),
+    );
+    if (bug.descriptionMd !== filedBody || (bug.explanationMd ?? null) !== null) {
+      return { status: 'skipped', reason: 'card-changed' };
+    }
+
+    try {
+      // AS THE BINDER, through the gated write path — every rule the tree
+      // enforces runs, with no bypass and no system context.
+      await workItemsService.updateWorkItem(
+        bug.id,
+        {
+          descriptionMd: describedForWrite(answer),
+          explanationMd: answer.explanationMd,
+          explanationSource: 'ai_draft',
+          type: answer.type,
+          executor: answer.executor,
+          storyPoints: answer.storyPoints,
+          estimateMinutes: answer.estimateMinutes,
+        },
+        binder,
+        { expectedUpdatedAt: bug.updatedAt },
+      );
+    } catch (err) {
+      if (err instanceof StaleWorkItemError) return { status: 'skipped', reason: 'card-changed' };
+      throw err;
+    }
+    return { status: 'applied' };
   },
 };
 

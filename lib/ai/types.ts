@@ -511,6 +511,11 @@ export interface ResultEnvelope {
   // Purely additive; results are read loosely, and the approve path re-parses
   // this from scratch rather than trusting the shape (see lib/ai/sprintAssignment.ts).
   sprintAssignment?: SprintAssignmentDelta | null;
+  // The PLANNED BUG an `author_bug` job produced (Story MOTIR-4930 · MOTIR-5851)
+  // — that kind only. Typed `unknown` ON PURPOSE: it is untrusted model output
+  // that crossed a boundary, and the only way into a typed value is
+  // `parseAuthoredBug` (lib/ai/authoredBug.ts), which VALIDATES rather than casts.
+  authoredBug?: unknown;
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';

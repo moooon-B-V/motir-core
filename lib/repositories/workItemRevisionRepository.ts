@@ -37,6 +37,35 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * The body a work item was CREATED with — the `descriptionMd` its `created`
+   * revision recorded, or `null` when it was created with none (Story MOTIR-4930 ·
+   * Subtask MOTIR-5851).
+   *
+   * The bug-enrichment write compares the CURRENT body against this: equal means
+   * nobody has touched the card since it was filed, which is both "this delivery
+   * has not written yet" and "no person has edited it" in one test. The row is
+   * immutable, so the answer cannot drift the way a recomputed body can when the
+   * facts it was computed from move on.
+   */
+  async findCreatedDescription(
+    workItemId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const client = tx ?? dbRead;
+    const row = await client.workItemRevision.findFirst({
+      where: { workItemId, changeKind: 'created' },
+      orderBy: { changedAt: 'asc' },
+      select: { diff: true },
+    });
+    const diff = row?.diff;
+    if (!diff || typeof diff !== 'object' || Array.isArray(diff)) return null;
+    const cell = (diff as Record<string, unknown>)['descriptionMd'];
+    if (!cell || typeof cell !== 'object' || Array.isArray(cell)) return null;
+    const to = (cell as { to?: unknown }).to;
+    return typeof to === 'string' ? to : null;
+  },
+
+  /**
    * WHEN one specific revision was written — the `changedAt` of the row the
    * caller already holds the id of (Bug MOTIR-3334;
    * `docs/decisions/status-derivation.md` §5).

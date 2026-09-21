@@ -141,6 +141,16 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
     shape: '{ dispatched: number }',
   },
+  'dispatch-bug-authoring': {
+    file: 'lib/jobs/definitions/monitorBugEnrich.ts',
+    shape:
+      '{ dispatched: false; reason: "ai-not-configured" | "already-dispatched" | "no-binder" | "no-monitor-link" | "not-a-bug" } | { dispatched: true; framesRead: boolean; jobId: string }',
+  },
+  '`apply-authored-bug-${poll}`': {
+    file: 'lib/jobs/definitions/monitorBugEnrich.ts',
+    shape:
+      '{ reason: "ai-unreachable" | "bug-gone" | "card-changed" | "invalid-answer" | "job-failed" | "terminal-status" | "timed-out"; status: "skipped" } | { status: "applied" } | { status: "pending" }',
+  },
   'dispatch-outward-analysis': {
     file: 'lib/jobs/definitions/outwardBugTelemetry.ts',
     shape:
