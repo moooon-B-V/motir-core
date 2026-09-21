@@ -50,13 +50,17 @@ export type ApprovalGateKindDTO =
  * - `yours` — the gate is in this reader's To-approve tab AND they hold the kind's
  *   permission floor, so they could press it. Exactly the rows the tab offers to
  *   decide.
- * - `others` — any other awaiting gate: routed elsewhere or to nobody (an admin who
- *   COULD decide it is still not the one asked), or routed to this reader while
- *   they sit below the floor.
+ * - `others` — any other awaiting gate: routed elsewhere (an admin who COULD
+ *   decide it is still not the one asked), or routed to this reader while they sit
+ *   below the floor.
  *
  * `kind` is the gate the entry was chosen from — the first `yours` by age, else the
  * oldest `others` — and is what the item header anchors its jump on. `routedToId`
  * is an id only: every surface already holds its member list to name the person.
+ * It is never null in practice — `work_item.reporter_id` is `NOT NULL` with
+ * `onDelete: Restrict`, so `assigneeId ?? reporterId` always names someone, and the
+ * design draws no *routed to nobody* state (MOTIR-5875, amended 2026-09-21). The
+ * type stays nullable only because `routingTargetId`'s signature is.
  */
 export interface PendingDecisionDTO {
   state: 'yours' | 'others';

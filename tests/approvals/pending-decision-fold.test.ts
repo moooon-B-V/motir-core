@@ -37,7 +37,6 @@ describe('foldPendingDecisions', () => {
         g('assigned-me', 'design_result', 1, { assigneeId: ME, reporterId: THEM }),
         g('reported-me', 'design_result', 1, { assigneeId: null, reporterId: ME }),
         g('reported-me-assigned-them', 'design_result', 1, { assigneeId: THEM, reporterId: ME }),
-        g('nobody', 'design_result', 1, { assigneeId: null, reporterId: null }),
       ],
       ME,
       holdsAll,
@@ -49,7 +48,6 @@ describe('foldPendingDecisions', () => {
       kind: 'design_result',
       routedToId: THEM,
     });
-    expect(out.get('nobody')).toEqual({ state: 'others', kind: 'design_result', routedToId: null });
   });
 
   it('a later YOURS gate displaces an earlier OTHERS one on the same card', () => {
