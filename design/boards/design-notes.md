@@ -200,8 +200,10 @@ where `{line}` is the composed held sentence.
 
 **Allocation:** every element above is built by MOTIR-5529 (the board and list card).
 
-**Out of scope:** the "a decision is waiting" marker on a board card (MOTIR-4908); the overlay
-(MOTIR-5222); every guard rule (the ADR amendment).
+**Out of scope:** the "a decision is waiting" marker on a board card — now drawn by MOTIR-5875 in
+`design/work-items/decision-waiting.mock.html`, specified in `design/work-items/design-notes.md` § _The
+DECISION-WAITING MARKER_ (it also retires the _Awaiting acceptance_ pill); the overlay (MOTIR-5222);
+every guard rule (the ADR amendment).
 
 **Grounding:** the snap-back this branches from was read in
 `app/(authed)/boards/_components/BoardContainer.tsx` (`runMove` → `snapBack` → an error
