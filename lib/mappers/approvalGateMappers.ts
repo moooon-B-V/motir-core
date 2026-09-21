@@ -118,6 +118,7 @@ export function toApprovalRecordDecidedRowDto(
       type: row.workItem.type,
     },
     subject,
+    chosenOption: (row.chosenOption as ChosenOptionDTO | null) ?? null,
   };
 }
 

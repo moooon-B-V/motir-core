@@ -593,6 +593,12 @@ export interface ApprovalRecordDecidedRowDto {
   workItem: ApprovalQueueWorkItemRefDto;
   /** What was decided, or NULL when the gate's subject no longer resolves. */
   subject: ApprovalGateSubjectSummaryDTO | null;
+  /**
+   * WHAT A CHOICE PICKED (MOTIR-5897) — read off the immutable row, so a decided choice
+   * names its option even after the body changed. Null on every other kind, and on a
+   * choice sent back with *None of these*.
+   */
+  chosenOption: ChosenOptionDTO | null;
 }
 
 /** One SECTION of the room: its rows on this page, and its total over every page. */

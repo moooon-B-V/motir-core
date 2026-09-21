@@ -7516,7 +7516,10 @@
         "several": "{count} decision documents · {pr}",
         "unreadable": "Decision document not read yet · {pr}",
         "title": "{path} at blob {blob}"
-      }
+      },
+      "choiceMeta": "{count} options · {question}",
+      "choiceDecided": "Chose <label>{label}</label> · {bestFor}",
+      "choiceNoneChosen": "{count} options · none chosen"
     },
     "live": {
       "new": "New",

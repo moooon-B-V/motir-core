@@ -7512,7 +7512,10 @@
         "several": "{count} 份决策文档 · {pr}",
         "unreadable": "尚未读取决策文档 · {pr}",
         "title": "{path}，文件版本 {blob}"
-      }
+      },
+      "choiceMeta": "{count} 个选项 · {question}",
+      "choiceDecided": "选择了「<label>{label}</label>」· {bestFor}",
+      "choiceNoneChosen": "{count} 个选项 · 未选择"
     },
     "live": {
       "new": "新增",

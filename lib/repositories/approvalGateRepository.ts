@@ -1036,6 +1036,8 @@ const RECORD_GATE_SELECT = {
   // (MOTIR-5599) — the two are one question in a 144px cell.
   decisionSource: true,
   subjectVersion: true,
+  // What a CHOICE picked (MOTIR-5897) — a decided choice row names it.
+  chosenOption: true,
 } as const satisfies Prisma.ApprovalGateSelect;
 
 /** One row of the Approvals room's read, as Prisma returns it. */

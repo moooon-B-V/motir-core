@@ -3,7 +3,7 @@
 import { useCallback, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { CircleDashed, GitPullRequest, Pencil, Scale, Video } from 'lucide-react';
+import { CircleDashed, GitPullRequest, Pencil, Scale, Signpost, Video } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,7 @@ import type {
   ApprovalGateSubjectSummaryDTO,
   ApprovalQueueRowDto,
   ApprovalRecordDecidedRowDto,
+  ChosenOptionDTO,
   DecisionApprovalSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
@@ -139,6 +140,11 @@ function KindGlyph({ kind }: { kind: ApprovalGateKindDTO }) {
     // hue — the question is about the story, so the row reads as one.
     return <Video className="h-4 w-4 shrink-0 text-(--el-type-story)" aria-hidden />;
   }
+  if (kind === 'decision_choice') {
+    // The choice TYPE's own mark and hue (MOTIR-5897; `approvals-row--choice.mock.html`) —
+    // a choice gate is only ever raised on a `type: choice` card.
+    return <Signpost className="h-4 w-4 shrink-0 text-(--el-type-choice)" aria-hidden />;
+  }
   if (kind === 'decision_approval') {
     // The decision TYPE's own mark and hue (MOTIR-5679; `design/workbench` § 27) — exactly
     // as a design row takes the design type's pencil, so the reader already knows it.
@@ -210,12 +216,28 @@ function DecisionSubjectLine({ subject }: { subject: DecisionApprovalSubjectSumm
 function SubjectMeta({
   subject,
   decidedVersion,
+  chosenOption,
 }: {
   subject: ApprovalGateSubjectSummaryDTO | null;
   /** Set on a DECIDED record: the version the decision was made against. */
   decidedVersion?: string | null;
+  /** Set on a DECIDED CHOICE: what was picked, off the immutable row (MOTIR-5897). */
+  chosenOption?: ChosenOptionDTO | null;
 }) {
   const t = useTranslations('workbench.approvals');
+  // A DECIDED CHOICE names its pick from the RECORD, never from the body — which may
+  // have changed, or stopped parsing, since. It is read before the subject check for
+  // exactly that reason: a chosen option is still a fact about a body that is gone.
+  if (chosenOption) {
+    return (
+      <span className="truncate text-xs text-(--el-text-secondary)">
+        {t.rich('choiceDecided', {
+          label: () => <span className="font-medium text-(--el-text)">{chosenOption.label}</span>,
+          bestFor: chosenOption.bestFor,
+        })}
+      </span>
+    );
+  }
   if (subject === null) {
     // The gate's subject no longer resolves — a DIFFERENT fact from not-built-yet
     // (design-notes § 20). The first is a feature that has not shipped; the
@@ -238,6 +260,17 @@ function SubjectMeta({
           chapters: subject.chapterCount,
           version: subject.commitSha ? subject.commitSha.slice(0, 8) : t('noVersion'),
         })}
+      </span>
+    );
+  }
+  if (subject.kind === 'decision_choice') {
+    // A waiting choice: how many options and the question (MOTIR-5897). A decided one
+    // that picked nothing — *None of these* — says so; its pick returned above.
+    return (
+      <span className="truncate text-xs text-(--el-text-secondary)" title={subject.question}>
+        {decidedVersion !== undefined
+          ? t('choiceNoneChosen', { count: subject.optionCount })
+          : t('choiceMeta', { count: subject.optionCount, question: subject.question })}
       </span>
     );
   }
@@ -290,8 +323,14 @@ function SubjectMeta({
 }
 
 /** The state pill a SETTLED row carries in its Decide cell. */
-function StatePill({ state }: { state: ApprovalGateStateDTO }) {
+function StatePill({ state, kind }: { state: ApprovalGateStateDTO; kind: ApprovalGateKindDTO }) {
   const t = useTranslations('approvalGate.state');
+  // A CHOICE that was answered reads *Chosen*, not *Approved* — nothing was approved,
+  // an option was picked (MOTIR-5897; the frame's own pill says the same).
+  const tChoice = useTranslations('approvalGate.choice.state');
+  if (state === 'approved' && kind === 'decision_choice') {
+    return <Pill severity="success">{tChoice('chosen')}</Pill>;
+  }
   switch (state) {
     // ⚠️ THE SAME PILL RECIPES THE FRAME PICKS, so a settled row and the frame
     // in the overlay above it cannot disagree about what a state looks like.
@@ -350,6 +389,7 @@ export function ApprovalRow({
   // block at viewport height, so the row no longer has to send the reader to the card.
   const pullRequestSet = row.subject?.kind === 'pull_request_approval';
   const decision = row.subject?.kind === 'decision_approval';
+  const choice = row.subject?.kind === 'decision_choice';
   // A kind with no renderer, or a subject that is gone, still HAS the door — the
   // overlay draws both (§ 22 Panels 4a / 4b). What they lack is anything to
   // decide, so their Decide cell keeps § 20's treatment.
@@ -358,7 +398,8 @@ export function ApprovalRow({
     (row.subject.kind === 'design_result' ||
       row.subject.kind === 'acceptance_result' ||
       pullRequestSet ||
-      decision);
+      decision ||
+      choice);
   const settledState: ApprovalGateStateDTO | null =
     record.section === 'decided' ? record.row.state : announcedState;
   // A HELD row is settled with no state to show: it has left the awaiting set,
@@ -427,7 +468,11 @@ export function ApprovalRow({
               : t(`kind.${row.kind}`)}
         </span>
         {record.section === 'decided' ? (
-          <SubjectMeta subject={row.subject} decidedVersion={record.row.subjectVersion} />
+          <SubjectMeta
+            subject={row.subject}
+            decidedVersion={record.row.subjectVersion}
+            chosenOption={record.row.chosenOption}
+          />
         ) : (
           <SubjectMeta subject={row.subject} />
         )}
@@ -483,7 +528,7 @@ export function ApprovalRow({
         <div role="cell" className="flex min-w-0 items-center md:justify-end">
           {settled ? (
             settledState !== null ? (
-              <StatePill state={settledState} />
+              <StatePill state={settledState} kind={row.kind} />
             ) : (
               /* HELD, outcome unknown (§ 26, DECISION 1). Colourless for § 20's
                  own reason, one case over: this was written by somebody else's

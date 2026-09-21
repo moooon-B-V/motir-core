@@ -86,6 +86,7 @@ function decidedRow(over: Partial<ApprovalRecordDecidedRowDto> = {}): ApprovalRe
       type: 'design',
     },
     subject: SUBJECT,
+    chosenOption: null,
     ...over,
   };
 }
