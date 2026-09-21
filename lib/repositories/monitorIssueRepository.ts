@@ -1,5 +1,6 @@
 import type { MonitorIssue, Prisma } from '@/generated/prisma/client';
 import type { MonitorAssigneeSyncNote } from '@/lib/monitors/syncStates';
+import type { NormalizedMonitorStackFrame, NormalizedMonitorTag } from '@/lib/monitors/types';
 
 // Monitor-issue repository — single Prisma operations on the `monitor_issue`
 // table (Story MOTIR-4929 · Subtask MOTIR-5576): the link between ONE provider
@@ -51,6 +52,32 @@ export interface MonitorIssueFacts {
    */
   environment?: string | null;
   release?: string | null;
+  /**
+   * When a context read was last ATTEMPTED and FAILED (MOTIR-5979). OPTIONAL
+   * under the same rule: absent leaves it standing. A SUCCESSFUL read writes it
+   * with the evidence instead, through {@link monitorIssueRepository.updateEvidenceIfNotOlder},
+   * so a late read of an older event cannot move it either.
+   */
+  evidenceCheckedAt?: Date;
+}
+
+/**
+ * The latest event's EVIDENCE as one successful read wrote it (Story MOTIR-5975 ·
+ * Subtask MOTIR-5979). Every field is the read's answer, `null`s and `[]`s
+ * included — a read that found no exception records that it found none.
+ * `readAt` is the moment of the read: it stamps both `evidence_read_at` and
+ * `evidence_checked_at`.
+ */
+export interface MonitorIssueEvidence {
+  exceptionType: string | null;
+  exceptionMessage: string | null;
+  frames: NormalizedMonitorStackFrame[];
+  tags: NormalizedMonitorTag[];
+  requestMethod: string | null;
+  requestPath: string | null;
+  eventId: string | null;
+  eventAt: Date | null;
+  readAt: Date;
 }
 
 export interface InsertMonitorIssueInput extends MonitorIssueFacts {
@@ -165,6 +192,49 @@ export const monitorIssueRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<MonitorIssue> {
     return tx.monitorIssue.update({ where: { id }, data: facts });
+  },
+
+  /**
+   * Write one read's EVIDENCE — unless the row already holds a NEWER event
+   * (MOTIR-5979). ONE conditional statement: the `WHERE` is the guard, so the
+   * comparison runs against the committed row. Two writers racing on one link
+   * serialise on the row, and Postgres re-evaluates the losing `UPDATE`'s
+   * `WHERE` against the winner's committed values — so whichever commits last,
+   * the row ends holding the later event, and the loser is a no-op rather than
+   * an error.
+   *
+   * "Not older" is `event_at IS NULL OR event_at <= incoming`. A read whose
+   * event states no time cannot be ordered at all, so it writes only over a row
+   * that has never held a dated event. Returns whether THIS call wrote.
+   */
+  async updateEvidenceIfNotOlder(
+    id: string,
+    evidence: MonitorIssueEvidence,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.monitorIssue.updateMany({
+      where: {
+        id,
+        ...(evidence.eventAt === null
+          ? { eventAt: null }
+          : { OR: [{ eventAt: null }, { eventAt: { lte: evidence.eventAt } }] }),
+      },
+      data: {
+        exceptionType: evidence.exceptionType,
+        exceptionMessage: evidence.exceptionMessage,
+        // A normalized frame / tag is plain JSON by construction (strings,
+        // numbers, booleans, nulls); the cast only erases the interface names.
+        frames: evidence.frames as unknown as Prisma.InputJsonValue,
+        tags: evidence.tags as unknown as Prisma.InputJsonValue,
+        requestMethod: evidence.requestMethod,
+        requestPath: evidence.requestPath,
+        eventId: evidence.eventId,
+        eventAt: evidence.eventAt,
+        evidenceReadAt: evidence.readAt,
+        evidenceCheckedAt: evidence.readAt,
+      },
+    });
+    return result.count === 1;
   },
 
   /**

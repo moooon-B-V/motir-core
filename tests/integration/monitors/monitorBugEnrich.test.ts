@@ -138,14 +138,18 @@ async function file(target: MonitorReconcileConnection, externalId: string) {
   fakeMonitorState().issues = [seeded];
   const from = cap.events.length;
   const result = await monitorIngestionService.reconcileIssue(target, seeded, {
-    environment: 'production',
-    release: '2.4.1',
-    frames: [],
-    exception: null,
-    tags: [],
-    request: null,
-    eventId: null,
-    eventAt: null,
+    outcome: 'read',
+    at: new Date(),
+    context: {
+      environment: 'production',
+      release: '2.4.1',
+      frames: [],
+      exception: null,
+      tags: [],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    },
   });
   const created = cap.events
     .slice(from)

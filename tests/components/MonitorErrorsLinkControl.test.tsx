@@ -73,6 +73,18 @@ const LINK: MonitorIssueLinkDto = {
   connection: { id: 'c-web', orgSlug: 'acme', projectSlug: 'web' },
   resolve: { state: null, attemptedAt: null, resolvedAt: null, error: null },
   assigneeNote: null,
+  evidence: {
+    state: 'never_read',
+    stale: false,
+    exception: null,
+    frames: [],
+    tags: [],
+    request: null,
+    eventId: null,
+    eventAt: null,
+    readAt: null,
+    lastFailedAt: null,
+  },
 };
 
 function searchResult(candidates: MonitorIssueCandidateDto[], failures: unknown[] = []) {

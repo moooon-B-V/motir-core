@@ -173,10 +173,13 @@ export interface NormalizedMonitorRequest {
  * EVERY adapter, so no consumer can store or show what this returns without the
  * filter having run.
  *
- * ⚠️ WHAT IS STORED, AND WHERE: the reconciler keeps `environment` and
- * `release` on the `monitor_issue` link (MOTIR-5729), and — from MOTIR-5979 —
- * the rest of the evidence beside them. Until that lands the evidence fields
- * are returned and not stored.
+ * ⚠️ WHAT IS STORED, AND WHERE: every SUCCESSFUL read — the reconcile visit
+ * and the hand-made link — stores ALL of it on the `monitor_issue` link:
+ * `environment` / `release` (MOTIR-5729) and the evidence, frames included
+ * (MOTIR-5979), unless the link already holds a newer event. The work-item
+ * page, `get_work_item` and the dispatch prompt read the STORE, never this call;
+ * the bug enrichment (MOTIR-5849) still reads the frames here, at the moment it
+ * needs them.
  */
 export interface NormalizedMonitorIssueContext {
   environment: string | null;

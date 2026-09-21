@@ -43,6 +43,46 @@ export interface MonitorIssueLinkDto {
   };
   /** Why the monitor's assignee was NOT applied, or `null` (MOTIR-5705). */
   assigneeNote: MonitorAssigneeSyncNote | null;
+  /** The latest event's stored EVIDENCE and the state it is in (MOTIR-5979). */
+  evidence: MonitorIssueEvidenceDto;
+}
+
+/**
+ * Which of the evidence's display states a link is in — DERIVED ONCE, in the
+ * mapper, so the page, `get_work_item` and the dispatch prompt cannot disagree:
+ *
+ * - `never_read` — no latest event has been read for this link yet;
+ * - `no_exception` — read, and the event carried no exception and no frames
+ *   (a message-only event — its tags and request may still be present);
+ * - `present` — read, with an exception or frames.
+ *
+ * `stale` is orthogonal: a later check FAILED, so what stands is older than the
+ * last attempt. It is never `true` for `never_read` — there is nothing to be
+ * stale about.
+ */
+export type MonitorEvidenceState = 'never_read' | 'present' | 'no_exception';
+
+/** One stack frame as stored — in-app first, most recent call first. */
+export interface MonitorEvidenceFrameDto {
+  filePath: string;
+  function: string | null;
+  lineNumber: number | null;
+  inApp: boolean | null;
+}
+
+export interface MonitorIssueEvidenceDto {
+  state: MonitorEvidenceState;
+  stale: boolean;
+  exception: { type: string | null; message: string | null } | null;
+  frames: MonitorEvidenceFrameDto[];
+  tags: { key: string; value: string }[];
+  request: { method: string | null; path: string } | null;
+  eventId: string | null;
+  eventAt: string | null;
+  /** When the evidence was last read successfully; `null` = never. */
+  readAt: string | null;
+  /** When the last check FAILED — set only while `stale`. */
+  lastFailedAt: string | null;
 }
 
 // ── THE HAND-MADE LINK (Story MOTIR-4932 · Subtask MOTIR-5731) ───────────────

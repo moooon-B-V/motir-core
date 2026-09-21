@@ -47,6 +47,18 @@ function link(overrides: Partial<MonitorIssueLinkDto> = {}): MonitorIssueLinkDto
     connection: { id: 'c1', orgSlug: 'acme', projectSlug: 'checkout-api' },
     resolve: { state: null, attemptedAt: null, resolvedAt: null, error: null },
     assigneeNote: null,
+    evidence: {
+      state: 'never_read',
+      stale: false,
+      exception: null,
+      frames: [],
+      tags: [],
+      request: null,
+      eventId: null,
+      eventAt: null,
+      readAt: null,
+      lastFailedAt: null,
+    },
     ...overrides,
   };
 }

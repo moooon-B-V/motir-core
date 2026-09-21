@@ -3,11 +3,7 @@ import { getMonitorProvider } from '@/lib/monitors';
 import { MonitorBinderUnavailableError, MonitorProviderCallError } from '@/lib/monitors/errors';
 import { meetsMinimumLevel } from '@/lib/monitors/levels';
 import { MONITOR_ISSUES_PAGE_LIMIT } from '@/lib/monitors/provider';
-import type {
-  NormalizedMonitorIssue,
-  NormalizedMonitorIssueContext,
-  NormalizedMonitorIssuePage,
-} from '@/lib/monitors/types';
+import type { NormalizedMonitorIssue, NormalizedMonitorIssuePage } from '@/lib/monitors/types';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   monitorIssueRepository,
@@ -17,6 +13,12 @@ import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectio
 import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
+import {
+  contextFactsOf,
+  MONITOR_CONTEXT_SKIPPED,
+  writeLinkFacts,
+  type MonitorContextRead,
+} from '@/lib/services/monitorContextRead';
 import {
   monitorCredentialService,
   type MonitorAccessToken,
@@ -91,14 +93,15 @@ const BINDER_CANNOT_FILE =
   'Bind the monitored project again as someone who can.';
 
 /**
- * The facts a visit writes. `context` is the latest event's environment and
- * release (MOTIR-5729); when it is absent — not read, capped, failed, gone —
- * the two keys are left OFF the write, so the stored values stand. A read that
- * succeeded writes what it got, `null`s included.
+ * The facts a visit writes. The latest event's environment and release
+ * (MOTIR-5729) ride on a `read`, and a `failed` read stamps only the evidence's
+ * last check (MOTIR-5979) — `contextFactsOf` decides, so a read that was never
+ * made (`null` / `skipped`) leaves every context column standing. The EVIDENCE
+ * itself is written beside these facts by `writeLinkFacts`, never through them.
  */
 function factsOf(
   issue: NormalizedMonitorIssue,
-  context?: NormalizedMonitorIssueContext | null,
+  read: MonitorContextRead | null,
 ): MonitorIssueFacts {
   return {
     title: issue.title,
@@ -108,7 +111,7 @@ function factsOf(
     eventCount: issue.eventCount,
     firstSeenAt: issue.firstSeenAt,
     lastSeenAt: issue.lastSeenAt,
-    ...(context ? { environment: context.environment, release: context.release } : {}),
+    ...contextFactsOf(read ?? MONITOR_CONTEXT_SKIPPED),
   };
 }
 
@@ -220,8 +223,9 @@ const NOTHING_POLLED: MonitorPollSummary = {
  * holds — never inside a transaction, never with a refresh of its own.
  *
  * ⚠️ EVERY FAILURE IS ABSORBED, AND THAT IS THE RULE, NOT A SHORTCUT: a refusal,
- * a timeout and a gone issue all answer `null`, which leaves the stored
- * environment and release exactly as they were. Filing must not become less
+ * a timeout and a gone issue all answer `failed`, which leaves the stored
+ * environment, release and evidence exactly as they were and records only WHEN
+ * the check failed — what makes the evidence read as stale (MOTIR-5979). Filing must not become less
  * reliable because an enrichment failed (MOTIR-5729; the degrade principle
  * MOTIR-4930 states for the bug body). It deliberately does not go through
  * `withFreshCredential`, so an enrichment's 401 can never be the thing that
@@ -231,15 +235,16 @@ const NOTHING_POLLED: MonitorPollSummary = {
 async function readContextQuietly(
   credential: MonitorAccessToken,
   externalIssueId: string,
-): Promise<NormalizedMonitorIssueContext | null> {
+): Promise<MonitorContextRead> {
   try {
-    return await getMonitorProvider(credential.provider).getIssueContext({
+    const context = await getMonitorProvider(credential.provider).getIssueContext({
       accessToken: credential.token,
       orgSlug: credential.orgSlug ?? '',
       externalIssueId,
     });
+    return { outcome: 'read', context, at: new Date() };
   } catch {
-    return null;
+    return { outcome: 'failed', at: new Date() };
   }
 }
 
@@ -396,13 +401,14 @@ export const monitorIngestionService = {
     connection: MonitorReconcileConnection,
     issue: NormalizedMonitorIssue,
     /**
-     * The issue's latest-event environment and release, READ BY THE CALLER
-     * before this method takes its row lock (MOTIR-5729) — a provider call held
-     * inside the lock would hold a row lock across a network round trip. Written
-     * in the same update as the other facts on every outcome; absent or `null`
-     * leaves the stored values alone. It changes no DECISION below.
+     * The issue's latest-event context read, MADE BY THE CALLER before this
+     * method takes its row lock (MOTIR-5729) — a provider call held inside the
+     * lock would hold a row lock across a network round trip. Its facts and its
+     * evidence (MOTIR-5979) are written with the other facts on every outcome;
+     * absent, `null` or `skipped` leaves the stored values alone. It changes no
+     * DECISION below.
      */
-    context?: NormalizedMonitorIssueContext | null,
+    read?: MonitorContextRead | null,
   ): Promise<MonitorReconcileResult> {
     const binderId = connection.boundByUserId;
     if (!binderId) throw new MonitorBinderUnavailableError(connection.id, BINDER_MISSING);
@@ -414,7 +420,8 @@ export const monitorIngestionService = {
     const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
     const doneKeys = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
 
-    const facts = factsOf(issue, context);
+    const contextRead = read ?? MONITOR_CONTEXT_SKIPPED;
+    const facts = factsOf(issue, contextRead);
 
     const settled = await withWorkspaceContext({ ...ctx, projectId }, async (tx) => {
       await monitorIssueRepository.insertIfAbsent(
@@ -452,7 +459,7 @@ export const monitorIngestionService = {
       // "deleted" is told from "never filed" below.
       const bug = row.workItemId ? await workItemRepository.findById(row.workItemId, tx) : null;
       if (bug && !doneKeys.has(bug.status)) {
-        await monitorIssueRepository.updateFacts(row.id, facts, tx);
+        await writeLinkFacts(row.id, facts, contextRead, tx);
         return {
           outcome: 'updated' as const,
           workItemId: bug.id,
@@ -486,7 +493,7 @@ export const monitorIngestionService = {
           row.resolvedByMotirAt?.getTime() ?? 0,
         );
         if (issue.lastSeenAt.getTime() <= motirWrite) {
-          await monitorIssueRepository.updateFacts(row.id, facts, tx);
+          await writeLinkFacts(row.id, facts, contextRead, tx);
           return {
             outcome: 'updated' as const,
             workItemId: bug.id,
@@ -527,7 +534,7 @@ export const monitorIngestionService = {
         throw err;
       }
 
-      await monitorIssueRepository.updateFacts(row.id, facts, tx);
+      await writeLinkFacts(row.id, facts, contextRead, tx);
       await monitorIssueRepository.markFiled(row.id, created.id, created.identifier, tx);
       return {
         outcome: previous ? ('refiled' as const) : ('filed' as const),
@@ -582,7 +589,7 @@ export const monitorIngestionService = {
   async refreshLinkedFacts(
     connection: Pick<MonitorReconcileConnection, 'id' | 'projectId' | 'workspaceId'>,
     issue: NormalizedMonitorIssue,
-    context?: NormalizedMonitorIssueContext | null,
+    read?: MonitorContextRead | null,
   ): Promise<boolean> {
     const doneKeys = await doneKeysOf(connection.projectId, connection.workspaceId);
     return withSystemContext(async (tx) => {
@@ -597,7 +604,8 @@ export const monitorIngestionService = {
       if (!row?.workItemId) return false;
       const bug = await workItemRepository.findById(row.workItemId, tx);
       if (!bug || doneKeys.has(bug.status)) return false;
-      await monitorIssueRepository.updateFacts(row.id, factsOf(issue, context), tx);
+      const contextRead = read ?? MONITOR_CONTEXT_SKIPPED;
+      await writeLinkFacts(row.id, factsOf(issue, contextRead), contextRead, tx);
       return true;
     });
   },
@@ -735,10 +743,10 @@ export const monitorIngestionService = {
     // take their row lock, and never more than the cap per poll.
     let contextReads = 0;
     const credentialForContext: MonitorAccessToken | null = listingCredential;
-    const contextFor = async (
-      issue: NormalizedMonitorIssue,
-    ): Promise<NormalizedMonitorIssueContext | null> => {
-      if (!credentialForContext || contextReads >= MONITOR_CONTEXT_READS_PER_POLL) return null;
+    const contextFor = async (issue: NormalizedMonitorIssue): Promise<MonitorContextRead> => {
+      if (!credentialForContext || contextReads >= MONITOR_CONTEXT_READS_PER_POLL) {
+        return MONITOR_CONTEXT_SKIPPED;
+      }
       contextReads += 1;
       return readContextQuietly(credentialForContext, issue.externalId);
     };
