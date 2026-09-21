@@ -7,7 +7,7 @@ import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/erro
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import { getGitProvider } from '@/lib/git';
 import type { GitProvider } from '@/lib/git/provider';
-import type { MergeChangeRequestResult } from '@/lib/git/types';
+import type { ChangeRequestMergeability, MergeChangeRequestResult } from '@/lib/git/types';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateNotFoundError,
@@ -45,6 +45,14 @@ beforeEach(async () => {
   await truncateAuthTables();
   await adminDb.$executeRawUnsafe('TRUNCATE TABLE "approval_gate" RESTART IDENTITY CASCADE');
   fx = await makeWorkItemFixture();
+  // The press asks the host whether each member can merge BEFORE deciding (MOTIR-5915).
+  // Every case here is about what happens AFTER that, so the host answers "clean" unless a
+  // case says otherwise — and nothing leaves the process.
+  vi.spyOn(github, 'readChangeRequestMergeability').mockResolvedValue({
+    mergeable: true,
+    mergeableState: 'clean',
+    headSha: null,
+  });
 });
 
 afterEach(() => {
@@ -264,7 +272,9 @@ describe('partial success', () => {
         subjectVersion: api.version,
         pullRequestId: api.prId,
         outcome: 'refused',
-        refusal: { tag: 'MERGE_CONFLICT' },
+        // A conflict the MERGE met after the decision (the backstop), not one found at the
+        // press — so it says the approval was spent (MOTIR-5915).
+        refusal: { tag: 'MERGE_CONFLICT', atPress: false, conflicts: [] },
       },
       { subjectVersion: web.version, pullRequestId: web.prId, outcome: 'merged' },
     ]);
@@ -1025,5 +1035,136 @@ describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design ga
     expect((await gateRow(approval.id)).state).toBe('awaiting');
     expect(result.members).toEqual([]);
     expect(host).not.toHaveBeenCalled();
+  });
+});
+
+// THE PRESS ASKS THE HOST FIRST (MOTIR-5915, for bug MOTIR-5907; design/github § 30 rule 3,
+// Panels 5a / 5b / 6). The approval used to commit before any merge was attempted, so a
+// conflicted member read `in_review → approved → implemented` two seconds apart. Now a
+// member the host reports `dirty` refuses the press BEFORE anything is written.
+describe('a conflict found AT THE PRESS writes nothing (MOTIR-5915)', () => {
+  /** Every status the card has ever been written to, from its revision trail. */
+  async function statusTrail(workItemId: string): Promise<string[]> {
+    const revisions = await adminDb.workItemRevision.findMany({
+      where: { workItemId },
+      orderBy: { changedAt: 'asc' },
+    });
+    return revisions.flatMap((r) => {
+      const to = (r.diff as { status?: { to?: string } } | null)?.status?.to;
+      return typeof to === 'string' ? [to] : [];
+    });
+  }
+
+  function stubReads(answers: Record<number, Partial<ChangeRequestMergeability>>) {
+    return vi.spyOn(github, 'readChangeRequestMergeability').mockImplementation(async (args) => ({
+      mergeable: true,
+      mergeableState: 'clean',
+      headSha: null,
+      ...(answers[args.number] ?? {}),
+    }));
+  }
+
+  it('a `dirty` member refuses MERGE_CONFLICT at the press: nothing approved, the gate withdrawn as `conflict`, the card at Implemented, no merge attempted', async () => {
+    const { item, approval } = await pressable();
+    stubReads({ 7: { mergeable: false, mergeableState: 'dirty', headSha: HEAD_WEB } });
+    const merge = stubHost({
+      7: { outcome: 'merged', commitSha: 'x' },
+      12: { outcome: 'merged', commitSha: 'y' },
+    });
+
+    const pressed = pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    await expect(pressed).rejects.toMatchObject({
+      tag: 'MERGE_CONFLICT',
+      atPress: true,
+      conflicts: [{ pullRequest: 'acme/web#7', baseRef: 'main' }],
+    });
+    const gate = await gateRow(approval.id);
+    expect([gate.state, gate.supersededCause, gate.decidedAt]).toEqual([
+      'superseded',
+      'conflict',
+      null,
+    ]);
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusTrail(item.id)).not.toContain('approved');
+    expect(merge).not.toHaveBeenCalled();
+  });
+
+  it('`mergeable: null` on every read approves and merges exactly as before (Panel 6)', async () => {
+    const { item, approval } = await pressable();
+    stubReads({ 7: { mergeable: null, mergeableState: 'unknown' }, 12: { mergeable: null } });
+    stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'merged', commitSha: 'merge-api' },
+    });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    expect(result.approval.gate.state).toBe('approved');
+    expect(result.members.map((m) => m.outcome)).toEqual(['merged', 'merged']);
+    expect(await statusOf(item.id)).toBe('approved');
+  }, 20_000);
+
+  it('a read that THROWS does not refuse — the press proceeds', async () => {
+    const { approval } = await pressable();
+    vi.spyOn(github, 'readChangeRequestMergeability').mockRejectedValue(new Error('host down'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    stubHost({
+      7: { outcome: 'merged', commitSha: 'merge-web' },
+      12: { outcome: 'merged', commitSha: 'merge-api' },
+    });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+      fx.ctx,
+    );
+
+    expect(result.approval.gate.state).toBe('approved');
+  });
+
+  it('ONE `dirty` member of two refuses the WHOLE press — neither merges', async () => {
+    const { approval } = await pressable();
+    stubReads({ 12: { mergeable: false, mergeableState: 'dirty', headSha: HEAD_API } });
+    const merge = stubHost({
+      7: { outcome: 'merged', commitSha: 'x' },
+      12: { outcome: 'merged', commitSha: 'y' },
+    });
+
+    await expect(
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({ tag: 'MERGE_CONFLICT', conflicts: [{ pullRequest: 'acme/api#12' }] });
+    expect(merge).not.toHaveBeenCalled();
+  });
+
+  it('a press on a gate already withdrawn for a conflict (a stale tab) is the shipped SUPERSEDED refusal, naming `conflict` (Panel 5b)', async () => {
+    const { approval } = await pressable();
+    stubReads({ 7: { mergeable: false, mergeableState: 'dirty', headSha: HEAD_WEB } });
+    stubHost({});
+    await pullRequestMergeService
+      .approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+        fx.ctx,
+      )
+      .catch(() => {});
+    const reads = stubReads({});
+    reads.mockClear();
+
+    await expect(
+      pullRequestMergeService.approveAndMerge(
+        { stamp: DECIDED_WITHOUT_A_READER, gateId: approval.id, source: 'ui' },
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({ tag: 'APPROVAL_GATE_SUPERSEDED', supersedeCause: 'conflict' });
+    // A withdrawn gate is not read for: the door's own refusal is the true one.
+    expect(reads).not.toHaveBeenCalled();
   });
 });
