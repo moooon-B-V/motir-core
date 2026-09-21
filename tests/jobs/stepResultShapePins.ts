@@ -91,6 +91,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ billableSeconds: number; containerId: string; coreTimings?: undefined | { phasesMs: { admissionWait?: number | undefined; boot?: number | undefined; pollToDetect?: number | undefined }; totalMs?: number | undefined }; costUsd: string; failureDetail: null | string; indexMode?: "rebuild" | "sync" | undefined; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string }; verdict: { detail: string; exitClass: "credential_refused" | "dispatch_malformed" | "exit_unobserved" | "graph_unbuildable" | "indexed" | "never_started" | "out_of_memory" | "pointer_unrecorded" | "repo_unfetchable" | "supervision_timed_out" | "unclassified" | "upload_failed"; exitCode: null | number; indexed: boolean; redispatchable: boolean } } | { detail: string; outcome: "admission_deferred"; reason: "fleet_ceiling" | "gate_unavailable" | "index_cap" | "repo_index_in_flight" | "workspace_index_cap" } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }',
   },
+  '`settle-${pass}`': {
+    file: 'lib/jobs/definitions/pullRequestBaseMoved.ts',
+    shape:
+      '{ conflicted: number; failed: number; held: number; unknown: Array<{ number: number; pullRequestId: string }>; withdrawn: number }',
+  },
   'advance-wedged-index-runs': {
     file: 'lib/jobs/definitions/migrateOnboardingSweep.ts',
     shape: '{ advanced: number; failed: number; scanned: number }',
@@ -223,6 +228,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/engine/ledger.ts',
     shape:
       'null | { attempt: number; delivery: null | { lastEventAt: null | string; providerMessageId: null | string; recipient: string; state: "accepted" | "bounced" | "complained" | "delayed" | "delivered"; template: string }; durationMs: null | number; eventId: string; eventName: string; failure: null | { code?: string | undefined; message: string; stack?: string | undefined }; finishedAt: null | string; functionId: string; id: string; idempotencyKey: null | string; lane: "engine" | "inngest"; output: unknown; startedAt: string; status: "abandoned" | "failed" | "running" | "succeeded"; workspaceId: null | string }',
+  },
+  'list-members': {
+    file: 'lib/jobs/definitions/pullRequestBaseMoved.ts',
+    shape: 'Array<{ number: number; pullRequestId: string }>',
   },
   'list-pending-intents': {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
