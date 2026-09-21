@@ -23,8 +23,8 @@ import { truncateAuthTables } from '../helpers/db';
 //   · THE PLACEMENT MATRIX (`approval-gates.md` §1, the MOTIR-5787 amendment, points
 //     1–3) — a STORY run and a SINGLE-CARD run, built as fixtures, and which card each
 //     question lands on in each;
-//   · THE LIFECYCLES — approve before green, a merge re-asked alone, a newer receipt,
-//     and a republish after approval;
+//   · THE LIFECYCLES — nothing asked before green (MOTIR-5903), a merge re-asked alone,
+//     a newer receipt, and a republish after approval;
 //   · THE GUARDS — one decide path, one loader, and nothing raised with the switch OFF.
 //
 // The object store and the billing entitlement seam are the only fakes; the host's merge
@@ -58,6 +58,8 @@ const { workItemsService } = await import('@/lib/services/workItemsService');
 const { pullRequestMergeService } = await import('@/lib/services/pullRequestMergeService');
 const { reconcileGatesFor } = await import('@/lib/services/gateSetFor');
 const { settleGreenVerdict } = await import('@/lib/services/mergeGates');
+const { withdrawPullRequestApprovalGatesOnHeadMove } =
+  await import('@/lib/services/pullRequestApprovalGates');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 
 const github = getGitProvider('github') as Required<GitProvider>;
@@ -212,7 +214,7 @@ describe('the placement matrix — which card each question lands on (points 1�
     expect(await gatesOn(e2e.id)).toEqual([]);
   });
 
-  it('(b) a SINGLE-CARD run: the story holds the acceptance question alone; the subtask only its own merge question', async () => {
+  it('(b) a SINGLE-CARD run: while the E2E subtask is not done the story asks NOTHING; the subtask only its own merge question (MOTIR-5903)', async () => {
     const story = await item('story', 'Accept a story from its recording');
     const e2e = await item('subtask', 'Story E2E + acceptance video', story.id);
     await runTargetRecord(e2e.id);
@@ -225,29 +227,71 @@ describe('the placement matrix — which card each question lands on (points 1�
       reconcileGatesFor((await tx.workItem.findUniqueOrThrow({ where: { id: e2e.id } }))!, tx),
     );
 
-    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'awaiting']]);
+    // The receipt exists, and there is nothing to approve yet: the story cannot finish
+    // while the subtask that recorded it is unmerged.
+    expect(await gatesOn(story.id)).toEqual([]);
     expect(await gatesOn(e2e.id)).toEqual([['pull_request_approval', 'awaiting']]);
+  });
+
+  it('(b′) the E2E subtask reaching DONE raises the story acceptance question with no further publish, and approving it moves the story to done (MOTIR-5903)', async () => {
+    const story = await item('story', 'Accept a story from its recording');
+    const e2e = await item('subtask', 'Story E2E + acceptance video', story.id);
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    await runTargetRecord(e2e.id);
+    const pr = await deliver(e2e.id, 411, HEAD, 'success');
+    await publishVia(e2e.identifier, 'c0ffee1');
+    await workItemsService.updateStatus(e2e.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(e2e.id, 'implemented', fx.ctx);
+    expect(await gatesOn(story.id)).toEqual([]);
+
+    // The subtask's pull request merges and the merge sync writes its `done`.
+    await adminDb.githubPullRequest.update({
+      where: { id: pr.id },
+      data: { state: 'closed', merged: true },
+    });
+    await workItemsService.updateStatus(e2e.id, 'done', fx.ctx, { keepPendingQuestions: true });
+
+    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'awaiting']]);
+    // And the story's own move into `done` is now held by that question (§6d rule 1), so
+    // the parent rollup cannot close it around the receipt.
+    await expect(workItemsService.updateStatus(story.id, 'done', fx.ctx)).rejects.toThrow();
+
+    const acceptance = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: story.id, kind: 'acceptance_result' },
+    });
+    await pullRequestMergeService.approveAndMerge(
+      { gateId: acceptance.id, source: 'ui', noteMd: null, stamp: DECIDED_WITHOUT_A_READER },
+      fx.ctx,
+    );
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(
+      'done',
+    );
+    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'approved']]);
+  });
+
+  it('(b″) a sibling still OPEN keeps the story question un-asked when the E2E subtask finishes; the sibling finishing asks it (MOTIR-5903)', async () => {
+    const story = await item('story', 'Accept a story from its recording');
+    const e2e = await item('subtask', 'Story E2E + acceptance video', story.id);
+    const sibling = await item('subtask', 'A sibling not built yet', story.id);
+    await publishVia(e2e.identifier, 'c0ffee1');
+    await workItemsService.updateStatus(e2e.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(e2e.id, 'done', fx.ctx);
+    expect(await gatesOn(story.id)).toEqual([]);
+
+    await workItemsService.updateStatus(sibling.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(sibling.id, 'done', fx.ctx);
+    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'awaiting']]);
   });
 });
 
 // ── the lifecycles ──────────────────────────────────────────────────────────
 
 describe('the lifecycles', () => {
-  it('approve BEFORE green: the press is not refused, no merge gate is raised on the green, and the merge is carried', async () => {
+  it('a story run NOT yet green asks nothing; the green asks BOTH together, and nothing is carried or merged before a press (MOTIR-5903)', async () => {
     const { story, e2e, pr } = await storyRun('pending');
     await publishVia(e2e.identifier, 'c0ffee1');
-    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'awaiting']]);
-    const acceptance = await adminDb.approvalGate.findFirstOrThrow({
-      where: { workItemId: story.id, kind: 'acceptance_result' },
-    });
-
-    const pressed = await pullRequestMergeService.approveAndMerge(
-      { gateId: acceptance.id, source: 'ui', noteMd: null, stamp: DECIDED_WITHOUT_A_READER },
-      fx.ctx,
-    );
-    // No companion yet — the merge is HELD, not refused (AMENDMENT 6 Q4).
-    expect(pressed.approval.gate.state).toBe('approved');
-    expect(pressed.members).toEqual([]);
+    // A receipt on a red/pending story is evidence waiting for its question, not a question.
+    expect(await gatesOn(story.id)).toEqual([]);
 
     // The set goes green.
     await adminDb.githubCheckRun.updateMany({
@@ -259,9 +303,48 @@ describe('the lifecycles', () => {
       await reconcileGatesFor(row, tx);
       return settleGreenVerdict({ item: row, pullRequestIds: [pr.id] }, fx.ctx, tx);
     });
-    // The standing acceptance carries the merge: nothing new is asked, and the merge is owed.
-    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'approved']]);
-    expect(requests.map((r) => r.pullRequestId)).toEqual([pr.id]);
+    // ONE decision to make — the acceptance leads, the merge rides on it — and nothing is
+    // merged until somebody presses it.
+    expect(await gatesOn(story.id)).toEqual([
+      ['acceptance_result', 'awaiting'],
+      ['pull_request_approval', 'awaiting'],
+    ]);
+    expect(requests).toEqual([]);
+  });
+
+  it('a push that takes a green story run red again withdraws the acceptance question WITH the merge question (MOTIR-5903)', async () => {
+    const { story, e2e, pr } = await storyRun('success');
+    await publishVia(e2e.identifier, 'c0ffee1');
+    expect(await gatesOn(story.id)).toEqual([
+      ['acceptance_result', 'awaiting'],
+      ['pull_request_approval', 'awaiting'],
+    ]);
+
+    const moved = 'c3'.repeat(20);
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      withdrawPullRequestApprovalGatesOnHeadMove(pr.id, tx, moved),
+    );
+    const rows = await adminDb.approvalGate.findMany({
+      where: { workItemId: story.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(rows.map((g) => [g.kind, g.state, g.supersededCause])).toEqual([
+      ['acceptance_result', 'superseded', 'head_moved'],
+      ['pull_request_approval', 'superseded', 'head_moved'],
+    ]);
+
+    // Green again at the new head: both are asked again, together.
+    await adminDb.githubCheckRun.create({
+      data: { pullRequestId: pr.id, commitSha: moved, checkName: 'Vitest', conclusion: 'success' },
+    });
+    await withWorkspaceContext(fx.ctx, async (tx) =>
+      reconcileGatesFor(await tx.workItem.findUniqueOrThrow({ where: { id: story.id } }), tx),
+    );
+    const awaiting = await adminDb.approvalGate.findMany({
+      where: { workItemId: story.id, state: 'awaiting' },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(awaiting.map((g) => g.kind)).toEqual(['acceptance_result', 'pull_request_approval']);
   });
 
   it('a merge re-asked ALONE: after the press, a push moves the head and the next green asks only the merge', async () => {
@@ -311,7 +394,7 @@ describe('the lifecycles', () => {
   });
 
   it('a NEWER receipt supersedes the awaiting question with cause `republished`', async () => {
-    const { story, e2e } = await storyRun('pending');
+    const { story, e2e } = await storyRun('success');
     await publishVia(e2e.identifier, 'c0ffee1');
     await publishVia(e2e.identifier, 'd00d002');
 
@@ -326,11 +409,19 @@ describe('the lifecycles', () => {
   });
 
   it('after APPROVAL, with the story pull request still open, a republish through the MCP door is refused', async () => {
-    const { story, e2e } = await storyRun('pending');
+    const { story, e2e } = await storyRun('success');
     await publishVia(e2e.identifier, 'c0ffee1');
     const acceptance = await adminDb.approvalGate.findFirstOrThrow({
       where: { workItemId: story.id, kind: 'acceptance_result' },
     });
+    // The host refuses the merge the press carries, so the pull request stays open.
+    vi.spyOn(github, 'mergeChangeRequest').mockImplementation(
+      async () =>
+        ({
+          outcome: 'refused',
+          refusal: { code: 'conflict' },
+        }) as unknown as MergeChangeRequestResult,
+    );
     await pullRequestMergeService.approveAndMerge(
       { gateId: acceptance.id, source: 'ui', noteMd: null, stamp: DECIDED_WITHOUT_A_READER },
       fx.ctx,
@@ -339,7 +430,9 @@ describe('the lifecycles', () => {
     const refused = await publishVia(e2e.identifier, 'd00d002');
     expect(refused.isError).toBe(true);
     expect(JSON.stringify(refused)).toContain('ACCEPTANCE_EVIDENCE_STORY_CLOSED');
-    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'approved']]);
+    expect((await gatesOn(story.id)).filter(([kind]) => kind === 'acceptance_result')).toEqual([
+      ['acceptance_result', 'approved'],
+    ]);
   });
 });
 

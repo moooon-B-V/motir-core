@@ -16,6 +16,7 @@ import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvide
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
 import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
@@ -202,6 +203,24 @@ export async function gateSetFor(
   const standingUnlandedOutcome =
     standingOutcomes.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;
 
+  // ⚠️ THE ACCEPTANCE QUESTION'S SUBTASK-RUN TIMING (Bug MOTIR-5903; `approval-gates.md`
+  // §1, the MOTIR-5903 amendment). A story that delivers no pull request of its own had
+  // its receipt recorded by a child, and approving it is what sets the story `done` — so
+  // the predicate needs to know whether anything under the story is still open. One
+  // recursive read, and only for a card holding a receipt and no delivery set: every other
+  // card pays nothing.
+  const subtreeSettled =
+    currentReceipt !== null && deliveries.length === 0
+      ? (await workItemRepository.findSubtreeMembersForValidity(item.id, item.workspaceId, tx))
+          .filter((member) => member.id !== item.id)
+          .every((member) =>
+            isTerminalStatus(
+              { status: member.status, projectId: item.projectId },
+              terminalByProject,
+            ),
+          )
+      : false;
+
   const set = resolveGateSet({
     currentDesignEvidence: currentDesign
       ? { id: currentDesign.id, commitSha: currentDesign.commitSha }
@@ -210,6 +229,7 @@ export async function gateSetFor(
       ? { id: currentReceipt.id, commitSha: currentReceipt.commitSha }
       : null,
     latestAcceptanceGate,
+    subtreeSettled,
     primaryApprovalStandsForMerge: primaryApprovalStandsForMerge({
       currentDesign,
       latestDesignGate,
@@ -294,4 +314,47 @@ export async function reconcileGatesFor(
     raised.push(owed.kind);
   }
   return raised;
+}
+
+/**
+ * RE-ASK THE OWNING STORY when a card beneath it reaches the done category — the wake
+ * the acceptance question's SUBTASK-RUN timing needs (Bug MOTIR-5903; `approval-gates.md`
+ * §1, the MOTIR-5903 amendment, point 3).
+ *
+ * The story's acceptance question is owed only once nothing under it is left open
+ * (`subtreeSettled`), and that condition changes on a CHILD's status write — never on
+ * anything the story's own events see. Without this, the recording subtask's merge would
+ * leave the story holding a receipt nobody is asked about, and the parent rollup would
+ * then close the story around it.
+ *
+ * ⚠️ IN THE CHILD'S TRANSACTION, BEFORE THE ROLLUP. The upward rollup runs as a job AFTER
+ * this transaction commits, and the gate raised here is what §6d's rule 1 then holds the
+ * story's move into `done` on — so the story reaches `done` by the approval, as the
+ * amendment says, not by the rollup racing past the question.
+ *
+ * ⚠️ IT LOCKS THE STORY ROW, because `reconcileGatesFor` relies on its caller holding the
+ * card's lock: two children finishing at once would otherwise both see no awaiting gate
+ * and the second insert would abort its own status write. The child is already locked;
+ * the story is taken second, child-then-parent, the same order the rollup never inverts.
+ *
+ * Only the NEAREST STORY ancestor is asked, and only when it holds a current receipt —
+ * every other done write pays one parent-chain read and stops.
+ */
+export async function reconcileAcceptanceOwnerOf(
+  item: Pick<WorkItem, 'parentId'>,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  let parentId = item.parentId;
+  while (parentId) {
+    const parent = await workItemRepository.findById(parentId, tx);
+    if (!parent) return;
+    if (parent.kind === 'story') {
+      const receipt = await acceptanceEvidenceRepository.findCurrentByWorkItem(parent.id, tx);
+      if (!receipt) return;
+      await workItemRepository.lockById(parent.id, tx);
+      await reconcileGatesFor(parent, tx);
+      return;
+    }
+    parentId = parent.parentId;
+  }
 }

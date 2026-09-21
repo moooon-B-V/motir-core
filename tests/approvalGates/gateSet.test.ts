@@ -562,15 +562,52 @@ describe('designHoldsMerge — MOTIR-5762: only an approval of the CURRENT resul
 // §1, the MOTIR-5787 amendment) — a STORY's receipt is a PRIMARY, exactly where the
 // design result is, and every case below is a story state.
 // ═══════════════════════════════════════════════════════════════════════════
-describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789)', () => {
+describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789; timing: MOTIR-5903)', () => {
   const RECEIPT = { id: 'ae_1', commitSha: 'c0ffee1' };
 
-  it('(a) a story with a current receipt and NO pull requests asks acceptance alone, and it leads', () => {
-    const set = resolveGateSet(input({ currentReceipt: RECEIPT }));
+  it('(a) a SUBTASK-RUN story (no pull requests of its own) with its subtree SETTLED asks acceptance alone, and it leads', () => {
+    const set = resolveGateSet(input({ currentReceipt: RECEIPT, subtreeSettled: true }));
     expect(set.awaited).toEqual([
       { kind: 'acceptance_result', subjectId: 'ae_1', subjectVersion: 'c0ffee1' },
     ]);
     expect(set.primary).toBe('acceptance_result');
+  });
+
+  it('(a′) a SUBTASK-RUN story asks NOTHING while anything under it is open — the recording subtask is not merged yet (MOTIR-5903)', () => {
+    expect(resolveGateSet(input({ currentReceipt: RECEIPT, subtreeSettled: false }))).toEqual({
+      awaited: [],
+      primary: null,
+    });
+    // Absent reads as NOT settled: a caller that did not load it never asks early.
+    expect(resolveGateSet(input({ currentReceipt: RECEIPT })).awaited).toEqual([]);
+  });
+
+  it('(a″) a STORY RUN whose set is NOT green asks nothing — no acceptance row while the story cannot merge (MOTIR-5903)', () => {
+    for (const members of [
+      [member('moooon/motir-core#10@aaa1', false)],
+      [member('moooon/motir-core#10@aaa1'), member('moooon/motir-ai#4@bbb2', false)],
+    ]) {
+      // A settled subtree does not make a story run's question owed: its timing is the SET.
+      const set = resolveGateSet(input({ currentReceipt: RECEIPT, members, subtreeSettled: true }));
+      expect(set).toEqual({ awaited: [], primary: null });
+    }
+  });
+
+  it('(a‴) a STORY RUN in an `auto` project asks acceptance once green, and never while red (MOTIR-5903)', () => {
+    expect(
+      resolveGateSet(
+        input({
+          prMergeMode: 'auto',
+          currentReceipt: RECEIPT,
+          members: [member('moooon/motir-core#10@aaa1', false)],
+        }),
+      ).awaited,
+    ).toEqual([]);
+    expect(
+      resolveGateSet(
+        input({ prMergeMode: 'auto', currentReceipt: RECEIPT, members: GREEN_ONE }),
+      ).awaited.map((gate) => gate.kind),
+    ).toEqual(['acceptance_result']);
   });
 
   it('(b) a STORY RUN — receipt + a green set — asks BOTH, and acceptance is the primary', () => {
@@ -628,6 +665,7 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789)', () => {
       input({
         currentReceipt: { id: 'ae_2', commitSha: 'd00d002' },
         latestAcceptanceGate: decided('ae_1', 'c0ffee1'),
+        subtreeSettled: true,
       }),
     );
     expect(set.awaited.map((gate) => gate.subjectId)).toEqual(['ae_2']);
@@ -636,7 +674,11 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789)', () => {
   it('REFUSES a card owing both a design and an acceptance question — asserted, never ranked', () => {
     expect(() =>
       resolveGateSet(
-        input({ currentReceipt: RECEIPT, currentDesignEvidence: { id: 'de_1', commitSha: 'abc' } }),
+        input({
+          currentReceipt: RECEIPT,
+          currentDesignEvidence: { id: 'de_1', commitSha: 'abc' },
+          subtreeSettled: true,
+        }),
       ),
     ).toThrow(/BOTH a design and an acceptance question/);
   });
