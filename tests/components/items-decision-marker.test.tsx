@@ -35,10 +35,12 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
 import { IssueListTable } from '@/app/(authed)/items/_components/IssueListTable';
 import { IssueTreeTable } from '@/app/(authed)/items/_components/IssueTreeTable';
 import {
+  collectTreeIds,
   toIssueListRows,
+  toIssueRows,
   type PendingDecisionMap,
 } from '@/app/(authed)/items/_components/issueRows';
-import type { TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
+import type { TreeLevelDto, WorkItemTreeNodeDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
@@ -142,6 +144,27 @@ describe('the row shapers carry the map onto the rows', () => {
     expect(
       toIssueListRows([node({ id: 'z', key: 9 })], workflow, members)[0]!.pendingDecision,
     ).toBeNull();
+  });
+});
+
+describe('the forest shaper and its id collector (the filtered Tree’s one call)', () => {
+  it('collects every id in the forest, depth-first, and carries the map onto nested rows', () => {
+    const forest = [
+      {
+        ...node({ id: 's', key: 1, kind: 'story' }),
+        matched: true,
+        children: [{ ...node({ id: 'c', key: 2, parentId: 's' }), matched: true, children: [] }],
+      },
+      { ...node({ id: 't', key: 3 }), matched: true, children: [] },
+    ] as unknown as WorkItemTreeNodeDto[];
+
+    expect(collectTreeIds(forest)).toEqual(['s', 'c', 't']);
+
+    const rows = toIssueRows(forest, workflow, members, 'en', { c: ANAS });
+    expect(rows[0]!.data.pendingDecision).toBeNull();
+    expect(rows[0]!.children?.[0]?.data.pendingDecision).toEqual(ANAS);
+    expect(rows[0]!.children?.[0]?.data.pendingRoutedToName).toBe('Ana Ruiz');
+    expect(toIssueRows(forest, workflow, members)[1]!.data.pendingDecision).toBeNull();
   });
 });
 
