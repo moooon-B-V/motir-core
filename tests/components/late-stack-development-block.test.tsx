@@ -4,7 +4,7 @@ import { cleanup, screen, within } from '@testing-library/react';
 import { createTranslator } from 'next-intl';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import messages from '@/messages/en.json';
-import { CORE_PR, GATEWAY_PR, recordDto } from '../helpers/howToTestFixtures';
+import { AWAITING_MERGE_GATE, CORE_PR, GATEWAY_PR, recordDto } from '../helpers/howToTestFixtures';
 
 // THE LATE STACK GAINS NO HOW TO TEST SECTION (Story MOTIR-4906 · Subtask
 // MOTIR-5336, design/github §20). How to test renders INSIDE the Development
@@ -81,6 +81,7 @@ function reads(): LateReads {
       gate: null,
       canDecide: false,
       routedToLabel: null,
+      earlierApproval: null,
       settingsDoor: null,
       stamp: null,
       // Nothing was asked, so nothing moved (Story MOTIR-5238 · MOTIR-5243).
@@ -93,6 +94,7 @@ function reads(): LateReads {
       gate: null,
       canDecide: false,
       routedToLabel: null,
+      earlierApproval: null,
       settingsDoor: null,
       stamp: null,
       // Nothing was asked, so nothing moved (Story MOTIR-5238 · MOTIR-5243).
@@ -108,6 +110,7 @@ function reads(): LateReads {
       gate: null,
       canDecide: false,
       routedToLabel: null,
+      earlierApproval: null,
       settingsDoor: null,
       stamp: null,
       // Nothing was asked, so nothing moved (Story MOTIR-5238 · MOTIR-5243).
@@ -125,6 +128,7 @@ function reads(): LateReads {
       gate: null,
       canDecide: false,
       routedToLabel: null,
+      earlierApproval: null,
       settingsDoor: null,
       stamp: null,
       movedSince: [],
@@ -450,5 +454,72 @@ describe('a story run — the acceptance question is asked where it can be answe
     await renderStack(story({ acceptance: gate('approved'), merge: null }));
     expect(screen.getByTestId('acceptance-development-slot')).toBeTruthy();
     expect(screen.queryByTestId('standalone-acceptance')).toBeNull();
+  });
+});
+
+// THE PAGE HOST THREADS THE SPENT APPROVAL (Bug MOTIR-5863). `frameGateFor` builds the
+// frame's read field by field, so a field the merge read carries and this host forgets is
+// dropped silently — the band then loses its first line on the item page while every
+// frame-level test stays green.
+describe('the item page’s re-asked merge gate names the approval it replaced', () => {
+  it('the merge read’s `earlierApproval` reaches the record band', async () => {
+    const GATEWAY_SHA = 'aa11bb2000000000000000000000000000000000';
+    const CORE_V = `moooon/motir-core#131@3f2a91c0000000000000000000000000000000aa`;
+    const GATEWAY_V = `moooon/motir-gateway#57@${GATEWAY_SHA}`;
+    const gate: ApprovalGateDTO = {
+      ...AWAITING_MERGE_GATE,
+      state: 'awaiting',
+      subjectVersion: [CORE_V, GATEWAY_V].sort().join(','),
+    };
+    const member = (subjectVersion: string, pullRequestId: string, exited: boolean) => ({
+      subjectVersion,
+      pullRequestId,
+      queued: false,
+      retryable: false,
+      exit: exited
+        ? {
+            rawReason: 'CI_FAILURE',
+            disposition: 'failure' as const,
+            headSha: GATEWAY_SHA,
+            exitedAt: '2026-09-19T15:00:00.000Z',
+            requeuedAt: null,
+            failingCheckName: 'CI complete',
+            failingCheckUrl: 'https://github.com/moooon/motir-gateway/actions/runs/1/job/2',
+          }
+        : null,
+      exitAtApprovedHead: exited,
+      requeueable: exited,
+      refusal: null,
+      retryDecidesGateId: gate.id,
+    });
+    const base = reads();
+    const ui = await LateUpperSections({
+      reads: Promise.resolve({
+        ...base,
+        mergeGate: {
+          ...base.mergeGate,
+          gate,
+          canDecide: true,
+          members: [member(CORE_V, CORE_PR.id, false), member(GATEWAY_V, GATEWAY_PR.id, true)],
+          earlierApproval: {
+            decidedByLabel: 'Ada L.',
+            decidedAt: '2026-09-15T14:22:00.000Z',
+            commits: 2,
+          },
+        },
+      }),
+      itemId: 'wi-acme-12',
+      itemIdentifier: 'ACME-12',
+      currentUserId: 'u-viewer',
+      canEdit: true,
+      repoDelivery: [],
+      deliveries: [],
+    });
+    const { container } = render(ui);
+
+    const line = container.querySelector('[data-earlier-approval]');
+    expect(line?.textContent).toBe(
+      `Approved earlier by Ada L. · ${new Date('2026-09-15T14:22:00.000Z').toLocaleString()} · 2 commits — not merged`,
+    );
   });
 });

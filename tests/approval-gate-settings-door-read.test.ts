@@ -135,6 +135,8 @@ describe('getForWorkItem hands the settings door ONLY to a workflow:manage holde
       gate: null,
       canDecide: false,
       routedToLabel: null,
+      // No gate, so no earlier approval to name either (MOTIR-5863).
+      earlierApproval: null,
       settingsDoor: null,
       // No gate, nothing to press, nothing stamped (MOTIR-5234).
       stamp: null,

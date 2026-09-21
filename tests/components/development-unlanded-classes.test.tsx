@@ -363,3 +363,62 @@ describe('the row draws the class, and offers only what that class allows', () =
     ).toBeTruthy();
   });
 });
+
+// THE SPENT APPROVAL, NAMED (Bug MOTIR-5863; § 28 panel 1's `af-record`, FIRST span). The
+// re-asked gate is a fresh `awaiting` row, so its own `decidedByLabel` / `decidedAt` are null —
+// the band's provenance line comes from the read's `earlierApproval`, never from the gate.
+describe('the re-asked record band opens with the approval that was spent', () => {
+  const SPENT_AT = '2026-09-15T14:22:00.000Z';
+  // As the reader SEES it — the ICU plural resolved, the bold name flattened (the mould this
+  // file's band-1 assertion uses).
+  const earlierLine = (name: string, commits: number) =>
+    `Approved earlier by ${name} · ${new Date(SPENT_AT).toLocaleString()} · ${commits} commits — not merged`;
+  const reaskedMembers = () => members({ exit: queueExit(), requeueable: true });
+
+  it('names who approved, when and over how many commits — FIRST, before the reason', () => {
+    renderBlock({
+      members: reaskedMembers(),
+      earlierApproval: { decidedByLabel: 'Ada L.', decidedAt: SPENT_AT, commits: 2 },
+    });
+
+    const line = screen.getByText(whole(earlierLine('Ada L.', 2)));
+    const exit = screen.getByText(
+      whole(plain(fill(pra.exit.left, { pr: GATEWAY_NAME, reason: pra.exit.reason.CI_FAILURE }))),
+    );
+    // Panel 1's order: the provenance, then the exit it explains.
+    expect(line.compareDocumentPosition(exit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('counts the SPENT approval’s commits, not the set now being asked about', () => {
+    renderBlock({
+      members: reaskedMembers(),
+      earlierApproval: { decidedByLabel: 'Ada L.', decidedAt: SPENT_AT, commits: 3 },
+    });
+    expect(screen.getByText(whole(earlierLine('Ada L.', 3)))).toBeTruthy();
+  });
+
+  it('an unattributable decider reads as such — never as nobody', () => {
+    renderBlock({
+      members: reaskedMembers(),
+      earlierApproval: { decidedByLabel: null, decidedAt: SPENT_AT, commits: 2 },
+    });
+    expect(
+      screen.getByText(whole(earlierLine(en.approvalGate.record.unattributed, 2))),
+    ).toBeTruthy();
+  });
+
+  it('no earlier approval on the read ⇒ no line — the band is not faked from the fresh gate', () => {
+    renderBlock({ members: reaskedMembers(), earlierApproval: null });
+    expect(screen.queryByText(/Approved earlier by/)).toBeNull();
+    // The rest of the band is untouched.
+    expect(screen.getByText(whole(plain(pra.exit.reasked.failure)))).toBeTruthy();
+  });
+
+  it('a gate that is NOT re-asked keeps its band — the line rides only on the re-ask', () => {
+    renderBlock({
+      members: members({}),
+      earlierApproval: { decidedByLabel: 'Ada L.', decidedAt: SPENT_AT, commits: 2 },
+    });
+    expect(screen.queryByText(/Approved earlier by/)).toBeNull();
+  });
+});

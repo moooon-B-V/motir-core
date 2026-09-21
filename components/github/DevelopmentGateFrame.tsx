@@ -21,6 +21,7 @@ import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type {
   ApprovalGateDTO,
   ApproveAndMergeMemberOutcomeDTO,
+  EarlierApprovalDTO,
   GateDecision,
   PullRequestApprovalMemberDTO,
 } from '@/lib/dto/approvalGate';
@@ -87,6 +88,13 @@ export interface DevelopmentGateRead {
    * for every other host, which keeps each shipped frame byte-for-byte as it was.
    */
   mergeSubjectVersion?: string | null;
+  /**
+   * The approval a RE-ASKED merge gate replaced (Bug MOTIR-5863; § 28 panel 1) — the record
+   * band's first line. Drawn only when the frame is re-asked; absent or null, the band is
+   * exactly what it was, and it is never reconstructed from the fresh gate, whose decider
+   * fields are null by construction.
+   */
+  earlierApproval?: EarlierApprovalDTO | null;
 }
 
 /**
@@ -814,7 +822,29 @@ export function DevelopmentGateFrame({
   // (§ 28 panel 1). It is the one question with history behind it: the reader is being
   // asked again because a press of theirs did not land, and the reason has to be on screen
   // WHILE they decide rather than only after.
-  const awaitingRecord = reasked && exitParts.length > 0 ? <>{exitParts}</> : null;
+  // ⚠️ ITS FIRST LINE NAMES THE APPROVAL THAT WAS SPENT (Bug MOTIR-5863; panel 1's first
+  // span) — the provenance that makes *that approval is spent* a statement about something
+  // on screen. It comes from the read, never from `gate`: the re-asked gate is a fresh row
+  // whose decider and decision time are null by construction.
+  const earlier = reasked ? (read.earlierApproval ?? null) : null;
+  const earlierLine = earlier ? (
+    <span className="w-full basis-full" data-earlier-approval>
+      {t.rich('reasked.earlier', {
+        // An unattributable decider is SAID, never shown as nobody (§6b).
+        name: earlier.decidedByLabel ?? tGate('record.unattributed'),
+        date: new Date(earlier.decidedAt).toLocaleString(),
+        count: earlier.commits,
+        b: bold,
+      })}
+    </span>
+  ) : null;
+  const awaitingRecord =
+    reasked && exitParts.length > 0 ? (
+      <>
+        {earlierLine}
+        {exitParts}
+      </>
+    ) : null;
   const decisionAccepted = isDecision && gate.state === 'approved';
   const acceptedBlob = decisionAccepted ? parseDecisionVersion(gate.subjectVersion)?.blob : null;
   const recordDetail = decisionAccepted ? (

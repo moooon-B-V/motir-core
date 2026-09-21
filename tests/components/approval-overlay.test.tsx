@@ -97,6 +97,7 @@ function readOf(overrides: Partial<ApprovalGateOverlayReadDTO> = {}): ApprovalGa
     // The field is REQUIRED rather than optional so a read that forgot to answer
     // *what changed?* is a compile error and not a silent empty notice.
     movedSince: [],
+    earlierApproval: null,
     subject: {
       state: 'resolved',
       kind: 'design_result',

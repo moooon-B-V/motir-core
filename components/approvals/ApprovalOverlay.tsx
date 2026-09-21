@@ -600,6 +600,7 @@ export function ApprovalOverlay() {
               canDecide: read.canDecide && !decidedState,
               routedToLabel: read.routedToLabel,
               members: subject.members,
+              earlierApproval: read.earlierApproval,
             }}
             gateActions={{
               decide: decideApprovalGateAction,

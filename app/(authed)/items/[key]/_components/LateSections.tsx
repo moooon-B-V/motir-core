@@ -114,6 +114,9 @@ function frameGateFor(r: LateReads, acceptanceLeads: boolean): DevelopmentGateRe
           // The PRIMARY gate's stamp — it covers the pull requests beneath it too.
           stamp: read.stamp,
           members: r.mergeGate.members,
+          // The approval a re-asked merge gate replaced (MOTIR-5863) — the merge read's,
+          // like `members`, whichever gate leads the frame.
+          earlierApproval: r.mergeGate.earlierApproval,
         }
       : null;
   const merge = r.mergeGate.gate ? primary(r.mergeGate) : null;
