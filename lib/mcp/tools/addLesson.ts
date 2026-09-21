@@ -11,6 +11,7 @@ import {
   canonicalizeLessonPhases,
   preprocessLessonPhases,
 } from '@/lib/lessons/phaseAxis';
+import { LESSON_KINDS } from '@/lib/lessons/kindAxis';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
@@ -47,8 +48,9 @@ import { projectKeyField } from './sprintRef';
 
 export const ADD_LESSON_TOOL_NAME = 'add_lesson';
 
-/** The store's routing-axis vocabularies, mirrored from motir-ai's enums. */
-const LESSON_KINDS = ['epic', 'story', 'task', 'bug', 'subtask'] as const;
+/** The store's routing-axis vocabularies, mirrored from motir-ai's enums. The
+ *  KIND axis lives in `lib/lessons/kindAxis.ts` (MOTIR-5622), shared with the
+ *  other lesson tool so the two cannot disagree. */
 const LESSON_TYPES = [
   'code',
   'design',
@@ -113,8 +115,11 @@ const inputSchema = {
     .array(z.enum(LESSON_KINDS))
     .optional()
     .describe(
-      'WHICH WORK-ITEM KINDS this lesson is about, and one of the three axes that decide when a ' +
-        'future plan is shown it. LEAVING IT OUT MEANS "every kind" — occasionally right, and ' +
+      'WHICH LEVEL this lesson is about — a work-item KIND, or "project" / "onboarding" for a ' +
+        'mistake made laying a project\'s top level ("onboarding" when that plan is carved from ' +
+        'the direction docs) — and one of the three axes that decide when a future plan is shown ' +
+        'it. A mistake made LAYING a level is filed under the level laid under, not the kind of ' +
+        'its children. LEAVING IT OUT MEANS "every kind" — occasionally right, and ' +
         'usually the reason a lesson turns up in plans it has nothing to do with. Say what you ' +
         'mean on each axis rather than skipping it.',
     ),

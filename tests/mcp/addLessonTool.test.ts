@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import { runAddLesson, ADD_LESSON_TOOL_NAME } from '@/lib/mcp/tools/addLesson';
+import { runAddLesson, registerAddLesson, ADD_LESSON_TOOL_NAME } from '@/lib/mcp/tools/addLesson';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -128,6 +128,24 @@ describe('add_lesson — registration', () => {
     // standing instructions the planner is given (MOTIR-3336).
     expect(TOOL_PERMISSIONS[ADD_LESSON_TOOL_NAME]).toBe('lesson:manage');
   });
+
+  // MOTIR-5622 — the schema is what refuses a kind, so it is asserted on the
+  // SHIPPED schema: every lay target parses, and a non-member is still refused.
+  it('its kinds schema takes every lay target and refuses a non-member', () => {
+    let config: { inputSchema: Record<string, { parse(v: unknown): unknown }> } | undefined;
+    registerAddLesson(
+      {
+        registerTool(_name: string, c: typeof config) {
+          config = c;
+        },
+      } as never,
+      () => ({}) as never,
+    );
+    const kinds = config!.inputSchema['kinds']!;
+    const legal = ['project', 'onboarding', 'epic', 'story', 'task', 'bug', 'subtask'];
+    expect(kinds.parse(legal)).toEqual(legal);
+    expect(() => kinds.parse(['not-a-member'])).toThrow();
+  });
 });
 
 describe('add_lesson — refused BEFORE any upstream call', () => {
@@ -234,6 +252,24 @@ describe('add_lesson — the axes round-trip as stored', () => {
     expect(body['kinds']).toEqual(['story']);
     expect(body['types']).toEqual(['code']);
     expect(body['phases']).toEqual(['author']);
+  });
+
+  // MOTIR-5622 — the two lay targets that are not cards are legal kinds, and
+  // travel to motir-ai as given. Before this, `z.enum` refused both, so a
+  // mistake made laying a project's top level could only be filed as `epic`.
+  it.each([['project'], ['onboarding']])('sends kinds: [%s] as given', async (kind) => {
+    const fx = await makeWorkItemFixture();
+    const upstream = stubUpstream(() =>
+      jsonResponse(wireLesson({ kinds: [kind], types: [], phases: ['lay'] }), 201),
+    );
+
+    await runAddLesson(
+      { projectKey: fx.projectIdentifier, ...INPUT, kinds: [kind] as never, phases: ['lay'] },
+      fx.ctx,
+    );
+
+    const body = JSON.parse(upstream.inits[0]!.body as string) as Record<string, unknown>;
+    expect(body['kinds']).toEqual([kind]);
   });
 
   // ── MOTIR-5081 — the FOURTH axis, and the one that is SCALAR ─────────────

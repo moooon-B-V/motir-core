@@ -85,9 +85,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
       kinds: {
         type: 'array',
-        items: { type: 'string', enum: ['epic', 'story', 'task', 'bug', 'subtask'] },
+        items: {
+          type: 'string',
+          enum: ['project', 'onboarding', 'epic', 'story', 'task', 'bug', 'subtask'],
+        },
         description:
-          'WHICH WORK-ITEM KINDS this lesson is about, and one of the three axes that decide when a future plan is shown it. LEAVING IT OUT MEANS "every kind" — occasionally right, and usually the reason a lesson turns up in plans it has nothing to do with. Say what you mean on each axis rather than skipping it.',
+          'WHICH LEVEL this lesson is about — a work-item KIND, or "project" / "onboarding" for a mistake made laying a project\'s top level ("onboarding" when that plan is carved from the direction docs) — and one of the three axes that decide when a future plan is shown it. A mistake made LAYING a level is filed under the level laid under, not the kind of its children. LEAVING IT OUT MEANS "every kind" — occasionally right, and usually the reason a lesson turns up in plans it has nothing to do with. Say what you mean on each axis rather than skipping it.',
       },
       types: {
         type: 'array',
@@ -1620,9 +1623,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
       kinds: {
         type: 'array',
-        items: { type: 'string', enum: ['epic', 'story', 'task', 'bug', 'subtask'] },
+        items: {
+          type: 'string',
+          enum: ['project', 'onboarding', 'epic', 'story', 'task', 'bug', 'subtask'],
+        },
         description:
-          'The work-item KIND(s) this search is about. Omitting it leaves the axis UNCONSTRAINED, which is often right — a lesson tagged with no kind reaches every query either way.',
+          'The LEVEL this search is about: the work-item KIND you are writing or laying under, or "project" / "onboarding" when laying a project\'s top level ("onboarding" for a first plan carved from the direction docs). Laying a level narrows on the target you lay under, not the kind of its children. Omitting it leaves the axis UNCONSTRAINED, which is often right — a lesson tagged with no kind reaches every query either way.',
       },
       types: {
         type: 'array',
