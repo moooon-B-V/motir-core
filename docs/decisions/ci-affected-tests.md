@@ -1,6 +1,6 @@
 # A pull request runs the Vitest files its diff can reach — what `--changed` sees, what it cannot, and what it saves
 
-**Status:** accepted · **Date:** 2026-09-13 · **Card:** Subtask MOTIR-5322 (Task MOTIR-5321) ·
+**Status:** accepted 2026-09-13; **reversed by Amendment 1 (2026-09-21, at the end)** · **Date:** 2026-09-13 · **Card:** Subtask MOTIR-5322 (Task MOTIR-5321) ·
 **Evidence pinned at:** `motir-core` `origin/main` @ `f59db9679dd1ae82db553273ca043fc39e42086f`,
 `vitest@4.1.7` as installed from `pnpm-lock.yaml` at that sha · **Amends:**
 [`merge-queue.md`](./merge-queue.md) §3, the _Pull request_ row — see §4
@@ -297,3 +297,205 @@ full suite against the same tree and fails the same way.
 **Where to look first if this ever goes wrong:** re-run this script on the pull request's squash commit
 and check whether the failing test was selected. If it was not, name the input it read, and add it to
 §2.1 or widen `ALWAYS_RUN_PATTERN` — in the one place each lives.
+
+---
+
+## Amendment 1 (2026-09-21) — the median is 66.5% over 118 pull requests: NO-GO by §4's own line; revert the pull-request lane to the full suite
+
+**Card:** Bug MOTIR-5924 (discovered in MOTIR-5324's case 5) · **Evidence pinned at:** `motir-core`
+`origin/main` @ `1f12eca70e32e6ff5513d2f38280f166a4eb9f0a`, `vitest@4.1.7`, a fresh
+`pnpm install --frozen-lockfile` + `prisma generate` in a worktree at that sha. The instrument is §3's,
+unchanged.
+
+> **What changed is not the import graph — it is which pull requests land.** Scored against today's
+> graph, the sixteen pull requests §3 measured still select a median **20.9%**. The last thirty select
+> **73.2%**, the last 260 **66.5%**, and no edge cut that a card could make brings either under 50%.
+
+### A1.1 — §3 re-measured at the pin
+
+```sh
+pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --at 1f12eca70
+pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --at 1f12eca70 --limit 260 --json
+```
+
+**1,984 spec files · always-run 408 (20.6%, was 342 of 1,649 = 20.7%) · setup-closure files the
+force-full list does not cover: none.** The table, as the script prints it:
+
+| PR    | commit      | changed | app | force-full on                                                                           | graph | + always-run | files |  cost |
+| ----- | ----------- | ------: | :-: | --------------------------------------------------------------------------------------- | ----: | -----------: | ----: | ----: |
+| #3027 | `1f12eca70` |       8 | yes | —                                                                                       |    89 |          477 | 24.0% | 23.1% |
+| #3026 | `5888abd14` |       3 | yes | —                                                                                       |  1234 |         1452 | 73.2% | 79.1% |
+| #3023 | `475c9b573` |      11 | yes | —                                                                                       |  1351 |         1550 | 78.1% | 81.7% |
+| #3024 | `a3b605e20` |      30 | yes | —                                                                                       |  1363 |         1560 | 78.6% | 82.1% |
+| #3020 | `9004ed77b` |      10 | yes | —                                                                                       |  1080 |         1319 | 66.5% | 72.6% |
+| #3022 | `0e6d99688` |       1 | yes | —                                                                                       |     1 |          409 | 20.6% | 18.9% |
+| #3021 | `7c7bea604` |       1 | no  | skipped                                                                                 |     — |            — |     — |     — |
+| #3015 | `c4c62a837` |      61 | yes | —                                                                                       |  1352 |         1551 | 78.2% | 81.7% |
+| #3010 | `9372f7d5c` |      38 | yes | `prisma/migrations/20260921090000_add_monitor_issue_authoring_job/migration.sql`        |     — |         1984 |  100% |  100% |
+| #3014 | `409632726` |      16 | yes | —                                                                                       |  1350 |         1549 | 78.1% | 81.7% |
+| #3019 | `d85ce78c2` |      10 | yes | `.github/workflows/ci.yml`                                                              |     — |         1984 |  100% |  100% |
+| #3005 | `c4b5298f8` |      49 | yes | `prisma/migrations/20260920090000_add_planning_parking_edges/migration.sql`             |     — |         1984 |  100% |  100% |
+| #3018 | `afb638546` |       4 | yes | —                                                                                       |  1080 |         1319 | 66.5% | 72.6% |
+| #3017 | `4f81cbdcf` |       2 | no  | skipped                                                                                 |     — |            — |     — |     — |
+| #3012 | `a1aa449ec` |      23 | yes | —                                                                                       |  1350 |         1548 | 78.0% | 81.6% |
+| #3013 | `af6618ccd` |      14 | yes | `prisma/migrations/20260921090000_email_delivery_created_at_index/migration.sql`        |     — |         1984 |  100% |  100% |
+| #3016 | `6da90c91c` |       3 | no  | skipped                                                                                 |     — |            — |     — |     — |
+| #3011 | `bb0180061` |      17 | yes | `prisma/migrations/20260921090000_add_job_dlq_standing_filing/migration.sql`            |     — |         1984 |  100% |  100% |
+| #2992 | `de31060f1` |      78 | yes | `package.json`                                                                          |     — |         1984 |  100% |  100% |
+| #3009 | `5dd09995c` |       7 | yes | —                                                                                       |  1234 |         1452 | 73.2% | 79.1% |
+| #3008 | `f0ff631a2` |       1 | no  | skipped                                                                                 |     — |            — |     — |     — |
+| #3007 | `cdcebaf1e` |       3 | yes | —                                                                                       |  1349 |         1548 | 78.0% | 81.6% |
+| #3006 | `38310cc7a` |      10 | yes | —                                                                                       |   157 |          541 | 27.3% | 26.7% |
+| #2995 | `ad94477f4` |      59 | yes | `prisma/migrations/20260919190000_add_acceptance_result_gate_kind/migration.sql`        |     — |         1984 |  100% |  100% |
+| #3004 | `264ef6054` |       6 | yes | —                                                                                       |  1351 |         1549 | 78.1% | 81.7% |
+| #2994 | `6c2e687d2` |      34 | yes | —                                                                                       |  1359 |         1556 | 78.4% | 81.9% |
+| #3002 | `69d8b9c7b` |       9 | yes | —                                                                                       |  1234 |         1452 | 73.2% | 79.1% |
+| #3003 | `ac5dfcf06` |       2 | yes | —                                                                                       |   206 |          578 | 29.1% | 28.7% |
+| #3001 | `fba2c375e` |      13 | yes | —                                                                                       |  1238 |         1455 | 73.3% | 79.2% |
+| #2998 | `ded9b1ca2` |      21 | yes | `prisma/migrations/20260919210000_project_planner_bug_destination_folder/migration.sql` |     — |         1984 |  100% |  100% |
+
+| Window                                 | pull requests | app=false | force-full | measured | median selected / total |   p90 | median cost share | graph alone | above 50% |
+| -------------------------------------- | ------------: | --------: | ---------: | -------: | ----------------------: | ----: | ----------------: | ----------: | --------: |
+| §3, at `f59db9679` (#2795–#2842)       |            30 |         8 |          6 |       16 |                   20.9% | 77.3% |             18.8% |        0.1% |    3 / 16 |
+| last 30, at `1f12eca70` (#2992–#3027)  |            30 |         4 |          8 |       18 |               **73.2%** | 78.4% |             79.1% |       62.2% |   14 / 18 |
+| last 260, at `1f12eca70` (#2762–#3027) |           260 |        59 |         83 |      118 |               **66.5%** | 78.2% |             72.6% |       54.4% |  66 / 118 |
+
+It agrees with the legs' own logs: MOTIR-5924 read 15 real `pull_request` runs between 2026-09-20 08:59Z
+and 2026-09-21 16:29Z at a median of 73.2%, 11 of 15 above 50%.
+
+**The 118, in consecutive windows of twenty** (median selected / total, and how many above 50%):
+#2762–#2796 **66.4%** (10) · #2791–#2826 **20.6%** (6) · #2827–#2872 27.7% (9) · #2874–#2920 24.9% (9) ·
+#2926–#2986 **66.5%** (16) · #2993–#3027 **73.2%** (16). **§3's window was the low trough of a bimodal
+series**, and the twenty pull requests immediately before it sat at 66.4%. §3 measured correctly; thirty
+consecutive pull requests were too few to see the mode it was not in.
+
+### A1.2 — The graph did not invert; the pull requests did
+
+The same script, with §3's sixteen measured pull requests scored against **today's** graph (taken from
+the `--limit 260` run above): **median 20.9%**, fourteen of the sixteen within a point of §3's cell.
+#2829 moved 21.0% → 24.6%, and #2842 moved 21.4% → 66.6% — its files have since been pulled into the hub. So the graph
+grew, but modestly, and the jump from 20.9% to 73.2% is the _mix_: the last month's pull requests are
+approval gates, merge queues, CI promotion and job definitions — the product's hub — and user-facing
+copy, and every one of those reaches half the suite.
+
+**How much of the codebase is hub**, counted with a probe that rebuilds the edges `getTestDependencies`
+walks (the same `transformRequest` → `deps` + `dynamicDeps` rule, `node_modules` excluded) and counts,
+for each source module, the spec graphs that contain it:
+
+| At                        | source modules | reached by ≥ half the specs |
+| ------------------------- | -------------: | --------------------------: |
+| `f59db9679` (1,649 specs) |          1,871 |                 354 (18.9%) |
+| `1f12eca70` (1,984 specs) |          2,120 |                 430 (20.3%) |
+
+A fifth of the source tree was already a hub when §4 said GO, and it still is. A pull request that
+touches any of those 430 modules pays for about three quarters of the suite.
+
+### A1.3 — The hubs, and each hub's reach
+
+The changed file with the largest reach, for every measured pull request above 50% in the last thirty,
+with its reach then and now (specs whose graph contains it):
+
+| Hub                                                | pull requests it carried over 50% | reach at `f59db9679` | reach at `1f12eca70` |
+| -------------------------------------------------- | --------------------------------: | -------------------: | -------------------: |
+| `messages/en.json`                                 |                                 8 |        1,083 / 1,649 |        1,349 / 1,984 |
+| `lib/git/errors.ts`, `lib/git/providers/github.ts` |                                 2 |          997 / 1,649 |        1,234 / 1,984 |
+| `lib/approvalGates/gateSet.ts`                     |                                 2 |      (did not exist) |        1,080 / 1,984 |
+| `lib/jobs/definitions/pullRequestReconcile.ts`     |                                 1 |      (did not exist) |        1,234 / 1,984 |
+| `lib/jobs/definitions/dailyHealthCheck.ts`         |                                 1 |          997 / 1,649 |        1,234 / 1,984 |
+
+And the modules they route through, which a change to any file below them inherits:
+
+| Module                                     | reach at `f59db9679` | reach at `1f12eca70` |
+| ------------------------------------------ | -------------------: | -------------------: |
+| `lib/i18n/locales.ts`                      |                1,161 |                1,425 |
+| `lib/db.ts`                                |                1,051 |                1,294 |
+| `lib/ai/motirAiClient.ts`                  |                1,009 |                1,249 |
+| `lib/repositories/githubRepoRepository.ts` |                1,002 |                1,239 |
+| `lib/git/index.ts`                         |                  997 |                1,234 |
+| `lib/i18n/messages.ts`                     |                  879 |                1,100 |
+| `lib/github/checkRuns.ts`                  |                  859 |                1,079 |
+| `lib/services/workItemsService.ts`         |                  859 |                1,078 |
+
+**Two corrections to the card that commissioned this.** `lib/services/changeRequestStatusSync.ts` is
+not a 1,000-spec file — its reach is **313** (136 at the pin). #3026's 1,234 comes from
+`lib/git/errors.ts`, the other file in the same diff. And `lib/approvalGates/gateSet.ts` reaches 1,080
+because `lib/services/gateSetFor.ts` imports it and `workItemsService` imports `gateSetFor`.
+
+**The edge that ties the hub together is a cycle.** Sixteen modules are one strongly connected
+component, so any spec that reaches one reaches all of them and everything they import:
+`workItemsService`, `boardsService`, `projectsService`, `approvalGatesService`, `ciPromotion`,
+`designEvidenceService`, `dispatchRunService`, `mergeQueueExitService`, `pullRequestMergeService`,
+`pullRequestReviewSync`, `syncedMergeRunner` (all under `lib/services/`), and
+`lib/approvalGates/{registry,subjectSummary,acceptanceResultHandler,designResultHandler,pullRequestApprovalHandler}.ts`.
+It closes because the gate registry's handlers import `workItemsService`, which imports the registry
+(MOTIR-4887, #2897), and `ciPromotion` imports `pullRequestReviewSync` → `syncedMergeRunner` →
+`pullRequestMergeService` → `ciPromotion`. At `f59db9679` the largest component was a different
+fourteen: `lib/git/index.ts`, the GitLab provider and the job registry and engine.
+
+### A1.4 — What cutting an edge buys, simulated
+
+The probe replays the last thirty against the edge set with edges removed; the rule, the always-run set
+(recomputed: 408) and the diffs are §3's. Baseline 73.2% · 14 of 18 above 50%.
+
+| Edges removed                                                                                                                                                                           | `workItemsService`'s closure | median selected / total | above 50% |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------: | ----------------------: | --------: |
+| none                                                                                                                                                                                    |                          428 |                   73.2% |   14 / 18 |
+| `workItemsService` → `ciPromotion`                                                                                                                                                      |                          415 |                   73.2% |   14 / 18 |
+| `workItemsService` → `ciPromotion`, `approvalGatesService`, `approvalGates/registry`, `designEvidenceService`, `gateSetFor`, `ciAllowanceService`, `dispatchRunService` (seven at once) |                          346 |                   73.2% |   14 / 18 |
+| the two service-layer imports of the catalogue: `workflowsService` and `pullRequestAutoMergeService` → `lib/i18n/messages.ts` (`en.json`'s reach falls 1,349 → 581)                     |                          428 |                   66.5% |   11 / 18 |
+
+**No edge a card could cut brings the median under 50%.** The PR-and-CI hub reaches ~1,080–1,234 specs
+by more paths than any one module's imports — route handlers, the job registry, test fixtures — so
+removing even seven of `workItemsService`'s outgoing edges together leaves every selection where it was.
+The catalogue cut is real (three pull requests fall under the line) and still leaves the median at
+66.5%.
+
+**And a lazy import cuts nothing.** `getTestDependencies` follows `transformed.dynamicDeps` (§1), so an
+`await import('./ciPromotion')` with a literal specifier is still an edge in the selection's graph. An
+edge leaves the graph only by being removed from the code — an injected dependency, an event, a module
+split — which is an architecture change, not a CI one.
+
+### A1.5 — The decision: NO-GO, revert the pull-request lane to the full suite
+
+**§4's line was: no-go if the median selected / total over non-force-full pull requests is above 50%.**
+Measured: **66.5% over the 118 such pull requests in the last 260** (73.2% over the last thirty's
+eighteen), and **83 of 260** hit the force-full set — under half, so that arm still holds. The median arm
+does not, and none of the three ways out holds:
+
+- **Keep** — no. The saving §5 bought the ejection trade with (_"the typical pull request's Vitest lane
+  falls to ~19% of its cost"_) is now a fall to **72.6%** of its cost on the typical subset pull request
+  (79.1% over the last thirty), for the same cost: a break the subset misses is found by the queue.
+  MOTIR-5324's wall clock points the same way — a median of **1,274 s** over the latest ten consecutive
+  pull-request runs against **875 s** for the ten before the merge. That comparison is not controlled
+  (other changes landed between the two windows), so it is recorded here as consistent with the
+  decision, not as its basis.
+- **Cut a named edge** — no. A1.4: none gets under 50%.
+- **Re-decide at a different threshold** — no. The threshold was set before the measurement to keep the
+  decision honest, and moving it after the measurement misses would undo that.
+
+So:
+
+| Lane               | Vitest             | Coverage gate                                           | E2E       |
+| ------------------ | ------------------ | ------------------------------------------------------- | --------- |
+| **Pull request**   | **the full suite** | enforced on a pull request again, as before this record | unchanged |
+| **`merge_group`**  | the full suite     | enforced                                                | unchanged |
+| **push to `main`** | unchanged (none)   | unchanged                                               | unchanged |
+
+**What the revert carries, and what it keeps:**
+
+1. **`merge-queue.md` §3's _Pull request_ row is restored** — this record's §4 amended it, and this
+   amendment takes that back. _"A failure must be visible before queueing, or ejection becomes the
+   normal feedback path"_ holds again.
+2. **`ci.yml`'s `test` job loses the select step and the subset step, and the `vitest-full` label stops
+   meaning anything.** §5's re-decided `fail-fast` goes back to the reason `ci.yml` first gave for it:
+   affordable on `merge_group` because the pull-request lane runs the whole suite.
+3. **`scripts/ci/measure-affected-tests.mjs` keeps its MEASURE mode**, and `.github/ci/full-suite-paths.txt`
+   with it. They are what re-opens this record: **re-run the measurement over at least the last 100 pull
+   requests; if the median selected / total over the non-force-full ones is under 50%, subset selection
+   can come back without re-deriving §1–§2.** Whether SELECT mode stays in the script is the revert
+   card's call — nothing reads it once the step is gone.
+4. **The hub is still worth cutting, for the build and the type-checker if not for this lane.** The
+   sixteen-module cycle in A1.3 is a real architecture finding, and it is not scheduled by this record:
+   cutting it would not re-open this lane on A1.4's numbers.
+
+The revert is implemented by its own card, proposed alongside this record's pull request.
