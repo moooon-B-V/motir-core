@@ -2056,3 +2056,77 @@ describe('DESIGN REFERENCE — what this card is built against (MOTIR-5563)', ()
     expect(prompt).toContain('Committing the two files to the repository is OPTIONAL');
   });
 });
+
+describe('a BUG card is REPRODUCED before THE CARD IS WRONG is reachable (MOTIR-5944)', () => {
+  const bug = (over: Partial<DispatchPromptSource> = {}) =>
+    source({ key: 'PROD-50', kind: 'bug', title: 'Debounced runs go missing', ...over });
+
+  // The heading line of the exit, not the forward reference WHAT_TO_DO.code
+  // makes to it ("STOP through THE CARD IS WRONG below").
+  const EXIT_HEADING = 'THE CARD IS WRONG — its premise is false';
+
+  it('renders the reporter’s base, the git-log classifier and the MATRIX with its PR-body table', () => {
+    const { prompt } = assembleDispatchPrompt(bug());
+
+    expect(prompt).toContain('THIS IS A BUG CARD');
+    expect(prompt).toContain('REPORTER’S BASE, not at HEAD');
+    expect(prompt).toContain('`git log <reporter’s base>..HEAD -- <the paths that serve it>`');
+    expect(prompt).toContain('NEVER reproduced');
+    expect(prompt).toContain('fixed in between');
+    expect(prompt).toContain('obliges the MATRIX, not the verdict');
+    expect(prompt).toContain('VARY each one');
+    expect(prompt).toContain('results table — passing rows');
+    expect(prompt).toContain('in the pull request body');
+  });
+
+  it('places the block inside WHAT TO DO, ahead of the type’s own steps and of THE CARD IS WRONG', () => {
+    const { prompt } = assembleDispatchPrompt(bug());
+    const block = prompt.indexOf('THIS IS A BUG CARD');
+    const whatToDo = prompt.indexOf('WHAT TO DO');
+    const firstStep = prompt.indexOf('1. Read the card description above');
+    const exit = prompt.indexOf(EXIT_HEADING);
+
+    expect(exit, 'the exit still renders').toBeGreaterThan(-1);
+    expect(block).toBeGreaterThan(whatToDo);
+    expect(block).toBeLessThan(firstStep);
+    expect(block).toBeLessThan(exit);
+  });
+
+  it('keeps REVERT FIRST as the exit’s first step — the block gates the exit, it does not replace it', () => {
+    const { prompt } = assembleDispatchPrompt(bug());
+    expect(prompt.slice(prompt.indexOf(EXIT_HEADING))).toContain('1. REVERT FIRST.');
+  });
+
+  it.each(['task', 'subtask', 'story'] as const)(
+    'a %s card carries no reproduction block',
+    (kind) => {
+      const { prompt } = assembleDispatchPrompt(source({ kind }));
+      expect(prompt).not.toContain('THIS IS A BUG CARD');
+      expect(prompt).not.toContain('obliges the MATRIX');
+    },
+  );
+
+  it.each(['code', 'test', 'chore', null] as const)(
+    'renders for a bug of type %s, before THE CARD IS WRONG',
+    (type) => {
+      const { prompt } = assembleDispatchPrompt(bug({ type }));
+      const block = prompt.indexOf('THIS IS A BUG CARD');
+      expect(block).toBeGreaterThan(-1);
+      expect(block).toBeLessThan(prompt.indexOf(EXIT_HEADING));
+    },
+  );
+
+  it('renders on the session-lineage (parent / scoped run) grammar too', () => {
+    const { prompt, workflowMode } = assembleDispatchPrompt(
+      bug({ sessionBranch: 'motir/auto-run-1', runTargetKey: 'PROD-2' }),
+    );
+    expect(workflowMode).toBe('session_lineage');
+    expect(prompt.indexOf('THIS IS A BUG CARD')).toBeLessThan(prompt.indexOf(EXIT_HEADING));
+  });
+
+  it('a MANUAL bug gets no block — it has no pull request body and no CARD IS WRONG to point at', () => {
+    const { prompt } = assembleDispatchPrompt(bug({ type: 'manual', executor: 'human' }));
+    expect(prompt).not.toContain('THIS IS A BUG CARD');
+    expect(prompt).not.toContain(EXIT_HEADING);
+  });
+});

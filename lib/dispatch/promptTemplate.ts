@@ -650,6 +650,47 @@ export function recordsAcceptanceReceipt(src: {
   return /acceptanceStory\s*\(|acceptance\s+(video|receipt)/i.test(text);
 }
 
+/**
+ * The REPRODUCTION preamble for a BUG card (MOTIR-5944) — chosen by `kind`, not
+ * `type`, and PREPENDED to whichever steps the type selected.
+ *
+ * WHY IT EXISTS. A bug card is the one card whose premise can be false while the
+ * defect is real: somebody saw something fail. Without this block the only exit
+ * a non-reproducing premise meets is THE CARD IS WRONG, whose first step is to
+ * REVERT — so a clean probe routed an agent straight to "premise false" without
+ * ever asking whether the code moved since the report, or varying a condition
+ * the card did not name (MOTIR-2994: the defect was one untried condition away).
+ * This is the runbook's *a bug card's FIRST deliverable is the REPRODUCTION*
+ * rule (motir-meta `run.md`), in the one document a dispatched agent reads.
+ *
+ * ⚠️ ORDER IS THE POINT: it renders in WHAT TO DO, which precedes the outcome
+ * protocol, so it is read before the exit it gates. After the exit it would
+ * never be reached. Lettered, not numbered, so it does not collide with the
+ * type's own step 1.
+ */
+const BUG_REPRODUCTION_STEPS = [
+  'THIS IS A BUG CARD. Before step 1, REPRODUCE THE DEFECT — and do it before you',
+  'decide the card is wrong. A report that will not reproduce is not yet a false',
+  'premise:',
+  '',
+  'a. Reproduce at the REPORTER’S BASE, not at HEAD: the branch or commit the card',
+  '   names (if it names none, the last main commit before the card was filed),',
+  '   with the data setup and the screen, endpoint or command the card names.',
+  'b. It will not reproduce? One command separates two opposite findings:',
+  '   `git log <reporter’s base>..HEAD -- <the paths that serve it>`. Empty means',
+  '   nothing changed, so it was NEVER reproduced; non-empty means read those',
+  '   commits first — it may have been fixed in between.',
+  'c. A non-reproduction obliges the MATRIX, not the verdict. List the conditions',
+  '   the card’s premise holds fixed (timing, concurrency, input shape, empty vs',
+  '   populated, a missing or unresolvable value, …) and VARY each one. A passing',
+  '   condition measures only that condition. Put the results table — passing rows',
+  '   included — in the pull request body, and do not report the defect as absent',
+  '   while the original observation is unexplained. "Widened to N conditions,',
+  '   still unexplained" is an honest result.',
+  'd. Only after a–c may a falsified premise go to THE CARD IS WRONG below.',
+  '',
+];
+
 /** WHAT TO DO for an item with no `type` set — the card body is all we have. */
 const UNTYPED_WHAT_TO_DO = [
   '1. Read the card description above; it is the specification for this work.',
@@ -2067,6 +2108,13 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   // does. A manual item never reaches it.
   if (!manual && src.type === 'design') {
     whatToDo = [...whatToDo, ...designResultSteps(src.openDependentKeys)];
+  }
+  // The bug-card reproduction preamble (MOTIR-5944) — keyed on KIND, for any
+  // type, and prepended so it is read before the type's steps and before THE
+  // CARD IS WRONG. A manual item is excluded: it has no pull request body for
+  // the matrix and no outcome protocol for step d to point at.
+  if (!manual && src.kind === 'bug') {
+    whatToDo = [...BUG_REPRODUCTION_STEPS, ...whatToDo];
   }
 
   // A MANUAL item gets neither the git workflow nor the outcome protocol: it is
