@@ -9067,6 +9067,33 @@
       "title": "将此错误的关联从 <link>{key}</link> 移到此工作项？",
       "body": "{key} 保留其其他关联和历史记录。从下次检查开始，此错误的计数和回写解决将跟随此工作项。",
       "action": "移动关联"
+    },
+    "evidence": {
+      "show": "显示错误详情",
+      "hide": "隐藏错误详情",
+      "summaryLatest": "最近一次事件 {when}",
+      "summaryNoException": "无异常",
+      "summaryStale": "已过期",
+      "neverRead": "尚未读取错误详情——将在下次检查时获取。",
+      "noException": "此事件未包含异常，因此没有堆栈跟踪——它是作为消息记录的。",
+      "stale": "上次检查于 <t>{when}</t> 失败。以下是此前读取的最近一次事件，发生于 <b>{eventWhen}</b>。",
+      "exception": "异常",
+      "showFullMessage": "显示完整消息",
+      "showLess": "收起",
+      "request": "请求",
+      "stackTrace": "堆栈跟踪",
+      "framesGrouped": "你的代码 {inApp} 帧 · 框架 {framework} 帧 · 最近的调用在前",
+      "framesFlat": "{count, plural, other {# 帧}}，最近的调用在前",
+      "frameIn": "位于 {function}",
+      "showFramework": "显示 {count, plural, other {# 个框架帧}}",
+      "hideFramework": "隐藏框架帧",
+      "tags": "标签",
+      "showAllTags": "显示全部 {count} 个标签",
+      "latestEvent": "最近一次事件 <t>{when}</t>",
+      "eventId": "事件 {id}",
+      "copyEventId": "复制事件 ID",
+      "copied": "已复制",
+      "copyFailed": "无法复制——请手动选择 ID。"
     }
   }
 }
