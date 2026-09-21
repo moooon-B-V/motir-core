@@ -560,8 +560,9 @@ planned — there, the planner decides — so what it governs is, by constructio
 not yet laid.
 
 **Its body STRUCTURE is not `decision`'s.** A `decision` states a decision and
-its consequences; a `choice` states a question, its options with each option's
-axis and WHY, and what the pick gates. The canonical structure, and what the
+its consequences; a `choice` states a question, WHY it is a choice — which of
+the three situations `kind-container.md`'s choice rule names brought it back —
+its options with each option's axis and WHY, and what the pick gates. The canonical structure, and what the
 gate does with a body that deviates from it, are the approval gates ADR's to
 fix (its `decision_choice` amendment, MOTIR-5887). The per-type authoring bar
 that teaches a planner to write that structure is the `type-choice` pack
