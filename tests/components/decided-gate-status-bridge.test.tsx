@@ -101,6 +101,27 @@ describe('the decided-gate status bridge (MOTIR-5570)', () => {
     expect(rail()).toBe('in_progress');
   });
 
+  it('a CHOICE moves the rail by what it WROTE, never by its option-id outcomeRef (MOTIR-5896)', () => {
+    // A choice's `outcomeRef` is the option it picked (MOTIR-5893), so painting it
+    // as a status would put "managed-object-storage" on the rail. The overlay
+    // announces what the decision wrote, and that is what the rail shows.
+    render(page('in_review', 'g-choice'));
+    act(() =>
+      announceGateDecided({
+        gate: {
+          ...GATE,
+          id: 'g-choice',
+          kind: 'decision_choice',
+          state: 'approved',
+          outcomeRef: 'managed-object-storage',
+        },
+        filesKept: null,
+        statusWritten: 'done',
+      }),
+    );
+    expect(rail()).toBe('done');
+  });
+
   it('a decision announced BEFORE the page mounted is not re-applied', () => {
     act(() => announceGateDecided(decision('g-earlier', 'approved', 'done')));
     // The card has since been reopened; the store still remembers the old decision.
