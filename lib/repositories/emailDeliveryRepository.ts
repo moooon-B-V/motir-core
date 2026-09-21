@@ -25,6 +25,30 @@ export const emailDeliveryRepository = {
   },
 
   /**
+   * How many messages of these templates the provider accepted since `since`
+   * (MOTIR-5873) — the notification budget's measure. It counts ACROSS every
+   * workspace, because the quota it protects is the provider account's, not a
+   * tenant's.
+   *
+   * ⚠️ It takes `tx` and the caller must open it under the SYSTEM context:
+   * `email_delivery` is FORCE row-level security, so the same count read off
+   * the singleton, or under a workspace binding, is silently narrowed — a
+   * smaller, plausible number and a budget that never engages.
+   */
+  async countAcceptedSince(
+    where: { provider: string; templates: readonly string[]; since: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.emailDelivery.count({
+      where: {
+        provider: where.provider,
+        template: { in: [...where.templates] },
+        createdAt: { gte: where.since },
+      },
+    });
+  },
+
+  /**
    * Read one delivery by the PROVIDER's id. This is the lookup the delivery
    * webhook (MOTIR-3515) joins an inbound event on, and the one this service
    * uses to return the existing row when a retried send was deduped to the

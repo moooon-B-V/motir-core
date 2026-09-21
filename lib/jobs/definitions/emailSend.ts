@@ -35,6 +35,9 @@ export const emailSend = defineJob(
   // transient provider/network blips, so a few attempts with backoff is the
   // right intent. The idempotency key (the reset / invite token) keeps a retried
   // Server Action that re-fires the same send from double-delivering.
+  // One failure is NOT retried on this schedule: a spent provider QUOTA
+  // (`EMAIL_QUOTA_EXHAUSTED`, MOTIR-5873) dead-letters on its first attempt,
+  // because it cannot clear for hours — see `isNonRetryableFailure`.
   { id: 'email.send', retryPolicy: 'transient', idempotency: EMAIL_SEND_IDEMPOTENCY },
   async (ctx, services) => {
     // `event.data` is typed loosely on the shared JobContext; narrow it to the
@@ -62,6 +65,10 @@ export const emailSend = defineJob(
         // dashboard can look the message up with the provider before the
         // delivery surface (MOTIR-3517) exists to show it to them.
         providerMessageId: result.providerMessageId,
+        // Present only when the notification budget held the send back
+        // (MOTIR-5873) — the run SUCCEEDS, and this is where an operator
+        // reading `job_run.output` sees that nothing was sent, and why.
+        ...(result.skipped === undefined ? {} : { skipped: result.skipped }),
       };
     });
   },

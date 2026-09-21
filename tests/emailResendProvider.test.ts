@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EMAIL_PERMANENT_FAILURE_CODE,
+  EMAIL_QUOTA_EXHAUSTED_CODE,
   EMAIL_TRANSIENT_FAILURE_CODE,
   EmailDeliveryError,
   getEmailProvider,
@@ -225,6 +226,70 @@ describe('resendProvider', () => {
         errorResponse(429, 'rate_limit_exceeded', 'Too many requests'),
       );
       expect(err.kind).toBe('transient');
+      expect(err.code).toBe(EMAIL_TRANSIENT_FAILURE_CODE);
+      expect(err.retryable).toBe(true);
+    });
+
+    // MOTIR-5873. The same status as a rate limit, and the opposite meaning:
+    // the account's quota is spent and nothing clears it for hours. Production
+    // dead-lettered 277 of these as EMAIL_TRANSIENT_FAILURE after burning the
+    // retry budget minutes apart against the exhausted quota.
+    it('treats a 429 DAILY QUOTA as its own non-retryable kind, not a rate limit', async () => {
+      const err = await sendExpectingFailure(
+        errorResponse(
+          429,
+          'daily_quota_exceeded',
+          'You have reached your daily email sending quota.',
+        ),
+      );
+      expect(err.kind).toBe('quota_exhausted');
+      expect(err.code).toBe(EMAIL_QUOTA_EXHAUSTED_CODE);
+      // The property the job worker reads to dead-letter on this attempt.
+      expect(err.retryable).toBe(false);
+      expect(err.status).toBe(429);
+      expect(err.providerErrorName).toBe('daily_quota_exceeded');
+      // What an operator reads on the dead-letter row names the real cause.
+      expect(err.message).toContain('quota is exhausted');
+      expect(err.message).toContain('daily_quota_exceeded');
+      expect(err.message).not.toContain('transiently');
+    });
+
+    it('treats a 429 MONTHLY quota the same way', async () => {
+      const err = await sendExpectingFailure(
+        errorResponse(429, 'monthly_quota_exceeded', 'You have reached your monthly quota.'),
+      );
+      expect(err.kind).toBe('quota_exhausted');
+      expect(err.code).toBe(EMAIL_QUOTA_EXHAUSTED_CODE);
+      expect(err.retryable).toBe(false);
+    });
+
+    it('keeps a 429 with NO error name transient — only the name moves it to quota', async () => {
+      const err = await sendExpectingFailure(new Response('', { status: 429 }));
+      expect(err.kind).toBe('transient');
+      expect(err.retryable).toBe(true);
+    });
+
+    it('keeps a quota NAME on any status other than 429 out of the quota class', async () => {
+      // The classification keys on the pair, so a name alone reclassifies nothing.
+      const err = await sendExpectingFailure(
+        errorResponse(403, 'daily_quota_exceeded', 'unexpected pairing'),
+      );
+      expect(err.kind).toBe('permanent');
+    });
+
+    it('treats a 408 request timeout as transient and retryable', async () => {
+      const err = await sendExpectingFailure(errorResponse(408, 'request_timeout', 'Timed out'));
+      expect(err.kind).toBe('transient');
+      expect(err.code).toBe(EMAIL_TRANSIENT_FAILURE_CODE);
+      expect(err.retryable).toBe(true);
+    });
+
+    it('treats a 503 as transient and retryable', async () => {
+      const err = await sendExpectingFailure(
+        errorResponse(503, 'service_unavailable', 'Try again later'),
+      );
+      expect(err.kind).toBe('transient');
+      expect(err.retryable).toBe(true);
     });
 
     it('treats a network failure with no response as transient', async () => {
