@@ -107,6 +107,19 @@ export interface LinkedPullRequestDto {
     state: 'approved' | 'changes_requested';
     atCurrentHead: boolean;
   } | null;
+  /**
+   * The branch the pull request TARGETS (MOTIR-5916; design/github § 30). Null on a row
+   * mirrored before base branches were recorded — the copy then says *its base branch*,
+   * never a guessed `main`.
+   */
+  baseRef: string | null;
+  /**
+   * The host reports this pull request CONFLICTED with its base at its current head
+   * (MOTIR-5913's stored reading, read by `lib/github/mergeability.ts`'s one rule). What
+   * the row's *Conflicts with {base}* pill and the withdrawn band's `conflict` arm draw.
+   * `false` for an unknown reading — "not computed" is never a conflict (§ 30 Panel 6).
+   */
+  conflicted: boolean;
   /* ⚠️ `linkedManually` WAS HERE and is removed by MOTIR-4894, along with the
    * "linked manually" suffix it fed. It said the link was DECLARED rather than
    * inferred by the MOTIR-892 auto-resolver, and MOTIR-3674 deleted that

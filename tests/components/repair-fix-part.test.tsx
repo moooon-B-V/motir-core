@@ -40,12 +40,14 @@ const CORE = {
   number: CORE_PR.number,
   ci: 'failing' as const,
   queueExit: null,
+  conflict: null,
 };
 const GATEWAY = {
   repo: GATEWAY_PR.repo,
   number: GATEWAY_PR.number,
   ci: 'failing' as const,
   queueExit: null,
+  conflict: null,
 };
 
 function renderPart(repair: WorkItemRepairViewDto | null) {
@@ -203,6 +205,7 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
     number: GATEWAY_PR.number,
     ci: 'passing' as const,
     queueExit: { rawReason: 'CI_FAILURE', failingCheckName: 'CI complete' },
+    conflict: null,
   };
   const TAGS = ['<b>', '</b>', '<code>', '</code>'] as const;
   const plain = (text: string) => TAGS.reduce((out, tag) => out.split(tag).join(''), text);
@@ -261,5 +264,54 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
   it('the pointer state names no command and no sentence', () => {
     renderPart({ state: 'pointer', failing: [EJECTED], runTargetKey: 'ACME-3' });
     expect(within(part()).queryByTestId('repair-which')).toBeNull();
+  });
+});
+
+// A CONFLICTED member (MOTIR-5916; design/github § 30's fix part): green checks, no queue
+// exit, and the host reports it conflicts with its base. It is named on the CONFLICT line —
+// never on *Checks are failing*, which would be false — and the notes say the agent rebases
+// or resolves and that nothing is asked until a push.
+describe('a member failing only because it CONFLICTS (MOTIR-5916)', () => {
+  const CONFLICTED = {
+    repo: GATEWAY_PR.repo,
+    number: GATEWAY_PR.number,
+    ci: 'passing' as const,
+    queueExit: null,
+    conflict: { baseRef: 'main' },
+  };
+
+  it('names it on the conflict line with its base, and says how an agent resolves it', () => {
+    renderPart({ state: 'offer', failing: [CONFLICTED], lastGaveUp: null });
+    const part = screen.getByTestId('repair-fix-part');
+    expect(part.textContent).not.toContain('Checks are failing on');
+    expect(screen.getByTestId('repair-conflict-line').textContent).toBe(
+      fix.conflictOn
+        .replace('<prs></prs>', `${GATEWAY_PR.repo} · #${GATEWAY_PR.number}`)
+        .replace('{base}', 'main'),
+    );
+    expect(part.textContent).toContain(fix.howConflict);
+    expect(part.textContent).toContain(fix.rearm);
+  });
+
+  it('a row with no recorded base reads *its base branch*', () => {
+    renderPart({
+      state: 'offer',
+      failing: [{ ...CONFLICTED, conflict: { baseRef: null } }],
+      lastGaveUp: null,
+    });
+    expect(screen.getByTestId('repair-conflict-line').textContent).toBe(
+      fix.conflictOnNoBase.replace('<prs></prs>', `${GATEWAY_PR.repo} · #${GATEWAY_PR.number}`),
+    );
+  });
+
+  it('a member red on its OWN checks AND conflicted is on both lines', () => {
+    renderPart({
+      state: 'offer',
+      failing: [{ ...CONFLICTED, ci: 'failing' as const }],
+      lastGaveUp: null,
+    });
+    const part = screen.getByTestId('repair-fix-part');
+    expect(part.textContent).toContain('Checks are failing on');
+    expect(screen.getByTestId('repair-conflict-line')).toBeTruthy();
   });
 });

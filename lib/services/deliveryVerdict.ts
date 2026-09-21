@@ -46,6 +46,10 @@ export interface DeliveredPullRequest {
   state: string;
   merged: boolean;
   checkRuns: GithubCheckRun[];
+  /** The host's stored mergeability reading and its head (MOTIR-5913) —
+   *  `lib/github/mergeability.ts` reads the pair. */
+  mergeableState: string | null;
+  mergeableStateHeadSha: string | null;
 }
 
 /**

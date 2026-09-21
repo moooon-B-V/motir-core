@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   ApprovalGateError,
+  ApprovalGateMergeRefusedError,
   ApprovalGatePrimaryPendingError,
   ApprovalGateStaleSubjectError,
 } from '@/lib/approvalGates/errors';
@@ -137,7 +138,11 @@ export async function POST(
           : // …and a primary-pending refusal says WHICH question to answer first (MOTIR-5785).
             err instanceof ApprovalGatePrimaryPendingError
             ? { code: err.code, error: err.message, primary: err.primary }
-            : { code: err.code, error: err.message },
+            : // …and a conflict found at the press says WHICH members and that nothing was
+              // written (MOTIR-5915).
+              err instanceof ApprovalGateMergeRefusedError && err.atPress
+              ? { code: err.code, error: err.message, atPress: true, conflicts: err.conflicts }
+              : { code: err.code, error: err.message },
         { status: APPROVAL_GATE_STATUS[err.tag] },
       );
     }

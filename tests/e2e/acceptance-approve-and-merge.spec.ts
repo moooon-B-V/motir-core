@@ -225,7 +225,15 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       repositories: [`${WEB_REPO.owner}/${WEB_REPO.name}`, `${API_REPO.owner}/${API_REPO.name}`],
       pullRequests: {
         [prKey(API_REPO, PRS.queued.api.number)]: { outcome: 'enqueued' },
-        [prKey(API_REPO, PRS.refused.api.number)]: { outcome: 'refused', refusal: 'conflict' },
+        // ⚠️ A conflict the MERGE meets after the decision (§ 28), not one the press
+        // finds first: the host's read says `clean`, then the merge is refused
+        // (MOTIR-5915 — a `dirty` read would refuse at the press instead, § 30 Panel 5a).
+        [prKey(API_REPO, PRS.refused.api.number)]: {
+          outcome: 'refused',
+          refusal: 'conflict',
+          mergeable: true,
+          mergeableState: 'clean',
+        },
       },
     });
 

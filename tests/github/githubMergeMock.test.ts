@@ -283,3 +283,60 @@ describe('the merge webhook afterwards', () => {
     ]);
   });
 });
+
+// THE MERGEABILITY READ (MOTIR-5913, for bug MOTIR-5907) — `readChangeRequestMergeability`
+// through the real provider against the seam's pull-request read, with the seam's
+// INDEPENDENT mergeability knob. Unset, the read reports what the merge answer implies, so
+// every spec that never names the knob sees the host it always did.
+describe('the mergeability read — through the real readChangeRequestMergeability', () => {
+  const read = (number: number) =>
+    github.readChangeRequestMergeability({
+      installationId: 'inst-1',
+      owner: 'moooon',
+      name: 'acme',
+      number,
+    });
+
+  it('reports `dirty` / not mergeable, `clean` / mergeable, and `null` as not computed — with the head', async () => {
+    control({
+      repositories: ['moooon/acme'],
+      pullRequests: {
+        'moooon/acme#1': {
+          outcome: 'merged',
+          headSha: 'h-1',
+          mergeableState: 'dirty',
+          mergeable: false,
+        },
+        'moooon/acme#2': {
+          outcome: 'merged',
+          headSha: 'h-2',
+          mergeableState: 'clean',
+          mergeable: true,
+        },
+        'moooon/acme#3': {
+          outcome: 'merged',
+          headSha: 'h-3',
+          mergeableState: 'unknown',
+          mergeable: null,
+        },
+      },
+    });
+
+    expect(await read(1)).toEqual({ mergeable: false, mergeableState: 'dirty', headSha: 'h-1' });
+    expect(await read(2)).toEqual({ mergeable: true, mergeableState: 'clean', headSha: 'h-2' });
+    expect(await read(3)).toEqual({ mergeable: null, mergeableState: 'unknown', headSha: 'h-3' });
+  });
+
+  it('with the knob UNSET, a `conflict` answer reads `dirty` and a merge answer reads `clean`', async () => {
+    control({
+      repositories: ['moooon/acme'],
+      pullRequests: {
+        'moooon/acme#4': { outcome: 'refused', refusal: 'conflict', headSha: 'h-4' },
+        'moooon/acme#5': { outcome: 'merged', headSha: 'h-5' },
+      },
+    });
+
+    expect(await read(4)).toEqual({ mergeable: false, mergeableState: 'dirty', headSha: 'h-4' });
+    expect(await read(5)).toEqual({ mergeable: true, mergeableState: 'clean', headSha: 'h-5' });
+  });
+});

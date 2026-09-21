@@ -4583,6 +4583,10 @@ enum ApprovalGateSupersedeCause {
   member_closed
   /// A member pull request was converted back to a DRAFT (MOTIR-5699).
   member_drafted
+  /// A member pull request CONFLICTS with its base branch — the host reports it
+  /// `dirty` at its head, found by a base-branch push or at the press (MOTIR-5914,
+  /// for bug MOTIR-5907; design/github § 30).
+  conflict
   /// A delivery row joined or left the card.
   set_changed
   /// The work was pulled out of review, or moved to Cancelled.
@@ -6768,8 +6772,9 @@ model GithubPullRequest {
   /// as of the last delivery (MOTIR-5002). `NormalizedChangeRequest.draft` is
   /// where it is read from the payload; this is where it survives the delivery.
   ///
-  /// ⚠️ ITS ONE READER IS `resyncLinkedPullRequest`, and that narrowness is the
-  /// design. Every OTHER reader of this row must go on seeing a draft as an
+  /// ⚠️ ITS READERS ARE `resyncLinkedPullRequest` AND `mergeCandidateHead` (a draft
+  /// is no merge candidate — MOTIR-5699), and that narrowness is the design. Every
+  /// OTHER reader of this row must go on seeing a draft as an
   /// ordinary OPEN pull request — the `deferred_open_pr` count that holds a
   /// multi-repository parent open while one repository's chain is stopped, the
   /// delivery-set gate, the Development surface — so nothing here keys on it and
@@ -6794,6 +6799,25 @@ model GithubPullRequest {
   /// without claiming to know, and the backfill (merged rows only, where the flag
   /// decides nothing) say the same.
   draft                 Boolean?
+  /// The host's answer to *can this pull request merge into its base right now?* —
+  /// GitHub's raw `mergeable_state` (`clean`, `dirty`, `blocked`, `unstable`,
+  /// `behind`, `unknown`, …), as of the last time Motir ASKED (MOTIR-5913, for bug
+  /// MOTIR-5907; design/github § 30). Stored as TEXT, not an enum: the value set is
+  /// the host's and open, and every reader compares against `'dirty'` alone.
+  ///
+  /// ⚠️ IT IS ONLY MEANINGFUL AT `mergeableStateHeadSha`. A conflict usually arrives
+  /// with NO event on the pull request — another merge moves the BASE — so the
+  /// reading is refreshed by asking, not by a payload: the base-branch push
+  /// re-evaluation, the press-time read and the reconcile tick write it, and a
+  /// `synchronize` CLEARS it (a new head's mergeability is uncomputed). A reading
+  /// taken at an older head is not a conflict at the current one.
+  ///
+  /// ⚠️ NULL IS "NOT KNOWN", NEVER "CONFLICTED" — the MOTIR-5699 rule for `draft`.
+  /// GitHub itself answers `mergeable: null` until it has computed, and inventing a
+  /// conflict for that would hold healthy work.
+  mergeableState        String?             @map("mergeable_state")
+  /// The head commit `mergeableState` was read at. See above.
+  mergeableStateHeadSha String?             @map("mergeable_state_head_sha")
   /// Whether this pull request's association with a work item was DECLARED by a
   /// person or an agent (MOTIR-1596, design/github Panel 5) rather than inferred.
   ///

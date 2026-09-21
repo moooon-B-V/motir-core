@@ -3,7 +3,12 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { getGitProvider } from '@/lib/git';
 import { providerSupportsMerge } from '@/lib/git/provider';
 import { MergeChangeRequestError } from '@/lib/git/errors';
-import type { GitProviderId, MergeChangeRequestResult, MergeRefusalCode } from '@/lib/git/types';
+import type {
+  ChangeRequestMergeability,
+  GitProviderId,
+  MergeChangeRequestResult,
+  MergeRefusalCode,
+} from '@/lib/git/types';
 // ⚠️ The MEMBER SPELLING, not a merge gate: `owner/name#number@headSha` is how the
 // surviving approval gate names each of its members, so the pull request's version now
 // and the version the card was approved at are comparable (MOTIR-5613). It lives beside
@@ -17,6 +22,7 @@ import {
   ApprovalGateNotAuthorisedError,
   ApprovalGateNotFoundError,
   ApprovalGateSupersededError,
+  type MergeConflictMember,
   type MergeRefusalTag,
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -44,6 +50,7 @@ import type { PullRequestStandingExitDTO } from '@/lib/dto/approvalGate';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { projectAccessService } from './projectAccessService';
 import { queueExitCardMoves, settleUnlandedOutcome } from './mergeQueueExitService';
+import { pullRequestMergeabilityService } from './pullRequestMergeabilityService';
 import {
   pullRequestApprovalMembersService,
   toQueueExitDto,
@@ -726,6 +733,90 @@ export const pullRequestMergeService = {
   },
 };
 
+/** The waits between asks while the host answers `mergeable: null` at the press (MOTIR-5915):
+ *  two more asks, a second apart, then the press PROCEEDS as it always did (§ 30 rule 4). */
+export const PRESS_READ_RETRY_WAITS_MS = [1_000, 1_000] as const;
+
+/**
+ * THE PRESS-TIME MERGEABILITY READ (MOTIR-5915, for bug MOTIR-5907; design/github § 30
+ * rule 3, Panels 5a and 6).
+ *
+ * The approval commits in its own transaction BEFORE any merge is attempted (STEP 1 above),
+ * so a conflict the merge discovers arrives after the card already read Approved — the
+ * `in_review → approved → implemented` two seconds apart the bug reproduced. So each open
+ * member is asked FIRST, outside any transaction (a network call never holds one open):
+ *
+ *  · `dirty` / `mergeable: false` → the reading is stored, the question is WITHDRAWN and the
+ *    card held at Implemented through the one entry point the base-branch push also uses
+ *    (`pullRequestMergeabilityService.settleReading`), and the press is refused
+ *    `MERGE_CONFLICT` marked `atPress` — nothing was decided, so a reload shows the
+ *    withdrawn frame, never the awaiting one;
+ *  · `mergeable: null` → asked again {@link PRESS_READ_RETRY_WAITS_MS}, then the press
+ *    PROCEEDS: "not computed" is never a conflict, and the post-merge classification still
+ *    catches one that appears between this read and the merge;
+ *  · a read that THROWS → the press proceeds on the same reasoning — a host that did not
+ *    answer said nothing, and the merge path already turns a real refusal into a result.
+ *
+ * Only an AWAITING approve-to-merge gate is read for: a decided or superseded one is
+ * refused by the decide door with its own true reason (Panel 5b's stale tab), and reading
+ * the host first would only make that refusal slower.
+ */
+async function refuseAtPressOnConflict(gateId: string, ctx: ServiceContext): Promise<void> {
+  const target = await withWorkspaceContext(ctx, async (tx) => {
+    const gate = await approvalGateRepository.findById(gateId, tx);
+    if (!gate || gate.kind !== APPROVAL_KIND || gate.state !== 'awaiting') return null;
+    // A PRIMARY question still awaiting (a design, a decision, an acceptance) refuses this
+    // press by name in the decide door (MOTIR-5785) — and that refusal promises the host
+    // was never called, so nothing here asks it either.
+    const awaiting = await approvalGateRepository.findAwaitingByWorkItem(gate.workItemId, tx);
+    if (awaiting.some((row) => isPrimaryKind(row.kind))) return null;
+    return workItemDeliveryRepository.listByWorkItemWithChecks(gate.workItemId, tx);
+  });
+  if (!target) return;
+
+  const conflicts: MergeConflictMember[] = [];
+  for (const delivery of target) {
+    if (delivery.pullRequest.state !== 'open' || delivery.pullRequest.merged) continue;
+    const reading = await readAtPress(delivery.githubPullRequestId);
+    if (!reading) continue;
+    const settled = await pullRequestMergeabilityService.settleReading(
+      ctx.workspaceId,
+      delivery.githubPullRequestId,
+      reading,
+    );
+    if (settled.conflicted) {
+      conflicts.push({
+        pullRequest: `${delivery.repo.owner}/${delivery.repo.name}#${delivery.pullRequest.number}`,
+        baseRef: delivery.pullRequest.baseRef,
+      });
+    }
+  }
+  if (conflicts.length > 0) {
+    throw new ApprovalGateMergeRefusedError(gateId, 'MERGE_CONFLICT', { atPress: true, conflicts });
+  }
+}
+
+/** One member's host answer at the press — asked again while it is `null`, and `null`
+ *  (proceed) when the host will not say. */
+async function readAtPress(pullRequestId: string): Promise<ChangeRequestMergeability | null> {
+  for (let attempt = 0; ; attempt++) {
+    let reading: ChangeRequestMergeability | null;
+    try {
+      reading = await pullRequestMergeabilityService.readFromHost(pullRequestId);
+    } catch (err) {
+      console.warn('[pullRequestMergeService] the press could not read mergeability; proceeding', {
+        pullRequestId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+    if (!reading || reading.mergeable !== null || reading.mergeableState === 'dirty')
+      return reading;
+    if (attempt >= PRESS_READ_RETRY_WAITS_MS.length) return null;
+    await new Promise((resolve) => setTimeout(resolve, PRESS_READ_RETRY_WAITS_MS[attempt]));
+  }
+}
+
 /**
  * The press's two steps, once the gate is known to be the approve-to-merge kind — shared by
  * {@link pullRequestMergeService.approveAndMerge} and the route's `decideGate` so the two
@@ -735,6 +826,11 @@ async function approveAndMergeGate(
   input: Omit<DecideGateInput, 'decision'>,
   ctx: ServiceContext,
 ): Promise<ApproveAndMergeResult> {
+  // STEP 0 — ASK THE HOST BEFORE ANYTHING IS WRITTEN (MOTIR-5915, for bug MOTIR-5907;
+  // design/github § 30 rule 3). A member that cannot merge into its base refuses the press
+  // here, so the card never passes through `approved` on a merge that could only fail.
+  await refuseAtPressOnConflict(input.gateId, ctx);
+
   // STEP 1 — the approval, committed in the door's own transaction.
   const approval = await approvalGatesService.decide({ ...input, decision: 'approve' }, ctx);
 

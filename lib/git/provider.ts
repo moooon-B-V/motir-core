@@ -17,6 +17,8 @@ import type {
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
   CommitComparison,
+  ChangeRequestMergeability,
+  ChangeRequestMergeabilityInput,
   MergeChangeRequestInput,
   MergeChangeRequestResult,
   NormalizedDeploymentStatus,
@@ -290,6 +292,23 @@ export interface GitProvider {
    * entry point maps the refusal codes onto the gate's refusal union.
    */
   mergeChangeRequest?(input: MergeChangeRequestInput): Promise<MergeChangeRequestResult>;
+
+  /**
+   * READ whether one change request can merge into its base right now (MOTIR-5913,
+   * for bug MOTIR-5907) — asked BEFORE anybody is asked to approve-and-merge, so a
+   * conflict withdraws the question instead of being discovered by a refused merge.
+   *
+   * ⚠️ OPTIONAL, and implemented exactly where {@link mergeChangeRequest} is: a host
+   * that cannot merge has nothing to be un-mergeable INTO. GitLab implements neither —
+   * it ships no merge path, so a GitLab merge request is never a merge candidate and
+   * there is no gate for a conflict to withdraw.
+   *
+   * ⚠️ A NON-ANSWER THROWS (`MergeChangeRequestError`, the same bounded host call a
+   * merge makes); every caller treats a throw as "not known", never as a conflict.
+   */
+  readChangeRequestMergeability?(
+    input: ChangeRequestMergeabilityInput,
+  ): Promise<ChangeRequestMergeability>;
 
   /**
    * Fetch an installation's account (login + type) from the host, given only the

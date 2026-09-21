@@ -3,6 +3,7 @@ import { getGitProvider } from '@/lib/git';
 import { providerSupportsMerge } from '@/lib/git/provider';
 import type { GitProviderId } from '@/lib/git/types';
 import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { isConflictedAt } from '@/lib/github/mergeability';
 import {
   githubPullRequestRepository,
   type GithubPullRequestWithInstallation,
@@ -53,10 +54,19 @@ export interface AutoMergeRequest {
  * fact reaching the gate. Only `true` refuses: `null` is a row written before
  * MOTIR-5002 persisted the flag, and inventing draft-ness for it would strand a card
  * nobody drafted.
+ *
+ * ⚠️ AND NEITHER IS A MEMBER THE HOST REPORTS CONFLICTED AT THAT HEAD (MOTIR-5913, for
+ * bug MOTIR-5907). A green pull request that no longer combines with its base can only
+ * be refused when pressed, so it is asked about nobody — `lib/github/mergeability.ts`
+ * holds the rule the three readers share. `null` stays a candidate, for the draft
+ * arm's reason: an answer nobody has computed is not a conflict.
  */
 export function mergeCandidateHead(
   pr:
-    | (Pick<GithubPullRequestWithInstallation, 'state' | 'merged' | 'draft' | 'checkRuns'> & {
+    | (Pick<
+        GithubPullRequestWithInstallation,
+        'state' | 'merged' | 'draft' | 'checkRuns' | 'mergeableState' | 'mergeableStateHeadSha'
+      > & {
         repo: { provider: string };
       })
     | null,
@@ -71,7 +81,8 @@ export function mergeCandidateHead(
   ) {
     return null;
   }
-  return liveRowsAtLatestSha(pr.checkRuns)[0]!.commitSha;
+  const head = liveRowsAtLatestSha(pr.checkRuns)[0]!.commitSha;
+  return isConflictedAt(pr, head) ? null : head;
 }
 
 /**

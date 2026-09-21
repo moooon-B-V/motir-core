@@ -38,6 +38,10 @@ export interface WithdrawnMergeCopy {
 export interface WithdrawnMember {
   name: string;
   state: LinkedPullRequestDto['state'] | null;
+  /** The host reports this member conflicted at its head (MOTIR-5916). Absent = no. */
+  conflicted?: boolean;
+  /** The branch it targets, for `{base}`; null when the row never recorded one. */
+  baseRef?: string | null;
 }
 
 const pra = (key: string, values: Record<string, string | number> = {}): WithdrawnMessage => ({
@@ -145,6 +149,31 @@ export function withdrawnMergeCopy({
           sentence: pra('withdrawn.portDrafted', { pr }),
           cite: pra('withdrawn.citeDrafted', { pr }),
         };
+      }
+      case 'conflict': {
+        // A CONFLICT FOUND BEFORE ANY PRESS (MOTIR-5916; design/github § 30 Panels 1, 2
+        // and 7). The conflicted member is READ off its row — the stored mergeability, not
+        // a deduction — so band 1, the sentence and the pill all name the same member. No
+        // conflicted row left (it resolved and was pushed since) says only what the cause
+        // records.
+        const conflicted = members.filter((m) => m.conflicted === true);
+        if (conflicted.length === 0) return unrecorded('conflict');
+        const pr = nameList(conflicted.map((m) => m.name));
+        // `{base}` only when every conflicted member names the SAME one; otherwise each row
+        // names its own and the band says *its base branch* (§ 30's copy note).
+        const bases = new Set(conflicted.map((m) => m.baseRef ?? null));
+        const base = bases.size === 1 ? [...bases][0]! : null;
+        return base !== null
+          ? {
+              meta: pra('meta.withdrawnConflict', { count, pr, base }),
+              sentence: pra('withdrawn.portConflict', { pr, base }),
+              cite: pra('withdrawn.citeConflict'),
+            }
+          : {
+              meta: pra('meta.withdrawnConflictNoBase', { count, pr }),
+              sentence: pra('withdrawn.portConflictNoBase', { pr }),
+              cite: pra('withdrawn.citeConflict'),
+            };
       }
       case 'pulled_back':
         return {

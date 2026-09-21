@@ -90,12 +90,18 @@ describe('toGateRefusal — the client reads the SERVER’s vocabulary (MOTIR-47
       'APPROVAL_GATE_ALREADY_AWAITING',
       'APPROVAL_GATE_DECIDED_IMMUTABLE',
       'MERGE_CHECKS_NOT_GREEN',
-      'MERGE_CONFLICT',
       'MERGE_ALREADY_MERGED',
       'MERGE_ALREADY_REQUEUED',
     ] as const) {
       expect(toGateRefusal(tag)).toEqual({ tag });
     }
+    // The conflict alone carries where it was met and which members (MOTIR-5915), and a
+    // bare code reads as the merge's own refusal, with nobody named.
+    expect(toGateRefusal('MERGE_CONFLICT')).toEqual({
+      tag: 'MERGE_CONFLICT',
+      atPress: false,
+      conflicts: [],
+    });
   });
 
   it('SUPERSEDED carries the cause when the door read one, and null when it did not (MOTIR-5667)', () => {

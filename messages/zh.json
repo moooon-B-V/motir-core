@@ -6329,7 +6329,11 @@
           "checks": "你这边没有改动？<b>批准</b>会把同样的提交再送一次。如果未通过的检查指向真实的代码问题，<code>motir fix</code> 会把它交给智能体。",
           "conflict": "冲突需要新的提交。<code>motir fix</code> 会把它交给智能体；再次批准也无法让这些提交合入，因此在分支变化之前不会提供任何按钮。",
           "other": "<b>批准</b>会把同样的提交再送一次。如果它以同样的方式离开队列，<code>motir fix</code> 会把它交给智能体。"
-        }
+        },
+        "conflictOn": "<prs></prs> 与 {base} 冲突，无法合并。",
+        "conflictOnNoBase": "<prs></prs> 与其目标分支冲突，无法合并。",
+        "howConflict": "代理会在拉取请求自己的分支上变基或解决冲突、推送，检查随即重新运行。",
+        "rearm": "这里没有可批准的东西。推送会移动 HEAD 并重新武装这个问题；下一次检查全绿时，会就新的提交提出一次合并审批。"
       },
       "emptyTitle": "暂无关联的拉取请求",
       "emptyDescription": "使用此处的“+关联拉取请求”，或通过 MCP 调用 <mono>link_pull_request</mono> 来添加 PR，并显示实时 PR 与 CI 状态。",
@@ -8347,6 +8351,7 @@
         "head_moved": "推送改变了提交，因此该问题已撤回。",
         "member_closed": "一个 Pull Request 已关闭，因此该问题已撤回。",
         "member_drafted": "一个 Pull Request 已转回草稿，因此该问题已撤回。",
+        "conflict": "有拉取请求与其目标分支冲突，因此该问题已撤回。",
         "set_changed": "Pull Request 集合发生变化，因此该问题已撤回。",
         "pulled_back": "工作已撤回评审，因此该问题已撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
@@ -8365,7 +8370,8 @@
       },
       "superseded": {
         "title": "该问题已被撤回。",
-        "next": "无人对其做出决定。请重新加载以查看其去向。"
+        "next": "无人对其做出决定。请重新加载以查看其去向。",
+        "staleTab": "此标签页显示的是 Motir 已撤回的问题。没有记录任何内容，{key} 也没有变化。"
       },
       "stale": {
         "subject": "你阅读期间，发布了更新的版本。",
@@ -8420,7 +8426,9 @@
       },
       "mergeConflict": {
         "title": "该拉取请求与其目标分支存在冲突。",
-        "next": "请在分支上解决冲突。检查通过后，Motir 会再次请求审批。"
+        "next": "没有批准，也没有合并任何内容。请在分支上解决冲突（motir fix 可交给代理处理），检查通过后，Motir 会再次请求审批。",
+        "atPress": "{host} 报告 {pr} 与 {base} 冲突。该操作在写入任何内容之前即被拒绝，因此 {key} 没有变化。",
+        "atPressNoBase": "{host} 报告 {pr} 与其目标分支冲突。该操作在写入任何内容之前即被拒绝，因此 {key} 没有变化。"
       },
       "mergeBranchProtected": {
         "title": "分支保护规则暂不允许此次合并。",
@@ -8501,7 +8509,9 @@
         "withdrawnClosed": "{count} 个拉取请求 · {pr} 未合并即关闭",
         "withdrawnDrafted": "{count} 个拉取请求 · {pr} 已转回草稿",
         "withdrawnPulledBack": "{count} 个拉取请求 · 已撤出评审",
-        "withdrawnUnknown": "{count} 个拉取请求 · 已撤回"
+        "withdrawnUnknown": "{count} 个拉取请求 · 已撤回",
+        "withdrawnConflict": "{count} 个拉取请求 · {pr} 与 {base} 冲突",
+        "withdrawnConflictNoBase": "{count} 个拉取请求 · {pr} 与目标分支冲突"
       },
       "verb": {
         "approveAndMerge": "批准并合并"
@@ -8554,7 +8564,10 @@
         "portDrafted": "{pr} 已转回草稿，因此该问题已被撤回。",
         "citeUnlink": "没有人对它做出决定。将 {pr} 与 {key} 取消关联后，Motir 会再次请求审批。",
         "citeDrafted": "没有人对它做出决定。{pr} 标记为可供审查后，Motir 会再次请求审批。",
-        "citePulledBack": "没有人对它做出决定。{key} 回到评审中后，Motir 会再次请求审批。"
+        "citePulledBack": "没有人对它做出决定。{key} 回到评审中后，Motir 会再次请求审批。",
+        "portConflict": "{pr} 与 {base} 冲突，因此该问题已撤回。没有批准任何内容。",
+        "portConflictNoBase": "{pr} 与其目标分支冲突，因此该问题已撤回。没有批准任何内容。",
+        "citeConflict": "没有人对它做出决定。推送解决冲突且检查通过后，Motir 会再次请求审批。"
       },
       "list": {
         "pair": "{a} 和 {b}",
@@ -8627,6 +8640,10 @@
         "line": "<b>{pr}</b> 未合并：仓库上的某项设置阻止了它。",
         "linePermission": "<b>{pr}</b> 未合并：Motir 的 GitHub App 在那里缺少 <b>{permission}</b> 权限。",
         "reasked": "改好设置后再按一次 — 这次按下是一次新的批准，并合并相同的提交。这里不提供 <b>motir fix</b>：没有可让代理修改的代码。"
+      },
+      "row": {
+        "conflicts": "与 {base} 冲突",
+        "conflictsNoBase": "与目标分支冲突"
       }
     },
     "statusHeld": {
@@ -8696,6 +8713,10 @@
     },
     "subjectGone": {
       "body": "此设计在发起审批后被移除，这里已没有可批准的内容。打开工作项查看它现在的内容。"
+    },
+    "withdrawn": {
+      "conflict": "{pr} 现在与 {base} 冲突，因此该问题已撤回。",
+      "next": "这里已没有可以批准的内容。"
     },
     "moved": {
       "one": "自你打开以来，{thing}已更改。",

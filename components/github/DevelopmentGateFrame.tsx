@@ -141,6 +141,11 @@ export interface RowState {
   repo: string;
   number: number;
   state: 'open' | 'merged' | 'closed';
+  /** The host reports the row conflicted at its head (MOTIR-5916) — what names the member
+   *  in a `conflict` withdrawal. Absent = no. */
+  conflicted?: boolean;
+  /** The branch the row targets, for `{base}` (MOTIR-5916). */
+  baseRef?: string | null;
 }
 
 /** What the press, or a retry, reported about one member — the response's outcome, minus
@@ -189,6 +194,8 @@ export function DevelopmentGateFrame({
   onShowCurrentVersion,
   gateKey = 0,
   decision = null,
+  notice,
+  verbsDisabled = false,
   children,
 }: {
   read: DevelopmentGateRead;
@@ -228,6 +235,19 @@ export function DevelopmentGateFrame({
   gateKey?: number;
   /** The decision port's facts — read only when the gate asked is `decision_approval`. */
   decision?: DecisionPortFacts | null;
+  /**
+   * A HOST's notice, drawn in the alert band between the port and band 3 — the approval
+   * overlay's *this question was withdrawn* (Subtask MOTIR-5917; § 30 Panel 4a). A member
+   * refusal from this frame's own press outranks it: that is the newer news.
+   */
+  notice?: ReactNode;
+  /**
+   * DISABLE both verbs, keeping them drawn so band 3 does not reflow (§ 30 Panel 4a — the
+   * one recorded departure from § 26, where a moved stamp keeps them live). Only honest with
+   * the reason said in words beside them, which is what `notice` is for; the server still
+   * refuses a press, so this claims no guarantee.
+   */
+  verbsDisabled?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
@@ -501,13 +521,20 @@ export function DevelopmentGateFrame({
     gate.state === 'superseded' && gate.kind === 'pull_request_approval'
       ? withdrawnMergeCopy({
           cause: gate.supersededCause,
-          members: members.map((member) => ({
-            name: nameOf(member),
-            state:
-              rowStates.find(
-                (row) => rowKey(row.repo, row.number) === rowKey(member.repo, member.number),
-              )?.state ?? null,
-          })),
+          members: members.map((member) => {
+            const row = rowStates.find(
+              (candidate) =>
+                rowKey(candidate.repo, candidate.number) === rowKey(member.repo, member.number),
+            );
+            return {
+              name: nameOf(member),
+              state: row?.state ?? null,
+              // What names the member in a `conflict` withdrawal (MOTIR-5916): read off
+              // the ROW, the same stored reading its *Conflicts with* pill draws.
+              conflicted: row?.conflicted ?? false,
+              baseRef: row?.baseRef ?? null,
+            };
+          }),
           moved: moved.map(nameOf),
           terminal,
           itemIdentifier,
@@ -610,6 +637,7 @@ export function DevelopmentGateFrame({
           // Sending the pull requests back records a note and moves nothing, so it does not
           // confirm — a reversible act asked twice is friction rather than care.
           confirms: false,
+          disabled: verbsDisabled,
         },
         {
           decision: 'approve',
@@ -619,7 +647,7 @@ export function DevelopmentGateFrame({
           confirms: true,
           // A decision with no one document on screen cannot be accepted (§27 Panels 3a–3d):
           // Approve stays drawn and disabled, with the reason as band 3's line.
-          disabled: isDecision && !decisionShown,
+          disabled: verbsDisabled || (isDecision && !decisionShown),
         },
       ]
     : [];
@@ -933,6 +961,9 @@ export function DevelopmentGateFrame({
           // the audit column itself is untouched.
           gate={{ ...gate, subjectVersion: null }}
           canDecide={read.canDecide}
+          // What a refusal names — § 30 Panels 5a / 5b say which card did not move, and on
+          // which host the conflict was reported (MOTIR-5916).
+          refusalContext={{ itemIdentifier, host: t('host') }}
           // ⚠️ THE KIND LABEL FOLLOWS THE GATE, not the block (Story MOTIR-5652 ·
           // Subtask MOTIR-5667; `design-result.md` AMENDMENT 6 Q1). A design card
           // with commits holds TWO gates and the DESIGN one leads: the frame is its
@@ -966,7 +997,7 @@ export function DevelopmentGateFrame({
           consequence={consequence}
           confirmConsequences={confirmConsequences}
           routedToLabel={read.routedToLabel}
-          alert={alert}
+          alert={alert ?? notice}
           recordDetail={recordDetail}
           recordLead={
             decisionAccepted && gate.decidedByLabel && gate.decisionSource !== 'github'

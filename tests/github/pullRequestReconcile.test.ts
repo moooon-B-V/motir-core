@@ -59,6 +59,11 @@ type HostPr = {
   merged: boolean;
   headRef: string;
   baseRef: string;
+  /** MOTIR-5914 — the host's mergeability and the head it is about. Absent, the payload
+   *  carries neither, exactly as before. */
+  mergeable?: boolean | null;
+  mergeableState?: string;
+  headSha?: string;
 };
 
 /** What GitHub currently says, per repo name + number. */
@@ -81,9 +86,11 @@ function hostPayload(pr: HostPr) {
     merged_at: pr.merged ? MERGED_AT : null,
     draft: false,
     title: 'Some change',
-    head: { ref: pr.headRef },
+    head: pr.headSha ? { ref: pr.headRef, sha: pr.headSha } : { ref: pr.headRef },
     base: { ref: pr.baseRef },
     user: { id: 4242 },
+    ...(pr.mergeable !== undefined ? { mergeable: pr.mergeable } : {}),
+    ...(pr.mergeableState !== undefined ? { mergeable_state: pr.mergeableState } : {}),
   };
 }
 
@@ -659,6 +666,50 @@ describe('a card whose question went missing is repaired by the sweep', () => {
 
     expect(summary).toMatchObject({ stillOpen: 1, gatesRaised: 0 });
     expect(await adminDb.approvalGate.count({ where: { workItemId: card.id } })).toBe(0);
+  });
+});
+
+// MOTIR-5914 — THE SWEEP IS ALSO THE MERGEABILITY BACKSTOP. The read it already makes
+// carries the host's `mergeable_state`, so a conflict the base-branch job never saw (a
+// lost push, a read GitHub had not computed in time) is settled here: stored, the
+// question withdrawn, the card held at Implemented — BEFORE the gate repair above, which
+// would otherwise raise a question over a member that cannot merge.
+describe('the sweep settles a member the host now reports conflicted (MOTIR-5914)', () => {
+  it('a green in-review member the host reports `dirty`: stored, NO gate raised, and the card held at Implemented', async () => {
+    const s = await makeScenario('reconcile-conflict@example.com');
+    const card = await linkedCard(s, 'conflicted while nobody was looking', [CORE]);
+    host.set(`${CORE.repo}#${CORE.number}`, {
+      number: CORE.number,
+      state: 'open',
+      merged: false,
+      headRef: `subtask/${card.identifier}-${CORE.number}`,
+      baseRef: CORE.baseRef,
+      mergeable: false,
+      mergeableState: 'dirty',
+      headSha: 'sha-conflicted',
+    });
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: (await prRow(CORE)).id,
+        commitSha: 'sha-conflicted',
+        checkName: 'ci / vitest',
+        conclusion: 'success',
+      },
+    });
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'in_review' } });
+    await adminDb.githubPullRequest.updateMany({
+      data: { updatedAt: new Date(Date.now() - 60 * 60_000) },
+    });
+
+    const summary = await pullRequestReconcileService.reconcileOpenDeliveries({ now: LATER() });
+
+    expect(summary).toMatchObject({ stillOpen: 1, gatesRaised: 0 });
+    const row = await prRow(CORE);
+    expect([row.mergeableState, row.mergeableStateHeadSha]).toEqual(['dirty', 'sha-conflicted']);
+    expect(await statusOf(card.id)).toBe('implemented');
+    expect(
+      await adminDb.approvalGate.count({ where: { workItemId: card.id, state: 'awaiting' } }),
+    ).toBe(0);
   });
 });
 

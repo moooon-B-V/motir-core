@@ -275,6 +275,48 @@ export async function withdrawPullRequestApprovalGatesOnDraft(
 }
 
 /**
+ * WITHDRAW on a CONFLICT: the host reports a member `dirty` — it no longer combines with
+ * its base (MOTIR-5914, for bug MOTIR-5907; design/github § 30 rule 1). One unmergeable
+ * member makes the whole set unmergeable (§ 28: one approval merges the set), so every
+ * card the pull request delivers loses its WHOLE awaiting gate, as `conflict`. The re-ask
+ * raises nothing while the reading stands — `mergeCandidateHead` refuses a member `dirty`
+ * at its head — so the caller persists the reading BEFORE calling this. A push that
+ * resolves the conflict clears the reading (`synchronize`) and the next green re-asks.
+ *
+ * ⚠️ GATES ONLY. The Implemented hold that goes with it is a STATUS write, which this
+ * module may not reach (it imports no service — see the header), so it is composed by
+ * `pullRequestMergeabilityService.withdrawForConflict`, the one entry point both the
+ * base-branch push and the press call.
+ */
+export async function withdrawPullRequestApprovalGatesOnConflict(
+  pullRequestId: string,
+  tx: Prisma.TransactionClient,
+): Promise<number> {
+  let withdrawn = 0;
+  for (const { workItemId } of await workItemDeliveryRepository.listByPullRequest(
+    pullRequestId,
+    tx,
+  )) {
+    withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(
+      workItemId,
+      KIND,
+      'conflict',
+      tx,
+    );
+    if (await acceptanceNoLongerOwed(workItemId, tx)) {
+      await approvalGateRepository.supersedeAwaitingByWorkItem(
+        workItemId,
+        ACCEPTANCE_KIND,
+        'conflict',
+        tx,
+      );
+    }
+    await reraiseAfterWithdrawal(workItemId, tx);
+  }
+  return withdrawn;
+}
+
+/**
  * WITHDRAW on a SET CHANGE: a delivery row joined or left this card, so the set its gate
  * asked about is not the set it now carries. Called by every writer of `work_item_delivery`
  * (`githubPullRequestService`'s two link arms and two unlink arms), only when the write

@@ -15,6 +15,7 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubInstallationService } from './githubInstallationService';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { listPullRequestFiles, type PullRequestFiles } from '@/lib/github/pullRequestFiles';
 import { captureDecisionDocument } from './decisionDocumentCaptureService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
@@ -605,6 +606,19 @@ export const githubWebhookService = {
       repoName: resolved.repoName,
       defaultBranch: resolved.defaultBranch,
     });
+    // ⚠️ THE BASE MOVED, SO ASK WHETHER ITS PULL REQUESTS STILL MERGE (MOTIR-5914, for bug
+    // MOTIR-5907; design/github § 30 rule 1). A conflict usually arrives exactly like this —
+    // another merge moves the base and GitHub sends the conflicted pull request nothing —
+    // so this push is the only event that can withdraw its approve-and-merge question.
+    // POST-write and best-effort: `sendEvent` swallows a transport failure, and the
+    // reconcile tick re-reads open delivering pull requests if this never runs.
+    await sendEvent('pull-request/base-moved', {
+      workspaceId: resolved.workspaceId,
+      repoId: resolved.repoRowId,
+      baseRef: resolved.defaultBranch,
+      baseHeadSha: push.headSha ?? null,
+      idempotencyKey: `${resolved.repoRowId}:${push.headSha ?? 'unknown'}`,
+    });
     return { event: 'push', outcome: 'refresh_enqueued' };
   },
 
@@ -1101,7 +1115,8 @@ async function reconcileInstallation(
 /**
  * WITHDRAW the merge gates a PUSH made stale (Story MOTIR-4882 · MOTIR-5515): a
  * `synchronize` delivery carries the new head, so any awaiting merge gate on that pull
- * request whose version names another head is superseded.
+ * request whose version names another head is superseded — and the stored
+ * mergeability reading, which was about the old head, is cleared (MOTIR-5913).
  *
  * The CI event for the new head withdraws it too; this is the earlier of the two, and
  * the only one for the minutes before any check has reported. SWALLOWS EVERYTHING, for
@@ -1135,6 +1150,10 @@ async function withdrawGatesOnSynchronize(body: Record<string, unknown>): Promis
       await bindWorkspaceContext(tx, repo.workspaceId);
       const row = await githubPullRequestRepository.findByRepoAndNumber(repo.id, number, tx);
       if (row) {
+        // A NEW HEAD'S MERGEABILITY IS UNCOMPUTED (MOTIR-5913): forget the old head's
+        // reading BEFORE the withdrawal's re-ask reads the set, so a push that resolves
+        // a conflict makes the member a merge candidate again.
+        await githubPullRequestRepository.clearMergeability(row.id, tx);
         // The approve-and-merge gate over the set this pull request belongs to
         // (MOTIR-5482) — the card's only gate since MOTIR-5611.
         await withdrawPullRequestApprovalGatesOnHeadMove(row.id, tx, headSha);

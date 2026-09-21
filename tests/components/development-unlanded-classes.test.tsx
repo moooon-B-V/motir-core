@@ -117,6 +117,7 @@ const repairOffer = (): WorkItemRepairViewDto => ({
       // (MOTIR-5719), which is what the which-to-use line reads.
       ci: 'passing',
       queueExit: { rawReason: 'CI_FAILURE', failingCheckName: 'CI complete' },
+      conflict: null,
     },
   ],
   lastGaveUp: null,

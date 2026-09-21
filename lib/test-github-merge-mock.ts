@@ -65,6 +65,17 @@ export type GithubMergeAnswer =
   | { outcome: 'enqueued' }
   | { outcome: 'refused'; refusal: GithubMergeRefusal };
 
+/** What the pull request READ reports about mergeability, independent of what the merge
+ *  itself would do (MOTIR-5913). Unset, both are derived from the merge answer exactly
+ *  as before — `dirty` only for a `conflict` refusal — so a spec that never names them
+ *  sees the host it always did. */
+export interface GithubMergeability {
+  /** GitHub's `mergeable`: `null` is "not computed yet". */
+  mergeable?: boolean | null;
+  /** GitHub's `mergeable_state` (`clean`, `dirty`, …). */
+  mergeableState?: string;
+}
+
 /** What the spec tells the fake GitHub to do. The empty control answers for no repository. */
 export interface GithubMergeControl {
   /** `owner/name` of each repository this seam answers for. A pull request of a listed
@@ -75,7 +86,7 @@ export interface GithubMergeControl {
   mergeQueueRepositories?: string[];
   /** `owner/name#number` → GitHub's answer. `headSha` is the head the pull request read
    *  reports; omitted, the read reports no head and the merge's head check is skipped. */
-  pullRequests?: Record<string, GithubMergeAnswer & { headSha?: string }>;
+  pullRequests?: Record<string, GithubMergeAnswer & { headSha?: string } & GithubMergeability>;
   /** REVIEWER LOGIN → the permission the host reports for them (Story MOTIR-4910 ·
    *  MOTIR-5595). Keys are case-insensitive, as every other key here is.
    *
@@ -179,7 +190,7 @@ function answersFor(control: GithubMergeControl, repository: string): boolean {
 function answerFor(
   control: GithubMergeControl,
   key: string,
-): GithubMergeAnswer & { headSha?: string } {
+): GithubMergeAnswer & { headSha?: string } & GithubMergeability {
   const entry = Object.entries(control.pullRequests ?? {}).find(([k]) => same(k, key));
   return entry?.[1] ?? { outcome: 'merged' };
 }
@@ -250,7 +261,8 @@ const REFUSED_MERGE: Record<
   },
 };
 
-function mergeableStateOf(answer: GithubMergeAnswer): string {
+function mergeableStateOf(answer: GithubMergeAnswer & GithubMergeability): string {
+  if (answer.mergeableState !== undefined) return answer.mergeableState;
   if (answer.outcome !== 'refused') return 'clean';
   const refused = REFUSED_MERGE[answer.refusal as keyof typeof REFUSED_MERGE];
   return refused?.mergeableState ?? 'clean';
@@ -299,6 +311,8 @@ export function installGithubMergeMock(agent: MockAgent): void {
         head: answer.headSha ? { sha: answer.headSha } : {},
         base: { ref: 'main' },
         mergeable_state: mergeableStateOf(answer),
+        mergeable:
+          answer.mergeable !== undefined ? answer.mergeable : mergeableStateOf(answer) !== 'dirty',
       });
     })
     .persist();

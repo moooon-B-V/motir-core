@@ -1,6 +1,7 @@
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
+import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
 import { monitorSyncService } from '@/lib/services/monitorSyncService';
@@ -123,6 +124,9 @@ export const jobServices = {
   // requests from GitHub and replays a close whose webhook delivery was lost.
   pullRequestReconcile: pullRequestReconcileService,
   pullRequestAutoMerge: pullRequestAutoMergeService,
+  // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
+  // withdraws the approve-and-merge question over any pull request it put in conflict.
+  pullRequestMergeability: pullRequestMergeabilityService,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick's
   // discovery, one binding's poll, and the terminal write onto that binding.
   monitorIngestion: monitorIngestionService,
