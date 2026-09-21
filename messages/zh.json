@@ -8496,7 +8496,12 @@
         "approved": "由 {name} 批准 · {count} 个拉取请求",
         "approvedByYou": "刚刚由你批准 · {count} 个拉取请求",
         "withdrawn": "{count} 个拉取请求 · {pr} 的最新提交已变更",
-        "withdrawnSet": "{count} 个拉取请求 · 集合已变更"
+        "withdrawnSet": "{count} 个拉取请求 · 集合已变更",
+        "withdrawnMerged": "{count} 个拉取请求 · {pr} 已在 {host} 上合并",
+        "withdrawnClosed": "{count} 个拉取请求 · {pr} 未合并即关闭",
+        "withdrawnDrafted": "{count} 个拉取请求 · {pr} 已转回草稿",
+        "withdrawnPulledBack": "{count} 个拉取请求 · 已撤出评审",
+        "withdrawnUnknown": "{count} 个拉取请求 · 已撤回"
       },
       "verb": {
         "approveAndMerge": "批准并合并"
@@ -8543,7 +8548,13 @@
       "withdrawn": {
         "port": "一次推送变更了 {pr} 的最新提交，因此该问题已被撤回。",
         "portSet": "拉取请求已变更，因此该问题已被撤回。",
-        "portCite": "没有人对它做出决定。所有检查通过后，Motir 会再次请求审批。"
+        "portCite": "没有人对它做出决定。所有检查通过后，Motir 会再次请求审批。",
+        "portMerged": "{pr} 已在 {host} 上合并，因此该问题已被撤回。",
+        "portClosed": "{pr} 未合并即被关闭，因此该问题已被撤回。",
+        "portDrafted": "{pr} 已转回草稿，因此该问题已被撤回。",
+        "citeUnlink": "没有人对它做出决定。将 {pr} 与 {key} 取消关联后，Motir 会再次请求审批。",
+        "citeDrafted": "没有人对它做出决定。{pr} 标记为可供审查后，Motir 会再次请求审批。",
+        "citePulledBack": "没有人对它做出决定。{key} 回到评审中后，Motir 会再次请求审批。"
       },
       "list": {
         "pair": "{a} 和 {b}",

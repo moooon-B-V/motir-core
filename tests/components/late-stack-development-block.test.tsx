@@ -523,3 +523,77 @@ describe('the item page’s re-asked merge gate names the approval it replaced',
     );
   });
 });
+
+// A PULL REQUEST MERGED ON GITHUB WHILE ITS GATE AWAITED (Bug MOTIR-5884; `design/github`
+// § 29, Panel 2). The merge supersedes the gate `member_closed`, nothing is left open to
+// re-raise it, and the card goes Done — so `frameGateFor` hands the block NO frame, and the
+// row shows its own *Merged* pill. Before the fix the withdrawn box REPLACED the rows and
+// promised a re-ask that could not happen.
+describe('a merge made on GitHub with nothing left open renders no frame', () => {
+  const CORE_V = `moooon/motir-core#131@3f2a91c0000000000000000000000000000000aa`;
+  const GATEWAY_V = `moooon/motir-gateway#57@aa11bb2000000000000000000000000000000000`;
+  const withdrawn = (subjectVersion: string): ApprovalGateDTO => ({
+    ...AWAITING_MERGE_GATE,
+    state: 'superseded',
+    supersededCause: 'member_closed',
+    subjectVersion,
+  });
+  const renderStack = async (
+    pullRequests: LateReads['pullRequests'],
+    gate: ApprovalGateDTO,
+    statusCategory: string,
+  ) => {
+    const base = reads();
+    return render(
+      await LateUpperSections({
+        reads: Promise.resolve({
+          ...base,
+          pullRequests,
+          mergeGate: { ...base.mergeGate, gate, canDecide: true },
+        }),
+        itemId: 'wi-acme-12',
+        itemIdentifier: 'ACME-12',
+        currentUserId: 'u-viewer',
+        canEdit: true,
+        repoDelivery: [],
+        deliveries: [],
+        statusCategory,
+      }),
+    );
+  };
+  const pra = messages.approvalGate.pullRequestApproval;
+
+  it('draws the merged row with its Merged pill, and no Withdrawn pill, band or re-ask', async () => {
+    const { container } = await renderStack(
+      [{ ...CORE_PR, state: 'merged' }],
+      withdrawn(CORE_V),
+      'done',
+    );
+    const row = screen.getByText(CORE_PR.title).closest('li')!;
+    expect(within(row).getByText(messages.github.development.prState.merged)).toBeTruthy();
+    expect(screen.queryByText(messages.approvalGate.state.withdrawn)).toBeNull();
+    expect(container.querySelector('[data-withdrawn-band]')).toBeNull();
+    // The two sentences the done card used to carry.
+    expect(container.textContent).not.toContain(pra.withdrawn.portCite);
+    expect(container.textContent).not.toContain('the set changed');
+    // And How to test is still in the block.
+    expect(screen.getByRole('group', { name: htt.title })).toBeTruthy();
+  });
+
+  it('keeps the frame while a member is still open — the band over BOTH rows (Panel 3a)', async () => {
+    const { container } = await renderStack(
+      [{ ...CORE_PR, state: 'merged' }, GATEWAY_PR],
+      withdrawn([CORE_V, GATEWAY_V].sort().join(',')),
+      'in_progress',
+    );
+    const band = container.querySelector('[data-withdrawn-band]') as HTMLElement;
+    expect(band.textContent).toContain(
+      pra.withdrawn.portMerged
+        .replace('{pr}', 'moooon/motir-core · #131')
+        .replace('{host}', 'GitHub'),
+    );
+    expect(band.textContent).toContain(pra.withdrawn.portCite);
+    expect(screen.getByText(CORE_PR.title)).toBeTruthy();
+    expect(screen.getByText(GATEWAY_PR.title)).toBeTruthy();
+  });
+});

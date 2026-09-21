@@ -100,8 +100,21 @@ import { RUN_HISTORY_PAGE, type LateReads } from './lateReads';
  * reader is being asked about the commits, and the primary shows as decided. A DECISION
  * card with no merge question left keeps its own gate in the frame (§27 Panels 4, 5a, 6a,
  * 6b): its record is the frame's record.
+ *
+ * ⚠️ A WITHDRAWN MERGE QUESTION WITH NOTHING LEFT OPEN IS NO QUESTION AT ALL (Bug
+ * MOTIR-5884; `design/github` § 29, Panel 2). A pull request merged with the host's own
+ * button while the gate awaited supersedes it `member_closed`, and when no member is left
+ * open nothing will ever re-raise it — yet it stayed the card's latest merge gate, so the
+ * frame drew a withdrawn box over a done card, promising a re-ask that could not happen.
+ * Nothing was decided and nothing is left to ask, which is what a frame is for, so there is
+ * none: the block is the shipped ungated body, each row with its own pill. Any cause — a
+ * gate withdrawn by a push whose pull request was then merged on GitHub lands here too.
  */
-function frameGateFor(r: LateReads, acceptanceLeads: boolean): DevelopmentGateRead | null {
+function frameGateFor(
+  r: LateReads,
+  acceptanceLeads: boolean,
+  anyPullRequestOpen: boolean,
+): DevelopmentGateRead | null {
   const primary = (read: {
     gate: DevelopmentGateRead['gate'] | null;
     canDecide: boolean;
@@ -144,6 +157,7 @@ function frameGateFor(r: LateReads, acceptanceLeads: boolean): DevelopmentGateRe
     return read ? { ...read, mergeSubjectVersion: r.mergeGate.gate.subjectVersion } : null;
   }
   if (r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate) return primary(r.designGate);
+  if (merge?.gate.state === 'superseded' && !anyPullRequestOpen) return null;
   return merge;
 }
 
@@ -236,10 +250,14 @@ export async function LateUpperSections({
   canEdit,
   repoDelivery,
   deliveries,
+  statusCategory,
 }: LateProps & {
   /** The session's user — only to say whether the design gate is ROUTED to the
    *  reader (the band's sentence, MOTIR-5229). Authority stays `canDecide`. */
   currentUserId: string;
+  /** The card's status CATEGORY — a withdrawn merge question on a done-category card
+   *  promises no re-ask (MOTIR-5884, § 29's cite table). */
+  statusCategory?: string | null;
 }) {
   const r = await reads;
   const [tGithub, tAcceptance, tDesignResult, tRuns] = await Promise.all([
@@ -296,7 +314,11 @@ export async function LateUpperSections({
   // FIRST in the Development block — the PRIMARY question, with the pull requests beneath
   // as what accepting it merges. `decisionGate` is read only for such a card.
   const decisionInDevelopment = r.decisionGate.gate !== null;
-  const developmentFrame = frameGateFor(r, acceptanceLeads);
+  const developmentFrame = frameGateFor(
+    r,
+    acceptanceLeads,
+    hasOpenPullRequest(r.pullRequests, deliveries ?? []),
+  );
   // THE HEADER MARKER'S DESTINATIONS (Story MOTIR-4908 · MOTIR-5878; design
   // § *The item header — where pressing it takes you*). Each section names the
   // gate kinds whose frame it draws, derived from the SAME flags that decide where
@@ -422,6 +444,7 @@ export async function LateUpperSections({
               // about the commits, and the design shows as decided rather than as a
               // second thing to answer.
               mergeGate={developmentFrame}
+              cardTerminal={statusCategory === 'done'}
               decision={
                 decisionInDevelopment
                   ? { document: r.decisionGate.document, gate: r.decisionGate.gate }

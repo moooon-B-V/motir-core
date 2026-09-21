@@ -639,6 +639,7 @@ export default async function IssueDetailPage({
                       canEdit={canEdit}
                       repoDelivery={deliveryView.repos}
                       deliveries={deliveryView.deliveries}
+                      statusCategory={statusCategory}
                     />
                   </Suspense>
                   <ChildPanel

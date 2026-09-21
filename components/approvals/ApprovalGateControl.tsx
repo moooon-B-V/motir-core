@@ -221,8 +221,15 @@ export interface ApprovalGateControlProps {
    * over a DEAD port, which was false three times in four and pointed nowhere even on the
    * fourth. The default is now the fact every writer leaves true, and THIS PROP is where
    * a cause belongs: a kind whose own surface knows why supplies its own two sentences.
+   *
+   * ⚠️ `keepsRecord` WITHDRAWS THE VERBS, NEVER THE RECORD (Bug MOTIR-5884; `design/github`
+   * § 29, Panel 1). The dead port exists for a subject whose bytes are no longer current
+   * (a superseded design), and it is still the default. A kind whose subject STAYS true
+   * after the withdrawal — the pull requests, which merged, closed or moved but are all
+   * still on the card — sets it: the sentence moves into a band ABOVE the port, and the
+   * port keeps rendering, floorless and with no Expand, because nothing is being decided.
    */
-  withdrawnPort?: { port: ReactNode; cite: ReactNode };
+  withdrawnPort?: { port: ReactNode; cite: ReactNode; keepsRecord?: boolean };
   /**
    * THE RECORD BAND'S LEAD, when a kind says who decided in its own words (MOTIR-5678 —
    * *Decision accepted by Ada L. · 19 Sep*). Replaces the decider and the date; the rest of
@@ -354,8 +361,12 @@ function PortBox({
   showExpand,
   onToggleExpanded,
   focusOnMount = false,
+  floorless = false,
 }: {
   children: ReactNode;
+  /** Drop the floor, keep the ceiling (MOTIR-5884, § 29): a withdrawn frame that keeps its
+   *  record holds no decision surface open, so there is nothing for the floor to reserve. */
+  floorless?: boolean;
   /** Move focus to the port as it mounts — after *Show the current version*, so the
    *  reader starts again from the top of what changed (MOTIR-5235, Panel 4). */
   focusOnMount?: boolean;
@@ -421,8 +432,8 @@ function PortBox({
             // purpose — expanded, the viewport is the ceiling.
             'relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4'
           : sectioned
-            ? `relative mt-3 ${PORT_FLOOR} ${PORT_CEILING} overflow-y-auto border-t border-(--el-border-soft) pt-3`
-            : `relative ${PORT_FLOOR} ${PORT_CEILING} overflow-y-auto px-4 py-4`
+            ? `relative mt-3 ${floorless ? 'min-h-0' : PORT_FLOOR} ${PORT_CEILING} overflow-y-auto border-t border-(--el-border-soft) pt-3`
+            : `relative ${floorless ? 'min-h-0' : PORT_FLOOR} ${PORT_CEILING} overflow-y-auto px-4 py-4`
       }
       // The port is a scroll container in both forms, so it must be focusable to
       // be scrollable from the keyboard alone (a scrollable region with no
@@ -863,6 +874,7 @@ export function ApprovalGateControl({
   // A KIND THAT KNOWS BETTER STILL WINS: `withdrawnPort` is the merge gate's own
   // two sentences, which name the pull request, and this is the default beneath it.
   const withdrawnSentence = t(`withdrawn.cause.${gate.supersededCause ?? 'unknown'}`);
+  const withdrawnKeepsRecord = withdrawn && withdrawnPort?.keepsRecord === true;
 
   // ⚠️ THE GATE LIVES HERE, IN THE FRAME'S OWN RENDER PATH — not in a consumer,
   // and not in the port. A consumer that passes a verb set and a failing port
@@ -993,6 +1005,20 @@ export function ApprovalGateControl({
           re-probing the design port and spending a fresh signed URL. Nothing
           inside the dead port reports, which is exactly right — there is no
           subject there to have rendered or failed. */}
+      {/* STATE `G` THAT KEEPS ITS RECORD (Bug MOTIR-5884; § 29, Panel 1): the withdrawn
+          sentence is a BAND between band 1 and the port, so the reader learns why there is
+          no button before reading the rows it would have merged. § 20's withdrawn tokens,
+          unchanged — only the shape moved, from a centred box to a left-aligned band. */}
+      {withdrawnKeepsRecord && withdrawnPort ? (
+        <div
+          role="status"
+          className="flex flex-col gap-1 border-b border-(--el-border) bg-(--el-muted) px-3.5 py-2.5 text-[13px] text-(--el-text-secondary)"
+          data-withdrawn-band
+        >
+          <span>{withdrawnPort.port}</span>
+          <span className="text-xs">{withdrawnPort.cite}</span>
+        </div>
+      ) : null}
       <PortRenderStatusProvider reporter={reporter}>
         <PortBox
           expanded={expanded}
@@ -1000,12 +1026,13 @@ export function ApprovalGateControl({
           sectioned={sectioned}
           // Drawn where the asset draws it: a decision that is YOURS to make,
           // not yet made, over a subject that actually rendered — and never
-          // over `G`'s dead port, which has nothing to expand.
+          // over `G`'s port, dead or kept: there is no decision to expand into.
           showExpand={!fill && canDecide && !decided && !withdrawn && portShown}
           onToggleExpanded={() => setExpanded((v) => !v)}
           focusOnMount={focusPortOnMount}
+          floorless={withdrawnKeepsRecord}
         >
-          {withdrawn ? (
+          {withdrawn && !withdrawnKeepsRecord ? (
             <div className="flex flex-col items-center justify-center gap-1 bg-(--el-muted) px-4 py-10 text-center">
               <p className="text-[13px] text-(--el-text-secondary)">
                 {withdrawnPort ? withdrawnPort.port : withdrawnSentence}

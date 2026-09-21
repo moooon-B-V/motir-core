@@ -8500,7 +8500,12 @@
         "approved": "Approved by {name} · {count, plural, one {# pull request} other {# pull requests}}",
         "approvedByYou": "Approved by you just now · {count, plural, one {# pull request} other {# pull requests}}",
         "withdrawn": "{count, plural, one {# pull request} other {# pull requests}} · the head of {pr} moved",
-        "withdrawnSet": "{count, plural, one {# pull request} other {# pull requests}} · the set changed"
+        "withdrawnSet": "{count, plural, one {# pull request} other {# pull requests}} · the set changed",
+        "withdrawnMerged": "{count, plural, one {# pull request} other {# pull requests}} · {pr} merged on {host}",
+        "withdrawnClosed": "{count, plural, one {# pull request} other {# pull requests}} · {pr} closed without merging",
+        "withdrawnDrafted": "{count, plural, one {# pull request} other {# pull requests}} · {pr} is a draft again",
+        "withdrawnPulledBack": "{count, plural, one {# pull request} other {# pull requests}} · taken out of review",
+        "withdrawnUnknown": "{count, plural, one {# pull request} other {# pull requests}} · withdrawn"
       },
       "verb": {
         "approveAndMerge": "Approve and merge"
@@ -8547,7 +8552,13 @@
       "withdrawn": {
         "port": "A push moved the head of {pr}, so this question was withdrawn.",
         "portSet": "The pull requests changed, so this question was withdrawn.",
-        "portCite": "Nobody decided it. Motir asks again when every check is green."
+        "portCite": "Nobody decided it. Motir asks again when every check is green.",
+        "portMerged": "{pr} was merged on {host}, so this question was withdrawn.",
+        "portClosed": "{pr} was closed without merging, so this question was withdrawn.",
+        "portDrafted": "{pr} went back to draft, so this question was withdrawn.",
+        "citeUnlink": "Nobody decided it. Unlink {pr} from {key} to be asked again.",
+        "citeDrafted": "Nobody decided it. Motir asks again when {pr} is marked ready for review.",
+        "citePulledBack": "Nobody decided it. Motir asks again when {key} is back in review."
       },
       "list": {
         "pair": "{a} and {b}",
