@@ -392,6 +392,14 @@ export const boardsService = {
       ctx,
     );
 
+    // The decision-waiting marker (Story MOTIR-4908 · MOTIR-5876): which cards have
+    // an awaiting gate, and whether it is this reader's. ONE gate query over every
+    // card on the board, beside the readiness batch — never a lookup per card.
+    const pendingById = await approvalGatesService.pendingDecisionsFor(
+      { projectId, workItemIds: allRows.map((r) => r.id) },
+      ctx,
+    );
+
     // Swimlanes (Subtask 3.3.4). The union of the board's mapped column statuses
     // IS the board's card population, so lane membership (per loaded card) and
     // the lane list are both resolved over that set — a bounded aggregate, never
@@ -452,6 +460,7 @@ export const boardsService = {
         toBoardCardDto(r, {
           ready: readyById.get(r.id) ?? true,
           awaitingAcceptance: awaitingAcceptanceIds.has(r.id),
+          pendingDecision: pendingById.get(r.id) ?? null,
           swimlaneKey: swimlaneKeyByCard.get(r.id),
           statusCategory: categoryByStatusKey.get(r.status) ?? null,
         }),
@@ -707,9 +716,17 @@ export const boardsService = {
       [row],
       ctx,
     );
+    // The dropped card keeps its decision-waiting marker (MOTIR-5876): the board
+    // reconciles the moved card from this DTO, so a card that returned without the
+    // field would lose its marker until the next reload.
+    const pendingById = await approvalGatesService.pendingDecisionsFor(
+      { projectId: row.projectId, workItemIds: [row.id] },
+      ctx,
+    );
     return {
       card: toBoardCardDto(row, {
         ready,
+        pendingDecision: pendingById.get(row.id) ?? null,
         swimlaneKey: swimlaneKeyByCard.get(row.id),
         statusCategory: appliedStatusCategory,
       }),

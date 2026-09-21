@@ -16,6 +16,7 @@ import type { StatusCategoryDto, WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
 import type { SprintStateDto } from '@/lib/dto/sprints';
 import type { FilterAst } from '@/lib/filters/ast';
+import type { PendingDecisionDTO } from '@/lib/dto/approvalGate';
 
 /** Board kind — mirrors the Prisma `BoardType` enum (Story 3.1.1). */
 export type BoardTypeDto = 'kanban' | 'scrum';
@@ -165,6 +166,14 @@ export interface BoardCardDto {
   /** A story in `in_review` whose CURRENT AcceptanceEvidence is pending — drives
    *  the board "Awaiting acceptance" badge (MOTIR-1636). */
   awaitingAcceptance: boolean;
+  /**
+   * Whether a decision is waiting on this card, and whether it is the READER's
+   * (Story MOTIR-4908 · MOTIR-5876) — `approvalGatesService.pendingDecisionsFor`,
+   * the same answer the `/items` rows and the item header draw. `null` when no
+   * gate awaits. Per-reader, so it lives on the board's own DTO and never on the
+   * shared list DTO `/api/v1` also serves.
+   */
+  pendingDecision: PendingDecisionDTO | null;
   /**
    * The card's CI verdict over its whole delivery set (`WorkItem.ciState`,
    * MOTIR-5470) — `failing` / `running` / `passing` / `null`. The board draws

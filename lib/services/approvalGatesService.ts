@@ -10,6 +10,7 @@ import type {
   ApprovalQueueRowDto,
   ApprovalRecordsPageDto,
   GateDecision,
+  PendingDecisionDTO,
 } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -22,6 +23,7 @@ import {
   type RegisteredGateKind,
 } from '@/lib/approvalGates/registry';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
+import { foldPendingDecisions } from '@/lib/approvalGates/pendingDecision';
 import { settingsDoorFor, type GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 import {
   ApprovalGateAlreadyDecidedError,
@@ -52,7 +54,7 @@ import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import {
   toApprovalGateDto,
@@ -389,12 +391,24 @@ async function routingScope(
   ctx: HomeActorContext,
   tx: Prisma.TransactionClient,
 ): Promise<AwaitingRoutingScope> {
-  const empty: AwaitingRoutingScope = { projectIds: [], userId: ctx.userId };
-  const project = await projectRepository.findById(ctx.projectId, tx);
-  if (!project || project.workspaceId !== ctx.workspaceId) return empty;
+  return { projectIds: await browsableProjectIds(ctx.projectId, ctx, tx), userId: ctx.userId };
+}
+
+/**
+ * `[projectId]` when this actor may browse it, else `[]` — the ACCESS half both
+ * the queue ({@link routingScope}) and the decision-waiting marker
+ * ({@link approvalGatesService.pendingDecisionsFor}) carry INTO their query, so a
+ * private project answers empty rather than erroring (no existence leak).
+ */
+async function browsableProjectIds(
+  projectId: string,
+  ctx: AccessActorContext,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
+  const project = await projectRepository.findById(projectId, tx);
+  if (!project || project.workspaceId !== ctx.workspaceId) return [];
   const browsable = await projectAccessService.filterBrowsable([project], ctx, tx);
-  if (browsable.length === 0) return empty;
-  return { projectIds: [ctx.projectId], userId: ctx.userId };
+  return browsable.length === 0 ? [] : [projectId];
 }
 
 /**
@@ -953,6 +967,49 @@ export const approvalGatesService = {
         page,
         pageSize,
       };
+    });
+  },
+
+  /**
+   * WHICH of a set of work items has a decision waiting, and whether it is THIS
+   * reader's — the one read behind the decision-waiting marker on the board card,
+   * the `/items` rows and the item page header (Story MOTIR-4908 · MOTIR-5876).
+   *
+   * ⚠️ `yours` IS THE TO-APPROVE TAB'S ANSWER, COMPOSED FROM ITS PIECES rather than
+   * restated: the carried merge gate is dropped by the same constant the queue
+   * spreads, routing is `routingTargetId`, and the floor is the kind's own
+   * permission — the test `canDecideGate` applies, which for every registered kind
+   * today is the `work_item:edit` the queue's `canEdit` shortcut reads. So a card
+   * marked yours is a card the tab lists with a press. An admin holding
+   * `approval:decide_any` is NOT made `yours` by it: the marker says who is ASKED,
+   * and the tab never lists a gate routed elsewhere.
+   *
+   * ⚠️ ONE GATE QUERY PER CALL, whatever the set's size, and none for an empty set.
+   * The permission read is one more, and only when a gate came back. Neither grows
+   * with the row count — the property a per-row lookup on the board would lose.
+   *
+   * Access travels INTO the query: a reader who may not browse the project gets an
+   * empty map, never an error.
+   */
+  async pendingDecisionsFor(
+    input: { projectId: string; workItemIds: string[] },
+    ctx: ServiceContext,
+  ): Promise<Map<string, PendingDecisionDTO>> {
+    if (input.workItemIds.length === 0) return new Map();
+    return withWorkspaceContext(ctx, async (tx) => {
+      const projectIds = await browsableProjectIds(input.projectId, ctx, tx);
+      const rows = await approvalGateRepository.findAwaitingOnItems(
+        input.workItemIds,
+        projectIds,
+        tx,
+      );
+      if (rows.length === 0) return new Map();
+      const held = await projectAccessService.getPermissions(input.projectId, ctx, tx);
+      return foldPendingDecisions(
+        rows.map((row) => ({ ...row, kind: row.kind as ApprovalGateKindDTO })),
+        ctx.userId,
+        (kind) => !isRegisteredGateKind(kind) || held.has(handlerFor(kind).permission),
+      );
     });
   },
 
