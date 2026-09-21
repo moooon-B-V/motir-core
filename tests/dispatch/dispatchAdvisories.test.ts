@@ -1026,6 +1026,10 @@ describe('THE ESTIMATION GATE advisory — a card whose own sizing says it is mo
     expect(dto.advisories).toMatchObject([{ severity: 'likely-over-gate-sizing' }]);
     expect(dto.prompt).toContain('THIS CARD IS SIZED PAST THE ESTIMATION GATE');
     expect(dto.prompt).toContain('13 story points / 600 estimated minutes');
+    // Size never stops a run (MOTIR-5372): the agent builds it and reports the sizing.
+    expect(dto.prompt).toContain('build it anyway, and say so in your report');
+    expect(dto.prompt).toContain('never a reason to stop');
+    expect(dto.prompt).not.toContain('Propose the split and STOP');
     // …and it still dispatches, in the same workflow mode.
     expect(dto.workflowMode).toBe('per_item_pr');
 
@@ -1033,6 +1037,8 @@ describe('THE ESTIMATION GATE advisory — a card whose own sizing says it is mo
     const text = (res.content as { text: string }[])[0]!.text;
     expect(text).toContain('Advisory (NOT a blocker');
     expect(text).toContain('over the estimation gate');
+    expect(text).toContain('size never stops a run');
+    expect(text).not.toContain('Split it before starting');
   });
 
   it('reaches the PLANNER through claim_next_ready — the caller with no sizing on its row', async () => {
@@ -1047,6 +1053,8 @@ describe('THE ESTIMATION GATE advisory — a card whose own sizing says it is mo
     const text = (res.content as { text: string }[])[0]!.text;
     expect(text).toContain('Advisory (NOT a blocker — the claim stands)');
     expect(text).toContain('over the estimation gate');
+    expect(text).toContain('Build it anyway');
+    expect(text).not.toContain('SPLIT it rather than');
     const payload = res.structuredContent as {
       item: { key: string } | null;
       advisories: WorkItemProseAdvisoryDto[];

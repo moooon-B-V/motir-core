@@ -863,31 +863,29 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   }
 
   // THE ESTIMATION GATE (MOTIR-3110). Addressed to the agent because the agent
-  // is where the cost lands: a card sized past the gate is a session that runs
-  // out of room, and the recurring ending is a hundred-file pull request nobody
-  // can review. It goes in the prompt rather than only in the tool summary for
-  // the same reason the other three do — the prompt is the one surface every
-  // harness inherits, because none of them assembles its own.
+  // is where the cost lands, and it goes in the prompt rather than only in the
+  // tool summary because the prompt is the one surface every harness inherits.
+  //
+  // ⚠️ IT NEVER STOPS THE RUN (MOTIR-5372, docs/decisions/over-gate-sizing-never-stops-a-run.md).
+  // This block used to say "Propose the split and STOP". A size is an estimate,
+  // and a card stuck on a sizing reason is a dead end for a non-technical user,
+  // while a large pull request is recoverable. So the agent is told the card is
+  // over the gate, told to say so in its report, and told to build it.
   if (oversized.length > 0) {
     lines.push(
       '',
-      'THIS CARD IS SIZED PAST THE ESTIMATION GATE — split it before you start:',
+      'THIS CARD IS SIZED PAST THE ESTIMATION GATE — build it anyway, and say so in your report:',
       ...oversized.map(
         (a) =>
           `    - ${a.storyPoints ?? '—'} story points / ${a.estimateMinutes ?? '—'} estimated` +
           ` minutes, over ${a.threshold === 'both' ? 'BOTH ceilings' : a.threshold === 'story_points' ? 'the 8-point split signal' : 'the 70-minute estimate threshold'}.`,
       ),
-      '  8+ points is the split signal read literally, and a coding_agent run must fit inside',
-      '  an hour. The MINUTES half is a PROXY for that hour, not the rule itself: the gate',
-      '  ceilings the AGENT RUN excluding CI, while the estimate column sums agent time AND CI',
-      '  time — so past 70 total minutes the run is PROBABLY over the hour, and a card with a',
-      '  short run behind a heavy CI leg can be inside it. Check the split before the number.',
-      '  READ THE CARD FIRST: every prior instance of this had already done the',
-      '  analysis and written the axis to split on into its own description — that is why the',
-      '  check exists, because the answer kept going into a field nothing reads. Propose the',
-      '  split and STOP; do not start a run whose own sizing says it will not finish. If the',
-      '  card is genuinely one unit and the numbers are wrong, say so and correct them on the',
-      '  record — but do not simply proceed past this line.',
+      '  This is a WARNING, never a reason to stop: do NOT halt the run, propose a split',
+      '  instead of building, or hand the card back. Build every acceptance criterion as usual.',
+      '  In your final report (and the PR description), state that the card was sized over the',
+      '  estimation gate, with the numbers above, so a planner can size similar work smaller',
+      '  next time. If the numbers are plainly wrong for what the card asks, you may correct',
+      '  them on the record as well.',
     );
   }
 

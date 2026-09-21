@@ -105,15 +105,15 @@ function summarize(
   }
   // THE ESTIMATION GATE (MOTIR-3110). The claimer is the party this lands on:
   // it has just been handed a card whose own sizing says it is more than one
-  // run, and the four prior instances all reached exactly this moment green.
+  // run. ⚠️ A WARNING ONLY — size never stops a run (MOTIR-5372): the claimer
+  // builds the card and reports the sizing, it does not split instead.
   for (const s of oversized) {
     lines.push(
       `Advisory (NOT a blocker — the claim stands): this card is sized ${s.storyPoints ?? '—'} ` +
         `story points / ${s.estimateMinutes ?? '—'} estimated minutes, over the estimation ` +
         `gate (${s.threshold === 'both' ? 'both ceilings' : s.threshold === 'story_points' ? '8+ points is its literal SPLIT signal' : 'a coding_agent run must fit in 60 minutes, and this minutes figure is a PROXY for that — the column sums agent time and CI time'}). ` +
-        'Read the card for a split it has already worked out — four cards over this gate each ' +
-        'carried the correct remedy in their own description — and SPLIT it rather than ' +
-        'starting a run the size says will not finish.',
+        'Build it anyway and say in your report that it was sized over the gate — size never ' +
+        'stops a run (MOTIR-5372).',
     );
   }
   // THE DESIGN GATE (MOTIR-3178). The claimer is the party this lands on: it has
