@@ -116,8 +116,9 @@ async function acceptanceNoLongerOwed(
     (row) => row.kind === ACCEPTANCE_KIND,
   );
   if (!awaiting) return false;
-  const item = await workItemRepository.findById(workItemId, tx);
-  if (!item) return false;
+  // The awaiting gate row just read holds a foreign key to this card (cascading delete),
+  // so inside this transaction the card exists.
+  const item = (await workItemRepository.findById(workItemId, tx))!;
   const set = await gateSetFor(item, tx, signals);
   return !set.awaited.some((gate) => gate.kind === ACCEPTANCE_KIND);
 }

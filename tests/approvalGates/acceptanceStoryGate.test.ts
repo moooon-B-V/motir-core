@@ -58,8 +58,12 @@ const { workItemsService } = await import('@/lib/services/workItemsService');
 const { pullRequestMergeService } = await import('@/lib/services/pullRequestMergeService');
 const { reconcileGatesFor } = await import('@/lib/services/gateSetFor');
 const { settleGreenVerdict } = await import('@/lib/services/mergeGates');
-const { withdrawPullRequestApprovalGatesOnHeadMove } =
-  await import('@/lib/services/pullRequestApprovalGates');
+const {
+  withdrawPullRequestApprovalGatesOnHeadMove,
+  withdrawPullRequestApprovalGatesOnClose,
+  withdrawPullRequestApprovalGatesOnDraft,
+  withdrawPullRequestApprovalGateOnSetChange,
+} = await import('@/lib/services/pullRequestApprovalGates');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 
 const github = getGitProvider('github') as Required<GitProvider>;
@@ -175,10 +179,12 @@ async function publishVia(key: string, commitSha: string) {
   );
 }
 
+// Gates raised in ONE transaction share `createdAt` (Postgres `now()` is the transaction's
+// start), so the kind NAME breaks the tie — never the enum, whose order is declaration order.
 const gatesOn = async (workItemId: string) =>
-  (
-    await adminDb.approvalGate.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } })
-  ).map((g) => [g.kind, g.state] as const);
+  (await adminDb.approvalGate.findMany({ where: { workItemId } }))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.kind.localeCompare(b.kind))
+    .map((g) => [g.kind, g.state] as const);
 
 const HEAD = 'a1'.repeat(20);
 
@@ -328,7 +334,8 @@ describe('the lifecycles', () => {
       where: { workItemId: story.id },
       orderBy: { createdAt: 'asc' },
     });
-    expect(rows.map((g) => [g.kind, g.state, g.supersededCause])).toEqual([
+    // Both rows are written in one transaction, so `createdAt` does not order them.
+    expect(rows.map((g) => [g.kind, g.state, g.supersededCause]).sort()).toEqual([
       ['acceptance_result', 'superseded', 'head_moved'],
       ['pull_request_approval', 'superseded', 'head_moved'],
     ]);
@@ -344,7 +351,10 @@ describe('the lifecycles', () => {
       where: { workItemId: story.id, state: 'awaiting' },
       orderBy: { createdAt: 'asc' },
     });
-    expect(awaiting.map((g) => g.kind)).toEqual(['acceptance_result', 'pull_request_approval']);
+    expect(awaiting.map((g) => g.kind).sort()).toEqual([
+      'acceptance_result',
+      'pull_request_approval',
+    ]);
   });
 
   it('a merge re-asked ALONE: after the press, a push moves the head and the next green asks only the merge', async () => {
@@ -391,6 +401,117 @@ describe('the lifecycles', () => {
     );
     expect(awaitingMerge).toHaveLength(1);
     expect(awaitingMerge[0]!.subjectVersion).toContain('b2'.repeat(20));
+  });
+
+  // Every event that takes a story run's set out of green withdraws the acceptance question
+  // WITH the merge question, under the same cause (MOTIR-5903, the ADR amendment's point 2).
+  for (const [cause, takeOutOfGreen] of [
+    [
+      'member_closed',
+      async (prId: string) => {
+        await adminDb.githubPullRequest.update({ where: { id: prId }, data: { state: 'closed' } });
+        return withWorkspaceContext(fx.ctx, (tx) =>
+          withdrawPullRequestApprovalGatesOnClose(prId, tx),
+        );
+      },
+    ],
+    [
+      'member_drafted',
+      async (prId: string) => {
+        await adminDb.githubPullRequest.update({ where: { id: prId }, data: { draft: true } });
+        return withWorkspaceContext(fx.ctx, (tx) =>
+          withdrawPullRequestApprovalGatesOnDraft(prId, tx),
+        );
+      },
+    ],
+    [
+      'set_changed',
+      async (prId: string) => {
+        const delivery = await adminDb.workItemDelivery.findFirstOrThrow({
+          where: { githubPullRequestId: prId },
+        });
+        await adminDb.workItemDelivery.delete({ where: { id: delivery.id } });
+        return withWorkspaceContext(fx.ctx, (tx) =>
+          withdrawPullRequestApprovalGateOnSetChange(delivery.workItemId, tx),
+        );
+      },
+    ],
+  ] as const) {
+    it(`a story run leaving green by \`${cause}\` withdraws the acceptance question WITH the merge question (MOTIR-5903)`, async () => {
+      const { story, e2e, pr } = await storyRun('success');
+      await publishVia(e2e.identifier, 'c0ffee1');
+      expect(await gatesOn(story.id)).toEqual([
+        ['acceptance_result', 'awaiting'],
+        ['pull_request_approval', 'awaiting'],
+      ]);
+
+      await takeOutOfGreen(pr.id);
+
+      const rows = await adminDb.approvalGate.findMany({
+        where: { workItemId: story.id },
+        orderBy: { createdAt: 'asc' },
+      });
+      // Both rows are written in one transaction, so `createdAt` does not order them.
+      expect(rows.map((g) => [g.kind, g.state, g.supersededCause]).sort()).toEqual([
+        ['acceptance_result', 'superseded', cause],
+        ['pull_request_approval', 'superseded', cause],
+      ]);
+    });
+  }
+
+  it('a draft on a story run with NO receipt withdraws the merge question alone — there is no acceptance question to retire', async () => {
+    const { story, pr } = await storyRun('success');
+    await withWorkspaceContext(fx.ctx, async (tx) =>
+      reconcileGatesFor(await tx.workItem.findUniqueOrThrow({ where: { id: story.id } }), tx),
+    );
+    expect(await gatesOn(story.id)).toEqual([['pull_request_approval', 'awaiting']]);
+
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { draft: true } });
+    await withWorkspaceContext(fx.ctx, (tx) => withdrawPullRequestApprovalGatesOnDraft(pr.id, tx));
+    expect(await gatesOn(story.id)).toEqual([['pull_request_approval', 'superseded']]);
+  });
+
+  it('a head move naming the head the questions were ASKED about is a late delivery: it withdraws neither', async () => {
+    const { story, e2e, pr } = await storyRun('success');
+    await publishVia(e2e.identifier, 'c0ffee1');
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      withdrawPullRequestApprovalGatesOnHeadMove(pr.id, tx, HEAD),
+    );
+    expect(await gatesOn(story.id)).toEqual([
+      ['acceptance_result', 'awaiting'],
+      ['pull_request_approval', 'awaiting'],
+    ]);
+  });
+
+  it('an `auto` story run: a push withdraws the acceptance question even with NO merge gate beside it (MOTIR-5903)', async () => {
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { prMergeMode: 'auto' } });
+    const { story, e2e, pr } = await storyRun('success');
+    await publishVia(e2e.identifier, 'c0ffee1');
+    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'awaiting']]);
+
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      withdrawPullRequestApprovalGatesOnHeadMove(pr.id, tx, 'c4'.repeat(20)),
+    );
+    const rows = await adminDb.approvalGate.findMany({ where: { workItemId: story.id } });
+    expect(rows.map((g) => [g.kind, g.state, g.supersededCause])).toEqual([
+      ['acceptance_result', 'superseded', 'head_moved'],
+    ]);
+  });
+
+  it('a withdrawer leaves a question that is STILL owed where it is — a subtask-run story whose subtree is settled (MOTIR-5903)', async () => {
+    const story = await item('story', 'Accept a story from its recording');
+    const e2e = await item('subtask', 'Story E2E + acceptance video', story.id);
+    await workItemsService.updateStatus(e2e.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(e2e.id, 'done', fx.ctx);
+    await publishVia(e2e.identifier, 'c0ffee1');
+    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'awaiting']]);
+
+    // A set change on the story (nothing was linked, nothing is now) re-asks nothing new
+    // and retires nothing: the question does not ride on a delivery set here.
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      withdrawPullRequestApprovalGateOnSetChange(story.id, tx),
+    );
+    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'awaiting']]);
   });
 
   it('a NEWER receipt supersedes the awaiting question with cause `republished`', async () => {
