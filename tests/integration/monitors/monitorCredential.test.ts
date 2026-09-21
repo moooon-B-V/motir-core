@@ -11,7 +11,11 @@ import {
 import { sentryMonitorProvider } from '@/lib/monitors/providers/sentry';
 import { registerMonitorProvider } from '@/lib/monitors/registry';
 import { decryptToken, encryptToken } from '@/lib/monitors/tokenCrypto';
-import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
+import { MONITOR_REFRESH_TIMEOUT_MS } from '@/lib/monitors/provider';
+import {
+  MONITOR_REFRESH_TRANSACTION_TIMEOUT_MS,
+  monitorCredentialService,
+} from '@/lib/services/monitorCredentialService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -261,6 +265,41 @@ describe('CONCURRENCY — two page loads must not break a connection', () => {
 
     expect(fakeMonitorState().refreshCount).toBe(1);
     expect(new Set(tokens.map((t) => t.token)).size).toBe(1);
+  });
+});
+
+describe('a SLOW refresh still commits the rotated pair (MOTIR-5988)', () => {
+  // The production incident: the provider took longer than Prisma's default
+  // 5 s interactive-transaction timeout, ROTATED the refresh token, and the
+  // write that should have stored the new pair ran on an expired transaction and
+  // rolled back — leaving a refresh token the provider had already invalidated.
+  // Every refresh after that is refused, and only a person re-authorising
+  // recovers it. So the provider is slowed past 5 s here, and the proof is the
+  // RE-READ ROW, never the returned value.
+  it('persists the pair a provider returned after more than five seconds', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Slow', identifier: 'SLOW' });
+    const grant = await seedGrant(fx, -60_000);
+    const original = fakeMonitorProvider.refreshCredential.bind(fakeMonitorProvider);
+    vi.spyOn(fakeMonitorProvider, 'refreshCredential').mockImplementation(async (args) => {
+      await new Promise((resolve) => setTimeout(resolve, 6_000));
+      return original(args);
+    });
+
+    const credential = await monitorCredentialService.getAccessToken(grant.id);
+
+    expect(credential.token).toBe('fake-access-token-1');
+    const row = await adminDb.monitorInstallation.findUniqueOrThrow({ where: { id: grant.id } });
+    expect(decryptToken(row.accessTokenEncrypted)).toBe('fake-access-token-1');
+    expect(decryptToken(row.refreshTokenEncrypted)).toBe('fake-refresh-token-1');
+    expect(row.health).toBe('connected');
+  }, 30_000);
+
+  it('gives the refresh transaction a budget that outlives the provider call AND a lock wait', () => {
+    // A loser blocked on the row lock waits out the winner's whole provider call
+    // before it can make its own (the forced-refresh path), so the transaction
+    // must cover two of them. Pinned as arithmetic, so neither constant can be
+    // edited alone into a gap.
+    expect(MONITOR_REFRESH_TRANSACTION_TIMEOUT_MS).toBeGreaterThan(2 * MONITOR_REFRESH_TIMEOUT_MS);
   });
 });
 

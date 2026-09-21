@@ -1,6 +1,7 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { getMonitorProvider } from '@/lib/monitors';
 import { MonitorGrantNotFoundError, MonitorProviderCallError } from '@/lib/monitors/errors';
+import { MONITOR_REFRESH_TIMEOUT_MS } from '@/lib/monitors/provider';
 import { readOrgSlug } from '@/lib/mappers/monitorMappers';
 import { decryptToken, encryptToken } from '@/lib/monitors/tokenCrypto';
 import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
@@ -39,6 +40,24 @@ import { withSystemContext } from '@/lib/workspaces/context';
  * right. Mirrors the same constant in the GitLab connection path.
  */
 export const MONITOR_EXPIRY_SKEW_MS = 60_000;
+
+/**
+ * How long the refresh TRANSACTION may run, in ms — derived from the provider
+ * call's own deadline, never left at Prisma's 5-second default.
+ *
+ * ⚠️ WHY THE DEFAULT BROKE A LIVE CONNECTION (MOTIR-5988). The lock is held
+ * across the provider call on purpose (below), so the transaction lasts at least
+ * as long as the call. Sentry took ~10 s; the transaction expired at 5 s; Sentry
+ * had already ROTATED the refresh token, and the write storing the new pair
+ * rolled back. What was left in the row was a refresh token the provider had
+ * invalidated, so every later refresh was refused until a person re-authorised.
+ *
+ * TWO calls, not one: a caller blocked on the row lock waits out the holder's
+ * whole provider call, and on the forced-refresh path then makes its own. The
+ * margin covers the queries around them. Pinned as arithmetic by
+ * `monitorCredential.test.ts`, so neither constant can be edited alone into a gap.
+ */
+export const MONITOR_REFRESH_TRANSACTION_TIMEOUT_MS = 2 * MONITOR_REFRESH_TIMEOUT_MS + 10_000;
 
 /** What a caller gets to make one provider call with. */
 export interface MonitorAccessToken {
@@ -105,79 +124,84 @@ async function refreshUnderLock(
   installationRowId: string,
   { force }: { force: boolean },
 ): Promise<RefreshOutcome> {
-  return withSystemContext(async (tx) => {
-    await monitorInstallationRepository.lockById(installationRowId, tx);
-    const grant = await monitorInstallationRepository.findCredentialById(installationRowId, tx);
-    if (!grant) throw new MonitorGrantNotFoundError(installationRowId);
+  return withSystemContext(
+    async (tx) => {
+      await monitorInstallationRepository.lockById(installationRowId, tx);
+      const grant = await monitorInstallationRepository.findCredentialById(installationRowId, tx);
+      if (!grant) throw new MonitorGrantNotFoundError(installationRowId);
 
-    const orgSlug = readOrgSlug(grant.metadata);
+      const orgSlug = readOrgSlug(grant.metadata);
 
-    // The common path, and the one the LOSER of a race lands on: a stored token
-    // that is still good. No provider call at all — which is the observable
-    // consequence the concurrency test asserts.
-    if (!force && grant.tokenExpiresAt.getTime() - MONITOR_EXPIRY_SKEW_MS > Date.now()) {
+      // The common path, and the one the LOSER of a race lands on: a stored token
+      // that is still good. No provider call at all — which is the observable
+      // consequence the concurrency test asserts.
+      if (!force && grant.tokenExpiresAt.getTime() - MONITOR_EXPIRY_SKEW_MS > Date.now()) {
+        return {
+          kind: 'ok',
+          credential: {
+            installationRowId: grant.id,
+            provider: grant.provider,
+            orgSlug,
+            token: decryptToken(grant.accessTokenEncrypted),
+            expiresAt: grant.tokenExpiresAt,
+          },
+        };
+      }
+
+      const provider = getMonitorProvider(grant.provider);
+      let refreshed;
+      try {
+        refreshed = await provider.refreshCredential({
+          installationId: grant.installationId,
+          refreshToken: decryptToken(grant.refreshTokenEncrypted),
+        });
+      } catch (error) {
+        // A refusal here is the customer having revoked the integration far more
+        // often than it is an outage, and either way the connection is not usable.
+        return {
+          kind: 'refused',
+          installationRowId: grant.id,
+          provider: grant.provider,
+          reason:
+            error instanceof MonitorProviderCallError
+              ? error.providerReason
+              : 'The refresh failed.',
+          error,
+        };
+      }
+
+      const updated = await monitorInstallationRepository.updateTokens(
+        grant.id,
+        {
+          accessTokenEncrypted: encryptToken(refreshed.accessToken),
+          refreshTokenEncrypted: encryptToken(refreshed.refreshToken),
+          tokenExpiresAt: refreshed.expiresAt,
+        },
+        tx,
+      );
+      // A successful refresh is also evidence of HEALTH, so the terminal value of
+      // the lifecycle is written here rather than left showing a stale failure — a
+      // re-authorised connection that keeps reading `degraded` is the same silent
+      // wrongness one polarity over.
+      await monitorInstallationRepository.updateHealth(
+        grant.id,
+        { health: 'connected', healthReason: null, healthCheckedAt: new Date() },
+        tx,
+      );
+
       return {
         kind: 'ok',
         credential: {
           installationRowId: grant.id,
           provider: grant.provider,
           orgSlug,
-          token: decryptToken(grant.accessTokenEncrypted),
-          expiresAt: grant.tokenExpiresAt,
+          token: refreshed.accessToken,
+          expiresAt: updated.tokenExpiresAt,
         },
       };
-    }
-
-    const provider = getMonitorProvider(grant.provider);
-    let refreshed;
-    try {
-      refreshed = await provider.refreshCredential({
-        installationId: grant.installationId,
-        refreshToken: decryptToken(grant.refreshTokenEncrypted),
-      });
-    } catch (error) {
-      // A refusal here is the customer having revoked the integration far more
-      // often than it is an outage, and either way the connection is not usable.
-      return {
-        kind: 'refused',
-        installationRowId: grant.id,
-        provider: grant.provider,
-        reason:
-          error instanceof MonitorProviderCallError ? error.providerReason : 'The refresh failed.',
-        error,
-      };
-    }
-
-    const updated = await monitorInstallationRepository.updateTokens(
-      grant.id,
-      {
-        accessTokenEncrypted: encryptToken(refreshed.accessToken),
-        refreshTokenEncrypted: encryptToken(refreshed.refreshToken),
-        tokenExpiresAt: refreshed.expiresAt,
-      },
-      tx,
-    );
-    // A successful refresh is also evidence of HEALTH, so the terminal value of
-    // the lifecycle is written here rather than left showing a stale failure — a
-    // re-authorised connection that keeps reading `degraded` is the same silent
-    // wrongness one polarity over.
-    await monitorInstallationRepository.updateHealth(
-      grant.id,
-      { health: 'connected', healthReason: null, healthCheckedAt: new Date() },
-      tx,
-    );
-
-    return {
-      kind: 'ok',
-      credential: {
-        installationRowId: grant.id,
-        provider: grant.provider,
-        orgSlug,
-        token: refreshed.accessToken,
-        expiresAt: updated.tokenExpiresAt,
-      },
-    };
-  });
+    },
+    { timeout: MONITOR_REFRESH_TRANSACTION_TIMEOUT_MS },
+  );
 }
 
 /** Hand back the credential, or COMMIT the verdict and then throw. */
