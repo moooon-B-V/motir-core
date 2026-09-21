@@ -181,15 +181,15 @@ half-wired.
 **The registry** is `Record<ApprovalGateKind, GateHandler>`. **What a third kind
 must supply to register — the table this record exists to make re-usable:**
 
-| a handler supplies                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 | for `decision_choice` — §1's MOTIR-5887 AMENDMENT                                                                                                                                      |
-| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **how to resolve the SUBJECT** from the gate row   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) | the `## Options` and `## What this choice gates` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 1–2) |
-| **who it ROUTES to**                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    | the same                                                                                                                                                                               |
-| **which PERMISSION authorises a decision**         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            | `work_item:edit`, under §2's AUTHORITY rule in force (point 4)                                                                                                                         |
-| **which STATUS TRANSITION the gate owns**, or none | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  | the move into the project's `done` category — a choice never has a pull request (point 6)                                                                                              |
-| **what `approve` DOES**                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  | there is no `approve`: each OPTION is a verb, `choose(optionId)`, which records the pick and writes `done` (points 5–6)                                                                |
-| **what `request_changes` DOES**                    | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 | **None of these — revise the options**: records `changes_requested`, moves nothing (point 5)                                                                                           |
-| **what to RETAIN on approval**, or nothing         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              | nothing to pin — the chosen option is SNAPSHOTTED onto the immutable gate row (point 7)                                                                                                |
+| a handler supplies                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 | for `decision_choice` — §1's MOTIR-5887 AMENDMENT                                                                                                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **how to resolve the SUBJECT** from the gate row   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) | the `## Why this is a choice`, `## Options` and `## What this choice gates` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 1–2) |
+| **who it ROUTES to**                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    | the same                                                                                                                                                                                                          |
+| **which PERMISSION authorises a decision**         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            | `work_item:edit`, under §2's AUTHORITY rule in force (point 4)                                                                                                                                                    |
+| **which STATUS TRANSITION the gate owns**, or none | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  | the move into the project's `done` category — a choice never has a pull request (point 6)                                                                                                                         |
+| **what `approve` DOES**                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  | there is no `approve`: each OPTION is a verb, `choose(optionId)`, which records the pick and writes `done` (points 5–6)                                                                                           |
+| **what `request_changes` DOES**                    | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 | **None of these — revise the options**: records `changes_requested`, moves nothing (point 5)                                                                                                                      |
+| **what to RETAIN on approval**, or nothing         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              | nothing to pin — the chosen option is SNAPSHOTTED onto the immutable gate row (point 7)                                                                                                                           |
 
 _The third column is added by §8's FIFTH AMENDMENT (MOTIR-5672, 2026-09-19); the
 first two are unchanged. The fourth is added by §1's MOTIR-5887 amendment
@@ -606,6 +606,11 @@ decision` + `executor: human` — the verb-set paragraph above, §8's fifth
 > ## Question
 > <the question the planner declined to decide>
 >
+> ## Why this is a choice
+> **Situation:** <contradicts your decision · better than your decision · two workflows>
+> **You said:** <the decision the person gave, quoted — situations 1 and 2 only>
+> <what research found, or where in the requirement the fork sits>
+>
 > ## Options
 >
 > ### <label>
@@ -620,12 +625,32 @@ decision` + `executor: human` — the verb-set paragraph above, §8's fifth
 > <the follow-up work that will be planned once an option is chosen>
 > ```
 >
+> - **`## Why this is a choice` names which of the THREE situations brought it
+>   back** — the exhaustive set `kind-container.md`'s choice rule (MOTIR-4915)
+>   defines, one `**Situation:**` value each:
+>
+>   | `**Situation:**` value      | situation id                | the situation                                                   | `**You said:**` |
+>   | --------------------------- | --------------------------- | --------------------------------------------------------------- | --------------- |
+>   | `contradicts your decision` | `contradicts_your_decision` | research CONTRADICTS the architecture decision the person gave  | required        |
+>   | `better than your decision` | `better_than_your_decision` | a BETTER option exists, and the person's decision is NOT wrong  | required        |
+>   | `two workflows`             | `two_workflows`             | the requirement itself admits two genuinely different WORKFLOWS | not used        |
+>
+>   The first two DEBATE a decision the person already made, so they carry it
+>   quoted on a `**You said:**` line; the rule's precondition — _no HOW offered ⇒
+>   nothing to contradict, and no choice_ — is thereby CHECKABLE rather than
+>   asserted. The third debates nothing, so it names where the fork sits in the
+>   requirement instead. **Why it is here matters to the person picking**: a
+>   choice that overrules what they said reads differently from one their own
+>   requirement forked, and without the section they cannot tell which they are
+>   facing. (Added on review of MOTIR-5888's first published design, 2026-09-21.)
+>
 > - **An option's id is the kebab-case slug of its label.** It is what the
 >   verb, the stored pick and `outcomeRef` name.
-> - **`subjectVersion` is a hash of the `## Options` and `## What this choice
-gates` sections** — not of the whole body, so editing the question's wording
->   or a typo elsewhere does not retire a pending decision, while any change to
->   what is being chosen between does. An edit that moves it trips the shipped
+> - **`subjectVersion` is a hash of the `## Why this is a choice`, `## Options`
+>   and `## What this choice gates` sections** — not of the whole body, so
+>   editing the question's wording or a typo elsewhere does not retire a pending
+>   decision, while any change to what is being chosen between, or to why it is
+>   being asked at all, does. An edit that moves it trips the shipped
 >   stale-stamp refusal (`APPROVAL_GATE_STALE_SUBJECT`, MOTIR-5232) for anyone
 >   who pressed against the old version.
 > - **Where a subject lives stays the handler's business**, as §1's MOTIR-4911
@@ -637,12 +662,15 @@ gates` sections** — not of the whole body, so editing the question's wording
 > The defect reasons are a CLOSED set, and the parser returns exactly one of
 > them or the parsed options:
 >
-> | reason                   | when                                                            |
-> | ------------------------ | --------------------------------------------------------------- |
-> | `fewer_than_two_options` | `## Options` holds zero or one `###` option                     |
-> | `option_without_axis`    | an option has no `**Axis:**` line — the reason NAMES the option |
-> | `duplicate_option`       | two options slug to the same id                                 |
-> | `no_follow_up_section`   | `## What this choice gates` is missing or empty                 |
+> | reason                   | when                                                                                   |
+> | ------------------------ | -------------------------------------------------------------------------------------- |
+> | `fewer_than_two_options` | `## Options` holds zero or one `###` option                                            |
+> | `option_without_axis`    | an option has no `**Axis:**` line — the reason NAMES the option                        |
+> | `duplicate_option`       | two options slug to the same id                                                        |
+> | `no_follow_up_section`   | `## What this choice gates` is missing or empty                                        |
+> | `no_why_section`         | `## Why this is a choice` is missing, or carries no `**Situation:**` line              |
+> | `unknown_situation`      | the `**Situation:**` value is not one of the three — the reason QUOTES it              |
+> | `no_quoted_decision`     | the situation debates a decision (the first two) and no `**You said:**` line quotes it |
 >
 > The item renders the reason rather than a bare list — the story's honest
 > defect state. **And it is what makes "a follow-up planning pass is owed" true
@@ -719,20 +747,22 @@ gates` sections** — not of the whole body, so editing the question's wording
 >   Workflow A always writes `done` — so the column holds what the kind uniquely
 >   caused: which option won.
 > - **A new nullable `chosenOption` JSON column on `approval_gate`** stamps
->   `{ optionId, label, axis, followUp }` — the pick's label, its named axis and
->   the text of `## What this choice gates` — **in the deciding write**, under
+>   `{ optionId, label, axis, followUp, situation }` — the pick's label, its named
+>   axis, the text of `## What this choice gates`, and the situation id that
+>   brought the choice back — **in the deciding write**, under
 >   the existing `trg_approval_gate_decided_immutable` trigger. The pick stays
 >   readable months later without re-reading a body that may since have changed:
->   _what did we pick, on which axis, and what does it unblock?_ is one row. It
+>   _why were we asked, what did we pick, on which axis, and what does it unblock?_
+>   is one row. It
 >   is null on every other kind and on a `changes_requested` choice.
 > - **Retention: nothing to pin.** The snapshot IS the retained artefact, and it
 >   lives on the immutable row.
 >
 > #### 8 — the KIND table's row
 >
-> | kind              | the port shows                                                                                           | fires when                                                                                      |
-> | ----------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-> | `decision_choice` | the QUESTION, the N options each with its AXIS and WHY, and what the choice gates — or the defect reason | a **`type: choice`** work item whose body parses complete, unblocked, not done — **never** a PR |
+> | kind              | the port shows                                                                                                                               | fires when                                                                                      |
+> | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+> | `decision_choice` | the QUESTION, WHY it is a choice (the situation), the N options each with its AXIS and WHY, and what the choice gates — or the defect reason | a **`type: choice`** work item whose body parses complete, unblocked, not done — **never** a PR |
 >
 > **The frame is the SAME component** as every other kind's (§1's claim that the
 > KIND decides the verbs and the PORT decides what you look at). This is the
