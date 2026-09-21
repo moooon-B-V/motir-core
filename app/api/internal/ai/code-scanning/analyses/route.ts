@@ -12,9 +12,11 @@ import { githubCodeScanningProxyService } from '@/lib/services/githubCodeScannin
 // service call, return. The workspace is the TOKEN's own — no caller-supplied
 // tenant, so a token can only read its own workspace's connected repos.
 //
-// `{ analyses: null }` when the repo isn't connected / code scanning is
-// unavailable — the detection step degrades to "source absent" (never a gate),
-// so the service NEVER throws for a GitHub-side failure.
+// `{ analyses, defaultBranch }` — the analyses on the repo's DEFAULT BRANCH,
+// each carrying its `ref` + `category`, and that branch's name (MOTIR-5922).
+// `{ analyses: null, defaultBranch: null }` when the repo isn't connected / code
+// scanning is unavailable — the detection step degrades to "source absent"
+// (never a gate), so the service NEVER throws for a GitHub-side failure.
 export async function GET(req: Request): Promise<Response> {
   let auth;
   try {
@@ -33,6 +35,9 @@ export async function GET(req: Request): Promise<Response> {
     );
   }
 
-  const analyses = await githubCodeScanningProxyService.listAnalyses(auth.ctx, repoRef);
-  return NextResponse.json({ analyses });
+  const view = await githubCodeScanningProxyService.listAnalyses(auth.ctx, repoRef);
+  return NextResponse.json({
+    analyses: view?.analyses ?? null,
+    defaultBranch: view?.defaultBranch ?? null,
+  });
 }

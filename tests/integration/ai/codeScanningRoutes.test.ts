@@ -25,7 +25,15 @@ const REPO: NormalizedRepo = {
   defaultBranch: 'main',
   archived: false,
 };
-const ANALYSES_BODY = [{ id: 42, tool: { name: 'CodeQL' }, created_at: '2026-07-01T00:00:00Z' }];
+const ANALYSES_BODY = [
+  {
+    id: 42,
+    tool: { name: 'CodeQL' },
+    created_at: '2026-07-01T00:00:00Z',
+    ref: 'refs/heads/main',
+    category: '/language:javascript-typescript',
+  },
+];
 const SARIF_DOC = { version: '2.1.0', runs: [] };
 
 beforeEach(async () => {
@@ -151,7 +159,16 @@ describe('GET /api/internal/ai/code-scanning/* — happy path (connected repo)',
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      analyses: [{ id: 42, toolName: 'CodeQL', createdAt: '2026-07-01T00:00:00Z' }],
+      analyses: [
+        {
+          id: 42,
+          toolName: 'CodeQL',
+          createdAt: '2026-07-01T00:00:00Z',
+          ref: 'refs/heads/main',
+          category: '/language:javascript-typescript',
+        },
+      ],
+      defaultBranch: 'main',
     });
   });
 
@@ -178,6 +195,6 @@ describe('GET /api/internal/ai/code-scanning/* — happy path (connected repo)',
       }),
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ analyses: null });
+    expect(await res.json()).toEqual({ analyses: null, defaultBranch: null });
   });
 });

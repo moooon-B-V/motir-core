@@ -35,8 +35,20 @@ const REPO: NormalizedRepo = {
 const REPO_REF = 'moooon/motir-core';
 
 const ANALYSES_BODY = [
-  { id: 42, tool: { name: 'CodeQL' }, created_at: '2026-07-01T00:00:00Z' },
-  { id: 7, tool: { name: 'CodeQL' }, created_at: '2026-06-01T00:00:00Z' },
+  {
+    id: 42,
+    tool: { name: 'CodeQL' },
+    created_at: '2026-07-01T00:00:00Z',
+    ref: 'refs/heads/main',
+    category: '/language:actions',
+  },
+  {
+    id: 7,
+    tool: { name: 'CodeQL' },
+    created_at: '2026-06-01T00:00:00Z',
+    ref: 'refs/heads/main',
+    category: '/language:javascript-typescript',
+  },
 ];
 const SARIF_DOC = { version: '2.1.0', runs: [{ results: [] }] };
 
@@ -101,26 +113,44 @@ afterAll(async () => {
 });
 
 describe('githubCodeScanningProxyService — private connected repo (AC1)', () => {
-  it('lists analyses read with the tenant installation token', async () => {
+  it('lists the DEFAULT BRANCH analyses, with ref + category, read with the tenant installation token', async () => {
     const fetchMock = stubGithub();
     const { user, workspace } = await makeWorkspace('a@example.com');
-    await connectRepo(workspace.id, 'inst-1');
+    await connectRepo(workspace.id, 'inst-1', { ...REPO, defaultBranch: 'trunk' });
 
-    const analyses = await githubCodeScanningProxyService.listAnalyses(
+    const view = await githubCodeScanningProxyService.listAnalyses(
       { userId: user.id, workspaceId: workspace.id },
       REPO_REF,
     );
-    expect(analyses).toEqual([
-      { id: 42, toolName: 'CodeQL', createdAt: '2026-07-01T00:00:00Z' },
-      { id: 7, toolName: 'CodeQL', createdAt: '2026-06-01T00:00:00Z' },
-    ]);
-    // The code-scanning read carried the minted INSTALLATION token.
+    expect(view).toEqual({
+      analyses: [
+        {
+          id: 42,
+          toolName: 'CodeQL',
+          createdAt: '2026-07-01T00:00:00Z',
+          ref: 'refs/heads/main',
+          category: '/language:actions',
+        },
+        {
+          id: 7,
+          toolName: 'CodeQL',
+          createdAt: '2026-06-01T00:00:00Z',
+          ref: 'refs/heads/main',
+          category: '/language:javascript-typescript',
+        },
+      ],
+      // The STORED default branch, not a guess — `main` would be wrong here.
+      defaultBranch: 'trunk',
+    });
+    // The code-scanning read carried the minted INSTALLATION token, and asked
+    // GitHub for the default branch's analyses only (MOTIR-5922): the
+    // unfiltered list is newest-first across every ref, pull requests included.
     const scanCall = fetchMock.mock.calls.find(([u]) =>
       String(u).includes('/code-scanning/analyses'),
     );
     expect(scanCall).toBeDefined();
     expect(String(scanCall![0])).toBe(
-      'https://api.github.com/repos/moooon/motir-core/code-scanning/analyses?per_page=50',
+      'https://api.github.com/repos/moooon/motir-core/code-scanning/analyses?per_page=50&ref=refs%2Fheads%2Ftrunk',
     );
     const headers = (scanCall![1] as RequestInit).headers as Record<string, string>;
     expect(headers['authorization']).toBe('Bearer ghs_installtoken');
