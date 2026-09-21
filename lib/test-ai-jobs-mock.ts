@@ -65,6 +65,12 @@ export interface RoutingJobOutcome {
   missing?: string[];
 }
 
+/** What the next `author_bug` job should settle as (MOTIR-5852 / MOTIR-5853). */
+export interface AuthorBugJobOutcome {
+  status?: 'succeeded' | 'failed' | 'running';
+  authoredBug?: unknown;
+}
+
 export interface AiJobsFixture {
   /**
    * The `ask_project` outcomes, CONSUMED IN ORDER — one per ask job submitted.
@@ -81,6 +87,15 @@ export interface AiJobsFixture {
    * wizard's own generate step reaches the same submit and must never be routed.
    */
   routing?: RoutingJobOutcome[];
+  /**
+   * The `author_bug` results (Story MOTIR-4930 · MOTIR-5852 / MOTIR-5853),
+   * CONSUMED IN ORDER — one per author job submitted, the last repeating. Each
+   * names the job's STATUS and, for a success, the `authoredBug` answer the
+   * enrichment writes onto the bug. Absent ⇒ a job that succeeds with NO answer,
+   * which the write-back refuses as `invalid-answer` — so a spec that forgot to
+   * declare one sees an unenriched card rather than an invented one.
+   */
+  authorBug?: AuthorBugJobOutcome[];
   /** Appended to by the mock: the job kind of every submit, in order. */
   submitted?: { kind: string }[];
 }
@@ -123,6 +138,13 @@ function recordSubmit(kind: string): number {
 function askOutcomeAt(n: number): AskJobOutcome {
   const queue = readFixture().ask ?? [];
   if (queue.length === 0) return { intent: 'ask', answer: 'No answer was declared.' };
+  return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** The author outcome for the `n`-th `author_bug` job, with the last entry repeating. */
+function authorBugOutcomeAt(n: number): AuthorBugJobOutcome {
+  const queue = readFixture().authorBug ?? [];
+  if (queue.length === 0) return { status: 'succeeded' };
   return queue[Math.min(n, queue.length - 1)]!;
 }
 
@@ -252,6 +274,33 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       // exactly what the ENVELOPE contract says anyway (per-kind, additive).
       const outcome = askOutcomeAt(index);
       const routing = routingOutcomeAt(index);
+      if (kind === 'author_bug') {
+        const author = authorBugOutcomeAt(index);
+        const status = author.status ?? 'succeeded';
+        // Typed as the same loose record the arm below returns — undici infers
+        // the reply type from EVERY return, so two shapes leave it unresolvable.
+        const data: Record<string, unknown> =
+          status === 'failed'
+            ? {
+                status,
+                result: null,
+                error: {
+                  type: 'about:blank',
+                  title: 'AI job failed',
+                  status: 502,
+                  code: 'ai_job_failed',
+                  detail: 'The fixture declared this author_bug job failed.',
+                },
+              }
+            : {
+                status,
+                result:
+                  status === 'succeeded' && author.authoredBug !== undefined
+                    ? { authoredBug: author.authoredBug }
+                    : null,
+              };
+        return { statusCode: 200, data, responseOptions: json };
+      }
       const result: Record<string, unknown> =
         kind === 'ask_project'
           ? {
@@ -278,11 +327,8 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                 },
               }
             : {};
-      return {
-        statusCode: 200,
-        data: { status: 'succeeded', result },
-        responseOptions: json,
-      };
+      const settled: Record<string, unknown> = { status: 'succeeded', result };
+      return { statusCode: 200, data: settled, responseOptions: json };
     })
     .persist();
 }

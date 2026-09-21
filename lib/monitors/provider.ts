@@ -396,8 +396,8 @@ export interface MonitorProvider {
    *
    * A DOCUMENTED EXPECTATION (read 2026-09-19,
    * https://docs.sentry.io/api/events/retrieve-an-issue-event/; the exception
-   * entry's shape per https://develop.sentry.dev/sdk/data-model/event-payloads/stacktrace/,
-   * read 2026-09-21). Consumed by the reconciler's context read (MOTIR-5729)
+   * entry's shape per Sentry's SDK developer documentation, "Event Payloads →
+   * Stack Trace Interface", read 2026-09-21). Consumed by the reconciler's context read (MOTIR-5729)
    * and LINK BY HAND (MOTIR-5731), which use the first two keys; the frames'
    * consumer is the bug ENRICHMENT (MOTIR-5849). Bounded by
    * {@link MONITOR_ISSUE_CONTEXT_TIMEOUT_MS}.

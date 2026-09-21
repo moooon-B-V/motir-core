@@ -218,6 +218,11 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `listIssuesSince`) and of the ingestion service (placement from one place).
   // No database, no render, only `node:fs` / `node:path`.
   'tests/monitors/monitorIngestionGuards.test.ts',
+  // ── the bug-ENRICHMENT guards (MOTIR-4930 · MOTIR-5852) ─────────────────────
+  // Text scans of the enrichment service, its job and the answer parser (no
+  // transition / re-parent / link, write only via updateWorkItem, post-commit),
+  // plus a hash pin on `monitorBugBody`. Only `node:fs` / `node:path` / `node:crypto`.
+  'tests/monitors/monitorEnrichmentGuards.test.ts',
   // ── tests/legal/ — the content/legal ABSENCE guard (MOTIR-4104) ──────────
   // The same shape as its neighbour above and as `abandonedPath` further up: it
   // walks `app/` + `lib/` + `components/` through `contentLegalReaderGuard.ts`,

@@ -2355,6 +2355,17 @@ export default defineConfig({
         'app/**/items/[key]/_components/MonitorErrorsSection.tsx',
         'app/**/items/[key]/_components/MonitorErrorsLinkControl.tsx',
         'app/**/items/[key]/_components/MonitorErrorsCard.tsx',
+        // Story MOTIR-4930 · Subtask MOTIR-5852 — the bug-ENRICHMENT surface: the
+        // trigger's job, the dispatch + apply service, and the answer parser.
+        // MEASURED on the parent branch before being pinned, over the story's own
+        // suites (the figures are on MOTIR-5852). The files this story only WIDENED
+        // and that are already listed above stay pinned where they are:
+        // `providers/sentry.ts` / `providers/fake.ts` (the frames),
+        // `monitorIssueRepository.ts` (two leaves), `monitorIngestionService.ts`
+        // (one provenance field), `workItemRevisionRepository.ts` (one read).
+        'lib/jobs/definitions/monitorBugEnrich.ts',
+        'lib/services/monitorBugEnrichmentService.ts',
+        'lib/ai/authoredBug.ts',
         // ── Story MOTIR-4906 · HOW TO TEST per RUN ─────────────────────────────
         // Its story gate (MOTIR-5337). Every file the story ADDED that compiles to
         // something, MEASURED on the parent branch before being pinned below, over
@@ -5015,6 +5026,21 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-4930 · Subtask MOTIR-5852 — the enrichment surface, at the
+        // list's ordinary floor (measured values on MOTIR-5852).
+        'lib/jobs/definitions/monitorBugEnrich.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/monitorBugEnrichmentService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ai/authoredBug.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'app/**/settings/project/monitoring/_components/MonitoringRoom.tsx': {
           lines: 90,
           functions: 90,
