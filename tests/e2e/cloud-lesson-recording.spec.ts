@@ -31,7 +31,7 @@ import { expectSettledVisible } from './_helpers/settle';
 // Real: the settings page, the permission catalog, `guardSettingsPage`, the
 // PATCH, `projectAiSettingsService`, the nullable column and its default,
 // `resolveRecordPlanningMistakesForJob` reading it back at submit time, the real
-// `motirAiClient` serializing the envelope, and the real `/api/ai/replan` route
+// `motirAiClient` serializing the envelope, and the real `/api/ai/expand` route
 // and service behind the pass.
 //
 // Simulated: motir-ai's own decision, because motir-ai does not run in this lane.
@@ -100,7 +100,7 @@ function seedStore(): void {
 /**
  * Pin the active WORKSPACE after signing in.
  *
- * The pages resolve their workspace happily enough, but `/api/ai/replan` goes
+ * The pages resolve their workspace happily enough, but `/api/ai/expand` goes
  * through `getWorkspaceContext`, which reads the `workspace_id` cookie and falls
  * back to "the user's first workspace" when it is unset — ambiguous the moment an
  * actor holds more than one, which a seeded member can. The UI keeps this cookie
@@ -125,22 +125,28 @@ const recordSwitch = (page: Page) => page.getByRole('switch', { name: 'Record pl
 const lessonsLink = (page: Page) => page.getByRole('link', { name: 'See what Motir has learned' });
 
 /**
- * Run a planning pass — a RE-PLAN of the seeded story, through the app's own
+ * Run a planning pass — an EXPAND of the seeded story, through the app's own
  * endpoint from the signed-in page context.
  *
- * Driven as a request rather than through the row menu deliberately: the door
- * itself is MOTIR-910's subject and is walked by `cloud-augment-replan`, and
- * what this spec needs is the SUBMIT — the whole real chain from the stored
- * setting to the serialized envelope. Nothing about the request is faked; it is
- * the same call the menu item makes, with the same session.
+ * Driven as a request rather than through a door deliberately: what this spec
+ * needs is the SUBMIT — the whole real chain from the stored setting to the
+ * serialized envelope — and every plan-edit submit reaches it through the one
+ * shared `submitPlanEditJob`, which is where the flag is resolved. Nothing about
+ * the request is faked; it is the same call `/ready`'s expansion nudge makes,
+ * with the same session.
+ *
+ * ⚠️ It drove `/api/ai/replan` until MOTIR-4261 retired that route with the
+ * in-place dock that was its only caller. The two sent the same envelope
+ * (`{ rootItemKey }` through the same shared submit), so the property this
+ * walk observes is unchanged.
  */
 async function runPlanningPass(page: Page, seed: LessonLibrarySeed): Promise<void> {
-  const res = await page.request.post('/api/ai/replan', {
-    // `itemKey`, which is what the route requires — the same argument the row
-    // menu sends.
+  const res = await page.request.post('/api/ai/expand', {
+    // `itemKey`, which is what the route requires — the same argument the
+    // nudge sends.
     data: { itemKey: seed.storyKey },
   });
-  expect(res.ok(), `re-plan submit failed: ${res.status()} ${await res.text()}`).toBeTruthy();
+  expect(res.ok(), `expand submit failed: ${res.status()} ${await res.text()}`).toBeTruthy();
 }
 
 test.beforeEach(async () => {

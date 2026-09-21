@@ -93,7 +93,7 @@ function projectCtx(fx: WorkItemFixture): ProjectContext {
   };
 }
 
-/** A story to anchor `expand` / `replan` at — both reject a non-container. */
+/** A story to anchor `expand` at — it rejects a non-container. */
 async function seedStory(fx: WorkItemFixture): Promise<string> {
   const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story: Login' });
   return story.identifier;
@@ -118,8 +118,10 @@ async function plannedPlan(fx: WorkItemFixture): Promise<string> {
 type Ctx = Record<string, unknown>;
 const ctxOf = (b: Record<string, unknown>): Ctx => (b['context'] ?? {}) as Ctx;
 
-/** Drive all six entrances once, and hand back the bodies they put on the wire. */
-async function driveAllSix(): Promise<Record<string, Record<string, unknown>>> {
+/** Drive all five entrances once, and hand back the bodies they put on the wire.
+ *  (There were six until MOTIR-4261 retired `submitReplan` with the `/api/ai/replan`
+ *  route that was its only caller — on the wire it was byte-identical to `expand`.) */
+async function driveAllFive(): Promise<Record<string, Record<string, unknown>>> {
   const fx = await makeFixture();
   const c = projectCtx(fx);
   const storyKey = await seedStory(fx);
@@ -145,10 +147,6 @@ async function driveAllSix(): Promise<Record<string, Record<string, unknown>>> {
   out['expand'] = at(0);
 
   bodies.length = 0;
-  await aiPlanEditsService.submitReplan(storyKey, c);
-  out['replan'] = at(0);
-
-  bodies.length = 0;
   await aiPlanEditsService.submitRevise(planId, 'split the second story', c);
   out['revise'] = { ...at(0), __planId: planId };
 
@@ -156,21 +154,20 @@ async function driveAllSix(): Promise<Record<string, Record<string, unknown>>> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 1. THE SEAM — six entrances, one kind, and the context that replaced it
+// 1. THE SEAM — five entrances, one kind, and the context that replaced it
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () => {
-  it('all six submits send `jobKind: "plan"` — read off the request body', async () => {
-    const sent = await driveAllSix();
+  it('all five submits send `jobKind: "plan"` — read off the request body', async () => {
+    const sent = await driveAllFive();
 
-    // Six entrances actually fired — a fixture that silently drove fewer would
+    // Five entrances actually fired — a fixture that silently drove fewer would
     // make every assertion below vacuous.
     expect(Object.keys(sent).sort()).toEqual([
       'augment',
       'contextual',
       'expand',
       'generation',
-      'replan',
       'revise',
     ]);
     for (const [name, body] of Object.entries(sent)) {
@@ -180,9 +177,9 @@ describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () =>
   });
 
   it('the CONTEXT carries the distinction the kind used to — per arm, distinctly', async () => {
-    const sent = await driveAllSix();
+    const sent = await driveAllFive();
 
-    // ⚠️ A SINGLE "all six sent plan" ASSERTION DOES NOT SATISFY THIS, and the
+    // ⚠️ A SINGLE "all five sent plan" ASSERTION DOES NOT SATISFY THIS, and the
     // criterion says so: the whole point of collapsing the kind is that the
     // CONTEXT now decides which grounding a run reads. `readerForPlan` resolves
     // `planId` → the plan, `rootItemKey`/`targetKeys` → the work item, neither →
@@ -197,11 +194,9 @@ describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () =>
     expect(revise['targetKeys']).toBeUndefined();
 
     // ARM 2 — the WORK ITEM, reached by either field.
-    for (const name of ['expand', 'replan']) {
-      const ctx = ctxOf(sent[name]!);
-      expect(typeof ctx['rootItemKey'], name).toBe('string');
-      expect(ctx['planId'], name).toBeUndefined();
-    }
+    const expand = ctxOf(sent['expand']!);
+    expect(typeof expand['rootItemKey']).toBe('string');
+    expect(expand['planId']).toBeUndefined();
     const contextual = ctxOf(sent['contextual']!);
     expect(Array.isArray(contextual['targetKeys'])).toBe(true);
     expect((contextual['targetKeys'] as string[]).length).toBeGreaterThan(0);
@@ -216,14 +211,14 @@ describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () =>
     }
   });
 
-  it('the two SETTINGS ride every one of the six — the shared-submit refactor’s likeliest loss', async () => {
-    const sent = await driveAllSix();
+  it('the two SETTINGS ride every one of the five — the shared-submit refactor’s likeliest loss', async () => {
+    const sent = await driveAllFive();
 
     // These are read ONLY from the envelope on the far side, so a submit that
     // drops one does not fail — it silently disables a project's setting on that
     // path.
 
-    // `generateExplanations` rides ALL SIX, and is always PRESENT rather than
+    // `generateExplanations` rides ALL FIVE, and is always PRESENT rather than
     // spread conditionally: absence reads as unset on the far side.
     for (const [name, body] of Object.entries(sent)) {
       expect(
@@ -232,9 +227,9 @@ describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () =>
       ).toBe(true);
     }
 
-    // ⚠️ `recordPlanningMistakes` NOW RIDES ALL SIX — ⚠️ CORRECTED (MOTIR-4343).
+    // ⚠️ `recordPlanningMistakes` NOW RIDES ALL FIVE — ⚠️ CORRECTED (MOTIR-4343).
     // KEPT AS A PARTITION, with `dropsFlag` EMPTY, because the shape of the
-    // defect is what this assertion is about and a flat "all six carry it" loop
+    // defect is what this assertion is about and a flat "all five carry it" loop
     // cannot say it.
     //
     // ~~It rode FOUR of the six, and the two that dropped it were exactly the two
@@ -258,11 +253,11 @@ describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () =>
     // shared assembler BOTH arms have always called. An entrance that stops
     // carrying the field does not fail anywhere; it silently resumes capturing
     // for a project that switched capture off. So the list that must stay empty
-    // is asserted as a list, and a seventh entrance that bypasses the shared
+    // is asserted as a list, and a sixth entrance that bypasses the shared
     // submit again is caught by the CALL-SITE guard in
     // `tests/integration/ai/planningSubmitCarriesConsentFlag.test.ts`, which this
     // seam test cannot see.
-    const carriesFlag = ['augment', 'contextual', 'expand', 'generation', 'replan', 'revise'];
+    const carriesFlag = ['augment', 'contextual', 'expand', 'generation', 'revise'];
     const dropsFlag: string[] = [];
     for (const name of carriesFlag) {
       expect(
@@ -271,7 +266,7 @@ describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () =>
       ).toBe(true);
     }
     expect(dropsFlag, 'no planning entrance may drop the consent flag (MOTIR-4343)').toEqual([]);
-    // …and the partition is TOTAL over the six, which is what stops an entrance
+    // …and the partition is TOTAL over the five, which is what stops an entrance
     // being dropped from both lists rather than moved between them.
     expect(carriesFlag.length + dropsFlag.length).toBe(Object.keys(sent).length);
     expect([...carriesFlag].sort()).toEqual(Object.keys(sent).sort());
@@ -285,7 +280,7 @@ describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () =>
 describe('no `submitJob` call site can reintroduce a per-operation kind', () => {
   it('no `submitJob(` in `lib/` names a RETIRED planning kind, naming any that does', async () => {
     // ⚠️ A STATIC ASSERTION OVER THE SOURCE, deliberately. The seam test above
-    // proves the six entrances that exist today; this is what stops a SEVENTH
+    // proves the five entrances that exist today; this is what stops a SIXTH
     // being added later by copying an old call site. A behavioural test cannot
     // see a submit nobody has written yet.
     //

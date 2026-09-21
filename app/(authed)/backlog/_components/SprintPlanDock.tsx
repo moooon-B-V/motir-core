@@ -15,11 +15,12 @@ import type { StatusByKey } from './backlogShared';
 // design/ai-planning/sprint-planning asset draws (panels 2, 3 and 4).
 //
 // It REPLACES the create-sprint strip in place, so the user stays on `/backlog`,
-// which is the surface the result lands in. Its shell is the shipped
-// `PlanEditsReviewDock` grammar — header title + close, scrolling body, footer
-// with the fine print on the left and ghost-discard / primary-approve on the
-// right, the CTA naming what it creates — so AI review reads the same everywhere
-// in the app.
+// which is the surface the result lands in. Its shell is the
+// `PlanEditsReviewDock` grammar (that dock was retired by MOTIR-4261; the grammar
+// lives on here and in `design/ai-planning`) — header title + close, scrolling
+// body, footer with the fine print on the left and ghost-discard /
+// primary-approve on the right, the CTA naming what it creates — so AI review
+// reads the same everywhere in the app.
 //
 // NOTHING here writes except Approve. Discard, Cancel and Close all simply
 // unmount the dock: no sprint, no partial state, nothing to roll back.

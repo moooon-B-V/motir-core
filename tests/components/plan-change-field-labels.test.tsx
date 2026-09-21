@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
-import { FIELD_KEYS } from '@/components/planning/PlanEditsReviewDock';
 import { FIELD_KEY } from '@/lib/planning/planChangeDiff';
 import { PLAN_ITEM_CHANGE_FIELDS } from '@/lib/dto/planReview';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -32,7 +31,10 @@ import zhMessages from '@/messages/zh.json';
 afterEach(cleanup);
 
 const CATALOGS = { en: enMessages, zh: zhMessages } as const;
-const NAMESPACES = ['planReview', 'planEdits'] as const;
+// `planEdits` was the second namespace here until MOTIR-4261 retired it with
+// `PlanEditsReviewDock`, the only surface that rendered it — and that dock's
+// `FIELD_KEYS` map with it.
+const NAMESPACES = ['planReview'] as const;
 const LOCALES = Object.keys(CATALOGS) as (keyof typeof CATALOGS)[];
 
 /** The catalogs are imported as their literal JSON types; every lookup here is
@@ -59,14 +61,6 @@ describe('the change-list field vocabulary', () => {
       // absence is asserted per field rather than as a count — the count passes
       // when two fields are added and one label is.
       expect(block[key], `messages/${locale}.json ${namespace}.${key} is missing`).toBeTruthy();
-    }
-  });
-
-  it("maps every wire field in the dock's FIELD_KEYS", () => {
-    // The dock's fallback makes an unmapped field READABLE (it prints the wire
-    // name), which is exactly why nobody notices the map going stale.
-    for (const field of PLAN_ITEM_CHANGE_FIELDS) {
-      expect(FIELD_KEYS[field], `FIELD_KEYS has no entry for ${field}`).toBe(`field_${field}`);
     }
   });
 

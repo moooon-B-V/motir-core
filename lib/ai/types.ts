@@ -59,8 +59,9 @@ export const JOB_KINDS = [
   'ask_project',
   // `plan` (Story MOTIR-3943 · MOTIR-4304 — ADR `motir-ai/docs/decisions/session-model.md`
   // §6 step 2) — THE ONE PLANNING KIND. Every planning submit in the product sends
-  // it: `startGeneration`, `submitAugment`, `submitContextual`, `submitExpand`,
-  // `submitReplan` and `submitRevise`, plus the auto-plan cadence trigger, which
+  // it: `startGeneration`, `submitAugment`, `submitContextual`, `submitExpand`
+  // and `submitRevise` (`submitReplan` went with its route, MOTIR-4261), plus the
+  // auto-plan cadence trigger, which
   // reaches the wire only through `submitExpand` and so inherits the switch.
   //
   // ⚠️ IT REPLACES A DISTINCTION NOTHING CONSUMED. The five planning kinds above

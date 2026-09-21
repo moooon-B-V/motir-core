@@ -19,9 +19,9 @@
 //
 // motir-ai is absent from CI, so the browser→ai boundary is STUBBED via
 // `page.route` — the same open-core seam `ai-plan-generation.spec.ts` uses. Only
-// the SUBMIT and its SSE are stubbed: what a run proposes is seeded as a real
+// the SUBMIT is stubbed: what a run proposes is seeded as a real
 // `Plan` (the shipped `plansService.createPlan → addProposals → markPlanned`,
-// exactly what the handler's callbacks do), the dock READS it through the real
+// exactly what the handler's callbacks do), the review READS it through the real
 // `GET /api/plans/:id`, and the approve runs the real
 // `POST /api/plans/:id/approve → materialize`. So the spec asserts real DB state,
 // not a stub echo.
@@ -56,10 +56,6 @@ const AI_ACCESS_NA = {
   tierAllotment: null,
   renewsAt: null,
 };
-
-function doneSse(): string {
-  return `event: done\ndata: {}\n\n`;
-}
 
 // ── Stub the browser→motir-ai boundary ───────────────────────────────────────
 
@@ -99,14 +95,16 @@ test.afterAll(async () => {
 //     entrance to the same job (`/ready`'s ExpansionNudgeBanner calls
 //     `submitExpandJob` directly, MOTIR-904) and asserts real DB state through
 //     the real `POST /api/plans/:id/approve`.
-//   * RE-PLAN — covered NOWHERE. `submitReplanJob` / `streamReplanJob` have no
-//     caller left. That is a product question, not a test one, and it is
-//     MOTIR-4261: retire the in-place replan, or give it an entrance. Do not
-//     write a replacement leg here until that card decides which.
+//   * RE-PLAN — RETIRED, not uncovered (MOTIR-4261). The in-place dock replan
+//     had no caller left, and the card chose to retire it rather than give it
+//     a second per-item door: the hook, the dock, `/api/ai/replan` and its
+//     stream are deleted. Re-planning an item is `WorkItemPlanEntrance`'s
+//     Re-plan pill → the planning workspace (MOTIR-910), a CONVERSATION, and
+//     its acceptance coverage is the conversational spec's, not this one's.
 //
-// The acceptance VIDEO consequence is named on MOTIR-4261 too — this spec runs
-// under playwright.acceptance.config.ts and publishes story MOTIR-811's clip,
-// which loses two of its three chapters until that card lands.
+// The acceptance VIDEO consequence: this spec publishes story MOTIR-811's clip,
+// which now carries ONE chapter (the nudge) where it carried three. MOTIR-811's
+// acceptance recipe was amended by MOTIR-4261 to describe that flow.
 
 test('nudge — near-drained project shows expansion-nudge banner and opens inline review', async ({
   page,
@@ -129,8 +127,10 @@ test('nudge — near-drained project shows expansion-nudge banner and opens inli
     });
   });
 
-  // The banner's Expand button drives the real expand flow: only the submit +
-  // SSE are stubbed, and the proposals it then polls for are a real Plan.
+  // The banner's Expand button drives the real expand flow: only the submit is
+  // stubbed, and the proposals it then polls for are a real Plan. (It never
+  // streamed — the expand SSE route this used to stub was only the retired
+  // dock's, and went with it in MOTIR-4261.)
   // (We do NOT approve — the nudge test stops at the review.)
   const planId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
     jobId: EXPAND_JOB_ID,
@@ -148,13 +148,6 @@ test('nudge — near-drained project shows expansion-nudge banner and opens inli
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ jobId: EXPAND_JOB_ID, planId }),
-    });
-  });
-  await page.route(`**/api/ai/expand/${EXPAND_JOB_ID}/stream`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/event-stream',
-      body: doneSse(),
     });
   });
 

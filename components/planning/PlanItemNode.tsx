@@ -343,8 +343,8 @@ function OpBadge({
  *  screen saw `planReview.field_storyPoints` where a word belongs. `t.has()`
  *  asks the catalog first, so the NEXT field somebody teaches `buildChanges` to
  *  emit degrades to something readable instead of leaking a key. This is the
- *  same fallback `PlanEditsReviewDock` has always had, which is why its own
- *  gap was cosmetic and this one was not.
+ *  same fallback the (since retired, MOTIR-4261) `PlanEditsReviewDock` had,
+ *  which is why its own gap was cosmetic and this one was not.
  *
  *  The copy itself is still owed — `plan-change-field-labels.test.tsx` fails
  *  when a `PLAN_ITEM_CHANGE_FIELDS` member has no message. */

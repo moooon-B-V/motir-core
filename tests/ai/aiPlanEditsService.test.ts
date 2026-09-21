@@ -262,45 +262,6 @@ describe('aiPlanEditsService.submitExpand', () => {
   });
 });
 
-describe('aiPlanEditsService.submitReplan', () => {
-  it('submits a replan job for a story', async () => {
-    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
-      mockWorkItem({ identifier: 'MOTIR-100', kind: 'story' }),
-    );
-    mockSubmitJob();
-
-    const out = await aiPlanEditsService.submitReplan('MOTIR-100', ctx);
-
-    expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
-    expect(submitJob).toHaveBeenCalledWith(
-      'plan',
-      expect.any(Object),
-      expect.objectContaining({ rootItemKey: 'MOTIR-100' }),
-      { userId: 'user_1' },
-    );
-  });
-
-  it('rejects a non-epic/story (task)', async () => {
-    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
-      mockWorkItem({ identifier: 'MOTIR-300', kind: 'task' }),
-    );
-
-    await expect(aiPlanEditsService.submitReplan('MOTIR-300', ctx)).rejects.toThrow(
-      InvalidTargetError,
-    );
-    expect(submitJob).not.toHaveBeenCalled();
-  });
-
-  it('rejects a missing item', async () => {
-    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(null);
-
-    await expect(aiPlanEditsService.submitReplan('MOTIR-999', ctx)).rejects.toThrow(
-      InvalidTargetError,
-    );
-    expect(submitJob).not.toHaveBeenCalled();
-  });
-});
-
 // ─── The job's Plan (MOTIR-1743) ─────────────────────────────────────────────
 // Every plan-edit submit must OPEN a `generating` Plan bound to the job via
 // `sourceJobId` — motir-ai's augment / expand_item / replan handlers append their
@@ -316,7 +277,6 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
       run: () => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], ctx),
     },
     { name: 'submitExpand', run: () => aiPlanEditsService.submitExpand('MOTIR-100', ctx) },
-    { name: 'submitReplan', run: () => aiPlanEditsService.submitReplan('MOTIR-100', ctx) },
   ];
 
   beforeEach(() => {
@@ -473,7 +433,7 @@ describe('aiPlanEditsService — the requirement rides both plan-edit submit arm
 // `context.generateExplanations` (never from motir-core config), so a submit
 // that omits it silently disables the project's setting on that path — which is
 // what a re-plan did, leaving the toggle working on first generation alone.
-// Asserted on EVERY plan-edit submit, not just `submitReplan`: a contextual turn
+// Asserted on EVERY plan-edit submit, not just a re-plan one: a contextual turn
 // submits as `augment` and motir-ai's scoping module can resolve it INTO a
 // re-plan, so a replan-only fix would leave the same hole one path over.
 describe('aiPlanEditsService — the generateExplanations opt-in rides every plan-edit envelope', () => {
@@ -496,11 +456,6 @@ describe('aiPlanEditsService — the generateExplanations opt-in rides every pla
       name: 'submitExpand',
       kind: 'plan',
       run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c),
-    },
-    {
-      name: 'submitReplan',
-      kind: 'plan',
-      run: (c) => aiPlanEditsService.submitReplan('MOTIR-100', c),
     },
   ];
 
@@ -558,7 +513,7 @@ describe('aiPlanEditsService — the generateExplanations opt-in rides every pla
         },
       ],
     });
-    await aiPlanEditsService.submitReplan('MOTIR-100', ctxWithExplanations);
+    await aiPlanEditsService.submitExpand('MOTIR-100', ctxWithExplanations);
 
     const context = vi.mocked(submitJob).mock.calls[0]![2] as JobContextBag;
     expect(context).toMatchObject({
@@ -583,32 +538,6 @@ describe('aiPlanEditsService.stream*', () => {
 
     const got: JobStreamEvent[] = [];
     for await (const f of aiPlanEditsService.streamAugment('job_1', 'pj_1')) got.push(f);
-
-    expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
-    expect(got).toEqual(frames);
-  });
-
-  it('streamExpand relays the client stream', async () => {
-    async function* gen(): AsyncGenerator<JobStreamEvent> {
-      for (const f of frames) yield f;
-    }
-    vi.mocked(streamJob).mockReturnValue(gen());
-
-    const got: JobStreamEvent[] = [];
-    for await (const f of aiPlanEditsService.streamExpand('job_1', 'pj_1')) got.push(f);
-
-    expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
-    expect(got).toEqual(frames);
-  });
-
-  it('streamReplan relays the client stream', async () => {
-    async function* gen(): AsyncGenerator<JobStreamEvent> {
-      for (const f of frames) yield f;
-    }
-    vi.mocked(streamJob).mockReturnValue(gen());
-
-    const got: JobStreamEvent[] = [];
-    for await (const f of aiPlanEditsService.streamReplan('job_1', 'pj_1')) got.push(f);
 
     expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
     expect(got).toEqual(frames);
@@ -651,11 +580,6 @@ describe('aiPlanEditsService — the record-planning-mistakes flag rides every p
       name: 'submitExpand',
       kind: 'plan',
       run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c),
-    },
-    {
-      name: 'submitReplan',
-      kind: 'plan',
-      run: (c) => aiPlanEditsService.submitReplan('MOTIR-100', c),
     },
   ];
 
@@ -746,11 +670,6 @@ describe('aiPlanEditsService — every planning submit sends `jobKind: "plan"` (
       name: 'submitExpand',
       arm: 'work-item',
       run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c),
-    },
-    {
-      name: 'submitReplan',
-      arm: 'work-item',
-      run: (c) => aiPlanEditsService.submitReplan('MOTIR-100', c),
     },
   ];
 

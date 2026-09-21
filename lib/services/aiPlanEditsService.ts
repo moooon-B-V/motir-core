@@ -79,7 +79,7 @@ function buildTenant(
  * return the same pair, and a caller that wants to link the user straight to
  * `/plans/<id>` no longer has to re-resolve the plan by `sourceJobId`. It is
  * ADDITIVE: the REST routes echo it, and every existing consumer
- * (`planEditsClient`, `usePlanEditsJob`, `planChangeSessionsService`)
+ * (`planEditsClient`, `planChangeSessionsService`)
  * destructures `{ jobId }` and reads the new field defensively (optional in the
  * browser-facing client types, since a stubbed/older response carries only
  * `jobId`).
@@ -127,8 +127,8 @@ export interface PlanEditSubmitOptions {
  * (Story MOTIR-2291 · Subtask MOTIR-2357).
  *
  * ⚠️ CALLED AT THE TOP OF EACH PUBLIC METHOD, not inside `submitPlanEditJob`.
- * The one-seam version is tidier and is WRONG: `submitExpand` and `submitReplan`
- * resolve their target work item first, so a gate behind them answers "no such
+ * The one-seam version is tidier and is WRONG: `submitExpand` resolves its
+ * target work item first, so a gate behind them answers "no such
  * item" to an actor who is not allowed to ask the question — a target oracle for
  * anyone who can reach the route. The gate goes before the lookup.
  *
@@ -204,7 +204,7 @@ async function submitPlanEditJob(
       // off its first generation. Re-plan is where a plan spends most of its
       // life, so most nodes were being born without the WHY.
       //
-      // Set HERE, on the one shared submit, rather than in `submitReplan` alone:
+      // Set HERE, on the one shared submit, rather than in a per-kind submit:
       // the anchor set makes the submitted kind only a FALLBACK (see
       // `submitContextual`) — motir-ai's scoping module classifies a contextual
       // turn and can resolve an `augment` submit into a re-plan — so a
@@ -605,33 +605,7 @@ export const aiPlanEditsService = {
     return { jobId, planId };
   },
 
-  async submitReplan(itemKey: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
-    await assertCanPlan(ctx);
-    const wi = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.findByIdentifier(ctx.projectId, itemKey, tx),
-    );
-    if (!wi || wi.projectId !== ctx.projectId) {
-      throw new InvalidTargetError(`Work item ${itemKey} not found in this project`);
-    }
-    const replanKinds = new Set(['epic', 'story']);
-    if (!replanKinds.has(wi.kind)) {
-      throw new InvalidTargetError(
-        `Work item ${itemKey} is a ${wi.kind} — replan requires an epic or story`,
-      );
-    }
-
-    return submitPlanEditJob({ rootItemKey: itemKey }, ctx);
-  },
-
   streamAugment(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId, coreProjectId);
-  },
-
-  streamExpand(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId, coreProjectId);
-  },
-
-  streamReplan(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
     return streamJob(jobId, coreProjectId);
   },
 
