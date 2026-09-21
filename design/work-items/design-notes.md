@@ -8335,11 +8335,13 @@ over exactly the classes the markup carries. The item header is lifted class-for
 
 ### The three states — the rule is the To-approve tab's, read not restated
 
-| state              | when                                                                                                                                                                                                                                                      | treatment                                                                                                             |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Yours**          | an `awaiting` gate this reader would see in THEIR To-approve tab: routed to them (`assigneeId ?? reporterId`, `routingTargetId`), not a merge gate carried by a primary (`CARRIED_MERGE_GATE_EXCLUDED`), and the reader holds the kind's permission floor | LOUD — `Pill tone="awaiting"`, glyph `Stamp`, _Awaiting you_                                                          |
-| **Someone else's** | any other `awaiting` gate — an admin holding `approval:decide_any` on a gate routed elsewhere, a gate routed to nobody, a gate routed to this reader when they are below the floor (the frame's own see-only case)                                        | QUIET — `Pill tone="neutral"`, glyph `Hourglass`, _Waiting on {name}_, or _Awaiting a decision_ when routed to nobody |
-| **None**           | no gate, or every gate is `approved` / `changes_requested` / `superseded`                                                                                                                                                                                 | nothing is rendered — the surface is unchanged                                                                        |
+| state              | when                                                                                                                                                                                                                                                      | treatment                                                             |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Yours**          | an `awaiting` gate this reader would see in THEIR To-approve tab: routed to them (`assigneeId ?? reporterId`, `routingTargetId`), not a merge gate carried by a primary (`CARRIED_MERGE_GATE_EXCLUDED`), and the reader holds the kind's permission floor | LOUD — `Pill tone="awaiting"`, glyph `Stamp`, _Awaiting you_          |
+| **Someone else's** | any other `awaiting` gate — an admin holding `approval:decide_any` on a gate routed elsewhere, a gate routed to this reader when they are below the floor (the frame's own see-only case)                                                                 | QUIET — `Pill tone="neutral"`, glyph `Hourglass`, _Waiting on {name}_ |
+| **None**           | no gate, or every gate is `approved` / `changes_requested` / `superseded`                                                                                                                                                                                 | nothing is rendered — the surface is unchanged                        |
+
+**There is no unrouted state, and none is drawn** (Yue, 2026-09-21). §2 routes a gate to `assigneeId ?? reporterId`, and `work_item.reporter_id` is `NOT NULL` with `onDelete: Restrict` (`prisma/schema.prisma`), so `routingTargetId` always names a person and the quiet form always reads _Waiting on {name}_. The first revision of this section drew a _routed to nobody_ fallback (_Awaiting a decision_, keys `approvalGate.waiting.unrouted` / `glyphUnrouted`); that case cannot occur, so the panel and both keys are withdrawn. A consumer does not branch on a null routee.
 
 **Loud and quiet differ in three ways and never in text alone:** the fill (`--el-tint-yellow` vs
 `--el-chip-bg` + `--el-chip-border`), the ink (`--el-text-strong` vs `--el-text-secondary`) and the glyph's
@@ -8451,17 +8453,15 @@ surface in both themes.
 The loud words REUSE `approvalGate.state.awaitingYou`; `{decision}` is the shipped
 `approvalGate.statusHeld.decisionNoun.<kind>`. Every new key is under `approvalGate.waiting.*`.
 
-| key                                       | en                               | zh                           | used by                                  |
-| ----------------------------------------- | -------------------------------- | ---------------------------- | ---------------------------------------- |
-| `approvalGate.state.awaitingYou` (reused) | Awaiting you                     | 等待你处理                   | loud label, board + header               |
-| `approvalGate.waiting.on`                 | Waiting on {name}                | 等待 {name} 处理             | quiet label, board + header              |
-| `approvalGate.waiting.unrouted`           | Awaiting a decision              | 等待决定                     | quiet label when routed to nobody        |
-| `approvalGate.waiting.glyphYours`         | Awaiting you — {decision}        | 等待你处理——{decision}       | row glyph name + `title`; header name    |
-| `approvalGate.waiting.glyphOn`            | Waiting on {name} — {decision}   | 等待 {name} 处理——{decision} | row glyph name + `title`; header name    |
-| `approvalGate.waiting.glyphUnrouted`      | Awaiting a decision — {decision} | 等待决定——{decision}         | row glyph name + `title`; header name    |
-| `approvalGate.waiting.jump`               | Go to the {decision}             | 前往{decision}               | header marker `title` + end of its name  |
-| `approvalGate.waiting.opening`            | Opening the {decision}…          | 正在打开{decision}…          | header marker, pressed before the stream |
-| `boards.awaitingAcceptance`               | **REMOVED**                      | **REMOVED**                  | — retired with the pill                  |
+| key                                       | en                             | zh                           | used by                                  |
+| ----------------------------------------- | ------------------------------ | ---------------------------- | ---------------------------------------- |
+| `approvalGate.state.awaitingYou` (reused) | Awaiting you                   | 等待你处理                   | loud label, board + header               |
+| `approvalGate.waiting.on`                 | Waiting on {name}              | 等待 {name} 处理             | quiet label, board + header              |
+| `approvalGate.waiting.glyphYours`         | Awaiting you — {decision}      | 等待你处理——{decision}       | row glyph name + `title`; header name    |
+| `approvalGate.waiting.glyphOn`            | Waiting on {name} — {decision} | 等待 {name} 处理——{decision} | row glyph name + `title`; header name    |
+| `approvalGate.waiting.jump`               | Go to the {decision}           | 前往{decision}               | header marker `title` + end of its name  |
+| `approvalGate.waiting.opening`            | Opening the {decision}…        | 正在打开{decision}…          | header marker, pressed before the stream |
+| `boards.awaitingAcceptance`               | **REMOVED**                    | **REMOVED**                  | — retired with the pill                  |
 
 The header marker's accessible name is `glyph*` + `. ` + `jump` — _Awaiting you — design approval. Go to
 the design approval_ — so a screen-reader user hears both the state and where the button goes.
