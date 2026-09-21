@@ -27,11 +27,17 @@ const ROOT = process.cwd();
 /**
  * The flags the shipped table declares, read out of the source rather than
  * restated. A list restated here would be a second hand-maintained enumeration
- * — the exact defect this file exists to prevent.
+ * — the exact defect this file exists to prevent. The table lives in
+ * `lib/test-mock-seams.ts` since MOTIR-5837, so the job worker installs from it
+ * too; `register()` below still reaches it through `instrumentation.ts`.
  */
 const FLAGS: string[] = [
   ...new Set(
-    [...readFileSync(join(ROOT, 'instrumentation.ts'), 'utf8').matchAll(/flag: '(E2E_TEST_\w+)'/g)]
+    [
+      ...readFileSync(join(ROOT, 'lib/test-mock-seams.ts'), 'utf8').matchAll(
+        /flag: '(E2E_TEST_\w+)'/g,
+      ),
+    ]
       .map((m) => m[1]!)
       .filter(Boolean),
   ),
@@ -91,10 +97,9 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   //
   // ⚠️ IT IS THE ONE SEAM THE LANE DOES NOT TURN ON HERE, and that changes
   // nothing about this assertion. The boundary it stubs is crossed only by the
-  // index supervisor, which is a JOB, so `playwright.config.ts` wires it on the
-  // WORKER (`scripts/worker.ts` installs it; `instrumentation.ts` is a Next.js
-  // hook the worker never runs). The table still declares it — a reader must find
-  // every seam in one place — so the table's own guard still owes it an entry.
+  // index supervisor, which is a JOB, so `playwright.config.ts` sets its flag on
+  // the WORKER only (which installs from the same table — MOTIR-5837). The table
+  // declares it once for both processes, so the table's own guard owes it an entry.
   E2E_TEST_CODE_GRAPH: [codeGraph.installCodeGraphBoundaryMock],
 };
 
