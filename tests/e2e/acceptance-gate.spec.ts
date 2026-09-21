@@ -32,9 +32,10 @@ import zh from '@/messages/zh.json';
 // recording LEADS its Development block with the pull requests and How to test beneath it,
 // and ONE press accepts the story and merges its code. The video is never merged: it is
 // evidence, and it is frozen the moment it is accepted. Then the two answers a demo would
-// hide: on a SINGLE-CARD run the question stays on the story and the run's own card shows
-// no recording at all; and a person who accepts BEFORE the checks pass is not asked a
-// second time — the merge is held for the next green.
+// hide, both the requester's MOTIR-5903 ruling (*"acceptance video gate is story gate"*):
+// on a SINGLE-CARD run the run's own card shows no recording, and the story asks nothing
+// until the E2E subtask has merged — then it asks with no further publish; and a story run
+// whose checks have not passed asks nothing at all until they do, when it asks ONCE.
 //
 // ── THE SEAMS THIS LANE USES ────────────────────────────────────────────────
 //
@@ -366,7 +367,7 @@ test.describe('the acceptance-video gate', () => {
     );
     await beat();
 
-    await chapter('A single-card run: the question stays on the story', async () => {
+    await chapter('A single-card run: nothing to approve until the E2E subtask lands', async () => {
       // The run delivered from the E2E subtask, so the pull requests are ITS — and the
       // recording is not, because a receipt belongs to the story.
       await page.goto(`/items/${seed.singleCard.e2e.identifier}`);
@@ -376,68 +377,71 @@ test.describe('the acceptance-video gate', () => {
       await expect(dev.getByTestId('acceptance-development-slot')).toHaveCount(0);
       await beat();
 
-      // On the STORY the question stands alone, with one door into the decision.
+      // On the STORY the recording is there to watch, and there is NOTHING to approve yet:
+      // the story cannot finish while the subtask that recorded it is unmerged (MOTIR-5903).
       await page.goto(`/items/${seed.singleCard.story.identifier}`);
       const acceptance = acceptanceCard(page);
       await expect(acceptance).toHaveCount(1, { timeout: 60_000 });
       await expect(
         acceptance.getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove }),
-      ).toBeVisible();
+      ).toHaveCount(0);
+      await beat();
+
+      // The subtask's pull requests merge — and the story is asked, with no further publish.
+      for (const [repo, number] of membersOf('singleCard')) {
+        await mergedWebhook(page, seed.singleCard.e2e, repo, number);
+      }
+      await page.reload();
+      await expect(
+        acceptanceCard(page).getByRole('link', {
+          name: en.approvalGate.statusHeld.reviewAndApprove,
+        }),
+      ).toBeVisible({ timeout: 60_000 });
       await expect(
         developmentCard(page).getByRole('button', { name: pra.verb.approveAndMerge, exact: true }),
       ).toHaveCount(0);
     });
     await beat();
 
-    await chapter('Accepted before the checks pass — and not asked a second time', async () => {
+    await chapter('A story run that is not green yet asks nothing — green asks once', async () => {
       const story = seed.held.story;
       await page.goto(`/items/${story.identifier}`);
       await expect(developmentCard(page)).toHaveCount(1, { timeout: 60_000 });
-      // The pull requests are open and NOT green, so there is no merge question yet and
-      // therefore no frame in the Development block to carry this one. The recording
-      // keeps its own section, with the one door into the overlay where every decision
-      // is made — which is what MOTIR-5792 had to put back: while the section was
-      // suppressed by an open pull request alone, an awaiting question on such a story
-      // had no door on the item page at all.
-      await acceptanceCard(page)
-        .getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove })
-        .click();
-      const overlay = page.getByRole('dialog');
-      await expect(overlay.getByRole('group', { name: en.approvalGate.port.label })).toBeVisible();
-      await overlay
-        .getByRole('button', { name: en.approvalGate.verb.approve, exact: true })
-        .click();
-      const action = serverAction(page);
-      await overlay
-        .getByRole('button', {
-          name: fill(en.approvalGate.confirm.proceed, { verb: en.approvalGate.verb.approve }),
-          exact: true,
-        })
-        .click();
-      expect((await action).status()).toBe(200);
-      await page.keyboard.press('Escape');
-      await expect(developmentCard(page).getByText(acc.mergeHeld, { exact: true })).toBeVisible({
-        timeout: 60_000,
-      });
-      // And there is no second question to press: the story's acceptance is answered and
-      // the commits are not being asked about, so the block offers no verb at all.
+      // The pull requests are open and NOT green: the recording is evidence waiting for the
+      // one approve-to-merge question, so there is no question, no door and no verb
+      // (MOTIR-5903 — before it, this story held an acceptance "To approve" row it could
+      // not act on).
+      await expect(
+        acceptanceCard(page).getByRole('link', {
+          name: en.approvalGate.statusHeld.reviewAndApprove,
+        }),
+      ).toHaveCount(0);
       await expect(
         developmentCard(page).getByRole('button', {
           name: pra.verb.approveAndMerge,
           exact: true,
         }),
       ).toHaveCount(0);
+      await page.goto('/workbench?tab=approvals');
+      await expect(
+        page
+          .getByRole('table', { name: en.workbench.tabs.toApprove })
+          .getByTestId(/^approval-row-/)
+          .filter({ hasText: story.identifier }),
+      ).toHaveCount(0);
+      await beat();
 
-      // ⚠️ THE MERGE ITSELF IS NOT WATCHED HERE, AND THAT IS A LANE LIMIT RATHER THAN A
-      // CHOICE. The carry is dispatched by the CI promotion as
-      // `pull-request/auto-merge.requested`, which runs in the JOB WORKER — a separate
-      // process running the shipped worker bundle, which never executes
-      // `instrumentation.ts` and therefore installs no mock agent. Its merge leaves for
-      // the real api.github.com and dies `401` in the dead-letter queue, where no browser
-      // assertion can see it. So this walk records the STATE the press leaves — accepted,
-      // and the merge held for the next green — and the merge that follows is proved
-      // where it can be: `tests/approvalGates/acceptanceOnePress.test.ts` and
-      // `settleGreenVerdict`'s manual arm, against a real Postgres and a stubbed host.
+      // The set goes green: ONE question, the recording leading the pull requests.
+      await turnGreen(page, story, 'held');
+      await page.goto(`/items/${story.identifier}`);
+      const dev = developmentCard(page);
+      await expect(dev.getByTestId('acceptance-development-slot')).toHaveCount(1, {
+        timeout: 60_000,
+      });
+      await expect(
+        dev.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }),
+      ).toHaveCount(1);
+      await expect(acceptanceCard(page)).toHaveCount(0);
     });
     await beat();
 

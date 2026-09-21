@@ -274,13 +274,15 @@ export async function LateUpperSections({
   // pull request of its own (a single-card run) keeps the section, alone (point 3).
   //
   // ⚠️ AND ONLY WHEN THE BLOCK CAN CARRY THE QUESTION (Subtask MOTIR-5792). The frame is
-  // the MERGE gate's — `DevelopmentSectionBody` draws no bands without one — so a story
-  // whose pull requests are open but NOT YET GREEN has no frame to lead. Suppressing the
-  // standalone section there took the last door to an awaiting question off the item page:
-  // the receipt rendered as a subject nobody could answer, and the only remaining door was
-  // the To-approve row. An ANSWERED acceptance is different and stays here: panels B and C
-  // are lines about a decision already made, not a question, and the block is where they
-  // belong beside the commits they cover.
+  // the MERGE gate's — `DevelopmentSectionBody` draws no bands without one. Since Bug
+  // MOTIR-5903 a story run's acceptance question is asked only once its set is GREEN, so a
+  // story whose pull requests are open but not yet green holds NO acceptance question at
+  // all — there is no "To approve" row to fall back on, and none should exist (the receipt
+  // is evidence waiting for the one approve-to-merge question). An awaiting acceptance with
+  // no merge gate beside it is now the `auto`-mode shape, where Motir raises no merge gate:
+  // the standalone section stays its door. An ANSWERED acceptance stays here too: panels B
+  // and C are lines about a decision already made, and the block is where they belong
+  // beside the commits they cover.
   const acceptanceAwaiting = r.acceptanceGate.gate?.state === 'awaiting';
   const acceptanceInDevelopment =
     r.acceptanceEvidence !== null &&

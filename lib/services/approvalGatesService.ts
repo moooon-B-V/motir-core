@@ -48,6 +48,7 @@ import {
   type AwaitingRoutingScope,
 } from '@/lib/repositories/approvalGateRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { gateSetFor } from '@/lib/services/gateSetFor';
 import { summarizeGateSubjects } from '@/lib/approvalGates/subjectSummary';
 import { HOME_PAGE_SIZE, type HomeActorContext } from '@/lib/services/homeService';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -808,6 +809,20 @@ export const approvalGatesService = {
       const handler = handlerFor(kind);
       const subjectId = await handler.currentSubject({ item, ctx, tx });
       if (!subjectId) continue;
+      // ⚠️ A RECEIPT IS NOT BY ITSELF A QUESTION (Bug MOTIR-5903; `approval-gates.md` §1,
+      // the MOTIR-5903 amendment). The acceptance video is the STORY's gate and is asked
+      // only when the work it shows can finish — a story run's set green, or a subtask
+      // run's subtree settled — which the gate-set predicate decides. A story rolling up
+      // into review while its recording subtask is unmerged must not be asked here what
+      // the predicate has not yet owed.
+      if (
+        kind === 'acceptance_result' &&
+        !(await gateSetFor(item, tx)).awaited.some(
+          (gate) => gate.kind === kind && gate.subjectId === subjectId,
+        )
+      ) {
+        continue;
+      }
       if (await approvalGateRepository.hasLiveGateForSubject(item.id, kind, subjectId, tx)) {
         continue;
       }
