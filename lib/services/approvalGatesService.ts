@@ -806,6 +806,12 @@ export const approvalGatesService = {
   ): Promise<number> {
     let raised = 0;
     for (const kind of Object.keys(APPROVAL_GATE_HANDLERS) as RegisteredGateKind[]) {
+      // ⚠️ A CHOICE HAS ITS OWN RAISER (MOTIR-5891; `approval-gates.md` §1's MOTIR-5887
+      // amendment, point 3). Its question is owed on the BODY and the BLOCKERS, not on
+      // entering review, and it is raised with its stamp — `choiceGateService.reconcile`
+      // does both, before it walks the item here. Raising it from this loop would ask a
+      // blocked choice, and ask it with no `subjectVersion`.
+      if (kind === 'decision_choice') continue;
       const handler = handlerFor(kind);
       const subjectId = await handler.currentSubject({ item, ctx, tx });
       if (!subjectId) continue;

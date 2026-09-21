@@ -471,7 +471,11 @@ export function ApprovalOverlay() {
     );
     const subject = read.subject;
 
-    if (subject.state === 'kind_not_built') {
+    // A CHOICE is read (MOTIR-5891) before its port is drawn (MOTIR-5896): until then
+    // the overlay says, honestly, that it cannot show this kind yet — never a design
+    // panel over a subject that is not one.
+    const choiceNotDrawnYet = subject.state === 'resolved' && subject.kind === 'decision_choice';
+    if (subject.state === 'kind_not_built' || choiceNotDrawnYet) {
       // Panel 4a — a feature that has not shipped. Opposite in meaning to 4b,
       // which is a gate worth withdrawing, however alike they look.
       body = (
@@ -655,7 +659,8 @@ export function ApprovalOverlay() {
             onShowCurrentVersion={() => setReread((n) => n + 1)}
             focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
           />
-        ) : (
+        ) : subject.kind === 'decision_choice' ? /* v8 ignore next -- answered above by the
+             not-built state until MOTIR-5896 draws the choice port */ null : (
           <ApprovalGateControl
             // A fresh read is a fresh frame: a stale refusal clears and the verbs return.
             key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}

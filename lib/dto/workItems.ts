@@ -8,6 +8,7 @@
 // `string` (a fractional-index key is already a string and Decimals don't
 // JSON-serialize losslessly as numbers). The mapper owns those conversions.
 
+import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkflowDto, StatusCategoryDto } from './workflows';
 import type { SprintBlockerDto } from './sprints';
@@ -477,6 +478,13 @@ export interface IssueDetailDto {
   duplicates: RelationshipLinkDto[];
   clones: RelationshipLinkDto[];
   readiness: ReadinessVerdictDto;
+  /**
+   * A CHOICE'S BODY, parsed (Story MOTIR-4914 · MOTIR-5891) — the options, or the
+   * reasons it cannot be asked yet. `null` for every item that is not
+   * `type: choice`. A defective body raises no gate, so this is how the page
+   * learns its state: the port renders the defect from it (MOTIR-5896).
+   */
+  choiceBody: ChoiceBodyDTO | null;
   workflow: WorkflowDto;
   /**
    * The issue's labels, name-ordered (Subtask 5.4.2 — rides the detail

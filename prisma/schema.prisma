@@ -4533,6 +4533,10 @@ enum ApprovalGateKind {
   /// on a story run it is the PRIMARY of two gates (ADR `approval-gates.md` §1,
   /// the MOTIR-5787 amendment).
   acceptance_result
+  /// A person PICKS one of N options on a `type: choice` work item (Story
+  /// MOTIR-4914; ADR `approval-gates.md` §1, the MOTIR-5887 amendment). No pull
+  /// request — choosing is TERMINAL and writes `done` (Workflow A).
+  decision_choice
 
   @@map("approval_gate_kind")
 }

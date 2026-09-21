@@ -574,6 +574,8 @@ export const approvalGateRepository = {
       kind: ApprovalGateKind;
       subjectId: string;
       routedToId: string | null;
+      /** The subject's stamp, when the raiser knows it (a `decision_choice` always does). */
+      subjectVersion?: string | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<boolean> {

@@ -6,6 +6,7 @@ import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
+import { choiceGateService } from '@/lib/services/choiceGateService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
@@ -172,6 +173,13 @@ async function readSubject(
       return block.state === 'resolved' && block.kind === 'pull_request_approval'
         ? { ...block, decision: { document } }
         : block;
+    }
+    // THE CHOICE PORT (Story MOTIR-4914 · MOTIR-5891): the options parsed from the work
+    // item's own body — which IS the subject. A body that no longer parses has nothing
+    // left to pick from, so the port answers `gone`, exactly as a vanished design does.
+    case 'decision_choice': {
+      const choice = await choiceGateService.readPort(gate.workItemId, ctx);
+      return choice ? { state: 'resolved', kind: 'decision_choice', choice } : { state: 'gone' };
     }
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error

@@ -5,6 +5,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
 import { acceptanceResultGateHandler } from '@/lib/approvalGates/acceptanceResultHandler';
 import { decisionApprovalGateHandler } from '@/lib/approvalGates/decisionApprovalHandler';
+import { decisionChoiceGateHandler } from '@/lib/approvalGates/decisionChoiceHandler';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
@@ -75,7 +76,8 @@ export type RegisteredGateKind =
   | 'design_result'
   | 'decision_approval'
   | 'acceptance_result'
-  | 'pull_request_approval';
+  | 'pull_request_approval'
+  | 'decision_choice';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -196,6 +198,14 @@ export interface GateEffectArgs extends GateRoutingArgs {
    * reference data do NOT need `tx`*.
    */
   resolvedStatusKey: string | null;
+  /**
+   * WHICH OPTION a `decision_choice` press picked (Story MOTIR-4914; ADR §1's
+   * MOTIR-5887 amendment, point 5 — each option IS a verb, `choose(optionId)`).
+   * Absent for every other kind, whose verbs carry no argument. The decide door
+   * gains the verb in MOTIR-5893; the handler refuses an id its subject does not
+   * hold, so an absent or stale one can never record a pick.
+   */
+  choice?: { optionId: string };
 }
 
 /**
@@ -328,6 +338,7 @@ export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   decision_approval: decisionApprovalGateHandler,
   pull_request_approval: pullRequestApprovalGateHandler,
   acceptance_result: acceptanceResultGateHandler,
+  decision_choice: decisionChoiceGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

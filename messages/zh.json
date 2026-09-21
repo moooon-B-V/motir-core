@@ -7490,7 +7490,8 @@
         "decision_approval": "决策审批",
         "pull_request_approval": "合并请求审批",
         "pull_request_merge": "合并请求合并",
-        "acceptance_result": "验收视频"
+        "acceptance_result": "验收视频",
+        "decision_choice": "选择"
       },
       "reviewRow": "查看 {key} {title}",
       "pullRequest": {
@@ -8629,7 +8630,8 @@
         "pull_request_approval": "合并请求审批",
         "decision_approval": "决策审批",
         "pull_request_merge": "合并审批",
-        "acceptance_result": "验收审批"
+        "acceptance_result": "验收审批",
+        "decision_choice": "选择"
       },
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",
