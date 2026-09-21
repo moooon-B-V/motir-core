@@ -261,7 +261,7 @@ async function enrich(page: Page, workItemId: string, phase?: 'dispatch', jobId?
   };
 }
 
-const description = (page: Page) => page.getByLabel('Work item description');
+const description = (page: Page) => page.getByRole('main').getByLabel('Work item description');
 
 async function setActiveProject(projectId: string) {
   await adminDb.workspaceMembership.update({
@@ -369,7 +369,9 @@ test('an error arrives as a PLANNED bug — and a code-blind project, a broken A
     await expect(body.getByRole('heading', { name: 'Context refs' })).toBeVisible();
     await expect(body.getByText('lib/cart/total.ts')).toBeVisible();
     await expect(page.getByRole('main')).not.toContainText('No explanation yet.');
-    await expect(page.getByLabel('Work item explanation')).toContainText('cannot reach checkout');
+    await expect(page.getByRole('main').getByLabel('Work item explanation')).toContainText(
+      'cannot reach checkout',
+    );
     // The sizing and routing the answer carried, read from the committed row…
     const row = await adminDb.workItem.findUniqueOrThrow({
       where: { id: bug.id },
@@ -397,7 +399,7 @@ test('an error arrives as a PLANNED bug — and a code-blind project, a broken A
   });
 
   await chapter('The explanation is marked AI-drafted', async () => {
-    await expect(page.getByText('AI-drafted', { exact: true })).toBeVisible();
+    await expect(page.getByRole('main').getByText('AI-drafted', { exact: true })).toBeVisible();
     await beat();
   });
 
@@ -423,7 +425,7 @@ test('an error arrives as a PLANNED bug — and a code-blind project, a broken A
       await expect(
         description(page).getByRole('heading', { name: 'Acceptance criteria' }),
       ).toBeVisible();
-      await expect(page.getByLabel('Work item explanation')).toBeVisible();
+      await expect(page.getByRole('main').getByLabel('Work item explanation')).toBeVisible();
       await beat();
       await setActiveProject(storeProjectId);
     },

@@ -42,7 +42,10 @@ beforeAll(async () => {
   observeAiJobSubmit((raw) => submittedBodies.push(raw));
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
-    if (!url.startsWith(ORIGIN)) escapedRequests.push(url);
+    // Compared as a parsed ORIGIN, not a prefix: `startsWith` would let
+    // `https://motir-ai.story-gate.invalid.elsewhere.com` pass as the fake.
+    const origin = URL.canParse(url) ? new URL(url).origin : null;
+    if (origin !== new URL(ORIGIN).origin) escapedRequests.push(url);
     return realFetch(input, init);
   }) as typeof fetch;
 });
