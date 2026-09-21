@@ -584,7 +584,7 @@ decision` + `executor: human` — the verb-set paragraph above, §8's fifth
 > record for a person to accept (`decision_approval`). The taxonomy ADR's
 > Amendment 3 (MOTIR-5886) splits the undecided act out as its own type,
 > **`choice`** — a question the planner correctly declined to decide, two or
-> more options each carrying its WHY on a named axis, and a person PICKS one.
+> more options each carrying its WHY and what it is best for, and a person PICKS one.
 > All three places are re-keyed in place. **A `decision` work item, of either
 > executor, never raises `decision_choice`.**
 >
@@ -614,7 +614,7 @@ decision` + `executor: human` — the verb-set paragraph above, §8's fifth
 > ## Options
 >
 > ### <label>
-> **Axis:** <the named axis this option wins on — e.g. more cost-effective ·
+> **Best if you want:** <what this option is best for — e.g. more cost-effective ·
 > faster to the goal · more customisable later · less to operate>
 > <its WHY, prose>
 >
@@ -662,15 +662,15 @@ decision` + `executor: human` — the verb-set paragraph above, §8's fifth
 > The defect reasons are a CLOSED set, and the parser returns exactly one of
 > them or the parsed options:
 >
-> | reason                   | when                                                                                   |
-> | ------------------------ | -------------------------------------------------------------------------------------- |
-> | `fewer_than_two_options` | `## Options` holds zero or one `###` option                                            |
-> | `option_without_axis`    | an option has no `**Axis:**` line — the reason NAMES the option                        |
-> | `duplicate_option`       | two options slug to the same id                                                        |
-> | `no_follow_up_section`   | `## What this choice gates` is missing or empty                                        |
-> | `no_why_section`         | `## Why this is a choice` is missing, or carries no `**Situation:**` line              |
-> | `unknown_situation`      | the `**Situation:**` value is not one of the three — the reason QUOTES it              |
-> | `no_quoted_decision`     | the situation debates a decision (the first two) and no `**You said:**` line quotes it |
+> | reason                    | when                                                                                   |
+> | ------------------------- | -------------------------------------------------------------------------------------- |
+> | `fewer_than_two_options`  | `## Options` holds zero or one `###` option                                            |
+> | `option_without_best_for` | an option has no `**Best if you want:**` line — the reason NAMES the option            |
+> | `duplicate_option`        | two options slug to the same id                                                        |
+> | `no_follow_up_section`    | `## What this choice gates` is missing or empty                                        |
+> | `no_why_section`          | `## Why this is a choice` is missing, or carries no `**Situation:**` line              |
+> | `unknown_situation`       | the `**Situation:**` value is not one of the three — the reason QUOTES it              |
+> | `no_quoted_decision`      | the situation debates a decision (the first two) and no `**You said:**` line quotes it |
 >
 > The item renders the reason rather than a bare list — the story's honest
 > defect state. **And it is what makes "a follow-up planning pass is owed" true
@@ -678,8 +678,9 @@ decision` + `executor: human` — the verb-set paragraph above, §8's fifth
 > cannot raise a gate, so there is no path to `done` that leaves the unplanned
 > work unnamed.
 >
-> _Options that share no axis_ — the second defect the `type-choice` authoring
-> bar names — is **not** a parser reason: whether two axes can be weighed
+> _Options that cannot be weighed against each other_ — each best for something
+> the others never mention, the second defect the `type-choice` authoring bar
+> names — is **not** a parser reason: whether two such options can be weighed
 > against each other is a judgement, not a property of the Markdown. It stays
 > an authoring rule, and a person facing such options refuses with the one
 > refusal verb (point 5).
@@ -747,12 +748,12 @@ decision` + `executor: human` — the verb-set paragraph above, §8's fifth
 >   Workflow A always writes `done` — so the column holds what the kind uniquely
 >   caused: which option won.
 > - **A new nullable `chosenOption` JSON column on `approval_gate`** stamps
->   `{ optionId, label, axis, followUp, situation }` — the pick's label, its named
->   axis, the text of `## What this choice gates`, and the situation id that
+>   `{ optionId, label, bestFor, followUp, situation }` — the pick's label, what it
+>   is best for, the text of `## What this choice gates`, and the situation id that
 >   brought the choice back — **in the deciding write**, under
 >   the existing `trg_approval_gate_decided_immutable` trigger. The pick stays
 >   readable months later without re-reading a body that may since have changed:
->   _why were we asked, what did we pick, on which axis, and what does it unblock?_
+>   _why were we asked, what did we pick, what was it best for, and what does it unblock?_
 >   is one row. It
 >   is null on every other kind and on a `changes_requested` choice.
 > - **Retention: nothing to pin.** The snapshot IS the retained artefact, and it
@@ -760,9 +761,9 @@ decision` + `executor: human` — the verb-set paragraph above, §8's fifth
 >
 > #### 8 — the KIND table's row
 >
-> | kind              | the port shows                                                                                                                               | fires when                                                                                      |
-> | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-> | `decision_choice` | the QUESTION, WHY it is a choice (the situation), the N options each with its AXIS and WHY, and what the choice gates — or the defect reason | a **`type: choice`** work item whose body parses complete, unblocked, not done — **never** a PR |
+> | kind              | the port shows                                                                                                                                              | fires when                                                                                      |
+> | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+> | `decision_choice` | the QUESTION, WHY it is a choice (the situation), the N options each with its WHY and what it is BEST FOR, and what the choice gates — or the defect reason | a **`type: choice`** work item whose body parses complete, unblocked, not done — **never** a PR |
 >
 > **The frame is the SAME component** as every other kind's (§1's claim that the
 > KIND decides the verbs and the PORT decides what you look at). This is the
