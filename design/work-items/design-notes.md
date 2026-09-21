@@ -8287,3 +8287,210 @@ MOTIR-4950 shipped the kind, the port's receipt and the single-card copy. **G1�
 remain the single-gate base** — this asset amends them only in D(ii)'s consequence sentence.
 
 Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.
+
+## ⭐ The DECISION-WAITING MARKER — yours vs someone else's, on the board card, the List/Tree row and the item header (Story MOTIR-4908 · MOTIR-5875 — `decision-waiting.mock.html`, DATED 2026-09-21)
+
+**The asset:** `decision-waiting.mock.html`, a two-file set with this section (no `.png`). It gates
+**MOTIR-5877** (the board card), **MOTIR-5878** (the item header) and **MOTIR-5881** (List and Tree),
+each of which carries it in `blocked_by`. **MOTIR-5876** (the read) supplies the state and does not wait
+on it.
+
+**What it draws:** ONE marker, in the three places a member meets a work item before opening it, that
+answers two questions — _is a decision waiting here?_ and _is it waiting on me?_ Every earlier design in
+this epic names this story as the owner of "the pending indicator" and draws none of it: § _The item page
+HANDS THE DECISION OVER_ (_What the band is NOT_), § _The status control says so_ (_Out of scope here_),
+`design/boards/design-notes.md` § the held refusal, `design/workbench/design-notes.md` § 20 and § 22.
+
+**Panels:** 1 the three states on a board card · 2 the exclusive slot's precedence, with `Blocked` and the
+CI badge · 3 several gates, the carried merge gate, and the retired _Awaiting acceptance_ pill · 4 the List
+row at its new minimum, measured · 5 the Tree, a lazily-expanded level · 6 the item header at 1280 and at
+390 · 7 the header marker beside the status control's held notice · 8 press → destination per kind, and
+before the late tier has streamed · 9 dark and 中文.
+
+### Rendered first
+
+Every board card, list row, status pill, the held notice and the buttons in the asset are the markup the
+REAL components emit — `BoardCardView`, `IssueListTable` (inline-edit off), `StatusHeldNotice`,
+`IssueTypeIcon` and `buttonVariants` — rendered with the repo's vitest + RTL setup and the real `en` /
+`zh` catalogues on `origin/main` `de31060f1`. The asset's stylesheet is the project's own Tailwind build
+(`@import 'tailwindcss'` + `@motir/design-system/theme.css`, the entry `app/globals.css` compiles), run
+over exactly the classes the markup carries. The item header is lifted class-for-class from
+`app/(authed)/items/[key]/page.tsx`. Four facts from that reading shape the design:
+
+- **A board card is ONE `<button>`** (`BoardCard.tsx`, the whole card is the drag handle), so the marker
+  there cannot be a control, and the card's `aria-label` (`openIssueAria`) would hide its text from a
+  screen reader. It is static and is referenced by `aria-describedby`.
+- **The CI glyph lives in the TITLE cell, not the status cell** (`issueColumns.tsx`, MOTIR-5474). The card
+  asks for the marker "beside the status pill in the glyph form the CI badge already uses there"; the FORM
+  is taken from the CI badge, the PLACE is the status cell as the card asks — a decision holds the STATUS,
+  and the title cell already carries one glyph a reader must decode.
+- **Where a gate is drawn on the item page is not fixed by its kind.** `LateSections.tsx` moves a
+  `design_result` gate into the Development block when the card has an open linked pull request
+  (AMENDMENT 6), moves an `acceptance_result` gate there on a story run (MOTIR-5790), and always draws
+  `decision_approval` and `pull_request_approval` there. The card's per-kind destination list is therefore
+  refined below into a rule that follows the frame.
+- **The status control's held notice is already yellow** (`StatusHeldNotice`: `--el-tint-yellow`), and so
+  is the band's _Awaiting you_ pill (`tone="awaiting"`). The loud marker takes the SAME tint, so the page has
+  one colour for _a decision is waiting on you_.
+
+### The three states — the rule is the To-approve tab's, read not restated
+
+| state              | when                                                                                                                                                                                                                                                      | treatment                                                                                                             |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Yours**          | an `awaiting` gate this reader would see in THEIR To-approve tab: routed to them (`assigneeId ?? reporterId`, `routingTargetId`), not a merge gate carried by a primary (`CARRIED_MERGE_GATE_EXCLUDED`), and the reader holds the kind's permission floor | LOUD — `Pill tone="awaiting"`, glyph `Stamp`, _Awaiting you_                                                          |
+| **Someone else's** | any other `awaiting` gate — an admin holding `approval:decide_any` on a gate routed elsewhere, a gate routed to nobody, a gate routed to this reader when they are below the floor (the frame's own see-only case)                                        | QUIET — `Pill tone="neutral"`, glyph `Hourglass`, _Waiting on {name}_, or _Awaiting a decision_ when routed to nobody |
+| **None**           | no gate, or every gate is `approved` / `changes_requested` / `superseded`                                                                                                                                                                                 | nothing is rendered — the surface is unchanged                                                                        |
+
+**Loud and quiet differ in three ways and never in text alone:** the fill (`--el-tint-yellow` vs
+`--el-chip-bg` + `--el-chip-border`), the ink (`--el-text-strong` vs `--el-text-secondary`) and the glyph's
+SHAPE (`Stamp` vs `Hourglass`). Both glyphs are `aria-hidden`; the words or the accessible name carry the
+meaning.
+
+**Several gates on one card:** any gate that is yours makes the card yours. The entry the surfaces show is
+the FIRST yours gate by `createdAt`, else the OLDEST someone-else's gate — its `kind` is what the header
+anchors on and what the glyph's accessible name names (MOTIR-5876's contract). **A merge gate carried by a
+primary is excluded** exactly as the To-approve tab excludes it, so a design card with an open pull request
+(design gate + merge gate) shows ONE marker. The marker carries no count and never rolls up: a parent row
+shows one only for a gate on itself.
+
+### The three forms
+
+| surface              | form                                                                         | where                                                                                                                | interaction                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| **board card**       | LABEL — the pill with its glyph and words                                    | the card's EXCLUSIVE slot, first in the pill row; the CI badge stays immediately after it                            | none — static inside the card `<button>`; the card sets `aria-describedby` to the marker's id |
+| **List / Tree row**  | GLYPH — 18px, `shrink-0`, `role="img"` with the sentence as name and `title` | the STATUS cell, after the status pill (`gap-1.5`), OUTSIDE the inline-edit trigger so it is not part of that button | none — the row link still owns the click                                                      |
+| **item page header** | LABEL, as a `<button>`, with a trailing `ArrowDown`                          | the EYEBROW, after the breadcrumb (the slot the _Archived_ chip uses); the breadcrumb cell gains `flex-wrap gap-y-2` | press → scroll to the gate's section (below). Early tier — on screen before the late stack    |
+
+### The board card's exclusive slot — the precedence
+
+The slot holds ONE of: **Yours › `Blocked` › Someone else's › the priority chip.**
+
+- **Yours beats `Blocked`**: it is the only one of the four that asks the reader to act, and a decision can
+  be made on a card whose blockers are open.
+- **`Blocked` beats Someone else's**: the quiet marker is context the reader cannot act on; the card's own
+  readiness is the more useful fact on a board.
+- **The CI badge is not in the slot** and does not move (`board-card--ci-badge.mock.html` panel 1). The
+  row already wraps, so marker + CI badge take a second line only when they must (panel 2).
+- **A long name** in the quiet form truncates inside the pill (`min-w-0 max-w-full`, the words in a
+  `truncate` span) and the row wraps the avatar to its own line — the wrap the CI badge introduced.
+
+### The List / Tree status cell — measured, and the track widens 108 → 144px
+
+The row grid is `minmax(10rem,1fr) 116px 120px 150px 150px 72px 80px 108px` (+ `gap-x-4`,
+`pl-4 pr-7`), per § _The CI badge (MOTIR-5471)_. Rendered at the row's minimum, measured with
+`getBoundingClientRect` in Chromium on the asset's own rows (panel 4):
+
+| status pill (shipped `StatusPill`) | pill    | + 6px gap + 18px marker  | fits 108? | fits 144?      |
+| ---------------------------------- | ------- | ------------------------ | --------- | -------------- |
+| _Implemented_ (carries a glyph)    | 113.6px | **138px**                | **no**    | yes, 6px spare |
+| _Approved_ (carries a glyph)       | 93.8px  | 118px                    | **no**    | yes            |
+| _In Review_                        | 76.8px  | 101px                    | yes       | yes            |
+| _In Progress_                      | 85px    | (no gate in the fixture) | —         | —              |
+
+**At 108px the marker does not fit beside the two per-status pills that carry a glyph**, and the column's
+own comment is out of date: it sizes the track on _In Progress_ ≈ 88px, but _Implemented_ (MOTIR-3103)
+is **113.6px on its own — already 5.6px wider than its track today**, spilling into the row's 28px right
+padding where nothing shows it. **So the Status track widens to 144px:** the widest pairing fits with 6px
+to spare, and the row minimum moves **1204 → 1240px**. At 1280 the slack falls from 76 to 40px and
+nothing clips; at 1200 the row already scrolls today (4px under its minimum) and now scrolls 40px under.
+The title track absorbs the rest, exactly as before. List, lazy Tree and static Tree share
+`buildIssueColumns`, so all three take the same width.
+
+**Placing it in the TITLE cell instead was weighed and declined.** It costs no width (the CI badge's
+argument), but that cell already carries the CI glyph, two glyphs there are two shapes to decode at the
+end of a truncating title, and the story's own card puts the marker in the status column — a decision is
+what holds the status.
+
+### The item header — where pressing it takes you
+
+**The rule:** every section that draws a gate's frame carries `data-decision-anchor="<kind>"` (and
+`tabindex="-1"`) on its section card, so the marker's destination is WHEREVER that kind is drawn. What
+that rule yields on `origin/main` today:
+
+| gate kind               | the section it scrolls to                     | when                                                                |
+| ----------------------- | --------------------------------------------- | ------------------------------------------------------------------- |
+| `design_result`         | **Design result** — the call-to-action band   | the card has no open linked pull request                            |
+| `design_result`         | **Development** — the design leads the block  | an open linked pull request (AMENDMENT 6)                           |
+| `acceptance_result`     | **Acceptance**                                | the story has no open pull request of its own, or no merge gate yet |
+| `acceptance_result`     | **Development** — the receipt leads the block | the story run: an open pull request and a merge gate (MOTIR-5790)   |
+| `pull_request_approval` | **Development** — the pull-request frame      | always (uncarried only — a carried one draws no marker)             |
+| `decision_approval`     | **Development** — the decision port (§ 27)    | always                                                              |
+
+**Press, when the anchor is in the DOM:** `scrollIntoView({ block: 'start' })` — smooth unless
+`prefers-reduced-motion` — and move focus to the anchored card (panel 8A draws the ring).
+
+**Press, before the late stack has streamed (panel 8B):** those sections render in the page's LATE tier.
+If the anchor is not there yet, scroll to the late stack's fallback, swap the trailing `ArrowDown` for a
+spinning `LoaderCircle`, set `aria-busy="true"` and announce _Opening the {decision}…_ in a polite status
+region. When the anchor mounts, scroll and focus ONCE and restore the glyph. If the stack settles with no
+anchor (the reader cannot see that section), stop waiting and stay put.
+
+**It is a pointer, never a verb.** Beside the held notice (panel 7) the page already has its ONE _Review &
+approve_ door above the fold, and the band carries it again where the gate lives. The header marker adds no
+third: its words are the state, its glyph is `ArrowDown`, it never carries `ScanEye`, never says _Review &
+approve_, and never writes the overlay address.
+
+### Tokens and primitives
+
+| element                | primitive                                             | colour                                                           | shape                                   |
+| ---------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------- |
+| loud marker (label)    | `Pill tone="awaiting"` + lucide `Stamp` 12px          | `--el-tint-yellow` · `--el-text-strong`                          | `--radius-badge` · `--spacing-chip-x/y` |
+| quiet marker (label)   | `Pill tone="neutral"` + lucide `Hourglass` 12px       | `--el-chip-bg` · `--el-chip-border` · `--el-text-secondary`      | `--radius-badge` · `--spacing-chip-x/y` |
+| loud marker (glyph)    | an 18px disc + `Stamp` 12px                           | `--el-tint-yellow` · `--el-text-strong`                          | `rounded-full` (a disc)                 |
+| quiet marker (glyph)   | bare `Hourglass` 14px in an 18px box                  | `--el-text-secondary`                                            | —                                       |
+| header marker          | the label pill as a `<button>` + trailing `ArrowDown` | as its state · hover `--el-border-strong` · `--focus-ring-color` | `--radius-badge`                        |
+| header marker, waiting | trailing `LoaderCircle` `animate-spin`                | as its state                                                     | —                                       |
+| the landed section     | the section card, focused                             | `--focus-ring-color` ring                                        | `--radius-card`                         |
+
+Both inks clear AA on every surface the marker paints on: `--el-text-strong` on the yellow tint (the band's
+and the held notice's pairing), and `--el-text-secondary` on the chip fill, which is 6.18–6.80:1 on every
+surface in both themes.
+
+### Copy — en + zh
+
+The loud words REUSE `approvalGate.state.awaitingYou`; `{decision}` is the shipped
+`approvalGate.statusHeld.decisionNoun.<kind>`. Every new key is under `approvalGate.waiting.*`.
+
+| key                                       | en                               | zh                           | used by                                  |
+| ----------------------------------------- | -------------------------------- | ---------------------------- | ---------------------------------------- |
+| `approvalGate.state.awaitingYou` (reused) | Awaiting you                     | 等待你处理                   | loud label, board + header               |
+| `approvalGate.waiting.on`                 | Waiting on {name}                | 等待 {name} 处理             | quiet label, board + header              |
+| `approvalGate.waiting.unrouted`           | Awaiting a decision              | 等待决定                     | quiet label when routed to nobody        |
+| `approvalGate.waiting.glyphYours`         | Awaiting you — {decision}        | 等待你处理——{decision}       | row glyph name + `title`; header name    |
+| `approvalGate.waiting.glyphOn`            | Waiting on {name} — {decision}   | 等待 {name} 处理——{decision} | row glyph name + `title`; header name    |
+| `approvalGate.waiting.glyphUnrouted`      | Awaiting a decision — {decision} | 等待决定——{decision}         | row glyph name + `title`; header name    |
+| `approvalGate.waiting.jump`               | Go to the {decision}             | 前往{decision}               | header marker `title` + end of its name  |
+| `approvalGate.waiting.opening`            | Opening the {decision}…          | 正在打开{decision}…          | header marker, pressed before the stream |
+| `boards.awaitingAcceptance`               | **REMOVED**                      | **REMOVED**                  | — retired with the pill                  |
+
+The header marker's accessible name is `glyph*` + `. ` + `jump` — _Awaiting you — design approval. Go to
+the design approval_ — so a screen-reader user hears both the state and where the button goes.
+
+### The _Awaiting acceptance_ pill is RETIRED
+
+The board's `Awaiting acceptance` pill ([MOTIR-1636](motir:cmr8bo6xq000v04l717ruve6v), drawn by
+[MOTIR-1633](motir:cmr8bmqxy000004l7uvl0wddz), § _Story-acceptance surfaces_) and the marker state ONE fact
+twice: every pending acceptance receipt raises an awaiting `acceptance_result` gate
+(`acceptanceEvidenceService.persistEvidence` → `reconcileGatesFor`). **The marker takes the pill's slot**
+(panel 3), and **`boards.awaitingAcceptance` is removed** from `en.json` and `zh.json` together with the
+`BoardCardDto.awaitingAcceptance` field and its batch — MOTIR-5877's retirement, which also leaves the
+board's query count where it was.
+
+### Out of scope, each with its reason
+
+- **The quick view** — its status control already carries the held notice and its door (MOTIR-5528).
+- **Workbench rows** — the To-approve tab IS that list.
+- **The backlog** — it lists planned `todo` work, and gates are raised in review.
+- **The roadmap canvas node** — not a surface the story names.
+- **The band, the overlay, the held notice and the CI badge** — composed as they ship, never redrawn.
+
+### Allocation
+
+| work item      | builds                                                                                                                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-5876** | the state rule itself — `pendingDecisionsFor`, which answers yours / others / none, the entry's `kind` and `routedToId` for a set of work items. Draws nothing                               |
+| **MOTIR-5877** | the SHARED marker component in both its forms (label and glyph); the board card's slot and its precedence; `aria-describedby`; retiring the pill, its field and its string                   |
+| **MOTIR-5881** | the List and Tree status cell: the glyph after the pill, outside the edit trigger, and the Status track 108 → 144px in `buildIssueColumns`                                                   |
+| **MOTIR-5878** | the header marker as a button in the eyebrow (and the cell's `flex-wrap gap-y-2`); `data-decision-anchor` on every section card that draws a gate's frame; the press, the wait and the focus |
+
+Panel 9 is shared: every form above in dark and in `zh`.
