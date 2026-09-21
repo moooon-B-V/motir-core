@@ -216,6 +216,29 @@ export interface ApprovalGateDTO {
   updatedAt: string;
 }
 
+/**
+ * THE APPROVAL A RE-ASKED MERGE GATE REPLACED (Bug MOTIR-5863; `design/github/design-notes.md`
+ * § 28 panel 1, the record band's FIRST span) — *Approved earlier by {name} · {date} ·
+ * {count} commits — not merged*.
+ *
+ * ⚠️ IT IS A DIFFERENT ROW FROM THE GATE ON SCREEN. A press that did not land raises a
+ * FRESH `awaiting` gate, whose `decidedByLabel` / `decidedAt` are null by construction, so
+ * the band cannot be drawn from the gate it sits in: it names the latest `approved` row of
+ * the same kind, which `findLatestByWorkItem` never returns while a live question stands.
+ *
+ * ⚠️ `commits` IS THAT ROW'S OWN MEMBER COUNT, not the current set's. The set can change
+ * between the two asks, and the line is a statement about what was approved THEN.
+ */
+export interface EarlierApprovalDTO {
+  /** The audit label as at that decision — survives the decider's departure. Null when
+   *  the record is unattributable, which a surface says in words, never as nobody. */
+  decidedByLabel: string | null;
+  /** ISO-8601 — when that approval was given. */
+  decidedAt: string;
+  /** How many pull requests (each at one head) that approval named. */
+  commits: number;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // THE APPROVALS QUEUE (Story MOTIR-4879 · Subtask MOTIR-4791) — what the
 // Workbench's *To approve* tab reads. A DIFFERENT shape from `ApprovalGateDTO`
@@ -661,6 +684,8 @@ export interface ApprovalGateOverlayReadDTO {
    * disagree.
    */
   movedSince: StampComponent[];
+  /** The approval a RE-ASKED merge gate replaced (MOTIR-5863) — `WorkItemGateRead.earlierApproval`. */
+  earlierApproval: EarlierApprovalDTO | null;
   subject: ApprovalGateOverlaySubjectDTO;
 }
 

@@ -280,6 +280,10 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     // reporter arm, so this reader may press the verbs.
     expect(body.canDecide).toBe(true);
     expect(typeof body.routedToLabel).toBe('string');
+    // The overlay's copy of the merge gate's spent approval (MOTIR-5863): always on the
+    // wire — JSON drops an `undefined`, so a route that forgot it answers undefined here —
+    // and null for any gate that is not a re-asked merge question.
+    expect(body.earlierApproval).toBeNull();
     expect(body.subject.state).toBe('resolved');
     expect(body.subject.kind).toBe('design_result');
     expect(body.subject.evidence.id).toBe(evidence.id);

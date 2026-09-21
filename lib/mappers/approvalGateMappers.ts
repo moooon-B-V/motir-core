@@ -4,7 +4,9 @@ import type {
   ApprovalGateSubjectSummaryDTO,
   ApprovalQueueRowDto,
   ApprovalRecordDecidedRowDto,
+  EarlierApprovalDTO,
 } from '@/lib/dto/approvalGate';
+import { membersOf } from '@/lib/approvalGates/memberVersion';
 import type { AwaitingGateRow, RecordGateRow } from '@/lib/repositories/approvalGateRepository';
 
 // Prisma row → the wire DTO the decide control / Approvals tab reads (Story
@@ -49,6 +51,21 @@ export function toApprovalGateDto(row: ApprovalGate): ApprovalGateDTO {
     outcomeRef: row.outcomeRef,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * The approval a re-asked merge gate replaced → the record band's first line (Bug
+ * MOTIR-5863). `commits` is counted from THAT row's own `subjectVersion`, never the set now
+ * on screen. A row with no decision time is not an approval a reader can be told about, so
+ * it maps to null rather than to a line with a hole in it.
+ */
+export function toEarlierApprovalDto(row: ApprovalGate): EarlierApprovalDTO | null {
+  if (!row.decidedAt) return null;
+  return {
+    decidedByLabel: row.decidedByLabel,
+    decidedAt: row.decidedAt.toISOString(),
+    commits: membersOf(row.subjectVersion).length,
   };
 }
 

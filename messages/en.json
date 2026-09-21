@@ -8634,6 +8634,7 @@
       },
       "reasked": {
         "meta": "Asked again after the merge queue · {count, plural, one {# pull request} other {# pull requests}}",
+        "earlier": "Approved earlier by <b>{name}</b> · {date} · {count, plural, one {# commit} other {# commits}} — not merged",
         "why": "Approving puts {pr} back in its repository’s merge queue, which merges it when the queue’s checks pass, then moves {key} to Approved.",
         "confirm": {
           "newApproval": "record that you approved these {count, plural, one {# commit} other {# commits}} again, with the time — a new approval, not the spent one;",

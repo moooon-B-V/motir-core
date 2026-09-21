@@ -297,6 +297,7 @@ export async function GET(req: Request): Promise<Response> {
       routedToLabel: read.routedToLabel,
       stamp: read.stamp,
       movedSince: read.movedSince,
+      earlierApproval: read.earlierApproval,
       subject: await readSubject(kind, read.gate, item, ctx),
     };
     return NextResponse.json(body, {

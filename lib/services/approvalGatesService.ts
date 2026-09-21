@@ -5,6 +5,7 @@ import type {
   ApprovalGateDecisionSourceDTO,
   ApprovalGateKindDTO,
   ApprovalGatePendingPayloadDTO,
+  EarlierApprovalDTO,
   HeldTransitionDTO,
   ApprovalQueuePageDto,
   ApprovalQueueRowDto,
@@ -56,6 +57,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import {
   toApprovalGateDto,
+  toEarlierApprovalDto,
   toApprovalQueueRowDto,
   toApprovalRecordDecidedRowDto,
 } from '@/lib/mappers/approvalGateMappers';
@@ -239,6 +241,18 @@ export interface WorkItemGateRead {
    * The two columns are both right, about different questions.
    */
   routedToLabel: string | null;
+  /**
+   * THE APPROVAL A RE-ASKED MERGE GATE REPLACED (Bug MOTIR-5863; § 28 panel 1's record
+   * band, first span) — who gave it, when, over how many commits.
+   *
+   * Read ONLY for an `awaiting` `pull_request_approval` gate: that is the one question
+   * with history behind it, and every other read pays nothing. It is the latest
+   * `approved` row of the kind, by decision time, and null when there is none — a first
+   * ask. Whether the frame DRAWS it is the frame's call (the members say whether a press
+   * did not land); a gate re-raised over new commits after an approval carries one too,
+   * and draws no band.
+   */
+  earlierApproval: EarlierApprovalDTO | null;
   /**
    * The SETTINGS DOOR this viewer is handed for the gate's kind (MOTIR-5513) —
    * the kind's own door when they hold `workflow:manage`, the key its destination
@@ -568,6 +582,7 @@ export const approvalGatesService = {
           gate: null,
           canDecide: false,
           routedToLabel: null,
+          earlierApproval: null,
           settingsDoor: null,
           stamp: null,
           movedSince: [],
@@ -583,6 +598,7 @@ export const approvalGatesService = {
           gate: null,
           canDecide: false,
           routedToLabel: null,
+          earlierApproval: null,
           settingsDoor: null,
           stamp: null,
           movedSince: [],
@@ -652,12 +668,27 @@ export const approvalGatesService = {
           ? movedAsReaderSees(stampMoved(input.since, stampInputs), input.kind)
           : [];
 
+      // THE SPENT APPROVAL (MOTIR-5863). The re-asked gate is a fresh row that names
+      // nobody, so its record band's first line needs the approval before it — one read,
+      // paid only by an awaiting merge gate.
+      const earlier =
+        row.state === 'awaiting' && input.kind === 'pull_request_approval'
+          ? (
+              await approvalGateRepository.findLatestApprovedByWorkItems(
+                [input.workItemId],
+                input.kind,
+                tx,
+              )
+            ).get(input.workItemId)
+          : undefined;
+
       return {
         gate: toApprovalGateDto(row),
         canDecide,
         stamp,
         movedSince,
         routedToLabel: routedToDisplayName(routedTo),
+        earlierApproval: earlier ? toEarlierApprovalDto(earlier) : null,
         settingsDoor: settingsDoorFor(
           isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
           held,
@@ -1151,6 +1182,7 @@ export const approvalGatesService = {
         gate: null,
         canDecide: false,
         routedToLabel: null,
+        earlierApproval: null,
         settingsDoor: null,
         stamp: null,
         movedSince: [],
