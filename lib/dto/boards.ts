@@ -163,9 +163,6 @@ export interface BoardCardDto {
   position: string;
   /** False iff an `is_blocked_by` blocker remains in a non-terminal status (finding #21). */
   ready: boolean;
-  /** A story in `in_review` whose CURRENT AcceptanceEvidence is pending — drives
-   *  the board "Awaiting acceptance" badge (MOTIR-1636). */
-  awaitingAcceptance: boolean;
   /**
    * Whether a decision is waiting on this card, and whether it is the READER's
    * (Story MOTIR-4908 · MOTIR-5876) — `approvalGatesService.pendingDecisionsFor`,

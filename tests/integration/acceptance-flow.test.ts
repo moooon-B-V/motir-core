@@ -35,6 +35,7 @@ vi.mock('@/lib/blob/uploader', () => {
 const { POST } = await import('@/app/api/work-items/[id]/acceptance-evidence/route');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
 const { acceptanceEvidenceService } = await import('@/lib/services/acceptanceEvidenceService');
+const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 
 async function inReviewStory(fx: WorkItemFixture) {
@@ -117,9 +118,14 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     expect(panel!.commitSha).toBe('deadbeefcafe');
     expect(panel!.producedByKey).toBe('MOTIR-1638');
 
-    // The board flag sees it awaiting.
-    const awaiting = await acceptanceEvidenceService.findAwaitingIds([story.id], fx.ctx);
-    expect(awaiting.has(story.id)).toBe(true);
+    // The board's decision-waiting marker sees it awaiting (MOTIR-5877 retired the
+    // `Awaiting acceptance` flag into it): the pending receipt raised an
+    // `acceptance_result` gate.
+    const awaiting = await approvalGatesService.pendingDecisionsFor(
+      { projectId: fx.projectId, workItemIds: [story.id] },
+      fx.ctx,
+    );
+    expect(awaiting.get(story.id)?.kind).toBe('acceptance_result');
   });
 
   it('Approve moves the story to done + stamps the evidence + clears the board flag', async () => {
@@ -133,7 +139,12 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     const persisted = await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } });
     expect(persisted.status).toBe('done');
     expect(
-      (await acceptanceEvidenceService.findAwaitingIds([story.id], fx.ctx)).has(story.id),
+      (
+        await approvalGatesService.pendingDecisionsFor(
+          { projectId: fx.projectId, workItemIds: [story.id] },
+          fx.ctx,
+        )
+      ).has(story.id),
     ).toBe(false);
   });
 

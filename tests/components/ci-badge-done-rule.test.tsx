@@ -80,7 +80,6 @@ function boardCard(status: string, statusCategory: 'in_progress' | 'done'): Boar
     storyPoints: null,
     position: 'a0',
     ready: true,
-    awaitingAcceptance: false,
     pendingDecision: null,
     ciState: 'failing',
     statusCategory,

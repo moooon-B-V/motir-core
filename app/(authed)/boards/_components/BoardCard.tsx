@@ -3,10 +3,11 @@
 import { useTranslations } from 'next-intl';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CircleAlert, Clock, GripVertical, Hash } from 'lucide-react';
+import { CircleAlert, GripVertical, Hash } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
+import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { formatStoryPoints } from '@/lib/estimation/scales';
 import type { BoardCardDto } from '@/lib/dto/boards';
@@ -47,15 +48,38 @@ import { BoardCardHeldRefusal } from './BoardHeldRefusal';
 // A board card carries only `assigneeId` on the `BoardCardDto` (Story 3.1.4), so
 // the parent column resolves the id → display name from the workspace members
 // the board page passes down, and hands the resolved `assigneeName` (or null) in.
+// The decision-waiting marker's `routedToName` is resolved the same way, from
+// `pendingDecision.routedToId` (MOTIR-5877).
+
+/** The DOM id the card `<button>` points `aria-describedby` at (MOTIR-5877). */
+export function decisionMarkerId(cardId: string): string {
+  return `decision-marker-${cardId}`;
+}
+
+/** dnd-kit's instructions id joined with the marker's, when the slot draws the marker. */
+function describedBy(dndId: string | undefined, card: BoardCardDto): string | undefined {
+  const marker =
+    card.pendingDecision && (card.pendingDecision.state === 'yours' || card.ready)
+      ? decisionMarkerId(card.id)
+      : null;
+  const ids = [dndId, marker].filter((id): id is string => Boolean(id));
+  return ids.length > 0 ? ids.join(' ') : undefined;
+}
 
 // The presentational card body — shared by the in-list sortable card AND the
 // `DragOverlay` clone, so the lifted card looks identical to its resting form.
 export function BoardCardView({
   card,
   assigneeName,
+  routedToName = null,
+  markerId,
 }: {
   card: BoardCardDto;
   assigneeName: string | null;
+  /** The decision-waiting marker's routed person, resolved by the caller. */
+  routedToName?: string | null;
+  /** Set on the in-list card only — the drag clone must not duplicate the id. */
+  markerId?: string;
 }) {
   const t = useTranslations('boards');
   const estimate =
@@ -88,32 +112,44 @@ export function BoardCardView({
       {/* ⚠️ `flex-wrap` is REQUIRED by the CI badge (MOTIR-5474, design
           `board-card--ci-badge.mock.html` panel 4). This row had none, so a SECOND
           pill did not wrap — it OVERFLOWED, pushing the story-point chip and the
-          avatar past the card's right edge. With it, the longest pairing
-          (`Awaiting acceptance` + `Checks running`) takes a second line and the
+          avatar past the card's right edge. With it, the longest pairing (a
+          decision-waiting marker + `Checks running`) takes a second line and the
           card grows by one 22px line plus the 6px gap, only in that case. */}
       <span className="flex flex-wrap items-center gap-1.5">
-        {/* A story in review is AWAITING ACCEPTANCE (MOTIR-1636) — an info-tone
-            pill in the same slot as the readiness/priority chip, distinct from
-            the warning "Blocked" pill. Blocked cards swap the priority chip for a
-            "Blocked" peach pill — the ReadinessBadge tone, driven by the
-            finding-#21 `ready` flag. State is carried by text + icon, never
-            colour alone (finding #35). */}
-        {card.awaitingAcceptance ? (
-          <Pill severity="info">
-            <Clock className="h-3 w-3" aria-hidden />
-            {t('awaitingAcceptance')}
-          </Pill>
-        ) : card.ready ? (
-          <PriorityValue priority={card.priority} />
-        ) : (
+        {/* THE EXCLUSIVE SLOT, in the design's precedence (MOTIR-5875 § *The board
+            card's exclusive slot*): a decision waiting on YOU › `Blocked` › a
+            decision waiting on someone else › the priority chip. Yours beats
+            Blocked because it is the one thing here that asks the reader to act;
+            Blocked beats the quiet marker because the card's own readiness is the
+            more useful fact. The marker RETIRED the `Awaiting acceptance` pill
+            (MOTIR-1636): every pending receipt raises an `acceptance_result` gate,
+            so the two said one fact twice. State is text + glyph, never colour
+            alone (finding #35). */}
+        {card.pendingDecision?.state === 'yours' ? (
+          <DecisionWaitingMarker
+            id={markerId}
+            state="yours"
+            kind={card.pendingDecision.kind}
+            routedToName={routedToName}
+          />
+        ) : !card.ready ? (
           <Pill severity="warning">
             <CircleAlert className="h-3 w-3" aria-hidden />
             {t('blocked')}
           </Pill>
+        ) : card.pendingDecision ? (
+          <DecisionWaitingMarker
+            id={markerId}
+            state="others"
+            kind={card.pendingDecision.kind}
+            routedToName={routedToName}
+          />
+        ) : (
+          <PriorityValue priority={card.priority} />
         )}
         {/* THE CI BADGE (MOTIR-5474), in the slot the design gives it: an
             ADDITIONAL pill immediately after the exclusive one, never replacing
-            it — so `Blocked` and `Awaiting acceptance` both survive beside it.
+            it — so `Blocked` and the decision-waiting marker both survive beside it.
             It draws only `failing` / `running`, and only off the `done`
             category; `ciBadgeState` is the shared rule. */}
         <CiStateBadge ciState={card.ciState} statusCategory={card.statusCategory} />
@@ -176,10 +212,12 @@ const CARD_CLASS =
 export function BoardCard({
   card,
   assigneeName,
+  routedToName = null,
   onOpenQuickView,
 }: {
   card: BoardCardDto;
   assigneeName: string | null;
+  routedToName?: string | null;
   onOpenQuickView: (identifier: string) => void;
 }) {
   const t = useTranslations('boards');
@@ -230,9 +268,21 @@ export function BoardCard({
           isDragging ? 'border-dashed opacity-40' : ''
         }`}
         {...attributes}
+        // The card's own label would hide the decision-waiting marker from a screen
+        // reader (MOTIR-5875 § *The three forms*), so the button points at it —
+        // only when a marker is rendered, since the slot may hold `Blocked`.
+        // ⚠️ AFTER the dnd-kit spread and JOINED with it: `attributes` carries its
+        // own `aria-describedby` (the keyboard-drag instructions), which a prop
+        // set before the spread is silently overwritten by.
+        aria-describedby={describedBy(attributes['aria-describedby'], card)}
         {...listeners}
       >
-        <BoardCardView card={card} assigneeName={assigneeName} />
+        <BoardCardView
+          card={card}
+          assigneeName={assigneeName}
+          routedToName={routedToName}
+          markerId={decisionMarkerId(card.id)}
+        />
       </button>
       {/* Hidden until the card is hovered / the menu is focused — and
         `pointer-events-none` while hidden so it never intercepts a click/drag
@@ -264,16 +314,18 @@ export function BoardCard({
 export function BoardCardOverlay({
   card,
   assigneeName,
+  routedToName = null,
 }: {
   card: BoardCardDto;
   assigneeName: string | null;
+  routedToName?: string | null;
 }) {
   return (
     <div
       data-surface="card"
       className={`${CARD_CLASS} w-[17rem] rotate-2 cursor-grabbing border-(--el-accent) shadow-(--shadow-elevated)`}
     >
-      <BoardCardView card={card} assigneeName={assigneeName} />
+      <BoardCardView card={card} assigneeName={assigneeName} routedToName={routedToName} />
     </div>
   );
 }

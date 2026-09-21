@@ -96,7 +96,6 @@ export function toBoardCardDto(
   row: WorkItem,
   opts: {
     ready: boolean;
-    awaitingAcceptance?: boolean;
     /** The card's decision-waiting marker (MOTIR-5876); `null` when omitted. */
     pendingDecision?: PendingDecisionDTO | null;
     swimlaneKey?: string;
@@ -125,7 +124,6 @@ export function toBoardCardDto(
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     position: row.position,
     ready: opts.ready,
-    awaitingAcceptance: opts.awaitingAcceptance ?? false,
     pendingDecision: opts.pendingDecision ?? null,
     ciState: row.ciState,
     statusCategory: opts.statusCategory ?? null,
