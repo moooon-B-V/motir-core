@@ -103,9 +103,18 @@ export async function exchangeCodeForToken(code: string): Promise<GitlabTokenSet
 }
 
 /**
+ * Deadline for a token REFRESH, in ms. A bound, not a budget: the refresh runs
+ * inside a transaction holding a row lock (`gitlabConnectionService`), so a hung
+ * host must not hold that lock — or that transaction — open indefinitely. The
+ * transaction's own timeout is DERIVED from this number (MOTIR-5988).
+ */
+export const GITLAB_REFRESH_TIMEOUT_MS = 15_000;
+
+/**
  * Exchange a stored refresh token for a fresh token set (access + a ROTATED
  * refresh token). Throws GitlabOAuthNotConfiguredError (unwired) or
- * GitlabTokenRefreshError (the refresh token was rejected / endpoint erred).
+ * GitlabTokenRefreshError (the refresh token was rejected / endpoint erred /
+ * no answer inside {@link GITLAB_REFRESH_TIMEOUT_MS}).
  */
 export async function refreshAccessToken(refreshToken: string): Promise<GitlabTokenSet> {
   const { clientId, clientSecret, baseUrl } = resolveConfig();
@@ -118,6 +127,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<GitlabTo
       client_secret: clientSecret,
     },
     (detail) => new GitlabTokenRefreshError(detail),
+    GITLAB_REFRESH_TIMEOUT_MS,
   );
 }
 
@@ -160,6 +170,7 @@ async function postToken(
   baseUrl: string,
   body: Record<string, string>,
   makeError: (detail: string) => Error,
+  timeoutMs?: number,
 ): Promise<GitlabTokenSet> {
   let res: Response;
   try {
@@ -167,6 +178,7 @@ async function postToken(
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify(body),
+      ...(timeoutMs === undefined ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
     });
   } catch (err) {
     throw makeError(`token endpoint unreachable (${describeError(err)})`);
