@@ -77,6 +77,15 @@ export const JOB_KINDS = [
   // three-step sequence, and it runs last for a reason: while motir-core still
   // declared them the switch (MOTIR-4304) stayed revertible on its own.
   'plan',
+  // `author_bug` (Story MOTIR-4930 — MOTIR-5847/5848 handler / MOTIR-5849 trigger)
+  // — ONE error-monitor issue's facts (`context.bugAuthoring`, below) → a PLANNED
+  // bug as the typed `authoredBug` result: both bodies, a type, an executor, a
+  // sizing pair, context refs grounded in the project's code graph, and candidate
+  // mechanisms. An analysis job — it writes NO plan delta and creates nothing;
+  // motir-core carries the answer onto the bug itself (MOTIR-5851). NOT
+  // `analyze_bug`, which classifies Motir's OWN defects. Mirror of the closed
+  // motir-ai enum (the open-core boundary).
+  'author_bug',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
@@ -145,6 +154,34 @@ export interface BugAnalysisDispatchSignal {
   subtaskKey: string;
   dispatchPromptExcerpt?: string | null;
   prStatus?: string | null;
+}
+
+/**
+ * What an `author_bug` job authors a planned bug FROM (Story MOTIR-4930 ·
+ * MOTIR-5849) — the motir-core mirror of motir-ai's `context.bugAuthoring` hole
+ * (`src/jobs/handlers/authorBug.ts` `parseAuthorBugInput`). Assembled INLINE by
+ * the enrichment trigger: motir-ai re-reads nothing. The repository set it
+ * grounds against rides the ordinary `context.code` hole beside it.
+ */
+export interface BugAuthoringContext {
+  issue: {
+    title: string;
+    culprit: string | null;
+    level: string | null;
+    eventCount: number;
+    firstSeenAt: string;
+    lastSeenAt: string;
+    permalink: string | null;
+  };
+  environment: string | null;
+  release: string | null;
+  frames: Array<{
+    filePath: string;
+    function: string | null;
+    lineNumber: number | null;
+    inApp: boolean | null;
+  }>;
+  monitoredProjectSlug: string | null;
 }
 
 /** The full analysis unit the trigger assembles and motir-ai classifies over. */
@@ -228,6 +265,9 @@ export interface JobContextBag {
   // plan-tree neighborhood the OUTWARD classifier reasons over, assembled by the
   // trigger (MOTIR-1481) and sent inline (see BugAnalysisContext above).
   bugAnalysis?: BugAnalysisContext;
+  // The monitor-issue facts an `author_bug` job (MOTIR-5849) authors a planned
+  // bug FROM (see BugAuthoringContext above).
+  bugAuthoring?: BugAuthoringContext;
   // The work-item context a `generate_explanation` job (8.8.11) drafts an
   // explanation FROM — the title / description / type / parent the "Draft with
   // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,

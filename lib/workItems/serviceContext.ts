@@ -39,4 +39,19 @@ export interface ServiceContext {
    * (rules don't trigger rules). Absent on every ordinary user-driven write.
    */
   viaAutomationRuleId?: string;
+  /**
+   * Monitor provenance (Story MOTIR-4930 · Subtask MOTIR-5849). When a `bug` is
+   * CREATED by the monitor reconciler, this carries the id of the binding that
+   * filed it, and the create's post-commit `work-item/created` event stamps it as
+   * `viaMonitorConnectionId`.
+   *
+   * ⚠️ IT EXISTS TO CLOSE A RACE, not to label a card. The reconciler's create
+   * commits its OWN transaction — and so emits its event — before the OUTER
+   * transaction that points the `monitor_issue` row at the new bug commits. A
+   * consumer that asks "does a link point at this item?" can therefore observe a
+   * committed bug with no link yet. The stamp says the link IS coming, so that
+   * consumer retries instead of concluding "not a monitor bug" for good. Absent on
+   * every other write.
+   */
+  viaMonitorConnectionId?: string;
 }

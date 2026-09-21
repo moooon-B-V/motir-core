@@ -32,6 +32,7 @@ import { billingSeatSync } from './definitions/billingSeatSync';
 import { codeGraphIndex } from './definitions/codeGraphIndex';
 import { codeGraphRefresh } from './definitions/codeGraphRefresh';
 import { outwardBugTelemetryOnCreated } from './definitions/outwardBugTelemetry';
+import { monitorBugEnrichOnCreated } from './definitions/monitorBugEnrich';
 import { autoPlanCadenceTick } from './definitions/autoPlanCadenceTick';
 import { ciMinutesReconcile } from './definitions/ciMinutesReconcile';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
@@ -108,6 +109,7 @@ export const jobDefinitions = [
   codeGraphIndex,
   codeGraphRefresh,
   outwardBugTelemetryOnCreated,
+  monitorBugEnrichOnCreated,
   autoPlanCadenceTick,
   ciMinutesReconcile,
   ciActionsGateSweep,

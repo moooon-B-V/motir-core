@@ -1984,6 +1984,7 @@ export const workItemsService = {
       workItemId: dto.id,
       actorId: ctx.userId,
       ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
+      ...(ctx.viaMonitorConnectionId ? { viaMonitorConnectionId: ctx.viaMonitorConnectionId } : {}),
     });
 
     // Plan-tree embedding, CREATE trigger (Story MOTIR-2694 · MOTIR-2696, ADR

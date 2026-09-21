@@ -20,6 +20,7 @@ import { publicFollowDigestService } from '@/lib/services/publicFollowDigestServ
 import { automationEngineService } from '@/lib/services/automationEngineService';
 import { billingService } from '@/lib/services/billingService';
 import { aiBugTelemetryService } from '@/lib/services/aiBugTelemetryService';
+import { monitorBugEnrichmentService } from '@/lib/services/monitorBugEnrichmentService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphOffboardSweepService } from '@/lib/services/codeGraphOffboardSweepService';
@@ -75,6 +76,9 @@ export const jobServices = {
   automationEngine: automationEngineService,
   billing: billingService,
   aiBugTelemetry: aiBugTelemetryService,
+  // The bug ENRICHMENT dispatch (MOTIR-5849) — a monitor-filed bug is planned by
+  // motir-ai's `author_bug` job, dispatched post-commit.
+  monitorBugEnrichment: monitorBugEnrichmentService,
   codeGraph: codeGraphIndexService,
   codeGraphIndexDispatch: codeGraphIndexDispatchService,
   codeGraphOffboardSweep: codeGraphOffboardSweepService,
