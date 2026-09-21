@@ -9,6 +9,24 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
+/**
+ * Drop the target locks an UN-DECIDED plan holds, so a fixture can build a
+ * SECOND open plan over the same card (MOTIR-5645).
+ *
+ * ⚠️ FIXTURE SURGERY, and it records a real consequence rather than dodging a
+ * defect. A plan PARKS every committed target it names and holds it while the
+ * plan is open, so a tenant can have at most ONE open plan per card — a second
+ * is refused with `PlanTargetLockedError` (AMENDMENT 16 D4). The cases here need
+ * several open plans over one card, which no tenant can now produce.
+ *
+ * The lock's own behaviour, including that refusal, is covered in
+ * `tests/planning/planTargetParkDoor.test.ts`.
+ */
+async function freePlanTargets(planId: string): Promise<string> {
+  await adminDb.planTargetLock.deleteMany({ where: { planId } });
+  return planId;
+}
+
 // WHO MOVES A PLAN BETWEEN `planned` AND `stale` (Bug MOTIR-3560 · Subtask
 // MOTIR-3579), implementing `docs/decisions/agent-authored-plans.md`
 // AMENDMENT 9 D4/D5 over real Postgres.
@@ -119,6 +137,10 @@ describe('INTO `stale` — a target finished under a plan that proposes to chang
       [{ op: 'modify', workItemId: target, patch: { title: 'New' } }],
       fx.ctx,
     );
+    // The `generating` plan above still HOLDS the card (MOTIR-5645), so the
+    // second plan over it would be refused. Free it: this case is about which
+    // plan STATUSES the drift guard touches, not about the lock.
+    await freePlanTargets(generating.id);
     const declined = await plannedPlanTargeting(fx, [target]);
     await plansService.declinePlan(declined, fx.ctx);
     await setStatus(target, 'done');

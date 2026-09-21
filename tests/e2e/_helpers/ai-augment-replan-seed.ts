@@ -18,6 +18,8 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { plansService } from '@/lib/services/plansService';
+import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
+import { asConversationTurn } from './planChangeConversation';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestPerson } from './testPerson';
 
@@ -159,6 +161,23 @@ export async function seedAiAugmentReplan(email: string): Promise<AiAugmentRepla
  * runs `plansService.approvePlan → materialize` against Postgres.
  *
  * `sourceJobId` binds the plan to the stubbed job exactly as the submit does.
+ *
+ * ⚠️ AND IT RECORDS THE CONVERSATION, which it did not before (MOTIR-5640). The
+ * real submit does two things: it opens the Plan bound to the job AND it stamps
+ * that job onto the plan-change SESSION as its `lastJobId`
+ * (`planChangeSessionsService.submit`). This helper only did the first, so the
+ * plans it seeded belonged to no conversation at all — a state the product
+ * cannot reach.
+ *
+ * That was invisible until a plan began PARKING its targets: a card may be
+ * planned by only one planner at a time, so the second seeded plan naming the
+ * same card read as a SECOND planner rather than as the same conversation
+ * refining, and was refused with `PlanTargetLockedError`. Recording the session
+ * makes successive turns what they are — one planner, one hold.
+ *
+ * `scopeKey` selects WHICH conversation. The default is the project-wide one the
+ * augment flow uses; a CONTEXTUAL run passes the anchor's key, exactly as the
+ * contextual route does.
  */
 export async function seedPlanChangeProposal(
   ctx: ServiceContext,
@@ -174,39 +193,48 @@ export async function seedPlanChangeProposal(
     addShape?: { kind?: string; type?: string; parentRef?: string };
     /** An existing item to propose a rename of (`modify`). */
     rename?: { workItemId: string; title: string };
+    /** The conversation this turn belongs to. Defaults to the project-wide
+     *  scope the augment flow opens; a contextual run passes its anchor's key. */
+    scopeKey?: string;
   },
 ): Promise<string> {
-  const plan = await plansService.createPlan(
-    projectId,
-    { title: args.title, sourceJobId: args.jobId },
-    ctx,
-  );
-  await plansService.addProposals(
-    plan.id,
-    [
-      // `story` carries no `type` — that is leaf-only (the 2.7.2 ADR; an
-      // epic/story with a type is rejected 422 by the approve).
-      ...args.adds.map((title) => ({
-        op: 'add' as const,
-        proposedFields: {
-          title,
-          kind: args.addShape?.kind ?? 'story',
-          ...(args.addShape?.type ? { type: args.addShape.type } : {}),
-        },
-        ...(args.addShape?.parentRef ? { parentRef: args.addShape.parentRef } : {}),
-      })),
-      ...(args.rename
-        ? [
-            {
-              op: 'modify' as const,
-              workItemId: args.rename.workItemId,
-              patch: { title: args.rename.title },
-            },
-          ]
-        : []),
-    ],
-    ctx,
-  );
+  // The SESSION half of a real submit: the append runs as a turn of the scope's
+  // conversation, which is then left as the browser finds it.
+  const scopeKey = args.scopeKey ?? PROJECT_SCOPE_KEY;
+  const plan = await asConversationTurn(ctx, projectId, scopeKey, args.jobId, async () => {
+    const plan = await plansService.createPlan(
+      projectId,
+      { title: args.title, sourceJobId: args.jobId },
+      ctx,
+    );
+    await plansService.addProposals(
+      plan.id,
+      [
+        // `story` carries no `type` — that is leaf-only (the 2.7.2 ADR; an
+        // epic/story with a type is rejected 422 by the approve).
+        ...args.adds.map((title) => ({
+          op: 'add' as const,
+          proposedFields: {
+            title,
+            kind: args.addShape?.kind ?? 'story',
+            ...(args.addShape?.type ? { type: args.addShape.type } : {}),
+          },
+          ...(args.addShape?.parentRef ? { parentRef: args.addShape.parentRef } : {}),
+        })),
+        ...(args.rename
+          ? [
+              {
+                op: 'modify' as const,
+                workItemId: args.rename.workItemId,
+                patch: { title: args.rename.title },
+              },
+            ]
+          : []),
+      ],
+      ctx,
+    );
+    return plan;
+  });
   // The handler's LAST callback — the plan leaves `generating` and becomes a
   // pending review. Until it does, there is nothing for the rail to confirm.
   await plansService.markPlanned(plan.id, ctx);

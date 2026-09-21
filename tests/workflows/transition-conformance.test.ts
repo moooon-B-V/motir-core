@@ -139,7 +139,7 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
     ]);
   });
 
-  it('declares exactly the thirty-six default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630)', () => {
+  it('declares exactly the forty-one default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630 + MOTIR-5643)', () => {
     expect(new Set(EDGES.map(([from, to]) => edgeKey(from, to)))).toEqual(
       new Set([
         'todo>in_progress',
@@ -172,6 +172,16 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'planning>todo',
         'planning>in_progress',
         'planning>cancelled',
+        // MOTIR-5643 — the PARKING edges. Every non-terminal status may be
+        // parked while a plan rewrites the card, and a parked card may rest at
+        // `blocked` when the approved plan leaves it gated
+        // (`agent-authored-plans.md` AMENDMENT 16 D10). NOTHING from `done` or
+        // `cancelled`: we plan forward, and the partition below pins that.
+        'blocked>planning',
+        'implemented>planning',
+        'in_review>planning',
+        'approved>planning',
+        'planning>blocked',
         // MOTIR-3003: built, waiting on checks. IN from the two states a card
         // can be in when its pull request opens; OUT to the five it can reach —
         // `in_review` is the one CI green performs, and the other four are
@@ -201,14 +211,14 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'in_review>implemented',
       ]),
     );
-    expect(EDGES).toHaveLength(36);
+    expect(EDGES).toHaveLength(41);
   });
 
-  it('partitions the 9×9 grid into 36 edges + 9 self-loops + 36 non-edges', () => {
+  it('partitions the 9×9 grid into 41 edges + 9 self-loops + 31 non-edges', () => {
     expect(NON_EDGES).toHaveLength(
       STATUS_KEYS.length * STATUS_KEYS.length - EDGES.length - STATUS_KEYS.length,
     );
-    expect(NON_EDGES).toHaveLength(36);
+    expect(NON_EDGES).toHaveLength(31);
   });
 });
 

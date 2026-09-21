@@ -59,7 +59,16 @@ vi.mock('@/lib/workspaces', async (importOriginal) => ({
 
 // The motir-ai BOUNDARY — the one mock the convention allows. A real engine is
 // absent from CI; everything on THIS side of the boundary runs for real.
-const submitJobMock = vi.fn(async (..._args: unknown[]) => ({ jobId: 'job-contextual-1' }));
+// ⚠️ A UNIQUE job id PER SUBMIT, as production mints them (MOTIR-5645). The
+// shared literal this used to return gave two sessions the same `lastJobId`,
+// which is a state the product cannot reach — and both `releasePlanTargetLocks`
+// and the park's own-session check resolve a session by that column, so a
+// fixture-only collision made a plan fail to recognise the session that
+// produced it.
+let submitJobSeq = 0;
+const submitJobMock = vi.fn(async (..._args: unknown[]) => ({
+  jobId: `job-contextual-${++submitJobSeq}`,
+}));
 vi.mock('@/lib/ai/motirAiClient', () => ({
   submitJob: (...args: unknown[]) => submitJobMock(...(args as [])),
   streamJob: vi.fn(),
@@ -161,7 +170,8 @@ beforeEach(async () => {
   await truncateAuthTables();
   vi.unstubAllGlobals();
   submitJobMock.mockClear();
-  submitJobMock.mockResolvedValue({ jobId: 'job-contextual-1' });
+  submitJobSeq = 0;
+  submitJobMock.mockImplementation(async () => ({ jobId: `job-contextual-${++submitJobSeq}` }));
   fx = await makeWorkItemFixture();
   session.current = { user: { id: fx.ownerId, email: 'owner@example.com', name: 'Owner' } };
   activeCtx.current = {
@@ -299,10 +309,19 @@ async function lockedAnchors(): Promise<string[]> {
  * status change. Projecting anything else out would let a real write hide, which
  * is why this takes the ONE id rather than dropping `status` wholesale.
  */
+/**
+ * ⚠️ TAKES A SET since MOTIR-5645, and that widening is the fact rather than a
+ * convenience. This used to take ONE id — the conversation's anchor, the only
+ * thing a run locked. A plan now PARKS every COMMITTED target it names: every
+ * `modify` and `remove` target, and every `add`'s committed `parentRef`
+ * (`agent-authored-plans.md` AMENDMENT 16 D1). So a run whose plan removes a
+ * card two levels away parks that card too, and it is not the anchor.
+ */
 function snapshotExceptStatusOf(
   snapshot: Awaited<ReturnType<typeof treeSnapshot>>,
-  workItemId: string,
+  ...workItemIds: string[]
 ): unknown {
+  const parked = new Set(workItemIds);
   const { items, links } = snapshot as {
     items: Array<Record<string, unknown>>;
     links: unknown;
@@ -310,13 +329,13 @@ function snapshotExceptStatusOf(
   return {
     links,
     items: items.map((i) =>
-      i.id === workItemId ? { ...i, status: '<locked>', updatedAt: '<locked>' } : i,
+      parked.has(i.id as string) ? { ...i, status: '<locked>', updatedAt: '<locked>' } : i,
     ),
   };
 }
 
-async function treeSnapshotExceptStatusOf(workItemId: string): Promise<unknown> {
-  return snapshotExceptStatusOf(await treeSnapshot(), workItemId);
+async function treeSnapshotExceptStatusOf(...workItemIds: string[]): Promise<unknown> {
+  return snapshotExceptStatusOf(await treeSnapshot(), ...workItemIds);
 }
 
 /**
@@ -538,8 +557,16 @@ describe('no approve ⇒ no write — a completed run proposes everything and wr
     ).toBeNull();
     expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
 
-    // The ONE difference from before the run is the anchor's lock — the anchor is
-    // in `planning`, and nothing else moved at all.
+    // ⚠️ STILL ONE LOCK, and the reason is D5's correction (MOTIR-5648). A plan
+    // produced by a CONVERSATION parks nothing — the session is its holder — so
+    // the only thing held here is the conversation's own anchor, exactly as
+    // before this bug. `doomed` is a `remove` TARGET of the plan and is NOT
+    // parked, because parking it would be a second lock for ONE actor, and that
+    // is what broke the shipped refine loop.
+    //
+    // A plan with NO session does park every committed target it names
+    // (AMENDMENT 16 D1) — that is the MCP door, and it has its own coverage in
+    // `tests/planning/planTargetParkDoor.test.ts`.
     expect(await lockedAnchors()).toEqual([story.id]);
     const duringTheRun = await treeSnapshot();
     expect(await treeSnapshotExceptStatusOf(story.id)).toEqual(
@@ -711,29 +738,35 @@ describe('the gate is TRIGGER-AGNOSTIC — same predicate, same confirm', () => 
     // The mirror case: the gate must not be softer on a plan the machine opened
     // than on one the user did. A subtask may not hang off an epic.
     const epic = await seedItem({ kind: 'epic', title: 'The epic' });
+    // ⚠️ ONE ANCHOR EACH, since MOTIR-5645. Both plans used to name the SAME
+    // story, and a plan now PARKS the committed `parentRef` of every `add` it
+    // carries — so the second plan was refused with `PlanTargetLockedError`,
+    // which is the one-holder-per-card rule working (AMENDMENT 16 D4). What this
+    // case compares is the TRIGGER, and two triggers do not need one anchor.
     const story = await seedItem({ kind: 'story', title: 'Anchor' });
+    const cadenceStory = await seedItem({ kind: 'story', title: 'Cadence anchor' });
 
     const { planId: userPlanId } = await planFromItem(story.id, 'Add a subtask to the epic');
     submitJobMock.mockResolvedValue({ jobId: 'job-cadence-2' });
     const { planId: cadencePlanId } = await aiPlanEditsService.submitExpand(
-      story.identifier,
+      cadenceStory.identifier,
       activeCtx.current!,
       { origin: 'cadence' },
     );
 
-    const legal: Parameters<typeof plansService.addProposals>[1] = [
+    const legalUnder = (parentId: string): Parameters<typeof plansService.addProposals>[1] => [
       {
         op: 'add',
         proposedFields: { title: 'Illegal child', kind: 'subtask' },
-        parentRef: story.id,
+        parentRef: parentId,
       },
     ];
     /** Re-parent onto the epic after the close — a subtask may not hang there. */
     const reparent = async ([addId]: string[]) => {
       await adminDb.planItem.update({ where: { id: addId! }, data: { parentRef: epic.id } });
     };
-    await engineProposes(userPlanId, legal, reparent);
-    await engineProposes(cadencePlanId, legal, reparent);
+    await engineProposes(userPlanId, legalUnder(story.id), reparent);
+    await engineProposes(cadencePlanId, legalUnder(cadenceStory.id), reparent);
 
     const before = await treeSnapshot();
     for (const planId of [userPlanId, cadencePlanId]) {

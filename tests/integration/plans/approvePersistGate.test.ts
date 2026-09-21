@@ -15,6 +15,24 @@ import { createTestProject, makeWorkItemFixture, type WorkItemFixture } from '..
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
+/**
+ * Drop the target locks an UN-DECIDED plan holds, so a fixture can build a
+ * SECOND open plan over the same card (MOTIR-5645).
+ *
+ * ⚠️ FIXTURE SURGERY, and it records a real consequence rather than dodging a
+ * defect. A plan PARKS every committed target it names and holds it while the
+ * plan is open, so a tenant can have at most ONE open plan per card — a second
+ * is refused with `PlanTargetLockedError` (AMENDMENT 16 D4). The cases here need
+ * several open plans over one card, which no tenant can now produce.
+ *
+ * The lock's own behaviour, including that refusal, is covered in
+ * `tests/planning/planTargetParkDoor.test.ts`.
+ */
+async function freePlanTargets(planId: string): Promise<string> {
+  await adminDb.planTargetLock.deleteMany({ where: { planId } });
+  return planId;
+}
+
 // Subtask 7.12.5 / MOTIR-911 — the CONFIRMATION GATE at the persist boundary,
 // against real Postgres (no mocks, per CLAUDE.md).
 //
@@ -617,6 +635,12 @@ describe('the confirmation gate — unconditional, and non-regressive', () => {
     const fromCadence = await plannedThenBroken(fx, [legal], breakIt, {
       sourceJobId: 'job_cadence_1',
     });
+    // Both plans lay under the same story, and a plan PARKS the committed
+    // `parentRef` of every `add` it carries (MOTIR-5645) — so the second would
+    // be refused. Free the first: what this case asserts is that the persist
+    // gate is indifferent to the TRIGGER, which needs two plans of the same
+    // shape and nothing about the lock.
+    await freePlanTargets(fromCadence);
     const fromUser = await plannedThenBroken(fx, [legal], breakIt);
 
     await expectRejectedWithNoWrite(fx, fromCadence, PlanGrammarError);

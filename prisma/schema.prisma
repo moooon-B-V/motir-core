@@ -6144,6 +6144,10 @@ model Plan {
   createdBy User?          @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   items     PlanItem[]
   revisions PlanRevision[]
+  /// The targets this plan has PARKED at `planning` while it is open
+  /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
+  /// nothing — the restore is the release path's job, not the FK's.
+  targetLocks PlanTargetLock[]
 
   @@index([workspaceId])
   @@index([projectId, createdAt])
@@ -7880,7 +7884,20 @@ model PlanTargetLock {
   workItemId  String   @unique @map("work_item_id")
   /// The holding plan-change conversation. Cascade — a deleted thread cannot keep
   /// holding anything.
-  sessionId   String   @map("session_id")
+  ///
+  /// ⚠️ NULLABLE SINCE MOTIR-5645. A lock is now held by a SESSION or by a PLAN,
+  /// never by neither and never by both: `plan_target_lock_one_holder` is a
+  /// `num_nonnulls(session_id, plan_id) = 1` CHECK. The two coexist on one table
+  /// because they answer the same question — WHO is rewriting this card right
+  /// now — and putting them in two tables would give the `work_item_id` UNIQUE,
+  /// which is the whole exclusion, nothing to be unique across.
+  sessionId   String?  @map("session_id")
+  /// The holding PLAN (MOTIR-5645, `docs/decisions/agent-authored-plans.md`
+  /// AMENDMENT 16 D5). Set when the park came from `plansService.addProposals` —
+  /// the one choke point every authoring door passes through — rather than from a
+  /// planning conversation's open. Cascade, for the same reason `session_id` is:
+  /// a deleted plan cannot keep holding anything.
+  planId      String?  @map("plan_id")
   /// WHO holds it, so a refusal can name a person rather than a session id.
   /// SetNull: a departed holder leaves a lease the sweep still expires.
   heldById    String?  @map("held_by_id")
@@ -7889,9 +7906,14 @@ model PlanTargetLock {
   /// hardcoded `todo` would silently discard real progress.
   priorStatus String   @map("prior_status")
   /// Whether acquire actually MOVED the status. False when the move was not a
-  /// legal edge for that item (only `todo` and `in_progress` reach `planning`) or
-  /// when the item was already at `planning`. The exclusion holds either way — it
-  /// is this row, not the status — and release then restores nothing.
+  /// legal edge for that item or when the item was already at `planning`. The
+  /// exclusion holds either way — it is this row, not the status — and release
+  /// then restores nothing.
+  ///
+  /// ⚠️ The parenthetical here used to read "only `todo` and `in_progress` reach
+  /// `planning`". MOTIR-5643 declares an edge from every NON-terminal status, so
+  /// a legal-edge failure is now the custom-workflow case rather than the
+  /// ordinary one.
   statusHeld  Boolean  @default(false) @map("status_held")
   acquiredAt  DateTime @default(now()) @map("acquired_at")
   /// The LEASE. Extended on each turn of the holding session; past it, the sweep
@@ -7900,12 +7922,16 @@ model PlanTargetLock {
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workItem  WorkItem          @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  session   PlanChangeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  heldBy    User?             @relation("PlanTargetLockHeldBy", fields: [heldById], references: [id], onDelete: SetNull)
+  workItem  WorkItem           @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  session   PlanChangeSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  plan      Plan?              @relation(fields: [planId], references: [id], onDelete: Cascade)
+  heldBy    User?              @relation("PlanTargetLockHeldBy", fields: [heldById], references: [id], onDelete: SetNull)
 
   /// The release read — every lock one session holds, in one query.
   @@index([sessionId])
+  /// The same read for a PLAN-held lock (MOTIR-5645): approve, decline and the
+  /// abandoned-plan sweep all list a plan's locks.
+  @@index([planId])
   /// The sweep's read: expired first, bounded.
   @@index([expiresAt])
   @@index([workspaceId])

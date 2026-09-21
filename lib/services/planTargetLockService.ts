@@ -7,6 +7,7 @@ import {
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -18,6 +19,7 @@ import {
   PLAN_TARGET_LOCK_SWEEP_BATCH_SIZE,
   isExpired,
   leaseExpiryFrom,
+  planLeaseExpiryFrom,
   shouldHoldStatus,
 } from '@/lib/planChange/targetLock';
 
@@ -45,13 +47,28 @@ import {
 // one session concurrently" (MOTIR-2788).
 //
 // ── THE ROW IS THE LOCK; THE STATUS IS THE AFFORDANCE ───────────────────────
-// See `lib/planChange/targetLock.ts` and the migration header. The short version:
-// `planning` is also set by hand (MOTIR-2425 parks an unimplementable card there
-// until a human acts, and `defaultWorkflow.ts` forbids auto-returning it), and
-// only `todo`/`in_progress` have a legal edge into it. So the lease row is the
-// authority and the status is its visible face — release and recovery touch ONLY
-// items that have a row here, and an item parked at `planning` without one is
-// never disturbed.
+// See `lib/planChange/targetLock.ts` and the migration header. The lease row is
+// the authority and the status is its visible face: release and recovery touch
+// ONLY items that have a row here.
+//
+// ⚠️ TWO CLAUSES OF THIS NOTE ARE SUPERSEDED BY MOTIR-5645, and they are stated
+// rather than quietly edited, because both were load-bearing for years:
+//
+//   1. *"only `todo`/`in_progress` have a legal edge into it"* — MOTIR-5643
+//      declares an edge from EVERY non-terminal status, so a card can now be
+//      parked from `blocked`, `implemented`, `in_review` and `approved` too.
+//   2. *"an item parked at `planning` without one is never disturbed"* — a
+//      hand-parked item is now ADOPTED when a plan names it as a target
+//      (`acquireForPlanWithin`), which is what retires the runbook's manual
+//      `transition_status` step. It is still never disturbed by the SWEEP or by
+//      a release, because both read rows rather than statuses.
+//
+// ── WHO HOLDS IT: A SESSION, OR A PLAN ──────────────────────────────────────
+// MOTIR-5645 / AMENDMENT 16 D5. A planning conversation holds its targets from
+// the moment it opens; a PLAN holds every committed target it names, acquired at
+// `plansService.addProposals` — the one choke point the MCP door, `expand_item`
+// and generation all pass through. `PlanTargetHolder` is the discriminator and a
+// database CHECK keeps a row to exactly one of them.
 //
 // ── CONCURRENCY ─────────────────────────────────────────────────────────────
 // Acquire locks the WORK ITEM row (`SELECT … FOR UPDATE`) before reading the
@@ -108,10 +125,16 @@ export interface PlanTargetHandOff {
   acquire: readonly string[];
 }
 
-/** One expired lease the sweep dealt with. */
+/** One expired lease the sweep dealt with.
+ *
+ *  `plan_awaiting_review` is MOTIR-5647's: the lease is a dead-author detector,
+ *  and a plan that reached `planned` is waiting for a PERSON rather than for a
+ *  crashed author — so its lock is left standing however old the lease is
+ *  (AMENDMENT 16 D9). Reported rather than silently skipped, so the sweep's own
+ *  output says why it walked past a row its read had selected. */
 export interface PlanTargetLockSweepEntry {
   workItemId: string;
-  outcome: 'restored' | 'left_as_is' | 'unattributable';
+  outcome: 'restored' | 'left_as_is' | 'unattributable' | 'plan_awaiting_review';
 }
 
 /**
@@ -142,22 +165,66 @@ async function holderName(
 }
 
 /**
+ * WHO is holding a target (MOTIR-5645). A lock names a SESSION or a PLAN, never
+ * both and never neither — `plan_target_lock_one_holder` is a
+ * `num_nonnulls(session_id, plan_id) = 1` CHECK, so the database refuses any
+ * other shape.
+ *
+ * The two live on ONE table because the exclusion the whole mechanism provides
+ * is `work_item_id UNIQUE`: split across two tables there is nothing for that
+ * constraint to be unique ACROSS, and a session and a plan could each take the
+ * same card.
+ */
+export type PlanTargetHolder =
+  | { readonly kind: 'session'; readonly sessionId: string }
+  | { readonly kind: 'plan'; readonly planId: string };
+
+/** Whether an existing lock is held by THIS holder — a refresh rather than a
+ *  collision. Compared on the holder's own column, so a session lock and a plan
+ *  lock can never read as each other's. */
+function heldBy(lock: PlanTargetLock, holder: PlanTargetHolder): boolean {
+  return holder.kind === 'session'
+    ? lock.sessionId === holder.sessionId
+    : lock.planId === holder.planId;
+}
+
+/** The holder's columns, as the row stores them. Writing BOTH on every acquire —
+ *  one to a value and the other to null — is what lets a lock legitimately change
+ *  hands from a session to a plan (or back) on a reclaim without leaving the CHECK
+ *  violated. */
+function holderColumns(holder: PlanTargetHolder): {
+  sessionId: string | null;
+  planId: string | null;
+} {
+  return holder.kind === 'session'
+    ? { sessionId: holder.sessionId, planId: null }
+    : { sessionId: null, planId: holder.planId };
+}
+
+/** The lease a holder of this kind gets: thirty minutes for a session, which is
+ *  refreshed by a submit; twenty-four hours for a plan, which is refreshed by an
+ *  append (`targetLock.ts`'s two constants, and AMENDMENT 16 D9). */
+function expiryFor(holder: PlanTargetHolder, now: Date): Date {
+  return holder.kind === 'session' ? leaseExpiryFrom(now) : planLeaseExpiryFrom(now);
+}
+
+/**
  * Acquire ONE target inside the caller's transaction. The work item's row lock is
  * already held by the caller, so what this reads cannot move underneath it.
  */
 async function acquireOne(
   item: { id: string; identifier: string; projectId: string; status: string },
-  sessionId: string,
+  holder: PlanTargetHolder,
   pctx: PlanTargetLockContext,
   now: Date,
   tx: Prisma.TransactionClient,
 ): Promise<PlanTargetLockOutcome> {
   const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
-  const expiresAt = leaseExpiryFrom(now);
+  const expiresAt = expiryFor(holder, now);
   const existing = await planTargetLockRepository.findByWorkItemId(item.id, tx);
 
   if (existing) {
-    if (existing.sessionId !== sessionId && !isExpired(existing.expiresAt, now)) {
+    if (!heldBy(existing, holder) && !isExpired(existing.expiresAt, now)) {
       throw new PlanTargetLockedError(
         item.identifier,
         await holderName(existing.heldById, tx),
@@ -170,13 +237,13 @@ async function acquireOne(
     // conclude "nothing to hold" and the eventual release would strand it there.
     const updated = await planTargetLockRepository.update(
       existing.id,
-      { sessionId, heldById: pctx.userId, expiresAt },
+      { ...holderColumns(holder), heldById: pctx.userId, expiresAt },
       tx,
     );
     return {
       workItemId: item.id,
       identifier: item.identifier,
-      disposition: existing.sessionId === sessionId ? 'refreshed' : 'reclaimed',
+      disposition: heldBy(existing, holder) ? 'refreshed' : 'reclaimed',
       statusHeld: updated.statusHeld,
       expiresAt: updated.expiresAt,
     };
@@ -193,6 +260,16 @@ async function acquireOne(
     PLANNING_STATUS_KEY,
     pctx.workspaceId,
   );
+  // ⚠️ ADOPTION of a HAND-PARKED card (MOTIR-5645). An item already sitting at
+  // `planning` with no lock row — the shape the runbook's manual
+  // `transition_status` step produces — takes `statusHeld: false` and
+  // `priorStatus: 'planning'`, because nothing recorded where it came from.
+  //
+  // That is the honest record and it gives each decision the right answer:
+  // APPROVE rests it at `todo` or `blocked` from its live edges like any other
+  // target (AMENDMENT 16 D6 — *"a target parked by hand before the plan existed
+  // is treated the same way"*), while DECLINE leaves it exactly where it was,
+  // because restoring a status we never observed would be inventing one.
   const statusHeld = shouldHoldStatus(item.status, planningIsLegal);
 
   try {
@@ -201,7 +278,7 @@ async function acquireOne(
         workspaceId: pctx.workspaceId,
         projectId: item.projectId,
         workItemId: item.id,
-        sessionId,
+        ...holderColumns(holder),
         heldById: pctx.userId,
         priorStatus: item.status,
         statusHeld,
@@ -313,7 +390,80 @@ export const planTargetLockService = {
     const outcomes: PlanTargetLockOutcome[] = [];
     for (const item of targets) {
       await workItemRepository.lockById(item.id, tx);
-      outcomes.push(await acquireOne(item, sessionId, pctx, now, tx));
+      outcomes.push(await acquireOne(item, { kind: 'session', sessionId }, pctx, now, tx));
+    }
+    return outcomes;
+  },
+
+  /**
+   * PARK every committed target a PLAN names (MOTIR-5645; AMENDMENT 16 D1–D5) —
+   * the acquire `plansService.addProposals` makes, inside the transaction that is
+   * already holding the plan row.
+   *
+   * Takes work-item IDS rather than identifiers, because the append has already
+   * resolved and validated them: a proposal's `workItemId` is a real id and an
+   * `add`'s committed `parentRef` was resolved to one before this runs. That is
+   * the only shape difference from {@link acquireForScopeWithin}; everything
+   * below it — the fixed lock order, the refusal, the status write — is shared.
+   *
+   * ⚠️ WHAT IT DOES NOT DO, so the boundary is legible: it does not RELEASE.
+   * Approve, decline and the empty close are MOTIR-5646's; the abandoned-plan
+   * expiry is MOTIR-5647's. Until those land a plan-held lock is released by
+   * nothing, which is safe only because all three ship on one parent pull
+   * request.
+   *
+   * ⚠️ IT IS ONLY EVER CALLED FOR A PLAN WITH NO SESSION. A plan produced by a
+   * planning CONVERSATION is already held by that conversation (MOTIR-2786), so
+   * `plansService.addProposals` hands this an EMPTY list for one — successive
+   * plans of one conversation are ONE actor, and making each its own holder made
+   * a conversation collide with itself on every refine (MOTIR-5648).
+   *
+   * `tx` is REQUIRED — this never opens a transaction of its own, because the
+   * park and the proposals it guards must commit or roll back together. A plan
+   * that parked a card and then failed to append would hold it for a day.
+   */
+  async acquireForPlanWithin(
+    planId: string,
+    workItemIds: readonly string[],
+    terminalStatusKeys: ReadonlySet<string>,
+    pctx: PlanTargetLockContext,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanTargetLockOutcome[]> {
+    if (workItemIds.length === 0) return [];
+    // ONE fixed lock order — work item id ascending — the same order every other
+    // path here takes, so an append and a release touching the same pair of cards
+    // queue instead of deadlocking. De-duplicated first: a plan naming one card
+    // in several proposals must not take its row lock twice.
+    const ordered = [...new Set(workItemIds)].sort();
+    const outcomes: PlanTargetLockOutcome[] = [];
+    for (const id of ordered) {
+      await workItemRepository.lockById(id, tx);
+      // Re-read under the row lock: `addProposals` resolved these ids before
+      // taking it, so the status it saw is a snapshot and `priorStatus` must be
+      // what the row says NOW.
+      const item = await workItemRepository.findById(id, tx);
+      // Deleted between the resolve and the lock. Nothing to hold, and refusing
+      // the whole append over it would be the wrong answer — `resolveTargets`
+      // makes the same judgement for the session path, for the same reason.
+      if (!item) continue;
+      // ⚠️ A TERMINAL TARGET IS NEVER PARKED (AMENDMENT 16 D2; product owner,
+      // 2026-09-16: *"done and cancelled should be excluded"*), and this check
+      // has to be HERE rather than inherited.
+      //
+      // MOTIR-5645's card asserted that `validateProposals` already refuses a
+      // terminal target before the park runs. It does not: that refusal is
+      // `validatePlanProposals`, which needs `liveById` and therefore "cannot
+      // move earlier than the CLOSE" — so an APPEND naming a `done` card is
+      // accepted, and without this the park would take a lock on shipped work.
+      //
+      // Not folded into `shouldHoldStatus`, which asks a different question. That
+      // one asks whether the MOVE is legal and answers false for a custom
+      // workflow missing the edge — where the right outcome is still a lock with
+      // `statusHeld: false`, because the row is the exclusion. This asks whether
+      // the card may be HELD AT ALL, and the answer for terminal work is no row.
+      if (terminalStatusKeys.has(item.status)) continue;
+      outcomes.push(await acquireOne(item, { kind: 'plan', planId }, pctx, now, tx));
     }
     return outcomes;
   },
@@ -356,7 +506,7 @@ export const planTargetLockService = {
           // status, and the acquire's `priorStatus` must be what it is NOW.
           const fresh = await workItemRepository.findById(item.id, tx);
           if (!fresh) continue;
-          outcomes.push(await acquireOne(fresh, sessionId, pctx, now, tx));
+          outcomes.push(await acquireOne(fresh, { kind: 'session', sessionId }, pctx, now, tx));
         }
         return outcomes;
       },
@@ -382,6 +532,44 @@ export const planTargetLockService = {
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       async (tx) => {
         const locks = await planTargetLockRepository.listBySessionId(sessionId, tx);
+        const results: Array<{ workItemId: string; outcome: 'restored' | 'left_as_is' }> = [];
+        for (const lock of locks) {
+          results.push({ workItemId: lock.workItemId, outcome: await releaseOne(lock, ctx, tx) });
+        }
+        return results;
+      },
+    );
+  },
+
+  /**
+   * Give back everything one PLAN holds, RESTORING each target's prior status
+   * (MOTIR-5646; AMENDMENT 16 D8) — the twin of the release above, for the
+   * DECLINE side of a decision.
+   *
+   * ⚠️ THIS IS THE RESTORE PATH ONLY, and the asymmetry with approve is the whole
+   * of D6 vs D8. A decline, a withdraw that empties the plan and a close that
+   * materializes nothing have changed NOTHING about the card, so the card goes
+   * back to the status it was parked from. An APPROVE does not come through here
+   * at all: it has already given each target its RESTING status inside its own
+   * transaction (`plansService.restPlanTargets`) and deleted the lock, so this
+   * finds nothing left to do — which is what makes calling it on every decision
+   * safe and idempotent.
+   *
+   * Idempotent and total, like `releaseForSession`: a plan holding nothing
+   * releases nothing and returns an empty list, so every caller can call it
+   * unconditionally rather than deciding whether there is anything to release. A
+   * release that callers have to remember to guard is one that gets skipped on
+   * the error path, which is the path that matters.
+   */
+  async releaseForPlan(
+    planId: string,
+    pctx: PlanTargetLockContext,
+  ): Promise<Array<{ workItemId: string; outcome: 'restored' | 'left_as_is' }>> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locks = await planTargetLockRepository.listByPlanId(planId, tx);
         const results: Array<{ workItemId: string; outcome: 'restored' | 'left_as_is' }> = [];
         for (const lock of locks) {
           results.push({ workItemId: lock.workItemId, outcome: await releaseOne(lock, ctx, tx) });
@@ -443,6 +631,31 @@ export const planTargetLockService = {
 
     const entries: PlanTargetLockSweepEntry[] = [];
     for (const lock of expired) {
+      // ⚠️ A `planned` PLAN'S LOCK NEVER EXPIRES (MOTIR-5647; AMENDMENT 16 D9).
+      //
+      // The lease is a DEAD-AUTHOR detector: it exists because a planner that
+      // crashes leaves a plan `generating` with no terminal event, so the only
+      // signal left is the passage of time. A plan that reached `planned` is not
+      // that case — it is waiting for a PERSON, a review queue has no deadline,
+      // and its release is the decision itself (D6 / D8).
+      //
+      // Without this, a plan sitting in review for longer than the window would
+      // have its targets swept out from under it and become claimable while a
+      // reviewer was still deciding, which is the exact failure the park exists
+      // to prevent. The card would then be built from the shape the plan is
+      // replacing.
+      //
+      // A `generating` plan still expires, which is the whole point of D9.
+      if (lock.planId) {
+        const planStatus = await withWorkspaceServiceContext(lock.workspaceId, async (tx) => {
+          const plan = await planRepository.findById(lock.planId!, lock.workspaceId, tx);
+          return plan?.status ?? null;
+        });
+        if (planStatus === 'planned') {
+          entries.push({ workItemId: lock.workItemId, outcome: 'plan_awaiting_review' });
+          continue;
+        }
+      }
       // Resolve the signer in ITS OWN workspace-bound read, then release in a
       // second bound transaction. Two short transactions rather than one bare one
       // that binds mid-flight: the workspace is already known here (it came off

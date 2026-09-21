@@ -302,8 +302,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   },
   'release-expired-planning-locks': {
     file: 'lib/jobs/definitions/planTargetLockSweep.ts',
+    // `plan_awaiting_review` added by MOTIR-5647: a lock held by a plan that has
+    // reached `planned` is waiting for a PERSON, not for a crashed author, so the
+    // lease never expires it (AMENDMENT 16 D9). The sweep reports the skip rather
+    // than walking past a selected row silently.
     shape:
-      '{ entries: Array<{ outcome: "left_as_is" | "restored" | "unattributable"; workItemId: string }>; released: number }',
+      '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "restored" | "unattributable"; workItemId: string }>; released: number }',
   },
   'resolve-target-v2': {
     file: 'lib/jobs/indexFleetSteps.ts',

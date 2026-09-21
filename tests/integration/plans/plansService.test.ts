@@ -22,6 +22,7 @@ import {
 } from '@/lib/workItemTodos/limits';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { contentRevisions, statusMoves } from '../../helpers/planTargetRevisions';
 import { truncateAuthTables } from '../../helpers/db';
 
 /** Seed a pre-existing work item through the real service, so it carries a
@@ -424,9 +425,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     // Exactly ONE `updated` revision for the whole modify (the seed `created`
     // one aside) — the modify lands as a single entry, same id — and the edge
     // change rides it under the existing `links` diff key.
-    const modRevisions = await adminDb.workItemRevision.findMany({
-      where: { workItemId: targetId, changeKind: 'updated' },
-    });
+    const modRevisions = await contentRevisions(targetId);
     expect(modRevisions).toHaveLength(1);
     expect(modRevisions[0]!.diff).toMatchObject({
       links: { added: [{ toId: blockerId, kind: 'is_blocked_by' }] },
@@ -463,9 +462,7 @@ describe('plansService.approvePlan — materialize per op', () => {
 
     // Exactly ONE `updated` revision for the whole modify, carrying BOTH sizing
     // diff cells (the seed `created` revision aside).
-    const revisions = await adminDb.workItemRevision.findMany({
-      where: { workItemId: targetId, changeKind: 'updated' },
-    });
+    const revisions = await contentRevisions(targetId);
     expect(revisions).toHaveLength(1);
     expect(revisions[0]!.diff).toMatchObject({
       storyPoints: { from: 3, to: 8 },
@@ -485,9 +482,7 @@ describe('plansService.approvePlan — materialize per op', () => {
 
     const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(modified.storyPoints).toBeNull();
-    const revision = await adminDb.workItemRevision.findFirstOrThrow({
-      where: { workItemId: targetId, changeKind: 'updated' },
-    });
+    const revision = (await contentRevisions(targetId))[0]!;
     expect(revision.diff).toMatchObject({ storyPoints: { from: 5, to: null } });
   });
 
@@ -530,9 +525,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     // ONE `updated` revision carrying the `explanationMd` diff cell — the key
     // already has an `editedField()` disposition in lib/activity/renderers.ts
     // (`buildAddDiff` emits it), so this renders with no new registry entry.
-    const revisions = await adminDb.workItemRevision.findMany({
-      where: { workItemId: targetId, changeKind: 'updated' },
-    });
+    const revisions = await contentRevisions(targetId);
     expect(revisions).toHaveLength(1);
     expect(revisions[0]!.diff).toMatchObject({
       explanationMd: {
@@ -558,9 +551,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(modified.title).toBe('A new title only');
     expect(modified.explanationMd).toBe('Still the right WHY.'); // absent ≠ null
-    const revision = await adminDb.workItemRevision.findFirstOrThrow({
-      where: { workItemId: targetId, changeKind: 'updated' },
-    });
+    const revision = (await contentRevisions(targetId))[0]!;
     expect(revision.diff).not.toHaveProperty('explanationMd');
   });
 
@@ -579,9 +570,7 @@ describe('plansService.approvePlan — materialize per op', () => {
 
     const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(modified.explanationMd).toBeNull();
-    const revision = await adminDb.workItemRevision.findFirstOrThrow({
-      where: { workItemId: targetId, changeKind: 'updated' },
-    });
+    const revision = (await contentRevisions(targetId))[0]!;
     expect(revision.diff).toMatchObject({
       explanationMd: { from: 'A rationale about to be withdrawn.', to: null },
     });
@@ -656,9 +645,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     expect(modified.estimateMinutes).toBe(30);
     expect(modified.descriptionMd).toBe('The WHAT, unchanged.');
     expect(modified.explanationMd).toBe('The WHY, unchanged.');
-    const revision = await adminDb.workItemRevision.findFirstOrThrow({
-      where: { workItemId: targetId, changeKind: 'updated' },
-    });
+    const revision = (await contentRevisions(targetId))[0]!;
     expect(revision.diff).not.toHaveProperty('descriptionMd');
     expect(revision.diff).not.toHaveProperty('explanationMd');
   });
@@ -2138,7 +2125,28 @@ describe('plansService.approvePlan — a materialized add is born `blocked` when
     expect(created.status).toBe('todo');
   });
 
-  it('AC 3 — a `modify` that newly blocks an EXISTING card leaves its status alone', async () => {
+  // ⚠️ AC 3 IS REVERSED BY MOTIR-5646, and this is a DECISION rather than a
+  // regression — `agent-authored-plans.md` AMENDMENT 16 D7, row 2.
+  //
+  // MOTIR-3050's rule was *"FOR AN EDGE, A `modify` NEVER MOVES THE STATUS ON ITS
+  // OWN ACCOUNT"*, and its warrant is quoted in `materialize`: an `add` has no
+  // prior status to overwrite, while a `modify` target has one that somebody
+  // RECORDED — *"that card may be `in_progress` with a live worktree … an approve
+  // cannot see any of that."*
+  //
+  // What changed is the PREMISE, not the argument. The card no longer arrives at
+  // the approve wearing a status somebody recorded: its own append PARKED it at
+  // `planning` (MOTIR-5645), so the recorded status is already displaced and
+  // stored on the lock. The approve is therefore not overwriting a fact it cannot
+  // see — it is answering the question the park deferred, and the owner's ruling
+  // is that the answer is `todo`, or `blocked` when the card still waits on
+  // something. A card that gains a prerequisite waits on something.
+  //
+  // The half of MOTIR-3050 that is UNTOUCHED is the one about `blocked` not being
+  // a projection of the edges: nothing recomputes this column later, no human's
+  // externally-motivated block is ever cleared, and the resting status is written
+  // exactly once, at the approve, over a status the same plan put there.
+  it('AC 3 (REVERSED by MOTIR-5646) — a `modify` that newly blocks an EXISTING card rests it at `blocked`', async () => {
     const fx = await makeWorkItemFixture();
     const blockerId = await seedItem(fx, 'Newly discovered prerequisite');
     const targetId = await seedItem(fx, 'Already in flight');
@@ -2147,16 +2155,26 @@ describe('plansService.approvePlan — a materialized add is born `blocked` when
     const planId = await plannedPlan(fx, [
       { op: 'modify', workItemId: targetId, patch: { blockedByAdd: [blockerId] } },
     ]);
+    // The park has already displaced the recorded status — that is the premise
+    // MOTIR-3050's rule rested on, and it no longer holds.
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } })).status).toBe(
+      'planning',
+    );
+
     await plansService.approvePlan(planId, fx.ctx);
 
     const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
-    // The EDGE lands; the status is the card's own recorded state and is not
-    // rewritten by an approve (see the note in plansService.materialize).
-    expect(target.status).toBe('in_progress');
+    // The EDGE lands, and the card rests where the edge says it belongs.
+    expect(target.status).toBe('blocked');
     const link = await adminDb.workItemLink.findFirst({
       where: { fromId: targetId, toId: blockerId, kind: 'is_blocked_by' },
     });
     expect(link).not.toBeNull();
+    // And the prior status is not lost silently — it is on the park's revision.
+    expect(await statusMoves(targetId)).toEqual([
+      { from: 'in_progress', to: 'planning' },
+      { from: 'planning', to: 'blocked' },
+    ]);
   });
 
   it('AC 4 — the two authoring doors agree: the same tree via create+transition and via approve ends in the same statuses', async () => {
