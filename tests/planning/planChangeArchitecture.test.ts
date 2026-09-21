@@ -13,8 +13,11 @@ import zh from '@/messages/zh.json';
 
 const ROOT = process.cwd();
 
-const planEditsEn = (en as unknown as Record<string, Record<string, string>>)['planEdits']!;
-const planEditsZh = (zh as unknown as Record<string, Record<string, string>>)['planEdits']!;
+// The whole `planEdits` namespace went with the dock that was its only reader
+// (MOTIR-4261), so these read an EMPTY block — which every "is gone" assertion
+// below still means exactly what it says.
+const planEditsEn = (en as unknown as Record<string, Record<string, string>>)['planEdits'] ?? {};
+const planEditsZh = (zh as unknown as Record<string, Record<string, string>>)['planEdits'] ?? {};
 const planningWorkspaceEn = (en as unknown as Record<string, Record<string, unknown>>)[
   'planningWorkspace'
 ]!;
@@ -160,10 +163,9 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     'components/planning/planChangeLevel.tsx',
     'components/planning/PlanChangeDiffNode.tsx',
     'lib/planning/planChangeDiff.ts',
-    // The OTHER two entrances, moved off the same dead delta by MOTIR-1747: the
-    // item-scoped expand/replan dock and the `/ready` expansion nudge.
-    'lib/hooks/usePlanEditsJob.ts',
-    'components/planning/PlanEditsReviewDock.tsx',
+    // The OTHER entrance moved off the same dead delta by MOTIR-1747: the
+    // `/ready` expansion nudge. (The item-scoped expand/replan dock was the
+    // second, and was RETIRED whole by MOTIR-4261 — see the guard at the foot.)
     'app/(authed)/ready/_components/ExpansionNudgeBanner.tsx',
     'app/(authed)/ready/_components/ExpansionNudgeReview.tsx',
   ];
@@ -180,13 +182,12 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
   });
 
   it('every AI-planning entrance confirms through the SAME client', () => {
-    // FOUR entrances (the rail, the item-scoped dock, the `/ready` nudge and
-    // `/plans/[id]`), ONE gate: all go through `planReviewClient` →
+    // THREE entrances (the rail, the `/ready` nudge and `/plans/[id]` — the
+    // item-scoped dock was retired by MOTIR-4261), ONE gate: all go through `planReviewClient` →
     // `POST /api/plans/[id]/approve` → `materialize`. A second write path is how
     // the same proposal lands twice.
     for (const rel of [
       'lib/hooks/usePlanChangeConversation.ts',
-      'lib/hooks/usePlanEditsJob.ts',
       'app/(authed)/ready/_components/ExpansionNudgeBanner.tsx',
       'components/planning/PlanDetail.tsx',
     ]) {
@@ -223,7 +224,7 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     }
 
     // …and no OTHER endpoint persists proposals: the only route that materializes
-    // a plan is the plans approve route the four entrances share.
+    // a plan is the plans approve route the entrances share.
     const approveRoutes = SOURCE_FILES.filter((file) => {
       if (!relative(ROOT, file).startsWith(`app${sep}api`)) return false;
       const code = read(file)
@@ -513,6 +514,56 @@ describe('retiring “Augment from prompt” left no dangling key or import', ()
   });
 });
 
+// ─────────── Guard 3b — MOTIR-4261 retired the in-place plan-edits dock ───────────
+//
+// MOTIR-4258 removed the dock's only door (the `/items` row ⋯), which left the
+// whole chain behind it reachable from nowhere: the hook, the dock, the replan
+// route and its stream, the expand STREAM (the `/ready` nudge polls its plan,
+// it never streams), and the client + service functions only those reached.
+// MOTIR-4261 RETIRED it rather than re-homing it — re-planning an item is
+// `WorkItemPlanEntrance` → the planning workspace, one door. This guard is what
+// stops the chain coming back one piece at a time as a "helper".
+
+describe('retiring the in-place plan-edits dock left nothing on the old path', () => {
+  const GONE_FILES = [
+    'lib/hooks/usePlanEditsJob.ts',
+    'components/planning/PlanEditsReviewDock.tsx',
+    'app/api/ai/replan/route.ts',
+    'app/api/ai/replan/[jobId]/stream/route.ts',
+    'app/api/ai/expand/[jobId]/stream/route.ts',
+  ];
+
+  it.each(GONE_FILES)('%s is deleted, not merely unreferenced', (rel) => {
+    expect(existsSync(join(ROOT, rel)), `${rel} must not exist`).toBe(false);
+  });
+
+  it('no source file defines or calls a retired symbol', () => {
+    // CODE, not commentary: a note recording why the path went is a breadcrumb.
+    const retired =
+      /\b(usePlanEditsJob|PlanEditsReviewDock|submitReplanJob|streamReplanJob|streamExpandJob|submitReplan|streamReplan|streamExpand)\b|\/api\/ai\/replan/;
+    const offenders = SOURCE_FILES.filter((file) => {
+      const code = read(file)
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/[^\n]*$/gm, '');
+      return retired.test(code);
+    }).map((f) => relative(ROOT, f));
+    expect(offenders).toEqual([]);
+  });
+
+  it('its i18n namespace is gone from BOTH catalogs', () => {
+    expect(en).not.toHaveProperty('planEdits');
+    expect(zh).not.toHaveProperty('planEdits');
+  });
+
+  it('the EXPAND submit survives — the `/ready` nudge and the MCP `expand_item` still drive it', () => {
+    expect(existsSync(join(ROOT, 'app/api/ai/expand/route.ts'))).toBe(true);
+    expect(read(join(ROOT, 'lib/planning/planEditsClient.ts'))).toMatch(
+      /export async function submitExpandJob\(/,
+    );
+    expect(read(join(ROOT, 'lib/services/aiPlanEditsService.ts'))).toMatch(/async submitExpand\(/);
+  });
+});
+
 // ─────────── Guard 4 — the story's i18n additions are catalog-complete ───────────
 
 describe('the story’s new copy exists in every locale', () => {
@@ -521,7 +572,8 @@ describe('the story’s new copy exists in every locale', () => {
     // OWN namespace so a future removal can't pass parity by deleting both
     // halves of a key the UI still renders. `planningWorkspace` is the one
     // namespace this story added (MOTIR-1729); the conversation's copy
-    // (MOTIR-1730) extends the existing `planEdits` namespace.
+    // (MOTIR-1730) extended the `planEdits` namespace, retired whole with the
+    // item-scoped dock by MOTIR-4261.
     expect(planningWorkspaceEn).toBeDefined();
     expect(planningWorkspaceZh).toBeDefined();
     expect(keyPaths(planningWorkspaceZh)).toEqual(keyPaths(planningWorkspaceEn));

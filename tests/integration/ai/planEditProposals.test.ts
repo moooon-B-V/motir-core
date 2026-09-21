@@ -124,11 +124,6 @@ const CASES: SubmitCase[] = [
     jobId: 'job_edit_expand',
     submit: (fx, storyKey) => aiPlanEditsService.submitExpand(storyKey, projectCtx(fx)),
   },
-  {
-    name: 'submitReplan',
-    jobId: 'job_edit_replan',
-    submit: (fx, storyKey) => aiPlanEditsService.submitReplan(storyKey, projectCtx(fx)),
-  },
 ];
 
 describe('plan-edit submit → proposal callback (MOTIR-1743)', () => {
@@ -281,10 +276,6 @@ describe('the concurrency anchor each plan-edit submit puts on the wire (MOTIR-3
     [
       'submitExpand',
       (fx: WorkItemFixture, k: string) => aiPlanEditsService.submitExpand(k, projectCtx(fx)),
-    ],
-    [
-      'submitReplan',
-      (fx: WorkItemFixture, k: string) => aiPlanEditsService.submitReplan(k, projectCtx(fx)),
     ],
   ])('%s names its item in `rootItemKey`, and does NOT set `targetKeys`', async (_name, submit) => {
     const fx = await makeFixture();

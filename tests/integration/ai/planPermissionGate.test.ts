@@ -140,15 +140,12 @@ describe('the plan-change session asks ai:plan', () => {
 // `submitExplanationDraft` reached none. The gate now lives at
 // `submitPlanEditJob`, the one seam every plan-edit passes through.
 describe('the plan-editing jobs ask ai:plan', () => {
-  it('refuses a VIEWER augment, expand and replan', async () => {
+  it('refuses a VIEWER augment and expand', async () => {
     const fx = await makeFixture('edits-viewer');
     await expect(
       aiPlanEditsService.submitAugment('add a story', fx.viewerPctx),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(aiPlanEditsService.submitExpand('PROD-1', fx.viewerPctx)).rejects.toBeInstanceOf(
-      PermissionDeniedError,
-    );
-    await expect(aiPlanEditsService.submitReplan('PROD-1', fx.viewerPctx)).rejects.toBeInstanceOf(
       PermissionDeniedError,
     );
   });

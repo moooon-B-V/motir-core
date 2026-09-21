@@ -1175,7 +1175,7 @@ export interface AutoPlanPauseDto {
 
 // --- Plan-job OUTCOME (Story 7.9 · MOTIR-1825) ------------------------------
 // The read a NON-INTERACTIVE client needs after it FIRES a plan-edit job and
-// walks away. The browser surfaces stream the job (`usePlanEditsJob`) and watch
+// walks away. The browser surfaces stream the job (the planning workspace) and watch
 // the plan appear; a CLI or agent has no stream to hold open — it submits,
 // returns, and comes back later asking "what became of it?". These shapes are
 // that answer.
