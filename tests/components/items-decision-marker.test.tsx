@@ -192,6 +192,17 @@ describe('the List row — the glyph in the status cell', () => {
     expect(glyph.previousElementSibling?.textContent).toContain('To Do');
   });
 
+  it('the status cell FILLS its track, so the pill never wraps on a row without a marker', () => {
+    // Asserted on the class because happy-dom has no layout. Measured in Chromium:
+    // without `w-full` the wrapper shrinks to the trigger's content width less its
+    // `-mx-1` margins, and the trigger's `max-w-full` then wraps *In Progress*
+    // (38px tall, 79px wide) — only on rows with NO marker (MOTIR-5880's frame).
+    renderList({});
+    const pill = within(screen.getByTestId('issue-row-PROD-1')).getByText('To Do');
+    const wrapper = pill.closest('span.flex.items-center.gap-1\\.5');
+    expect(wrapper?.className).toContain('w-full');
+  });
+
   it('names the routed member in zh', () => {
     renderList({ b: ANAS }, { locale: 'zh', messages: zhMessages });
     expect(

@@ -206,8 +206,14 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       // otherwise. The cell owns its own category→tone rendering. The marker sits
       // AFTER it and OUTSIDE its edit trigger, so it is never part of that button;
       // the row link still owns the click (the marker is static).
+      // ⚠️ `w-full` IS LOAD-BEARING (found by MOTIR-5880's recording): the edit
+      // trigger is `-mx-1 max-w-full`, so inside a shrink-to-fit wrapper its
+      // percentage cap resolved against the wrapper's own width — 8px narrower
+      // than the pill, because of the negative margins — and *In Progress* / *To
+      // Do* broke onto two lines on every row WITHOUT a marker. Filling the cell
+      // gives the cap the 144px track to resolve against, as it had before.
       cell: (r) => (
-        <span className="flex min-w-0 items-center gap-1.5">
+        <span className="flex w-full min-w-0 items-center gap-1.5">
           <InlineStatusCell row={r} />
           {r.pendingDecision ? (
             <DecisionWaitingMarker
