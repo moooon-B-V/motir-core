@@ -181,7 +181,13 @@ describe('approval_gate.outcome_ref keeps its ONE writer (MOTIR-5520)', () => {
     expect(assignments.sort()).toEqual(
       [
         'lib/mappers/approvalGateMappers.ts: outcomeRef: row.outcomeRef,',
-        'lib/services/approvalGatesService.ts: outcomeRef: effect.statusWritten,',
+        // Still ONE writer. Its expression changed for ONE kind, by decision (Story
+        // MOTIR-4914 · MOTIR-5893; `approval-gates.md` §1's MOTIR-5887 amendment, point
+        // 7): a CHOICE records the OPTION it picked, because Workflow A always writes
+        // `done` and the status is implied by the kind. The item page therefore no longer
+        // paints `outcomeRef` as a status — it reads the decision's `statusWritten`
+        // (`DecidedGateStatusBridge`, MOTIR-5896). Every other kind is unchanged.
+        'lib/services/approvalGatesService.ts: outcomeRef: effect.chosenOption ? effect.chosenOption.optionId : effect.statusWritten,',
       ].sort(),
     );
   });

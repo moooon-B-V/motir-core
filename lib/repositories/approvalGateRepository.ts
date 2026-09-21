@@ -9,6 +9,7 @@ import {
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import { sqlStateOf } from '@/lib/prisma/sqlstate';
+import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
 import {
   ApprovalGateAlreadyAwaitingError,
   ApprovalGateDecidedImmutableError,
@@ -363,11 +364,21 @@ export const approvalGateRepository = {
       /** What the decision CAUSED — null when it deliberately caused no status
        *  write, which is a real answer rather than a missing one. */
       outcomeRef: string | null;
+      /** What a CHOICE picked (MOTIR-5893) — null on every other decision. */
+      chosenOption: ChosenOption | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<ApprovalGate> {
+    const { chosenOption, ...rest } = data;
     try {
-      return await tx.approvalGate.update({ where: { id }, data });
+      return await tx.approvalGate.update({
+        where: { id },
+        // A JSON column writes SQL NULL through `Prisma.DbNull`, never a bare `null`.
+        data: {
+          ...rest,
+          chosenOption: chosenOption === null ? Prisma.DbNull : { ...chosenOption },
+        },
+      });
     } catch (err) {
       translateApprovalGateWriteError(err);
     }
@@ -574,6 +585,8 @@ export const approvalGateRepository = {
       kind: ApprovalGateKind;
       subjectId: string;
       routedToId: string | null;
+      /** The subject's stamp, when the raiser knows it (a `decision_choice` always does). */
+      subjectVersion?: string | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<boolean> {
@@ -1023,6 +1036,8 @@ const RECORD_GATE_SELECT = {
   // (MOTIR-5599) — the two are one question in a 144px cell.
   decisionSource: true,
   subjectVersion: true,
+  // What a CHOICE picked (MOTIR-5897) — a decided choice row names it.
+  chosenOption: true,
 } as const satisfies Prisma.ApprovalGateSelect;
 
 /** One row of the Approvals room's read, as Prisma returns it. */

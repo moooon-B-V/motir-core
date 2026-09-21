@@ -75,6 +75,7 @@ const LESSON_TYPES = [
   'review',
   'verification',
   'decision',
+  'choice',
   'deploy',
   'manual',
   'legal',

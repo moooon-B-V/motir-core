@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
-import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
+import type { ApprovalGateDTO, GateDecision } from '@/lib/dto/approvalGate';
 
 // THE APPROVAL FRAME'S SETTINGS DOOR (Story MOTIR-4882 · Subtask MOTIR-5513),
 // `design/work-items/approval-control.mock.html` panel `S` and
@@ -30,6 +30,7 @@ const AWAITING: ApprovalGateDTO = {
   decidedUnderAuthority: null,
   decisionSource: null,
   outcomeRef: null,
+  chosenOption: null,
   createdAt: '2026-09-14T04:00:00.000Z',
   updatedAt: '2026-09-14T04:00:00.000Z',
 };
@@ -41,7 +42,7 @@ const VERBS: GateVerb[] = [
 
 function render(
   props: Partial<React.ComponentProps<typeof ApprovalGateControl>> = {},
-  onDecide: (d: 'approve' | 'request_changes') => Promise<GateRefusal | null> = async () => null,
+  onDecide: (d: GateDecision) => Promise<GateRefusal | null> = async () => null,
 ) {
   return renderWithIntl(
     <ApprovalGateControl

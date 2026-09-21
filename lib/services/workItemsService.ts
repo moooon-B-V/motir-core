@@ -61,6 +61,7 @@ import {
   withdrawsPendingQuestion,
 } from '@/lib/workItems/statusLadder';
 import { reconcileAcceptanceOwnerOf, reconcileGatesFor } from '@/lib/services/gateSetFor';
+import { choiceBodyOf, choiceGateService } from '@/lib/services/choiceGateService';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -1438,6 +1439,27 @@ function pickReview(countable: readonly CountableReview[]): CountableReview | nu
   return approvals[0] ?? null;
 }
 
+/**
+ * RECONCILE A CHOICE'S QUESTION and walk it to review when one is raised (Story
+ * MOTIR-4914 · MOTIR-5891; `approval-gates.md` §1's MOTIR-5887 amendment, point 3).
+ * `choiceGateService` decides — raise, supersede, the declared-edge walk — and this
+ * applies the walk through the ONE status funnel, which is why the walk lives
+ * here and not in that module (it would import this one). Returns the item as it
+ * now stands. Inside the caller's transaction and under its locks.
+ */
+async function reconcileChoiceGate(
+  item: WorkItem,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<WorkItem> {
+  const result = await choiceGateService.reconcile(item, tx);
+  if (result.hopsToReview.length === 0) return item;
+  for (const key of result.hopsToReview) {
+    await workItemsService.applyStatusTransition(item.id, key, ctx, tx);
+  }
+  return (await workItemRepository.findById(item.id, tx)) ?? item;
+}
+
 export const workItemsService = {
   /**
    * Create a work item: allocate the per-project key + insert the row + emit
@@ -1956,7 +1978,11 @@ export const workItemsService = {
         tx,
       );
 
-      return { dto: toWorkItemDto(row), revisionId };
+      // THE CHOICE QUESTION (Story MOTIR-4914 · MOTIR-5891) — AFTER the links, so a
+      // choice born `blocked_by` something open is not asked until that lands.
+      const born = row.type === 'choice' ? await reconcileChoiceGate(row, ctx, tx) : row;
+
+      return { dto: toWorkItemDto(born), revisionId };
     });
 
     // Post-commit, never inside the tx — a rollback must not have notified
@@ -2522,6 +2548,14 @@ export const workItemsService = {
       // Subtask 6.6.2) — translated from the diff keys; drives the
       // `field.changed` emit below. Computed off `diff` (the field cells), so
       // the synthetic `attachments` cell on `revisionDiff` is naturally ignored.
+      // THE CHOICE QUESTION (Story MOTIR-4914 · MOTIR-5891) — an edit to a choice's body
+      // re-asks it at the new stamp or withdraws it; a type change onto or off `choice`
+      // raises or withdraws it. Anything else leaves it exactly as it is.
+      const choiceTouched =
+        (diff['descriptionMd'] !== undefined || diff['type'] !== undefined) &&
+        (row.type === 'choice' || current.type === 'choice');
+      const settled = choiceTouched ? await reconcileChoiceGate(row, ctx, tx) : row;
+
       const changedFieldIds: string[] = automationFieldsFromDiffKeys(Object.keys(diff));
       // Did this edit move the EMBEDDED DOCUMENT (Story MOTIR-2694 · MOTIR-2696,
       // ADR §3)? Compared as composed DOCUMENTS rather than as `diff.title ||
@@ -2531,7 +2565,7 @@ export const workItemsService = {
       // from the document, so an explanation-only edit is likewise silent.
       const embeddingChanged = embeddingDocumentChanged(current, row);
       return {
-        dto: toWorkItemDto(row),
+        dto: toWorkItemDto(settled),
         revisionId,
         addedDescMentionIds,
         changedFieldIds,
@@ -3317,6 +3351,17 @@ export const workItemsService = {
     // included: the cascade and the merge sync finish children too.
     if (entersDone) {
       await reconcileAcceptanceOwnerOf(row, tx);
+    }
+
+    // A BLOCKER FINISHING MAY ASK A CHOICE (Story MOTIR-4914 · MOTIR-5891). A choice
+    // waiting on this item is asked once its last open blocker reaches `done`, in
+    // this transaction — the reconcile re-checks every blocker, so a dependent still
+    // waiting on something else is left alone.
+    if (entersDone) {
+      for (const dependent of await workItemLinkRepository.findDependentStates(workItemId, tx)) {
+        const waiting = await workItemRepository.findById(dependent.id, tx);
+        if (waiting?.type === 'choice') await reconcileChoiceGate(waiting, ctx, tx);
+      }
     }
 
     // ENTERING REVIEW ASKS AGAIN (ADR `approval-gates.md` §6d AMENDMENT, rule 7 ·
@@ -5865,6 +5910,7 @@ export const workItemsService = {
       children: childRows.map(toWorkItemSummaryDto),
       ...linkGroups,
       readiness: { ready: readiness.ready, openBlockers, blockedByAncestor },
+      choiceBody: choiceBodyOf(item),
       workflow,
       labels: labelRows.map(toLabelDto),
       components: componentRows.map(toComponentDto),

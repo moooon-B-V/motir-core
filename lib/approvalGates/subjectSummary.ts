@@ -3,6 +3,7 @@ import type {
   AcceptanceResultSubjectSummaryDTO,
   ApprovalGateSubjectSummaryDTO,
   DecisionApprovalSubjectSummaryDTO,
+  DecisionChoiceSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
   UnregisteredSubjectSummaryDTO,
@@ -11,6 +12,8 @@ import type { RegisteredGateKind, UnregisteredGateKind } from '@/lib/approvalGat
 import { isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { parseChoiceOptions } from '@/lib/approvalGates/choiceOptions';
 import {
   workItemDeliveryRepository,
   type WorkItemDeliveryWithChecks,
@@ -148,6 +151,24 @@ export function excerptNote(noteMd: string | null): string | null {
  * its loader — the same sentence the handler registry enforces, one layer over.
  */
 const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
+  // MOTIR-5891 — a choice row names the QUESTION and how many options it offers,
+  // parsed from the work item's own body (`subjectId` is the work item). A body
+  // that no longer parses is absent, and the row says the subject no longer resolves.
+  async decision_choice(subjectIds, tx) {
+    const items = await workItemRepository.findByIds([...subjectIds], tx);
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const item of items) {
+      const parse = parseChoiceOptions(item.descriptionMd);
+      if (item.type !== 'choice' || !parse.ok) continue;
+      const summary: DecisionChoiceSubjectSummaryDTO = {
+        kind: 'decision_choice',
+        optionCount: parse.options.length,
+        question: parse.question,
+      };
+      out.set(item.id, summary);
+    }
+    return out;
+  },
   // MOTIR-4950 — the acceptance row names the RECORDING the gate asks about.
   async acceptance_result(subjectIds, tx) {
     const rows = await acceptanceEvidenceRepository.findManyByIds(subjectIds, tx);

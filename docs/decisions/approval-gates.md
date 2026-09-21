@@ -91,6 +91,15 @@
   the merge question it leads; on a subtask run only once nothing under the story
   is open. Points 3–5 of the MOTIR-5787 amendment are struck in place.
 
+- **AMENDED 2026-09-21 (MOTIR-5887), at §1, §8 and _Deliberately NOT decided
+  here_ — the `decision_choice` kind is REGISTERED.** It was named and keyed on
+  `type: decision` + `executor: human`; the taxonomy ADR's Amendment 3 admits a
+  `choice` type for exactly that act, so the kind is re-keyed on `type: choice`
+  in all three places that named it, and §1 gains its handler row: the subject
+  is a parsed section of the work item's own body, the verbs are the options
+  plus one refusal, the effect is terminal (Workflow A), and the record stamps
+  the chosen option.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -172,18 +181,19 @@ half-wired.
 **The registry** is `Record<ApprovalGateKind, GateHandler>`. **What a third kind
 must supply to register — the table this record exists to make re-usable:**
 
-| a handler supplies                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 |
-| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **how to resolve the SUBJECT** from the gate row   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) |
-| **who it ROUTES to**                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    |
-| **which PERMISSION authorises a decision**         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            |
-| **which STATUS TRANSITION the gate owns**, or none | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  |
-| **what `approve` DOES**                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  |
-| **what `request_changes` DOES**                    | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 |
-| **what to RETAIN on approval**, or nothing         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              |
+| a handler supplies                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 | for `decision_choice` — §1's MOTIR-5887 AMENDMENT                                                                                                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **how to resolve the SUBJECT** from the gate row   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) | the `## Why this is a choice`, `## Options` and `## What this choice gates` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 1–2) |
+| **who it ROUTES to**                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    | the same                                                                                                                                                                                                          |
+| **which PERMISSION authorises a decision**         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            | `work_item:edit`, under §2's AUTHORITY rule in force (point 4)                                                                                                                                                    |
+| **which STATUS TRANSITION the gate owns**, or none | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  | the move into the project's `done` category — a choice never has a pull request (point 6)                                                                                                                         |
+| **what `approve` DOES**                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  | there is no `approve`: each OPTION is a verb, `choose(optionId)`, which records the pick and writes `done` (points 5–6)                                                                                           |
+| **what `request_changes` DOES**                    | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 | **None of these — revise the options**: records `changes_requested`, moves nothing (point 5)                                                                                                                      |
+| **what to RETAIN on approval**, or nothing         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              | nothing to pin — the chosen option is SNAPSHOTTED onto the immutable gate row (point 7)                                                                                                                           |
 
 _The third column is added by §8's FIFTH AMENDMENT (MOTIR-5672, 2026-09-19); the
-first two are unchanged._
+first two are unchanged. The fourth is added by §1's MOTIR-5887 amendment
+(2026-09-21), below, whose points it cites._
 
 A third kind is then a row in the enum, a handler, and a renderer for its
 subject body. **No second vocabulary, no second control, no second decide door.**
@@ -254,14 +264,18 @@ subject body. **No second vocabulary, no second control, no second decide door.*
 > retention), and a renderer.**
 >
 > **A kind may also carry a VERB SET rather than two verbs.** `decision_choice`
-> — a `type: decision` card with `executor: human`, where the card states two or
+> — ~~a `type: decision` card with `executor: human`~~ **a `type: choice` work
+> item (AMENDED, MOTIR-5887, 2026-09-21 — the taxonomy ADR's Amendment 3 admits
+> the type; a `decision` work item, of either executor, never raises this kind)**,
+> where the card states two or
 > more options on named axes and a person PICKS one — is a gate by every property
 > that matters here: it blocks work, it routes to one person, it needs a surface,
 > and what they chose must be stamped with the same audit §6a describes. What
 > differs is only the verb set, N options instead of Approve / Request changes,
 > and the frame already accommodates it because the KIND is what decides the
-> verbs. **This record ships none of these handlers** — see _Deliberately NOT
-> decided here_.
+> verbs. ~~**This record ships none of these handlers** — see _Deliberately NOT
+> decided here_.~~ **AMENDED (MOTIR-5887): the handler is now decided — §1's
+> MOTIR-5887 amendment, below.**
 
 > ### §1 — AMENDMENT (MOTIR-5787, 2026-09-19): `acceptance_result` — the gate hangs on the STORY whatever the run target, and on a story run it is the PRIMARY of two gates whose ONE press merges the story's code
 >
@@ -560,6 +574,207 @@ in_progress` through its own path, so an acceptance decision is invisible to
 > wake, and the withdraw on a push), `tests/attachments/acceptance-gate.test.ts`,
 > and `tests/e2e/acceptance-gate.spec.ts`'s single-card and not-yet-green
 > chapters.
+
+> ### §1 — AMENDMENT (MOTIR-5887, 2026-09-21): `decision_choice` is REGISTERED — keyed on `type: choice`, its verbs are the OPTIONS plus one refusal, its subject is a parsed section of the body, and its record stamps the pick
+>
+> **What was WRONG.** §1 named `decision_choice` and keyed it on `type:
+decision` + `executor: human` — the verb-set paragraph above, §8's fifth
+> amendment clause 10, and _Deliberately NOT decided here_. That pair already
+> meant something else: `decision` is the type whose work item holds a DECIDED
+> record for a person to accept (`decision_approval`). The taxonomy ADR's
+> Amendment 3 (MOTIR-5886) splits the undecided act out as its own type,
+> **`choice`** — a question the planner correctly declined to decide, two or
+> more options each carrying its WHY and what it is best for, and a person PICKS one.
+> All three places are re-keyed in place. **A `decision` work item, of either
+> executor, never raises `decision_choice`.**
+>
+> **What this amendment settles is the HANDLER ROW** — the fifth column of §1's
+> table cites the points below. It ships no code: the kind, its parser and its
+> handler are MOTIR-5891's; the decide door's new verb is MOTIR-5893's; the port
+> is MOTIR-5896's, drawn by MOTIR-5888.
+>
+> #### 1 — the SUBJECT is a PARSED SECTION of the work item's own body, never a new table
+>
+> The body is what the reviewer read. A structured copy of the options beside it
+> would be a second source of truth with two writers, and the first edit to one
+> of them would make the gate decide something nobody read. So the subject is
+> the work item's own `descriptionMd`, in this canonical structure — the one the
+> parser, the port and the `type-choice` authoring pack (MOTIR-5889 /
+> MOTIR-5892) all read:
+>
+> ```
+> ## Question
+> <the question the planner declined to decide>
+>
+> ## Why this is a choice
+> **Situation:** <contradicts your decision · better than your decision · two workflows>
+> **You said:** <the decision the person gave, quoted — situations 1 and 2 only>
+> <what research found, or where in the requirement the fork sits>
+>
+> ## Options
+>
+> ### <label>
+> **Best if you want:** <what this option is best for — e.g. more cost-effective ·
+> faster to the goal · more customisable later · less to operate>
+> <its WHY, prose>
+>
+> ### <label>
+> …
+>
+> ## What this choice gates
+> <the follow-up work that will be planned once an option is chosen>
+> ```
+>
+> - **`## Why this is a choice` names which of the THREE situations brought it
+>   back** — the exhaustive set `kind-container.md`'s choice rule (MOTIR-4915)
+>   defines, one `**Situation:**` value each:
+>
+>   | `**Situation:**` value      | situation id                | the situation                                                   | `**You said:**` |
+>   | --------------------------- | --------------------------- | --------------------------------------------------------------- | --------------- |
+>   | `contradicts your decision` | `contradicts_your_decision` | research CONTRADICTS the architecture decision the person gave  | required        |
+>   | `better than your decision` | `better_than_your_decision` | a BETTER option exists, and the person's decision is NOT wrong  | required        |
+>   | `two workflows`             | `two_workflows`             | the requirement itself admits two genuinely different WORKFLOWS | not used        |
+>
+>   The first two DEBATE a decision the person already made, so they carry it
+>   quoted on a `**You said:**` line; the rule's precondition — _no HOW offered ⇒
+>   nothing to contradict, and no choice_ — is thereby CHECKABLE rather than
+>   asserted. The third debates nothing, so it names where the fork sits in the
+>   requirement instead. **Why it is here matters to the person picking**: a
+>   choice that overrules what they said reads differently from one their own
+>   requirement forked, and without the section they cannot tell which they are
+>   facing. (Added on review of MOTIR-5888's first published design, 2026-09-21.)
+>
+> - **An option's id is the kebab-case slug of its label.** It is what the
+>   verb, the stored pick and `outcomeRef` name.
+> - **`subjectVersion` is a hash of the `## Why this is a choice`, `## Options`
+>   and `## What this choice gates` sections** — not of the whole body, so
+>   editing the question's wording or a typo elsewhere does not retire a pending
+>   decision, while any change to what is being chosen between, or to why it is
+>   being asked at all, does. An edit that moves it trips the shipped
+>   stale-stamp refusal (`APPROVAL_GATE_STALE_SUBJECT`, MOTIR-5232) for anyone
+>   who pressed against the old version.
+> - **Where a subject lives stays the handler's business**, as §1's MOTIR-4911
+>   amendment requires: the gate row stores the opaque `subjectId` (the work
+>   item) and nothing in the schema knows the options live in Markdown.
+>
+> #### 2 — a COMPLETE body raises a gate; an incomplete one raises NONE and says why
+>
+> The defect reasons are a CLOSED set, and the parser returns exactly one of
+> them or the parsed options:
+>
+> | reason                    | when                                                                                   |
+> | ------------------------- | -------------------------------------------------------------------------------------- |
+> | `fewer_than_two_options`  | `## Options` holds zero or one `###` option                                            |
+> | `option_without_best_for` | an option has no `**Best if you want:**` line — the reason NAMES the option            |
+> | `duplicate_option`        | two options slug to the same id                                                        |
+> | `no_follow_up_section`    | `## What this choice gates` is missing or empty                                        |
+> | `no_why_section`          | `## Why this is a choice` is missing, or carries no `**Situation:**` line              |
+> | `unknown_situation`       | the `**Situation:**` value is not one of the three — the reason QUOTES it              |
+> | `no_quoted_decision`      | the situation debates a decision (the first two) and no `**You said:**` line quotes it |
+>
+> The item renders the reason rather than a bare list — the story's honest
+> defect state. **And it is what makes "a follow-up planning pass is owed" true
+> of EVERY choice that can be decided**: one that does not say what it gates
+> cannot raise a gate, so there is no path to `done` that leaves the unplanned
+> work unnamed.
+>
+> _Options that cannot be weighed against each other_ — each best for something
+> the others never mention, the second defect the `type-choice` authoring bar
+> names — is **not** a parser reason: whether two such options can be weighed
+> against each other is a judgement, not a property of the Markdown. It stays
+> an authoring rule, and a person facing such options refuses with the one
+> refusal verb (point 5).
+>
+> #### 3 — RAISE and SUPERSEDE
+>
+> - **Raised** `awaiting` on a `type: choice` work item whose body parses
+>   complete, that has **no open blocker**, and that is **not in a `done`-category
+>   status**. The work item then moves to `in_review` **along declared workflow
+>   edges only** (the same hop-walking the status sync does); where the project's
+>   workflow offers no path, the gate is still raised and the status is left
+>   where it is.
+> - **An edit that moves `subjectVersion`** supersedes the `awaiting` gate and
+>   raises a fresh one from the new body, as the other kinds do on a new version.
+>   The supersede cause is the shipped `republished` — the subject was restated
+>   under the question — so no new `ApprovalGateSupersedeCause` value is needed.
+>   An edit that makes the body stop parsing supersedes the gate and raises
+>   none; the defect state takes its place.
+> - **After `changes_requested`**, the next edit that moves `subjectVersion` and
+>   parses complete raises a fresh gate. Nothing re-asks the unchanged options.
+>
+> #### 4 — ROUTING and AUTHORITY: §2, unchanged
+>
+> Routed to `assigneeId ?? reporterId`. Decided under §2's AUTHORITY rule **in
+> force** — the assignee, or the reporter when there is no assignee (§2's second
+> amendment), or a holder of `approval:decide_any` (§2's third amendment) — with
+> `work_item:edit` as the permission floor, the same as `design_result` and
+> `decision_approval`. Nothing about who decides a choice differs from who
+> decides a design.
+>
+> #### 5 — the VERB SET is the OPTIONS, plus ONE refusal
+>
+> - **Each option is a verb: `choose(optionId)`.** There is no separate confirm-
+>   the-recommendation step, because nothing was recommended — that is what
+>   makes it a `choice` and not a `decision`. The frame's own confirm step (the
+>   press, then the commit) is the only confirmation.
+> - **_None of these — revise the options_** is this kind's `request_changes`.
+>   A gate a person cannot refuse traps them into picking something wrong. It
+>   records `changes_requested` with its note and **moves nothing**, exactly as
+>   `design_result`'s `requestChanges` does (`designResultHandler.ts`); the gate
+>   is routed, so the work item's assignee — or its reporter — is who revises
+>   the body.
+> - **The decide door gains the verb** (`GateDecision` takes `choose` +
+>   `optionId` on the route, the server action and the service — MOTIR-5893). An
+>   `optionId` that is not in the gate's `subjectVersion` is refused as a stale
+>   subject, never matched loosely.
+>
+> #### 6 — the EFFECT is TERMINAL: Workflow A
+>
+> A choice work item never has a pull request, so nothing would ever merge and
+> nothing else would write `done`. Choosing writes the project's `done`-category
+> status through `applyStatusTransition` with `decidingGateId` — the
+> `design_result` handler's own path, exempting only this gate from the held-move
+> guard (§6d's amendment, rule 5). §8's Workflow A diagram names
+> `decision_choice` beside `design_result`.
+>
+> #### 7 — the RECORD stamps the pick, and it survives the body
+>
+> - `state: approved` on a choice — **no new state value**. The verb that
+>   produced it is readable from the stamp below.
+> - **`outcomeRef` = the chosen option's id.** ⚠️ **This is the one kind where
+>   `outcomeRef` does NOT carry `statusWritten`** (`approvalGatesService.decide`
+>   writes `outcomeRef: effect.statusWritten` today, `approvalGatesService.ts`
+>   ~L1641). For `decision_choice` the status written is implied by the kind —
+>   Workflow A always writes `done` — so the column holds what the kind uniquely
+>   caused: which option won.
+> - **A new nullable `chosenOption` JSON column on `approval_gate`** stamps
+>   `{ optionId, label, bestFor, followUp, situation }` — the pick's label, what it
+>   is best for, the text of `## What this choice gates`, and the situation id that
+>   brought the choice back — **in the deciding write**, under
+>   the existing `trg_approval_gate_decided_immutable` trigger. The pick stays
+>   readable months later without re-reading a body that may since have changed:
+>   _why were we asked, what did we pick, what was it best for, and what does it unblock?_
+>   is one row. It
+>   is null on every other kind and on a `changes_requested` choice.
+> - **Retention: nothing to pin.** The snapshot IS the retained artefact, and it
+>   lives on the immutable row.
+>
+> #### 8 — the KIND table's row
+>
+> | kind              | the port shows                                                                                                                                              | fires when                                                                                      |
+> | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+> | `decision_choice` | the QUESTION, WHY it is a choice (the situation), the N options each with its WHY and what it is BEST FOR, and what the choice gates — or the defect reason | a **`type: choice`** work item whose body parses complete, unblocked, not done — **never** a PR |
+>
+> **The frame is the SAME component** as every other kind's (§1's claim that the
+> KIND decides the verbs and the PORT decides what you look at). This is the
+> first kind whose verb set is not a fixed pair, so it is where that claim is
+> exercised rather than asserted. How band 3 behaves as N grows — select an
+> option row, then commit it — is MOTIR-5888's to draw.
+>
+> **Not decided here:** where a choice work item may be created or when one is
+> warranted (MOTIR-4915's placement rule); the DECISION work item's own gate
+> (MOTIR-5871); and whether a lay session may write a choice's body
+> (MOTIR-5870).
 
 ### 2. Routing and authority — DECIDED BY THE REQUESTER (Yue, 2026-09-08)
 
@@ -2531,6 +2746,18 @@ implemented → in_review → [ design_result ] → done
                            approve is TERMINAL
 ```
 
+**AMENDED (MOTIR-5887, 2026-09-21): `decision_choice` takes Workflow A
+beside `design_result`.** A choice never has a pull request, so nothing would
+ever merge and nothing else would write `done`; choosing an option writes it.
+
+```
+implemented → in_review → [ design_result | decision_choice ] → done
+                           approve / choose is TERMINAL
+```
+
+For `decision_choice` row 1 is the author writing a body that parses (there is
+no agent publish), and row 3 is **Choose {option}** rather than **Approve**.
+
 ~~`implemented → in_review → [ design_result | decision_approval ] → done`~~
 **AMENDED (MOTIR-5672, 2026-09-19): a decision never takes Workflow A.** Its
 pull request is MANDATORY, so a merge always writes its `done` (§8's FIFTH
@@ -3334,7 +3561,10 @@ ApprovalGateAuthority` is `assignee | reporter | admin`,
 > **10. THE EXECUTOR DISCRIMINATOR** (rung 2: §1's MOTIR-4911 amendment).
 > `decision` + **`coding_agent`** raises `decision_approval`. `decision` +
 > **`human`** raises NONE here: a person picking one of N options is
-> `decision_choice`, which Story MOTIR-4914 owns. A card whose `type` is not
+> `decision_choice`, which Story MOTIR-4914 owns. **AMENDED (MOTIR-5887,
+> 2026-09-21): `decision_choice` is keyed on `type: choice`, not on this pair —
+> so `decision` + `human` raises NO gate of either kind; a person picking among
+> options is a `choice` work item (§1's MOTIR-5887 amendment).** A card whose `type` is not
 > `decision` never raises this kind, whatever files its pull request touches — a
 > code card that also edits an ADR is a code card.
 >
@@ -3696,8 +3926,10 @@ owed there.
   now decided too — §8's FIFTH AMENDMENT.** The document lives in the card's
   mandatory pull request, at `docs/decisions/*.md`; Motir stores only its
   identity at the head, and reads its content through a resolver the `pages`
-  domain will later replace. `decision_choice`, the N-option verb set, is named in
-  §1 and likewise ships nothing here.
+  domain will later replace. ~~`decision_choice`, the N-option verb set, is named in
+  §1 and likewise ships nothing here.~~ **AMENDED (MOTIR-5887, 2026-09-21):
+  `decision_choice` is decided too — keyed on `type: choice`, its handler row in
+  §1's MOTIR-5887 amendment.**
 - **Re-homing the ACCEPTANCE gate.** `AcceptancePanel` is the language §1
   generalises from and is deliberately left where it is; folding it onto the
   Approvals tab is its own story.

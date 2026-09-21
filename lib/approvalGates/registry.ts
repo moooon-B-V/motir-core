@@ -1,10 +1,12 @@
 import type { ApprovalGate, ApprovalGateKind, Prisma, WorkItem } from '@/generated/prisma/client';
+import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
 import { acceptanceResultGateHandler } from '@/lib/approvalGates/acceptanceResultHandler';
 import { decisionApprovalGateHandler } from '@/lib/approvalGates/decisionApprovalHandler';
+import { decisionChoiceGateHandler } from '@/lib/approvalGates/decisionChoiceHandler';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
@@ -75,7 +77,8 @@ export type RegisteredGateKind =
   | 'design_result'
   | 'decision_approval'
   | 'acceptance_result'
-  | 'pull_request_approval';
+  | 'pull_request_approval'
+  | 'decision_choice';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -146,6 +149,10 @@ export interface GateEffect {
     | 'rollup_writes_done'
     | 'request_changes_moves_nothing'
     | 'no_status_in_target_category';
+  /** WHAT A CHOICE PICKED (MOTIR-5893) — returned by the `decision_choice` handler's
+   *  approve and written by the door onto the deciding row, which then records the
+   *  option's id as `outcomeRef`. Absent on every other kind's effect. */
+  chosenOption?: ChosenOption;
 }
 
 /**
@@ -196,6 +203,14 @@ export interface GateEffectArgs extends GateRoutingArgs {
    * reference data do NOT need `tx`*.
    */
   resolvedStatusKey: string | null;
+  /**
+   * WHICH OPTION a `decision_choice` press picked (Story MOTIR-4914; ADR §1's
+   * MOTIR-5887 amendment, point 5 — each option IS a verb, `choose(optionId)`).
+   * Absent for every other kind, whose verbs carry no argument. The decide door
+   * gains the verb in MOTIR-5893; the handler refuses an id its subject does not
+   * hold, so an absent or stale one can never record a pick.
+   */
+  choice?: { optionId: string };
 }
 
 /**
@@ -328,6 +343,7 @@ export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   decision_approval: decisionApprovalGateHandler,
   pull_request_approval: pullRequestApprovalGateHandler,
   acceptance_result: acceptanceResultGateHandler,
+  decision_choice: decisionChoiceGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

@@ -1,3 +1,9 @@
+import type {
+  ChoiceDefect,
+  ChoiceDraft,
+  ChosenOption,
+  ParsedChoice,
+} from '@/lib/approvalGates/choiceOptions';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
@@ -39,7 +45,8 @@ export type ApprovalGateKindDTO =
   | 'decision_approval'
   | 'pull_request_approval'
   | 'pull_request_merge'
-  | 'acceptance_result';
+  | 'acceptance_result'
+  | 'decision_choice';
 
 /**
  * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
@@ -174,7 +181,10 @@ export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
  * `decision_choice`), which is why the door takes a decision rather than
  * exposing `approve()` / `requestChanges()` as separate methods.
  */
-export type GateDecision = 'approve' | 'request_changes';
+export type GateDecision = 'approve' | 'request_changes' | 'choose';
+
+/** WHAT A CHOICE'S DECISION PICKED — see {@link ChosenOption} (MOTIR-5893). */
+export type ChosenOptionDTO = ChosenOption;
 
 /**
  * One approval gate, as the decide control / Approvals tab renders it. The
@@ -239,6 +249,9 @@ export interface ApprovalGateDTO {
   /** WHAT it caused — the merge commit sha, or the transition applied. Written
    *  in the deciding write, never backfilled: a decided gate is immutable. */
   outcomeRef: string | null;
+  /** WHAT WAS CHOSEN, on an approved `decision_choice` gate (MOTIR-5893) — and there
+   *  `outcomeRef` is the option's id rather than a status key. Null everywhere else. */
+  chosenOption: ChosenOptionDTO | null;
 
   createdAt: string;
   updatedAt: string;
@@ -373,6 +386,43 @@ export interface DecisionApprovalSubjectSummaryDTO {
 }
 
 /**
+ * WHICH CHOICE is waiting, at row scale (Story MOTIR-4914 · MOTIR-5891) — read from
+ * the work item's own body, which IS the subject (ADR §1's MOTIR-5887 amendment,
+ * point 1). A row says how many options there are and what is being asked; which
+ * option was CHOSEN is the decided gate's own stamp (`chosenOption`, MOTIR-5893),
+ * never re-read from a body that may since have changed.
+ */
+/**
+ * A CHOICE'S PORT — what the frame renders for a `decision_choice` gate (Story
+ * MOTIR-4914; ADR §1's MOTIR-5887 amendment, point 1): the question, why it is a
+ * choice, the options with what each is best for, and what the pick gates. It is
+ * the parser's answer verbatim (`lib/approvalGates/choiceOptions.ts`), so the port
+ * and the gate can never read two different bodies.
+ */
+export type DecisionChoicePortDTO = Omit<ParsedChoice, 'ok'>;
+
+/** One reason a choice's body cannot be asked yet — the closed set point 2 fixes. */
+export type ChoiceDefectDTO = ChoiceDefect;
+
+/**
+ * WHAT THE ITEM PAGE KNOWS ABOUT A CHOICE'S BODY, gate or no gate (MOTIR-5891,
+ * the card's point 5). A defective body raises no gate, so the page cannot learn
+ * its state from one: this carries the parse itself, and the port renders the
+ * defect state from it (MOTIR-5896).
+ */
+export type ChoiceBodyDTO =
+  | { ok: true; port: DecisionChoicePortDTO }
+  | { ok: false; defects: ChoiceDefectDTO[]; draft: ChoiceDraft };
+
+export interface DecisionChoiceSubjectSummaryDTO {
+  kind: 'decision_choice';
+  /** How many options the body offers. */
+  optionCount: number;
+  /** The `## Question`, as written. */
+  question: string;
+}
+
+/**
  * A gate whose KIND THIS BUILD REGISTERS NO RENDERER FOR — a real row on the
  * day this ships, not a defensive branch.
  *
@@ -387,7 +437,11 @@ export interface DecisionApprovalSubjectSummaryDTO {
 export interface UnregisteredSubjectSummaryDTO {
   kind: Exclude<
     ApprovalGateKindDTO,
-    'design_result' | 'decision_approval' | 'acceptance_result' | 'pull_request_approval'
+    | 'design_result'
+    | 'decision_approval'
+    | 'acceptance_result'
+    | 'pull_request_approval'
+    | 'decision_choice'
   >;
 }
 
@@ -406,6 +460,7 @@ export type ApprovalGateSubjectSummaryDTO =
   | DecisionApprovalSubjectSummaryDTO
   | PullRequestApprovalSubjectSummaryDTO
   | AcceptanceResultSubjectSummaryDTO
+  | DecisionChoiceSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */
@@ -539,6 +594,12 @@ export interface ApprovalRecordDecidedRowDto {
   workItem: ApprovalQueueWorkItemRefDto;
   /** What was decided, or NULL when the gate's subject no longer resolves. */
   subject: ApprovalGateSubjectSummaryDTO | null;
+  /**
+   * WHAT A CHOICE PICKED (MOTIR-5897) — read off the immutable row, so a decided choice
+   * names its option even after the body changed. Null on every other kind, and on a
+   * choice sent back with *None of these*.
+   */
+  chosenOption: ChosenOptionDTO | null;
 }
 
 /** One SECTION of the room: its rows on this page, and its total over every page. */
@@ -602,6 +663,15 @@ export type ApprovalGateOverlaySubjectDTO =
   | { state: 'no_gate' }
   | { state: 'kind_not_built' }
   | { state: 'gone' }
+  | {
+      state: 'resolved';
+      kind: 'decision_choice';
+      /**
+       * THE CHOICE PORT (Story MOTIR-4914) — the parsed body the gate asks about. A
+       * body that no longer parses is `gone`: there is nothing left to pick from.
+       */
+      choice: DecisionChoicePortDTO;
+    }
   | {
       state: 'resolved';
       kind: 'design_result';

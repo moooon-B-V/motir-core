@@ -82,6 +82,7 @@ const GATE: ApprovalGateDTO = {
   decidedUnderAuthority: null,
   decisionSource: null,
   outcomeRef: null,
+  chosenOption: null,
   createdAt: '2026-09-08T04:00:00.000Z',
   updatedAt: '2026-09-08T04:00:00.000Z',
 };
@@ -1012,5 +1013,82 @@ describe('the ACCEPTANCE port — a story\u2019s recording, in the shared frame'
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText(en.workbench.approvals.subjectGone)).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: en.approvalGate.verb.approve })).toBeNull();
+  });
+});
+
+describe('a CHOICE in the overlay (Story MOTIR-4914 · MOTIR-5896)', () => {
+  const ch = en.approvalGate.choice;
+  const stale = en.approvalGate.refusal.stale;
+  const staleRefusal = (moved: ('subject' | 'pull_requests' | 'criteria')[]) => ({
+    ok: false as const,
+    refusal: { tag: 'APPROVAL_GATE_STALE_SUBJECT' as const, moved },
+  });
+  const CHOICE_READ = () =>
+    readOf({
+      gate: { ...GATE, kind: 'decision_choice', subjectId: 'wi-1' },
+      subject: {
+        state: 'resolved',
+        kind: 'decision_choice',
+        choice: {
+          question: 'Where do exports live?',
+          why: { situation: 'two_workflows', youSaid: null, evidenceMd: 'It forks.' },
+          options: [
+            { id: 'managed', label: 'Managed', bestFor: 'less to operate', whyMd: 'A.' },
+            { id: 'ours', label: 'Ours', bestFor: 'more cost-effective', whyMd: 'B.' },
+          ],
+          followUpMd: 'The export story.',
+          subjectVersion: 'a'.repeat(64),
+        },
+      },
+    });
+
+  async function pick(label: string) {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('radio', { name: new RegExp(label) }));
+    });
+    fireEvent.click(screen.getByRole('button', { name: ch.verb.choose.replace('{label}', label) }));
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: ch.confirm.proceed.replace('{label}', label) }),
+      );
+    });
+  }
+
+  it('sends the OPTION with the choose, and announces what the decision WROTE', async () => {
+    openAt('GATE-1', 'decision_choice');
+    fetchApprovalGateOverlay.mockResolvedValue(CHOICE_READ());
+    decideApprovalGateAction.mockResolvedValue({
+      ok: true,
+      gate: { ...GATE, kind: 'decision_choice', state: 'approved', outcomeRef: 'ours' },
+      filesKept: null,
+      statusWritten: 'done',
+    });
+    await renderOverlay();
+    await pick('Ours');
+    expect(decideApprovalGateAction).toHaveBeenCalledWith({
+      gateId: 'gate-1',
+      decision: 'choose',
+      optionId: 'ours',
+      identifier: 'GATE-1',
+      stamp: 'v1.stamp-the-read-handed-over',
+    });
+    // The rail underneath reads `statusWritten`, never the choice's option-id outcomeRef.
+    expect(announceGateDecided).toHaveBeenCalledWith(
+      expect.objectContaining({ statusWritten: 'done' }),
+    );
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('a stale refusal offers “Show the current version”, which re-reads the choice in place', async () => {
+    openAt('GATE-1', 'decision_choice');
+    fetchApprovalGateOverlay.mockResolvedValue(CHOICE_READ());
+    decideApprovalGateAction.mockResolvedValue(staleRefusal(['subject']));
+    await renderOverlay();
+    await pick('Managed');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: stale.control }));
+    });
+    expect(fetchApprovalGateOverlay).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('radiogroup')).toBeTruthy();
   });
 });

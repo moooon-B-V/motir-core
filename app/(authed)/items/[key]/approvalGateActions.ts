@@ -84,6 +84,13 @@ export type DecideGateActionResult =
       /** Whether the approved version's files were pinned — see
        *  `DecideGateResult.filesKept` (MOTIR-5265). */
       filesKept: boolean | null;
+      /**
+       * The status key the decision WROTE onto the card, or null (MOTIR-5896). For
+       * every kind but a choice this equals `gate.outcomeRef`; a choice's
+       * `outcomeRef` is the option it picked (MOTIR-5893), so the status rail reads
+       * this instead.
+       */
+      statusWritten: string | null;
     }
   | { ok: false; refusal: GateRefusal };
 
@@ -91,6 +98,8 @@ export type DecideGateActionResult =
 export async function decideApprovalGateAction(input: {
   gateId: string;
   decision: GateDecision;
+  /** The option a `choose` picks (MOTIR-5893) — the route's `optionId`, mirrored. */
+  optionId?: string | null;
   /** The card whose page the frame is on — the path revalidated on success. */
   identifier: string;
   noteMd?: string | null;
@@ -101,17 +110,18 @@ export async function decideApprovalGateAction(input: {
   stamp: string;
 }): Promise<DecideGateActionResult> {
   const { gateId, decision, identifier, noteMd, stamp } = input;
+  const optionId = decision === 'choose' ? (input.optionId?.trim() ?? '') : null;
   const ctx = await requireContext();
   try {
     // Through the merge entry point (MOTIR-5517 · MOTIR-5624): an approve on the card's
     // approve-to-merge gate is decided and then merges, exactly as the press does; every
     // other decision is the door's.
-    const { gate, filesKept } = await pullRequestMergeService.decideGate(
+    const { gate, filesKept, effect } = await pullRequestMergeService.decideGate(
       // `ui` — a SERVER ACTION is a person pressing the control in Motir. It is
       // the audit's strongest claim (ADR §6a: *"a human click must be
       // distinguishable from a programmatic call"*), so it is stated at the one
       // call site that actually knows it rather than defaulted in the door.
-      { gateId, decision, noteMd, source: 'ui', stamp },
+      { gateId, decision, optionId, noteMd, source: 'ui', stamp },
       ctx,
     );
     // The server half, on the action's own response. A REFUSAL revalidates
@@ -126,7 +136,7 @@ export async function decideApprovalGateAction(input: {
     // it. A decision made on the ITEM page moves that same badge, so this is
     // correct for both callers rather than a branch for one of them.
     revalidatePath(AUTHED_LANDING_PATH);
-    return { ok: true, gate, filesKept };
+    return { ok: true, gate, filesKept, statusWritten: effect.statusWritten };
   } catch (err) {
     const refusal = refusalOf(err);
     if (refusal) return { ok: false, refusal };

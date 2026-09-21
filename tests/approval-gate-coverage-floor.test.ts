@@ -439,6 +439,7 @@ describe('the repository translates the write failures it OWNS (MOTIR-4796)', ()
             decidedUnderAuthority: 'assignee',
             decisionSource: 'ui',
             outcomeRef: null,
+            chosenOption: null,
           },
           tx,
         ),

@@ -75,6 +75,10 @@ export type ApprovalGateErrorTag =
   // The question is still live and what the reader was shown MOVED under them
   // (Story MOTIR-5232 · MOTIR-5234) — the stamp they pressed with no longer matches.
   | 'APPROVAL_GATE_STALE_SUBJECT'
+  // The VERB does not belong to this gate (Story MOTIR-4914 · MOTIR-5893): `choose`
+  // sent to a kind that asks no choice, `approve` sent to a choice, or an option the
+  // choice does not hold. A request-shape refusal — nothing was written.
+  | 'APPROVAL_GATE_VERB_NOT_OFFERED'
   // MERGE tier — the HOST refused a merge the card's approve-to-merge gate
   // performs (Story MOTIR-4882 · MOTIR-5512; `approval-gates.md` §4, second
   // amendment decision 8, and §8's SECOND AMENDMENT, which keeps this union whole
@@ -309,6 +313,39 @@ export class ApprovalGateStaleSubjectError extends ApprovalGateError {
       `Approval gate ${gateId} changed while it was being read (${moved.join(', ')}) — nothing was recorded; read the current version and decide again.`,
     );
     this.name = 'ApprovalGateStaleSubjectError';
+  }
+}
+
+/** Why {@link ApprovalGateVerbNotOfferedError} refused — the three shapes a verb can miss by. */
+export type VerbNotOfferedReason = 'choose_on_other_kind' | 'approve_on_choice' | 'unknown_option';
+
+/**
+ * A decision whose VERB this gate does not offer (Story MOTIR-4914 · Subtask
+ * MOTIR-5893; ADR `approval-gates.md` §1's MOTIR-5887 amendment, point 5). A
+ * `decision_choice` gate's verbs ARE its options — `choose(optionId)` — plus
+ * `request_changes`; every other kind's are `approve` + `request_changes`. So:
+ *
+ *   · `choose_on_other_kind` — `choose` sent to a gate that asks no choice;
+ *   · `approve_on_choice`    — `approve` sent to a choice, which recommends nothing;
+ *   · `unknown_option`       — an `optionId` the choice does not hold.
+ *
+ * ⚠️ NOT THE STALE REFUSAL, even for `unknown_option`. The stamp check runs first,
+ * so by the time an option is looked up the options are exactly the ones the
+ * reader was shown; an id missing from them was never offered, and telling the
+ * reader "this changed, look again" would send them to re-read a body that did not
+ * move. Raised under the lock, before anything is written.
+ */
+export class ApprovalGateVerbNotOfferedError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_VERB_NOT_OFFERED' as const;
+  readonly code = 'APPROVAL_GATE_VERB_NOT_OFFERED' as const;
+  constructor(
+    readonly gateId: string,
+    readonly reason: VerbNotOfferedReason,
+  ) {
+    super(
+      `Approval gate ${gateId} does not offer that decision (${reason}); nothing was recorded.`,
+    );
+    this.name = 'ApprovalGateVerbNotOfferedError';
   }
 }
 

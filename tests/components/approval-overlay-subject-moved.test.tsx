@@ -250,6 +250,47 @@ describe('the DISCRIMINATION — a tab moving is not this gate moving', () => {
     expect(h.gateReadCount()).toBeGreaterThan(before);
   });
 
+  it('a CHOICE draws the same notice, and its own Show the current version re-reads (MOTIR-5896)', async () => {
+    // The choice arm mounts its own frame with its own alert slot, like the acceptance
+    // arm above — so its notice and its re-read are asserted, not assumed to follow.
+    params = new URLSearchParams('approval=MOTIR-5147&approvalKind=decision_choice');
+    const choice = (over: Partial<ApprovalGateOverlayReadDTO> = {}) => {
+      const base = read(over);
+      return {
+        ...base,
+        gate: { ...base.gate, kind: 'decision_choice', subjectId: 'wi-1', chosenOption: null },
+        subject: {
+          state: 'resolved',
+          kind: 'decision_choice',
+          choice: {
+            question: 'Where do exports live?',
+            why: { situation: 'two_workflows', youSaid: null, evidenceMd: '' },
+            options: [
+              { id: 'a', label: 'Option A', bestFor: 'less to operate', whyMd: '' },
+              { id: 'b', label: 'Option B', bestFor: 'more cost-effective', whyMd: '' },
+            ],
+            followUpMd: 'Next.',
+            subjectVersion: 'a'.repeat(64),
+          },
+        },
+      } as ApprovalGateOverlayReadDTO;
+    };
+    const h = harness([choice(), choice({ movedSince: ['subject'] })]);
+    await mount();
+
+    await h.nudge(['approvals']);
+
+    const notice = screen.getByTestId('approval-subject-moved');
+    expect(notice.textContent).toContain('changed since you opened this');
+    expect(screen.getByText('Option A')).toBeTruthy();
+
+    const before = h.gateReadCount();
+    await act(async () => {
+      fireEvent.click(within(notice).getByRole('button', { name: 'Show the current version' }));
+    });
+    expect(h.gateReadCount()).toBeGreaterThan(before);
+  });
+
   it('names SEVERAL things when several moved', async () => {
     const h = harness([read(), read({ movedSince: ['subject', 'criteria'] })]);
     await mount();

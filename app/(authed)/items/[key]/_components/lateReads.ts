@@ -16,6 +16,8 @@ import type {
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
+import { choiceGateService } from '@/lib/services/choiceGateService';
+import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
@@ -161,6 +163,15 @@ export interface LateReads {
   decisionGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     document: DecisionDocumentViewDTO | null;
   };
+  /**
+   * A CHOICE work item's question (Story MOTIR-4914 · MOTIR-5896) — the gate, read
+   * exactly as `designGate` is, and the BODY's parse, gate or no gate, so the page
+   * can render the defect state. `body: null` for any card that is not a choice, and
+   * on a failed read (the section then does not render).
+   */
+  choiceGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
+    body: ChoiceBodyDTO | null;
+  };
   mergeGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     members: PullRequestApprovalMemberDTO[];
     /** An `auto` card's standing merge-queue exits, read only when there is no gate
@@ -253,6 +264,34 @@ async function readDecisionGate(input: LateReadsInput): Promise<LateReads['decis
   }
 }
 
+const NO_CHOICE_GATE: LateReads['choiceGate'] = {
+  gate: null,
+  canDecide: false,
+  routedToLabel: null,
+  earlierApproval: null,
+  settingsDoor: null,
+  stamp: null,
+  movedSince: [],
+  body: null,
+};
+
+/** A choice's gate and body (MOTIR-5896) — only for `type: choice`, contained. */
+async function readChoiceGate(input: LateReadsInput): Promise<LateReads['choiceGate']> {
+  if (input.itemType !== 'choice') return NO_CHOICE_GATE;
+  try {
+    const [read, body] = await Promise.all([
+      approvalGatesService.getForWorkItem(
+        { workItemId: input.itemId, kind: 'decision_choice' },
+        input.ctx,
+      ),
+      choiceGateService.readBody(input.itemId, input.ctx),
+    ]);
+    return { ...read, body };
+  } catch {
+    return NO_CHOICE_GATE;
+  }
+}
+
 /** One page of a card's run history — the same default the route serves. */
 export const RUN_HISTORY_PAGE = 20;
 
@@ -283,6 +322,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       monitorIssueLinks,
       monitorHasConnection,
       decisionGate,
+      choiceGate,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -490,6 +530,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
         }
       })(),
       readDecisionGate(input),
+      readChoiceGate(input),
     ]);
 
     return {
@@ -516,6 +557,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       monitorIssueLinks,
       monitorHasConnection,
       decisionGate,
+      choiceGate,
     };
   })();
 }

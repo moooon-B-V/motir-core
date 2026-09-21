@@ -164,10 +164,23 @@ describe('ONE CONTROL — the approval frame is SHARED and COMPOSABLE (MOTIR-479
     // empty population is exactly what a rename would produce.
     expect(gateSurfaces.length).toBeGreaterThan(0);
 
-    for (const file of gateSurfaces) {
-      expect(codeOf(file), `${file} renders a gate without the shared frame`).toContain(
+    // A KIND FRAME (MOTIR-5896) is a kind's port and verb set wrapped around the
+    // shared control — `ChoiceGateFrame` holds the choice's selection and derives its
+    // verbs from it. A surface may render one instead of the control directly, and
+    // each kind frame is itself held to rendering the control, so the rule is the
+    // same rule one hop further out rather than an exemption from it.
+    const KIND_FRAMES = ['components/approvals/ChoiceGate.tsx'];
+    for (const frame of KIND_FRAMES) {
+      expect(codeOf(frame), `${frame} is a kind frame that does not render the control`).toContain(
         "from '@/components/approvals/ApprovalGateControl'",
       );
+    }
+    for (const file of gateSurfaces) {
+      const code = codeOf(file);
+      const rendersTheFrame =
+        code.includes("from '@/components/approvals/ApprovalGateControl'") ||
+        KIND_FRAMES.some((frame) => code.includes(`from '@/${frame.replace(/\.tsx$/, '')}'`));
+      expect(rendersTheFrame, `${file} renders a gate without the shared frame`).toBe(true);
     }
   });
 });
@@ -249,8 +262,14 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // CHANGED the decision document's blob — `head_moved`, product-written, no actor.
       // It lives with the capture because that is the only moment the new version is
       // known; the decision it withdraws is still made only through the door.
+      //
+      // AMENDED ON THE RECORD — MOTIR-5891, 2026-09-21 (§1's MOTIR-5887 amendment,
+      // point 3): the CHOICE question is withdrawn when the body's stamp moves
+      // (`republished`), when the body stops parsing, or when the item stops being a
+      // choice (`withdrawn`). Product-written, no actor — its one raiser owns it.
       callers: [
         'lib/services/acceptanceEvidenceService.ts',
+        'lib/services/choiceGateService.ts',
         'lib/services/decisionDocumentCaptureService.ts',
         'lib/services/designEvidenceService.ts',
         'lib/services/pullRequestApprovalGates.ts',
@@ -275,7 +294,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
     {
       method: 'createAwaitingIfAbsent',
       writes: 'awaiting',
-      callers: ['lib/services/approvalGatesService.ts'],
+      // MOTIR-5891: the CHOICE question's one raiser, inside the work item's own write —
+      // a create, a body or type edit, or its last blocker landing — where a concurrent
+      // double raise must be "already raised", not an aborted transaction.
+      callers: ['lib/services/approvalGatesService.ts', 'lib/services/choiceGateService.ts'],
     },
     {
       method: 'supersedeAllAwaitingByWorkItem',
@@ -359,7 +381,7 @@ describe('REGISTRY TOTALITY — a NEW enum member fails the build (MOTIR-4796)',
   // stand with one member added — so the only thing simulated is the widening
   // itself.
 
-  it('a fifth `ApprovalGateKind` breaks the classification until somebody files it', () => {
+  it('a NEW `ApprovalGateKind` breaks the classification until somebody files it', () => {
     const dir = fs.mkdtempSync(path.join(ROOT, '.tsprobe-kind-'));
     try {
       fs.writeFileSync(
@@ -372,7 +394,10 @@ describe('REGISTRY TOTALITY — a NEW enum member fails the build (MOTIR-4796)',
           '// The enum as a migration would leave it the moment a fifth kind is',
           '// added — before anybody has classified it as registered or as a',
           '// declared hole. The tuple and the registered set are the REAL ones.',
-          "type WidenedKind = ApprovalGateKind | 'decision_choice';",
+          // ⚠️ A kind that does NOT exist. This line used `decision_choice` until
+          // MOTIR-5891 made it a real member — at which point the widening became a
+          // no-op and this must-not-compile probe would have compiled silently.
+          "type WidenedKind = ApprovalGateKind | 'hypothetical_new_kind';",
           'type WidenedUnregistered = Exclude<WidenedKind, RegisteredGateKind>;',
           '',
           'type AssertEqual<A, B> =',

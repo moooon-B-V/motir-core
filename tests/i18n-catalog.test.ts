@@ -297,7 +297,7 @@ describe('platform support-action labels resolve for every operator write', () =
 
 // ── Work-item TYPE labels are a closed, single-word vocabulary (MOTIR-4249) ───
 //
-// The fourteen type labels are single words BY CONSTRUCTION (the grammar frozen
+// The fifteen type labels are single words BY CONSTRUCTION (the grammar frozen
 // in docs/decisions/work-item-type-taxonomy.md §1b), and that is exactly what
 // makes them collide: `Legal`, `Copy`, `Manual`, `Design`, `Review`, `Content`
 // are also ordinary UI nouns and verbs. The shipped defect was `shell.nav.legal`
@@ -376,6 +376,16 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // beside the decision type's own glyph, as *Pull requests* labels its row.
     'workbench.approvals.rowKind.decision_approval':
       "To-approve row KIND — the decision card's own question, beside its type glyph (§27)",
+    // THE CHOICE GATE (Story MOTIR-4914 · MOTIR-5891/5896). The gate kind and the type
+    // share a word ON PURPOSE: a `decision_choice` gate is only ever raised on a
+    // `type: choice` card, so the gate IS the card's own question — the decision
+    // kind's precedent above, one member over. Each sits in a gate-kind slot.
+    'approvalGate.choice.kindLabel':
+      "band-1 gate KIND in the approval frame — the choice card's own question",
+    'workbench.approvals.kind.decision_choice':
+      "Approvals row / overlay KIND for the choice gate — the choice card's own question",
+    'approvalGate.statusHeld.decisionNoun.decision_choice':
+      "the held-status sentence's decision NOUN — names the choice card's own question",
   },
   zh: {
     // `验证` is the verification TYPE noun and also the ordinary button verb; en
@@ -391,6 +401,12 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
 
     'approvalGate.decision.kindLabel': 'band-1 gate KIND in the approval frame (§27)',
     'workbench.approvals.rowKind.decision_approval': 'To-approve row KIND (§27)',
+    'approvalGate.choice.kindLabel': 'band-1 gate KIND — the choice card’s own question',
+    'workbench.approvals.kind.decision_choice': 'Approvals row / overlay KIND for the choice gate',
+    'approvalGate.statusHeld.decisionNoun.decision_choice': 'held-status decision NOUN',
+    // zh `选择` is both the type noun and the verb *choose*; this is band 3's commit
+    // verb before an option is picked, on the frame whose band 1 already names the kind.
+    'approvalGate.choice.verb.chooseEmpty': 'band-3 VERB *choose*, before an option is picked',
   },
 };
 
@@ -407,7 +423,7 @@ describe('work-item type labels do not silently name something else', () => {
   }
 
   it.each(['en', 'zh'] as const)(
-    '%s labels all fourteen types (the derivation is real)',
+    '%s labels all fifteen types (the derivation is real)',
     (locale) => {
       const labels = typeLabels(locale);
       const unlabelled = [...labels].filter(([, value]) => !value).map(([type]) => type);

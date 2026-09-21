@@ -279,7 +279,7 @@ describe('validatePlanProposals — the proposed `type` is a closed set (MOTIR-3
     // that actually reached `prisma.workItem.create()` in production, and it is
     // exactly the shape the old `.describe()` string invited — a five-of-fourteen
     // list ending in an ellipsis.
-    expect(WORK_ITEM_TYPES).toHaveLength(14);
+    expect(WORK_ITEM_TYPES).toHaveLength(15);
     expect((WORK_ITEM_TYPES as readonly string[]).includes('migration')).toBe(false);
   });
 });

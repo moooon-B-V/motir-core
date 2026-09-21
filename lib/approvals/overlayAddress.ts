@@ -42,6 +42,7 @@ export const APPROVAL_GATE_KINDS = [
   // that stopped recognising the spelling would fail to address a real row.
   'pull_request_merge',
   'acceptance_result',
+  'decision_choice',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 
 // Exhaustiveness: a member added to `ApprovalGateKindDTO` and not to the tuple

@@ -526,6 +526,7 @@
       "review": "Review",
       "verification": "Verification",
       "decision": "Decision",
+      "choice": "Choice",
       "deploy": "Deploy",
       "manual": "Manual",
       "legal": "Legal",
@@ -7500,7 +7501,8 @@
         "decision_approval": "Decision approval",
         "pull_request_approval": "Pull-request approval",
         "pull_request_merge": "Pull-request merge",
-        "acceptance_result": "Acceptance video"
+        "acceptance_result": "Acceptance video",
+        "decision_choice": "Choice"
       },
       "reviewRow": "Review {key} {title}",
       "pullRequest": {
@@ -7521,7 +7523,10 @@
         "several": "{count} decision documents · {pr}",
         "unreadable": "Decision document not read yet · {pr}",
         "title": "{path} at blob {blob}"
-      }
+      },
+      "choiceMeta": "{count} options · {question}",
+      "choiceDecided": "Chose <label>{label}</label> · {bestFor}",
+      "choiceNoneChosen": "{count} options · none chosen"
     },
     "live": {
       "new": "New",
@@ -8409,6 +8414,10 @@
         "title": "There is no single decision document to approve.",
         "next": "The pull request has to add or change exactly one file under docs/decisions/. Request changes to send it back."
       },
+      "verbNotOffered": {
+        "title": "That decision is not one this approval offers.",
+        "next": "Nothing was changed. Reload the page and decide again from the options shown."
+      },
       "primaryPending": {
         "design": {
           "title": "Approve the design before these pull requests merge.",
@@ -8663,7 +8672,8 @@
         "pull_request_approval": "pull-request approval",
         "decision_approval": "decision approval",
         "pull_request_merge": "merge approval",
-        "acceptance_result": "acceptance approval"
+        "acceptance_result": "acceptance approval",
+        "decision_choice": "choice"
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",
@@ -8704,6 +8714,64 @@
         "records": "Records that you accept this decision",
         "moves": "Moves {key} to Approved"
       }
+    },
+    "choice": {
+      "kindLabel": "Choice",
+      "meta": "{count, plural, =1 {# option} other {# options}}",
+      "question": "Question",
+      "options": "Options · {count}",
+      "bestIfYouWant": "best if you want",
+      "gates": "What this choice gates",
+      "verb": {
+        "choose": "Choose {label}",
+        "chooseEmpty": "Choose",
+        "noneOfThese": "None of these — revise the options"
+      },
+      "consequence": {
+        "pick": "Pick an option above to choose it. Choosing moves {key} to Done.",
+        "picked": "Choosing moves {key} to Done and leaves a follow-up planning pass owed."
+      },
+      "confirm": {
+        "title": "Choosing this will:",
+        "record": "Record {label} (best if you want {bestFor}) as the answer.",
+        "done": "Move {key} to Done.",
+        "followUp": "Leave a follow-up planning pass owed: {gates}.",
+        "proceed": "Yes, choose {label}"
+      },
+      "state": {
+        "chosen": "Chosen"
+      },
+      "record": {
+        "lead": "Chosen by {name} · {when}",
+        "chose": "Chose",
+        "followUp": "Follow-up planning owed — {gates}",
+        "willRevise": "the options will be revised",
+        "askedBecause": "Asked because"
+      },
+      "cta": {
+        "body": "Review the options full screen, then choose one.",
+        "button": "Review & choose"
+      },
+      "defect": {
+        "title": "Can't be decided yet",
+        "fewer_than_two_options": "This choice lists only one option. A choice needs at least two.",
+        "option_without_best_for": "“{label}” says what it is, not when it is the best pick. Every option needs a Best if you want: line.",
+        "duplicate_option": "Two options are both called “{label}”. Give each a distinct name.",
+        "no_follow_up_section": "This choice doesn't say what it gates. Add a “What this choice gates” section naming the work that follows.",
+        "no_why_section": "This choice doesn't say why it is a choice. Add a “Why this is a choice” section with a Situation: line.",
+        "unknown_situation": "“{value}” is not one of the three situations. Use contradicts your decision, better than your decision, or two workflows.",
+        "no_quoted_decision": "This choice debates a decision you made but doesn't quote it. Add a You said: line.",
+        "fix": "No one can choose until the description is fixed; the question is asked as soon as it reads complete.",
+        "flag": "Missing — add a Best if you want: line"
+      },
+      "why": "Why this is a choice",
+      "situation": {
+        "contradicts_your_decision": "Research contradicts your decision",
+        "better_than_your_decision": "A better option than your decision",
+        "two_workflows": "Your requirement allows two workflows"
+      },
+      "youSaid": "You said",
+      "stale": "The options changed while you were reading."
     }
   },
   "approvalOverlay": {

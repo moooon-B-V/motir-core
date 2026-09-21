@@ -580,6 +580,64 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
   });
 });
 
+describe('GET /api/work-items/approval-gate · a CHOICE (Story MOTIR-4914)', () => {
+  const BODY = [
+    '## Question',
+    'Where do exports live?',
+    '## Why this is a choice',
+    '**Situation:** two workflows',
+    'The requirement forks.',
+    '## Options',
+    '### Managed storage',
+    '**Best if you want:** less to operate',
+    'A.',
+    '### Our Postgres',
+    '**Best if you want:** more cost-effective',
+    'B.',
+    '## What this choice gates',
+    'The export story.',
+  ].join('\n');
+
+  async function choiceCard(): Promise<WorkItem> {
+    const created = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Choose',
+        type: 'choice',
+        executor: 'human',
+        descriptionMd: BODY,
+      },
+      fx.ctx,
+    );
+    return adminDb.workItem.findUniqueOrThrow({ where: { id: created.id } });
+  }
+
+  it('a complete body answers RESOLVED, with the parsed options', async () => {
+    const card = await choiceCard();
+    signIn(owner());
+    const body = await (
+      await gateViaRoute({ key: card.identifier, kind: 'decision_choice' })
+    ).json();
+    expect(body.subject).toMatchObject({ state: 'resolved', kind: 'decision_choice' });
+    expect(body.subject.choice.options.map((o: { id: string }) => o.id)).toEqual([
+      'managed-storage',
+      'our-postgres',
+    ]);
+  });
+
+  it('a body that stopped parsing under a waiting gate answers GONE — nothing to pick from', async () => {
+    const card = await choiceCard();
+    // Written behind the service's back, so the gate still waits over a broken body.
+    await adminDb.workItem.update({ where: { id: card.id }, data: { descriptionMd: 'broken' } });
+    signIn(owner());
+    const body = await (
+      await gateViaRoute({ key: card.identifier, kind: 'decision_choice' })
+    ).json();
+    expect(body.subject).toEqual({ state: 'gone' });
+  });
+});
+
 describe('GET /api/work-items/approval-gate · seeing is not deciding', () => {
   it('a reader who may BROWSE but not DECIDE gets the gate and the subject with canDecide false', async () => {
     const card = await designCard();
@@ -760,6 +818,8 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       'acceptanceEvidenceService.getCurrentForStory',
       'acceptanceEvidenceService.getForGateSubject',
       'approvalGatesService.getForWorkItem',
+      // The choice port's parsed options (MOTIR-5891) — the same parse the item page reads.
+      'choiceGateService.readPort',
       // The decision port's document (MOTIR-5678) — the same read the item page makes.
       'decisionDocumentService.readViewForWorkItem',
       'designEvidenceService.getCurrentForWorkItem',

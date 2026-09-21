@@ -50,6 +50,7 @@ export const WORK_ITEM_TYPES = [
   'review',
   'verification',
   'decision',
+  'choice',
   'deploy',
   'manual',
   'legal',
@@ -63,8 +64,8 @@ export const WORK_ITEM_TYPES = [
  * the enum — adding an eleventh `WorkItemType` member without extending this
  * map is a compile error here (and a failed table-test in 2.7.7), never a
  * silent `default` fall-through. Read as three groups: always-agent
- * (`code` / `test` / `deploy`), always-human (`manual` / `decision` / `review`
- * / `legal`), and either-default-agent (`design` / `content` / `copy` /
+ * (`code` / `test` / `deploy`), always-human (`manual` / `decision` / `choice` /
+ * `review` / `legal`), and either-default-agent (`design` / `content` / `copy` /
  * `translate` / `research` / `verification` / `chore`).
  *
  * Amendment 1 (§3a) placed the four admitted members. `legal` is the only one
@@ -72,6 +73,9 @@ export const WORK_ITEM_TYPES = [
  * signature, and an agent cannot sign. A wrong `human` default costs one
  * reassignment; a wrong `coding_agent` default costs a card that stalls
  * mid-run, which is the failure this map exists to prevent.
+ *
+ * Amendment 3 (§3b) admits `choice`, always-HUMAN: a pick among options is a
+ * person's by definition, so there is no `coding_agent` arm to default to.
  */
 export const DEFAULT_EXECUTOR_BY_TYPE: Record<WorkItemTypeDto, ExecutorDto> = {
   code: 'coding_agent',
@@ -79,6 +83,7 @@ export const DEFAULT_EXECUTOR_BY_TYPE: Record<WorkItemTypeDto, ExecutorDto> = {
   deploy: 'coding_agent',
   manual: 'human',
   decision: 'human',
+  choice: 'human',
   review: 'human',
   legal: 'human',
   design: 'coding_agent',

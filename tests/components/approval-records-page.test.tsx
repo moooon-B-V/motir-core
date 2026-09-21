@@ -147,6 +147,7 @@ describe('the /approvals page', () => {
                 type: 'design',
               },
               subject: null,
+              chosenOption: null,
             },
           ],
           total: 1,

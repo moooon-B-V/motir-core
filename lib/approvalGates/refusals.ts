@@ -73,6 +73,9 @@ export type GateRefusal =
   // No single decision document to approve (MOTIR-5676). Its reason is drawn by the
   // port (MOTIR-5678), not by the refusal line, so the refusal carries none.
   | { tag: 'APPROVAL_GATE_DECISION_UNRESOLVABLE' }
+  // A verb the gate does not offer (MOTIR-5893). The choice port only offers the
+  // options it parsed, so a reader meets this only from a stale bundle or a crafted call.
+  | { tag: 'APPROVAL_GATE_VERB_NOT_OFFERED' }
   | {
       tag: 'APPROVAL_GATE_PRIMARY_PENDING';
       /**
@@ -188,6 +191,7 @@ export function toGateRefusal(
     case 'APPROVAL_GATE_NOT_FOUND':
     case 'APPROVAL_GATE_KIND_UNREGISTERED':
     case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
+    case 'APPROVAL_GATE_VERB_NOT_OFFERED':
     case 'APPROVAL_GATE_ALREADY_AWAITING':
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':

@@ -27,7 +27,7 @@ import type { ApprovalGateKind } from '@/generated/prisma/client';
 //     handler, asserting it FAILS. That is the only way to test a negative about
 //     the type system, and without it the criterion is discharged by a comment.
 
-// The four members of the Prisma enum, written out. A LITERAL on purpose: this
+// The members of the Prisma enum, written out. A LITERAL on purpose: this
 // is the list the registry must be total over, and deriving it from the same
 // type the registry derives from would assert that type equals itself.
 const ALL_KINDS = [
@@ -36,6 +36,8 @@ const ALL_KINDS = [
   'pull_request_approval',
   'pull_request_merge',
   'acceptance_result',
+  // Story MOTIR-4914 · MOTIR-5891: a person PICKS one of a choice work item's options.
+  'decision_choice',
 ] as const satisfies readonly ApprovalGateKind[];
 
 describe('the approval-gate registry — totality at runtime', () => {
@@ -54,8 +56,11 @@ describe('the approval-gate registry — totality at runtime', () => {
       'decision_approval',
       'pull_request_approval',
       'acceptance_result',
+      'decision_choice',
     ]);
     expect(isRegisteredGateKind('design_result')).toBe(true);
+    // MOTIR-5891 (Story MOTIR-4914): the CHOICE gate — its verbs are its options.
+    expect(isRegisteredGateKind('decision_choice')).toBe(true);
     // MOTIR-5676 (Story MOTIR-4907): the DECISION gate left the holes it was declared in.
     expect(isRegisteredGateKind('decision_approval')).toBe(true);
     expect(isRegisteredGateKind('pull_request_approval')).toBe(true);

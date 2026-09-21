@@ -117,6 +117,12 @@ export interface GateVerb {
    * band carries its own act. Omitted, `onDecide(verb.decision)` runs, as it always has.
    */
   perform?: () => Promise<GateRefusal | null>;
+  /**
+   * WHICH OPTION a `choose` verb records (Story MOTIR-4914 · MOTIR-5896) — a
+   * `decision_choice` gate's verbs are its options, so the verb carries the one it
+   * names and `onDecide` passes it to the door. Absent on every other verb.
+   */
+  optionId?: string;
 }
 
 export interface ApprovalGateControlProps {
@@ -149,6 +155,27 @@ export interface ApprovalGateControlProps {
   settingsDoor?: { href: string; label: string };
   /** The confirm band's list — what approving is about to do, per kind. */
   confirmConsequences: ReactNode[];
+  /**
+   * The confirm band's TITLE, when the kind's verb is not *approving* (MOTIR-5896,
+   * the choice design's TAKES 1: *Choosing this will:*). Absent, the shipped words.
+   */
+  confirmTitle?: ReactNode;
+  /**
+   * The confirm band's PROCEED label, when the kind words it itself (MOTIR-5896 —
+   * *Yes, choose {label}*). Absent, the shipped *Yes, {verb}*.
+   */
+  confirmProceedLabel?: string;
+  /**
+   * Band 1's pill on an APPROVED gate, in the kind's own word (MOTIR-5896 — a choice
+   * reads *Chosen*). Absent, the shipped *Approved*.
+   */
+  approvedStateLabel?: string;
+  /**
+   * The record's line on a CHANGES-REQUESTED gate, when the kind's revise loop is not
+   * the agent's (MOTIR-5896, TAKES 2 — a choice's reporter revises the options).
+   * Absent, the shipped *the agent will publish a new version*.
+   */
+  changesRequestedLine?: ReactNode;
   /** Who the gate is waiting on, for state `B`. */
   routedToLabel?: string | null;
   /**
@@ -244,7 +271,7 @@ export interface ApprovalGateControlProps {
    * Record the decision. Resolves to a refusal the frame draws IN PLACE, or
    * null on success — at which point the caller has already reconciled.
    */
-  onDecide: (decision: GateDecision) => Promise<GateRefusal | null>;
+  onDecide: (decision: GateDecision, optionId?: string) => Promise<GateRefusal | null>;
   /**
    * RE-READ what is being decided, in place — the STALE refusal's one control,
    * *Show the current version* (Story MOTIR-5232 · Subtask MOTIR-5235; design
@@ -644,6 +671,9 @@ export function useRefusalCopy(
     case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
       headline = t('decisionUnresolvable.title');
       break;
+    case 'APPROVAL_GATE_VERB_NOT_OFFERED':
+      headline = t('verbNotOffered.title');
+      break;
     case 'APPROVAL_GATE_PRIMARY_PENDING':
       // Names WHICH question the merge follows (MOTIR-5785) — the next action differs.
       headline = t(`primaryPending.${refusal.primary}.title`);
@@ -819,6 +849,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'kindUnregistered';
     case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
       return 'decisionUnresolvable';
+    case 'APPROVAL_GATE_VERB_NOT_OFFERED':
+      return 'verbNotOffered';
     case 'APPROVAL_GATE_PRIMARY_PENDING':
       return 'primaryPending';
     case 'APPROVAL_GATE_ALREADY_AWAITING':
@@ -854,6 +886,10 @@ export function ApprovalGateControl({
   consequence,
   settingsDoor,
   confirmConsequences,
+  confirmTitle,
+  confirmProceedLabel,
+  approvedStateLabel,
+  changesRequestedLine,
   routedToLabel,
   filesKept = null,
   refusalContext,
@@ -941,7 +977,13 @@ export function ApprovalGateControl({
     setPhase({ kind: 'pending' });
     // A verb that carries its own act runs THAT (§ 28 panel 8a: a row's *Queue again* is
     // an approval, and it is this frame's confirm, pending and refusal that report it).
-    const refusal = verb.perform ? await verb.perform() : await onDecide(verb.decision);
+    // Only a verb that NAMES an option passes one, so every other kind's `onDecide`
+    // is called exactly as it always was.
+    const refusal = verb.perform
+      ? await verb.perform()
+      : verb.optionId !== undefined
+        ? await onDecide(verb.decision, verb.optionId)
+        : await onDecide(verb.decision);
     // On success the CALLER has reconciled and re-rendered us with the decided
     // gate, so there is no success branch to draw here — which is what keeps
     // this component free of the write's own state.
@@ -953,7 +995,7 @@ export function ApprovalGateControl({
     ? t('state.withdrawn')
     : decided
       ? gate.state === 'approved'
-        ? t('state.approved')
+        ? (approvedStateLabel ?? t('state.approved'))
         : t('state.changesRequested')
       : phase.kind === 'pending'
         ? t('state.recording')
@@ -1177,7 +1219,9 @@ export function ApprovalGateControl({
               {t('record.version', { version: gate.subjectVersion.slice(0, 8) })}
             </span>
           ) : null}
-          {gate.state === 'changes_requested' ? <span>{t('record.willRepublish')}</span> : null}
+          {gate.state === 'changes_requested' ? (
+            <span>{changesRequestedLine ?? t('record.willRepublish')}</span>
+          ) : null}
           {/* ⚠️ ONLY ON AN APPROVAL, AND ONLY WHEN THE KIND ANSWERED. §6c pins
               for approvals alone, so the line has no meaning on a rejection —
               and `null` means the kind was not asked, which renders nothing
@@ -1210,7 +1254,9 @@ export function ApprovalGateControl({
             <div
               className={`${sectioned ? 'mt-3 ' : ''}border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3`}
             >
-              <p className="text-[13px] font-semibold text-(--el-text)">{t('confirm.title')}</p>
+              <p className="text-[13px] font-semibold text-(--el-text)">
+                {confirmTitle ?? t('confirm.title')}
+              </p>
               <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
                 {confirmConsequences.map((line, i) => (
                   <li key={i}>{line}</li>
@@ -1229,7 +1275,7 @@ export function ApprovalGateControl({
                   {t('confirm.cancel')}
                 </Button>
                 <Button variant="primary" size="sm" onClick={() => run(phase.verb)} type="button">
-                  {t('confirm.proceed', { verb: phase.verb.label })}
+                  {confirmProceedLabel ?? t('confirm.proceed', { verb: phase.verb.label })}
                 </Button>
               </div>
             </div>
@@ -1269,7 +1315,9 @@ export function ApprovalGateControl({
                 <span className="ml-auto flex flex-wrap gap-2">
                   {verbs.map((verb) => (
                     <Button
-                      key={verb.decision}
+                      // Keyed by the verb's IDENTITY — a decision and, for a choice,
+                      // the option it names (the choice design's TAKES 3).
+                      key={`${verb.decision}:${verb.optionId ?? ''}`}
                       variant={verb.variant}
                       size="sm"
                       type="button"

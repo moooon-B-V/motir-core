@@ -30,6 +30,8 @@ export function GateCallToActionBand({
   askedAt,
   itemIdentifier,
   routedElsewhereName,
+  body,
+  buttonLabel,
 }: {
   /** Which gate the overlay opens on. */
   kind: ApprovalGateKindDTO;
@@ -39,6 +41,13 @@ export function GateCallToActionBand({
   itemIdentifier: string;
   /** The routed recipient's name, when that is somebody other than the reader. */
   routedElsewhereName: string | null;
+  /**
+   * The band's sentence and its button, when the KIND words its question itself
+   * (MOTIR-5896 — a choice is *Review & choose*, not *Review & approve*). Absent,
+   * the shipped approve words.
+   */
+  body?: string;
+  buttonLabel?: string;
 }) {
   const t = useTranslations('approvalGate');
   const format = useFormatter();
@@ -88,7 +97,7 @@ export function GateCallToActionBand({
                 name: routedElsewhereName,
                 person: (chunks) => <span className="font-medium text-(--el-text)">{chunks}</span>,
               })
-            : t('cta.body')}
+            : (body ?? t('cta.body'))}
         </span>
         <Link
           href={href}
@@ -98,7 +107,7 @@ export function GateCallToActionBand({
           className={`${buttonVariants({ variant: 'primary', size: 'sm' })} md:ml-auto`}
         >
           <ScanEye className="h-3.5 w-3.5" aria-hidden />
-          <span>{t('statusHeld.reviewAndApprove')}</span>
+          <span>{buttonLabel ?? t('statusHeld.reviewAndApprove')}</span>
         </Link>
       </div>
     </div>

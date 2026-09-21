@@ -4,6 +4,7 @@ import {
   ApprovalGateMergeRefusedError,
   ApprovalGatePrimaryPendingError,
   ApprovalGateStaleSubjectError,
+  ApprovalGateVerbNotOfferedError,
 } from '@/lib/approvalGates/errors';
 import { APPROVAL_GATE_STATUS } from '@/lib/approvalGates/httpStatus';
 import type { GateDecision } from '@/lib/services/approvalGatesService';
@@ -46,11 +47,17 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // rather than to a human — must not reach it. ADR §6a: the row is the
 // human-in-the-loop evidence an agent-driven pipeline owes an auditor.
 //
-// JSON body: `decision` (required — `approve` | `request_changes`), `stamp`
-// (required — the `stamp` the gate read returned, MOTIR-5234) and `noteMd`
-// (optional free text — why they said yes, or what they sent back).
+// JSON body: `decision` (required — `approve` | `request_changes` | `choose`),
+// `optionId` (required with `choose` — the option a choice's decision picks,
+// MOTIR-5893), `stamp` (required — the `stamp` the gate read returned, MOTIR-5234)
+// and `noteMd` (optional free text — why they said yes, or what they sent back).
+//
+// ⚠️ WHICH VERB FITS WHICH KIND IS THE DOOR'S TO SAY, NOT THIS LAYER'S. `choose` is
+// the one verb of a `decision_choice` gate and `approve` is every other kind's; the
+// route cannot see the kind without a read, so it checks only the SHAPE and the
+// door answers a mismatch as `APPROVAL_GATE_VERB_NOT_OFFERED` (400) under its lock.
 
-const DECISIONS: readonly GateDecision[] = ['approve', 'request_changes'];
+const DECISIONS: readonly GateDecision[] = ['approve', 'request_changes', 'choose'];
 
 function parseDecision(value: unknown): GateDecision | null {
   return typeof value === 'string' && (DECISIONS as readonly string[]).includes(value)
@@ -88,7 +95,19 @@ export async function POST(
   const decision = parseDecision(body.decision);
   if (!decision) {
     return NextResponse.json(
-      { code: 'BAD_REQUEST', error: '`decision` must be `approve` or `request_changes`.' },
+      {
+        code: 'BAD_REQUEST',
+        error: '`decision` must be `approve`, `request_changes` or `choose`.',
+      },
+      { status: 400 },
+    );
+  }
+
+  // A choice's decision names its option; no other verb carries one.
+  const optionId = typeof body.optionId === 'string' ? body.optionId.trim() : '';
+  if (decision === 'choose' && optionId === '') {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: '`choose` needs an `optionId` — the option being picked.' },
       { status: 400 },
     );
   }
@@ -112,6 +131,7 @@ export async function POST(
       {
         gateId,
         decision,
+        optionId: decision === 'choose' ? optionId : null,
         noteMd: typeof body.noteMd === 'string' ? body.noteMd : null,
         // `api` — a token called the REST API (ADR §6a). NOT `ui`, even though a
         // browser can reach this route: the record answers *how did the decision
@@ -138,11 +158,14 @@ export async function POST(
           : // …and a primary-pending refusal says WHICH question to answer first (MOTIR-5785).
             err instanceof ApprovalGatePrimaryPendingError
             ? { code: err.code, error: err.message, primary: err.primary }
-            : // …and a conflict found at the press says WHICH members and that nothing was
-              // written (MOTIR-5915).
-              err instanceof ApprovalGateMergeRefusedError && err.atPress
-              ? { code: err.code, error: err.message, atPress: true, conflicts: err.conflicts }
-              : { code: err.code, error: err.message },
+            : // …and a verb the gate does not offer says which of the three (MOTIR-5893).
+              err instanceof ApprovalGateVerbNotOfferedError
+              ? { code: err.code, error: err.message, reason: err.reason }
+              : // …and a conflict found at the press says WHICH members and that nothing was
+                // written (MOTIR-5915).
+                err instanceof ApprovalGateMergeRefusedError && err.atPress
+                ? { code: err.code, error: err.message, atPress: true, conflicts: err.conflicts }
+                : { code: err.code, error: err.message },
         { status: APPROVAL_GATE_STATUS[err.tag] },
       );
     }

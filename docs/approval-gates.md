@@ -66,7 +66,31 @@ document withdraws the question and asks about the new version; a push that leav
 document alone keeps your answer, and only the merge is asked again.
 
 A decision card worked by a person asks nothing here: a person choosing between options
-is a different question.
+is a different question — the next section's.
+
+### When a choice appears
+
+A `type: choice` work item is a question the planner **declined to decide for you** —
+two or more options, each with what it is **best for** and why, and a person picks one.
+Nothing is recommended: that is what makes it a choice rather than a decision.
+
+Motir asks it **on its own, from the work item's description**, as soon as the
+description reads complete and nothing it waits on is still open. The work item's page
+shows a **Choice** section with the question, **why it is a choice** (research
+contradicts what you said, there is a better option than what you said, or your
+requirement allows two workflows), the options and what the pick gates — and **Review &
+choose**, which opens the full-screen view where you pick.
+
+**Select an option, then press _Choose {option}_**, and confirm. Choosing records your
+pick and moves the work item to **Done**; the planning the pick unblocks is owed next.
+_None of these — revise the options_ sends it back without moving anything, and the
+question is asked again once the options change.
+
+**What you chose is stamped on the record** — the option, what it was best for, why you
+were asked and what it gates — and stays readable even if the description is edited
+later. A description that is not complete asks nothing: the section says what is
+missing instead, and nobody can choose until it is fixed. Editing the options of a
+waiting choice withdraws the question and asks it again about the new options.
 
 ## What you see
 

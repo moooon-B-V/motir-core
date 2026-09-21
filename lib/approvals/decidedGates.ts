@@ -34,6 +34,12 @@ import type { ApprovalGateDTO, ApprovalGateStateDTO } from '@/lib/dto/approvalGa
 export interface DecidedGate {
   gate: ApprovalGateDTO;
   filesKept: boolean | null;
+  /**
+   * The status the decision WROTE, when the announcer knows it (MOTIR-5896). Absent,
+   * a reader falls back to `gate.outcomeRef` — true for every kind but a choice,
+   * whose `outcomeRef` is the option it picked.
+   */
+  statusWritten?: string | null;
 }
 
 const listeners = new Set<() => void>();
