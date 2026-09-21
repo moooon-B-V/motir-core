@@ -298,9 +298,9 @@ export const projectRepoSetService = {
    * realized repos joined in a single query.
    *
    * An empty `rows` list is the honest answer for a project that has not run the
-   * establish step (every project that predates this table). It is NOT an error:
-   * ADR consequence — `resolveDispatchTargetRepo`'s single-connected-repo fallback
-   * is what answers for a project with no set.
+   * establish step (every project that predates this table). It is NOT an error —
+   * and since MOTIR-4955 it reaches no repository at all: a project with no set
+   * never inherits the workspace's connected repos.
    */
   async getSet(projectId: string, ctx: ServiceContext): Promise<ProjectRepoSetDto> {
     return inProject(projectId, ctx, 'browse', async (tx) => {
@@ -375,16 +375,12 @@ export const projectRepoSetService = {
    *
    * Three answers rather than three calls, because the scope ladder in
    * `lib/workItems/dispatchRepo.ts` needs all three at once and they must describe
-   * the SAME snapshot of the set: `hasSet` decides whether the project's set
-   * answers at all or the workspace-connected compatibility path does, and mixing
-   * that decision with a domain read from a later snapshot is how a project that
-   * gained its first row mid-request would validate a pin against the workspace
-   * and then dispatch against the project.
+   * the SAME snapshot of the set.
    *
-   * `hasSet` is "the project has ROWS", not "the project has established rows": a
-   * set whose repositories are all still proposed HAS been planned, and answering
-   * it with the workspace's single connected repo would hand back a repository the
-   * project deliberately did not choose.
+   * ⚠️ SINCE MOTIR-4955 THERE IS NO WORKSPACE-CONNECTED PATH AT ALL — the project
+   * link is the isolation boundary, so an empty set reaches nothing
+   * (`lib/projectRepos/effectiveDomain.ts`). The paragraph below records why
+   * `hasSet` was never a registry switch even while that path existed.
    *
    * ⚠️ `hasSet` IS NOT A SWITCH BETWEEN THE TWO REGISTRIES (MOTIR-3086). It reads
    * like one — "rows? then the set; no rows? then the workspace" — and the ladder

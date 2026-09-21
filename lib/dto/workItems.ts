@@ -1172,10 +1172,11 @@ export interface CreateWorkItemInput {
   /**
    * Pin the repo this item's work ships in (Story 7.9 · MOTIR-1804) — the bare
    * repo NAME, or the `owner/name` ref form (normalized to the name). Validated
-   * against the workspace's CONNECTED repo set; an unknown name is rejected with
-   * `UnknownTargetRepoError` (422). Omitted / null / blank → unpinned, and the
-   * dispatch payload falls back to the workspace's single connected repo when
-   * that is unambiguous.
+   * against the PROJECT's repository set (MOTIR-4955) — a repository connected to
+   * the workspace but not linked to the project is rejected with
+   * `UnknownTargetRepoError` (422), as is an unknown name. Omitted / null / blank →
+   * unpinned, and the dispatch payload falls back to the project's single
+   * established repository when that is unambiguous.
    */
   targetRepo?: string | null;
   /**
@@ -1363,7 +1364,7 @@ export interface UpdateWorkItemInput {
    * Patch the repo pin (Story 7.9 · MOTIR-1804): set / change / clear (`null`,
    * or a blank string) the bare repo NAME this item's work ships in. The
    * `owner/name` ref form is accepted and normalized to the name. Validated
-   * against the workspace's CONNECTED repo set — the SAME rule create uses, so
+   * against the PROJECT's repository set — the SAME rule create uses, so
    * the patch surface is never looser than the create one. Recorded in the
    * revision diff as `{ targetRepo: { from, to } }`, sharing the single 'updated'
    * revision with any other field in the patch.

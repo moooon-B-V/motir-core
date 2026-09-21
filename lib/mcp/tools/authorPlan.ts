@@ -739,7 +739,8 @@ const updatePlanProposalInputSchema = {
     .optional()
     .describe(
       '`add` only: re-pin WHICH REPO this proposal ships in, validated against the project’s ' +
-        'connected repositories; `null` unpins it.',
+        'repository set (a repository connected to the workspace but not linked to the project ' +
+        'is rejected); `null` unpins it.',
     ),
   targetRepos: z
     .array(z.string())

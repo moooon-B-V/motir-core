@@ -767,9 +767,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '94e776963f84',
   },
   update_work_item: {
+    // Re-pinned for MOTIR-5585: the description now names PROJECT-repository
+    // validation (MOTIR-4955) instead of the retired connected-repo rule; the
+    // summary never named the rule, so it still holds.
     summary:
       "Edit any subset of an item's fields, including the explanation body create cannot set.",
-    descriptionFingerprint: '564bf33c1ea8',
+    descriptionFingerprint: 'a0b37665094b',
   },
   transition_status: {
     summary:

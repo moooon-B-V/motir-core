@@ -579,11 +579,11 @@ pin on `WorkItemDto`: the item's explicit `targetRepo` when it has one, else the
 guesses; the CLI falls back to its link-root rule.
 
 The domain is the **project's repository set** (`project_repository`,
-MOTIR-1780 · MOTIR-1783). A project that has **no** set — every project created
-before that table — still resolves against the **workspace's connected repos**,
-unchanged; that fallback answers only for a missing set, never underneath one
-that exists (a project whose repositories are all still planned resolves to
-`null`, not to a workspace repo it did not choose). See
+MOTIR-1780 · MOTIR-1783) and nothing else. A project that has **no** set resolves
+to `null` — it never inherits the **workspace's connected repos** (MOTIR-4955
+retired that compatibility fallback: the project link is the isolation
+boundary). The single-repo default counts only **established** rows, so a
+project whose repositories are all still planned also resolves to `null`. See
 `docs/decisions/target-repo-attribution.md` and
 `docs/decisions/project-repository-set.md`.
 
@@ -1086,9 +1086,11 @@ boundary-contract card that legitimately ships two coordinated PRs.
 The validation domain is every row of the project's set — including rows whose
 repository has not been **created yet** (MOTIR-1783). A plan pins repositories
 before it creates them, so a pin at `proposed` is ordinary; what validation
-catches is the typo and the **sibling project's** repo, which workspace-wide
-validation used to accept. A project with no set of its own still validates
-against the workspace's connected repos, unchanged. See
+catches is the typo, the **sibling project's** repo, and a repository the
+workspace has connected but this project never linked — all three of which
+workspace-wide validation used to accept. A project with no set of its own
+accepts no pin at all (MOTIR-4955); it never falls back to the workspace's
+connected repos. See
 `docs/decisions/target-repo-attribution.md` and
 `docs/decisions/project-repository-set.md`.
 

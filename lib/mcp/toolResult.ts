@@ -278,9 +278,9 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof AssigneeNotInWorkspaceError ||
     err instanceof TypeNotAllowedOnKindError ||
     // Target-repo validation (MOTIR-1804; project-scoped in MOTIR-1783): a
-    // `targetRepo` naming a repo outside the item's PROJECT repository set (or,
-    // for a project with no set, the workspace's connected repos) on
-    // create_work_item / update_work_item. The message NAMES the repos of the
+    // `targetRepo` naming a repo outside the item's PROJECT repository set on
+    // create_work_item / update_work_item — a workspace-connected repo the
+    // project never linked included (MOTIR-4955). The message NAMES the repos of the
     // scope it checked, so the agent self-corrects in one hop instead of
     // guessing — the MCP analogue of the route's 422.
     err instanceof UnknownTargetRepoError ||
