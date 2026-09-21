@@ -19,7 +19,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { plansService } from '@/lib/services/plansService';
 import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
-import { recordConversationTurn } from './planChangeConversation';
+import { asConversationTurn } from './planChangeConversation';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestPerson } from './testPerson';
 
@@ -198,42 +198,43 @@ export async function seedPlanChangeProposal(
     scopeKey?: string;
   },
 ): Promise<string> {
-  // The SESSION half of a real submit: one conversation per scope, whose
-  // `lastJobId` moves to the job this turn just started.
+  // The SESSION half of a real submit: the append runs as a turn of the scope's
+  // conversation, which is then left as the browser finds it.
   const scopeKey = args.scopeKey ?? PROJECT_SCOPE_KEY;
-  await recordConversationTurn(ctx, projectId, scopeKey, args.jobId);
-
-  const plan = await plansService.createPlan(
-    projectId,
-    { title: args.title, sourceJobId: args.jobId },
-    ctx,
-  );
-  await plansService.addProposals(
-    plan.id,
-    [
-      // `story` carries no `type` — that is leaf-only (the 2.7.2 ADR; an
-      // epic/story with a type is rejected 422 by the approve).
-      ...args.adds.map((title) => ({
-        op: 'add' as const,
-        proposedFields: {
-          title,
-          kind: args.addShape?.kind ?? 'story',
-          ...(args.addShape?.type ? { type: args.addShape.type } : {}),
-        },
-        ...(args.addShape?.parentRef ? { parentRef: args.addShape.parentRef } : {}),
-      })),
-      ...(args.rename
-        ? [
-            {
-              op: 'modify' as const,
-              workItemId: args.rename.workItemId,
-              patch: { title: args.rename.title },
-            },
-          ]
-        : []),
-    ],
-    ctx,
-  );
+  const plan = await asConversationTurn(ctx, projectId, scopeKey, args.jobId, async () => {
+    const plan = await plansService.createPlan(
+      projectId,
+      { title: args.title, sourceJobId: args.jobId },
+      ctx,
+    );
+    await plansService.addProposals(
+      plan.id,
+      [
+        // `story` carries no `type` — that is leaf-only (the 2.7.2 ADR; an
+        // epic/story with a type is rejected 422 by the approve).
+        ...args.adds.map((title) => ({
+          op: 'add' as const,
+          proposedFields: {
+            title,
+            kind: args.addShape?.kind ?? 'story',
+            ...(args.addShape?.type ? { type: args.addShape.type } : {}),
+          },
+          ...(args.addShape?.parentRef ? { parentRef: args.addShape.parentRef } : {}),
+        })),
+        ...(args.rename
+          ? [
+              {
+                op: 'modify' as const,
+                workItemId: args.rename.workItemId,
+                patch: { title: args.rename.title },
+              },
+            ]
+          : []),
+      ],
+      ctx,
+    );
+    return plan;
+  });
   // The handler's LAST callback — the plan leaves `generating` and becomes a
   // pending review. Until it does, there is nothing for the rail to confirm.
   await plansService.markPlanned(plan.id, ctx);

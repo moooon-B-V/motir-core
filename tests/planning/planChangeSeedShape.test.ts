@@ -70,6 +70,12 @@ describe('the E2E seeds produce a REAL conversation shape', () => {
       const session = await adminDb.planChangeSession.findFirstOrThrow({
         where: { projectId: fx.projectId },
       });
+      // …and at page load NO TURN HAS BEEN SUBMITTED. The specs seed before the
+      // user types, so a `lastJobId` left on the seeded job reads to the rail as a
+      // finished turn awaiting review, and it shows the confirm bar on mount — the
+      // merge queue's second ejection (`cloud-contextual-plan-confirm.spec.ts`,
+      // "a failed run is recoverable in place").
+      expect(session.lastJobId).toBeNull();
       // The browser then OPENS that same conversation — it must resume, not collide.
       await expect(
         planTargetLockService.acquireForScope(session.id, [row.identifier], {

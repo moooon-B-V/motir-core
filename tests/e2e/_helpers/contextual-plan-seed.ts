@@ -20,7 +20,7 @@
 // temp ref), so this is the shipped contract, not a test-only shortcut.
 
 import { db } from '@/lib/db';
-import { recordConversationTurn } from './planChangeConversation';
+import { asConversationTurn } from './planChangeConversation';
 import { plansService } from '@/lib/services/plansService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemKind } from '@/generated/prisma/client';
@@ -91,12 +91,25 @@ export async function seedContextualProposal(
     anchorWorkItemId?: string;
   },
 ): Promise<string> {
-  // The SESSION half of a real contextual submit: one conversation per scope,
-  // whose `lastJobId` moves to the job this turn just started.
-  await recordConversationTurn(ctx, projectId, args.anchorWorkItemId ?? null, args.jobId, {
-    anchorIsWorkItemId: true,
-  });
+  // The SESSION half of a real contextual submit: the append runs as a turn of
+  // the anchor's conversation, which is then left as the browser finds it.
+  const plan = await asConversationTurn(
+    ctx,
+    projectId,
+    args.anchorWorkItemId ?? null,
+    args.jobId,
+    () => appendContextualProposals(ctx, projectId, args),
+    { anchorIsWorkItemId: true },
+  );
+  await plansService.markPlanned(plan.id, ctx);
+  return plan.id;
+}
 
+async function appendContextualProposals(
+  ctx: ServiceContext,
+  projectId: string,
+  args: Parameters<typeof seedContextualProposal>[2],
+) {
   const plan = await plansService.createPlan(
     projectId,
     { title: args.title, sourceJobId: args.jobId },
@@ -122,8 +135,7 @@ export async function seedContextualProposal(
     ],
     ctx,
   );
-  await plansService.markPlanned(plan.id, ctx);
-  return plan.id;
+  return plan;
 }
 
 /** The anchor's direct children, by title — the "did it land UNDER the item?"
