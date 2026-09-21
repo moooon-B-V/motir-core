@@ -256,3 +256,87 @@ describe('the item page — the Choice section', () => {
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });
+
+describe('the remaining shapes (MOTIR-5898 coverage)', () => {
+  it('the chosen option, still in the body, is marked Chosen with its glyph; an unlabelled decider reads blank', () => {
+    renderFrame({ gate: { ...CHOSEN, decidedByLabel: null } });
+    const row = document.querySelector('[data-option-id="managed-object-storage"]')!;
+    expect(row.textContent).toContain('Chosen');
+    expect(row.querySelector('svg')).toBeTruthy();
+    expect(
+      document.querySelector('[data-option-id="our-own-postgres"]')!.textContent,
+    ).not.toContain('Chosen');
+  });
+
+  it('a bare draft — no question, no why, no follow-up — renders its options and each defect sentence', () => {
+    renderWithIntl(
+      <ChoiceSection
+        body={{
+          ok: false,
+          defects: [
+            { reason: 'fewer_than_two_options' },
+            { reason: 'unknown_situation', value: 'the team prefers it' },
+          ],
+          draft: {
+            question: '',
+            why: null,
+            options: [{ id: 'only', label: 'Only', bestFor: 'x', whyMd: '' }],
+            followUpMd: '',
+          },
+        }}
+        gate={null}
+        canDecide={false}
+        routedToLabel={null}
+        routedToViewer={false}
+        itemIdentifier="ACME-42"
+      />,
+    );
+    expect(
+      screen.getByText('This choice lists only one option. A choice needs at least two.'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/“the team prefers it” is not one of the three situations/),
+    ).toBeTruthy();
+    expect(screen.getByText('Only')).toBeTruthy();
+    expect(screen.queryByText('Question')).toBeNull();
+    expect(screen.queryByText('What this choice gates')).toBeNull();
+  });
+
+  it('a situation-3 why quotes nothing, and a gate with no body yet renders the options read-only', () => {
+    renderWithIntl(
+      <ChoiceSection
+        body={{
+          ok: true,
+          port: { ...TWO, why: { situation: 'two_workflows', youSaid: null, evidenceMd: '' } },
+        }}
+        gate={null}
+        canDecide={false}
+        routedToLabel={null}
+        routedToViewer={false}
+        itemIdentifier="ACME-42"
+      />,
+    );
+    expect(screen.getByText('Your requirement allows two workflows')).toBeTruthy();
+    expect(screen.queryByText('You said')).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+  });
+
+  it('a decided choice whose body stopped parsing still shows its record', () => {
+    renderWithIntl(
+      <ChoiceSection
+        body={{
+          ok: false,
+          defects: [{ reason: 'no_follow_up_section' }],
+          draft: { question: 'Q', why: null, options: [], followUpMd: '' },
+        }}
+        gate={CHOSEN}
+        canDecide={false}
+        routedToLabel="Yue"
+        routedToViewer={false}
+        itemIdentifier="ACME-42"
+      />,
+    );
+    expect(screen.getByText('Follow-up planning owed — The export story.')).toBeTruthy();
+    expect(screen.queryByText("Can't be decided yet")).toBeNull();
+  });
+});

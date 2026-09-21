@@ -25,6 +25,13 @@ import type { ApprovalGateDTO, ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 //     without verbs: its record, or who it waits on;
 //   · no gate yet (the choice is blocked, or already done) — the options, read-only.
 
+/* v8 ignore next 3 -- UNREACHABLE: the section renders the frame with `canDecide={false}`,
+   so it draws no verbs and nothing can call this. The page keeps the record and none of
+   the verbs (MOTIR-5215); a decision is made in the overlay. */
+async function decideNothing(): Promise<null> {
+  return null;
+}
+
 export function ChoiceSection({
   body,
   gate,
@@ -92,8 +99,7 @@ export function ChoiceSection({
       canDecide={false}
       routedToLabel={routedToLabel}
       identifier={itemIdentifier}
-      // Unreachable: the frame draws no verbs here.
-      onDecide={async () => null}
+      onDecide={decideNothing}
     />
   );
 }
