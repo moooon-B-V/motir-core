@@ -1195,19 +1195,19 @@ names the lesson that already covers it so the caller can reword or retire it.
 Not to be confused with motir-ai's internal `log_planning_mistake`, which the
 planner calls during a run.
 
-| Input         | Type     | Required | Notes                                                                              |
-| ------------- | -------- | -------- | ---------------------------------------------------------------------------------- |
-| `projectKey`  | string   | yes      | The project the lesson belongs to.                                                 |
-| `title`       | string   | yes      | The takeaway in one line — what to do differently, not a headline for an incident. |
-| `body`        | string   | yes      | What goes wrong, stated so it is recognisable next time.                           |
-| `why`         | string   | yes      | Why it matters. The one field that may carry your own specifics.                   |
-| `howToApply`  | string   | yes      | The actionable rule, in the second person, addressed to a future planner.          |
-| `mistakeType` | enum     | no       | `regular_planning` (default) · `onboarding_planning` · `planning_craft`.           |
-| `kinds`       | string[] | no       | `epic` · `story` · `task` · `bug` · `subtask`. Omitted = every kind.               |
-| `types`       | string[] | no       | The work-type vocabulary (`code`, `design`, …). Omitted = every type.              |
-| `phases`      | string[] | no       | `lay` · `author`. Omitted = both. (`skeleton` · `deepen` still accepted.)          |
-| `subject`     | string   | no       | **SCALAR, not a list.** Which subject matter. Omitted = every subject.             |
-| `sourceRef`   | string   | no       | Provenance, and the idempotency key — a repeat returns the existing lesson.        |
+| Input         | Type     | Required | Notes                                                                                                                                                                                              |
+| ------------- | -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `projectKey`  | string   | yes      | The project the lesson belongs to.                                                                                                                                                                 |
+| `title`       | string   | yes      | The takeaway in one line — what to do differently, not a headline for an incident.                                                                                                                 |
+| `body`        | string   | yes      | What goes wrong, stated so it is recognisable next time.                                                                                                                                           |
+| `why`         | string   | yes      | Why it matters. The one field that may carry your own specifics.                                                                                                                                   |
+| `howToApply`  | string   | yes      | The actionable rule, in the second person, addressed to a future planner.                                                                                                                          |
+| `mistakeType` | enum     | no       | `regular_planning` (default) · `onboarding_planning` · `planning_craft`.                                                                                                                           |
+| `kinds`       | string[] | no       | `project` · `onboarding` · `epic` · `story` · `task` · `bug` · `subtask` — every LAY TARGET (MOTIR-5622): a mistake made laying a level is filed under the level laid under. Omitted = every kind. |
+| `types`       | string[] | no       | The work-type vocabulary (`code`, `design`, …). Omitted = every type.                                                                                                                              |
+| `phases`      | string[] | no       | `lay` · `author`. Omitted = both. (`skeleton` · `deepen` still accepted.)                                                                                                                          |
+| `subject`     | string   | no       | **SCALAR, not a list.** Which subject matter. Omitted = every subject.                                                                                                                             |
+| `sourceRef`   | string   | no       | Provenance, and the idempotency key — a repeat returns the existing lesson.                                                                                                                        |
 
 Requires the lesson-library-change permission (`lesson:manage`) — the same key
 retiring a lesson takes, checked **before** any call to motir-ai.
@@ -1260,14 +1260,14 @@ The last two both carry an empty `lessons`, and treating `unavailable` as
 `nothing-matched` is a search that reports "nothing exists" truthfully and
 wrongly.
 
-| Input        | Type     | Required | Notes                                                                    |
-| ------------ | -------- | -------- | ------------------------------------------------------------------------ |
-| `projectKey` | string   | yes      | The project whose lessons join the shared corpus in the answer.          |
-| `query`      | string   | yes      | The question, in takeaway register — the action and the risk shape.      |
-| `kinds`      | string[] | no       | `epic` · `story` · `task` · `bug` · `subtask`. Omitted = unconstrained.  |
-| `types`      | string[] | no       | The work-type vocabulary (`code`, `design`, …). Omitted = unconstrained. |
-| `phases`     | string[] | no       | `lay` · `author`. Omitted = unconstrained. (Old spellings still taken.)  |
-| `limit`      | number   | no       | How many to return, nearest first. Default 8, max 50.                    |
+| Input        | Type     | Required | Notes                                                                                                                              |
+| ------------ | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `projectKey` | string   | yes      | The project whose lessons join the shared corpus in the answer.                                                                    |
+| `query`      | string   | yes      | The question, in takeaway register — the action and the risk shape.                                                                |
+| `kinds`      | string[] | no       | `project` · `onboarding` · `epic` · `story` · `task` · `bug` · `subtask` — every LAY TARGET (MOTIR-5622). Omitted = unconstrained. |
+| `types`      | string[] | no       | The work-type vocabulary (`code`, `design`, …). Omitted = unconstrained.                                                           |
+| `phases`     | string[] | no       | `lay` · `author`. Omitted = unconstrained. (Old spellings still taken.)                                                            |
+| `limit`      | number   | no       | How many to return, nearest first. Default 8, max 50.                                                                              |
 
 **Output** — each lesson's `title`, `body`, `howToApply`, its `scope`
 (`global` / `tenant`), the axes it is tagged on, and its cosine `distance`.

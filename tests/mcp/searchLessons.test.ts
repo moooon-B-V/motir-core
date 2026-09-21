@@ -225,6 +225,12 @@ describe('the axes reach the seam, and an omitted one stays absent', () => {
     });
   });
 
+  // MOTIR-5622 — a lay target that is not a card reaches the seam as sent.
+  it.each([['project'], ['onboarding']])('passes kinds: [%s] through', async (kind) => {
+    await runSearchLessons({ ...ARGS, kinds: [kind] } as never, ctx);
+    expect(searchLessons.mock.calls[0]![2]).toMatchObject({ kinds: [kind] });
+  });
+
   // MOTIR-4775 — the one-release grace, asserted where it is observable: the
   // value motir-ai RECEIVES. A caller still on the old runbook sends
   // `skeleton` / `deepen` and the seam sees `lay` / `author`, so no retired
@@ -322,7 +328,8 @@ describe('the subject is VISIBLE on the way back', () => {
 
 describe('an illegal axis value is refused with the legal set named', () => {
   it.each([
-    ['kinds', ['epic', 'story', 'task', 'bug', 'subtask']],
+    // MOTIR-5622 — every lay target, the two non-card ones included.
+    ['kinds', ['project', 'onboarding', 'epic', 'story', 'task', 'bug', 'subtask']],
     ['phases', ['lay', 'author']],
   ])('%s — the schema enumerates the legal members', (axis, legal) => {
     // The refusal is the SCHEMA's: `strictInput.ts` makes every tool's input
