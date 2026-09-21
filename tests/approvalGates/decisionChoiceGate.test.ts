@@ -107,7 +107,7 @@ describe('the raise — a complete, unblocked choice is asked', () => {
     expect(await statusOf(item.id)).toBe('todo');
 
     const detail = await workItemsService.getIssueDetail(fx.projectId, item.identifier, fx.ctx);
-    expect(detail.choiceBody).toEqual({
+    expect(detail.choiceBody).toMatchObject({
       ok: false,
       defects: [{ reason: 'option_without_best_for', label: 'Our own Postgres' }],
     });

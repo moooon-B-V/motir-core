@@ -1,4 +1,9 @@
-import type { ChoiceDefect, ChosenOption, ParsedChoice } from '@/lib/approvalGates/choiceOptions';
+import type {
+  ChoiceDefect,
+  ChoiceDraft,
+  ChosenOption,
+  ParsedChoice,
+} from '@/lib/approvalGates/choiceOptions';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
@@ -406,7 +411,7 @@ export type ChoiceDefectDTO = ChoiceDefect;
  */
 export type ChoiceBodyDTO =
   | { ok: true; port: DecisionChoicePortDTO }
-  | { ok: false; defects: ChoiceDefectDTO[] };
+  | { ok: false; defects: ChoiceDefectDTO[]; draft: ChoiceDraft };
 
 export interface DecisionChoiceSubjectSummaryDTO {
   kind: 'decision_choice';

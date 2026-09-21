@@ -61,9 +61,7 @@ import {
   withdrawsPendingQuestion,
 } from '@/lib/workItems/statusLadder';
 import { reconcileAcceptanceOwnerOf, reconcileGatesFor } from '@/lib/services/gateSetFor';
-import { choiceGateService } from '@/lib/services/choiceGateService';
-import { parseChoiceOptions } from '@/lib/approvalGates/choiceOptions';
-import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
+import { choiceBodyOf, choiceGateService } from '@/lib/services/choiceGateService';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -1439,21 +1437,6 @@ function pickReview(countable: readonly CountableReview[]): CountableReview | nu
   if (changes.length > 0) return changes[0]!;
   const approvals = countable.filter((r) => r.state === 'approved').sort(newestFirst);
   return approvals[0] ?? null;
-}
-
-/**
- * A choice's body, parsed for the item page (MOTIR-5891) — `null` for anything that
- * is not `type: choice`. Pure: it reads the row the detail read already loaded.
- */
-function choiceBodyOf(item: {
-  type: string | null;
-  descriptionMd: string | null;
-}): ChoiceBodyDTO | null {
-  if (item.type !== 'choice') return null;
-  const parse = parseChoiceOptions(item.descriptionMd);
-  if (!parse.ok) return { ok: false, defects: parse.defects };
-  const { ok: _ok, ...port } = parse;
-  return { ok: true, port };
 }
 
 /**

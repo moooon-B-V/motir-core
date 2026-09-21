@@ -85,10 +85,24 @@ export interface ParsedChoice {
   subjectVersion: string;
 }
 
+/**
+ * What a DEFECTIVE body still says, as far as it parses — so the defect state can
+ * show the question and the options read-only beside the reason (MOTIR-5896,
+ * design Panel 3). Never a subject: nothing here can be chosen.
+ */
+export interface ChoiceDraft {
+  question: string;
+  /** Null when the Why section is missing or its situation unreadable. */
+  why: ChoiceWhy | null;
+  options: ChoiceOption[];
+  followUpMd: string;
+}
+
 export interface DefectiveChoice {
   ok: false;
   /** Every defect found, in a stable order; the first is the one to headline. */
   defects: ChoiceDefect[];
+  draft: ChoiceDraft;
 }
 
 export type ChoiceParse = ParsedChoice | DefectiveChoice;
@@ -248,7 +262,13 @@ export function parseChoiceOptions(descriptionMd: string | null | undefined): Ch
   const followUpMd = byHeading.get(SECTION.gates) ?? '';
   if (followUpMd === '') defects.push({ reason: 'no_follow_up_section' });
 
-  if (defects.length > 0 || why === null) return { ok: false, defects };
+  if (defects.length > 0 || why === null) {
+    return {
+      ok: false,
+      defects,
+      draft: { question: byHeading.get(SECTION.question) ?? '', why, options, followUpMd },
+    };
+  }
 
   return {
     ok: true,

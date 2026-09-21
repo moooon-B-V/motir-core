@@ -5,6 +5,7 @@ import { LATE_FALLBACK_ATTR } from './decisionAnchor';
 import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
 import { AcceptancePanel } from './AcceptancePanel';
 import { DesignResultSection } from './DesignResultSection';
+import { ChoiceSection } from './ChoiceSection';
 import { DecidedGateStatusBridge } from './DecidedGateStatusBridge';
 import {
   approveAndMergeAction,
@@ -242,11 +243,12 @@ export async function LateUpperSections({
   currentUserId: string;
 }) {
   const r = await reads;
-  const [tGithub, tAcceptance, tDesignResult, tRuns] = await Promise.all([
+  const [tGithub, tAcceptance, tDesignResult, tRuns, tChoice] = await Promise.all([
     getTranslations('github'),
     getTranslations('acceptance'),
     getTranslations('designResult'),
     getTranslations('runs'),
+    getTranslations('approvalGate.choice'),
   ]);
   // ⚠️ A DESIGN RESULT ON A CARD WITH AN OPEN LINKED PULL REQUEST IS NOT A SECTION
   // (`design-result.md` AMENDMENT 4 Q8). Those pull requests carry the decision —
@@ -477,6 +479,22 @@ export async function LateUpperSections({
                 ? null
                 : r.acceptanceGate.routedToLabel
             }
+          />
+        </ContentSectionCard>
+      ) : null}
+      {r.choiceGate.body ? (
+        // THE CHOICE (Story MOTIR-4914 · MOTIR-5896) — in the slot a design result takes,
+        // and the destination the decision-waiting marker scrolls to for this kind.
+        <ContentSectionCard title={tChoice('kindLabel')} decisionAnchor={['decision_choice']}>
+          {/* A choice made in the overlay moves this page's status rail through here. */}
+          {r.choiceGate.gate ? <DecidedGateStatusBridge gateId={r.choiceGate.gate.id} /> : null}
+          <ChoiceSection
+            body={r.choiceGate.body}
+            gate={r.choiceGate.gate}
+            canDecide={r.choiceGate.canDecide}
+            routedToLabel={r.choiceGate.routedToLabel}
+            routedToViewer={r.choiceGate.gate?.routedToId === currentUserId}
+            itemIdentifier={itemIdentifier}
           />
         </ContentSectionCard>
       ) : null}

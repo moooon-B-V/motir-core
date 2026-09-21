@@ -8676,6 +8676,64 @@
         "records": "记录你接受此决策",
         "moves": "将 {key} 移至“已批准”"
       }
+    },
+    "choice": {
+      "kindLabel": "选择",
+      "meta": "{count} 个选项",
+      "question": "问题",
+      "options": "选项 · {count}",
+      "bestIfYouWant": "如果你更看重",
+      "gates": "此选择决定的后续工作",
+      "verb": {
+        "choose": "选择「{label}」",
+        "chooseEmpty": "选择",
+        "noneOfThese": "都不合适 — 修改选项"
+      },
+      "consequence": {
+        "pick": "请先在上方选中一个选项。选择后，{key} 将移至“已完成”。",
+        "picked": "选择后，{key} 将移至“已完成”，并留下一轮待进行的后续规划。"
+      },
+      "confirm": {
+        "title": "选择此项将会：",
+        "record": "将「{label}」（如果你更看重：{bestFor}）记录为答案。",
+        "done": "将 {key} 移至“已完成”。",
+        "followUp": "留下一轮待进行的后续规划：{gates}。",
+        "proceed": "是，选择「{label}」"
+      },
+      "state": {
+        "chosen": "已选择"
+      },
+      "record": {
+        "lead": "由 {name} 选择 · {when}",
+        "chose": "选择了",
+        "followUp": "待进行后续规划 — {gates}",
+        "willRevise": "选项将被修改",
+        "askedBecause": "提问原因"
+      },
+      "cta": {
+        "body": "全屏查看选项，然后选择一个。",
+        "button": "查看并选择"
+      },
+      "defect": {
+        "title": "暂时无法决定",
+        "fewer_than_two_options": "此选择只列出了一个选项。一个选择至少需要两个选项。",
+        "option_without_best_for": "「{label}」只说明了它是什么，没有说明什么情况下最该选它。每个选项都需要一行 Best if you want:。",
+        "duplicate_option": "有两个选项都叫「{label}」。请为每个选项取不同的名字。",
+        "no_follow_up_section": "此选择没有说明它决定哪些后续工作。请添加 “What this choice gates” 一节，写明接下来的工作。",
+        "no_why_section": "此选择没有说明为什么需要选择。请添加 “Why this is a choice” 一节，并写一行 Situation:。",
+        "unknown_situation": "「{value}」不是三种情形之一。请使用 contradicts your decision、better than your decision 或 two workflows。",
+        "no_quoted_decision": "此选择在讨论你做过的决定，但没有引用它。请添加一行 You said:。",
+        "fix": "在描述修正之前，任何人都无法选择；描述完整后会立即发起提问。",
+        "flag": "缺少 — 请添加一行 Best if you want:"
+      },
+      "why": "为什么这是一个选择",
+      "situation": {
+        "contradicts_your_decision": "调研结果与你的决定相矛盾",
+        "better_than_your_decision": "有比你的决定更好的选项",
+        "two_workflows": "你的需求允许两种工作流"
+      },
+      "youSaid": "你说过",
+      "stale": "你阅读期间选项已更改。"
     }
   },
   "approvalOverlay": {

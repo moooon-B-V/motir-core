@@ -164,10 +164,23 @@ describe('ONE CONTROL — the approval frame is SHARED and COMPOSABLE (MOTIR-479
     // empty population is exactly what a rename would produce.
     expect(gateSurfaces.length).toBeGreaterThan(0);
 
-    for (const file of gateSurfaces) {
-      expect(codeOf(file), `${file} renders a gate without the shared frame`).toContain(
+    // A KIND FRAME (MOTIR-5896) is a kind's port and verb set wrapped around the
+    // shared control — `ChoiceGateFrame` holds the choice's selection and derives its
+    // verbs from it. A surface may render one instead of the control directly, and
+    // each kind frame is itself held to rendering the control, so the rule is the
+    // same rule one hop further out rather than an exemption from it.
+    const KIND_FRAMES = ['components/approvals/ChoiceGate.tsx'];
+    for (const frame of KIND_FRAMES) {
+      expect(codeOf(frame), `${frame} is a kind frame that does not render the control`).toContain(
         "from '@/components/approvals/ApprovalGateControl'",
       );
+    }
+    for (const file of gateSurfaces) {
+      const code = codeOf(file);
+      const rendersTheFrame =
+        code.includes("from '@/components/approvals/ApprovalGateControl'") ||
+        KIND_FRAMES.some((frame) => code.includes(`from '@/${frame.replace(/\.tsx$/, '')}'`));
+      expect(rendersTheFrame, `${file} renders a gate without the shared frame`).toBe(true);
     }
   });
 });

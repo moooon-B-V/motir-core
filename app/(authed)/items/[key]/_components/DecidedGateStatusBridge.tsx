@@ -32,7 +32,11 @@ export function DecidedGateStatusBridge({ gateId }: { gateId: string }) {
   useEffect(() => {
     if (entry === null || entry === seen.current) return;
     seen.current = entry;
-    applyOptimisticStatus(entry.gate.outcomeRef);
+    // What the decision WROTE — announced by the overlay. `outcomeRef` is the fallback,
+    // and it is a status only for the kinds that are not a choice (MOTIR-5893).
+    applyOptimisticStatus(
+      entry.statusWritten !== undefined ? entry.statusWritten : entry.gate.outcomeRef,
+    );
   }, [entry, applyOptimisticStatus]);
 
   return null;

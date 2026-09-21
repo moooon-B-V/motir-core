@@ -134,6 +134,17 @@ function reads(): LateReads {
       movedSince: [],
       document: null,
     },
+    // Not a choice — no choice gate, no body (MOTIR-5896).
+    choiceGate: {
+      gate: null,
+      canDecide: false,
+      routedToLabel: null,
+      earlierApproval: null,
+      settingsDoor: null,
+      stamp: null,
+      movedSince: [],
+      body: null,
+    },
   };
 }
 

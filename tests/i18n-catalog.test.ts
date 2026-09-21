@@ -376,6 +376,16 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // beside the decision type's own glyph, as *Pull requests* labels its row.
     'workbench.approvals.rowKind.decision_approval':
       "To-approve row KIND — the decision card's own question, beside its type glyph (§27)",
+    // THE CHOICE GATE (Story MOTIR-4914 · MOTIR-5891/5896). The gate kind and the type
+    // share a word ON PURPOSE: a `decision_choice` gate is only ever raised on a
+    // `type: choice` card, so the gate IS the card's own question — the decision
+    // kind's precedent above, one member over. Each sits in a gate-kind slot.
+    'approvalGate.choice.kindLabel':
+      "band-1 gate KIND in the approval frame — the choice card's own question",
+    'workbench.approvals.kind.decision_choice':
+      "Approvals row / overlay KIND for the choice gate — the choice card's own question",
+    'approvalGate.statusHeld.decisionNoun.decision_choice':
+      "the held-status sentence's decision NOUN — names the choice card's own question",
   },
   zh: {
     // `验证` is the verification TYPE noun and also the ordinary button verb; en
@@ -391,6 +401,12 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
 
     'approvalGate.decision.kindLabel': 'band-1 gate KIND in the approval frame (§27)',
     'workbench.approvals.rowKind.decision_approval': 'To-approve row KIND (§27)',
+    'approvalGate.choice.kindLabel': 'band-1 gate KIND — the choice card’s own question',
+    'workbench.approvals.kind.decision_choice': 'Approvals row / overlay KIND for the choice gate',
+    'approvalGate.statusHeld.decisionNoun.decision_choice': 'held-status decision NOUN',
+    // zh `选择` is both the type noun and the verb *choose*; this is band 3's commit
+    // verb before an option is picked, on the frame whose band 1 already names the kind.
+    'approvalGate.choice.verb.chooseEmpty': 'band-3 VERB *choose*, before an option is picked',
   },
 };
 

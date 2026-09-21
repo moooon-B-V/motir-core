@@ -233,3 +233,26 @@ describe('parseChoiceOptions — the seven defects', () => {
     expect(reasons(parseChoiceOptions(null))).toEqual(reasons(parseChoiceOptions('')));
   });
 });
+
+describe('parseChoiceOptions — a defective body still carries its DRAFT (MOTIR-5896)', () => {
+  it('the question, why and options as far as they parse, for the defect state to show', () => {
+    const parse = parseChoiceOptions(
+      body({ options: '### A\n**Best if you want:** x\nWhy A.\n### B\nNo line here.' }),
+    );
+    expect(parse.ok).toBe(false);
+    if (parse.ok) return;
+    expect(parse.draft.question).toBe('Where do reports live?');
+    expect(parse.draft.why?.situation).toBe('better_than_your_decision');
+    expect(parse.draft.options.map((o) => [o.label, o.bestFor])).toEqual([
+      ['A', 'x'],
+      ['B', ''],
+    ]);
+    expect(parse.draft.followUpMd).toBe('The export story.');
+  });
+
+  it('a missing Why section drafts `why: null` rather than guessing a situation', () => {
+    const parse = parseChoiceOptions(body({ why: null }));
+    expect(parse.ok).toBe(false);
+    if (!parse.ok) expect(parse.draft.why).toBeNull();
+  });
+});

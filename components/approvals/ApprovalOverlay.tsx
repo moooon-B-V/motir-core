@@ -17,6 +17,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
+import { ChoiceGateFrame } from '@/components/approvals/ChoiceGate';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from '@/app/(authed)/items/[key]/_components/DesignResultPanel';
 import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
@@ -471,11 +472,7 @@ export function ApprovalOverlay() {
     );
     const subject = read.subject;
 
-    // A CHOICE is read (MOTIR-5891) before its port is drawn (MOTIR-5896): until then
-    // the overlay says, honestly, that it cannot show this kind yet — never a design
-    // panel over a subject that is not one.
-    const choiceNotDrawnYet = subject.state === 'resolved' && subject.kind === 'decision_choice';
-    if (subject.state === 'kind_not_built' || choiceNotDrawnYet) {
+    if (subject.state === 'kind_not_built') {
       // Panel 4a — a feature that has not shipped. Opposite in meaning to 4b,
       // which is a gate worth withdrawing, however alike they look.
       body = (
@@ -528,13 +525,18 @@ export function ApprovalOverlay() {
         },
       ];
 
-      const onDecide = async (decision: GateDecision): Promise<GateRefusal | null> => {
+      const onDecide = async (
+        decision: GateDecision,
+        optionId?: string,
+      ): Promise<GateRefusal | null> => {
         // ⚠️ THE STAMP THIS READ HANDED OVER, never one fetched at press time (MOTIR-5235).
         // A stamp asked for when the reader presses always matches, so the check would pass
         // every time and protect nothing: it has to be the record of what is on screen.
         const result = await decideApprovalGateAction({
           gateId: gate.id,
           decision,
+          // A CHOICE names its option (MOTIR-5896); no other verb carries one.
+          ...(optionId ? { optionId } : {}),
           identifier,
           stamp: read.stamp ?? '',
         });
@@ -545,7 +547,13 @@ export function ApprovalOverlay() {
         // The WHOLE decision, not only its state: the To-approve row reads the
         // state, and the item page underneath reads `outcomeRef` for its status
         // rail and `filesKept` for its record (MOTIR-5570).
-        announceGateDecided({ gate: result.gate, filesKept: result.filesKept });
+        announceGateDecided({
+          gate: result.gate,
+          filesKept: result.filesKept,
+          // What the decision WROTE onto the card — the item page's status rail reads
+          // this, never `outcomeRef`, which is a CHOICE's option id (MOTIR-5893).
+          statusWritten: result.statusWritten,
+        });
         router.refresh();
         return null;
       };
@@ -659,8 +667,27 @@ export function ApprovalOverlay() {
             onShowCurrentVersion={() => setReread((n) => n + 1)}
             focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
           />
-        ) : subject.kind === 'decision_choice' ? /* v8 ignore next -- answered above by the
-             not-built state until MOTIR-5896 draws the choice port */ null : (
+        ) : subject.kind === 'decision_choice' ? (
+          // THE CHOICE PORT (Story MOTIR-4914 · MOTIR-5896) — the options, each with its
+          // WHY and what it is best for, in the SAME frame: select a row, then commit.
+          <ChoiceGateFrame
+            key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}
+            layout="fill"
+            gate={gate}
+            port={subject.choice}
+            canDecide={read.canDecide && !decidedState}
+            routedToLabel={read.routedToLabel}
+            identifier={identifier}
+            alert={
+              moved.length > 0 && gate.state === 'awaiting' && !decidedState ? (
+                <SubjectMovedNotice moved={moved} onShow={() => setReread((n) => n + 1)} />
+              ) : undefined
+            }
+            onDecide={onDecide}
+            onShowCurrentVersion={() => setReread((n) => n + 1)}
+            focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
+          />
+        ) : (
           <ApprovalGateControl
             // A fresh read is a fresh frame: a stale refusal clears and the verbs return.
             key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}

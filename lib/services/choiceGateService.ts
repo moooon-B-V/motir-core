@@ -105,6 +105,22 @@ async function hopsToReview(item: WorkItem, tx: Prisma.TransactionClient): Promi
   return path;
 }
 
+/**
+ * A work item's body as the item page and the port read it — the parse, gate or no
+ * gate, so a defective body renders its defect (and its draft) rather than nothing.
+ * Null for a work item that is not a choice. Pure: the ONE mapping of parse → DTO.
+ */
+export function choiceBodyOf(item: {
+  type: string | null;
+  descriptionMd: string | null;
+}): ChoiceBodyDTO | null {
+  if (item.type !== 'choice') return null;
+  const parse = parseChoiceOptions(item.descriptionMd);
+  if (!parse.ok) return { ok: false, defects: parse.defects, draft: parse.draft };
+  const { ok: _ok, ...port } = parse;
+  return { ok: true, port };
+}
+
 export const choiceGateService = {
   /**
    * Bring a work item's `decision_choice` question into line with its body.
@@ -199,11 +215,8 @@ export const choiceGateService = {
     const item = await withWorkspaceContext(ctx, (tx) =>
       workItemRepository.findById(workItemId, tx),
     );
-    if (!item || item.workspaceId !== ctx.workspaceId || item.type !== 'choice') return null;
-    const parse = parseChoiceOptions(item.descriptionMd);
-    if (!parse.ok) return { ok: false, defects: parse.defects };
-    const { ok: _ok, ...port } = parse;
-    return { ok: true, port };
+    if (!item || item.workspaceId !== ctx.workspaceId) return null;
+    return choiceBodyOf(item);
   },
 
   /** The overlay's port for a `decision_choice` gate — null when the body no longer parses. */
