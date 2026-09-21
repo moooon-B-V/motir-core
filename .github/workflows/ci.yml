@@ -1314,21 +1314,30 @@ jobs:
       # from the same checkout and base, and the cost-balanced sequencer
       # partitions it deterministically, so no file runs twice and none drops.
       #
-      # ⚠️ IT FAILS OPEN. Any error while selecting — the base cannot be fetched,
-      # the diff is empty, the script refuses because a force-full path changed,
-      # the list comes back empty — leaves `mode` at `full` (or unset, when the
-      # step is skipped), and the full-shard step below runs exactly as it
-      # always has. The base sha arrives through `env:`, never spliced in.
+      # ⚠️ THE DIFF IS THE MERGE COMMIT AGAINST ITS FIRST PARENT (MOTIR-5923),
+      # never against `pull_request.base.sha`. The checkout is
+      # `refs/pull/<n>/merge`, built on whatever `main` was when GitHub built it;
+      # the payload's base sha can be older, and a two-dot diff from it counted
+      # everything `main` gained since as this pull request's change — a
+      # force-full path in that gap refused the subset. `HEAD^1 HEAD` is a subset
+      # of the `changes` job's `base...head`, so it can only ever agree with it.
+      # The checkout is shallow, so the step deepens it by one to reach the
+      # parents, and checks HEAD really is a merge before trusting `HEAD^1`.
+      #
+      # ⚠️ IT FAILS OPEN. Any error while selecting — the parents cannot be
+      # fetched, HEAD is not a merge, the diff is empty, the script refuses
+      # because a force-full path changed, the list comes back empty — leaves
+      # `mode` at `full` (or unset, when the step is skipped), and the full-shard
+      # step below runs exactly as it always has.
       - name: Select the affected test files
         id: select
         if: needs.changes.outputs.vitest_full != 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -uo pipefail
           list="$RUNNER_TEMP/vitest-affected.txt"
-          if git fetch --no-tags --depth=1 origin "$BASE_SHA" &&
-            pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --select "$BASE_SHA" --out "$list" &&
+          if git fetch --no-tags --depth=2 origin "$(git rev-parse HEAD)" &&
+            git rev-parse --verify --quiet 'HEAD^2' >/dev/null &&
+            pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --select 'HEAD^1' --out "$list" &&
             [ -s "$list" ]; then
             echo "mode=subset" >>"$GITHUB_OUTPUT"
           else

@@ -255,12 +255,20 @@ requests is above 50%, or if more than half of the 30 hit the force-full set. Me
    predicate this script already implements, run as a selection mode of the same code so that the rule
    that was measured and the rule that is enforced cannot drift — and handed to each leg as positional
    file filters: `vitest run --config vitest.collect.config.ts --shard=<n>/12 --passWithNoTests <files…>`.
+   **The diff it selects from is `git diff --name-only HEAD^1 HEAD`** — the pull request's merge
+   commit (`refs/pull/<n>/merge`, what the legs check out) against its own first parent
+   (`scripts/ci/selectionDiff.mjs`). Never the event payload's `pull_request.base.sha`: `main` can move
+   between the event and the merge-ref build, and a two-dot diff from that stale sha counts what `main`
+   gained in the gap as this pull request's change — a force-full path there refused the subset and ran
+   the full suite with no coverage gate (MOTIR-5923, run 35600662955). `HEAD^1 HEAD` is a subset of the
+   `changes` job's `base...head`, so the two readers cannot disagree in the direction that refuses.
 2. **`--passWithNoTests` is mandatory** on a subset run: without it `--shard` throws when the subset
    holds fewer than twelve files, and an empty leg exits 1.
 3. **The sequencer needs no change.** `CostBalancedSequencer.shard` receives the selected specs and
    packs them deterministically, so twelve legs computing the same selection agree on the partition.
 4. **Fail open.** Any error while selecting — including `git` failing on a shallow checkout — runs the
-   leg's full shard. The checkout must hold the merge base.
+   leg's full shard. The checkout must hold the merge commit's parents: the step deepens the depth-1
+   checkout to two and confirms `HEAD^2` exists before trusting `HEAD^1`.
 5. **No coverage on a subset.** The per-file thresholds are enforced on a merged report; a subset
    cannot satisfy them, so a subset run collects none and the `coverage` job is skipped.
 6. **A `vitest-full` label on a pull request forces the full suite** — the diagnosis door §5 depends on.
