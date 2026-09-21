@@ -8357,7 +8357,9 @@
     "waiting": {
       "on": "Waiting on {name}",
       "glyphYours": "Awaiting you — {decision}",
-      "glyphOn": "Waiting on {name} — {decision}"
+      "glyphOn": "Waiting on {name} — {decision}",
+      "jump": "Go to the {decision}",
+      "opening": "Opening the {decision}…"
     },
     "settingsDoor": {
       "mergeMode": "Change how this project merges pull requests →"

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Hourglass, Stamp } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
@@ -32,6 +33,12 @@ interface DecisionWaitingMarkerProps {
   form?: 'label' | 'glyph';
   /** For the board card's `aria-describedby`, which the card's own label would otherwise hide. */
   id?: string;
+  /** Label form only: a trailing glyph after the words — the item header's
+   *  `ArrowDown` / pending spinner (MOTIR-5878). The marker itself stays static. */
+  trailing?: ReactNode;
+  /** Label form only: extra classes on the pill, e.g. the header button's hover
+   *  border. Styling stays HERE, so the button never forks the pill's look. */
+  className?: string;
 }
 
 export function DecisionWaitingMarker({
@@ -40,6 +47,8 @@ export function DecisionWaitingMarker({
   routedToName,
   form = 'label',
   id,
+  trailing,
+  className,
 }: DecisionWaitingMarkerProps) {
   const t = useTranslations('approvalGate');
   const name = routedToName ?? t('theAssignee');
@@ -83,7 +92,9 @@ export function DecisionWaitingMarker({
     <Pill
       id={id}
       tone={yours ? 'awaiting' : 'neutral'}
-      className="min-w-0 max-w-full shrink-0"
+      className={
+        className ? `min-w-0 max-w-full shrink-0 ${className}` : 'min-w-0 max-w-full shrink-0'
+      }
       data-decision-marker={state}
       data-decision-kind={kind}
     >
@@ -93,6 +104,7 @@ export function DecisionWaitingMarker({
         <Hourglass className="h-3 w-3 shrink-0" aria-hidden />
       )}
       <span className="truncate">{words}</span>
+      {trailing}
     </Pill>
   );
 }

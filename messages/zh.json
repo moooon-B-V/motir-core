@@ -8353,7 +8353,9 @@
     "waiting": {
       "on": "等待 {name} 处理",
       "glyphYours": "等待你处理——{decision}",
-      "glyphOn": "等待 {name} 处理——{decision}"
+      "glyphOn": "等待 {name} 处理——{decision}",
+      "jump": "前往{decision}",
+      "opening": "正在打开{decision}…"
     },
     "settingsDoor": {
       "mergeMode": "更改该项目合并拉取请求的方式 →"
