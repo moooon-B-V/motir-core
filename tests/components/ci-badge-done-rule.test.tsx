@@ -80,7 +80,7 @@ function boardCard(status: string, statusCategory: 'in_progress' | 'done'): Boar
     storyPoints: null,
     position: 'a0',
     ready: true,
-    awaitingAcceptance: false,
+    pendingDecision: null,
     ciState: 'failing',
     statusCategory,
   } as BoardCardDto;
@@ -110,6 +110,8 @@ function listRow(status: string, statusCategory: 'in_progress' | 'done'): IssueR
     estimateLabel: null,
     storyPointsLabel: null,
     hasChildren: false,
+    pendingDecision: null,
+    pendingRoutedToName: null,
   };
 }
 

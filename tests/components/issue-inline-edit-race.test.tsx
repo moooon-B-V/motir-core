@@ -139,6 +139,8 @@ function toRow(
     storyPoints: dto.storyPoints,
     storyPointsLabel: null,
     hasChildren: false,
+    pendingDecision: null,
+    pendingRoutedToName: null,
   };
 }
 

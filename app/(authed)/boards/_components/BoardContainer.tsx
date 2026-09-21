@@ -1213,6 +1213,11 @@ function BoardDnd({
               assigneeName={
                 activeCard.assigneeId ? (assigneeNameById.get(activeCard.assigneeId) ?? null) : null
               }
+              routedToName={
+                activeCard.pendingDecision
+                  ? (assigneeNameById.get(activeCard.pendingDecision.routedToId ?? '') ?? null)
+                  : null
+              }
             />
           ) : null}
         </DragOverlay>

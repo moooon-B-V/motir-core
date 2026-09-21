@@ -16,7 +16,7 @@
 // E2E_TEST_CODE_HEALTH, and `playwright.config.ts` `testIgnore`s `cloud-*`, so
 // the two sets were disjoint. The board was therefore rendered under the
 // PRODUCTION posture by exactly one spec — `cloud-video.spec.ts`, which visits
-// `/boards` to assert the "Awaiting acceptance" badge — and that spec seeds a
+// `/boards` to assert the decision-waiting marker (the retired "Awaiting acceptance" badge, MOTIR-5877) — and that spec seeds a
 // PAID org (`seedBillingOwner` + `paidOrgState`) with the org/workspace context
 // cookies pinned. The free-tier org on a plain sign-up, which is what a real
 // new customer is, had never had its board rendered cloud-on by anything.

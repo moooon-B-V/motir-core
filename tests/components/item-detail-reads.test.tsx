@@ -139,6 +139,10 @@ vi.mock('@/lib/services/approvalGatesService', async (importOriginal) => {
     approvalGatesService: {
       ...actual.approvalGatesService,
       listHeldTransitions: deferred('heldTransitions', [], 'tierTwo'),
+      // The header's decision-waiting marker (MOTIR-5878) — a TIER-TWO read, so the
+      // header never waits on the late stack. Mocked, not spread from the real
+      // service: the real one would open a database transaction here.
+      pendingDecisionsFor: deferred('pendingDecisions', new Map(), 'tierTwo'),
     },
   };
 });
@@ -451,6 +455,9 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
       // The held status moves (MOTIR-5528): the rail's status card draws them
       // under its value, so they are read with the rail, not after it.
       'heldTransitions',
+      // The header's decision-waiting marker (MOTIR-5878): the header is what the
+      // reader lands on, so its read is in THIS group, never in the late stack.
+      'pendingDecisions',
     ]) {
       expect(started, `${name} should already be in flight`).toContain(name);
     }
@@ -713,5 +720,64 @@ describe('permission shaping travels WITH the section (MOTIR-3437)', () => {
     expect(activity).toBeDefined();
     expect(attachments!.props.canCreate).toBe(true);
     expect((activity!.props.comments as { canComment: boolean }).canComment).toBe(true);
+  });
+});
+
+describe('the header’s decision-waiting marker (MOTIR-5878)', () => {
+  // The page is CALLED, not rendered, so what is asserted is the element tree it
+  // returns: the header mounts the marker exactly when the early read found a
+  // decision on THIS item, with the routed person named from the page's members.
+  const findAll = (node: unknown, type: unknown, out: Record<string, unknown>[] = []) => {
+    if (Array.isArray(node)) {
+      for (const n of node) findAll(n, type, out);
+    } else if (node && typeof node === 'object' && '$$typeof' in node) {
+      const el = node as unknown as { type: unknown; props: Record<string, unknown> };
+      if (el.type === type) out.push(el.props);
+      for (const value of Object.values(el.props ?? {})) findAll(value, type, out);
+    }
+    return out;
+  };
+
+  const renderHeader = async (
+    pending: Map<string, unknown>,
+    members: { userId: string; name: string; email: string }[] = [],
+  ) => {
+    const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
+    const { assignableMembersService } = await import('@/lib/services/assignableMembersService');
+    vi.mocked(approvalGatesService.pendingDecisionsFor).mockResolvedValueOnce(pending as never);
+    vi.mocked(assignableMembersService.list).mockResolvedValueOnce(members as never);
+    const { DecisionWaitingHeaderLink } =
+      await import('@/app/(authed)/items/[key]/_components/DecisionWaitingHeaderLink');
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set(['work_item:edit']));
+    releaseAll();
+    return findAll(await callPage(), DecisionWaitingHeaderLink);
+  };
+
+  it('mounts the marker for an awaiting gate, naming the routed member', async () => {
+    const markers = await renderHeader(
+      new Map([['i1', { state: 'others', kind: 'design_result', routedToId: 'u2' }]]),
+      [{ userId: 'u2', name: 'Ana Ruiz', email: 'ana@ex.com' }],
+    );
+    expect(markers).toHaveLength(1);
+    expect(markers[0]!.decision).toEqual({
+      state: 'others',
+      kind: 'design_result',
+      routedToId: 'u2',
+    });
+    expect(markers[0]!.routedToName).toBe('Ana Ruiz');
+  });
+
+  it('mounts NOTHING when the read finds no awaiting gate (none, decided or superseded)', async () => {
+    expect(await renderHeader(new Map())).toHaveLength(0);
+  });
+
+  it('passes a null name for a routee outside the member list — the marker’s own fallback', async () => {
+    const markers = await renderHeader(
+      new Map([['i1', { state: 'others', kind: 'acceptance_result', routedToId: 'gone' }]]),
+    );
+    expect(markers[0]!.routedToName).toBeNull();
   });
 });

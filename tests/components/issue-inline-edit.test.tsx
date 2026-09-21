@@ -120,6 +120,8 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     estimateLabel: null,
     storyPointsLabel: null,
     hasChildren: false,
+    pendingDecision: null,
+    pendingRoutedToName: null,
     ...over,
   };
 }

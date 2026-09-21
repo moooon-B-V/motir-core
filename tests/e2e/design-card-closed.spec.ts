@@ -190,7 +190,15 @@ test.describe('a done design is final until a person reopens it', () => {
       // one door (MOTIR-5215), so the door is MOUNTED before anything is said
       // about the question behind it.
       await expect(designDoor(page)).toHaveCount(1);
-      await expect(page.getByRole('main').getByText('Awaiting you', { exact: true })).toBeVisible();
+      // Scoped to the SECTION that holds the gate: since MOTIR-4908 (MOTIR-5878) the page
+      // header carries the decision-waiting marker, which also reads "Awaiting you".
+      await expect(
+        page
+          .getByRole('main')
+          .locator('[data-surface="card"]')
+          .filter({ has: page.getByRole('heading', { level: 2, name: 'Design result' }) })
+          .getByText('Awaiting you', { exact: true }),
+      ).toBeVisible();
       // …and decidable again, as the first was: the new version's design and the
       // verb, in the overlay the door opens.
       await designDoor(page).click();
