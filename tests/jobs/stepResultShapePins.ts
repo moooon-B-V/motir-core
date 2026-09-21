@@ -328,10 +328,16 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ checkedAt: string; entries: Array<{ cron: string; functionId: string; judgedAgainst: null | string; lastRunAt: null | string }>; overdue: Array<{ cron: string; functionId: string; judgedAgainst: null | string; lastRunAt: null | string }> }',
   },
+  // MOTIR-5873 added the OPTIONAL `skipped` member and KEPT the id, on purpose.
+  // `send` has an external effect — bumping it would re-send a reset or an
+  // invite on every run resumed across the deploy. The replay is safe as it
+  // stands: a memo written before the change has no `skipped`, and absent reads
+  // as "not skipped", which is exactly what that memo recorded (it was sent).
+  // Nothing branches on the value; it is surfaced on `job_run.output` only.
   send: {
     file: 'lib/jobs/definitions/emailSend.ts',
     shape:
-      '{ providerMessageId: null | string; template: "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
+      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
   },
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',

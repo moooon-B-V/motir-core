@@ -314,7 +314,17 @@ await sendEvent('email.send', {
 
 - **Retry policy.** `email.send` uses `retryPolicy: 'transient'` — a send fails
   on transient provider/network blips, so a few attempts with backoff is the
-  right intent (see **Retry policies**). A terminal failure dead-letters.
+  right intent (see **Retry policies**). A terminal failure dead-letters. A
+  spent provider quota is not retried at all: it dead-letters on its first
+  attempt as `EMAIL_QUOTA_EXHAUSTED` (`retryable: false`, below).
+- **Notification budget.** Notification-class templates (watchers, mentions,
+  subscriptions, digests, a failed automation) may use at most
+  `EMAIL_NOTIFICATION_DAILY_BUDGET` accepted sends per rolling 24 hours — 60 by
+  default on Resend — counted from `email_delivery`. Past it the send is SKIPPED:
+  the run succeeds with `skipped: 'notification_budget_exhausted'` on its output
+  and nothing reaches the provider, so the rest of the quota stays for password
+  reset, email change, invites and sign-in codes, which are never budgeted
+  (`EMAIL_TEMPLATE_CLASS`, `lib/services/emailService.ts`).
 - **`workspaceId: null`** for password reset (cross-workspace); the invite path
   passes its real workspace id.
 
@@ -385,6 +395,21 @@ Passing both `retryPolicy` and a raw `retries` throws (ambiguous intent). When a
 job specifies neither, it gets `transient`. On the **final** failed attempt the
 run dead-letters (below); `none` therefore dead-letters on the very first
 failure.
+
+### A failure can end the run early — `retryable: false`
+
+A handler that KNOWS repeating cannot help throws an error carrying
+`retryable: false`, and the worker dead-letters on that attempt — the same
+terminal hook and the same dead-letter row as a spent budget, with the rest of
+the budget unspent (`isNonRetryableFailure`, `lib/jobs/engine/worker.ts`). It
+is a property rather than a class because the code that knows is usually a
+provider adapter outside `lib/jobs/**`, which may not import the engine. Only an
+explicit `false` counts: an error that says nothing keeps its whole budget.
+
+The one producer today is a spent email-provider QUOTA (MOTIR-5873): a Resend
+`429 daily_quota_exceeded` clears only when the provider's day rolls over, so the
+`transient` schedule's minutes-apart retries each asked an exhausted quota again.
+It now dead-letters at once as `EMAIL_QUOTA_EXHAUSTED`.
 
 ## Concurrency — HISTORICAL (the option is gone)
 

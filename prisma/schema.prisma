@@ -4056,6 +4056,9 @@ model EmailDelivery {
   /// The join the jobs dashboard makes from a run row to its delivery.
   @@index([idempotencyKey])
   @@index([runId])
+  /// The notification budget's read (MOTIR-5873): accepted sends in the last
+  /// 24 hours, counted across every workspace on every notification send.
+  @@index([createdAt])
   @@map("email_delivery")
 }
 
