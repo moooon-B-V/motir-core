@@ -65,3 +65,10 @@ export const E2E_INSTALLATION_ACCOUNT = { login: 'moooon-e2e', type: 'Organizati
 // playwright.acceptance.config.ts hands it to the server as GITHUB_FALLBACK_ORG
 // before any app code is loadable.
 export const E2E_PROVISIONING_ORG = 'motir-projects-e2e';
+
+// The Studio App's id in the acceptance lane. Shared by the config (which hands it
+// to the webServer) and the job worker's merge-seam mirror (MOTIR-5837), so both
+// processes resolve a `motir-projects-e2e` repository to the same App. Its private
+// key is GENERATED per process — `createAppJwt` really signs, and nothing behind
+// the merge seam verifies the signature.
+export const E2E_STUDIO_APP_ID = '424242';
