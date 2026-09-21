@@ -83,7 +83,7 @@ beforeEach(async () => {
   blobs.clear();
   await truncateAuthTables();
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "approval_gate", "design_evidence", "folder" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "design_evidence", "approval_gate", "folder" RESTART IDENTITY CASCADE',
   );
   fx = await makeWorkItemFixture();
   const m = await createTestUser({ email: 'm@ex.com', name: 'Mira' });
