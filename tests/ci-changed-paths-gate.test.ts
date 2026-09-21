@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { SELECT_BASE_REF, changedFiles } from '../scripts/ci/selectionDiff.mjs';
 
 // Guard for MOTIR-3148. The expensive lanes in `ci.yml` used to decide whether
 // to run from the BRANCH NAME — a `startsWith` test against the `seed/` /
@@ -968,15 +969,31 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       }
     });
 
-    it('selects only when the flag says so, with the base sha through `env:`', () => {
+    it('selects only when the flag says so, splicing nothing into the script', () => {
       expect(selectStep).toMatch(/^\s*if: needs\.changes\.outputs\.vitest_full != 'true'$/m);
-      expect(selectStep).toMatch(
-        /^\s*BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \}\}$/m,
-      );
       const body = selectStep.split(/^\s*run: \|$/m)[1] ?? '';
       expect(body, 'a block `run:` body').not.toBe('');
       expect(body).not.toMatch(/\$\{\{/);
-      expect(body).toContain(`${SCRIPT} --select "$BASE_SHA"`);
+    });
+
+    // MOTIR-5923. The legs check out `refs/pull/<n>/merge`, built on a `main`
+    // that can be NEWER than the payload's `base.sha`; a two-dot diff from that
+    // sha counted what `main` gained in the gap as the pull request's change,
+    // and a force-full path there refused the subset (run 35600662955: #3019's
+    // `ci.yml` refused PR #3020, whose ten files were `lib/`, `app/`, `tests/`).
+    it('diffs the merge commit against its FIRST PARENT, never the payload base sha', () => {
+      const body = selectStep.split(/^\s*run: \|$/m)[1] ?? '';
+      expect(body).toContain(`${SCRIPT} --select 'HEAD^1'`);
+      expect(body, 'the parents are fetched').toMatch(/git fetch [^\n]*--depth=2 origin /);
+      expect(body, 'HEAD is checked to be a merge').toContain(
+        "git rev-parse --verify --quiet 'HEAD^2'",
+      );
+      // The two-dot `BASE_SHA HEAD` form, in any spelling, is the defect.
+      expect(selectStep).not.toContain('pull_request.base.sha');
+      expect(body).not.toMatch(/--select "?\$\{?BASE_SHA/);
+      // The script reads the diff through the one helper the test below executes.
+      expect(read(SCRIPT)).toContain('changedFiles(SELECT_BASE, SELECT_HEAD, ROOT)');
+      expect(read(SCRIPT)).not.toMatch(/git\('diff', '--name-only', SELECT_BASE/);
     });
 
     it('runs the selected files in ONE invocation, with --passWithNoTests and no coverage', () => {
@@ -1026,7 +1043,6 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
           env: {
             ...process.env,
             PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}`,
-            BASE_SHA: 'abc123',
             RUNNER_TEMP: dir,
             GITHUB_OUTPUT: output,
           },
@@ -1048,11 +1064,134 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       });
 
       it.each([
-        ['the base commit cannot be fetched', writesList('tests/a.test.ts\\n'), 'exit 1'],
+        [
+          "the merge commit's parents cannot be fetched",
+          writesList('tests/a.test.ts\\n'),
+          'exit 1',
+        ],
+        [
+          'HEAD is not a merge commit',
+          writesList('tests/a.test.ts\\n'),
+          'case "$*" in *HEAD^2*) exit 1;; esac; exit 0',
+        ],
         ['the selection exits non-zero', 'exit 3', 'exit 0'],
         ['the selection writes an empty list', writesList(''), 'exit 0'],
       ])('answers `full` when %s', (label, pnpm, git) => {
         expect(runSelect(pnpm, git), label).toBe('full');
+      });
+    });
+    // MOTIR-5923 — the reproduction, on a real history rather than a fake `git`.
+    // `main` moves past the payload's base with a force-full path (`ci.yml`)
+    // before GitHub builds the merge ref; the pull request itself touches one
+    // `lib/` file. The selection must see that one file and nothing of `main`'s.
+    describe('the selection diff, on a history where `main` moved past the payload base', () => {
+      let dir: string;
+      let origin: string;
+      let payloadBase: string;
+      let mergeSha: string;
+
+      const gitIn = (cwd: string, ...args: string[]): string =>
+        execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
+          cwd,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            GIT_AUTHOR_NAME: 'CI',
+            GIT_AUTHOR_EMAIL: 'ci@example.com',
+            GIT_COMMITTER_NAME: 'CI',
+            GIT_COMMITTER_EMAIL: 'ci@example.com',
+          },
+        }).trim();
+      const commitFile = (path: string, content: string, message: string): void => {
+        mkdirSync(dirname(join(origin, path)), { recursive: true });
+        writeFileSync(join(origin, path), content);
+        gitIn(origin, 'add', path);
+        gitIn(origin, 'commit', '-q', '-m', message);
+      };
+
+      beforeAll(() => {
+        dir = mkdtempSync(join(tmpdir(), 'vitest-select-history-'));
+        origin = join(dir, 'origin');
+        mkdirSync(origin);
+        gitIn(origin, 'init', '-q', '-b', 'main');
+        // The legs fetch the merge commit's parents BY SHA, as GitHub allows.
+        gitIn(origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true');
+        commitFile('lib/x.ts', 'export const x = 1;\n', 'base');
+        commitFile('.github/workflows/ci.yml', 'name: CI\n', 'ci');
+        payloadBase = gitIn(origin, 'rev-parse', 'HEAD');
+        // The pull request: one `lib/` file.
+        gitIn(origin, 'checkout', '-q', '-b', 'pr');
+        commitFile('lib/x.ts', 'export const x = 2;\n', 'the change');
+        // `main` moves on AFTER the event: a force-full path, and an ordinary one.
+        gitIn(origin, 'checkout', '-q', 'main');
+        commitFile('.github/workflows/ci.yml', 'name: CI\non: push\n', 'main moves');
+        commitFile('app/y.ts', 'export const y = 1;\n', 'main moves again');
+        // `refs/pull/<n>/merge`: first parent the NEW tip of `main`.
+        gitIn(origin, 'merge', '-q', '--no-ff', '-m', 'Merge pr into main', 'pr');
+        mergeSha = gitIn(origin, 'rev-parse', 'HEAD');
+      });
+      afterAll(() => {
+        if (dir) rmSync(dir, { recursive: true, force: true });
+      });
+
+      it('reproduces the defect with the payload base (the control)', () => {
+        const stale = changedFiles(payloadBase, mergeSha, origin);
+        expect(stale).toContain('.github/workflows/ci.yml');
+        expect(stale).toContain('app/y.ts');
+        expect(
+          stale.some((f) => covers(forceFullGlobs, f)),
+          'the stale diff refuses',
+        ).toBe(true);
+      });
+
+      it("selects the pull request's own files from the first parent, and does not refuse", () => {
+        expect(SELECT_BASE_REF).toBe('HEAD^1');
+        const own = changedFiles(SELECT_BASE_REF, 'HEAD', origin);
+        expect(own).toEqual(['lib/x.ts']);
+        expect(own.filter((f) => covers(forceFullGlobs, f))).toEqual([]);
+      });
+
+      it('the shipped step reaches `HEAD^1` from a depth-1 checkout and answers `subset`', () => {
+        // What `actions/checkout` leaves behind: the merge commit, depth 1.
+        const leg = join(dir, 'leg');
+        mkdirSync(join(leg, 'bin'), { recursive: true });
+        gitIn(leg, 'init', '-q');
+        gitIn(leg, 'remote', 'add', 'origin', `file://${origin}`);
+        gitIn(leg, 'fetch', '-q', '--no-tags', '--depth=1', 'origin', mergeSha);
+        gitIn(leg, 'checkout', '-q', '--detach', 'FETCH_HEAD');
+        expect(() => gitIn(leg, 'rev-parse', '--verify', '--quiet', 'HEAD^1')).toThrow();
+
+        // A `pnpm` that stands in for the script: the diff it was TOLD to take.
+        writeFileSync(
+          join(leg, 'bin', 'pnpm'),
+          [
+            '#!/bin/sh',
+            'while [ $# -gt 0 ]; do',
+            '  case "$1" in --select) base=$2 ;; --out) out=$2 ;; esac',
+            '  shift',
+            'done',
+            'git diff --name-only "$base" HEAD >"$out"',
+          ].join('\n'),
+          { mode: 0o755 },
+        );
+        const output = join(leg, 'github-output');
+        writeFileSync(output, '');
+        const selectScript = (selectStep.split(/^\s*run: \|$/m)[1] ?? '')
+          .split('\n')
+          .map((line) => line.replace(/^ {10}/, ''))
+          .join('\n');
+        execFileSync('bash', ['-c', selectScript], {
+          cwd: leg,
+          env: {
+            ...process.env,
+            PATH: `${join(leg, 'bin')}:${process.env.PATH ?? ''}`,
+            RUNNER_TEMP: leg,
+            GITHUB_OUTPUT: output,
+          },
+          stdio: 'pipe',
+        });
+        expect(readFileSync(output, 'utf8')).toMatch(/^mode=subset$/m);
+        expect(readFileSync(join(leg, 'vitest-affected.txt'), 'utf8')).toBe('lib/x.ts\n');
       });
     });
   });

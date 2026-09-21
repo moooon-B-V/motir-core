@@ -12,12 +12,15 @@
 //   pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --json
 //
 // SELECT is what `ci.yml`'s `test` legs run on a pull request: the files the
-// diff against `<base>` reaches, plus every always-run test, one per line.
+// diff from `<base>` reaches, plus every always-run test, one per line.
 //
-//   pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --select <base-sha> --out <file>
+//   pnpm exec tsx --tsconfig tsconfig.node.json scripts/ci/measure-affected-tests.mjs --select 'HEAD^1' --out <file>
 //
-// `--head <ref>` (default `HEAD`) diffs against another commit instead, which is
-// how the selection for an already-merged pull request is reproduced by hand.
+// On a leg `<base>` is `HEAD^1` — the merge commit's first parent, never the
+// event payload's `base.sha`, which can be older than the tree under test
+// (MOTIR-5923; `selectionDiff.mjs` says why). `--head <ref>` (default `HEAD`)
+// diffs to another commit instead, which is how the selection for an
+// already-merged pull request is reproduced by hand: `--select <sha>^ --head <sha>`.
 //
 // It exits NON-ZERO — and the leg then runs its full shard — when the diff is
 // empty or unreadable, or when it touches a force-full path. The `changes` job
@@ -53,6 +56,7 @@ import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve } from 'node:path';
 import { createVitest } from 'vitest/node';
+import { changedFiles } from './selectionDiff.mjs';
 
 const ROOT = process.cwd();
 const args = process.argv.slice(2);
@@ -187,13 +191,11 @@ try {
 
   if (SELECT_BASE !== undefined) {
     // ── SELECT ──────────────────────────────────────────────────────────────
-    // Two-dot against the base TIP: on a pull request's merge checkout that is
-    // the pull request's own change, and if the base moved it also includes what
-    // landed since — more files, never fewer.
+    // Two-dot from `--select` to `--head`. The legs pass the merge commit's
+    // first parent, so this is the pull request's own change to the tree under
+    // test — see `selectionDiff.mjs` for why a stale payload base is not.
     if (!SELECT_OUT) throw new Error('--select needs --out <file>');
-    const changed = git('diff', '--name-only', SELECT_BASE, SELECT_HEAD)
-      .split('\n')
-      .filter(Boolean);
+    const changed = changedFiles(SELECT_BASE, SELECT_HEAD, ROOT);
     if (changed.length === 0) {
       console.error('select: empty diff against the base — refusing, so the leg runs in full');
       process.exitCode = 3;
