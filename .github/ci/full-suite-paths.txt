@@ -1,16 +1,16 @@
 # The Vitest FORCE-FULL path set — `docs/decisions/ci-affected-tests.md` §2.1.
 #
-# A pull request whose diff touches a path matching any glob below runs the WHOLE
-# Vitest suite, with the coverage gate, exactly as the merge queue does. Every
-# entry is an input every test depends on that no test's import graph contains;
-# the ADR's table gives the reason for each and must equal this list.
+# Every entry is an input every test depends on that no test's import graph
+# contains, so a diff touching one would have to run the WHOLE Vitest suite under
+# affected-file selection; the ADR's table gives the reason for each and must
+# equal this list.
 #
-# It lives in ONE file because three things read it:
-#   - `ci.yml`'s `changes` job, with bash `[[ $f == $glob ]]`, where `*` also spans
-#     `/` — which can only over-match, the safe direction;
+# ⚠️ NO CI JOB READS IT. A pull request runs the whole suite again — the ADR's
+# Amendment 1 reverted the selection (MOTIR-5948). It is kept, with the measuring
+# script, as the input that re-opens that decision. Two things read it:
 #   - `scripts/ci/measure-affected-tests.mjs`, with picomatch (`dot: true`);
-#   - `tests/ci-changed-paths-gate.test.ts`, which executes the classifier against
-#     one path per glob and asserts this list equals the ADR's table.
+#   - `tests/ci-changed-paths-gate.test.ts`, which asserts this list equals the
+#     ADR's table.
 #
 # One glob per line. A line starting with `#` is a comment.
 package.json

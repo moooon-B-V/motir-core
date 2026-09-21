@@ -145,6 +145,14 @@ cost), only **6 of 30** had to run all of it, and Vitest was **3 of 23** of the 
 queue builds §6.1 counted. Everything else in this row — the rest of the gate, and
 `e2e-at-scale` staying off an unlabelled pull request — is unchanged.
 
+> **WITHDRAWN — 2026-09-21 (MOTIR-5948).** This amendment is withdrawn by
+> [`ci-affected-tests.md` Amendment 1](./ci-affected-tests.md), which re-measured the
+> selection at a median of **66.5%** of the suite over 118 pull requests, past that record's
+> own 50% no-go line, and reverted the pull-request Vitest lane to the full suite with the
+> coverage gate. **The original _Pull request_ row in §3 stands again**, warrant included: a
+> failure must be visible before queueing, or ejection becomes the normal feedback path. The
+> amendment's text is kept above as the record of what was decided and why.
+
 ## §4 — What it costs, stated before it is discovered
 
 **Per merged change, in runner-minutes** (sandbox/runner-image excluded from both sides —
