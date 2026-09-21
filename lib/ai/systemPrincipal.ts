@@ -16,3 +16,13 @@
 
 export const MOTIR_SYSTEM_USER_EMAIL = 'system@motir.internal';
 export const MOTIR_SYSTEM_USER_NAME = 'Motir Planner';
+
+/**
+ * The KEY of the Motir META project — the project the system principal files
+ * into. Mirrors motir-ai's `MOTIR_META_PROJECT_KEY` with the same default, so
+ * both sides of the boundary name the same project. Read at CALL time, so a
+ * deployment (or a test) that sets the variable after import is honoured.
+ */
+export function metaProjectKey(): string {
+  return process.env['MOTIR_META_PROJECT_KEY'] ?? 'MOTIR';
+}

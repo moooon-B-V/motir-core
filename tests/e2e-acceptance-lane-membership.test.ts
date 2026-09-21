@@ -18,6 +18,19 @@ import {
 
 // THE LANE-MEMBERSHIP GUARD (Story MOTIR-2765 · Subtask MOTIR-2770).
 //
+// ⚠️ RE-KEYED BY MOTIR-5872 — READ THIS BEFORE THE HISTORY BELOW. The live check
+// no longer asks the product whether a story's receipt is `approved`, and it no
+// longer evicts a spec for it. That half tied a TEST's lane to whether a RECORD
+// had been signed: MOTIR-5799's receipt was approved while its pull request sat
+// in the merge queue, the queue ejected it, the story came back to be reworked —
+// and this guard, which runs in the MAIN suite, turned every pull request in the
+// repository red demanding the spec of a still-live feature leave the lane. A
+// spec's lane is a PLACEMENT, decided once when the spec is written
+// (`docs/decisions/acceptance-receipt-lifecycle.md` AMENDMENT 1). What the live
+// check keeps is the half that is true of the FILE: a spec declaring no story can
+// never publish a receipt. The status-read machinery and its unit tests below are
+// kept only until MOTIR-5874 retires them with the credential they need.
+//
 // An acceptance spec exists to record ONE receipt. Once that receipt is
 // `approved` the spec has discharged its purpose and must leave the lane — by
 // PROMOTION into a lane that runs on every PR, or by RETIREMENT
@@ -71,75 +84,16 @@ import {
 // `tests/acceptance-evidence-status-route.test.ts`, which cannot import a spec
 // file without re-running its suite. One implementation, two callers.
 
-// ── THE NETWORK-BOUND CASE'S OWN BUDGET (MOTIR-4901) ────────────────────────
-//
-// The root config's 15 s `testTimeout` is sized for a database call, and it
-// never described THIS case: `requireStatusSource` + `collectLaneMembers` are
-// cheap, but `fetchApprovedStories` reaches `https://app.motir.co` from a
-// GitHub runner. A budget is only honest once it describes the work
-// (`vitest.guards.config.ts:74-78` says the same thing about its own lane).
-//
-// What the work now is: ONE batch of N concurrent cross-internet requests, so
-// the cost is a single round trip plus its slowest tail — NOT `N × round-trip`,
-// which is the defect this budget was raised alongside. 30 s is roughly 30x a
-// normal round trip to production: wide enough that ordinary latency, a TLS
-// handshake and a cold route cannot red-light an unrelated pull request,
-// narrow enough that a genuinely hung read still fails rather than hanging the
-// shard. It is deliberately NOT the global default — see the guard below.
-const LANE_READ_BUDGET_MS = 30_000;
-
-describe('the acceptance lane holds only IN-FLIGHT stories (MOTIR-2770)', () => {
-  // ⚠️ ITS OWN `it()`, AND THAT IS THE POINT (MOTIR-4093 AC 2). The obvious home
-  // for this assertion is inside the membership check below, and that is exactly
-  // where it would never fire: that check returns at `members.length === 0`
-  // BEFORE it ever resolves a source, and an empty lane is the lane's STEADY
-  // STATE after a triage. A binding assertion placed after that early return is
-  // shut only on the days it would not have mattered — which is this card's own
-  // defect, one level up. Asked of the ENVIRONMENT, it is independent of the
-  // lane's membership by construction.
-  it('BINDS where the environment declares it must — the hatch is shut where it counts', () => {
-    expect(() => requireStatusSource(process.env)).not.toThrow();
+describe('every spec in the acceptance lane declares its story (MOTIR-2770, re-keyed by MOTIR-5872)', () => {
+  // ⚠️ NO NETWORK, NO CREDENTIAL, AND THAT IS THE FIX. The retired half asked the
+  // product which receipts were approved and failed the run on each one; a
+  // receipt's status says nothing about where its TEST belongs. What is checked
+  // here is a property of the spec file alone, so it runs identically on a laptop,
+  // a fork and the merge queue.
+  it('no spec in the lane is missing its acceptanceStory() declaration', () => {
+    const verdict = judgeLane(collectLaneMembers());
+    expect(verdict.ok, verdict.message).toBe(true);
   });
-
-  it(
-    'no spec in the lane has an approved receipt, and every one declares its story',
-    async () => {
-      // Resolved FIRST, above the empty-lane return, for the same reason the test
-      // above exists: a source read after that return is a source nobody reads.
-      const source = requireStatusSource(process.env);
-      const members = collectLaneMembers();
-
-      if (members.length === 0) {
-        // A legitimate and, after a triage, common state: no story is in review.
-        // Not a skip — an empty lane genuinely satisfies the rule.
-        expect(members).toEqual([]);
-        return;
-      }
-
-      if (!source) {
-        // The stated degradation, and it is now reachable only where the
-        // environment has NOT declared that it must bind — a laptop, a fork's
-        // pull request. Never a silent pass: the reason is printed, and the
-        // undeclared-story half of the rule is checked anyway because it needs no
-        // credential at all.
-        const verdict = judgeLane(members, new Set());
-        expect(
-          verdict.ok,
-          `${verdict.message}\n\n(The approved-receipt half of this guard was SKIPPED: this ` +
-            `environment resolved no origin + token and did not set ${GUARD_REQUIRED_VAR}=true, so ` +
-            'the product could not be asked which receipts are approved. That is correct on a ' +
-            "laptop and on a fork's pull request. Every other environment declares itself and " +
-            'FAILS instead — see MOTIR-4093.)',
-        ).toBe(true);
-        return;
-      }
-
-      const keys = members.map((m) => m.storyKey).filter((k): k is string => k !== null);
-      const verdict = judgeLane(members, await fetchApprovedStories(keys, source));
-      expect(verdict.ok, verdict.message).toBe(true);
-    },
-    LANE_READ_BUDGET_MS,
-  );
 });
 
 // ── THE GUARD CAN FAIL ──────────────────────────────────────────────────────
@@ -231,39 +185,27 @@ function batchedFetch(
 const laneKeys = (n: number) => Array.from({ length: n }, (_, i) => `MOTIR-${5000 + i}`);
 
 describe('the guard itself', () => {
-  it('FAILS a spec whose story is already approved, naming it and both remedies', () => {
-    const verdict = judgeLane(
-      [
-        { file: 'acceptance-cadence.spec.ts', storyKey: 'MOTIR-813' },
-        { file: 'acceptance-in-flight.spec.ts', storyKey: 'MOTIR-9999' },
-      ],
-      new Set(['MOTIR-813']),
-    );
-
-    expect(verdict.ok).toBe(false);
-    expect(verdict.message).toContain('tests/e2e/acceptance-cadence.spec.ts');
-    expect(verdict.message).toContain('MOTIR-813');
-    expect(verdict.message).toContain('PROMOTE');
-    expect(verdict.message).toContain('RETIRE');
-    // The one instruction that reverses the original incident's reflex.
-    expect(verdict.message).toContain('Do NOT edit the spec');
-    // …and it does NOT drag in the spec whose story is still in flight.
-    expect(verdict.message).not.toContain('acceptance-in-flight.spec.ts');
+  it('PASSES a declared spec WHATEVER its story’s receipt says — approval evicts nothing (MOTIR-5872)', () => {
+    // The retired half failed `acceptance-cadence.spec.ts` here because MOTIR-813's
+    // receipt was approved. A signed record says nothing about where its TEST
+    // belongs, so the judgement no longer takes an approved set at all — and the
+    // failure text can never name a receipt again.
+    const verdict = judgeLane([
+      { file: 'acceptance-cadence.spec.ts', storyKey: 'MOTIR-813' },
+      { file: 'acceptance-in-flight.spec.ts', storyKey: 'MOTIR-9999' },
+    ]);
+    expect(verdict).toEqual({ ok: true, message: '' });
+    expect(judgeLane.length).toBe(1);
   });
 
-  it('PASSES a spec whose story is in review — the lane’s legitimate member', () => {
-    expect(judgeLane([{ file: 'acceptance-x.spec.ts', storyKey: 'MOTIR-1' }], new Set()).ok).toBe(
-      true,
-    );
-  });
-
-  it('fails a spec with NO acceptanceStory() DISTINCTLY — a different defect', () => {
-    const verdict = judgeLane([{ file: 'acceptance-orphan.spec.ts', storyKey: null }], new Set());
+  it('FAILS a spec with NO acceptanceStory() — the half that stays', () => {
+    const verdict = judgeLane([{ file: 'acceptance-orphan.spec.ts', storyKey: null }]);
     expect(verdict.ok).toBe(false);
     expect(verdict.message).toContain('declare NO story');
     expect(verdict.message).toContain('acceptance-orphan.spec.ts');
-    // Not conflated with the discharged case.
-    expect(verdict.message).not.toContain('APPROVED receipt');
+    // It names the way out, and never a receipt's status.
+    expect(verdict.message).toContain('promoted-regression');
+    expect(verdict.message).not.toMatch(/approved/i);
   });
 
   it('reads the declaration from CODE, not from a header comment', () => {
@@ -434,27 +376,6 @@ describe('the guard itself', () => {
     expect(err).toBeInstanceOf(LaneGuardReadError);
     expect((err as LaneGuardReadError).storyKey).toBe('MOTIR-1');
     expect((err as LaneGuardReadError).status).toBe(405);
-  });
-
-  it('the network-bound case declares its OWN budget, and the GLOBAL default is untouched', () => {
-    // The knob this card exists to refuse. Raising `vitest.config.ts`'s
-    // `testTimeout` would have made today's red go away and hidden every other
-    // boundary-slow fixture in the suite behind the same number — so the budget
-    // is declared where the work is, the way `vitest.guards.config.ts` does it,
-    // and the global is asserted so a later edit cannot quietly take the other
-    // route.
-    const root = path.join(__dirname, '..');
-    expect(fs.readFileSync(path.join(root, 'vitest.config.ts'), 'utf8')).toContain(
-      'testTimeout: 15_000,',
-    );
-    expect(LANE_READ_BUDGET_MS).toBeGreaterThan(15_000);
-    // And the budget is actually PASSED to the network-bound case — a constant
-    // nobody hands to an `it()` is a comment. Whitespace-stripped so prettier
-    // may wrap the call either way (it has already wrapped it once).
-    const self = fs
-      .readFileSync(path.join(__dirname, 'e2e-acceptance-lane-membership.test.ts'), 'utf8')
-      .replace(/\s+/g, '');
-    expect(self).toContain('},LANE_READ_BUDGET_MS');
   });
 
   it('sends the OIDC marker on the keyless arm, and only there', async () => {

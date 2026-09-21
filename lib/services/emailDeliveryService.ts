@@ -59,6 +59,27 @@ function isDuplicateMessageError(err: unknown): boolean {
 
 export const emailDeliveryService = {
   /**
+   * Accepted sends of `templates` through `provider` in the last `windowMs`
+   * (MOTIR-5873's notification budget). Read under the SYSTEM context — the
+   * table is FORCE RLS and the quota is account-wide, so a tenant-scoped read
+   * would under-count (see `emailDeliveryRepository.countAcceptedSince`).
+   */
+  async countAcceptedWithin(input: {
+    provider: string;
+    templates: readonly string[];
+    windowMs: number;
+    now?: Date;
+  }): Promise<number> {
+    const since = new Date((input.now ?? new Date()).getTime() - input.windowMs);
+    return withSystemContext((tx) =>
+      emailDeliveryRepository.countAcceptedSince(
+        { provider: input.provider, templates: input.templates, since },
+        tx,
+      ),
+    );
+  },
+
+  /**
    * Record a message the provider accepted, at state `accepted`.
    *
    * Returns the row, or `null` when nothing was written — which happens for

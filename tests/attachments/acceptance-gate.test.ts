@@ -5,7 +5,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPr } from '../helpers/prLink';
 import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
-import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
+import { AcceptanceEvidenceStoryClosedError } from '@/lib/acceptanceEvidence/errors';
 
 // THE ACCEPTANCE GATE ON THE CONTRACT (Story MOTIR-4949 · Subtask MOTIR-4950;
 // ADR `approval-gates.md` §1, the MOTIR-5787 amendment) against a REAL Postgres.
@@ -258,13 +258,13 @@ describe('the effect — approval writes `done` only when nothing is left for th
   });
 });
 
-describe('the freeze — an APPROVED receipt closes (point 6)', () => {
-  it('a receipt approved through the gate refuses a republish with the existing error, and asks nothing new', async () => {
+describe('an APPROVED receipt with no pull request closes the STORY (point 6; MOTIR-5872)', () => {
+  it('a receipt approved through the gate closes the story, so a republish is refused and asks nothing new', async () => {
     const story = await makeStory('in_review');
     await publish(story.id);
     await decide((await awaitingGate(story.id)).id, 'approve');
 
-    await expect(publish(story.id)).rejects.toBeInstanceOf(AcceptanceEvidenceAlreadyApprovedError);
+    await expect(publish(story.id)).rejects.toBeInstanceOf(AcceptanceEvidenceStoryClosedError);
     // The refused publish rolled back with its supersede: the approved gate stands,
     // and no second question was raised.
     const gates = await gatesOn(story.id);

@@ -283,6 +283,23 @@ export function retryBackoffMs(attempt: number, random: () => number = Math.rand
   return Math.max(0, Math.round(base + jitter));
 }
 
+/**
+ * True when a thrown value DECLARES that repeating the run cannot help —
+ * `retryable === false` on the error (MOTIR-5873). The worker then dead-letters
+ * on this attempt instead of rescheduling onto the backoff curve.
+ *
+ * A duck-typed property and not a class, deliberately: the code that knows a
+ * failure is hopeless (a provider adapter, e.g. `lib/email.ts`'s spent-quota
+ * `EmailDeliveryError`) is outside `lib/jobs/**` and may not import the engine,
+ * and the engine may not import it back. Only an explicit `false` counts — an
+ * error that says nothing keeps its whole budget, so no existing job changes.
+ */
+export function isNonRetryableFailure(err: unknown): boolean {
+  return (
+    typeof err === 'object' && err !== null && (err as { retryable?: unknown }).retryable === false
+  );
+}
+
 /** Serialize an unknown thrown value for `job_queue.last_error`. Mirrors `defineJob`'s `serializeFailure`. */
 export function serializeWorkerFailure(err: unknown): { message: string; stack?: string } {
   if (err instanceof Error) {
@@ -518,7 +535,11 @@ export class JobWorker {
       }
 
       const failure = serializeWorkerFailure(err);
-      if (run.attempts >= run.maxAttempts) {
+      // A failure that declares itself non-retryable ends the run NOW, exactly
+      // as a spent budget does — the same hook, the same dead-letter row. A
+      // spent provider quota is the case: retrying minutes apart only asks an
+      // exhausted quota again (MOTIR-5873).
+      if (run.attempts >= run.maxAttempts || isNonRetryableFailure(err)) {
         // The budget is spent. Write the ledger + DLQ rows BEFORE marking the
         // queue row failed, so an operator never sees a `failed` run with no
         // record of why.

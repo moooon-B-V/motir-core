@@ -1,4 +1,9 @@
-import { emailProviderName, sendEmail, type EmailSendResult } from '@/lib/email';
+import {
+  emailProviderName,
+  getNotificationDailyBudget,
+  sendEmail,
+  type EmailSendResult,
+} from '@/lib/email';
 import { emailDeliveryService } from '@/lib/services/emailDeliveryService';
 import {
   passwordResetEmail,
@@ -110,6 +115,82 @@ export type SendableEmail = TransactionalEmail & {
   eventId?: string | null;
 };
 
+/**
+ * Which share of the provider's quota a template draws on (MOTIR-5873).
+ *
+ * `essential` — mail a person is WAITING on, usually to get back into their
+ * account or to act on something they just asked for: a password reset, an
+ * email change, a sign-in code, an invite, a follow confirmation, their own
+ * data export. Never budgeted: it may use the whole quota.
+ *
+ * `notification` — mail Motir sends ABOUT activity (watchers, mentions,
+ * subscriptions, digests, a failed automation). Each is also visible in the
+ * app, and a burst of them is what spent the quota on 2026-09-14. Budgeted,
+ * so a burst stops short of the quota and leaves the essential mail its room.
+ *
+ * A `Record` over EVERY template, so a new template does not compile until
+ * somebody has decided which kind it is — the decision that was never made
+ * for the ten templates before this one.
+ */
+export type EmailTemplateClass = 'essential' | 'notification';
+
+export const EMAIL_TEMPLATE_CLASS: Record<EmailTemplate, EmailTemplateClass> = {
+  'password-reset': 'essential',
+  'email-change': 'essential',
+  'two-factor-otp': 'essential',
+  'workspace-invite': 'essential',
+  'follow-confirm': 'essential',
+  'data-export-ready': 'essential',
+  'mention-notification': 'notification',
+  'watcher-comment-notification': 'notification',
+  'watcher-transition-notification': 'notification',
+  'filter-subscription': 'notification',
+  'automation-rule-failed': 'notification',
+  'follow-digest': 'notification',
+};
+
+export const NOTIFICATION_TEMPLATES: readonly EmailTemplate[] = (
+  Object.keys(EMAIL_TEMPLATE_CLASS) as EmailTemplate[]
+).filter((t) => EMAIL_TEMPLATE_CLASS[t] === 'notification');
+
+/** The budget's window: ROLLING, so it holds whichever clock the provider resets on. */
+export const NOTIFICATION_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * What a send reports. `skipped` is set — and nothing reached the provider —
+ * when a notification was held back by the budget. It is a deliberate policy
+ * outcome, not a failure, so the job SUCCEEDS with it on its output rather
+ * than dead-lettering: a dead letter asks an operator to act, and there is
+ * nothing to do about a watcher email the budget chose not to send.
+ */
+export type EmailServiceSendResult = EmailSendResult & {
+  skipped?: 'notification_budget_exhausted';
+};
+
+/**
+ * True when this send is a notification and the rolling-24h budget is spent.
+ *
+ * ⚠️ A COUNT-THEN-SEND, deliberately unlocked. The send is an HTTP call that
+ * cannot sit inside a row lock, so concurrent workers can each read the same
+ * count and overshoot the budget by at most the number of sends in flight
+ * (the worker pool, `POOL_SIZE` = 10). That is what the headroom is for: the
+ * default budget is 60 against a 100/day quota, so an overshoot of ten still
+ * leaves thirty for essential mail. A budget set within `POOL_SIZE` of the
+ * quota would not have that margin.
+ */
+async function notificationBudgetExhausted(template: EmailTemplate): Promise<boolean> {
+  if (EMAIL_TEMPLATE_CLASS[template] !== 'notification') return false;
+  const budget = getNotificationDailyBudget();
+  if (budget === null) return false;
+  if (budget === 0) return true;
+  const used = await emailDeliveryService.countAcceptedWithin({
+    provider: emailProviderName(),
+    templates: NOTIFICATION_TEMPLATES,
+    windowMs: NOTIFICATION_BUDGET_WINDOW_MS,
+  });
+  return used >= budget;
+}
+
 export const emailService = {
   /**
    * Render the chosen template and dispatch it. Throws whatever the provider
@@ -125,7 +206,18 @@ export const emailService = {
    * a direct caller need not. No caller changed to gain this — the job was
    * already passing the whole `EmailSendData` payload, envelope included.
    */
-  async send(message: SendableEmail): Promise<EmailSendResult> {
+  async send(message: SendableEmail): Promise<EmailServiceSendResult> {
+    // Before rendering: a notification the budget holds back never reaches
+    // the provider, so it cannot spend the quota the essential mail needs.
+    if (await notificationBudgetExhausted(message.template)) {
+      console.warn(
+        `[email] ${message.template} to '${message.to}' skipped: the notification ` +
+          `budget (EMAIL_NOTIFICATION_DAILY_BUDGET=${getNotificationDailyBudget()} per ` +
+          `rolling 24h) is spent, and the rest of the provider quota is kept for ` +
+          `password-reset, invite and sign-in mail.`,
+      );
+      return { providerMessageId: null, skipped: 'notification_budget_exhausted' };
+    }
     const rendered = await renderTemplate(message);
     const result = await sendEmail({
       to: message.to,

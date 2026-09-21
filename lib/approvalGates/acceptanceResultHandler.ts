@@ -135,8 +135,10 @@ export const acceptanceResultGateHandler: GateHandler<AcceptanceEvidence> = {
   /**
    * The story's CURRENT receipt — what a gate raised now would ask about (§6d
    * AMENDMENT, rule 7) — or null when there is none, or when it is already
-   * approved: a signed receipt is frozen (`acceptance-receipt-lifecycle.md` §2 and
-   * §6), so there is no question left to ask about it, even after a re-open.
+   * approved: that question has been answered, and re-opening the story does not
+   * un-answer it. A reworked story asks again by publishing a NEW recording, which
+   * supersedes this one and keeps its bytes (`acceptance-receipt-lifecycle.md`
+   * AMENDMENT 1, MOTIR-5872).
    */
   async currentSubject({ item, tx }: GateRoutingArgs): Promise<string | null> {
     const current = await acceptanceEvidenceRepository.findCurrentByWorkItem(item.id, tx);

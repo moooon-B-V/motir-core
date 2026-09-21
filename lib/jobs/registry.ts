@@ -62,6 +62,7 @@ import {
 } from './definitions/monitorIssueReconcile';
 import { monitorIssueResolveOnTransitioned } from './definitions/monitorIssueResolve';
 import { accountErasureSweep } from './definitions/accountErasureSweep';
+import { dlqStandingDepthSweep } from './definitions/dlqStandingDepthSweep';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
 // Postgres engine by Story MOTIR-3418).
@@ -140,4 +141,7 @@ export const jobDefinitions = [
   // Resolve-back (Story MOTIR-4931 · MOTIR-5703): a done bug resolves its
   // linked monitor issues, off `work-item/transitioned`.
   monitorIssueResolveOnTransitioned,
+  // The DLQ standing-depth filer (MOTIR-5869): one bug per job function whose
+  // dead letters have stood seven days, re-armed only when that depth drains.
+  dlqStandingDepthSweep,
 ];

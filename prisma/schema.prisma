@@ -3559,6 +3559,41 @@ model JobRunDlq {
   @@map("job_run_dlq")
 }
 
+// The DLQ STANDING-DEPTH filer's dedup row (MOTIR-5869, implementing
+// `docs/decisions/dead-letter-standing-depth-filing.md`). ONE row per
+// `function_id` whose standing dead letters the sweep has filed a `bug` for.
+//
+// `armed` is the whole state machine, and it is deliberately NOT derived from
+// the bug's status:
+//
+//   · armed ⇒ the next sweep MAY file for this function (a row that does not
+//     exist yet is armed too);
+//   · filing sets it false, and while it is false the sweep files nothing more
+//     for this function, whatever the depth does;
+//   · ONLY the function's standing depth returning to ZERO sets it back —
+//     closing, archiving or deleting the bug does NOT, or a backlog nobody
+//     drains would file a new card every sweep.
+//
+// So the sweep never reads the bug it filed, and there is no FK to it: the key
+// is kept as text so a re-file after a re-arm can name the card before it.
+//
+// Deployment-wide and untenanted, like `job_run_dlq` itself (its `system.*`
+// rows have no workspace), so its RLS policy has a system-admin arm only.
+model JobDlqStandingFiling {
+  id                      String    @id @default(cuid())
+  functionId              String    @unique @map("function_id")
+  armed                   Boolean   @default(true)
+  /// The `KEY-<n>` of the bug last filed for this function.
+  filedWorkItemIdentifier String?   @map("filed_work_item_identifier")
+  filedAt                 DateTime? @map("filed_at")
+  /// When the function's standing depth was last seen at zero after a filing.
+  rearmedAt               DateTime? @map("rearmed_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  @@map("job_dlq_standing_filing")
+}
+
 enum JobRunStatus {
   running
   succeeded
@@ -4021,6 +4056,9 @@ model EmailDelivery {
   /// The join the jobs dashboard makes from a run row to its delivery.
   @@index([idempotencyKey])
   @@index([runId])
+  /// The notification budget's read (MOTIR-5873): accepted sends in the last
+  /// 24 hours, counted across every workspace on every notification send.
+  @@index([createdAt])
   @@map("email_delivery")
 }
 

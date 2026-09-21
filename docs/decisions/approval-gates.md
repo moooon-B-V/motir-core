@@ -287,6 +287,10 @@ in_progress` through its own path, so an acceptance decision is invisible to
 > Its **authority and routing** are §2's, unchanged. Its **retention** is not this record's:
 > `acceptance-receipt-lifecycle.md` §2 freezes an approved receipt and §6c here
 > already defers to it — nothing is pinned, because nothing is ever superseded.
+> **⚠️ AMENDED (MOTIR-5872, 2026-09-21):** that record's AMENDMENT 1 replaces the
+> freeze with a PIN. An approved receipt IS superseded when its story is reworked,
+> and its bytes are kept. The refusal now keys on the story, as the design gate's
+> does: the story is closed, or it still stands on the approval.
 >
 > **⚠️ THE ACCEPTANCE VIDEO IS NEVER COMMITTED, AND THE ONE PRESS MERGES THE
 > STORY'S CODE — NEVER A PULL REQUEST FOR THE VIDEO.** The receipt is an

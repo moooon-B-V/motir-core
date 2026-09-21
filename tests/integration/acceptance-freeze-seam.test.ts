@@ -7,7 +7,7 @@ import { adminDb } from '../helpers/adminDb';
 import { decideAcceptance } from '../helpers/acceptanceGate';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
-import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
+import { AcceptanceEvidenceStoryClosedError } from '@/lib/acceptanceEvidence/errors';
 
 // The WIRE code, written out rather than imported — deliberately (MOTIR-4096).
 //
@@ -22,7 +22,7 @@ import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence
 // HTTP route) recognises it as a STRING off the wire, with nothing to import.
 // A test that derived it from the error class would assert the class equals
 // itself and could be renamed green while every one of those clients broke.
-const ALREADY_APPROVED_CODE = 'ACCEPTANCE_EVIDENCE_ALREADY_APPROVED';
+const STORY_CLOSED_CODE = 'ACCEPTANCE_EVIDENCE_STORY_CLOSED';
 
 // THE FREEZE SEAM (Story MOTIR-2765 · Subtask MOTIR-2771).
 //
@@ -42,7 +42,13 @@ const ALREADY_APPROVED_CODE = 'ACCEPTANCE_EVIDENCE_ALREADY_APPROVED';
 //     headline test beautifully and silently breaks the review loop;
 //   · the RACE — an approval landing between a publish's read and its write.
 //     Closed on BOTH sides now: MOTIR-2764 gave the publish the lock, MOTIR-2851
-//     gave `decide` the same one, so the two serialise on one row.
+//     gave `decide` the same one, so the two serialise on one row;
+//   · the RE-OPEN (MOTIR-5872) — approval pins the recording, it does not freeze
+//     the STORY. Every story here that is approved with no pull request goes to
+//     `done`, which is why a republish on it is still refused: the refusal is now
+//     "this story is CLOSED", not "this receipt is approved". A story reopened to
+//     be reworked records again, and the approved recording's bytes survive the
+//     supersede.
 
 vi.mock('@/lib/blob/uploader', () => {
   let seq = 0;
@@ -159,6 +165,59 @@ describe('the freeze seam, end to end', () => {
     expect(storyAfter.status).toBe('done');
   });
 
+  it('a REOPENED story records again, and the approved recording is PINNED, not collected (MOTIR-5872)', async () => {
+    const story = await inReviewStory();
+    await publish(story, 'signed.webm', 'aaaaaaa');
+    await decideAcceptance(story.id, 'approve', fx.ctx);
+    const approved = await adminDb.acceptanceEvidence.findFirstOrThrow({
+      where: { workItemId: story.id, isCurrent: true },
+    });
+    expect(approved.status).toBe('approved');
+
+    // A person reopens the story to redo the work — `done → in_progress` is a
+    // legal edge. Before MOTIR-5872 this story could never record again.
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    const res = await publish(story, 'reworked.webm', 'bbbbbbb');
+    expect(res.status).toBe(201);
+
+    // The new recording is the current receipt, and it is a fresh question.
+    const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
+    expect(current!.commitSha).toBe('bbbbbbb');
+    expect(current!.status).toBe('pending');
+
+    // The approved row is HISTORY with its signature intact…
+    const history = await adminDb.acceptanceEvidence.findUniqueOrThrow({
+      where: { id: approved.id },
+    });
+    expect(history.isCurrent).toBe(false);
+    expect(history.status).toBe('approved');
+    expect(history.approvedById).toBe(approved.approvedById);
+
+    // …and its bytes are still LINKED, so the orphan-GC never sees them. This is
+    // what MOTIR-2764 protected; it is kept by the supersede, not by a refusal.
+    const kept = await adminDb.attachment.findUniqueOrThrow({
+      where: { id: approved.attachmentId! },
+    });
+    expect(kept.workItemId).toBe(story.id);
+    expect(
+      await adminDb.attachment.count({ where: { source: 'acceptance_video', workItemId: null } }),
+    ).toBe(0);
+  });
+
+  it('a superseded PENDING recording is still handed to the orphan-GC — only an approval pins', async () => {
+    const story = await inReviewStory();
+    await publish(story, 'first.webm', 'aaaaaaa');
+    const first = await adminDb.acceptanceEvidence.findFirstOrThrow({
+      where: { workItemId: story.id, isCurrent: true },
+    });
+    expect((await publish(story, 'second.webm', 'bbbbbbb')).status).toBe(201);
+
+    const unlinked = await adminDb.attachment.findUniqueOrThrow({
+      where: { id: first.attachmentId! },
+    });
+    expect(unlinked.workItemId).toBeNull();
+  });
+
   it('ONE code, asserted at all THREE layers — a rename cannot pass by updating two', async () => {
     const story = await inReviewStory();
     await publish(story, 'signed.webm', 'aaaaaaa');
@@ -174,27 +233,27 @@ describe('the freeze seam, end to end', () => {
         },
         fx.ctx,
       ),
-    ).rejects.toBeInstanceOf(AcceptanceEvidenceAlreadyApprovedError);
+    ).rejects.toBeInstanceOf(AcceptanceEvidenceStoryClosedError);
 
     // Layer 2 — the ROUTE maps it to the agreed status + code.
     const res = await publish(story, 'later.webm', 'bbbbbbb');
     expect(res.status).toBe(409);
     const routeCode = (await res.json()).code;
-    expect(routeCode).toBe(ALREADY_APPROVED_CODE);
+    expect(routeCode).toBe(STORY_CLOSED_CODE);
 
     // Layer 3 — a CLIENT's recognition keys on that exact string. Nothing
     // outside this repository can import the TS class, so the wire literal is
     // the join (see the constant above; MOTIR-4096 moved that client from the
     // CI uploader to the agent publishing over MCP, and the join is unchanged).
-    expect(ALREADY_APPROVED_CODE).toBe(new AcceptanceEvidenceAlreadyApprovedError('MOTIR-1').code);
+    expect(STORY_CLOSED_CODE).toBe(new AcceptanceEvidenceStoryClosedError('MOTIR-1', 'done').code);
 
     // …and all three are literally the same value, in one assertion, so no two
     // of them can be updated without this failing.
     expect(
       new Set([
         routeCode,
-        ALREADY_APPROVED_CODE,
-        new AcceptanceEvidenceAlreadyApprovedError('X').code,
+        STORY_CLOSED_CODE,
+        new AcceptanceEvidenceStoryClosedError('X', 'done').code,
       ]).size,
     ).toBe(1);
   });
@@ -244,7 +303,7 @@ describe('the freeze seam, end to end', () => {
       expect(approveResult.status, `round ${round}: the approval was refused`).toBe('fulfilled');
       expect(publishResult.status).toBe('fulfilled');
       const publishStatus = publishResult.status === 'fulfilled' ? publishResult.value.status : -1;
-      // 409 = the freeze refused it; 201 = it superseded a still-`pending`
+      // 409 = the approval closed the story first; 201 = it superseded a still-`pending`
       // receipt. Anything else (a raw P2002, a 500) is a new defect, not a race.
       expect([201, 409]).toContain(publishStatus);
 
@@ -273,7 +332,7 @@ describe('the freeze seam, end to end', () => {
       expect(attachment.workItemId).toBe(story.id);
 
       if (publishStatus === 409) {
-        // The approval won: the receipt it signed is the one that is frozen.
+        // The approval won: it closed the story, so the receipt it signed stays current.
         expect(row.commitSha).toBe(`aaaaaa${round}`);
         expect(rows).toHaveLength(1);
         outcomes.push('approval-first');

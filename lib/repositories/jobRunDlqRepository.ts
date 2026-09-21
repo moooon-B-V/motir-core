@@ -81,4 +81,51 @@ export const jobRunDlqRepository = {
       where: { replayedAt: null, ...(since ? { lastFailedAt: { gte: since } } : {}) },
     });
   },
+
+  /**
+   * The STANDING depth of every job function that has any — its unreplayed
+   * dead letters and the OLDEST `lastFailedAt` among them — for the depth filer
+   * (MOTIR-5869). A function with no unreplayed row is absent, which is what
+   * "its depth returned to zero" means to the caller.
+   *
+   * Deployment-wide, so the caller MUST supply a `withSystemContext` tx, for the
+   * reason `countActiveSince` gives.
+   */
+  async standingDepthByFunction(tx: Prisma.TransactionClient): Promise<StandingDlqDepth[]> {
+    const groups = await tx.jobRunDlq.groupBy({
+      by: ['functionId'],
+      where: { replayedAt: null },
+      _count: { _all: true },
+      _min: { lastFailedAt: true },
+    });
+    return groups.map((g) => ({
+      functionId: g.functionId,
+      standing: g._count._all,
+      // A group exists only because it has a row, and `lastFailedAt` is NOT NULL.
+      oldestLastFailedAt: g._min.lastFailedAt!,
+    }));
+  },
+
+  /** ONE function's standing depth, or null when it has none — the filer's
+   *  re-read under its row lock, so a queue drained since the sweep's first
+   *  read is not filed about. Same system-context requirement as above. */
+  async standingDepthOfFunction(
+    functionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<StandingDlqDepth | null> {
+    const agg = await tx.jobRunDlq.aggregate({
+      where: { functionId, replayedAt: null },
+      _count: { _all: true },
+      _min: { lastFailedAt: true },
+    });
+    const oldest = agg._min.lastFailedAt;
+    return oldest ? { functionId, standing: agg._count._all, oldestLastFailedAt: oldest } : null;
+  },
 };
+
+/** One job function's standing (unreplayed) dead letters. */
+export interface StandingDlqDepth {
+  functionId: string;
+  standing: number;
+  oldestLastFailedAt: Date;
+}

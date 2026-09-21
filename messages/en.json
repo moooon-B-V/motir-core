@@ -8519,7 +8519,7 @@
       "consequence": "Approving accepts {key}. It moves to Done once nothing under it is still open.",
       "confirm": {
         "records": "record that you accepted it, with the time and this recording;",
-        "freezes": "lock this recording, so a later run cannot replace it;",
+        "freezes": "keep this recording on record, so a later run cannot delete it;",
         "movesToDone": "move {key} to Done once nothing under it is still open.",
         "merges": "merge {prs} — the video is not part of it."
       },

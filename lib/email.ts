@@ -88,18 +88,38 @@ export type SendEmail = (msg: EmailMessage) => Promise<EmailSendResult>;
  * worth repeating. `permanent` — the provider rejected the request itself
  * (bad address, unverified domain, restricted key); repeating it changes
  * nothing, so the retry budget is only a delay before the dead-letter.
+ * `quota_exhausted` — the provider's sending QUOTA for the day (or month) is
+ * spent (MOTIR-5873). It clears only when the provider's window rolls over,
+ * hours away, so the transient schedule's minutes-apart retries are each just
+ * another request against an exhausted quota. It is the one kind that is NOT
+ * retryable: the send dead-letters on its first attempt, under its own code.
  */
-export type EmailFailureKind = 'transient' | 'permanent';
+export type EmailFailureKind = 'transient' | 'permanent' | 'quota_exhausted';
 
 /** The `code` a permanent failure carries onto the job's dead-letter row. */
 export const EMAIL_PERMANENT_FAILURE_CODE = 'EMAIL_PERMANENT_FAILURE';
 /** The `code` a transient failure carries onto the job's dead-letter row. */
 export const EMAIL_TRANSIENT_FAILURE_CODE = 'EMAIL_TRANSIENT_FAILURE';
+/** The `code` a spent provider quota carries onto the job's dead-letter row. */
+export const EMAIL_QUOTA_EXHAUSTED_CODE = 'EMAIL_QUOTA_EXHAUSTED';
+
+const FAILURE_CODE: Record<EmailFailureKind, string> = {
+  transient: EMAIL_TRANSIENT_FAILURE_CODE,
+  permanent: EMAIL_PERMANENT_FAILURE_CODE,
+  quota_exhausted: EMAIL_QUOTA_EXHAUSTED_CODE,
+};
+
+/** How the dead-letter message names the kind — what an operator reads first. */
+const FAILURE_PHRASE: Record<EmailFailureKind, string> = {
+  transient: 'failed transiently',
+  permanent: 'failed permanently',
+  quota_exhausted: 'was refused because the provider quota is exhausted (not retried)',
+};
 
 /**
  * A provider send that failed, classified.
  *
- * Both kinds THROW: `lib/email.ts` is deliberately runtime-agnostic (the
+ * Every kind THROWS: `lib/email.ts` is deliberately runtime-agnostic (the
  * ESLint boundary in `eslint.config.mjs` forbids it the Inngest SDK), so it
  * cannot reach for `NonRetriableError` and does not try to. What it does
  * instead is make the classification READABLE where an operator actually
@@ -117,6 +137,15 @@ export class EmailDeliveryError extends Error {
   readonly status: number | undefined;
   /** The provider's own error name (Resend's `name` field), when it sent one. */
   readonly providerErrorName: string | undefined;
+  /**
+   * `false` tells the job worker to dead-letter NOW instead of spending the
+   * rest of the retry budget (`isNonRetryableFailure`, lib/jobs/engine/worker.ts).
+   * A property rather than a class the engine imports, because this module may
+   * not reach the engine (the ESLint boundary above) and the engine may not
+   * know about email. Only `quota_exhausted` sets it: a `permanent` failure
+   * keeps its existing budget, which this card deliberately does not change.
+   */
+  readonly retryable: boolean;
 
   constructor(
     kind: EmailFailureKind,
@@ -126,7 +155,8 @@ export class EmailDeliveryError extends Error {
     super(message, details.cause === undefined ? undefined : { cause: details.cause });
     this.name = 'EmailDeliveryError';
     this.kind = kind;
-    this.code = kind === 'permanent' ? EMAIL_PERMANENT_FAILURE_CODE : EMAIL_TRANSIENT_FAILURE_CODE;
+    this.code = FAILURE_CODE[kind];
+    this.retryable = kind !== 'quota_exhausted';
     this.status = details.status;
     this.providerErrorName = details.providerErrorName;
   }
@@ -214,6 +244,16 @@ const RESEND_IDEMPOTENCY_KEY_MAX_LENGTH = 256;
 const RESEND_RETRYABLE_CONFLICTS = new Set(['concurrent_idempotent_requests']);
 
 /**
+ * Resend error names on 429 that mean the account's sending QUOTA is spent,
+ * not that we are sending too fast. Both come back on the same status as
+ * `rate_limit_exceeded`, so the NAME is the only thing that tells them apart.
+ * `daily_quota_exceeded` is the one production has actually returned (277
+ * dead letters, 2026-09-14..15, MOTIR-5844); `monthly_quota_exceeded` is its
+ * documented sibling and clears on an even longer clock.
+ */
+const RESEND_QUOTA_EXHAUSTED = new Set(['daily_quota_exceeded', 'monthly_quota_exceeded']);
+
+/**
  * Read a required env var or throw a message that says what to set and where.
  * Called during provider RESOLUTION, which is module load (see `sendEmail`
  * below) — so a production deploy that selects `resend` without its
@@ -259,14 +299,26 @@ interface ResendErrorBody {
 }
 
 /**
- * Classify a non-2xx response. Transient: 408/429 and every 5xx (the provider
- * or the hop between us is unhealthy), plus the 409 that says our own key is
- * still in flight. Everything else the provider returned is a considered
- * rejection of THIS request — a malformed address, an unverified sender
- * domain, a key without send scope — and repeating it just delays the
- * dead-letter.
+ * Classify a non-2xx response. Quota: a 429 whose NAME says the account's
+ * quota is spent — checked first, because it shares the status with a plain
+ * rate limit and must not fall into that arm. Transient: 408, every other 429
+ * and every 5xx (the provider or the hop between us is unhealthy), plus the
+ * 409 that says our own key is still in flight. Everything else the provider
+ * returned is a considered rejection of THIS request — a malformed address,
+ * an unverified sender domain, a key without send scope — and repeating it
+ * just delays the dead-letter.
  */
-function classifyResendStatus(status: number, providerErrorName: string | undefined) {
+export function classifyResendStatus(
+  status: number,
+  providerErrorName: string | undefined,
+): EmailFailureKind {
+  if (
+    status === 429 &&
+    providerErrorName !== undefined &&
+    RESEND_QUOTA_EXHAUSTED.has(providerErrorName)
+  ) {
+    return 'quota_exhausted' as const;
+  }
   if (status >= 500) return 'transient' as const;
   if (status === 429 || status === 408) return 'transient' as const;
   if (
@@ -364,7 +416,7 @@ function resendProvider(): SendEmail {
     const kind = classifyResendStatus(res.status, providerErrorName);
     throw new EmailDeliveryError(
       kind,
-      `Resend send to '${msg.to}' failed ${kind}ly with HTTP ${res.status}` +
+      `Resend send to '${msg.to}' ${FAILURE_PHRASE[kind]} with HTTP ${res.status}` +
         `${providerErrorName === undefined ? '' : ` (${providerErrorName})`}` +
         `${providerMessage === undefined ? '' : `: ${providerMessage}`}`,
       {
@@ -508,5 +560,55 @@ export function getEmailProvider(): SendEmail {
       );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// The NOTIFICATION budget (MOTIR-5873).
+//
+// Every template shares ONE provider account and so ONE sending quota. On
+// 2026-09-14 a burst of watcher notifications spent Resend's daily quota and
+// 277 sends dead-lettered — and a password reset asked for that day would
+// have been refused the same way. The budget is how many NOTIFICATION-class
+// sends (watchers, mentions, subscriptions, digests — `emailService`'s
+// template classes) may be accepted in any rolling 24 hours. Past it,
+// notifications are skipped and the rest of the quota stays for the mail a
+// person is waiting on: password reset, email change, invites, sign-in codes.
+//
+// EMAIL_NOTIFICATION_DAILY_BUDGET:
+//   - unset      → 60 when EMAIL_PROVIDER=resend, otherwise no budget. 60 sits
+//                  under the Resend FREE plan's 100/day — the only Resend plan
+//                  with a DAILY quota, which is what `daily_quota_exceeded`
+//                  proves production is on — leaving 40/day for essential
+//                  mail, and 60 × 30 = 1,800 stays inside the plan's
+//                  3,000/month with the same margin.
+//   - an integer ≥ 0 → that many (0 = no notification email at all).
+//   - `none`     → no budget (a paid plan with no daily quota).
+// Anything else throws at module load, like a bad EMAIL_PROVIDER does.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** The default when a Resend deployment sets no budget — see the block above. */
+export const DEFAULT_RESEND_NOTIFICATION_DAILY_BUDGET = 60;
+
+/**
+ * The notification budget per rolling 24 hours, or `null` for none. Read
+ * fresh on every call (tests re-point the env), and once at module load
+ * below so a malformed value fails the boot, not the first watcher email.
+ */
+export function getNotificationDailyBudget(): number | null {
+  const raw = process.env['EMAIL_NOTIFICATION_DAILY_BUDGET']?.trim();
+  if (raw === undefined || raw === '') {
+    return emailProviderName() === 'resend' ? DEFAULT_RESEND_NOTIFICATION_DAILY_BUDGET : null;
+  }
+  if (raw.toLowerCase() === 'none') return null;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(
+      `EMAIL_NOTIFICATION_DAILY_BUDGET='${raw}' is not a non-negative integer or 'none'. ` +
+        `It caps notification email per rolling 24 hours so password-reset mail keeps ` +
+        `headroom under the provider's quota — see lib/email.ts.`,
+    );
+  }
+  return Number.parseInt(raw, 10);
+}
+
+getNotificationDailyBudget();
 
 export const sendEmail: SendEmail = withFaultInjection(getEmailProvider());

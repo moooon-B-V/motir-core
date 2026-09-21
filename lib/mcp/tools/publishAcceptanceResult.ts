@@ -318,7 +318,9 @@ export function registerPublishAcceptanceResult(
         'yourself in the same run that recorded the video — NOTHING ELSE WILL, and a missing ' +
         'publish looks exactly like a successful run (spec green, checks green, PR merged, ' +
         'story with no receipt). The receipt lands `pending`; a person approves it, and an ' +
-        'approved one is FROZEN — a later publish is refused, not superseded. Re-sending the ' +
+        'approved recording is KEPT on record — a later publish supersedes it without deleting ' +
+        'it. Refused while the story is closed, or while it still stands on an approved receipt ' +
+        'with a pull request open; reopen the story to record again. Re-sending the ' +
         'same `commitSha` + `producedByKey` returns the existing receipt rather than making a ' +
         'second one. Targets the STORY, so a leaf key resolves UP to its parent story.',
       inputSchema: publishInputSchema,

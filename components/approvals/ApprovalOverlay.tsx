@@ -641,8 +641,9 @@ export function ApprovalOverlay() {
               tAcceptance('confirm.movesToDone', { key: identifier }),
             ]}
             routedToLabel={read.routedToLabel}
-            // A receipt is FROZEN on approval rather than pinned (§6c defers to
-            // `acceptance-receipt-lifecycle.md`), so there is no files-kept answer.
+            // An approved receipt's bytes are always kept (MOTIR-5872 — a later
+            // publish supersedes it without unlinking them), so there is no
+            // per-version files-kept answer to show.
             filesKept={null}
             alert={
               moved.length > 0 && gate.state === 'awaiting' && !decidedState ? (

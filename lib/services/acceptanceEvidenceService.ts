@@ -7,6 +7,10 @@ import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { workflowsService } from '@/lib/services/workflowsService';
+import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
+import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { headPrivateBlob, mintPrivateUploadToken, putPrivateAttachment } from '@/lib/blob/uploader';
 import { MAX_UPLOAD_BYTES, isAllowedAcceptanceVideoType } from '@/lib/blob/allowlist';
@@ -16,8 +20,8 @@ import {
   AcceptanceEvidenceCommitShaError,
   AcceptanceEvidenceNotAStoryError,
   AcceptanceEvidenceNotFoundError,
-  AcceptanceEvidenceAlreadyApprovedError,
   AcceptanceEvidencePathnameError,
+  AcceptanceEvidenceStoryClosedError,
 } from '@/lib/acceptanceEvidence/errors';
 import { normalizeCommitSha } from '@/lib/git/commitSha';
 import { toAcceptanceEvidenceDto } from '@/lib/mappers/acceptanceEvidenceMappers';
@@ -186,6 +190,66 @@ async function findIdempotentExisting(
 }
 
 /**
+ * Refuse a new receipt for a story that cannot take one (MOTIR-5872) — the
+ * acceptance twin of the design gate's `assertStatusOpen` + `assertDesignSettled`,
+ * and deliberately the SAME two conditions:
+ *
+ * · **A CLOSED story** (a terminal status) takes no new receipt. Its acceptance is
+ *   decided; reopening it by hand is the way back.
+ * · **A story STANDING ON an approved receipt.** The current receipt is
+ *   `approved`, the story is at or above `implemented` — the rung that says its
+ *   pull request is open and it is OFFERING commits — and a delivery is still
+ *   open. That merge ships with whatever receipt is current, so a republish now
+ *   would carry a recording nobody approved to `done`. Below `implemented` the
+ *   work is being redone, which is exactly when a new recording is right; a
+ *   person pulling the story back to `in_progress` is the deliberate re-open.
+ *
+ * What it does NOT refuse, and this is the fix: an approved receipt on a story
+ * that has come back to be reworked. Approval pins the recording and moves the
+ * story; it does not freeze the story (`acceptance-receipt-lifecycle.md`
+ * AMENDMENT 1).
+ *
+ * ⚠️ The status vocabulary is a policy-gated read, so it is given the caller's
+ * bound transaction — unbound under the runtime role it returns no statuses and
+ * every story would read as open.
+ */
+async function assertStoryTakesAReceipt(
+  story: WorkItem,
+  currentReceiptStatus: string | null,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await workItemRepository.lockById(story.id, tx);
+  const current = (await workItemRepository.findById(story.id, tx)) ?? story;
+
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    [current.projectId],
+    ctx.workspaceId,
+    tx,
+  );
+  if (isTerminalStatus(current, terminalByProject)) {
+    throw new AcceptanceEvidenceStoryClosedError(current.identifier, current.status);
+  }
+
+  if (currentReceiptStatus !== 'approved') return;
+  if ((await workItemDeliveryRepository.countOpenByWorkItem(current.id, tx)) === 0) return;
+
+  const statuses = await workflowsService.listStatusesByProject(
+    current.projectId,
+    ctx.workspaceId,
+    tx,
+  );
+  const rank = rankOfStatus(current.status, statuses, {
+    reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
+    implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
+    approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
+  });
+  if (rank < RUNG_RANK.implemented) return;
+
+  throw AcceptanceEvidenceStoryClosedError.becauseApproved(current.identifier, current.status);
+}
+
+/**
  * Supersede the prior current evidence + write the new video (+ trace)
  * Attachment rows and the evidence row, atomically in ONE withWorkspaceContext
  * transaction (binds the RLS GUC for the publish path, which has no
@@ -212,8 +276,9 @@ async function persistEvidence(
     // `republished` is the cause AMENDMENT 6 Q5 already names for a newer version,
     // and the MOTIR-5787 amendment (point 5) re-uses it rather than minting one.
     //
-    // ⚠️ AN APPROVED RECEIPT IS NOT RE-ASKED BY THIS — the freeze just below refuses
-    // the whole publish, which rolls this statement back with it.
+    // ⚠️ AN APPROVED RECEIPT HAS NO AWAITING GATE, so this retires nothing about
+    // it: its gate is decided, and a decided row is immutable. A refusal further
+    // down rolls this statement back with the rest of the publish.
     await approvalGateRepository.supersedeAwaitingByWorkItem(
       args.story.id,
       'acceptance_result',
@@ -221,31 +286,42 @@ async function persistEvidence(
       tx,
     );
 
-    // THE FREEZE GATE (MOTIR-2764). An `approved` receipt is the record of a
-    // human watching THIS recording and signing it — superseding it destroys the
-    // evidence the story was accepted on, and the unlink below hands its bytes to
-    // the orphan-GC. Lock the current row, read its status under the lock (the
-    // lock-before-read-derived-update rule), and refuse before anything is
-    // written. `pending` / `changes_requested` stay freely replaceable: a story
-    // still in review must keep getting the current truth on every run.
-    // Policy: docs/decisions/acceptance-receipt-lifecycle.md §2.
+    // Lock the current receipt BEFORE reading what to supersede — the decision is
+    // read-derived, so an unlocked read lets two publishes both target one row.
     const locked = await acceptanceEvidenceRepository.lockCurrentStatusByWorkItem(
       args.story.id,
       tx,
     );
-    if (locked?.status === 'approved') {
-      throw new AcceptanceEvidenceAlreadyApprovedError(args.story.identifier);
-    }
+
+    // ⚠️ THE STORY MUST BE OPEN — read HERE, under a `work_item` lock, and the
+    // POSITION is the contract (MOTIR-5872; the design gate's `assertCardOpen`,
+    // MOTIR-5556). Lock order on this path: `approval_gate` (the supersede above)
+    // → `acceptance_evidence` (the line above) → `work_item` (this check), which is
+    // the order the decide door takes: the gate FOR UPDATE, the handler's receipt
+    // stamp, then the story's transition. So an Approve racing this publish is
+    // resolved by WAITING, never by a deadlock.
+    await assertStoryTakesAReceipt(args.story, locked?.status ?? null, ctx, tx);
+
     const prior = await acceptanceEvidenceRepository.findCurrentByWorkItem(args.story.id, tx);
     if (prior) {
       await acceptanceEvidenceRepository.markSupersededByWorkItem(args.story.id, tx);
-      // Unlink the superseded video + trace so the orphan-GC reclaims their
-      // blobs after the safety window (one current receipt per story).
-      const priorAttachmentIds = [prior.attachmentId, prior.traceAttachmentId].filter(
-        (id): id is string => id !== null,
-      );
-      if (priorAttachmentIds.length > 0) {
-        await attachmentRepository.unlinkFromWorkItem(priorAttachmentIds, tx);
+      // ⚠️ THE PIN (MOTIR-5872, replacing MOTIR-2764's freeze). An APPROVED
+      // receipt is the record of a person watching THAT recording and signing it,
+      // so its video + trace stay linked and the orphan-GC never reclaims them —
+      // the same promise `design_evidence.pinned_at` makes for an approved design
+      // version. The row keeps `status: 'approved'` and its approver stamp; it is
+      // history now, not the current receipt.
+      //
+      // Anything else — `pending`, `changes_requested` — is the intended loss:
+      // unlinked, so the GC reclaims the bytes after its safety window (one
+      // current receipt per story). The gate row keeps who said what, and when.
+      if (prior.status !== 'approved') {
+        const priorAttachmentIds = [prior.attachmentId, prior.traceAttachmentId].filter(
+          (id): id is string => id !== null,
+        );
+        if (priorAttachmentIds.length > 0) {
+          await attachmentRepository.unlinkFromWorkItem(priorAttachmentIds, tx);
+        }
       }
     }
     const attachment = await attachmentRepository.create(

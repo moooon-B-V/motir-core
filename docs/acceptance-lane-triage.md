@@ -6,6 +6,12 @@ flow stays covered. Required by MOTIR-2769: a promote-or-retire decision made
 silently is one nobody can audit later, and _"why did this spec disappear"_ is
 exactly the question a future reader asks.
 
+> ⚠️ **AMENDED (MOTIR-5872, 2026-09-21).** Approval no longer forces a
+> disposition, and the lane guard no longer evicts a spec whose receipt is
+> approved (the lifecycle ADR's AMENDMENT 1). The dispositions below stand as
+> authoring decisions about where each test belongs. They are no longer
+> deadlines set by a signature.
+
 **The rule it applies** is `docs/decisions/acceptance-receipt-lifecycle.md` §3:
 once a receipt is frozen the spec has discharged its purpose and leaves the
 acceptance lane by exactly one of two routes — **PROMOTE** into a lane that runs

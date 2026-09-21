@@ -314,7 +314,17 @@ await sendEvent('email.send', {
 
 - **Retry policy.** `email.send` uses `retryPolicy: 'transient'` — a send fails
   on transient provider/network blips, so a few attempts with backoff is the
-  right intent (see **Retry policies**). A terminal failure dead-letters.
+  right intent (see **Retry policies**). A terminal failure dead-letters. A
+  spent provider quota is not retried at all: it dead-letters on its first
+  attempt as `EMAIL_QUOTA_EXHAUSTED` (`retryable: false`, below).
+- **Notification budget.** Notification-class templates (watchers, mentions,
+  subscriptions, digests, a failed automation) may use at most
+  `EMAIL_NOTIFICATION_DAILY_BUDGET` accepted sends per rolling 24 hours — 60 by
+  default on Resend — counted from `email_delivery`. Past it the send is SKIPPED:
+  the run succeeds with `skipped: 'notification_budget_exhausted'` on its output
+  and nothing reaches the provider, so the rest of the quota stays for password
+  reset, email change, invites and sign-in codes, which are never budgeted
+  (`EMAIL_TEMPLATE_CLASS`, `lib/services/emailService.ts`).
 - **`workspaceId: null`** for password reset (cross-workspace); the invite path
   passes its real workspace id.
 
@@ -385,6 +395,21 @@ Passing both `retryPolicy` and a raw `retries` throws (ambiguous intent). When a
 job specifies neither, it gets `transient`. On the **final** failed attempt the
 run dead-letters (below); `none` therefore dead-letters on the very first
 failure.
+
+### A failure can end the run early — `retryable: false`
+
+A handler that KNOWS repeating cannot help throws an error carrying
+`retryable: false`, and the worker dead-letters on that attempt — the same
+terminal hook and the same dead-letter row as a spent budget, with the rest of
+the budget unspent (`isNonRetryableFailure`, `lib/jobs/engine/worker.ts`). It
+is a property rather than a class because the code that knows is usually a
+provider adapter outside `lib/jobs/**`, which may not import the engine. Only an
+explicit `false` counts: an error that says nothing keeps its whole budget.
+
+The one producer today is a spent email-provider QUOTA (MOTIR-5873): a Resend
+`429 daily_quota_exceeded` clears only when the provider's day rolls over, so the
+`transient` schedule's minutes-apart retries each asked an exhausted quota again.
+It now dead-letters at once as `EMAIL_QUOTA_EXHAUSTED`.
 
 ## Concurrency — HISTORICAL (the option is gone)
 
@@ -913,6 +938,39 @@ operator action; there is one surface now, and it is this one.
 - **When NOT to replay** — if the failure was a bad payload or a since-removed
   code path, replaying just re-fails. Fix forward first; replay only transient
   infrastructure failures (provider outage, expired upstream token now renewed).
+
+**Disposing of a standing dead letter.** A row nobody replays stands for ever:
+nothing else in the system replays, discards or expires it. So every row needs
+a verdict, taken from its `failure`, and one of two dispositions (the rule
+MOTIR-5844 applied to the 1,381 rows that had accumulated by 2026-09-21):
+
+- **Replay** it — only when the failure was transient AND the run is still
+  wanted. A cron tick is almost never still wanted, because every later tick
+  already ran; a superseded run (an index of a repository that has been indexed
+  since) is not either. **Replaying `email.send` sends real mail**, late, to
+  real people — decide that about the recipients, not about the row.
+- **Otherwise, export it and delete it.** Export the rows first (they are the
+  only record of the failure), then `DELETE` them, guarded by the
+  `last_failed_at` of the newest row you read so a dead letter that arrives
+  meanwhile is not swept up. **Do not stamp `replayed_at` by hand**: a row
+  with it set always means the event was actually published (`lib/jobs/dlq.ts`),
+  and a stamp without a replay makes that column lie.
+
+A fault that is still reproducing is not a disposal question at all — it is a
+bug to fix, and the dead letters it produced are disposed of after the fix.
+
+**The standing-depth filer holds you to this (MOTIR-5869).**
+`system.dlq-standing-depth-sweep` runs daily at 07:00 and files ONE bug, into
+the Motir meta project's bug destination as the system principal, for each job
+function whose OLDEST unreplayed row last failed more than seven days ago. The
+bug names the function, the standing count and the oldest `last_failed_at`, and
+points here. While that bug exists the sweep files nothing more for the
+function; **closing the bug does not re-arm it** — only draining the function's
+unreplayed rows to zero does, after which a new standing row files again. The
+sweep never closes its own bug. It is a different signal from the event path
+(a terminal failure → Sentry → a bound monitor's bug): that one says _a job is
+failing_, this one says _nobody has disposed of its failures_.
+`docs/decisions/dead-letter-standing-depth-filing.md` is the decision.
 
 **Idempotency on replay (1.6.6).** A replay re-emits the original event but
 **re-shapes its idempotency key** to `{original}:replay:{dlqId}`. This is

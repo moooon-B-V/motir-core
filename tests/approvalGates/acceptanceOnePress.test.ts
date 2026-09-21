@@ -31,7 +31,7 @@ vi.mock('@/lib/blob/uploader', () => {
 const { acceptanceEvidenceService } = await import('@/lib/services/acceptanceEvidenceService');
 const { pullRequestMergeService } = await import('@/lib/services/pullRequestMergeService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
-const { AcceptanceEvidenceAlreadyApprovedError } = await import('@/lib/acceptanceEvidence/errors');
+const { AcceptanceEvidenceStoryClosedError } = await import('@/lib/acceptanceEvidence/errors');
 
 const HEAD_WEB = '9840d00ea1b2c3d4e5f60718293a4b5c6d7e8f90';
 const HEAD_API = '1111111111111111111111111111111111111111';
@@ -198,7 +198,7 @@ describe('a story run — the receipt is the PRIMARY, and one press also merges 
     expect(row.status).toBe('approved');
   });
 
-  it('with the receipt APPROVED and a story pull request still open, a republish is refused by the shipped freeze — no new refusal (point 6)', async () => {
+  it('with the receipt APPROVED and a story pull request still open, a republish is refused — the story still stands on the approval (point 6; MOTIR-5872)', async () => {
     const { story } = await storyRun();
     await acceptanceEvidenceService.recordFromUpload(
       { workItemId: story.id, video: video(), commitSha: 'c0ffee1' },
@@ -220,8 +220,68 @@ describe('a story run — the receipt is the PRIMARY, and one press also merges 
         { workItemId: story.id, video: video(), commitSha: 'd00d002' },
         fx.ctx,
       ),
-    ).rejects.toBeInstanceOf(AcceptanceEvidenceAlreadyApprovedError);
+    ).rejects.toBeInstanceOf(AcceptanceEvidenceStoryClosedError);
     const acceptanceRows = (await gatesOf(story.id)).filter((g) => g.kind === 'acceptance_result');
     expect(acceptanceRows.map((g) => g.state)).toEqual(['approved']);
+  });
+
+  // ⚠️ MOTIR-5872 — approval pins the recording; it does not freeze the STORY.
+  // The two cases below are the design gate's `assertDesignSettled` rung,
+  // transposed: at or above `implemented` with a pull request open the story is
+  // still OFFERING the approved work, below it the work is being redone.
+  async function approvedWithOpenPullRequests() {
+    const { story } = await storyRun();
+    await acceptanceEvidenceService.recordFromUpload(
+      { workItemId: story.id, video: video(), commitSha: 'c0ffee1' },
+      fx.ctx,
+    );
+    const [acceptance] = await gatesOf(story.id);
+    stubHost({
+      7: { outcome: 'enqueued', entryId: 'queue-7' },
+      12: { outcome: 'enqueued', entryId: 'queue-12' },
+    });
+    await pullRequestMergeService.approveAndMerge(
+      { gateId: acceptance!.id, source: 'ui', noteMd: null, stamp: DECIDED_WITHOUT_A_READER },
+      fx.ctx,
+    );
+    const approved = await adminDb.acceptanceEvidence.findFirstOrThrow({
+      where: { workItemId: story.id, isCurrent: true },
+    });
+    expect(approved.status).toBe('approved');
+    return { story, approved };
+  }
+
+  it('a story EJECTED back to Implemented with its pull request still open still stands on the approval — refused', async () => {
+    const { story } = await approvedWithOpenPullRequests();
+    await workItemsService.updateStatus(story.id, 'implemented', fx.ctx);
+
+    await expect(
+      acceptanceEvidenceService.recordFromUpload(
+        { workItemId: story.id, video: video(), commitSha: 'd00d002' },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(AcceptanceEvidenceStoryClosedError);
+  });
+
+  it('a story PULLED BACK to In progress records again, and the approved recording keeps its bytes', async () => {
+    const { story, approved } = await approvedWithOpenPullRequests();
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+
+    const next = await acceptanceEvidenceService.recordFromUpload(
+      { workItemId: story.id, video: video(), commitSha: 'd00d002' },
+      fx.ctx,
+    );
+    expect(next.status).toBe('pending');
+    expect(next.id).not.toBe(approved.id);
+
+    const history = await adminDb.acceptanceEvidence.findUniqueOrThrow({
+      where: { id: approved.id },
+    });
+    expect(history.isCurrent).toBe(false);
+    expect(history.status).toBe('approved');
+    const kept = await adminDb.attachment.findUniqueOrThrow({
+      where: { id: approved.attachmentId! },
+    });
+    expect(kept.workItemId).toBe(story.id);
   });
 });

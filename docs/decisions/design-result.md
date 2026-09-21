@@ -306,7 +306,11 @@ rows record the iterations.
 > nothing to freeze on, and superseding is the intended behaviour described in
 > this very table. **Acceptance receipts are signed-and-frozen; design results
 > are superseded-by-design** — same storage shape, opposite lifecycle. See
-> `acceptance-receipt-lifecycle.md` §5.
+> `acceptance-receipt-lifecycle.md` §5. **⚠️ And the receipt's freeze is now
+> retired in this record's favour (MOTIR-5872, that record's AMENDMENT 1):** an
+> approved receipt is PINNED and superseded the way §6c pins an approved design,
+> with the same two refusals. The two lifecycles converged. Nothing about this
+> section's design rule changes.
 >
 > **⚠️ AMENDED (MOTIR-5554, 2026-09-15):** superseded-by-design holds for every
 > card that is not `done`. A design card in the `done` category is CLOSED — §7's

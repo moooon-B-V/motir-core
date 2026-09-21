@@ -1026,12 +1026,18 @@ of a story working, which a human then approves. The full rule is
 
 - **The spec is a TEST; the video is a TEST EXECUTION.** Their lifetimes are
   independent. Deleting the spec does not touch the receipt it produced.
-- **Once the story's receipt is `approved` it is FROZEN** — a republish is
-  refused, not superseded — and **the spec must LEAVE the acceptance lane**, by
-  exactly one of two routes: **PROMOTE** it into a lane that runs on every PR
-  (keep every assertion; strip `chapter()` / `beat()` / `acceptanceStory()` and
-  the pacing holds), or **RETIRE** it, naming where the flow stays covered. There
-  is no third route.
+- **Approving a receipt PINS the recording; it does not freeze the story**
+  (MOTIR-5872, the lifecycle ADR's AMENDMENT 1). A later publish supersedes an
+  approved receipt and keeps its bytes. It is refused
+  (`ACCEPTANCE_EVIDENCE_STORY_CLOSED`) only while the story is closed, or while
+  it still stands on the approval: at or above `implemented` with a pull request
+  open. To record again, the story is pulled back below `implemented`.
+- **A spec leaves the acceptance lane when its AUTHOR decides where the test
+  belongs, never because a receipt was signed.** There are exactly two routes:
+  **PROMOTE** it into a lane that runs on every PR (keep every assertion; strip
+  `chapter()` / `beat()` / `acceptanceStory()` and the pacing holds), or
+  **RETIRE** it, naming where the flow stays covered. The lane guard checks only
+  that every spec in the lane declares its story.
 - **⚠️ When an acceptance spec goes red on a PR that did not change its story,
   do NOT update the assertion to match today.** That is the one reflex this rule
   exists to stop: it is right for a regression test and backwards for a receipt,
