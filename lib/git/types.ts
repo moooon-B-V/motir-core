@@ -145,7 +145,10 @@ export type CiConclusion = 'success' | 'failure' | 'pending' | 'neutral';
  *  is associated with (the check payload's `pull_requests[].number`) — the
  *  STRONGEST link back to the stored change request; `headBranch` is the branch
  *  the checks ran on, the fallback resolver when the payload carries no PR list
- *  (both are stable across a re-push, unlike a head SHA). `commitSha` is the head
+ *  (both are stable across a re-push, unlike a head SHA). A provider that reports
+ *  the change request's own ref where the branch belongs (GitHub's
+ *  `refs/pull/<n>/head`) puts `<n>` in `prNumbers` and leaves `headBranch` null,
+ *  so `headBranch` is always a real branch name (MOTIR-5918). `commitSha` is the head
  *  commit the checks ran on, part of the idempotency key. `context` names the
  *  check (a `check_run.name`, a `check_suite` app slug, a commit-status context). */
 export interface NormalizedStatusEvent {

@@ -209,6 +209,51 @@ describe('github.parseCiStatusEvent', () => {
     });
   });
 
+  // MOTIR-5918 — CodeQL default setup's suite, as GitHub's REST API returned it
+  // for motir-gateway#45 at f6faeec (suite 96436591673): the PULL REF in
+  // `head_branch` and no `pull_requests`. The ref names the PR by number, so it
+  // is read as one; the literal is never offered as a branch to match.
+  it('reads a refs/pull/<n>/head head_branch as PR <n>, not as a branch (check_run)', () => {
+    const ev = github.parseCiStatusEvent({
+      repository: { id: 9 },
+      check_run: {
+        head_sha: 'f6faeec',
+        status: 'in_progress',
+        conclusion: null,
+        name: 'Analyze (go)',
+        check_suite: { id: 96436591673, head_branch: 'refs/pull/45/head' },
+        pull_requests: [],
+      },
+    });
+    expect(ev).toMatchObject({ prNumbers: [45], headBranch: null, conclusion: 'pending' });
+  });
+
+  it('reads a refs/pull/<n>/merge head_branch as PR <n> (check_suite), merged with any PR list', () => {
+    const ev = github.parseCiStatusEvent({
+      repository: { id: 9 },
+      check_suite: {
+        id: 96436591673,
+        head_sha: 'f6faeec',
+        head_branch: 'refs/pull/45/merge',
+        status: 'completed',
+        conclusion: 'success',
+        app: { slug: 'github-actions' },
+        pull_requests: [{ number: 45 }, { number: 7 }],
+      },
+    });
+    expect(ev).toMatchObject({ prNumbers: [45, 7], headBranch: null });
+  });
+
+  it('keeps a branch that merely LOOKS like a pull ref as a branch', () => {
+    for (const branch of ['refs/pull/45', 'refs/pull/x/head', 'feat/refs/pull/45/head']) {
+      const ev = github.parseCiStatusEvent({
+        repository: { id: 9 },
+        check_suite: { head_sha: 'a', head_branch: branch, status: 'queued', pull_requests: [] },
+      });
+      expect(ev).toMatchObject({ prNumbers: [], headBranch: branch });
+    }
+  });
+
   it('reports an in-progress check_run as pending', () => {
     const ev = github.parseCiStatusEvent({
       repository: { id: 9 },
