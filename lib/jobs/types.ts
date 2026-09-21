@@ -166,6 +166,11 @@ export interface WorkItemCreatedData {
    * create-item action can't loop). The engine skips provenance-carrying
    * events. */
   viaAutomationRuleId?: string;
+  /** Monitor provenance (MOTIR-5849) — set when the create was the monitor
+   *  reconciler FILING a bug, naming the binding that filed it. The bug
+   *  enrichment trigger reads it to tell a monitor bug whose link has not yet
+   *  committed from a bug somebody filed by hand (`ServiceContext`'s note). */
+  viaMonitorConnectionId?: string;
 }
 
 /**

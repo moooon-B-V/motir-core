@@ -235,3 +235,31 @@ export class MonitorIssueLinkNotFoundError extends Error {
     this.name = 'MonitorIssueLinkNotFoundError';
   }
 }
+
+/**
+ * The bug ENRICHMENT trigger (Story MOTIR-4930 · Subtask MOTIR-5849) was handed a
+ * bug the monitor reconciler FILED — its `work-item/created` event carries the
+ * binding's provenance — and no `monitor_issue` row points at it yet.
+ *
+ * ⚠️ THIS IS THE ORDERING WINDOW, AND IT IS THROWN SO IT IS RETRIED. The
+ * reconciler's create commits its own transaction, and emits its event, before
+ * the outer transaction that links the row commits. So a fast consumer can see
+ * the bug before the link. Throwing hands the wait to the job's idempotent retry
+ * budget, which is measured in seconds; returning a value here would skip the
+ * enrichment for good. A link that NEVER appears — the reconciler's outer
+ * transaction rolled back after its create committed, the one window it accepts —
+ * exhausts the budget and dead-letters, which is loud rather than silent. The bug
+ * itself is untouched either way.
+ */
+export class MonitorLinkNotYetVisibleError extends Error {
+  readonly code = 'MONITOR_LINK_NOT_YET_VISIBLE' as const;
+  constructor(
+    readonly connectionId: string,
+    readonly workItemId: string,
+  ) {
+    super(
+      `The monitor link for work item ${workItemId} (connection ${connectionId}) is not visible yet.`,
+    );
+    this.name = 'MonitorLinkNotYetVisibleError';
+  }
+}
