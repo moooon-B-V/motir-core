@@ -18,6 +18,7 @@ import type { ProposalInput } from '@/lib/dto/plans';
 import type { RawPreplanStateResponse } from '@/lib/ai/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { contentRevisions } from '../../helpers/planTargetRevisions';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The plan → repo ROLE carrier (Story MOTIR-1775 · MOTIR-1912) over real Postgres.
@@ -268,10 +269,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins by role', () => {
 
     await plansService.approvePlan(planId, fx.ctx);
 
-    const revision = await adminDb.workItemRevision.findFirstOrThrow({
-      where: { workItemId: existing.id, changeKind: 'updated' },
-      orderBy: { changedAt: 'desc' },
-    });
+    const revision = (await contentRevisions(existing.id)).at(-1)!;
     const diff = revision.diff as Record<string, unknown>;
     // The title change IS reported — so this is "no disposition for the role",
     // not "no revision was written".

@@ -20,6 +20,7 @@
 // temp ref), so this is the shipped contract, not a test-only shortcut.
 
 import { db } from '@/lib/db';
+import { asConversationTurn } from './planChangeConversation';
 import { plansService } from '@/lib/services/plansService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemKind } from '@/generated/prisma/client';
@@ -59,6 +60,23 @@ export interface ContextualAdd {
  *
  * The plan is left `planned` (the handler's last callback), which is the only
  * status the rail treats as a pending review.
+ *
+ * ⚠️ AND IT RECORDS THE CONVERSATION, which it did not before (MOTIR-5640). A
+ * real contextual submit opens a plan-change SESSION on the anchor and stamps
+ * the job onto it as `lastJobId`; this helper only opened the Plan, so the plans
+ * it seeded belonged to no conversation — a state the product cannot reach.
+ *
+ * That was invisible until a plan began PARKING its targets. A card may be
+ * planned by only one planner at a time, so the session-less seeded plan took
+ * the anchor as a PLAN, and the browser's own session-open was then refused with
+ * `PlanTargetLockedError` — the run colliding with the conversation it belongs
+ * to. Recording the session first makes the two one planner, and the browser's
+ * open resumes that row rather than fighting it.
+ *
+ * `anchorWorkItemId` is the item the conversation is anchored on — the SAME id
+ * the spec hands `stubContextualSubmit`. Its `MOTIR-<n>` key is resolved here,
+ * because that is what `buildScope` canonicalizes into the session's scope key,
+ * and making every caller look it up would be four chances to pass the wrong one.
  */
 export async function seedContextualProposal(
   ctx: ServiceContext,
@@ -69,8 +87,29 @@ export async function seedContextualProposal(
     adds?: readonly ContextualAdd[];
     /** A `modify` of an existing item — the re-plan-the-parent case. */
     modify?: { workItemId: string; patch: Record<string, unknown> };
+    /** The anchor this conversation is on. Omit for a project-wide thread. */
+    anchorWorkItemId?: string;
   },
 ): Promise<string> {
+  // The SESSION half of a real contextual submit: the append runs as a turn of
+  // the anchor's conversation, which is then left as the browser finds it.
+  const plan = await asConversationTurn(
+    ctx,
+    projectId,
+    args.anchorWorkItemId ?? null,
+    args.jobId,
+    () => appendContextualProposals(ctx, projectId, args),
+    { anchorIsWorkItemId: true },
+  );
+  await plansService.markPlanned(plan.id, ctx);
+  return plan.id;
+}
+
+async function appendContextualProposals(
+  ctx: ServiceContext,
+  projectId: string,
+  args: Parameters<typeof seedContextualProposal>[2],
+) {
   const plan = await plansService.createPlan(
     projectId,
     { title: args.title, sourceJobId: args.jobId },
@@ -96,8 +135,7 @@ export async function seedContextualProposal(
     ],
     ctx,
   );
-  await plansService.markPlanned(plan.id, ctx);
-  return plan.id;
+  return plan;
 }
 
 /** The anchor's direct children, by title — the "did it land UNDER the item?"

@@ -43,6 +43,16 @@ export const planTargetLockRepository = {
     });
   },
 
+  /** Every lease ONE PLAN holds (MOTIR-5645) — the twin of the read above, and
+   *  the read approve, decline and the abandoned-plan sweep all make. Ordered by
+   *  work item id for the same reason: one fixed lock order across every path. */
+  async listByPlanId(planId: string, tx: Prisma.TransactionClient): Promise<PlanTargetLock[]> {
+    return tx.planTargetLock.findMany({
+      where: { planId },
+      orderBy: { workItemId: 'asc' },
+    });
+  },
+
   async update(
     id: string,
     data: Prisma.PlanTargetLockUncheckedUpdateInput,

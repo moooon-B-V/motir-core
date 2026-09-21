@@ -164,6 +164,19 @@ afterAll(async () => {
 });
 
 describe('planReviewService.getPlanReview', () => {
+  // ⚠️ THE `status` ROW IS NEW AND IT IS ON EVERY PARKED TARGET (MOTIR-5646).
+  // A plan PARKS its committed targets when it appends, and the review surface
+  // tells the reviewer each one comes back — `status → To Do or Blocked
+  // (returned when this plan is approved)`. So a `modify`'s change list now
+  // carries that row in addition to the fields the patch touched.
+  //
+  // The cases below are about those OTHER fields, and their exact-set assertions
+  // are the point (a per-field `find` passes vacuously on `undefined`). So they
+  // drop the resting-status row rather than being relaxed to a bigger set — the
+  // row has its own cases in `approveRescopeResetsStatus.test.ts`.
+  const contentFields = (changes: ReadonlyArray<{ field: string }>) =>
+    changes.filter((c) => c.field !== 'status');
+
   it('enriches add / modify / remove and builds the history timeline', async () => {
     const fx = await makeWorkItemFixture();
     const modifyTarget = await seedItem(fx, 'Seller onboarding', 'medium');
@@ -848,7 +861,7 @@ describe('planReviewService.getPlanReview', () => {
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     const modify = review.items.find((i) => i.op === 'modify')!;
-    expect(modify.changes.map((c) => c.field)).toEqual(['title']);
+    expect(contentFields(modify.changes).map((c) => c.field)).toEqual(['title']);
   });
 
   // ── WHERE THE CARD SHIPS (bug MOTIR-3868) ────────────────────────────────
@@ -906,8 +919,8 @@ describe('planReviewService.getPlanReview', () => {
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     const modify = review.items.find((i) => i.op === 'modify')!;
-    expect(modify.changes).not.toHaveLength(0);
-    expect(modify.changes.map((c) => c.field)).toEqual(['targetRepo']);
+    expect(contentFields(modify.changes)).not.toHaveLength(0);
+    expect(contentFields(modify.changes).map((c) => c.field)).toEqual(['targetRepo']);
   });
 
   it('renders an explicit UNPIN as an empty NEW side, and says nothing when the key is absent (MOTIR-3868)', async () => {
@@ -933,10 +946,12 @@ describe('planReviewService.getPlanReview', () => {
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     const unpin = review.items.find((i) => i.nodeId === unpinned.id)!;
-    expect(unpin.changes).toEqual([{ field: 'targetRepo', from: 'motir-core', to: null }]);
+    expect(contentFields(unpin.changes)).toEqual([
+      { field: 'targetRepo', from: 'motir-core', to: null },
+    ]);
 
     const stands = review.items.find((i) => i.nodeId === untouched.id)!;
-    expect(stands.changes.map((c) => c.field)).toEqual(['title']);
+    expect(contentFields(stands.changes).map((c) => c.field)).toEqual(['title']);
   });
 
   it('surfaces a repo ROLE re-pin on KEY PRESENCE, with no old side to read (MOTIR-3868)', async () => {
@@ -958,7 +973,9 @@ describe('planReviewService.getPlanReview', () => {
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     const modify = review.items.find((i) => i.op === 'modify')!;
-    expect(modify.changes).toEqual([{ field: 'targetRepoRole', from: null, to: 'api' }]);
+    expect(contentFields(modify.changes)).toEqual([
+      { field: 'targetRepoRole', from: null, to: 'api' },
+    ]);
   });
 
   // ── The SINGULAR ROW-ID pin (bug MOTIR-4924, AC3) ─────────────────────────
@@ -985,7 +1002,9 @@ describe('planReviewService.getPlanReview', () => {
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     const modify = review.items.find((i) => i.op === 'modify')!;
-    expect(modify.changes).toEqual([{ field: 'targetRepo', from: null, to: 'row row-web-1' }]);
+    expect(contentFields(modify.changes)).toEqual([
+      { field: 'targetRepo', from: null, to: 'row row-web-1' },
+    ]);
   });
 
   it('carries the `add` ROW-REF pin on the review item, add-only, so an approver is not shown a proposal with no repository at all (MOTIR-4924, AC3)', async () => {
@@ -1245,6 +1264,13 @@ describe('planReviewService.getPlanReview', () => {
     const oldStory = await seedChild(fx, 'story', 'The old story', oldEpic.id);
     const newEpic = await seedChild(fx, 'epic', 'The new epic');
     const newStory = await seedChild(fx, 'story', 'The new story', newEpic.id);
+    // ⚠️ DISJOINT CARD SETS for the two plans, since MOTIR-5645. A plan PARKS
+    // every committed target it names, and one card cannot be held by two plans
+    // at once — so re-using `cards[0]` in both plans was refused with
+    // `PlanTargetLockedError`, which is the one-holder-per-card rule working
+    // rather than a defect. The comparison this case makes is MANY vs ONE
+    // proposals in a plan, and it does not need the same rows in both.
+    const solo = await seedChild(fx, 'task', 'Mover solo', oldStory.id);
     const cards = [
       await seedChild(fx, 'task', 'Mover one', oldStory.id),
       await seedChild(fx, 'task', 'Mover two', oldStory.id),
@@ -1265,7 +1291,7 @@ describe('planReviewService.getPlanReview', () => {
       await plansService.markPlanned(plan.id, fx.ctx);
       return plan.id;
     };
-    const onePlan = await movePlan(cards.slice(0, 1));
+    const onePlan = await movePlan([solo]);
     const manyPlan = await movePlan(cards);
 
     // A pass-through counter, never a mock: the reads still hit the real database.
@@ -1842,8 +1868,14 @@ describe('planReviewService.getPlanReview', () => {
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     const modify = review.items.find((i) => i.op === 'modify')!;
-    expect(modify.status).toBe('implemented');
-    expect(modify.statusLabel).toBe('Implemented');
+    // ⚠️ `planning`, not `implemented`, since MOTIR-5645 — and the case is still
+    // about what it was about. A plan PARKS its committed targets when it
+    // appends, so by the time a reviewer reads the plan the card is at
+    // `planning`; what this pins is that the surface names the target's LIVE
+    // status with its label and category rather than defaulting them, whatever
+    // that status happens to be.
+    expect(modify.status).toBe('planning');
+    expect(modify.statusLabel).toBe('Planning');
     expect(modify.statusCategory).toBe('in_progress');
 
     // An UN-MATERIALIZED `add` has no live target, so it has no status at all —
@@ -2404,13 +2436,19 @@ describe('planReviewService — the blockers a proposal names, NAMED', () => {
       await seedChild(fx, 'task', 'B2', there.id),
       await seedChild(fx, 'task', 'B3', there.id),
     ];
-    const planBlockedBy = async (refs: string[][]) => {
+    // ⚠️ ONE PARENT PER PLAN, since MOTIR-5645. This helper used to lay both
+    // plans under `here`, and a plan now PARKS the committed `parentRef` of every
+    // `add` it carries — so the second plan was refused with
+    // `PlanTargetLockedError`, which is the one-holder-per-card rule working
+    // rather than a defect. The two plans get their own container; nothing this
+    // case measures depends on them sharing one.
+    const planBlockedBy = async (parentId: string, refs: string[][]) => {
       const plan = await plansService.createPlan(fx.projectId, { title: 'Blocked' }, fx.ctx);
       await plansService.addProposals(
         plan.id,
         refs.map((blockedByRefs, n) => ({
           op: 'add' as const,
-          parentRef: here.id,
+          parentRef: parentId,
           blockedByRefs,
           proposedFields: { title: `Card ${n}` },
         })),
@@ -2419,8 +2457,12 @@ describe('planReviewService — the blockers a proposal names, NAMED', () => {
       await plansService.markPlanned(plan.id, fx.ctx);
       return plan.id;
     };
-    const unblocked = await planBlockedBy([[]]);
-    const threeBlocked = await planBlockedBy(blockers.map((b) => [b.id]));
+    const alsoHere = await seedChild(fx, 'story', 'Here as well');
+    const unblocked = await planBlockedBy(here.id, [[]]);
+    const threeBlocked = await planBlockedBy(
+      alsoHere.id,
+      blockers.map((b) => [b.id]),
+    );
 
     // Pass-through counters, never mocks: the reads still hit the real database.
     const rowReads = vi.spyOn(workItemRepository, 'findByIdsInWorkspace');

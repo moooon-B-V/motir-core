@@ -427,6 +427,8 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
         estimateMinutes: 30,
       },
     ],
+    // The conversation this turn belongs to — the same anchor the stub names.
+    anchorWorkItemId: seed.notifId,
   });
 
   await stubAiAccess(page);
@@ -591,6 +593,8 @@ test('a SIBLING under the anchor’s parent goes through the same confirm', asyn
     jobId: CONTEXTUAL_JOB_ID,
     title: 'Add a session-expiry story beside Login UI',
     adds: [{ title: SIBLING, kind: 'story', parentWorkItemId: authEpicId }],
+    // The conversation this turn belongs to — the same anchor the stub names.
+    anchorWorkItemId: loginId,
   });
 
   await stubAiAccess(page);
@@ -647,6 +651,8 @@ test('re-planning the PARENT goes through the same confirm', async ({ page, acce
     title: 'Re-plan the Authentication epic',
     adds: [{ title: UNDER_PARENT, kind: 'story', parentWorkItemId: authEpicId }],
     modify: { workItemId: authEpicId, patch: { title: RENAMED_EPIC } },
+    // The conversation this turn belongs to — the same anchor the stub names.
+    anchorWorkItemId: authEpicId,
   });
 
   await stubAiAccess(page);
@@ -694,6 +700,8 @@ test('Discard declines the plan and leaves the tree untouched', async ({
       { title: DIGEST, kind: 'subtask', parentWorkItemId: seed.notifId },
       { title: TOASTS, kind: 'subtask', parentWorkItemId: seed.notifId },
     ],
+    // The conversation this turn belongs to — the same anchor the stub names.
+    anchorWorkItemId: seed.notifId,
   });
 
   await stubAiAccess(page);
@@ -738,6 +746,8 @@ test('a failed run is recoverable in place — the thread survives, the tree is 
       { title: DIGEST, kind: 'subtask', parentWorkItemId: seed.notifId },
       { title: TOASTS, kind: 'subtask', parentWorkItemId: seed.notifId },
     ],
+    // The conversation this turn belongs to — the same anchor the stub names.
+    anchorWorkItemId: seed.notifId,
   });
 
   // One job (and one plan) for both attempts: the STREAM fails first and succeeds

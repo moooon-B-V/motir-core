@@ -277,12 +277,27 @@ describe('acquire', () => {
     'LOCKS an item it cannot legally move, and says it did not move it',
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
-      // `in_review` has no edge to `planning` in the default workflow. The item is
-      // still a legitimate subject for a planning conversation, so the exclusion
-      // must hold — it is the ROW, not the status.
+      // ⚠️ AMENDED BY MOTIR-5643. This case used `in_review` as its example of a
+      // status with no edge to `planning` — *"`in_review` has no edge to
+      // `planning` in the default workflow"* — and that is exactly the sentence
+      // MOTIR-5643 reversed: every NON-terminal status now has one, so the
+      // default workflow no longer contains this shape at all.
+      //
+      // The CASE is not obsolete, though; only its fixture was. What it rules on
+      // is that the exclusion is the ROW and not the status, which still has to
+      // hold wherever the move is illegal — and after MOTIR-5643 that is a
+      // CUSTOM workflow, so the test builds one by deleting the edge.
       const story = await makeItem('story', 'Invoices');
       await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
       await workItemsService.updateStatus(story.id, 'in_review', fx.ctx);
+
+      await adminDb.$executeRawUnsafe(
+        `DELETE FROM "workflow_transition" t
+           USING "workflow_status" fs, "workflow_status" ts
+          WHERE t."from_status_id" = fs.id AND t."to_status_id" = ts.id
+            AND t."project_id" = $1 AND fs.key = 'in_review' AND ts.key = 'planning'`,
+        fx.projectId,
+      );
 
       const session = await makeSession('A', [story.identifier]);
       const [outcome] = await planTargetLockService.acquireForScope(

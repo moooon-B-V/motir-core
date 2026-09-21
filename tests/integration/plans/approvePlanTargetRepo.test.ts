@@ -11,6 +11,7 @@ import type { ProposalInput } from '@/lib/dto/plans';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { contentRevisions } from '../../helpers/planTargetRevisions';
 import { truncateAuthTables } from '../../helpers/db';
 import { randomToken } from '../../helpers/random';
 import { organizationIdOf } from '../../helpers/organizationOf';
@@ -237,10 +238,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins', () => {
 
     const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } });
     expect(row.targetRepo).toBe('acme-api');
-    const revision = await adminDb.workItemRevision.findFirstOrThrow({
-      where: { workItemId: existing.id, changeKind: 'updated' },
-      orderBy: { changedAt: 'desc' },
-    });
+    const revision = (await contentRevisions(existing.id)).at(-1)!;
     expect((revision.diff as Record<string, unknown>).targetRepo).toEqual({
       from: 'acme-web',
       to: 'acme-api',
@@ -295,10 +293,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins', () => {
     ]);
 
     await plansService.approvePlan(planId, fx.ctx);
-    const revision = await adminDb.workItemRevision.findFirstOrThrow({
-      where: { workItemId: existing.id, changeKind: 'updated' },
-      orderBy: { changedAt: 'desc' },
-    });
+    const revision = (await contentRevisions(existing.id)).at(-1)!;
     expect((revision.diff as Record<string, unknown>).targetRepo).toBeUndefined();
   });
 });

@@ -2844,3 +2844,271 @@ default, while the direct path has always written the names array beside the sca
 returns EARLY on an empty names array, so the completion gate had nothing to hold a plan-materialized card
 open on. Materialize now writes the pair together for BOTH spellings — the singular as the one-element set
 it means — so a card's shape no longer depends on which door created it.
+
+## AMENDMENT 16 — the PLAN-TARGET STATUS contract: a plan PARKS what it is about, and the DECISION gives it back (bug MOTIR-5640, 2026-09-20)
+
+**The gap.** `planning` was wired as a lock by MOTIR-2786 for ONE door — the planning
+conversation — and the rest of the plan surface grew past it. At `origin/main` `69d8b9c7b`:
+
+- **Only a session parks.** `planTargetLockService.acquireForScope` is reached from
+  `planChangeSessionsService.getOrCreateForScope` and from nowhere else, so `create_plan` /
+  `add_plan_items`, `expand_item` and every generation job leave their target claimable while a plan
+  rewrites it. The runbook works around this with a hand `transition_status`
+  (`motir-meta` `prompts/plan-procedure.md`, _Park the target_).
+- **Only two statuses may park at all.** `DEFAULT_TRANSITIONS` declares `todo → planning` and
+  `in_progress → planning` and nothing else, so a `blocked`, `implemented`, `in_review` or
+  `approved` card cannot be parked even by hand.
+- **And the decision gives nothing back.** `releasePlanTargetLocks` returns early on
+  `!plan.sourceJobId`, which is EVERY MCP-authored plan (`lib/mcp/tools/authorPlan.ts` says so
+  outright); where it does run it restores the PRIOR status; and AMENDMENT 15's sibling bug
+  MOTIR-5359 resets a re-scoped card to the project's initial status regardless of its blockers.
+
+**Why that is a defect and not a boundary.** The third bullet was a DECISION, written at the edges
+themselves — _"⚠️ A HUMAN MOVES IT, and plan approval deliberately does NOT"_ — and its warrant was
+real: auto-returning an unchanged, still-wrong card to `todo` puts it back in the pickable set for
+the same run to re-dispatch. **This amendment supersedes that decision on the record**, on the
+product owner's ruling of 2026-09-16, and D7 is where the loop it was guarding is answered rather
+than ignored.
+
+> **Yue, 2026-09-16:** _"When a work item has an open plan, both motir-ai planner and motir-meta
+> plan skill should set the status to planning; when the plan is accepted, the status is changed
+> back to To Do or Blocked."_ — and, on which statuses may park: _"all the statuses can be changed
+> to planning"_, corrected the same day to _"done and cancelled should be excluded."_
+
+The cost of leaving it is not untidiness. `planning` is in the `in_progress` CATEGORY, so both claim
+doors refuse it: `claimNextReadyCandidate` admits only the `todo` category and `claim_work_item`
+answers `not_claimable`. A card parked by the runbook is therefore parked FOR EVER unless a person
+moves it by hand, and no surface anywhere asks them to.
+
+### D1 — every plan parks every COMMITTED target it names, at ONE door
+
+The choke point is `plansService.addProposals`, which both authoring paths already pass through: the
+MCP door (`lib/mcp/tools/authorPlan.ts`) and generation plus every motir-ai job
+(`aiGenerationService.appendProposals`, via `app/api/internal/ai/plan-proposals`). Parking there
+covers every door that exists and every door added later, with no per-caller rule.
+
+**A TARGET is:**
+
+- the `workItemId` of every `modify` and every `remove`; and
+- the **committed** `parentRef` of every `add` — a plan laying children is a plan about that parent.
+
+A `planItem:` ref names a proposal, which has no row and cannot be parked; a `folder:` ref names a
+placement, which carries no status.
+
+**The consequence of that second bullet is stated rather than discovered: parking a PARENT does not
+park its children.** Both claim doors read each leaf's own status, so a `todo` child under a parked
+container stays claimable — the same asymmetry `plan-procedure.md` already records, and a parent
+run depends on it.
+
+Plan SESSIONS keep their own acquire at open. This adds a door; it removes none.
+
+### D2 — parkable is every NON-TERMINAL status; `done` and `cancelled` are never parked
+
+`todo`, `blocked`, `in_progress`, `implemented`, `in_review` and `approved` park. The two
+done-category statuses do not, by the owner's correction above.
+
+⚠️ **THE PARK ENFORCES THIS ITSELF, and the obvious assumption that it need not is FALSE.**
+`validateProposals.ts` does raise `PlanTargetImmutableError` on a terminal target — but from
+`validatePlanProposals`, which needs `liveById` and therefore, in its own words, "cannot move earlier
+than the CLOSE". **An APPEND naming a `done` card is accepted.** So a park that inherited that refusal
+would take a lock on shipped work, and the owner's exclusion would hold at approve and nowhere else.
+`acquireForPlanWithin` reads the project's own terminal status keys and skips those targets: no lock
+row, no status write, and the rest of the batch parks normally.
+
+This was found by building it — `tests/planning/planTargetParkDoor.test.ts` failed on exactly this
+case, against MOTIR-5645's card, which asserted the inherited refusal.
+
+### D3 — the park does NOT withdraw an `awaiting` approval gate, and that needs no code
+
+`approval-gates.md` §6d rule 6 withdraws an item's `awaiting` gates when a **person** pulls work out
+of the review band. The park and the release are `{ system: true }` writes, and
+`withdrawsPendingQuestion` returns `false` for a system write before it reads anything else — so the
+gate survives the whole park-and-release cycle by construction.
+
+That is also the right answer on the merits. §6d's own carve-out keeps the question through
+`→ blocked` because _"blocking pauses the work, it does not abandon the question"_, and a park is
+that case: the plan may be declined, and D8 then puts the card back exactly where it was. A plan
+that genuinely abandons the work `remove`s its target, and D7 archives it.
+
+### D4 — one holder per item, and a second plan is REFUSED
+
+`plan_target_lock.work_item_id` is UNIQUE, and its P2002 is already translated to the shipped
+`PlanTargetLockedError` (`lib/planChange/errors.ts`). A second plan naming a parked target is
+refused with it, naming the holding plan and its author. Nothing new is invented for the collision;
+what changes is that far more plans now take the lock, so it will actually fire.
+
+### D5 — the lock is held by the PLAN, not only by a session — and a CONVERSATION is ONE holder
+
+The row names the plan, and the status is held while that plan is `generating` or `planned`. A
+session-held lock keeps its existing meaning; the two coexist on one table because they answer the
+same question — _who is rewriting this card right now_.
+
+⚠️ **A PLAN PRODUCED BY A CONVERSATION PARKS NOTHING — the SESSION is its holder.** This is a
+correction to D5 as first written, and it was forced by evidence rather than argument: five at-scale
+E2E cases (`cloud-plan-change-conversation.spec.ts`, `cloud-contextual-plan-confirm.spec.ts`) failed
+with `PlanTargetLockedError` on the user's own anchor, in the browser, in the shipped
+_describe → refine → approve_ loop.
+
+**The REFINE is what proves it.** One conversation produces SUCCESSIVE plans over the same targets —
+that is what refining IS — so treating each plan as its own holder made a conversation collide with
+itself on the second submit. The two plans are ONE actor, and the session is the thing that says so.
+A session already acquires its anchors at open and gives them back on the decision (MOTIR-2786), so
+a second lock for one actor buys nothing and breaks the loop.
+
+So the rule is: **the plan parks only when it resolves to NO session.** That is exactly the
+population the bug was reported for — `create_plan` / `add_plan_items` through the MCP, which is
+every runbook planning pass.
+
+⚠️ **THE RESIDUAL GAP, stated rather than discovered:** a plan carrying a `sourceJobId` whose session
+cannot be resolved — a generation or `expand_item` job that opened no conversation — parks nothing
+and is held by nothing. Its targets are as claimable as they were before this amendment. That is not
+a regression (it is the shipped behaviour), and closing it needs the plan→session link to be a
+column rather than a `lastJobId` lookup. Left open deliberately.
+
+### D6 — APPROVE rests each target at Blocked or To Do
+
+After `materialize`, every still-parked target of the approved plan is moved to:
+
+- **`blocked`** when any live `blocked_by` of that card is not done — the same
+  `classifyBlockerReadiness` predicate the ready set and the birth-status pass already use; else
+- **`todo`**.
+
+This REPLACES two shipped behaviours, both named in D11: `releasePlanTargetLocks`'s restore-to-prior
+and MOTIR-5359's unconditional reset to the initial status. **A target parked BY HAND before the
+plan existed is rested the same way** — the release keys on the card sitting at `planning` under
+this plan's lock, not on who put it there, which is what retires the runbook's manual step.
+
+### D7 — the LOOP-RISK rule: what each plan SHAPE rests at
+
+The superseded comment's worry was an unchanged defective card going straight back into the ready
+set. The answer is that a plan shape that leaves the card unchanged is not a plan that corrects it —
+so the table gives each shape exactly one outcome:
+
+| the approved plan's effect on the target                   | rests at                           | why                                                                                                      |
+| ---------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **`remove`** — the plan replaces the card                  | **archived; no status is written** | an archived row is claimed by nothing; writing a status onto it would be a claim about work that is gone |
+| **`modify` carrying `blockedByAdd`**                       | **`blocked`**                      | D6's predicate, and the new prerequisite is exactly the thing that must not be skipped                   |
+| **`add`s parented at the target** (container)              | **`todo`**                         | the children carry the work; the container is not handed out by the ready walk (see below)               |
+| **`modify` with no new edge** (re-scope, re-size, re-type) | **`todo`**                         | the approval IS the correction — the card a run next claims is the card the plan rewrote                 |
+| **`modify` carrying only `parentRef`** (AMENDMENT 11)      | **`todo`**                         | a re-parent changes where the card sits, never what it asks for                                          |
+
+**A container resting at `todo` is not thereby dispatched.** The ready-set walk DESCENDS into a
+container and COLLECTS only ready childless leaves (`workItemRepository`'s `ReadyLayerRow` /
+`hasChildren`), so a container never reaches `claimNextReadyCandidate`'s candidate list at all; a
+keyed `claim_work_item` on it still succeeds, which is what `motir run <parent>` relies on.
+
+**And row four is the one the superseded comment refused, so it is argued rather than asserted.** A
+`modify` with no new edge has rewritten the card's body, its sizing or its type, and a person
+approved that rewrite having seen the diff. Re-dispatching it is re-dispatching the CORRECTION. The
+loop the old comment feared needs a card that came back unchanged, and no row above produces one.
+`--auto-approve-replan` (`run-findings-protocol.md` Q4) is the loop that will now re-claim such a
+card without a human in it, and that is the owner's intent: it is `auto`-only, opt-in per run, and
+the alternative it replaces is a card stranded at `planning` until somebody notices.
+
+### D8 — DECLINE, an emptying withdraw, and a discarded close RESTORE the prior status
+
+A decision that materializes nothing has changed nothing about the card, so the card goes back to
+the status it was parked from — the existing `releaseOne` behaviour, kept, and now reached by plans
+that never had a `sourceJobId` to resolve through. It stays CONDITIONAL on the card still sitting at
+`planning`: a person who moved it out by hand has released it themselves, and writing a remembered
+status over their move would undo a human decision.
+
+### D9 — the ABANDONED-PLAN exit: 24 hours, reusing the threshold that already exists
+
+A crashed author leaves a plan `generating` with no terminal event, which is the whole reason the
+session lease exists. **The window for a PLAN-held lock is `ABANDONED_PLAN_MAX_AGE_HOURS` — 24
+hours — measured from the plan's last write**, and the sweep then releases it, restoring each
+target's prior status per D8.
+
+The number is not chosen; it is **the one already shipped for this exact population**.
+`abandonedPlanService` uses `ABANDONED_PLAN_MAX_AGE_HOURS` as the crashed-worker arm and as the only
+signal available for a plan with NO producer — an MCP-authored plan — and its own comment records
+that it reuses the constant _"rather than introducing a threshold of its own"_. A lock released at
+the same threshold is released exactly when the plan it belongs to is declared dead, and the two
+cannot drift apart.
+
+**Measured from the last WRITE, not from creation**, because a runbook pass writes repeatedly while
+it works — `create_plan`, a batch per layer, an `update_plan_item` per card — so an honest pass
+refreshes its own window without a heartbeat. This is also why the session lease's 30 minutes
+(`PLAN_TARGET_LOCK_LEASE_MS`) is the wrong number here: it is refreshed only by a session SUBMIT,
+which a runbook walk never makes, so a walk longer than half an hour would have its targets swept
+out from under it mid-pass.
+
+**A `planned` plan NEVER expires.** It is waiting for a person, a review queue has no deadline, and
+its release is the decision itself (D6 / D8).
+
+### D10 — the EDGES this implies
+
+Every non-terminal status gains an edge into `planning` — `blocked`, `implemented`, `in_review` and
+`approved` join `todo` and `in_progress` — and `planning → blocked` is declared for D6's resting
+status. No edge from `done` or `cancelled`, per D2.
+
+The moves above are `{ system: true }` writes and would not be refused either way. **The edges are
+declared so a PERSON can make the same moves**, and so a `restricted` workflow policy does not
+silently turn the product's own write into the second-class `plan_reset` arm MOTIR-5359 had to
+invent.
+
+### D11 — the referrers this supersedes, each with its disposition
+
+| referrer                                                                      | disposition                                                                                                   |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `lib/workflows/defaultWorkflow.ts`, the `planning` OUT block                  | **rewritten** in this card's commit to cite this amendment; the _"A HUMAN MOVES IT"_ paragraph is gone        |
+| MOTIR-2787's restore-on-release (`planTargetLockService.releaseOne`)          | **narrowed** — it stays the DECLINE path (D8) and no longer answers approve                                   |
+| MOTIR-5359's reset (`lib/plans/rescopeReset.ts`)                              | **superseded** by D6 — a re-scope no longer has its own status rule; every target rests by the same predicate |
+| `plan-procedure.md` _Park the target_ / _"NOTHING RETURNS IT BUT A PERSON"_   | **superseded**; the runbook rewrite is MOTIR-5644, gated behind the live-tenant check MOTIR-5642              |
+| `run-findings-protocol.md` Q4                                                 | **unchanged, and now load-bearing** — D7 names it as the loop that re-claims a rested card                    |
+| `tests/planning/planTargetLockService.test.ts` _"restores the prior status…"_ | **re-pointed** at the decline path; its approve arm is replaced by D6's cases                                 |
+| `tests/integration/plans/approveRescopeResetsStatus.test.ts`                  | **rewritten** to assert D6's two outcomes instead of the initial-status reset                                 |
+
+### D12 — THREE MORE REFERRERS, found by BUILDING it rather than by reading
+
+D11 was written from the record. These three were found when the code ran, and each is named here
+because the next reader would otherwise re-derive it from a red test.
+
+**1. MOTIR-3050's rule (1) is superseded** — `materialize`'s _"FOR AN EDGE, A `modify` NEVER MOVES
+THE STATUS ON ITS OWN ACCOUNT"_. Its warrant was that a `modify` target carries a status somebody
+RECORDED, which an approve cannot see behind — _"that card may be `in_progress` with a live
+worktree."_ **The PREMISE changed, not the argument:** the card no longer reaches the approve wearing
+that status, because its own append parked it and stored it on the lock. So the approve is not
+overwriting a fact it cannot see; it is answering the question the park deferred. The half of
+MOTIR-3050 that STANDS is the one about `blocked` not being a projection of the edges — nothing
+recomputes this column later, and no human's externally-motivated block is ever cleared.
+
+**2. A PURE STATUS MOVE NO LONGER ANCHORS `base_revision_drift`** —
+`workItemRevisionRepository.findLatestIdsByWorkItemIds` skips a revision whose diff carries `status`
+and nothing else. **Without it, every plan read as STALE the moment it was authored:** the park
+records a status revision on the very card the plan is about, so the target's latest revision stopped
+matching the `baseRevision` its author had captured correctly seconds earlier. The skip is also right
+on that rule's own terms — it asks whether applying the patch _"may conflict with a newer edit /
+clobber it"_, and a content patch cannot clobber a status change.
+
+**3. A CARD IS PLANNED BY ONE PLANNER AT A TIME — and a CONVERSATION is one planner.** This is the
+owner's ruling of 2026-09-21, taken after the merge queue showed what the first reading cost:
+
+> _"makes no sense a card can be planned multiple times. The user wants to make a second plan should
+> check the plan made already, or if someone else is planning it right now the user should respect
+> that."_
+
+So D4's refusal STANDS, and it is a rule about a second PLANNER rather than about a second plan:
+
+| the second comer                                            | outcome                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------- |
+| another SESSION, or a session-less plan, naming a held card | **refused** — `PlanTargetLockedError`, naming the holder |
+| the SAME conversation taking its next turn                  | **allowed** — one planner, one hold (D5)                 |
+
+**The pending-plan indicator is therefore NOT dead**, which the first draft of this point got wrong.
+`listPendingProposalsForWorkItem` still returns several rows for one card, because a conversation
+that refines produces successive plans over the same targets and all of them stay pending until they
+are decided. What cannot happen is two DIFFERENT planners stacking plans on one card, which is
+exactly what the ruling forbids.
+
+### What this amendment does NOT change
+
+- **`CLI_TOKEN_GRANT` is not widened.** A sandboxed run still cannot author a plan, so it cannot
+  park anything either.
+- **No `motir-ai` change.** The fix sits at the one append choke point motir-ai's jobs already call
+  through, so the planner gets the behaviour without a line of its own.
+- **Readiness is untouched.** It is computed from edges, as always; D6 writes a status that AGREES
+  with the edges rather than a status anything derives from.
+- **Roll-up and the downward cascade are untouched.** A parked parent is recomputed by
+  `parentStatusRollupService` on the next child event exactly as before.

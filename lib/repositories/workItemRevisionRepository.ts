@@ -170,6 +170,22 @@ export const workItemRevisionRepository = {
    * `[workItemId, changedAt]` index; batched (no N+1) across all of a plan's
    * targets. A work item with no revisions simply has no entry in the map.
    * Read-only path → `db` singleton; empty input short-circuits to an empty map.
+   *
+   * ⚠️ IT SKIPS A PURE STATUS MOVE — a revision whose diff carries `status` and
+   * NOTHING ELSE (MOTIR-5646).
+   *
+   * Right on the rule's own terms: the question `base_revision_drift` asks is
+   * whether the target changed such that *"applying the patch may conflict with
+   * a newer edit / clobber it"*, and a content patch cannot clobber a status
+   * change. The two do not compete for a field.
+   *
+   * And REQUIRED, which is how it was found. A plan now PARKS every committed
+   * target it names at `planning` when it appends (MOTIR-5645), recording a
+   * status revision on the very card the plan is about — so without this skip
+   * EVERY plan read as stale the moment it was authored, against a
+   * `baseRevision` its author had captured correctly seconds earlier.
+   * `tests/integration/plans/planStalenessService.test.ts`'s all-clear case is
+   * the one that failed.
    */
   async findLatestIdsByWorkItemIds(
     workItemIds: string[],
@@ -181,6 +197,12 @@ export const workItemRevisionRepository = {
       SELECT DISTINCT ON ("workItemId") "workItemId", "id"
       FROM "work_item_revision"
       WHERE "workItemId" IN (${Prisma.join(workItemIds)})
+        -- A PURE STATUS MOVE IS NOT AN EDIT THIS ANCHOR IS ABOUT (MOTIR-5646).
+        -- See the note above this method for why.
+        AND NOT (
+          "diff" ?& ARRAY['status']
+          AND (SELECT count(*) FROM jsonb_object_keys("diff")) = 1
+        )
       ORDER BY "workItemId", "changedAt" DESC, "id" DESC
     `;
     return new Map(rows.map((r) => [r.workItemId, r.id]));

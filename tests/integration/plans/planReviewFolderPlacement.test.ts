@@ -207,7 +207,15 @@ describe('planReviewService.getPlanReview — folder placements', () => {
 
     expect(out).toMatchObject({ folderId: null, folderPath: null, parentNodeId: epic.id });
     // The folder side LEADS, ahead of the title change pushed before it.
-    expect(out!.changes.map((c) => c.field)).toEqual(['parent', 'title']);
+    // ⚠️ The resting-status row is dropped: a plan PARKS its committed targets, so
+    // every `modify` now carries `status → To Do or Blocked (returned when this
+    // plan is approved)` in addition to the fields the patch touched
+    // (MOTIR-5646). This case is about those other fields, and its exact-set
+    // assertion is the point.
+    expect(out!.changes.map((c) => c.field).filter((f) => f !== 'status')).toEqual([
+      'parent',
+      'title',
+    ]);
     expect(out!.changes[0]!.placement).toEqual({
       from: { kind: 'folder', folderId: parked, folderPath: ['Parked'], folderMissing: false },
       to: { kind: 'workItem', id: epic.id, identifier: epic.identifier },
@@ -216,7 +224,8 @@ describe('planReviewService.getPlanReview — folder placements', () => {
 
     // Not moved: it sits in its target's folder, and no placement row appears.
     expect(inPlace).toMatchObject({ folderId: parked, folderPath: ['Parked'], parentNodeId: null });
-    expect(inPlace!.changes.map((c) => c.field)).toEqual(['title']);
+    // The resting-status row is dropped — see the note above (MOTIR-5646).
+    expect(inPlace!.changes.map((c) => c.field).filter((f) => f !== 'status')).toEqual(['title']);
   });
 
   it('keeps a work-item → work-item re-parent row exactly as before, typed but not reordered', async () => {
@@ -233,7 +242,15 @@ describe('planReviewService.getPlanReview — folder placements', () => {
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     const item = review.items[0]!;
-    expect(item.changes.map((c) => c.field)).toEqual(['title', 'parent']);
+    // ⚠️ The resting-status row is dropped: a plan PARKS its committed targets, so
+    // every `modify` now carries `status → To Do or Blocked (returned when this
+    // plan is approved)` in addition to the fields the patch touched
+    // (MOTIR-5646). This case is about those other fields, and its exact-set
+    // assertion is the point.
+    expect(item.changes.map((c) => c.field).filter((f) => f !== 'status')).toEqual([
+      'title',
+      'parent',
+    ]);
     expect(item.changes[1]).toMatchObject({ from: from.identifier, to: to.identifier });
     expect(item.folderId).toBeNull();
   });
@@ -372,10 +389,17 @@ describe('planReviewService.getPlanReview — folderTrail', () => {
   it('does not grow its folder reads with the size of the plan — the same count for 1 and 10 filed proposals', async () => {
     const fx = await makeWorkItemFixture();
     const { parked, y2025 } = await parkedTree(fx);
-    const filedEpic = await seed(fx, 'epic', 'Parked epic');
-    await foldersService.fileWorkItem(filedEpic.id, { folderId: y2025 }, fx.ctx);
 
+    // ⚠️ ONE FILED EPIC PER CALL, since MOTIR-5645. This helper runs three times,
+    // and every plan it builds names the epic as a committed `parentRef` — which
+    // a plan now PARKS, so the second and third calls were refused with
+    // `PlanTargetLockedError` (AMENDMENT 16 D1/D4). What this case measures is
+    // the READ COUNT against the plan's SIZE, and that is unaffected by which
+    // epic the proposals hang under. A `folder:` parentRef parks nothing, so the
+    // filed half of each batch was never the problem.
     const readsFor = async (n: number): Promise<number> => {
+      const filedEpic = await seed(fx, 'epic', `Parked epic ${n}`);
+      await foldersService.fileWorkItem(filedEpic.id, { folderId: y2025 }, fx.ctx);
       const plan = await plansService.createPlan(fx.projectId, { title: `Plan ${n}` }, fx.ctx);
       await plansService.addProposals(
         plan.id,

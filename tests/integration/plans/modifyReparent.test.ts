@@ -7,6 +7,7 @@ import { InvalidProposalError, PlanGrammarError, PlanRefGraphError } from '@/lib
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { contentRevisions } from '../../helpers/planTargetRevisions';
 import { truncateAuthTables } from '../../helpers/db';
 
 // MOTIR-3859 — a `modify` proposal RE-PARENTS its target, against real Postgres
@@ -127,10 +128,11 @@ describe('a `modify` RE-PARENTS its target on approve', () => {
     await plansService.markPlanned(planId, fx.ctx);
     await plansService.approvePlan(planId, fx.ctx);
 
-    const revisions = await adminDb.workItemRevision.findMany({
-      where: { workItemId: card, changeKind: 'updated' },
-      orderBy: { changedAt: 'asc' },
-    });
+    // CONTENT revisions only: a plan now parks its target at `planning` and rests
+    // it afterwards, so two pure status moves sit either side of the modify's own
+    // entry. The claim being made — the modify lands as ONE entry, not one per
+    // key — is unchanged (MOTIR-5646).
+    const revisions = await contentRevisions(card);
     expect(revisions).toHaveLength(1);
     const diff = revisions[0]!.diff as Record<string, unknown>;
     expect(diff.parentId).toEqual({ from, to });

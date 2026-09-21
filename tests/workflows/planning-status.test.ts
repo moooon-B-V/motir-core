@@ -150,15 +150,41 @@ describe('the transitions in and out are legal without an admin editing anything
     });
   });
 
-  it('but NOT in_review → planning — that path goes back through in_progress', async () => {
-    // Enumerated, not generated: an edge nobody could justify from a user story
-    // does not get added just because it would be convenient.
+  // ⚠️ REVERSED BY MOTIR-5643, and the reversal is the decision rather than a
+  // regression. This case pinned `in_review → planning` as ABSENT — *"an edge
+  // nobody could justify from a user story does not get added just because it
+  // would be convenient"* — and that reasoning was sound for the one story it
+  // had: a PERSON noticing a card was wrong, for whom `in_review → in_progress
+  // → planning` really was enough.
+  //
+  // The story it did not have is the PRODUCT parking a target on its own. A plan
+  // now parks every committed card it names, whatever status that card is in
+  // (`agent-authored-plans.md` AMENDMENT 16 D2/D10; product owner, 2026-09-16),
+  // so for an `in_review` card the second hop is not an inconvenience — without
+  // the edge, a plan simply cannot hold that card.
+  //
+  // What is STILL enumerated rather than generated is the part that matters:
+  // `done` and `cancelled` get no edge in, which the case below pins.
+  it('in_review → planning IS legal now — a card in review can be parked (MOTIR-5643)', async () => {
     const item = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title: 'in review' },
       fx.ctx,
     );
     await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
     await workItemsService.updateStatus(item.id, 'in_review', fx.ctx);
+
+    await expect(workItemsService.updateStatus(item.id, 'planning', fx.ctx)).resolves.toMatchObject(
+      { status: 'planning' },
+    );
+  });
+
+  it('but NOT done → planning — we plan FORWARD (MOTIR-5643, AMENDMENT 16 D2)', async () => {
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'shipped' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(item.id, 'done', fx.ctx);
 
     await expect(workItemsService.updateStatus(item.id, 'planning', fx.ctx)).rejects.toBeInstanceOf(
       IllegalTransitionError,

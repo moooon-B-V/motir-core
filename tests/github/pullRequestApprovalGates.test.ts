@@ -350,6 +350,73 @@ describe('WITHDRAW — superseded when the set the gate asked about changes', ()
     expect(await awaiting(item.id)).toEqual([]);
   });
 
+  // ⚠️ MOTIR-5901 — a member MERGED ON GITHUB is settled, and the question comes back
+  // about the ones still open (§4 SECOND AMENDMENT, decision 4's amendment). Until this
+  // fix the close withdrew the gate and nothing ever re-raised it: the merged member
+  // failed `isMergeCandidate` on every later verdict, so the open one could only be
+  // merged on GitHub too.
+  const mergeOnGitHub = (number: number, identifier: string) =>
+    githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('closed', number, `subtask/${identifier}-${number}`, { merged: true }),
+    );
+
+  it('a member MERGED ON GITHUB withdraws the gate and re-asks at once about the set, the merged member settled', async () => {
+    const { item } = await reviewedWithGate('pa-merged-gh@example.com');
+
+    await mergeOnGitHub(11, item.identifier);
+
+    // Held open by #12 (`deferred_open_pr`), so the card is still in review…
+    expect(await statusOf(item.id)).toBe('in_review');
+    // …the old gate records the close, and ONE fresh gate names the whole set.
+    expect((await approvalGates(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'member_closed'],
+      ['awaiting', null],
+    ]);
+    expect((await awaiting(item.id)).map((g) => g.subjectVersion)).toEqual([
+      'moooon/acme#11@sha-a,moooon/acme#12@sha-b',
+    ]);
+  });
+
+  it('with the open member NOT green, the merge raises nothing — its next green raises ONE gate', async () => {
+    const { item } = await reviewedWithGate('pa-merged-gh-red@example.com');
+    // #12 moves to a commit CI has not spoken for: the gate goes, and nothing replaces it.
+    await ci({ conclusion: null, status: 'in_progress', headSha: 'sha-b2', number: 12 });
+    expect(await awaiting(item.id)).toEqual([]);
+
+    await mergeOnGitHub(11, item.identifier);
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaiting(item.id)).toEqual([]);
+
+    await ci({ conclusion: 'success', headSha: 'sha-b2', number: 12 });
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect((await awaiting(item.id)).map((g) => g.subjectVersion)).toEqual([
+      'moooon/acme#11@sha-a,moooon/acme#12@sha-b2',
+    ]);
+    // A redelivery of the same verdict adds none.
+    await ci({ conclusion: 'success', headSha: 'sha-b2', number: 12 });
+    expect(await awaiting(item.id)).toHaveLength(1);
+  });
+
+  it('a member CLOSED WITHOUT MERGING still blocks — nothing is re-asked until it is unlinked (MOTIR-5901)', async () => {
+    const { s, item } = await reviewedWithGate('pa-closed-unmerged@example.com');
+
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('closed', 12, `subtask/${item.identifier}-12`),
+    );
+    await ci({ conclusion: 'success', headSha: 'sha-a', number: 11 });
+    expect(await awaiting(item.id)).toEqual([]);
+
+    await githubPullRequestService.unlinkPullRequestByCoordinates(
+      { workItemId: item.id, projectId: s.project.id, owner: 'moooon', name: 'acme', number: 12 },
+      s.ctx,
+    );
+    expect((await awaiting(item.id)).map((g) => g.subjectVersion)).toEqual([
+      'moooon/acme#11@sha-a',
+    ]);
+  });
+
   // ⚠️ AMENDED — MOTIR-5663. The withdrawal still happens and still records
   // `set_changed`; what is new is that the site then ASKS what the card should hold
   // now. The remaining member is green, so the answer is a gate over the SMALLER

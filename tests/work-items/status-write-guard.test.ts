@@ -80,9 +80,16 @@ const STATUS_WRITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'never-terminal',
     "writes the project's own `blocked` status, resolved by category — `blocked` is category `todo`, so this write cannot enter or leave the done category; the row is also freshly created and carries no stamp to clear",
   ],
-  'lib/services/plansService.ts#applyModify#workItemRepository.update': [
+  // ⚠️ `applyModify` IS GONE FROM THIS LIST, and its absence is the point
+  // (MOTIR-5646). It carried a `never-terminal` verdict for MOTIR-5359's
+  // RE-SCOPE RESET, which put a status into the modify's patch. That reset is
+  // REMOVED: `applyModify` now writes content only, so the scanner no longer
+  // reports it at all, and a verdict naming a site that does not exist is what
+  // the second case in this file fails on. The status it used to write is
+  // `restPlanTargets`' below.
+  'lib/services/plansService.ts#restPlanTargets#workItemRepository.update': [
     'never-terminal',
-    "the RE-SCOPE RESET (MOTIR-5359) — `resolveRescopeReset` returns a move only FROM an `in_progress`-category status and only TO the project's initial status when that status is `todo`-category, so this write can neither enter nor leave the done category; every other key in the patch is content, not status",
+    "THE RESTING STATUS (MOTIR-5646, AMENDMENT 16 D6) — a target its plan parked goes to the project's own `blocked` or `todo`, both resolved from the project's status list and both asserted `todo`-CATEGORY before the write, so this can neither enter nor leave the done category and no `completedAt` stamp is ever owed. It writes only when the row is still at `planning`, which the same plan put there, and the legality of `planning → <target>` is read from the project's graph first",
   ],
   'lib/services/workflowsService.ts#deleteStatus#workItemRepository.update': [
     'stamps-itself',

@@ -32,6 +32,31 @@
  */
 export const PLAN_TARGET_LOCK_LEASE_MS = 30 * 60 * 1000;
 
+/**
+ * The lease for a lock held by a PLAN rather than by a session (MOTIR-5645;
+ * `docs/decisions/agent-authored-plans.md` AMENDMENT 16 D9) — TWENTY-FOUR HOURS.
+ *
+ * ⚠️ WHY NOT THE THIRTY MINUTES ABOVE. That window is refreshed by a session
+ * SUBMIT, and the things that now park a target make no submit at all: a runbook
+ * planning pass walks a corpus, lays a level, authors a card at a time, and a
+ * walk longer than half an hour would have its own targets swept out from under
+ * it mid-pass. A plan-held lease is refreshed by each APPEND instead, so an
+ * honest pass keeps its own window open by working.
+ *
+ * ⚠️ AND THE NUMBER IS NOT CHOSEN — it is `ABANDONED_PLAN_MAX_AGE_HOURS`, the
+ * threshold already shipped for exactly this population. `abandonedPlanService`
+ * uses it as the crashed-worker arm and as the only signal available for a plan
+ * with NO producer, which is every MCP-authored plan, and its own comment
+ * records that it reuses that constant *"rather than introducing a threshold of
+ * its own"*. A lock released on the same threshold is released exactly when the
+ * plan it belongs to is declared dead.
+ *
+ * The agreement is PINNED rather than imported: this module is a pure leaf with
+ * no imports, and reaching up into a service for a number is how a cycle starts.
+ * `tests/planning/planLeaseWindow.test.ts` fails if the two ever diverge.
+ */
+export const PLAN_TARGET_PLAN_LEASE_MS = 24 * 60 * 60 * 1000;
+
 /** How many expired leases one sweep pass releases. Bounded so a backlog drains
  *  over several passes instead of one run holding locks across a large slice of
  *  the table. */
@@ -64,9 +89,15 @@ export function shouldHoldStatus(fromStatus: string, planningIsLegalFromHere: bo
   return planningIsLegalFromHere;
 }
 
-/** The lease expiry for a lock acquired or refreshed at `now`. */
+/** The lease expiry for a SESSION-held lock acquired or refreshed at `now`. */
 export function leaseExpiryFrom(now: Date): Date {
   return new Date(now.getTime() + PLAN_TARGET_LOCK_LEASE_MS);
+}
+
+/** The lease expiry for a PLAN-held lock acquired or refreshed at `now`
+ *  (MOTIR-5645) — the 24-hour window, refreshed by each append. */
+export function planLeaseExpiryFrom(now: Date): Date {
+  return new Date(now.getTime() + PLAN_TARGET_PLAN_LEASE_MS);
 }
 
 /** Whether a lease has run out at `now` — the single definition the acquire

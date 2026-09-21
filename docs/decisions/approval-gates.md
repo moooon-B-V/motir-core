@@ -2576,6 +2576,54 @@ record holds then, and why a null FK would be the wrong answer.
 > as §6b's shipped note requires. The next all-green verdict raises a fresh gate
 > over the new `subjectVersion`.
 >
+> **4 · AMENDED (MOTIR-5901, 2026-09-21) — a MERGED member is SETTLED, so the
+> re-ask above can happen.** As shipped, "the next all-green verdict" never came
+> for a member that closed by MERGING. `resolveGateSet` required every member to
+> be a merge candidate, and `mergeCandidateHead` answers `null` for a merged pull
+> request, so a set with one member merged on the host's own button was
+> unaskable for good. The gate was withdrawn (`member_closed`), nothing ever
+> raised a new one, and the members still open could only be merged on the host.
+> The Development frame's _"Motir asks again when every check is green"_ could
+> not be kept. The only record of that behaviour was a regression guard that
+> MOTIR-5805 added around its own ejection carve-out (_"…and WITHOUT an ejection
+> a merged member still blocks, exactly as before"_). It was not a decision
+> about a merge made on the host. MOTIR-5805 had already given the reason for
+> the reverse (`gateSet.ts`, the `merged` member field): a merged member is
+> settled, and nothing about it is asked again. What made it merge does not
+> change that.
+>
+> - **A merged member is SETTLED, not blocking, in every case, not only after a
+>   queue ejection.** The question is about the commits that have NOT landed.
+>   `subjectVersion` still names the WHOLE set, merged members included, which
+>   is the form the ejection arm already used. So the row records which commits
+>   the set held when the person was asked, and approving it merges or enqueues
+>   only the members still open. A merged member reaches the press as `stale`,
+>   exactly as it did under the ejection arm.
+> - **At least one member must still be OPEN and a merge candidate.** A set with
+>   nothing left to land asks nothing, and that holds with or without an
+>   ejection. (On the ejection arm, a set whose every member had merged used to
+>   raise a gate. That was a latent hole, and this closes it.) A card whose
+>   whole set merged is normally `done` anyway and asks nothing through
+>   `cardIsTerminal`. This clause is what keeps the answer right while the
+>   status catches up.
+> - **A member CLOSED WITHOUT MERGING still BLOCKS, deliberately.** Its commits
+>   will never land. A gate over the set would ask a person to approve a merge
+>   the set cannot finish, and approving it would complete the card without that
+>   member's work. Unlike a merge, closing is reversible and has two exits, and
+>   both put the question back: **reopening** it makes it a candidate again on
+>   its next green, and **unlinking** it changes the set (`set_changed` re-asks
+>   over the smaller set). Which exit to take is a person's call about what the
+>   card still delivers, and the product should not make it for them.
+>   (MOTIR-5004 settles the completion gate differently for a closed member, and
+>   the two are consistent. That gate asks whether the card is FINISHED, and an
+>   abandoned pull request must not hold it open for ever. This gate asks whether
+>   a person should be asked to MERGE, and the answer is not until they have
+>   said what the closed member means.)
+>
+> Pinned by `tests/approvalGates/gateSet.test.ts` (the rewritten case and three
+> beside it) and, through the real webhook sequence, by
+> `tests/github/pullRequestApprovalGates.test.ts`'s MOTIR-5901 cases.
+>
 > **Why a withdraw needs its own trigger: the card never leaves `in_review` on a
 > push.** Nothing moves a work item back when its pull request gains a commit.
 > Re-run at this amendment's base:
