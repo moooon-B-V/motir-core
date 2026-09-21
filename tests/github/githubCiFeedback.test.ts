@@ -455,6 +455,101 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     expect(await ciStateOf(item.id)).toBe('passing');
   });
 
+  // ── MOTIR-5918 — a PULL REF where the branch should be ──────────────────────
+  //
+  // GitHub's CodeQL DEFAULT SETUP runs as a dynamic workflow whose check suite
+  // reports `head_branch: refs/pull/<n>/head` and an empty `pull_requests`, read
+  // off motir-gateway#45 at f6faeec (suite 96436591673) beside the ordinary
+  // `ci.yml` suite at the same commit, which carried the real branch name. The
+  // literal matched no stored `head_ref`, so every delivery from that suite was
+  // dropped and its rows sat `pending` until the half-hourly reconcile.
+
+  it('a check_run carrying refs/pull/<n>/head records BOTH its pending and terminal rows against PR <n>', async () => {
+    const s = await makeScenario('pullref-run@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 45);
+    const pr = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 45 } });
+
+    const pending = await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({
+        conclusion: null,
+        status: 'in_progress',
+        headSha: 'sha1',
+        name: 'Analyze (go)',
+        headBranch: 'refs/pull/45/head',
+        prNumbers: [],
+      }),
+    );
+    expect(pending).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
+    expect(await adminDb.githubCheckRun.findMany()).toMatchObject([
+      { pullRequestId: pr.id, checkName: 'Analyze (go)', conclusion: 'pending' },
+    ]);
+
+    const done = await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({
+        conclusion: 'success',
+        headSha: 'sha1',
+        name: 'Analyze (go)',
+        headBranch: 'refs/pull/45/head',
+        prNumbers: [],
+      }),
+    );
+    expect(done).toMatchObject({ event: 'ci', outcome: 'verified', workItemId: item.id });
+    // The terminal delivery UPDATED the pending row rather than being dropped.
+    expect(await adminDb.githubCheckRun.findMany()).toMatchObject([
+      { pullRequestId: pr.id, checkName: 'Analyze (go)', conclusion: 'success' },
+    ]);
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('a check_suite carrying refs/pull/<n>/merge resolves to PR <n> the same way', async () => {
+    const s = await makeScenario('pullref-suite@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 45);
+
+    const res = await githubWebhookService.handleEvent(
+      'check_suite',
+      checkSuitePayload({
+        conclusion: 'success',
+        headSha: 'sha1',
+        prNumbers: [],
+        headBranch: 'refs/pull/45/merge',
+      }),
+    );
+    expect(res).toMatchObject({ event: 'ci', outcome: 'verified', workItemId: item.id });
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('a pull ref naming a PR Motir has no row for resolves to nothing and writes nothing', async () => {
+    const s = await makeScenario('pullref-unknown@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 45);
+
+    const res = await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({
+        conclusion: 'success',
+        headSha: 'sha1',
+        headBranch: 'refs/pull/46/head',
+        prNumbers: [],
+      }),
+    );
+    expect(res).toEqual({ event: 'ci', outcome: 'no_pull_request' });
+    expect(await adminDb.githubCheckRun.findMany()).toEqual([]);
+    expect(await commentsOn(item.id)).toHaveLength(0);
+  });
+
   it('handles a check_run event (per-check) the same way', async () => {
     const s = await makeScenario('checkrun@example.com');
     const item = await workItemsService.createWorkItem(

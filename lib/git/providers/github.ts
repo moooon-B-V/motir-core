@@ -1035,8 +1035,7 @@ export const githubProvider: GitProvider = {
         commitSha,
         conclusion: status !== 'completed' ? 'pending' : mapConclusion(conclusion ?? 'neutral'),
         context: typeof checkRun['name'] === 'string' ? checkRun['name'] : 'check',
-        prNumbers: readPrNumbers(checkRun['pull_requests']),
-        headBranch: readHeadBranch(asRecord(checkRun['check_suite'])),
+        ...readPrLink(checkRun['pull_requests'], asRecord(checkRun['check_suite'])),
         suiteId: readSuiteId(asRecord(checkRun['check_suite'])),
       };
     }
@@ -1058,8 +1057,7 @@ export const githubProvider: GitProvider = {
         commitSha,
         conclusion: status !== 'completed' ? 'pending' : mapConclusion(conclusion ?? 'neutral'),
         context: typeof appSlug === 'string' && appSlug.length > 0 ? appSlug : 'check_suite',
-        prNumbers: readPrNumbers(checkSuite['pull_requests']),
-        headBranch: readHeadBranch(checkSuite),
+        ...readPrLink(checkSuite['pull_requests'], checkSuite),
         suiteId: readSuiteId(checkSuite),
       };
     }
@@ -1515,6 +1513,33 @@ function readPrNumbers(value: unknown): number[] {
 function readHeadBranch(checkSuite: Record<string, unknown> | null): string | null {
   const branch = checkSuite?.['head_branch'];
   return typeof branch === 'string' && branch.length > 0 ? branch : null;
+}
+
+/** GitHub's own ref for a pull request, `refs/pull/<n>/head` or `refs/pull/<n>/merge`. */
+const PULL_REF = /^refs\/pull\/(\d+)\/(?:head|merge)$/;
+
+/** The event's link back to its pull request: the payload's `pull_requests`
+ *  numbers, and the suite's `head_branch` as the fallback.
+ *
+ *  ⚠️ `head_branch` IS NOT ALWAYS A BRANCH (MOTIR-5918). A workflow triggered on
+ *  the pull request's own ref — CodeQL DEFAULT SETUP is the one observed — reports
+ *  `refs/pull/<n>/head` there, with an empty `pull_requests`. That literal matches
+ *  no stored `head_ref`, so every delivery from such a suite used to be dropped.
+ *  The ref names the pull request by NUMBER, so it is read as one, after any the
+ *  payload listed, and is never offered to a consumer as a branch name. */
+function readPrLink(
+  pullRequests: unknown,
+  checkSuite: Record<string, unknown> | null,
+): { prNumbers: number[]; headBranch: string | null } {
+  const prNumbers = readPrNumbers(pullRequests);
+  const headBranch = readHeadBranch(checkSuite);
+  const pullRef = headBranch ? PULL_REF.exec(headBranch) : null;
+  if (!pullRef) return { prNumbers, headBranch };
+  const number = Number(pullRef[1]);
+  return {
+    prNumbers: prNumbers.includes(number) ? prNumbers : [...prNumbers, number],
+    headBranch: null,
+  };
 }
 
 /** The `id` off a `check_suite` object — the CI RUN's identity (MOTIR-3209), on
