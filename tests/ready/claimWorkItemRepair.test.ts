@@ -99,6 +99,7 @@ describe('claimRepair — the claim', () => {
         ci: 'failing',
         failingChecks: ['Vitest'],
         queueExit: null,
+        conflicted: false,
       },
     ]);
 
@@ -416,7 +417,15 @@ describe('getRepairView — what the Development block draws', () => {
 
     expect(await view(fx, card.id)).toEqual({
       state: 'offer',
-      failing: [{ repo: `acme/${repo.name}`, number: pr.number, ci: 'failing', queueExit: null }],
+      failing: [
+        {
+          repo: `acme/${repo.name}`,
+          number: pr.number,
+          ci: 'failing',
+          queueExit: null,
+          conflict: null,
+        },
+      ],
       lastGaveUp: null,
     });
     expect(await fixRuns(card.id)).toHaveLength(0);
@@ -531,7 +540,9 @@ describe('getRepairView — what the Development block draws', () => {
 
     expect(await view(fx, red.id)).toEqual({
       state: 'pointer',
-      failing: [{ repo: 'acme/web', number: pr.number, ci: 'failing', queueExit: null }],
+      failing: [
+        { repo: 'acme/web', number: pr.number, ci: 'failing', queueExit: null, conflict: null },
+      ],
       runTargetKey: story.identifier,
     });
     expect(await view(fx, quiet.id)).toEqual({ state: 'hidden' });

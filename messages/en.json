@@ -6333,7 +6333,11 @@
           "checks": "Nothing changed on your side? <b>Approve</b> sends the same commits once more. If the failing check points at real code, <code>motir fix</code> hands it to an agent.",
           "conflict": "A conflict needs new commits. <code>motir fix</code> hands it to an agent; approving again cannot land these commits, so nothing is offered until the branch moves.",
           "other": "<b>Approve</b> sends the same commits once more. If it leaves the queue the same way, <code>motir fix</code> hands it to an agent."
-        }
+        },
+        "conflictOn": "<prs></prs> conflicts with {base} and cannot be merged.",
+        "conflictOnNoBase": "<prs></prs> conflicts with its base branch and cannot be merged.",
+        "howConflict": "An agent rebases or resolves on the pull request's own branch, pushes, and the checks run again.",
+        "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits."
       },
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Use + Link pull request here or <mono>link_pull_request</mono> over the MCP to add a PR and show live PR and CI status.",
@@ -8370,7 +8374,8 @@
       },
       "superseded": {
         "title": "This question was withdrawn.",
-        "next": "Nobody decided it. Reload to see where it went."
+        "next": "Nobody decided it. Reload to see where it went.",
+        "staleTab": "This tab was showing a question Motir had already withdrawn. Nothing was recorded, and {key} did not move."
       },
       "stale": {
         "subject": "A newer version was published while you were reading.",
@@ -8425,7 +8430,9 @@
       },
       "mergeConflict": {
         "title": "This pull request conflicts with its base branch.",
-        "next": "Resolve the conflict on the branch. Motir asks again once its checks are green."
+        "next": "Nothing was approved and nothing was merged. Resolve the conflict on the branch — motir fix hands it to an agent — and Motir asks again once its checks are green.",
+        "atPress": "{host} reports {pr} conflicts with {base}. The press was refused before anything was written, so {key} did not move.",
+        "atPressNoBase": "{host} reports {pr} conflicts with its base branch. The press was refused before anything was written, so {key} did not move."
       },
       "mergeBranchProtected": {
         "title": "The branch's protection rules do not allow this merge yet.",
@@ -8506,7 +8513,9 @@
         "withdrawnClosed": "{count, plural, one {# pull request} other {# pull requests}} · {pr} closed without merging",
         "withdrawnDrafted": "{count, plural, one {# pull request} other {# pull requests}} · {pr} is a draft again",
         "withdrawnPulledBack": "{count, plural, one {# pull request} other {# pull requests}} · taken out of review",
-        "withdrawnUnknown": "{count, plural, one {# pull request} other {# pull requests}} · withdrawn"
+        "withdrawnUnknown": "{count, plural, one {# pull request} other {# pull requests}} · withdrawn",
+        "withdrawnConflict": "{count, plural, one {# pull request} other {# pull requests}} · {pr} conflicts with {base}",
+        "withdrawnConflictNoBase": "{count, plural, one {# pull request} other {# pull requests}} · {pr} conflicts with its base branch"
       },
       "verb": {
         "approveAndMerge": "Approve and merge"
@@ -8559,7 +8568,10 @@
         "portDrafted": "{pr} went back to draft, so this question was withdrawn.",
         "citeUnlink": "Nobody decided it. Unlink {pr} from {key} to be asked again.",
         "citeDrafted": "Nobody decided it. Motir asks again when {pr} is marked ready for review.",
-        "citePulledBack": "Nobody decided it. Motir asks again when {key} is back in review."
+        "citePulledBack": "Nobody decided it. Motir asks again when {key} is back in review.",
+        "portConflict": "{pr} conflicts with {base}, so this question was withdrawn. Nothing was approved.",
+        "portConflictNoBase": "{pr} conflicts with its base branch, so this question was withdrawn. Nothing was approved.",
+        "citeConflict": "Nobody decided it. A push that resolves the conflict and goes green asks again."
       },
       "list": {
         "pair": "{a} and {b}",
@@ -8632,6 +8644,10 @@
         "line": "<b>{pr}</b> was not merged: a setting on the repository blocked it.",
         "linePermission": "<b>{pr}</b> was not merged: Motir’s GitHub App is missing <b>{permission}</b> there.",
         "reasked": "Change the setting, then press again — this press is a new approval, and merges the same commits. <b>motir fix</b> is not offered: there is no code for an agent to change."
+      },
+      "row": {
+        "conflicts": "Conflicts with {base}",
+        "conflictsNoBase": "Conflicts with its base branch"
       }
     },
     "statusHeld": {

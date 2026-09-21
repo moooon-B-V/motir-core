@@ -166,7 +166,9 @@ describe('seam 1 — claim → run → page', () => {
 
     expect(await workItemRepairService.getRepairView(card.id, s.ctx)).toEqual({
       state: 'in_progress',
-      failing: [{ repo: 'moooon/acme', number: 101, ci: 'failing', queueExit: null }],
+      failing: [
+        { repo: 'moooon/acme', number: 101, ci: 'failing', queueExit: null, conflict: null },
+      ],
       holder: { id: s.user.id, name: 'Owner' },
       byViewer: true,
       startedAt: run.startedAt.toISOString(),
@@ -234,7 +236,9 @@ describe('seam 3 — give-up → callout again', () => {
 
     expect(await workItemRepairService.getRepairView(card.id, s.ctx)).toEqual({
       state: 'offer',
-      failing: [{ repo: 'moooon/acme', number: 103, ci: 'failing', queueExit: null }],
+      failing: [
+        { repo: 'moooon/acme', number: 103, ci: 'failing', queueExit: null, conflict: null },
+      ],
       lastGaveUp: { attempts: 5, endedAt: closed.endedAt },
     });
 

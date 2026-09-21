@@ -28,6 +28,8 @@ const webhookPr: LinkedPullRequestDto = {
   headSha: null,
   url: 'https://github.com/moooon/motir-core/pull/11',
   githubReview: null,
+  baseRef: 'main',
+  conflicted: false,
 };
 const pickerPr: LinkedPullRequestDto = {
   id: 'pr-picker-57',
@@ -39,6 +41,8 @@ const pickerPr: LinkedPullRequestDto = {
   headSha: null,
   url: 'https://github.com/moooon/motir-gateway/pull/57',
   githubReview: null,
+  baseRef: 'main',
+  conflicted: false,
 };
 
 describe('DevelopmentSectionBody — the pr-meta line (MOTIR-1596 · MOTIR-4894)', () => {

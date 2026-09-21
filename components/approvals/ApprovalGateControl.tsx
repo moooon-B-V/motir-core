@@ -160,6 +160,8 @@ export interface ApprovalGateControlProps {
    * false reassurance on the one surface built to be checkable.
    */
   filesKept?: boolean | null;
+  /** What a refusal's sentence may name — the card key and the host (MOTIR-5916). */
+  refusalContext?: RefusalContext;
   /**
    * WHERE THE FRAME SITS — `inline` (the default: a card on a page or inside a
    * row) or `fill` (Subtask MOTIR-5224: the approval OVERLAY, which IS the
@@ -510,12 +512,14 @@ function RefusalAlert({
   refusal,
   sectioned,
   onShowCurrentVersion,
+  context,
 }: {
   refusal: GateRefusal;
   sectioned: boolean;
   onShowCurrentVersion?: () => void;
+  context?: RefusalContext;
 }) {
-  const { headline, nextAction } = useRefusalCopy(refusal);
+  const { headline, nextAction } = useRefusalCopy(refusal, context);
   const t = useTranslations('approvalGate.refusal.stale');
 
   // ⚠️ THE STALE REFUSAL IS THE ONLY ONE WITH A CONTROL (MOTIR-5235; design
@@ -575,7 +579,18 @@ function RefusalAlert({
  * request the approve-and-merge press could not merge), so the words stay these and a
  * second copy of them never exists.
  */
-export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAction: string } {
+/** What a refusal's sentence can NAME beyond the refusal itself — the card key and the host
+ *  (MOTIR-5916; § 30 Panels 5a and 5b). Absent, the shipped sentences are used unchanged. */
+export interface RefusalContext {
+  itemIdentifier: string;
+  /** The host's display name, as *Open on {host}* renders it. */
+  host: string;
+}
+
+export function useRefusalCopy(
+  refusal: GateRefusal,
+  context?: RefusalContext,
+): { headline: string; nextAction: string } {
   const t = useTranslations('approvalGate.refusal');
   const locale = useLocale();
   // The withdrawal's CAUSE sentences live beside state `G`'s, not under `refusal`,
@@ -701,6 +716,38 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
         ? t(`primaryPending.${refusal.primary}.next`)
         : t(`${nextActionKey}.next`);
 
+  // ⚠️ A CONFLICT FOUND AT THE PRESS WROTE NOTHING, AND SAYS SO (MOTIR-5916; design/github
+  // § 30 Panel 5a). The press-time host read refused before the decision write, so the
+  // card did not move and § 28's *your approval was spent* would be false. Named members
+  // and base come off the refusal; one shared base names it, several (or none recorded)
+  // say *its base branch*.
+  if (refusal.tag === 'MERGE_CONFLICT' && refusal.atPress && context) {
+    const names = refusal.conflicts.map((c) => c.pullRequest.replace('#', ' · #'));
+    const pr = new Intl.ListFormat(locale, { type: 'conjunction' }).format(names);
+    const bases = new Set(refusal.conflicts.map((c) => c.baseRef ?? null));
+    const base = bases.size === 1 ? [...bases][0]! : null;
+    const values = { host: context.host, pr, key: context.itemIdentifier };
+    const atPress =
+      base !== null
+        ? t('mergeConflict.atPress', { ...values, base })
+        : t('mergeConflict.atPressNoBase', values);
+    return { headline, nextAction: `${atPress} ${nextAction}` };
+  }
+  // ⚠️ A PRESS ON A TAB THAT HAD NOT HEARD THE WITHDRAWAL (Panel 5b): the shipped
+  // SUPERSEDED refusal, headed by the shared cause sentence, says the tab was stale and
+  // nothing moved — and a conflict's own next action follows, because that is what the
+  // reader has to do next.
+  if (
+    refusal.tag === 'APPROVAL_GATE_SUPERSEDED' &&
+    refusal.supersedeCause === 'conflict' &&
+    context
+  ) {
+    return {
+      headline,
+      nextAction: `${t('superseded.staleTab', { key: context.itemIdentifier })} ${t('mergeConflict.next')}`,
+    };
+  }
+
   return { headline, nextAction };
 }
 
@@ -807,6 +854,7 @@ export function ApprovalGateControl({
   confirmConsequences,
   routedToLabel,
   filesKept = null,
+  refusalContext,
   layout = 'inline',
   alert,
   recordDetail,
@@ -1068,6 +1116,7 @@ export function ApprovalGateControl({
           refusal={phase.refusal}
           sectioned={sectioned}
           onShowCurrentVersion={onShowCurrentVersion}
+          context={refusalContext}
         />
       ) : null}
 

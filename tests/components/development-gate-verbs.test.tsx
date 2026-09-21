@@ -763,3 +763,150 @@ describe('the remaining frame arms (MOTIR-5486 coverage floor)', () => {
     expect(screen.getByText('2 pull requests')).toBeTruthy();
   });
 });
+
+// A CONFLICT FOUND BEFORE ANY PRESS (MOTIR-5916; design/github § 30). Panels 1–2: the gate
+// was withdrawn with cause `conflict`, the conflicted row carries *Conflicts with {base}*,
+// and nothing can be pressed. Panels 5a–5b: the press refusals say nothing was written.
+describe('a conflicted pull request — the withdrawn frame and the press (MOTIR-5916)', () => {
+  const CONFLICTED_GATEWAY = { ...GATEWAY_PR, ci: 'passing' as const, conflicted: true };
+  const WITHDRAWN: ApprovalGateDTO = {
+    ...AWAITING,
+    state: 'superseded',
+    supersededCause: 'conflict',
+  };
+
+  function renderWith(
+    pullRequests: (typeof CORE_PR)[],
+    gate: ApprovalGateDTO,
+    actions: DevelopmentGateActions = fakeActions(),
+  ) {
+    return render(
+      <DevelopmentSectionBody
+        pullRequests={pullRequests}
+        itemIdentifier="ACME-12"
+        manualLinkable
+        howToTest={TWO_REPO_STORY}
+        mergeGate={{
+          canDecide: true,
+          routedToLabel: 'Mara S.',
+          members: [],
+          stamp: 'v1.stamp-on-screen',
+          gate,
+        }}
+        gateActions={actions}
+      />,
+    );
+  }
+
+  it('Panel 2: two pull requests, ONE conflicted — the band names it, only its row carries the pill, and no verb is offered', () => {
+    const { container } = renderWith([CORE_PR, CONFLICTED_GATEWAY], WITHDRAWN);
+
+    const band = container.querySelector('[data-withdrawn-band]') as HTMLElement;
+    expect(band.textContent).toContain(
+      fill(pra.withdrawn.portConflict, { pr: GATEWAY_NAME, base: 'main' }),
+    );
+    expect(band.textContent).toContain(pra.withdrawn.citeConflict);
+    expect(
+      within(rowOf(GATEWAY_PR.title)).getByText(fill(pra.row.conflicts, { base: 'main' })),
+    ).toBeTruthy();
+    expect(within(rowOf(CORE_PR.title)).queryByTestId('pr-row-conflict')).toBeNull();
+    expect(screen.queryByRole('button', { name: pra.verb.approveAndMerge })).toBeNull();
+    expect(screen.queryByRole('button', { name: en.approvalGate.verb.requestChanges })).toBeNull();
+  });
+
+  it('Panel 7: a row that never recorded its base reads *its base branch*, on the pill and in the band', () => {
+    const { container } = renderWith([{ ...CONFLICTED_GATEWAY, baseRef: null }], {
+      ...WITHDRAWN,
+      subjectVersion: GATEWAY_V,
+    });
+    const band = container.querySelector('[data-withdrawn-band]') as HTMLElement;
+    expect(band.textContent).toContain(
+      fill(pra.withdrawn.portConflictNoBase, { pr: GATEWAY_NAME }),
+    );
+    expect(within(rowOf(GATEWAY_PR.title)).getByText(pra.row.conflictsNoBase)).toBeTruthy();
+  });
+
+  it('Panel 6: `mergeable: null` — an unknown reading — draws nothing new: no pill, the verbs live', () => {
+    renderWith([CORE_PR, GATEWAY_PR], AWAITING);
+    expect(screen.queryByTestId('pr-row-conflict')).toBeNull();
+    expect(screen.getByRole('button', { name: pra.verb.approveAndMerge })).toBeTruthy();
+  });
+
+  it('Panel 5a: a press the host refuses as conflicted says nothing was written, and never that the approval was spent', async () => {
+    const actions = fakeActions({
+      approveAndMerge: vi.fn().mockResolvedValue({
+        ok: false,
+        refusal: {
+          tag: 'MERGE_CONFLICT',
+          atPress: true,
+          conflicts: [{ pullRequest: 'moooon/motir-gateway#57', baseRef: 'main' }],
+        },
+      }),
+    });
+    renderWith([CORE_PR, GATEWAY_PR], AWAITING, actions);
+
+    fireEvent.click(screen.getByRole('button', { name: pra.verb.approveAndMerge }));
+    fireEvent.click(screen.getByRole('button', { name: proceedLabel }));
+    const alert = await screen.findByRole('alert');
+
+    expect(alert.textContent).toContain(en.approvalGate.refusal.mergeConflict.title);
+    expect(alert.textContent).toContain(
+      fill(en.approvalGate.refusal.mergeConflict.atPress, {
+        host: 'GitHub',
+        pr: GATEWAY_NAME,
+        base: 'main',
+        key: 'ACME-12',
+      }),
+    );
+    expect(alert.textContent).toContain(en.approvalGate.refusal.mergeConflict.next);
+    expect(alert.textContent).not.toContain('spent');
+  });
+
+  it('Panel 5b: a press on a tab that had not heard the withdrawal reads the cause sentence and the stale-tab line', async () => {
+    const actions = fakeActions({
+      approveAndMerge: vi.fn().mockResolvedValue({
+        ok: false,
+        refusal: { tag: 'APPROVAL_GATE_SUPERSEDED', supersedeCause: 'conflict' },
+      }),
+    });
+    renderWith([CORE_PR, GATEWAY_PR], AWAITING, actions);
+
+    fireEvent.click(screen.getByRole('button', { name: pra.verb.approveAndMerge }));
+    fireEvent.click(screen.getByRole('button', { name: proceedLabel }));
+    const alert = await screen.findByRole('alert');
+
+    expect(alert.textContent).toContain(en.approvalGate.withdrawn.cause.conflict);
+    expect(alert.textContent).toContain(
+      fill(en.approvalGate.refusal.superseded.staleTab, { key: 'ACME-12' }),
+    );
+  });
+});
+
+describe('a conflicted pull request — in zh (MOTIR-5916)', () => {
+  it('Panel 2 in zh: the band and the pill use the zh catalog', async () => {
+    const zh = (await import('@/messages/zh.json')).default;
+    const zpra = zh.approvalGate.pullRequestApproval;
+    const { container } = render(
+      <DevelopmentSectionBody
+        pullRequests={[CORE_PR, { ...GATEWAY_PR, ci: 'passing', conflicted: true }]}
+        itemIdentifier="ACME-12"
+        manualLinkable
+        howToTest={TWO_REPO_STORY}
+        mergeGate={{
+          canDecide: true,
+          routedToLabel: 'Mara S.',
+          members: [],
+          stamp: 'v1.stamp-on-screen',
+          gate: { ...AWAITING, state: 'superseded', supersededCause: 'conflict' },
+        }}
+        gateActions={fakeActions()}
+      />,
+      { locale: 'zh', messages: zh },
+    );
+    const band = container.querySelector('[data-withdrawn-band]') as HTMLElement;
+    expect(band.textContent).toContain(
+      fill(zpra.withdrawn.portConflict, { pr: GATEWAY_NAME, base: 'main' }),
+    );
+    expect(screen.getByText(fill(zpra.row.conflicts, { base: 'main' }))).toBeTruthy();
+  });
+});

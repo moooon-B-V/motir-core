@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from 'react';
 import {
   CircleDashed,
+  CircleX,
   CircleQuestionMark,
   ExternalLink,
   FolderGit2,
@@ -137,6 +138,18 @@ function GithubReviewChip({ chipKey }: { chipKey: GithubReviewChipKey }) {
   );
 }
 
+/** *Conflicts with {base}* (MOTIR-5916; § 30's row pill). The `NoBase` form when the row
+ *  never recorded its base branch — a guessed `main` would be wrong (§ 30's decision). */
+function ConflictPill({ baseRef }: { baseRef: string | null }) {
+  const t = useTranslations('approvalGate.pullRequestApproval');
+  return (
+    <Pill severity="danger" data-testid="pr-row-conflict">
+      <CircleX className="h-3 w-3" aria-hidden />
+      {baseRef ? t('row.conflicts', { base: baseRef }) : t('row.conflictsNoBase')}
+    </Pill>
+  );
+}
+
 function PullRequestRow({
   pr,
   strandedBase,
@@ -221,7 +234,14 @@ function PullRequestRow({
               2026-09-17). The row is already a GitHub pull request and the pill beside it
               says *Checks passing*, not *Checks passing on GitHub*; and a pull request can
               carry SEVERAL reviewers, so one login here is a claim the row cannot make. */}
-          {chipKey ? (
+          {/* A CONFLICT TAKES THE SLOT (MOTIR-5916; design/github § 30 Panels 1–2): the host
+              reports this member cannot combine with its base, so *Checks passing* — true, and
+              beside the point — gives way to what the reader must act on. Only the conflicted
+              row carries it; the others keep their own pills. The tone and glyph are § 28's
+              *Cannot be merged*, which is the same class. */}
+          {pr.conflicted ? (
+            <ConflictPill baseRef={pr.baseRef} />
+          ) : chipKey ? (
             <GithubReviewChip chipKey={chipKey} />
           ) : ci ? (
             <Pill {...ci.pill}>
@@ -716,7 +736,13 @@ export function DevelopmentSectionBody({
         currentHeads={currentHeads}
         // What splits a `member_closed` withdrawal into merged and closed (MOTIR-5884):
         // the state each ROW already draws, never a second read.
-        rowStates={rows.map((row) => ({ repo: row.repo, number: row.number, state: row.pr.state }))}
+        rowStates={rows.map((row) => ({
+          repo: row.repo,
+          number: row.number,
+          state: row.pr.state,
+          conflicted: row.pr.conflicted,
+          baseRef: row.pr.baseRef,
+        }))}
         terminal={cardTerminal}
         actions={gateActions}
         layout={gateLayout}

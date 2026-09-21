@@ -33,6 +33,8 @@ const merged: LinkedPullRequestDto = {
   headSha: null,
   url: 'https://github.com/moooon/motir-core/pull/2118',
   githubReview: null,
+  baseRef: 'main',
+  conflicted: false,
 };
 
 const awaiting = (repo: string, state: RepoDelivery['state'] = 'awaiting'): RepoDelivery => ({
@@ -117,6 +119,8 @@ const openPr: LinkedPullRequestDto = {
   headSha: null,
   url: 'https://github.com/moooon-B-V/motir-core/pull/2120',
   githubReview: null,
+  baseRef: 'main',
+  conflicted: false,
 };
 
 describe('a repository whose pull request is already on the list', () => {

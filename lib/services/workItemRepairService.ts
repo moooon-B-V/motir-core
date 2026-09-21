@@ -210,7 +210,8 @@ async function evaluate(
   }));
   const failing: RepairPullRequestDto[] = open
     .filter((m) => m.ci === 'failing' || m.exit !== null || m.conflicted)
-    .map(({ row, ci, exit }) => ({
+    .map(({ row, ci, exit, conflicted }) => ({
+      conflicted,
       repo: `${row.repo.owner}/${row.repo.name}`,
       number: row.pullRequest.number,
       url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.pullRequest.number}`,
@@ -279,6 +280,7 @@ const refOf = (pr: RepairPullRequestDto) => ({
     pr.queueExit === null
       ? null
       : { rawReason: pr.queueExit.rawReason, failingCheckName: pr.queueExit.failingCheckName },
+  conflict: pr.conflicted ? { baseRef: pr.baseRef } : null,
 });
 
 export const workItemRepairService = {

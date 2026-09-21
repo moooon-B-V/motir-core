@@ -480,6 +480,7 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
     number: 57,
     ci: 'passing' as const,
     queueExit: { rawReason, failingCheckName: 'CI complete' },
+    conflict: null,
   });
   const offer = (rawReason?: string): WorkItemRepairViewDto => ({
     state: 'offer',

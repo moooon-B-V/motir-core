@@ -141,6 +141,11 @@ export interface RowState {
   repo: string;
   number: number;
   state: 'open' | 'merged' | 'closed';
+  /** The host reports the row conflicted at its head (MOTIR-5916) — what names the member
+   *  in a `conflict` withdrawal. Absent = no. */
+  conflicted?: boolean;
+  /** The branch the row targets, for `{base}` (MOTIR-5916). */
+  baseRef?: string | null;
 }
 
 /** What the press, or a retry, reported about one member — the response's outcome, minus
@@ -501,13 +506,20 @@ export function DevelopmentGateFrame({
     gate.state === 'superseded' && gate.kind === 'pull_request_approval'
       ? withdrawnMergeCopy({
           cause: gate.supersededCause,
-          members: members.map((member) => ({
-            name: nameOf(member),
-            state:
-              rowStates.find(
-                (row) => rowKey(row.repo, row.number) === rowKey(member.repo, member.number),
-              )?.state ?? null,
-          })),
+          members: members.map((member) => {
+            const row = rowStates.find(
+              (candidate) =>
+                rowKey(candidate.repo, candidate.number) === rowKey(member.repo, member.number),
+            );
+            return {
+              name: nameOf(member),
+              state: row?.state ?? null,
+              // What names the member in a `conflict` withdrawal (MOTIR-5916): read off
+              // the ROW, the same stored reading its *Conflicts with* pill draws.
+              conflicted: row?.conflicted ?? false,
+              baseRef: row?.baseRef ?? null,
+            };
+          }),
           moved: moved.map(nameOf),
           terminal,
           itemIdentifier,
@@ -933,6 +945,9 @@ export function DevelopmentGateFrame({
           // the audit column itself is untouched.
           gate={{ ...gate, subjectVersion: null }}
           canDecide={read.canDecide}
+          // What a refusal names — § 30 Panels 5a / 5b say which card did not move, and on
+          // which host the conflict was reported (MOTIR-5916).
+          refusalContext={{ itemIdentifier, host: t('host') }}
           // ⚠️ THE KIND LABEL FOLLOWS THE GATE, not the block (Story MOTIR-5652 ·
           // Subtask MOTIR-5667; `design-result.md` AMENDMENT 6 Q1). A design card
           // with commits holds TWO gates and the DESIGN one leads: the frame is its

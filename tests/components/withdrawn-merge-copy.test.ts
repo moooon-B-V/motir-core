@@ -164,3 +164,59 @@ describe('nothing left open (the frame is not drawn at all — Panel 2 — but t
     expect(copyFor('member_closed', [closed(CORE)]).cite).toEqual(gate('withdrawn.portCite'));
   });
 });
+
+// A CONFLICT FOUND BEFORE ANY PRESS (MOTIR-5916; design/github § 30 Panels 1, 2 and 7). The
+// conflicted member is READ off its row, and `{base}` is named only when every conflicted
+// member names the same one — else, and when the row never recorded a base, the `NoBase`
+// forms say *its base branch*.
+describe('`conflict` — the conflicted row is named, with its base (Panels 1, 2, 7)', () => {
+  const conflicted = (name: string, baseRef: string | null = 'main'): WithdrawnMember => ({
+    name,
+    state: 'open',
+    conflicted: true,
+    baseRef,
+  });
+
+  it('one pull request, conflicted: meta, sentence and cite name it and `main` (Panel 1)', () => {
+    expect(copyFor('conflict', [conflicted(CORE)])).toEqual({
+      meta: pra('meta.withdrawnConflict', { count: 1, pr: CORE, base: 'main' }),
+      sentence: pra('withdrawn.portConflict', { pr: CORE, base: 'main' }),
+      cite: pra('withdrawn.citeConflict'),
+    });
+  });
+
+  it('two pull requests, ONE conflicted: only that one is named (Panel 2)', () => {
+    expect(copyFor('conflict', [open(CORE), conflicted(AI)])).toEqual({
+      meta: pra('meta.withdrawnConflict', { count: 2, pr: AI, base: 'main' }),
+      sentence: pra('withdrawn.portConflict', { pr: AI, base: 'main' }),
+      cite: pra('withdrawn.citeConflict'),
+    });
+  });
+
+  it('a row that never recorded its base uses the NoBase forms (Panel 7)', () => {
+    expect(copyFor('conflict', [open(CORE), conflicted(AI, null)])).toEqual({
+      meta: pra('meta.withdrawnConflictNoBase', { count: 2, pr: AI }),
+      sentence: pra('withdrawn.portConflictNoBase', { pr: AI }),
+      cite: pra('withdrawn.citeConflict'),
+    });
+  });
+
+  it('two conflicted members on DIFFERENT bases: both named, and the NoBase forms', () => {
+    const copy = copyFor('conflict', [conflicted(CORE, 'main'), conflicted(AI, 'release')]);
+    expect(copy.sentence).toEqual(pra('withdrawn.portConflictNoBase', { pr: `${CORE} and ${AI}` }));
+  });
+
+  it('no conflicted row left (it was resolved since): the shared cause sentence, promising nothing', () => {
+    expect(copyFor('conflict', [open(CORE)])).toEqual({
+      meta: pra('meta.withdrawnUnknown', { count: 1 }),
+      sentence: gate('withdrawn.cause.conflict'),
+      cite: gate('withdrawn.portCite'),
+    });
+  });
+
+  it('on a done-category card the cite is the shared one', () => {
+    expect(copyFor('conflict', [conflicted(CORE)], { terminal: true }).cite).toEqual(
+      gate('withdrawn.portCite'),
+    );
+  });
+});
