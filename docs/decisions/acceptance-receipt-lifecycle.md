@@ -22,6 +22,10 @@
 - **Supersedes / superseded by:** none. It is the authority for the receipt's
   LIFECYCLE; `acceptance-video.md` remains the authority for the pipeline that
   produces one.
+- **Amended:** 2026-09-21, **AMENDMENT 1** (MOTIR-5872) — approval PINS the
+  recording and moves the story; it does not freeze the story, and it does not
+  evict the spec. **§2's `approved → REFUSED` row, §3's trigger, §4's layers 1
+  and 3, and §6 are superseded by it** — read it before those sections.
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `billing-tiering.md` / `acceptance-video.md` / `design-result.md`): a decision
@@ -110,6 +114,10 @@ otherwise, and purpose was enforced by nothing, so the form won.
 ---
 
 ## Decision
+
+> ⚠️ **§2, §3's trigger, §4 and §6 below are AMENDED — see AMENDMENT 1 at the end
+> of this section.** They are kept as the record of what was decided on
+> 2026-08-13.
 
 ### §1. The two entities, and which one Motir stores
 
@@ -261,6 +269,80 @@ receipt is a new row, and the old one is untouched.
   indirect path — re-open, republish, and the signature is gone — which is the
   original defect reachable in two steps instead of one. It also destroys the
   more interesting record: that a story was accepted, and then re-opened anyway.
+
+### AMENDMENT 1 (2026-09-21, MOTIR-5872) — approval pins the RECORDING; it does not freeze the STORY, and it does not evict the SPEC
+
+> _"The approval action is linked to the card status, but it doesn't lock the card
+> status."_ — Yue, 2026-09-20
+
+**What went wrong.** §2 keyed the freeze on the RECEIPT's status and §6 said a
+re-opened story stays frozen, on the assumption that a story only moves forward:
+publish → approve → merge → done. MOTIR-5799 is the story that made card motion
+non-monotonic: a merge that does not land sends the story back. Its receipt was
+approved while its pull request sat in the merge queue; the queue ejected it;
+the story came back to `implemented` to be reworked — and could now **never
+record again**. The story could change and its evidence could not. §3 then
+compounded it: the lane guard (a test in the MAIN suite) demanded the spec leave
+the lane, so every pull request in the repository went red over a feature that
+was still live.
+
+**The category error.** An E2E spec is a TEST; it runs while its feature is live.
+The video is a by-product of one run. §3 tied the test's lane membership to
+whether a RECORD had been signed. The lane's real problem — specs accumulating in
+an expensive lane that is not a regression gate — is a PLACEMENT question,
+answered once when the spec is written. It is not something an approval should
+trigger.
+
+**The decision, in three parts that are one change:**
+
+1. **Approval PINS the recording.** A publish over an `approved` receipt is no
+   longer refused because of the receipt. It supersedes it — and the approved
+   row's video and trace stay LINKED, so the orphan-GC never reclaims them. The
+   row keeps `status: 'approved'` and its approver stamp as history. This is the
+   same promise `design_evidence.pinned_at` makes for an approved design version
+   (`design-result.md` §6c). Unapproved recordings (`pending`,
+   `changes_requested`) are still unlinked and collected — the intended loss.
+2. **The refusal is keyed on the STORY, exactly as the design gate's is**
+   (`designEvidenceService`'s `assertStatusOpen` + `assertDesignSettled`).
+   `acceptanceEvidenceService` refuses a publish with
+   `ACCEPTANCE_EVIDENCE_STORY_CLOSED` (409) in two cases and no others:
+   - the story is **closed** (a terminal status) — its acceptance is decided;
+   - the story **still stands on the approval** — its current receipt is
+     `approved`, it is at or above `implemented`, and a pull request of its is
+     still open. That merge would ship with whatever receipt is current, so a
+     republish in that window would carry a recording nobody approved to `done`.
+
+   Below `implemented` the work is being redone, which is exactly when a new
+   recording is right. **A person pulling the story back (to `in_progress`) is the
+   deliberate re-open**, and the pulled-back move already withdraws every awaiting
+   question. It REPLACES `AcceptanceEvidenceAlreadyApprovedError` /
+   `ACCEPTANCE_EVIDENCE_ALREADY_APPROVED`.
+
+3. **The lane guard no longer reads receipt status**
+   (`tests/e2e-acceptance-lane-membership.test.ts`). It keeps the half that is true
+   of the spec file — a spec that declares no story can never publish a receipt —
+   and evicts nothing on approval. PROMOTE and RETIRE (§3) remain the two ways a
+   spec leaves the lane; choosing one is an authoring decision about where the test
+   belongs, not something a signature forces. The credential stack the old read
+   needed is retired by MOTIR-5874.
+
+**Why they are one change.** Part 1 alone leaves the guard evicting a live spec;
+part 3 alone leaves a reworked story unable to re-record.
+
+**What each superseded passage now reads as:**
+
+| Section                                             | Was                                            | Now                                                                                                                                                                                                                      |
+| --------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| §2 `approved` row                                   | REFUSED — nothing written                      | SUPERSEDED, bytes PINNED — unless the story is closed or still stands on the approval (above)                                                                                                                            |
+| §2 "Rejected: freeze when the story reaches `done`" | rejected                                       | ADOPTED as the closed-story half of the refusal. Its objection — a story can reach `done` with no video — does not apply: a story with no receipt has nothing to protect, and one with a receipt is protected by the pin |
+| §3 trigger                                          | "once a receipt is frozen" the spec must leave | A spec leaves by PROMOTE or RETIRE when its author decides where the test belongs; nothing forces it on approval                                                                                                         |
+| §4 layer 1                                          | the service refuses an approved supersede      | the service PINS an approved supersede and refuses on the STORY's state                                                                                                                                                  |
+| §4 layer 3                                          | the guard fails a spec whose story is accepted | the guard fails a spec that declares no story                                                                                                                                                                            |
+| §6                                                  | a re-opened story's receipt stays frozen       | a re-opened story records again; the approved recording stays on record as history. §6's own objection — "re-open, republish, and the signature is gone" — is answered by the pin: the signature is never gone           |
+
+**Unchanged:** §1 (the entity split), §5 (a design result is not a receipt), and
+the rule that a red acceptance spec is DISPOSITIONED, never edited to describe
+today.
 
 ---
 

@@ -3,6 +3,11 @@ import path from 'node:path';
 
 // THE LANE-MEMBERSHIP GUARD (Story MOTIR-2765 · Subtask MOTIR-2770).
 //
+// ⚠️ RE-KEYED BY MOTIR-5872: `judgeLane` no longer takes an approved set, and the
+// live guard no longer reads the product. The history below explains the
+// status-read machinery that remains in this file; it has no live caller, and
+// MOTIR-5874 retires it with the credential it needs.
+//
 // An acceptance spec exists to record ONE receipt. Once that receipt is
 // `approved` the spec has discharged its purpose and must leave the lane — by
 // PROMOTION into a lane that runs on every PR, or by RETIREMENT
@@ -88,55 +93,36 @@ export interface LaneVerdict {
   message: string;
 }
 
-/** Judge the lane against the approved set. Pure, so the "can it fail" fixture
- *  below can drive it without a network. */
-export function judgeLane(members: LaneMember[], approved: ReadonlySet<string>): LaneVerdict {
-  const discharged = members.filter((m) => m.storyKey && approved.has(m.storyKey));
+/**
+ * Judge the lane. Pure, so the "can it fail" fixtures can drive it without a
+ * network.
+ *
+ * ⚠️ IT NO LONGER ASKS WHETHER A STORY'S RECEIPT IS APPROVED (MOTIR-5872). That
+ * half evicted a spec the moment its receipt was signed, which tied a TEST's lane
+ * to whether a RECORD had been signed: a story whose merge was ejected came back
+ * to be reworked with its spec already demanded out of the lane, and because this
+ * guard runs in the main suite, every pull request in the repository went red
+ * with it. A spec's lane is a PLACEMENT, decided once when the spec is written
+ * (`docs/decisions/acceptance-receipt-lifecycle.md` AMENDMENT 1). What stays is
+ * the half that is true of the file itself: a spec that declares no story can
+ * never publish a receipt, so it is in this lane for no reason the lane serves.
+ */
+export function judgeLane(members: LaneMember[]): LaneVerdict {
   const undeclared = members.filter((m) => !m.storyKey);
-  if (discharged.length === 0 && undeclared.length === 0) return { ok: true, message: '' };
+  if (undeclared.length === 0) return { ok: true, message: '' };
 
-  const lines: string[] = [];
-  if (discharged.length > 0) {
-    lines.push(
-      `${discharged.length} acceptance spec(s) have already produced an APPROVED receipt, so they`,
-      'have discharged their purpose and must leave the acceptance lane:',
-      '',
-      ...discharged.map((m) => `  · tests/e2e/${m.file}  →  ${m.storyKey} (accepted)`),
-      '',
-      'Pick ONE of the two legal remedies for each, once:',
-      '',
-      '  PROMOTE  the flow is worth protecting on EVERY PR. Rename it out of the',
-      '           `acceptance` prefix, swap its import to _helpers/promoted-regression',
-      '           (which no-ops the chaptering and pacing), and KEEP EVERY ASSERTION.',
-      '           If its subject is cloud-gated — billing, motir-ai, code-health, the',
-      '           GitHub provisioning seam — the destination is `cloud-<name>.spec.ts`',
-      '           (playwright.cloud.config.ts), NOT the main lane, where those flags',
-      '           are off and the assertion would pass for the wrong reason.',
-      '  RETIRE   the receipt exists and the flow is covered elsewhere. Delete it, and',
-      '           SAY WHERE the coverage now lives — a deletion that cannot name its',
-      '           cover is a coverage regression wearing a cleanup’s clothes.',
-      '',
-      'Do NOT edit the spec’s assertions to match how the product behaves today.',
-      'That is right for a regression test and backwards for a receipt: it edits',
-      'history to agree with the present.',
-      '',
-      'Why: docs/decisions/acceptance-receipt-lifecycle.md §3.',
-      'Precedent for both remedies: docs/acceptance-lane-triage.md.',
-    );
-  }
-  if (undeclared.length > 0) {
-    if (lines.length > 0) lines.push('');
-    lines.push(
-      `${undeclared.length} acceptance spec(s) declare NO story, so they can never publish a`,
-      'receipt — they are in this lane for no reason it can serve:',
-      '',
-      ...undeclared.map((m) => `  · tests/e2e/${m.file}  →  no acceptanceStory() call`),
-      '',
-      'Either add `acceptanceStory(‘MOTIR-<n>’)` to the recorded happy path, or move',
-      'the spec to a regression lane per the remedies above. A story key in a header',
-      'COMMENT does not count: the uploader reads the fixture, not the prose.',
-    );
-  }
+  const lines: string[] = [
+    `${undeclared.length} acceptance spec(s) declare NO story, so they can never publish a`,
+    'receipt — they are in this lane for no reason it can serve:',
+    '',
+    ...undeclared.map((m) => `  · tests/e2e/${m.file}  →  no acceptanceStory() call`),
+    '',
+    'Either add `acceptanceStory(‘MOTIR-<n>’)` to the recorded happy path, or move the',
+    'spec to a regression lane: rename it out of the `acceptance` prefix and swap its',
+    'import to _helpers/promoted-regression (a cloud-gated subject goes to',
+    '`cloud-<name>.spec.ts`, not the main lane). A story key in a header COMMENT does',
+    'not count: the publisher reads the fixture, not the prose.',
+  ];
   return { ok: false, message: lines.join('\n') };
 }
 
