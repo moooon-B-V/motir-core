@@ -495,6 +495,17 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '   Motir and approves it; only then does the pull request merge. Stop at the',
     '   pull request.',
   ],
+  // A `choice` is a PERSON's pick among options the planner declined to choose
+  // between (taxonomy ADR Amendment 3) — its executor defaults to `human`, so
+  // `isManualReadyItem` sends it to the manual steps and it is never dispatched.
+  // This entry exists because the map is TOTAL and the executor is overridable:
+  // an agent handed one anyway is told to stop rather than to pick.
+  choice: [
+    '1. Stop. This work item is a CHOICE: a person picks one of the options in its',
+    '   description, in Motir, and that pick is the whole of the work.',
+    '2. Do not choose an option, do not edit the options, and open no pull request.',
+    '   If the options look wrong, say so in a comment on the work item.',
+  ],
   deploy: [
     '1. Read the card description above for the target environment and the change.',
     '2. Make the pipeline / configuration change, keeping it reproducible in code —',

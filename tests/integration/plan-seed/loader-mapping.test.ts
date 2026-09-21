@@ -33,7 +33,7 @@ function leaf(overrides: Partial<SeedItem> & Pick<SeedItem, 'id'>): SeedItem {
 }
 
 describe('mapTypeAndExecutor — plan `type` string → the WorkItemType enum (2.7.5)', () => {
-  it('maps every one of the fourteen enum members to itself, seeding the default executor', () => {
+  it('maps every one of the fifteen enum members to itself, seeding the default executor', () => {
     for (const type of WORK_ITEM_TYPES) {
       expect(mapTypeAndExecutor(leaf({ id: `x.${type}`, type }))).toEqual({
         type,

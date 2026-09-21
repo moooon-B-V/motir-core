@@ -3064,6 +3064,7 @@ enum WorkItemType {
   review
   verification
   decision
+  choice
   deploy
   manual
   legal

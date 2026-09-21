@@ -3654,6 +3654,11 @@
   --el-type-verification: var(--color-accent-orange); /* orange — with review (Investigate) */
   --el-type-legal: var(--color-charcoal); /* ink    — with decision (Govern) */
 
+  /* ADR Amendment 3 (MOTIR-5886) admits `choice`; MOTIR-5888's design gives it
+     the same precedent — `decision`'s charcoal, its OWN token, and a glyph
+     (`signpost`) that tells the two apart. */
+  --el-type-choice: var(--color-charcoal); /* ink    — with decision (Govern) */
+
   /* ── Chart series (Story 4.6 · the reusable viz Story 6.3 reuses) ──
      Every chart colour routes through one of these, NEVER a raw --color-*
      in chart code (the per-component growth pattern). They map to Tier-0

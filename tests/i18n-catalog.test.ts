@@ -297,7 +297,7 @@ describe('platform support-action labels resolve for every operator write', () =
 
 // ── Work-item TYPE labels are a closed, single-word vocabulary (MOTIR-4249) ───
 //
-// The fourteen type labels are single words BY CONSTRUCTION (the grammar frozen
+// The fifteen type labels are single words BY CONSTRUCTION (the grammar frozen
 // in docs/decisions/work-item-type-taxonomy.md §1b), and that is exactly what
 // makes them collide: `Legal`, `Copy`, `Manual`, `Design`, `Review`, `Content`
 // are also ordinary UI nouns and verbs. The shipped defect was `shell.nav.legal`
@@ -407,7 +407,7 @@ describe('work-item type labels do not silently name something else', () => {
   }
 
   it.each(['en', 'zh'] as const)(
-    '%s labels all fourteen types (the derivation is real)',
+    '%s labels all fifteen types (the derivation is real)',
     (locale) => {
       const labels = typeLabels(locale);
       const unlabelled = [...labels].filter(([, value]) => !value).map(([type]) => type);

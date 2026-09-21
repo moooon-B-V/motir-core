@@ -55,6 +55,7 @@ export type WorkItemTypeDto =
   | 'review'
   | 'verification'
   | 'decision'
+  | 'choice'
   | 'deploy'
   | 'manual'
   | 'legal'

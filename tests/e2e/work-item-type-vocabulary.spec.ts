@@ -39,8 +39,9 @@ test.afterAll(async () => {
 });
 
 /**
- * The fourteen labels a person actually reads, in the canonical order, written
- * out rather than derived. If ADR Amendment 1's set changes, this list is
+ * The fifteen labels a person actually reads, in the canonical order, written
+ * out rather than derived (`Choice` joined after `Decision` with taxonomy ADR
+ * Amendment 3, MOTIR-5890). If the ADR's set changes, this list is
  * SUPPOSED to need editing — that is the check, not an inconvenience.
  */
 const EXPECTED_LABELS = [
@@ -54,6 +55,7 @@ const EXPECTED_LABELS = [
   'Review',
   'Verification',
   'Decision',
+  'Choice',
   'Deploy',
   'Manual',
   'Legal',
@@ -123,7 +125,7 @@ async function renderedOptions(page: Page): Promise<string[]> {
   return raw.map((t) => t.trim()).filter(Boolean);
 }
 
-test('acceptance: the type picker offers fourteen, and a new one can be chosen end to end', async ({
+test('acceptance: the type picker offers fifteen, and a new one can be chosen end to end', async ({
   page,
   chapter,
   beat,
@@ -151,7 +153,7 @@ test('acceptance: the type picker offers fourteen, and a new one can be chosen e
     await beat();
   });
 
-  await chapter('The picker opens on the detail rail — fourteen, in four groups', async () => {
+  await chapter('The picker opens on the detail rail — fifteen, in four groups', async () => {
     await page.getByRole('button', { name: /set a type/i }).click();
     // ⚠️ 'Work type' EXACT, never /type/i: the work-item TYPE picker is labelled
     // "Work type" and the KIND picker is labelled "Type", so a loose matcher
@@ -244,7 +246,7 @@ test('acceptance: the type picker offers fourteen, and a new one can be chosen e
 // is a separate test rather than a chapter because it starts from a clean list
 // and creating an item mid-recording would make the earlier chapters' list
 // contents change under the viewer.
-test('the create-issue modal offers the same fourteen, and creates with a new type', async ({
+test('the create-issue modal offers the same fifteen, and creates with a new type', async ({
   page,
   chapter,
   beat,

@@ -21,8 +21,9 @@ import type { ExecutorDto, WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/wo
 // contract rather than mirror the code.
 
 /**
- * The fourteen members, in the canonical order the 2.7.2 ADR froze and its
- * Amendment 1 (MOTIR-2629) extended. Transcribed from the amendment's §1b list,
+ * The fifteen members, in the canonical order the 2.7.2 ADR froze, its
+ * Amendment 1 (MOTIR-2629) extended and its Amendment 3 (MOTIR-5886) extended
+ * again with `choice`. Transcribed from Amendment 3's §1e list,
  * NOT copied from `WORK_ITEM_TYPES` — the point of this file is to pin the ADR's
  * contract independently of the code that implements it.
  *
@@ -41,6 +42,7 @@ const EXPECTED_TYPES: readonly WorkItemTypeDto[] = [
   'review',
   'verification',
   'decision',
+  'choice',
   'deploy',
   'manual',
   'legal',
@@ -58,6 +60,7 @@ const EXPECTED_DEFAULTS: Record<WorkItemTypeDto, ExecutorDto> = {
   deploy: 'coding_agent',
   manual: 'human',
   decision: 'human',
+  choice: 'human',
   review: 'human',
   legal: 'human',
   design: 'coding_agent',
@@ -72,8 +75,8 @@ const EXPECTED_DEFAULTS: Record<WorkItemTypeDto, ExecutorDto> = {
 const ALL_KINDS: readonly WorkItemKindDto[] = ['epic', 'story', 'task', 'bug', 'subtask'];
 const EXPECTED_TYPEABLE: ReadonlySet<WorkItemKindDto> = new Set(['task', 'subtask', 'bug']);
 
-describe('WORK_ITEM_TYPES — the fixed fourteen-member enum', () => {
-  it('is exactly the fourteen members in the canonical ADR order', () => {
+describe('WORK_ITEM_TYPES — the fixed fifteen-member enum', () => {
+  it('is exactly the fifteen members in the canonical ADR order', () => {
     expect([...WORK_ITEM_TYPES]).toEqual(EXPECTED_TYPES);
   });
 
@@ -106,7 +109,7 @@ describe('defaultExecutorForType — a TOTAL function over the enum', () => {
 
   it('the three groups match the ADR (agent / human / either-default-agent)', () => {
     const agent: WorkItemTypeDto[] = ['code', 'test', 'deploy'];
-    const human: WorkItemTypeDto[] = ['manual', 'decision', 'review'];
+    const human: WorkItemTypeDto[] = ['manual', 'decision', 'choice', 'review'];
     const eitherDefaultAgent: WorkItemTypeDto[] = ['design', 'content', 'research', 'chore'];
     for (const t of agent) expect(defaultExecutorForType(t)).toBe('coding_agent');
     for (const t of human) expect(defaultExecutorForType(t)).toBe('human');

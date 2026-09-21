@@ -228,6 +228,7 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     review: 'A finding without a scenario is an opinion',
     verification: 'verification that cannot fail has verified nothing',
     decision: 'ships a decision, not a survey',
+    choice: 'that pick is the whole of the work',
     deploy: 'how it is rolled back',
     manual: 'Never paste a secret into the work item.',
     legal: 'stop at the draft',

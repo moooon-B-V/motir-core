@@ -69,9 +69,11 @@ describe('the admitted four reach every contract that publishes the type set', (
       expect(fromMeta).toEqual([...WORK_ITEM_TYPES].sort());
     });
 
-    it('holds fourteen members with no duplicates', () => {
-      expect(WORK_ITEM_TYPES).toHaveLength(14);
-      expect(new Set(WORK_ITEM_TYPES).size).toBe(14);
+    // Fifteen since taxonomy ADR Amendment 3 admitted `choice` (MOTIR-5890); this
+    // file still pins the Amendment-1 four, and the count moves with the set.
+    it('holds fifteen members with no duplicates', () => {
+      expect(WORK_ITEM_TYPES).toHaveLength(15);
+      expect(new Set(WORK_ITEM_TYPES).size).toBe(15);
     });
 
     it.each(ALIASES)('does NOT admit `%s` — Amendment 1 declared it an alias', (alias) => {

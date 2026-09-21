@@ -42,6 +42,14 @@
 // names the FAMILY and the glyph names the member — each still gets its own
 // token pointing at the shared Tier-0 var, so a palette can split them later
 // without touching a component. (ADR Amendment 1 §1a + design-notes.md "Q2".)
+//
+// ── The fifteenth, `choice` (ADR Amendment 3, MOTIR-5886; design MOTIR-5888) ──
+//
+//   choice       Signpost    --el-type-choice       -> --color-charcoal      (with decision)
+//
+// The same precedent: it shares `decision`'s charcoal and carries its own token;
+// `signpost` — a fork in the road — is what tells it apart from `decision`'s
+// `scale` (`design/work-items/type-executor-picker--choice.mock.html`).
 
 import {
   BadgeCheck,
@@ -56,6 +64,7 @@ import {
   Pencil,
   Rocket,
   Scale,
+  Signpost,
   Type,
   Wrench,
   type LucideIcon,
@@ -147,6 +156,12 @@ export const WORK_ITEM_TYPE_META: Record<WorkItemTypeDto, WorkItemTypeMeta> = {
     hueClass: 'text-(--el-type-decision)',
     hueVar: '--el-type-decision',
   },
+  choice: {
+    type: 'choice',
+    icon: Signpost,
+    hueClass: 'text-(--el-type-choice)',
+    hueVar: '--el-type-choice',
+  },
   deploy: {
     type: 'deploy',
     icon: Rocket,
@@ -207,6 +222,7 @@ export const WORK_ITEM_TYPE_GROUP: Record<WorkItemTypeDto, WorkItemTypeGroupKey>
   review: 'investigate',
   verification: 'investigate',
   decision: 'govern',
+  choice: 'govern',
   deploy: 'govern',
   manual: 'govern',
   legal: 'govern',
@@ -217,7 +233,7 @@ export const WORK_ITEM_TYPE_GROUP: Record<WorkItemTypeDto, WorkItemTypeGroupKey>
  * The chip tint BACKGROUND for a type — a `color-mix` of the type's saturated
  * hue into the page background, so one `--el-type-*` token yields both the
  * glyph hue and the chip tint (no separate `--el-tint-*` pairs). The grey
- * meta-types (`manual`, `chore`; `decision` and `legal` read near-neutral too)
+ * meta-types (`manual`, `chore`; `decision`, `choice` and `legal` read near-neutral too)
  * use a slightly higher mix so the near-neutral tint still reads (design
  * panel 4).
  * Returns a CSS value for an inline `backgroundColor` style — it references
@@ -225,6 +241,12 @@ export const WORK_ITEM_TYPE_GROUP: Record<WorkItemTypeDto, WorkItemTypeGroupKey>
  */
 export function workItemTypeChipBackground(type: WorkItemTypeDto): string {
   const pct =
-    type === 'manual' || type === 'chore' || type === 'decision' || type === 'legal' ? 18 : 14;
+    type === 'manual' ||
+    type === 'chore' ||
+    type === 'decision' ||
+    type === 'choice' ||
+    type === 'legal'
+      ? 18
+      : 14;
   return `color-mix(in srgb, var(${WORK_ITEM_TYPE_META[type].hueVar}) ${pct}%, var(--el-page-bg))`;
 }

@@ -68,6 +68,7 @@ export const PLAN_TYPE_TO_WORK_ITEM_TYPE: Record<string, WorkItemTypeDto> = {
   review: 'review',
   verification: 'verification',
   decision: 'decision',
+  choice: 'choice',
   deploy: 'deploy',
   manual: 'manual',
   legal: 'legal',
