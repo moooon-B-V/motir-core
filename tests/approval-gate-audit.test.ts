@@ -227,6 +227,7 @@ describe('a DECIDED gate is IMMUTABLE', () => {
       decidedUnderAuthority: 'assignee' as const,
       decisionSource: 'ui' as const,
       outcomeRef: 'done',
+      confirmedRecord: null,
       chosenOption: null,
     };
 
@@ -540,6 +541,8 @@ describe('the DTO carries the audit set, and no Prisma model crosses the boundar
       'outcomeRef',
       // What a choice picked (MOTIR-5893) — null on every other kind.
       'chosenOption',
+      // What a confirmed decision's record was (MOTIR-5954) — null on every other kind.
+      'confirmedRecord',
       'createdAt',
       'updatedAt',
     ];

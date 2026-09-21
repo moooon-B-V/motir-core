@@ -5,6 +5,7 @@ import type {
   ApprovalQueueRowDto,
   ApprovalRecordDecidedRowDto,
   ChosenOptionDTO,
+  ConfirmedRecordDTO,
   EarlierApprovalDTO,
 } from '@/lib/dto/approvalGate';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
@@ -52,6 +53,8 @@ export function toApprovalGateDto(row: ApprovalGate): ApprovalGateDTO {
     outcomeRef: row.outcomeRef,
     // Written only by the choice handler's deciding write, in `ChosenOption`'s shape.
     chosenOption: (row.chosenOption as ChosenOptionDTO | null) ?? null,
+    // Written only by the confirmation handler's deciding write (MOTIR-5954).
+    confirmedRecord: (row.confirmedRecord as ConfirmedRecordDTO | null) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

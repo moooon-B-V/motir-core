@@ -129,9 +129,11 @@ describe('the denylist itself — the regression this story can silently ship', 
       path.join(process.cwd(), 'lib/repositories/attachmentRepository.ts'),
       'utf8',
     );
-    // Two call sites, one constant, and no literal array left to fall out of
+    // Three call sites, one constant, and no literal array left to fall out of
     // step — which is exactly how `acceptance_trace` went missing from one copy.
-    expect(source.match(/notIn:\s*\[\.\.\.LIFECYCLE_OWNED_SOURCES\]/g)).toHaveLength(2);
+    // The third is a decision's written RECORD (MOTIR-5954): the newest markdown
+    // file the panel lists, read with the panel's own predicate on purpose.
+    expect(source.match(/notIn:\s*\[\.\.\.LIFECYCLE_OWNED_SOURCES\]/g)).toHaveLength(3);
     expect(source).not.toMatch(/notIn:\s*\['/);
   });
 

@@ -4,6 +4,7 @@ import type {
   ApprovalGateSubjectSummaryDTO,
   DecisionApprovalSubjectSummaryDTO,
   DecisionChoiceSubjectSummaryDTO,
+  DecisionConfirmationSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
   UnregisteredSubjectSummaryDTO,
@@ -14,6 +15,8 @@ import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvide
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { parseChoiceOptions } from '@/lib/approvalGates/choiceOptions';
+import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
+import { decisionConfirmationSummaryOf } from '@/lib/approvalGates/decisionRecord';
 import {
   workItemDeliveryRepository,
   type WorkItemDeliveryWithChecks,
@@ -164,6 +167,24 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
         kind: 'decision_choice',
         optionCount: parse.options.length,
         question: parse.question,
+      };
+      out.set(item.id, summary);
+    }
+    return out;
+  },
+  // MOTIR-5954 — a confirm row names the DECISION (its first line), what kind of change
+  // it records and how many work items it supersedes, parsed from the work item's own
+  // body. A body that no longer parses is absent, as a choice's is.
+  async decision_confirmation(subjectIds, tx) {
+    const items = await workItemRepository.findByIds([...subjectIds], tx);
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const item of items) {
+      if (!asksTheConfirmQuestion(item)) continue;
+      const parsed = decisionConfirmationSummaryOf(item.descriptionMd);
+      if (!parsed) continue;
+      const summary: DecisionConfirmationSubjectSummaryDTO = {
+        kind: 'decision_confirmation',
+        ...parsed,
       };
       out.set(item.id, summary);
     }

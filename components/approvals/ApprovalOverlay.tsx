@@ -557,7 +557,13 @@ export function ApprovalOverlay() {
     );
     const subject = read.subject;
 
-    if (subject.state === 'kind_not_built') {
+    if (
+      subject.state === 'kind_not_built' ||
+      // THE CONFIRM PORT IS NOT DRAWN YET (Story MOTIR-5871): the kind is registered and
+      // its port data resolves (MOTIR-5954), and the frame that renders it is MOTIR-5960's.
+      // Until then the honest answer is Panel 4a — never a design panel over a decision.
+      (subject.state === 'resolved' && subject.kind === 'decision_confirmation')
+    ) {
       // Panel 4a — a feature that has not shipped. Opposite in meaning to 4b,
       // which is a gate worth withdrawing, however alike they look.
       body = (

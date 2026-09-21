@@ -270,6 +270,9 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       callers: [
         'lib/services/acceptanceEvidenceService.ts',
         'lib/services/choiceGateService.ts',
+        // MOTIR-5954: the CONFIRM question's raiser withdraws its own stale question —
+        // a moved stamp, a broken body, an executor flipped off `human`.
+        'lib/services/decisionConfirmationGateService.ts',
         'lib/services/decisionDocumentCaptureService.ts',
         'lib/services/designEvidenceService.ts',
         'lib/services/pullRequestApprovalGates.ts',
@@ -297,7 +300,12 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // MOTIR-5891: the CHOICE question's one raiser, inside the work item's own write —
       // a create, a body or type edit, or its last blocker landing — where a concurrent
       // double raise must be "already raised", not an aborted transaction.
-      callers: ['lib/services/approvalGatesService.ts', 'lib/services/choiceGateService.ts'],
+      // MOTIR-5954: the CONFIRM question's one raiser, on the same three call sites.
+      callers: [
+        'lib/services/approvalGatesService.ts',
+        'lib/services/choiceGateService.ts',
+        'lib/services/decisionConfirmationGateService.ts',
+      ],
     },
     {
       method: 'supersedeAllAwaitingByWorkItem',

@@ -1,0 +1,109 @@
+import type {
+  GateEffect,
+  GateEffectArgs,
+  GateHandler,
+  GateRoutingArgs,
+} from '@/lib/approvalGates/registry';
+import { resolveDecisionRecord } from '@/lib/approvalGates/decisionConfirmationRecord';
+import { parseDecisionRecord, type ParsedDecision } from '@/lib/approvalGates/decisionRecord';
+import { ApprovalGateStaleSubjectError } from '@/lib/approvalGates/errors';
+import { routingTargetId } from '@/lib/approvalGates/routing';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+
+// THE `decision_confirmation` HANDLER (Story MOTIR-5871 · Subtask MOTIR-5954; ADR
+// `docs/decisions/approval-gates.md` §1's MOTIR-5952 amendment, the handler row).
+//
+// A person CONFIRMS a decision the planner settled WITH them — a `type: decision`
+// work item whose `executor` is `human`. The subject is the work item's OWN body,
+// parsed (`decisionRecord.ts`), so the gate's `subjectId` is the work item and its
+// version is the parser's hash of the four sections.
+//
+// It follows `decisionChoiceGateHandler` exactly where the two agree — §2's
+// routing, `work_item:edit`, a TERMINAL approve that writes `done` through
+// `applyStatusTransition` with `decidingGateId` (§8's Workflow A) — and adds ONE
+// thing: Confirm stamps the decision's optional written record, or its absence.
+//
+// ⚠️ ITS REFUSAL IS OVERTURN, NOT `request_changes` (point 6). The overturn verb, its
+// state and its effect are MOTIR-5956's; until they land this handler offers
+// Confirm only, and `requestChanges` is refused at the door by the kind's verb set.
+
+/** Confirming is terminal: Workflow A, the project's `done` category. */
+export const CONFIRM_DECISION_TARGET = { key: 'done', category: 'done' } as const;
+
+/** Does this work item ask the CONFIRM question — `decision` decided with a person (point 1)? */
+export function asksTheConfirmQuestion(item: { type: string | null; executor: string | null }) {
+  return item.type === 'decision' && item.executor === 'human';
+}
+
+async function parsedSubject(
+  workItemId: string,
+  tx: GateEffectArgs['tx'],
+): Promise<ParsedDecision | null> {
+  const item = await workItemRepository.findById(workItemId, tx);
+  if (!item || !asksTheConfirmQuestion(item)) return null;
+  const parse = parseDecisionRecord(item.descriptionMd);
+  return parse.ok ? parse : null;
+}
+
+export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
+  async resolveSubject({ gate, tx }: GateEffectArgs): Promise<ParsedDecision | null> {
+    return parsedSubject(gate.subjectId, tx);
+  },
+
+  async subjectVersion(args: GateEffectArgs): Promise<string | null> {
+    return (await this.resolveSubject(args))?.subjectVersion ?? null;
+  },
+
+  // The subject IS the work item — but only while it is a `human` decision whose
+  // body still parses. Anything else has nothing to be asked about.
+  async currentSubject({ item }: GateRoutingArgs): Promise<string | null> {
+    if (!asksTheConfirmQuestion(item)) return null;
+    return parseDecisionRecord(item.descriptionMd).ok ? item.id : null;
+  },
+
+  routeTo({ item }: GateRoutingArgs): string | null {
+    return routingTargetId(item);
+  },
+
+  permission: 'work_item:edit',
+
+  statusIntent: CONFIRM_DECISION_TARGET,
+
+  /**
+   * CONFIRM — stamp the record, write `done` (points 7–8). A subject that no longer
+   * parses under the lock is the stale refusal: the question itself went away.
+   *
+   * The record is resolved INSIDE the deciding transaction, so the stamp names the
+   * file that was current at the press — and a decision with no record confirms
+   * exactly as well, stamping `{ kind: 'none' }` (point 8: never a precondition).
+   */
+  async approve(args: GateEffectArgs): Promise<GateEffect> {
+    const { gate, ctx, tx, resolvedStatusKey } = args;
+    const subject = await this.resolveSubject(args);
+    if (!subject) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
+    const confirmedRecord = await resolveDecisionRecord(gate.workItemId, tx);
+    if (resolvedStatusKey === null) {
+      return {
+        statusWritten: null,
+        statusDeferredReason: 'no_status_in_target_category',
+        confirmedRecord,
+      };
+    }
+    // ⚠️ IMPORTED HERE, NOT AT THE TOP — the `workItemsService` → `approvalGatesService`
+    // → registry → handler cycle; the same lazy import `decisionChoiceHandler` makes.
+    const { workItemsService } = await import('@/lib/services/workItemsService');
+    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
+      decidingGateId: gate.id,
+    });
+    return { statusWritten: resolvedStatusKey, confirmedRecord };
+  },
+
+  /**
+   * Never reached: `request_changes` is not in this kind's verb set (point 6), and
+   * the door refuses it before dispatching. Answered rather than thrown so the
+   * registry's contract stays total; a caller that reached it would move nothing.
+   */
+  async requestChanges(): Promise<GateEffect> {
+    return { statusWritten: null, statusDeferredReason: 'request_changes_moves_nothing' };
+  },
+};

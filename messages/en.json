@@ -7502,7 +7502,8 @@
         "pull_request_approval": "Pull-request approval",
         "pull_request_merge": "Pull-request merge",
         "acceptance_result": "Acceptance video",
-        "decision_choice": "Choice"
+        "decision_choice": "Choice",
+        "decision_confirmation": "Confirm decision"
       },
       "reviewRow": "Review {key} {title}",
       "pullRequest": {
@@ -8673,7 +8674,8 @@
         "decision_approval": "decision approval",
         "pull_request_merge": "merge approval",
         "acceptance_result": "acceptance approval",
-        "decision_choice": "choice"
+        "decision_choice": "choice",
+        "decision_confirmation": "decision"
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",

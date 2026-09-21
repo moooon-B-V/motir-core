@@ -10,6 +10,7 @@ import {
 import { dbRead } from '@/lib/db';
 import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
+import type { ConfirmedRecord } from '@/lib/approvalGates/decisionConfirmationRecord';
 import {
   ApprovalGateAlreadyAwaitingError,
   ApprovalGateDecidedImmutableError,
@@ -366,10 +367,13 @@ export const approvalGateRepository = {
       outcomeRef: string | null;
       /** What a CHOICE picked (MOTIR-5893) — null on every other decision. */
       chosenOption: ChosenOption | null;
+      /** What a CONFIRMED decision's record was (MOTIR-5954) — null on every other
+       *  decision. */
+      confirmedRecord: ConfirmedRecord | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<ApprovalGate> {
-    const { chosenOption, ...rest } = data;
+    const { chosenOption, confirmedRecord, ...rest } = data;
     try {
       return await tx.approvalGate.update({
         where: { id },
@@ -377,6 +381,7 @@ export const approvalGateRepository = {
         data: {
           ...rest,
           chosenOption: chosenOption === null ? Prisma.DbNull : { ...chosenOption },
+          confirmedRecord: confirmedRecord === null ? Prisma.DbNull : { ...confirmedRecord },
         },
       });
     } catch (err) {

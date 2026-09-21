@@ -35,6 +35,7 @@ const AWAITING: ApprovalGateDTO = {
   decidedUnderAuthority: null,
   decisionSource: null,
   outcomeRef: null,
+  confirmedRecord: null,
   chosenOption: null,
   createdAt: '2026-09-08T04:00:00.000Z',
   updatedAt: '2026-09-08T04:00:00.000Z',

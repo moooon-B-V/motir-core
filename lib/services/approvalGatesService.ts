@@ -102,6 +102,9 @@ const DECISION_STATE: Record<
 
 /** The one kind whose verbs are its OPTIONS rather than `approve` (point 5). */
 const CHOICE_KIND = 'decision_choice';
+/** The one kind whose refusal is OVERTURN rather than `request_changes` (ADR §1's
+ *  MOTIR-5952 amendment, point 6). */
+const CONFIRMATION_KIND = 'decision_confirmation';
 
 export interface DecideGateInput {
   gateId: string;
@@ -824,7 +827,9 @@ export const approvalGatesService = {
       // entering review, and it is raised with its stamp — `choiceGateService.reconcile`
       // does both, before it walks the item here. Raising it from this loop would ask a
       // blocked choice, and ask it with no `subjectVersion`.
-      if (kind === 'decision_choice') continue;
+      // A CONFIRM QUESTION likewise (MOTIR-5954; §1's MOTIR-5952 amendment, point 4):
+      // `decisionConfirmationGateService.reconcile` raises it with its stamp.
+      if (kind === 'decision_choice' || kind === 'decision_confirmation') continue;
       const handler = handlerFor(kind);
       const subjectId = await handler.currentSubject({ item, ctx, tx });
       if (!subjectId) continue;
@@ -1575,6 +1580,9 @@ export const approvalGatesService = {
       if (input.decision === 'approve' && isChoice) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'approve_on_choice');
       }
+      if (input.decision === 'request_changes' && locked.kind === CONFIRMATION_KIND) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'request_changes_on_confirmation');
+      }
 
       // 4 · RETENTION — an APPROVAL PINS the version it was given on
       //      (MOTIR-4913; ADR §6c, with its MOTIR-4911 amendment).
@@ -1697,6 +1705,9 @@ export const approvalGatesService = {
           // which option won. `chosenOption` carries the rest of the pick.
           outcomeRef: effect.chosenOption ? effect.chosenOption.optionId : effect.statusWritten,
           chosenOption: effect.chosenOption ?? null,
+          // What a CONFIRMED decision's written record was — or that there was none
+          // (ADR §1's MOTIR-5952 amendment, point 8). Null on every other kind.
+          confirmedRecord: effect.confirmedRecord ?? null,
         },
         tx,
       );

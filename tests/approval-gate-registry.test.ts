@@ -38,6 +38,8 @@ const ALL_KINDS = [
   'acceptance_result',
   // Story MOTIR-4914 · MOTIR-5891: a person PICKS one of a choice work item's options.
   'decision_choice',
+  // Story MOTIR-5871 · MOTIR-5954: a person CONFIRMS or overturns a `human` decision.
+  'decision_confirmation',
 ] as const satisfies readonly ApprovalGateKind[];
 
 describe('the approval-gate registry — totality at runtime', () => {
@@ -57,8 +59,11 @@ describe('the approval-gate registry — totality at runtime', () => {
       'pull_request_approval',
       'acceptance_result',
       'decision_choice',
+      'decision_confirmation',
     ]);
     expect(isRegisteredGateKind('design_result')).toBe(true);
+    // MOTIR-5954 (Story MOTIR-5871): the CONFIRM gate — Confirm and Overturn.
+    expect(isRegisteredGateKind('decision_confirmation')).toBe(true);
     // MOTIR-5891 (Story MOTIR-4914): the CHOICE gate — its verbs are its options.
     expect(isRegisteredGateKind('decision_choice')).toBe(true);
     // MOTIR-5676 (Story MOTIR-4907): the DECISION gate left the holes it was declared in.

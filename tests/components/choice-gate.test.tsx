@@ -81,6 +81,7 @@ const AWAITING: ApprovalGateDTO = {
   decidedUnderAuthority: null,
   decisionSource: null,
   outcomeRef: null,
+  confirmedRecord: null,
   chosenOption: null,
   createdAt: '2026-09-21T10:00:00.000Z',
   updatedAt: '2026-09-21T10:00:00.000Z',
@@ -95,6 +96,7 @@ const CHOSEN: ApprovalGateDTO = {
   decidedUnderAuthority: 'assignee',
   decisionSource: 'ui',
   outcomeRef: 'managed-object-storage',
+  confirmedRecord: null,
   chosenOption: {
     optionId: 'managed-object-storage',
     label: 'Managed object storage',

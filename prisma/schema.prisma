@@ -4537,6 +4537,11 @@ enum ApprovalGateKind {
   /// MOTIR-4914; ADR `approval-gates.md` §1, the MOTIR-5887 amendment). No pull
   /// request — choosing is TERMINAL and writes `done` (Workflow A).
   decision_choice
+  /// A person CONFIRMS — or OVERTURNS — a decision the planner settled WITH them:
+  /// a `type: decision` + `executor: human` work item (Story MOTIR-5871; ADR
+  /// `approval-gates.md` §1, the MOTIR-5952 amendment). No pull request — both
+  /// verbs are TERMINAL (Workflow A): Confirm writes `done`, Overturn `cancelled`.
+  decision_confirmation
 
   @@map("approval_gate_kind")
 }
@@ -4764,6 +4769,13 @@ model ApprovalGate {
   /// IN the deciding write, so `trg_approval_gate_decided_immutable` holds it with
   /// the rest of the row. Null on every other kind and on a choice sent back.
   chosenOption          Json?                       @map("chosen_option")
+  /// WHAT A CONFIRMED DECISION'S WRITTEN RECORD WAS (Story MOTIR-5871 · MOTIR-5954;
+  /// ADR `approval-gates.md` §1's MOTIR-5952 amendment, point 8) — a discriminated
+  /// union: `{ kind: 'attachment', attachmentId, originalFilename, mimeType,
+  /// sizeBytes, createdAt }` or `{ kind: 'none' }`, stamped IN the deciding write.
+  /// A page arm (MOTIR-5761) is a new `kind`, never a migration. Null on every
+  /// other kind and on an undecided or overturned decision.
+  confirmedRecord       Json?                       @map("confirmed_record")
 
   /// WHY this gate was superseded — null for every row that is not `superseded`,
   /// and `unknown` for a row superseded before the column existed (MOTIR-5659).

@@ -62,6 +62,8 @@ import {
 } from '@/lib/workItems/statusLadder';
 import { reconcileAcceptanceOwnerOf, reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { choiceBodyOf, choiceGateService } from '@/lib/services/choiceGateService';
+import { decisionConfirmationGateService } from '@/lib/services/decisionConfirmationGateService';
+import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -1460,6 +1462,24 @@ async function reconcileChoiceGate(
   return (await workItemRepository.findById(item.id, tx)) ?? item;
 }
 
+/**
+ * RECONCILE A DECISION'S CONFIRM QUESTION and walk it to review when one is raised
+ * (Story MOTIR-5871 · MOTIR-5954; `approval-gates.md` §1's MOTIR-5952 amendment,
+ * point 4) — `reconcileChoiceGate`'s twin, for the same reason it lives here.
+ */
+async function reconcileDecisionGate(
+  item: WorkItem,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<WorkItem> {
+  const result = await decisionConfirmationGateService.reconcile(item, tx);
+  if (result.hopsToReview.length === 0) return item;
+  for (const key of result.hopsToReview) {
+    await workItemsService.applyStatusTransition(item.id, key, ctx, tx);
+  }
+  return (await workItemRepository.findById(item.id, tx)) ?? item;
+}
+
 export const workItemsService = {
   /**
    * Create a work item: allocate the per-project key + insert the row + emit
@@ -1980,7 +2000,11 @@ export const workItemsService = {
 
       // THE CHOICE QUESTION (Story MOTIR-4914 · MOTIR-5891) — AFTER the links, so a
       // choice born `blocked_by` something open is not asked until that lands.
-      const born = row.type === 'choice' ? await reconcileChoiceGate(row, ctx, tx) : row;
+      const choiceBorn = row.type === 'choice' ? await reconcileChoiceGate(row, ctx, tx) : row;
+      // THE CONFIRM QUESTION (Story MOTIR-5871 · MOTIR-5954) — likewise after the links.
+      const born = asksTheConfirmQuestion(choiceBorn)
+        ? await reconcileDecisionGate(choiceBorn, ctx, tx)
+        : choiceBorn;
 
       return { dto: toWorkItemDto(born), revisionId };
     });
@@ -2554,7 +2578,18 @@ export const workItemsService = {
       const choiceTouched =
         (diff['descriptionMd'] !== undefined || diff['type'] !== undefined) &&
         (row.type === 'choice' || current.type === 'choice');
-      const settled = choiceTouched ? await reconcileChoiceGate(row, ctx, tx) : row;
+      const choiceSettled = choiceTouched ? await reconcileChoiceGate(row, ctx, tx) : row;
+      // THE CONFIRM QUESTION (Story MOTIR-5871 · MOTIR-5954) — an edit to a `human`
+      // decision's body re-asks it or withdraws it; a type OR EXECUTOR change onto or
+      // off a `human` decision raises or withdraws it (point 4).
+      const decisionTouched =
+        (diff['descriptionMd'] !== undefined ||
+          diff['type'] !== undefined ||
+          diff['executor'] !== undefined) &&
+        (asksTheConfirmQuestion(row) || asksTheConfirmQuestion(current));
+      const settled = decisionTouched
+        ? await reconcileDecisionGate(choiceSettled, ctx, tx)
+        : choiceSettled;
 
       const changedFieldIds: string[] = automationFieldsFromDiffKeys(Object.keys(diff));
       // Did this edit move the EMBEDDED DOCUMENT (Story MOTIR-2694 · MOTIR-2696,
@@ -3361,6 +3396,9 @@ export const workItemsService = {
       for (const dependent of await workItemLinkRepository.findDependentStates(workItemId, tx)) {
         const waiting = await workItemRepository.findById(dependent.id, tx);
         if (waiting?.type === 'choice') await reconcileChoiceGate(waiting, ctx, tx);
+        else if (waiting && asksTheConfirmQuestion(waiting)) {
+          await reconcileDecisionGate(waiting, ctx, tx);
+        }
       }
     }
 

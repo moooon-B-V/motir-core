@@ -43,6 +43,7 @@ export const APPROVAL_GATE_KINDS = [
   'pull_request_merge',
   'acceptance_result',
   'decision_choice',
+  'decision_confirmation',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 
 // Exhaustiveness: a member added to `ApprovalGateKindDTO` and not to the tuple
