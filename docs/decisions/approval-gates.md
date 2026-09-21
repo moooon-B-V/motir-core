@@ -83,6 +83,14 @@
   writes `done` only when nothing under the story is left for the cascade to
   close. Nothing else in §1 changes.
 
+- **AMENDED 2026-09-21 (MOTIR-5903), at §1 — WHEN the acceptance question is
+  asked.** The MOTIR-5787 amendment made it a free-standing question raised the
+  moment a receipt exists (_"it does not depend on pull requests, on CI, or on the
+  run target"_). The requester replaced that: _"acceptance video gate is story
+  gate"_. On a story run it is asked only once the story's set is green, beside
+  the merge question it leads; on a subtask run only once nothing under the story
+  is open. Points 3–5 of the MOTIR-5787 amendment are struck in place.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -450,6 +458,108 @@ in_progress` through its own path, so an acceptance decision is invisible to
 > `pull_request_approval`'s own raise conditions (§8's MOTIR-5479 amendment); the
 > switch and its tier ([MOTIR-4925](motir:cmttap29j006dhxoipknbjh7v)); what a run
 > records, how the video is paced, and the storage caps (`acceptance-video.md`).
+
+> ### §1 — AMENDMENT (MOTIR-5903, 2026-09-21): the acceptance question is the STORY's gate, and WHEN it is asked follows the run shape — never merely because a receipt exists
+>
+> **Settled by the requester, 2026-09-21** (Bug
+> [MOTIR-5903](motir:cmub3ulch000phwoizrkscton)): _"there should be no acceptance
+> video gate, acceptance video gate is story gate"_. The acceptance video is not a
+> question of its own that can be asked at any time. It is the story's gate, and
+> an approval exists to let a person say yes to something that can actually
+> happen. **This REPLACES the MOTIR-5787 amendment's timing** — its point 2's
+> placement, point 6's closed receipt and point 7's status table all stand; the
+> sentence it inherited from the design gate, _"it does not depend on pull
+> requests, on CI, or on the run target"_, does not.
+>
+> **What shipped under the old wording, and why it was wrong.** `resolveGateSet`
+> owed `acceptance_result` whenever a current receipt existed, and
+> `acceptanceEvidenceService.persistEvidence` raised it right after the publish —
+> during the run, before any pull request was green or merged. So a red story run
+> held an acceptance "To approve" row and NO merge question, and a single-card
+> run's story was asked while the E2E subtask's pull request was still open —
+> where approving it could not finish the story at all
+> (`nothingLeftForTheCascade` → `rollup_writes_done`).
+>
+> #### 1 — the raise condition, per run shape
+>
+> | run shape                                                                                               | what is approved                                                                     | "To approve" records                                                                             | when the acceptance question is owed                                                                                                                                                          |
+> | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **story run** — the story delivers pull requests of its own                                             | the story's pull requests merge; the video is the **evidence** for that one approval | **one**: the story's approve-and-merge, the receipt leading it as its subject                    | exactly when **every member of the story's set could be merged now** — the merge question's own green test. **Never while any member is red, pending, a draft or closed.**                    |
+> | **subtask run** — the story delivers nothing; the E2E subtask recorded the video and delivered the code | two separate things                                                                  | **two**: (a) the subtask's approve-to-merge; (b) the acceptance, which sets the **story** `done` | only once **every live descendant of the story is in the `done` category** — the recording subtask included. While it is unmerged the story cannot finish, so there is nothing to approve yet |
+>
+> The shape is read off the story's own delivery set, the same fact the handler's
+> `merge_writes_done` row already reads — never off the run target and never off
+> `producedByKey`, which is optional on a publish.
+>
+> **Why the WHOLE subtree and not only the producing subtask.** Approving (b) is
+> what sets the story `done`. A sibling still open means that press would record a
+> yes and move nothing (point 7's `rollup_writes_done` row), which is the same
+> unactionable question this amendment removes. Waiting for the subtree makes the
+> press TERMINAL in the ordinary case, as the requester described it.
+>
+> **The row stays kind `acceptance_result`**, the PRIMARY carrier on a story run.
+> Folding it into `pull_request_approval` was the alternative, and it would have
+> given up point 6's stamp: the handler is what stamps the receipt `approved`, and
+> the stamp is what closes it. Keeping the kind and changing only WHEN it is owed
+> keeps the one press, the stamp and the frame exactly as MOTIR-5787 built them.
+> On a story run the two gates are therefore raised TOGETHER, on the same green,
+> which is the one question the requester asked for — the frame already presents
+> the pair as ONE row led by the receipt.
+>
+> #### 2 — what withdraws it on a story run (rung: §6b's supersede, the same causes)
+>
+> The question rides on the green set, so every event that takes the set out of
+> green withdraws it WITH the merge question, under the same cause: a head move
+> (`head_moved`), a close (`member_closed`), a draft (`member_drafted`) and a set
+> change (`set_changed`) (`lib/services/pullRequestApprovalGates.ts`). The next
+> green asks both again. **This reverses MOTIR-5787 point 5's _"a PUSH does not by
+> itself re-ask acceptance"_ for an AWAITING question**: an unanswered question
+> about a set that is no longer green is not a question anybody can act on. A
+> DECIDED acceptance is untouched, as before — a push after the press re-asks the
+> merge alone (AMENDMENT 6 Q2).
+>
+> #### 3 — what asks it on a subtask run (the WAKE)
+>
+> The subtree settles on a CHILD's status write, which no event on the story ever
+> saw. So `workItemsService.applyStatusTransition`, on every move INTO the done
+> category, re-asks the nearest story ancestor that holds a current receipt
+> (`reconcileAcceptanceOwnerOf`, `lib/services/gateSetFor.ts`) — in the child's
+> own transaction, under the story's row lock. That ordering is load-bearing: the
+> upward rollup runs as a job AFTER the commit, and it finds the gate already
+> there, so §6d's rule 1 holds the story's `done` for the approval instead of the
+> rollup closing the story around an unasked question. `raiseOnReviewEntry` asks
+> the same predicate for this kind, so a story rolling up into review does not
+> raise it early by the back door.
+>
+> #### 4 — what this STRIKES in the MOTIR-5787 amendment
+>
+> - **Point 3** (_"the story holds the `acceptance_result` gate alone"_ while the
+>   subtask holds its merge) — the story holds NOTHING until the subtask is done.
+>   The two presses are still independent; they are now also sequential.
+> - **Point 4** (_approving BEFORE green holds the merge_) — unreachable on a
+>   story run, because the question does not exist before green. Q4's one-time
+>   carry stays in the code for the design and decision gates, and still reads a
+>   standing acceptance approval, which is now only ever given on green.
+> - **Point 5**'s push rule, as §2 above says.
+> - The kind table's _fires when_ cell (_"a story holds a published receipt …
+>   whatever the run target"_) reads: _a story holds a published receipt AND the
+>   work it shows can finish — its set green on a story run, its subtree done on a
+>   subtask run_.
+>
+> #### 5 — what an `auto` project sees
+>
+> `auto` raises no merge gate (§7a). A story run's acceptance question is still
+> owed on green and is the only question then; the item page keeps the
+> standalone Acceptance section as its door, because the Development frame needs a
+> merge gate to lead (MOTIR-5792). Whether an unanswered acceptance should HOLD an
+> `auto` merge, as an unanswered design does (MOTIR-5762), is **not decided
+> here** — it was not held before this amendment either.
+>
+> Pinned by `tests/approvalGates/gateSet.test.ts` (the run-shape cases),
+> `tests/approvalGates/acceptanceStoryGate.test.ts` (the placement matrix, the
+> wake, and the withdraw on a push), `tests/attachments/acceptance-gate.test.ts`,
+> and `tests/e2e/acceptance-gate.spec.ts`'s single-card and not-yet-green
+> chapters.
 
 ### 2. Routing and authority — DECIDED BY THE REQUESTER (Yue, 2026-09-08)
 
