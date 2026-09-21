@@ -60,7 +60,7 @@ import {
   rankOfStatus,
   withdrawsPendingQuestion,
 } from '@/lib/workItems/statusLadder';
-import { reconcileGatesFor } from '@/lib/services/gateSetFor';
+import { reconcileAcceptanceOwnerOf, reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -3308,6 +3308,16 @@ export const workItemsService = {
       },
       tx,
     );
+
+    // A CHILD FINISHING RE-ASKS ITS STORY (Bug MOTIR-5903; `approval-gates.md` §1, the
+    // MOTIR-5903 amendment, point 3). A story whose receipt was recorded by a subtask is
+    // asked for its acceptance only once nothing under it is open — so the write that
+    // settles its subtree is the one that must ask. Here, before the commit, so the gate
+    // is on the story before the upward rollup job tries to close it. SYSTEM writes
+    // included: the cascade and the merge sync finish children too.
+    if (entersDone) {
+      await reconcileAcceptanceOwnerOf(row, tx);
+    }
 
     // ENTERING REVIEW ASKS AGAIN (ADR `approval-gates.md` §6d AMENDMENT, rule 7 ·
     // MOTIR-5532). The mirror of the withdraw above: a card coming back into

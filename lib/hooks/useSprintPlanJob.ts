@@ -14,9 +14,10 @@ import {
   type ApproveSprintPlanResponse,
 } from '@/lib/planning/sprintPlanClient';
 
-// The AI sprint-planning run, as a phase machine (Subtask MOTIR-1750). Mirrors
-// `usePlanEditsJob` — submit → stream → read the result → review → approve —
-// with three differences the surface needs:
+// The AI sprint-planning run, as a phase machine (Subtask MOTIR-1750). Mirrored
+// the item-scoped plan-edits dock's job hook (retired by MOTIR-4261) — submit →
+// stream → read the result → review → approve — with three differences the
+// surface needs:
 //
 //  * The review model is the SERVER-resolved `SprintPlanReviewDto`, not the raw
 //    delta: a packed key alone cannot render a row or a dependency caption.

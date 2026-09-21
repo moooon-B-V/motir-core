@@ -71,9 +71,14 @@ import type { WorkItemKindDto } from '@/lib/dto/workItems';
 //     plan control, and the fact that they read THIS file's rule while opening a
 //     different flow is what MOTIR-2097 had already been filed about.
 //
-// In both cases the JOB PATH is untouched — only the door went. `/api/ai/augment`
-// is driven by the conversation; `/api/ai/expand` by `/ready`'s expansion nudge.
-// `/api/ai/replan` is the one left with no caller, and that is MOTIR-4261.
+// The JOB PATHS were left for a separate decision, and MOTIR-4261 made it.
+// `/api/ai/augment` is driven by the conversation and `POST /api/ai/expand` by
+// `/ready`'s expansion nudge (which polls its plan rather than streaming). The
+// in-place dock's own chain — its job hook, the review dock, the replan route and
+// its stream, and the expand stream only the dock read — had no caller left, and
+// was RETIRED rather than re-homed: re-homing it would
+// have put a second plan door beside this one, which is the drift MOTIR-2097
+// was filed to stop. Re-planning an item is THIS door → the workspace.
 
 export interface WorkItemPlanEntranceProps {
   /** The item's human identifier (e.g. `MOTIR-42`) — the workspace's anchor. */

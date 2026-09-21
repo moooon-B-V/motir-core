@@ -43,6 +43,8 @@ const { approvalGatesService } = await import('@/lib/services/approvalGatesServi
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { resolveAcceptanceStory } = await import('@/lib/acceptanceEvidence/publishAuth');
+const { reconcileGatesFor } = await import('@/lib/services/gateSetFor');
+const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 
 const video = () => new File([new Uint8Array(1024)], 'run.webm', { type: 'video/webm' });
 
@@ -132,6 +134,14 @@ describe('placement — the gate hangs on the STORY (point 1)', () => {
     expect(target.id).toBe(story.id);
     await publish(target.id);
 
+    // The leaf is still open, so the story cannot finish and is asked nothing yet
+    // (MOTIR-5903); the leaf never holds the question at all.
+    expect(await gatesOn(story.id)).toHaveLength(0);
+    expect(await gatesOn(leaf.id)).toHaveLength(0);
+
+    // The leaf reaching `done` is what asks the story — with no further publish.
+    await workItemsService.updateStatus(leaf.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(leaf.id, 'done', fx.ctx);
     expect(await gatesOn(story.id)).toHaveLength(1);
     expect(await gatesOn(leaf.id)).toHaveLength(0);
   });
@@ -166,13 +176,16 @@ describe('the effect — approval writes `done` only when nothing is left for th
     expect(receipt.approvedById).toBe(fx.ctx.userId);
   });
 
-  it('a story with a child still OPEN — the single-card run: the receipt is approved, the story does NOT move, and the child is untouched', async () => {
+  it('a child filed AFTER the question was asked — the receipt is approved, the story does NOT move, and the child is untouched', async () => {
+    // The question is asked only over a settled subtree (MOTIR-5903), so an open child
+    // under an awaiting question is one that ARRIVED after it — a bug filed mid-review.
     const story = await makeStory('in_progress');
+    await publish(story.id);
+    const gate = await awaitingGate(story.id);
     const child = await makeChild(story.id);
     await workItemsService.updateStatus(child.id, 'in_progress', fx.ctx);
-    await publish(story.id);
 
-    const result = await decide((await awaitingGate(story.id)).id, 'approve');
+    const result = await decide(gate.id, 'approve');
 
     // Writing `done` here would have `childStatusCascadeService` close the child
     // whose work has not landed. The rollup writes `done` when it does.
@@ -228,7 +241,21 @@ describe('the effect — approval writes `done` only when nothing is left for th
       },
       fx.ctx,
     );
+    // The story run's question is asked once its set is GREEN (MOTIR-5903), and not before.
     await publish(story.id);
+    expect(await gatesOn(story.id)).toHaveLength(0);
+    const pr = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 4949 } });
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: pr.id,
+        commitSha: 'e5'.repeat(20),
+        checkName: 'Vitest',
+        conclusion: 'success',
+      },
+    });
+    await withWorkspaceContext(fx.ctx, async (tx) =>
+      reconcileGatesFor(await tx.workItem.findUniqueOrThrow({ where: { id: story.id } }), tx),
+    );
 
     const result = await decide((await awaitingGate(story.id)).id, 'approve');
 

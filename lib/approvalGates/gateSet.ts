@@ -102,13 +102,25 @@ export interface GateSetInput {
   latestDesignGate: ExistingGate | null;
   /**
    * The card's CURRENT acceptance receipt, or null — a STORY's (Story MOTIR-4949 · Subtask
-   * MOTIR-5789; `approval-gates.md` §1, the MOTIR-5787 amendment). Current-ness is right here
+   * MOTIR-5789; `approval-gates.md` §1, the MOTIR-5787 amendment; WHEN it is asked is the
+   * MOTIR-5903 amendment's, below). Current-ness is right here
    * for the reason it is for the design result above: this answers what a gate raised NOW
    * would ask about.
    */
   currentReceipt: { id: string; commitSha: string | null } | null;
   /** The card's most recent `acceptance_result` gate, whatever its state, or null. */
   latestAcceptanceGate: ExistingGate | null;
+  /**
+   * Whether every live DESCENDANT of the card sits in its project's done category —
+   * the acceptance question's timing input on a SUBTASK run (Bug MOTIR-5903;
+   * `approval-gates.md` §1, the MOTIR-5903 amendment). Read only when the card
+   * delivers no pull request of its own: then the receipt was recorded by a child
+   * (the E2E subtask), and approving it is what sets the story `done` — so it is not
+   * asked while anything under the story, the recording subtask included, is still
+   * open. Optional; absent reads as NOT settled, so a caller that did not load it
+   * never raises the question early.
+   */
+  subtreeSettled?: boolean;
   /** The card's most recent approve-to-merge gate, whatever its state, or null. */
   latestMergeGate: ExistingGate | null;
   /** Every pull request the card delivers. Empty when it delivers none. */
@@ -375,6 +387,13 @@ export function decisionApprovalStandsForMerge(
  *     on who holds the run target — AMENDMENT 6 Q1 reverses AMENDMENT 4 Q8's
  *     suppression, and MOTIR-5652's run-target refusal is not represented here at
  *     all because a card with something to decide has a gate regardless of it.
+ *  2b. **The ACCEPTANCE question** is owed when the card has a current receipt no
+ *     decision has answered AND the work it shows can finish — the MOTIR-5903
+ *     amendment, which reverses the MOTIR-5787 amendment's *"does not depend on pull
+ *     requests"*. On a STORY run (the story delivers pull requests) that is exactly when
+ *     every member could be merged now; on a SUBTASK run (it delivers none) it is when
+ *     every descendant is in the done category. Never while a story's set is red, and
+ *     never while the recording subtask is unmerged.
  *  3. **The MERGE question** is owed in a `manual` project when the card delivers at
  *     least one pull request, EVERY member could be merged now or has already merged
  *     (a merged member is settled — MOTIR-5901), at least one is still open to merge,
@@ -419,23 +438,6 @@ export function resolveGateSet(input: GateSetInput): GateSet {
       kind: 'design_result',
       subjectId: evidence.id,
       subjectVersion: evidence.commitSha,
-    });
-  }
-
-  // THE ACCEPTANCE QUESTION (Story MOTIR-4949 · Subtask MOTIR-5789; the MOTIR-5787
-  // amendment, points 1–2) — owed whenever the card carries a current receipt no
-  // decision has answered, with exactly the design question's stance: it does not
-  // depend on pull requests, on CI, or on the run target. A receipt row is immutable
-  // like an evidence row, so its id is the whole identity (`versionIdentifies: false`).
-  const receipt = input.currentReceipt;
-  if (
-    receipt !== null &&
-    !alreadyDecided(input.latestAcceptanceGate, receipt.id, receipt.commitSha, false)
-  ) {
-    awaited.push({
-      kind: 'acceptance_result',
-      subjectId: receipt.id,
-      subjectVersion: receipt.commitSha,
     });
   }
 
@@ -508,6 +510,40 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   const everyMemberMergeable =
     input.members.some((member) => member.isMergeCandidate) &&
     input.members.every((member) => member.isMergeCandidate || member.merged === true);
+  // THE ACCEPTANCE QUESTION (Story MOTIR-4949 · Subtask MOTIR-5789) — owed when the
+  // card carries a current receipt no decision has answered AND the work it shows can
+  // actually finish (Bug MOTIR-5903; `approval-gates.md` §1, the MOTIR-5903 amendment,
+  // which REPLACES the MOTIR-5787 amendment's *"it does not depend on pull requests, on
+  // CI, or on the run target"*). The acceptance video is the STORY's gate, never a
+  // question of its own, so its timing follows the run shape:
+  //
+  //  · STORY RUN — the story delivers pull requests of its own. The video is EVIDENCE
+  //    for the one approve-to-merge decision, so it is asked exactly when that set is
+  //    green — beside the merge question, which it leads — and never while any member
+  //    is red, pending, drafted or closed.
+  //  · SUBTASK RUN — the story delivers nothing; a child (the E2E subtask) recorded the
+  //    video and delivered the code. Approving it sets the story `done`, so it is asked
+  //    only once nothing under the story is left open (`subtreeSettled`): while the
+  //    recording subtask's pull request is unmerged the story cannot finish, and there
+  //    is nothing to approve yet.
+  //
+  // A receipt row is immutable like an evidence row, so its id is the whole identity
+  // (`versionIdentifies: false`).
+  const receipt = input.currentReceipt;
+  const storyRun = input.members.length > 0;
+  const acceptanceTimely = storyRun ? everyMemberMergeable : input.subtreeSettled === true;
+  if (
+    receipt !== null &&
+    acceptanceTimely &&
+    !alreadyDecided(input.latestAcceptanceGate, receipt.id, receipt.commitSha, false)
+  ) {
+    awaited.push({
+      kind: 'acceptance_result',
+      subjectId: receipt.id,
+      subjectVersion: receipt.commitSha,
+    });
+  }
+
   if (input.prMergeMode === 'manual' && !answered && everyMemberMergeable && version !== null) {
     awaited.push({
       kind: 'pull_request_approval',

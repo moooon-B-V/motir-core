@@ -15,7 +15,7 @@ export class PlanEditsClientError extends Error {
 }
 
 /**
- * What the three plan-edit submit routes return. `planId` — the `generating`
+ * What the plan-edit submit routes return. `planId` — the `generating`
  * Plan the job's proposals append into (MOTIR-1743) — is OPTIONAL on purpose:
  * it is an additive echo, and a caller must not depend on it (an E2E stub or a
  * pre-1743 response carries only `jobId`). Read it defensively.
@@ -53,20 +53,6 @@ export async function submitExpandJob(
   signal?: AbortSignal,
 ): Promise<PlanEditSubmitResponse> {
   const res = await fetch('/api/ai/expand', {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ itemKey }),
-    signal,
-  });
-  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
-  return (await res.json()) as PlanEditSubmitResponse;
-}
-
-export async function submitReplanJob(
-  itemKey: string,
-  signal?: AbortSignal,
-): Promise<PlanEditSubmitResponse> {
-  const res = await fetch('/api/ai/replan', {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
     body: JSON.stringify({ itemKey }),
@@ -137,34 +123,6 @@ export async function streamContextualPlanJob(
     onError,
     onDone,
     onFrame,
-  );
-}
-
-export async function streamExpandJob(
-  jobId: string,
-  signal: AbortSignal,
-  onError: (code: string | null) => void,
-  onDone: () => void,
-): Promise<void> {
-  return consumeStream(
-    `/api/ai/expand/${encodeURIComponent(jobId)}/stream`,
-    signal,
-    onError,
-    onDone,
-  );
-}
-
-export async function streamReplanJob(
-  jobId: string,
-  signal: AbortSignal,
-  onError: (code: string | null) => void,
-  onDone: () => void,
-): Promise<void> {
-  return consumeStream(
-    `/api/ai/replan/${encodeURIComponent(jobId)}/stream`,
-    signal,
-    onError,
-    onDone,
   );
 }
 

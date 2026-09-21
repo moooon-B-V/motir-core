@@ -14,7 +14,7 @@ import {
 // POST /api/ai/revise (Story MOTIR-3595 · Subtask MOTIR-3599) — ask Motir to
 // change the plan you are REVIEWING.
 //
-// It mirrors `/api/ai/replan`'s shape exactly — same two gates, same rate-limit
+// It mirrors `/api/ai/expand`'s shape exactly — same two gates, same rate-limit
 // bucket, same `{ jobId, planId }` response — so the client has ONE contract
 // across the four plan-edit submits rather than a fourth of its own. The single
 // difference is the target: a PLAN id where the other three take a work-item key,

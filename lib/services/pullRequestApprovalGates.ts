@@ -25,6 +25,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 // service-free modules instead (`deliverySetVersion.ts`, `routing.ts`).
 
 const KIND = 'pull_request_approval' as const;
+const ACCEPTANCE_KIND = 'acceptance_result' as const;
 
 /**
  * Raise the card's `awaiting` approve-and-merge gate when {@link gateSetFor} says it is
@@ -94,6 +95,35 @@ async function reraiseAfterWithdrawal(
 }
 
 /**
+ * Is the card's awaiting ACCEPTANCE question no longer owed? Each withdrawer below then
+ * supersedes it with its own cause —
+ * the story-run half of the MOTIR-5903 amendment (`approval-gates.md` §1, point 1).
+ *
+ * On a story run the acceptance video is EVIDENCE for the one approve-to-merge decision,
+ * so it is asked exactly while the set is green. Every event that withdraws the merge
+ * question for a set that stopped being mergeable — a head move, a close, a draft, a set
+ * change — therefore withdraws it too, with the same cause. Asked through the predicate
+ * rather than decided here, so a question that IS still owed (a subtask-run story whose
+ * subtree is settled, or a set still green after an event about a different member) is
+ * left exactly where it is.
+ */
+async function acceptanceNoLongerOwed(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+  signals: GateSetSignals = {},
+): Promise<boolean> {
+  const awaiting = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).some(
+    (row) => row.kind === ACCEPTANCE_KIND,
+  );
+  if (!awaiting) return false;
+  // The awaiting gate row just read holds a foreign key to this card (cascading delete),
+  // so inside this transaction the card exists.
+  const item = (await workItemRepository.findById(workItemId, tx))!;
+  const set = await gateSetFor(item, tx, signals);
+  return !set.awaited.some((gate) => gate.kind === ACCEPTANCE_KIND);
+}
+
+/**
  * WITHDRAW on a HEAD MOVE: for every card this pull request delivers, supersede its awaiting
  * approve-and-merge gate when the set's CURRENT version differs from the one the gate asked
  * about.
@@ -113,10 +143,25 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
     pullRequestId,
     tx,
   )) {
+    const signals: GateSetSignals = { movedHead: { pullRequestId, headSha } };
     const gate = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).find(
       (row) => row.kind === KIND,
     );
-    if (!gate) continue;
+    if (!gate) {
+      // No merge question to retire — but a story run's acceptance question may be
+      // awaiting on its own (an `auto` project raises no merge gate), and a moved head
+      // makes the set it is evidence for not green (MOTIR-5903).
+      if (await acceptanceNoLongerOwed(workItemId, tx, signals)) {
+        await approvalGateRepository.supersedeAwaitingByWorkItem(
+          workItemId,
+          ACCEPTANCE_KIND,
+          'head_moved',
+          tx,
+        );
+        await reraiseAfterWithdrawal(workItemId, tx, signals);
+      }
+      continue;
+    }
     const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(workItemId, tx);
     const current = deliverySetVersion(
       deliveries.map((delivery) =>
@@ -141,13 +186,22 @@ export async function withdrawPullRequestApprovalGatesOnHeadMove(
       'head_moved',
       tx,
     );
+    // The acceptance question rides on the same green set (MOTIR-5903).
+    if (await acceptanceNoLongerOwed(workItemId, tx, signals)) {
+      await approvalGateRepository.supersedeAwaitingByWorkItem(
+        workItemId,
+        ACCEPTANCE_KIND,
+        'head_moved',
+        tx,
+      );
+    }
     // ⚠️ AND ASK WHAT THE CARD SHOULD HOLD NOW (MOTIR-5663). The commits just
     // changed, so the new head has no verdict yet and the predicate answers *no
     // merge gate* — the NEXT green raises it. That is the case worth stating,
     // because it is the one that makes this call look pointless: it is not the
     // re-raise that matters here, it is that the re-ask happens at all. A design
     // gate the card is owed and does not have goes up from the same statement.
-    await reraiseAfterWithdrawal(workItemId, tx, { movedHead: { pullRequestId, headSha } });
+    await reraiseAfterWithdrawal(workItemId, tx, signals);
   }
   return withdrawn;
 }
@@ -172,6 +226,14 @@ export async function withdrawPullRequestApprovalGatesOnClose(
       'member_closed',
       tx,
     );
+    if (await acceptanceNoLongerOwed(workItemId, tx)) {
+      await approvalGateRepository.supersedeAwaitingByWorkItem(
+        workItemId,
+        ACCEPTANCE_KIND,
+        'member_closed',
+        tx,
+      );
+    }
     await reraiseAfterWithdrawal(workItemId, tx);
   }
   return withdrawn;
@@ -199,6 +261,14 @@ export async function withdrawPullRequestApprovalGatesOnDraft(
       'member_drafted',
       tx,
     );
+    if (await acceptanceNoLongerOwed(workItemId, tx)) {
+      await approvalGateRepository.supersedeAwaitingByWorkItem(
+        workItemId,
+        ACCEPTANCE_KIND,
+        'member_drafted',
+        tx,
+      );
+    }
     await reraiseAfterWithdrawal(workItemId, tx);
   }
   return withdrawn;
@@ -220,6 +290,14 @@ export async function withdrawPullRequestApprovalGateOnSetChange(
     'set_changed',
     tx,
   );
+  if (await acceptanceNoLongerOwed(workItemId, tx)) {
+    await approvalGateRepository.supersedeAwaitingByWorkItem(
+      workItemId,
+      ACCEPTANCE_KIND,
+      'set_changed',
+      tx,
+    );
+  }
   await reraiseAfterWithdrawal(workItemId, tx);
   return withdrawn;
 }

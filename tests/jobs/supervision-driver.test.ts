@@ -8,9 +8,11 @@ import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepos
 import { isJobRunDefer, type JobRunDefer } from '@/lib/jobs/engine/defer';
 import {
   advanceSupervision,
+  durableSupervisionStore,
   type SupervisionHooks,
   type SupervisionPollResult,
   type SupervisionPollState,
+  type SupervisionStore,
   type SupervisionTerminalReason,
 } from '@/lib/jobs/supervision/driver';
 import { adminDb } from '../helpers/adminDb';
@@ -329,6 +331,44 @@ describe('the terminal transitions', () => {
   });
 });
 
+/**
+ * A BARRIER for `parties` callers: each call resolves only once all of them have
+ * arrived.
+ *
+ * ⚠️ IT IS WHAT MAKES A RACE TEST A RACE (MOTIR-5589). `poll` runs after `open`
+ * has read the row and before the advance writes it, so a pass parked here has
+ * READ its poll number and not yet written one. Holding BOTH passes here is the
+ * only way to guarantee they read the same number. A `setTimeout` in `poll` only
+ * makes that likely: on a loaded CI shard the second pass's `open` waits for a
+ * pooled connection past the first pass's whole poll-and-commit, reads the
+ * advanced row, and correctly polls 2. That is a SEQUENTIAL pass, and it failed
+ * `expected 2 to be 1` three times in CI.
+ */
+function barrier(parties: number): () => Promise<void> {
+  let arrived = 0;
+  let release!: () => void;
+  const all = new Promise<void>((res) => (release = res));
+  return () => {
+    arrived += 1;
+    if (arrived === parties) release();
+    return all;
+  };
+}
+
+/**
+ * A store whose `open` waits for `gate` first — a pass whose first statement
+ * reaches the database late, as a pool wait on a loaded runner makes it.
+ */
+function lateOpen(gate: Promise<unknown>): SupervisionStore {
+  return {
+    ...durableSupervisionStore,
+    async open(...args) {
+      await gate;
+      return durableSupervisionStore.open(...args);
+    },
+  };
+}
+
 describe('two passes racing on one supervision', () => {
   it('do not BOTH advance — the loser observes the winner and declines', async () => {
     const { run, workspaceId } = await makeRun();
@@ -337,9 +377,11 @@ describe('two passes racing on one supervision', () => {
     // `FOR UPDATE` re-read is what makes the second one see 1 and stop. The
     // overlap is real: `reclaimExpiredLeases` hands a run to a second worker
     // while the first is inside a provider call it has not returned from.
+    // The BARRIER guarantees it here — see `barrier` for why a timer cannot.
+    const bothPolling = barrier(2);
     const r = recorder({
       poll: async () => {
-        await new Promise((res) => setTimeout(res, 40));
+        await bothPolling();
         return { done: false, startedAt: null, consecutiveReadFailures: 0 };
       },
     });
@@ -352,19 +394,76 @@ describe('two passes racing on one supervision', () => {
 
     // Both SUSPEND — neither is a failure and neither settles anything.
     expect(results.every((x) => x.status === 'rejected' && isJobRunDefer(x.reason))).toBe(true);
-    expect(r.polls).toHaveLength(2);
     expect(r.settles).toHaveLength(0);
+    // Both passes READ the same row, which is what makes this a race rather than
+    // two passes in a row. `[1, 2]` here would mean they did not overlap.
+    expect(r.polls.map((p) => p.pollNumber)).toEqual([1, 1]);
     // One advance, not two. Without the lock both would have written 1 and the
     // count would silently stop bounding anything.
     expect((await readRow(run.id))!.pollNumber).toBe(1);
   });
 
-  it('do not BOTH tear down — the loser reports `raced` and leans on the caller memo', async () => {
+  it('still declines when one pass reaches the database LATE — the flake’s own condition, held to a race', async () => {
+    // MOTIR-5589's reproduction, made deterministic: pass B's `open` is held back
+    // well past pass A's poll (a pool wait on a loaded runner). With the old
+    // timer this let A poll, advance and commit before B read anything, so B
+    // advanced to 2. The barrier keeps A parked in its poll until B has read,
+    // so the late pass is still a racer and the lock still decides.
+    const { run, workspaceId } = await makeRun();
+    const bootedAt = new Date();
+    const bothPolling = barrier(2);
+    const r = recorder({
+      poll: async () => {
+        await bothPolling();
+        return { done: false, startedAt: null, consecutiveReadFailures: 0 };
+      },
+    });
+    const late = lateOpen(new Promise((res) => setTimeout(res, 250)));
+
+    await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks); // the opening wait
+    const results = await Promise.allSettled([
+      advanceSupervision(run.id, KEY(bootedAt, workspaceId), r.hooks),
+      advanceSupervision(run.id, KEY(bootedAt, workspaceId), { ...r.hooks, store: late }),
+    ]);
+
+    expect(results.every((x) => x.status === 'rejected' && isJobRunDefer(x.reason))).toBe(true);
+    expect(r.polls.map((p) => p.pollNumber)).toEqual([1, 1]);
+    expect((await readRow(run.id))!.pollNumber).toBe(1);
+  });
+
+  it('a pass that reads AFTER the other committed is SEQUENTIAL — it polls the next number and advances', async () => {
+    // The shape the three CI failures actually were, pinned as CORRECT: the
+    // driver has no business declining a pass that read the committed row. It
+    // is handed poll 2 and records it. This is why `expected 2 to be 1` was a
+    // defect in the test's premise and not in the lock.
     const { run, workspaceId } = await makeRun();
     const bootedAt = new Date();
     const r = recorder({
+      poll: () => ({ done: false, startedAt: null, consecutiveReadFailures: 0 }),
+    });
+
+    await passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks); // the opening wait
+    const first = passDefers(run.id, KEY(bootedAt, workspaceId), r.hooks);
+    const second = passDefers(run.id, KEY(bootedAt, workspaceId), {
+      ...r.hooks,
+      store: lateOpen(first),
+    });
+    await Promise.all([first, second]);
+
+    expect(r.polls.map((p) => p.pollNumber)).toEqual([1, 2]);
+    expect((await readRow(run.id))!.pollNumber).toBe(2);
+  });
+
+  it('do not BOTH tear down — the loser reports `raced` and leans on the caller memo', async () => {
+    const { run, workspaceId } = await makeRun();
+    const bootedAt = new Date();
+    // The barrier again: without it the second pass can arrive after the first
+    // SETTLED and report `raced` through the replay arm, which proves nothing
+    // about the `watching → settling` claim this test is about.
+    const bothPolling = barrier(2);
+    const r = recorder({
       poll: async () => {
-        await new Promise((res) => setTimeout(res, 40));
+        await bothPolling();
         return { done: true, verdict: 'exit-0' };
       },
     });
@@ -379,6 +478,8 @@ describe('two passes racing on one supervision', () => {
     // still calls the hook, because in production that hook is a memoized
     // `step.run` and the memo is what makes a second call free and correct.
     expect([a.raced, b.raced].sort()).toEqual([false, true]);
+    // Both OBSERVED the container done — neither came in through the replay arm.
+    expect([a.reason, b.reason]).toEqual(['completed', 'completed']);
     expect((await readRow(run.id))!.state).toBe('settled');
   });
 });

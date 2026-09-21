@@ -338,14 +338,15 @@ describe('the planning-job ENVELOPE', () => {
     expect(Object.keys(context as object)).not.toContain('repositories');
   });
 
-  it('carries it on EVERY plan-edit operation — augment, expand_item and replan', async () => {
+  it('carries it on EVERY plan-edit operation — augment and expand_item', async () => {
     // AC 5 is a claim about the CODE, not about which operation a test drove, so
-    // it is asserted over all three. They share one submit precisely so a
+    // it is asserted over both (the third, `submitReplan`, went with its route —
+    // MOTIR-4261). They share one submit precisely so a
     // per-kind site cannot drop the field on the contextual path.
     const seed = await seedWorkspace();
     const ctx = await seedProject(seed, 'ETA');
     const api = await addRow(ctx, { name: 'acme-api', role: 'api', realizedName: 'acme-api' });
-    // `submitExpand` / `submitReplan` resolve a real target, so the fixture needs
+    // `submitExpand` resolves a real target, so the fixture needs
     // a real container to point them at.
     const target = await workItemsService.createWorkItem(
       { projectId: ctx.projectId, kind: 'story', title: 'A container to expand' },
@@ -361,9 +362,6 @@ describe('the planning-job ENVELOPE', () => {
     await aiPlanEditsService.submitExpand(target.identifier, ctx);
     expect(vi.mocked(submitJob).mock.calls.at(-1)![2]).toMatchObject({ repositories: expected });
 
-    await aiPlanEditsService.submitReplan(target.identifier, ctx);
-    expect(vi.mocked(submitJob).mock.calls.at(-1)![2]).toMatchObject({ repositories: expected });
-
     // Every planning submit this service makes carried it — counted, so a fourth
     // operation added later without the field fails here rather than silently.
     //
@@ -371,12 +369,12 @@ describe('the planning-job ENVELOPE', () => {
     // to isolate the plan-EDIT calls from the generation one. After the switch
     // every planning submit sends `plan`, so a filter on the KIND selects
     // nothing — and a filter written to exclude one kind would silently pass by
-    // matching everything or nothing, which is worse than failing. The three
+    // matching everything or nothing, which is worse than failing. The two
     // calls in THIS test are all `aiPlanEditsService`'s, so the count is taken
     // over the calls this test made, and the kind is asserted rather than used
     // to partition.
     const planningCalls = vi.mocked(submitJob).mock.calls;
-    expect(planningCalls.length).toBeGreaterThanOrEqual(3);
+    expect(planningCalls.length).toBeGreaterThanOrEqual(2);
     for (const [kind, , context] of planningCalls) {
       expect(kind).toBe('plan');
       expect(context).toMatchObject({ repositories: expected });
