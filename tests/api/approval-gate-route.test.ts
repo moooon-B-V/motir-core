@@ -760,6 +760,8 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       'acceptanceEvidenceService.getCurrentForStory',
       'acceptanceEvidenceService.getForGateSubject',
       'approvalGatesService.getForWorkItem',
+      // The choice port's parsed options (MOTIR-5891) — the same parse the item page reads.
+      'choiceGateService.readPort',
       // The decision port's document (MOTIR-5678) — the same read the item page makes.
       'decisionDocumentService.readViewForWorkItem',
       'designEvidenceService.getCurrentForWorkItem',

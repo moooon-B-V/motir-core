@@ -227,6 +227,7 @@ describe('a DECIDED gate is IMMUTABLE', () => {
       decidedUnderAuthority: 'assignee' as const,
       decisionSource: 'ui' as const,
       outcomeRef: 'done',
+      chosenOption: null,
     };
 
     // The real door's write, through the real repository method. `decide` carries
@@ -537,6 +538,8 @@ describe('the DTO carries the audit set, and no Prisma model crosses the boundar
       'decidedUnderAuthority',
       'decisionSource',
       'outcomeRef',
+      // What a choice picked (MOTIR-5893) — null on every other kind.
+      'chosenOption',
       'createdAt',
       'updatedAt',
     ];

@@ -42,6 +42,9 @@ export const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   // The question is live and changed under the reader (MOTIR-5234) — a well-formed
   // request against a resource no longer in the state it was read in.
   APPROVAL_GATE_STALE_SUBJECT: 409,
+  // A verb this gate does not offer (MOTIR-5893) — the REQUEST is malformed for this
+  // kind, not the resource in the wrong state, so `400` rather than `409`.
+  APPROVAL_GATE_VERB_NOT_OFFERED: 400,
   APPROVAL_GATE_ALREADY_AWAITING: 409,
   APPROVAL_GATE_KIND_UNREGISTERED: 501,
   // The request is well-formed and the gate is live; its SUBJECT is not in a state

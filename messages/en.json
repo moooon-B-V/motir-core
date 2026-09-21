@@ -8402,6 +8402,10 @@
         "title": "There is no single decision document to approve.",
         "next": "The pull request has to add or change exactly one file under docs/decisions/. Request changes to send it back."
       },
+      "verbNotOffered": {
+        "title": "That decision is not one this approval offers.",
+        "next": "Nothing was changed. Reload the page and decide again from the options shown."
+      },
       "primaryPending": {
         "design": {
           "title": "Approve the design before these pull requests merge.",

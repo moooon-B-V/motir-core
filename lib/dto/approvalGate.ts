@@ -1,4 +1,4 @@
-import type { ChoiceDefect, ParsedChoice } from '@/lib/approvalGates/choiceOptions';
+import type { ChoiceDefect, ChosenOption, ParsedChoice } from '@/lib/approvalGates/choiceOptions';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
@@ -175,7 +175,10 @@ export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
  * `decision_choice`), which is why the door takes a decision rather than
  * exposing `approve()` / `requestChanges()` as separate methods.
  */
-export type GateDecision = 'approve' | 'request_changes';
+export type GateDecision = 'approve' | 'request_changes' | 'choose';
+
+/** WHAT A CHOICE'S DECISION PICKED — see {@link ChosenOption} (MOTIR-5893). */
+export type ChosenOptionDTO = ChosenOption;
 
 /**
  * One approval gate, as the decide control / Approvals tab renders it. The
@@ -240,6 +243,9 @@ export interface ApprovalGateDTO {
   /** WHAT it caused — the merge commit sha, or the transition applied. Written
    *  in the deciding write, never backfilled: a decided gate is immutable. */
   outcomeRef: string | null;
+  /** WHAT WAS CHOSEN, on an approved `decision_choice` gate (MOTIR-5893) — and there
+   *  `outcomeRef` is the option's id rather than a status key. Null everywhere else. */
+  chosenOption: ChosenOptionDTO | null;
 
   createdAt: string;
   updatedAt: string;

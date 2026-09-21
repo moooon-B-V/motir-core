@@ -91,6 +91,8 @@ export type DecideGateActionResult =
 export async function decideApprovalGateAction(input: {
   gateId: string;
   decision: GateDecision;
+  /** The option a `choose` picks (MOTIR-5893) — the route's `optionId`, mirrored. */
+  optionId?: string | null;
   /** The card whose page the frame is on — the path revalidated on success. */
   identifier: string;
   noteMd?: string | null;
@@ -101,6 +103,7 @@ export async function decideApprovalGateAction(input: {
   stamp: string;
 }): Promise<DecideGateActionResult> {
   const { gateId, decision, identifier, noteMd, stamp } = input;
+  const optionId = decision === 'choose' ? (input.optionId?.trim() ?? '') : null;
   const ctx = await requireContext();
   try {
     // Through the merge entry point (MOTIR-5517 · MOTIR-5624): an approve on the card's
@@ -111,7 +114,7 @@ export async function decideApprovalGateAction(input: {
       // the audit's strongest claim (ADR §6a: *"a human click must be
       // distinguishable from a programmatic call"*), so it is stated at the one
       // call site that actually knows it rather than defaulted in the door.
-      { gateId, decision, noteMd, source: 'ui', stamp },
+      { gateId, decision, optionId, noteMd, source: 'ui', stamp },
       ctx,
     );
     // The server half, on the action's own response. A REFUSAL revalidates

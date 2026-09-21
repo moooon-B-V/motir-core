@@ -4754,6 +4754,12 @@ model ApprovalGate {
   /// transaction for the same reason — so the outcome is known before the row is
   /// written.
   outcomeRef            String?                     @map("outcome_ref")
+  /// WHAT A CHOICE PICKED (Story MOTIR-4914 · MOTIR-5893; ADR `approval-gates.md`
+  /// §1's MOTIR-5887 amendment, point 7) — `{ optionId, label, bestFor, followUp,
+  /// situation }`, taken from the body's parse at the decided version and written
+  /// IN the deciding write, so `trg_approval_gate_decided_immutable` holds it with
+  /// the rest of the row. Null on every other kind and on a choice sent back.
+  chosenOption          Json?                       @map("chosen_option")
 
   /// WHY this gate was superseded — null for every row that is not `superseded`,
   /// and `unknown` for a row superseded before the column existed (MOTIR-5659).

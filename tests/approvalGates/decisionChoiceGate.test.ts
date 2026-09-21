@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { decisionChoiceGateHandler } from '@/lib/approvalGates/decisionChoiceHandler';
-import { ApprovalGateStaleSubjectError } from '@/lib/approvalGates/errors';
+import { ApprovalGateVerbNotOfferedError } from '@/lib/approvalGates/errors';
 import { summarizeGateSubjects } from '@/lib/approvalGates/subjectSummary';
 import { choiceGateService } from '@/lib/services/choiceGateService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -227,19 +227,31 @@ describe('the handler — choose writes done; an option the subject lacks is ref
     );
   }
 
-  it('a valid option writes `done`', async () => {
+  it('a valid option writes `done` and returns the pick', async () => {
     const item = await createChoice(COMPLETE);
-    expect(await decideWith(item.id, 'our-own-postgres')).toEqual({ statusWritten: 'done' });
+    expect(await decideWith(item.id, 'our-own-postgres')).toEqual({
+      statusWritten: 'done',
+      chosenOption: {
+        optionId: 'our-own-postgres',
+        label: 'Our own Postgres',
+        bestFor: 'more cost-effective',
+        followUp: 'The export story.',
+        situation: 'better_than_your_decision',
+      },
+    });
     expect(await statusOf(item.id)).toBe('done');
   });
 
-  it('an unknown option, or none, is the stale refusal and writes nothing', async () => {
+  it('an unknown option, or none, is a verb the gate does not offer, and writes nothing', async () => {
+    // Not the stale refusal (MOTIR-5893): the door compares the stamp first, so the
+    // options here are the ones the reader was shown — an id missing from them was
+    // never offered.
     const item = await createChoice(COMPLETE);
     await expect(decideWith(item.id, 'a-cdn')).rejects.toBeInstanceOf(
-      ApprovalGateStaleSubjectError,
+      ApprovalGateVerbNotOfferedError,
     );
     await expect(decideWith(item.id, undefined)).rejects.toBeInstanceOf(
-      ApprovalGateStaleSubjectError,
+      ApprovalGateVerbNotOfferedError,
     );
     expect(await statusOf(item.id)).toBe('in_review');
   });

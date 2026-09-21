@@ -157,10 +157,15 @@ export const choiceGateService = {
     const isDone = terminal.get(item.projectId)?.has(item.status) ?? false;
     const blocked = !isDone && (await hasOpenBlocker(item, item.workspaceId, tx));
 
-    const superseded =
-      awaiting.length > 0
-        ? await approvalGateRepository.supersedeAwaitingByWorkItem(item.id, KIND, 'republished', tx)
-        : 0;
+    let superseded = 0;
+    if (awaiting.length > 0) {
+      superseded = await approvalGateRepository.supersedeAwaitingByWorkItem(
+        item.id,
+        KIND,
+        'republished',
+        tx,
+      );
+    }
     if (isDone || blocked) return { ...NOTHING, superseded };
 
     // "Nothing re-asks the unchanged options": a pick refused with None of these

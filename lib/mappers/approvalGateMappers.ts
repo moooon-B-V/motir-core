@@ -4,6 +4,7 @@ import type {
   ApprovalGateSubjectSummaryDTO,
   ApprovalQueueRowDto,
   ApprovalRecordDecidedRowDto,
+  ChosenOptionDTO,
   EarlierApprovalDTO,
 } from '@/lib/dto/approvalGate';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
@@ -49,6 +50,8 @@ export function toApprovalGateDto(row: ApprovalGate): ApprovalGateDTO {
     decidedUnderAuthority: row.decidedUnderAuthority,
     decisionSource: row.decisionSource,
     outcomeRef: row.outcomeRef,
+    // Written only by the choice handler's deciding write, in `ChosenOption`'s shape.
+    chosenOption: (row.chosenOption as ChosenOptionDTO | null) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

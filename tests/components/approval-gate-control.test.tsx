@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { REFUSAL_TAGS_ARE_TOTAL, type GateRefusal } from '@/lib/approvalGates/refusals';
-import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
+import type { ApprovalGateDTO, GateDecision } from '@/lib/dto/approvalGate';
 
 // THE UNIVERSAL APPROVAL FRAME (Story MOTIR-4778 · Subtask MOTIR-4792), built to
 // `design/work-items/approval-control.mock.html`. This suite pins the SEVEN
@@ -35,6 +35,7 @@ const AWAITING: ApprovalGateDTO = {
   decidedUnderAuthority: null,
   decisionSource: null,
   outcomeRef: null,
+  chosenOption: null,
   createdAt: '2026-09-08T04:00:00.000Z',
   updatedAt: '2026-09-08T04:00:00.000Z',
 };
@@ -52,7 +53,7 @@ const VERBS: GateVerb[] = [
 /** The frame with its design-result props; overrides go on top. */
 function render(
   props: Partial<React.ComponentProps<typeof ApprovalGateControl>> = {},
-  onDecide: (d: 'approve' | 'request_changes') => Promise<GateRefusal | null> = async () => null,
+  onDecide: (d: GateDecision) => Promise<GateRefusal | null> = async () => null,
 ) {
   return renderWithIntl(
     <ApprovalGateControl

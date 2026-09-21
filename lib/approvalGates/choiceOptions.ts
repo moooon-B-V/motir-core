@@ -93,6 +93,38 @@ export interface DefectiveChoice {
 
 export type ChoiceParse = ParsedChoice | DefectiveChoice;
 
+/**
+ * WHAT A CHOICE'S DECISION PICKED, stamped on the deciding write (Story MOTIR-4914 ·
+ * Subtask MOTIR-5893; ADR `approval-gates.md` §1's MOTIR-5887 amendment, point 7).
+ * Taken from the body's parse at the version that was decided, so *why were we
+ * asked, what did we pick, what was it best for, and what does it unblock?* stays
+ * one row after the body has changed. Null on every other kind, and on a choice
+ * sent back with *None of these*.
+ */
+export interface ChosenOption {
+  optionId: string;
+  label: string;
+  /** The option's `**Best if you want:**` line. */
+  bestFor: string;
+  /** The body's `## What this choice gates` — the follow-up the pick unblocks. */
+  followUp: string;
+  /** Which of the three situations brought the choice back. */
+  situation: ChoiceSituation;
+}
+
+/** The record of choosing `optionId` from a parsed choice — null when it holds no such option. */
+export function chosenOptionOf(parse: ParsedChoice, optionId: string): ChosenOption | null {
+  const option = parse.options.find((candidate) => candidate.id === optionId);
+  if (!option) return null;
+  return {
+    optionId: option.id,
+    label: option.label,
+    bestFor: option.bestFor,
+    followUp: parse.followUpMd,
+    situation: parse.why.situation,
+  };
+}
+
 const SECTION = {
   question: 'question',
   why: 'why this is a choice',

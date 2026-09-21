@@ -1,4 +1,5 @@
 import type { ApprovalGate, ApprovalGateKind, Prisma, WorkItem } from '@/generated/prisma/client';
+import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -148,6 +149,10 @@ export interface GateEffect {
     | 'rollup_writes_done'
     | 'request_changes_moves_nothing'
     | 'no_status_in_target_category';
+  /** WHAT A CHOICE PICKED (MOTIR-5893) — returned by the `decision_choice` handler's
+   *  approve and written by the door onto the deciding row, which then records the
+   *  option's id as `outcomeRef`. Absent on every other kind's effect. */
+  chosenOption?: ChosenOption;
 }
 
 /**

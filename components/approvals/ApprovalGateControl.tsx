@@ -616,6 +616,9 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
     case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
       headline = t('decisionUnresolvable.title');
       break;
+    case 'APPROVAL_GATE_VERB_NOT_OFFERED':
+      headline = t('verbNotOffered.title');
+      break;
     case 'APPROVAL_GATE_PRIMARY_PENDING':
       // Names WHICH question the merge follows (MOTIR-5785) — the next action differs.
       headline = t(`primaryPending.${refusal.primary}.title`);
@@ -759,6 +762,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'kindUnregistered';
     case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
       return 'decisionUnresolvable';
+    case 'APPROVAL_GATE_VERB_NOT_OFFERED':
+      return 'verbNotOffered';
     case 'APPROVAL_GATE_PRIMARY_PENDING':
       return 'primaryPending';
     case 'APPROVAL_GATE_ALREADY_AWAITING':

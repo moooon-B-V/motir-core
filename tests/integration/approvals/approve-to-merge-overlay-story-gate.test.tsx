@@ -335,7 +335,9 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, at BOTH ends, enumerated FROM 
           ? 'acceptance port'
           : kind === 'pull_request_approval' || kind === 'decision_approval'
             ? 'the Development block'
-            : 'not built yet';
+            : kind === 'decision_choice'
+              ? 'choice port'
+              : 'not built yet';
 
     it(`${kind}: the route's answer and the overlay's arm agree — ${expected}`, async () => {
       const story = await twoRepoStory();
@@ -368,12 +370,18 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, at BOTH ends, enumerated FROM 
       if (kind === 'pull_request_approval' || kind === 'decision_approval') {
         const port = within(dialog).getByRole('group', { name: en.approvalGate.port.label });
         expect(within(port).getByText('Change in web')).toBeTruthy();
-      } else if (kind === 'design_result' || kind === 'acceptance_result') {
+      } else if (
+        kind === 'design_result' ||
+        kind === 'acceptance_result' ||
+        kind === 'decision_choice'
+      ) {
         // A design gate whose evidence row is gone: the route answers `gone`, and
         // the overlay draws that arm — NOT the block, and not the not-built one.
         // MOTIR-4950 / MOTIR-5790: an acceptance gate whose receipt does not resolve
         // (here its subject is the story's own id) takes the same arm — it is a
         // REGISTERED kind with a real port, so *not built yet* would be false.
+        // MOTIR-5891: a choice gate on a card whose body is not a choice has no
+        // options to show — the route answers `gone`, the same arm.
         expect(within(dialog).getByText(en.workbench.approvals.subjectGone)).toBeTruthy();
         expect(
           within(dialog).queryByRole('group', { name: en.approvalGate.port.label }),

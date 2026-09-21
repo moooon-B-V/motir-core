@@ -4,8 +4,15 @@ import type {
   GateHandler,
   GateRoutingArgs,
 } from '@/lib/approvalGates/registry';
-import { parseChoiceOptions, type ParsedChoice } from '@/lib/approvalGates/choiceOptions';
-import { ApprovalGateStaleSubjectError } from '@/lib/approvalGates/errors';
+import {
+  chosenOptionOf,
+  parseChoiceOptions,
+  type ParsedChoice,
+} from '@/lib/approvalGates/choiceOptions';
+import {
+  ApprovalGateStaleSubjectError,
+  ApprovalGateVerbNotOfferedError,
+} from '@/lib/approvalGates/errors';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 
@@ -62,19 +69,28 @@ export const decisionChoiceGateHandler: GateHandler<ParsedChoice> = {
   statusIntent: CHOICE_DECISION_TARGET,
 
   /**
-   * CHOOSE — record the pick and write `done` (point 6). The option must be one
-   * the subject holds NOW; an id it does not hold is the stale refusal (point 5:
-   * "never matched loosely"), because the only way to press one is to have been
-   * shown options that have since changed.
+   * CHOOSE — record the pick and write `done` (points 5–7). Reached only as the
+   * door's `choose` verb, so `choice` is always present here; the door refuses
+   * `approve` on this kind before dispatching.
+   *
+   * The option must be one the subject holds. The door has already compared the
+   * reader's stamp, so the options here ARE the ones they were shown: an id not
+   * among them was never offered (`unknown_option`, a 400), not a body that moved.
+   * A subject that no longer parses at all is the stale refusal — the question
+   * itself went away under the lock.
    */
   async approve(args: GateEffectArgs): Promise<GateEffect> {
     const { gate, ctx, tx, resolvedStatusKey, choice } = args;
     const subject = await this.resolveSubject(args);
-    if (!subject || !choice || !subject.options.some((option) => option.id === choice.optionId)) {
-      throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
-    }
+    if (!subject) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
+    const chosenOption = choice ? chosenOptionOf(subject, choice.optionId) : null;
+    if (!chosenOption) throw new ApprovalGateVerbNotOfferedError(gate.id, 'unknown_option');
     if (resolvedStatusKey === null) {
-      return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
+      return {
+        statusWritten: null,
+        statusDeferredReason: 'no_status_in_target_category',
+        chosenOption,
+      };
     }
     // ⚠️ IMPORTED HERE, NOT AT THE TOP: `workItemsService` → `approvalGatesService` →
     // the registry → this module is a cycle, and a static import leaves the registry's
@@ -86,7 +102,7 @@ export const decisionChoiceGateHandler: GateHandler<ParsedChoice> = {
     await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
       decidingGateId: gate.id,
     });
-    return { statusWritten: resolvedStatusKey };
+    return { statusWritten: resolvedStatusKey, chosenOption };
   },
 
   /** NONE OF THESE — record `changes_requested`, move nothing, as `design_result` does. */

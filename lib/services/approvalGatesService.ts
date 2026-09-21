@@ -33,6 +33,7 @@ import {
   ApprovalGateNotFoundError,
   ApprovalGateSupersededError,
   ApprovalGateStaleSubjectError,
+  ApprovalGateVerbNotOfferedError,
 } from '@/lib/approvalGates/errors';
 import {
   DECIDED_WITHOUT_A_READER,
@@ -94,11 +95,23 @@ const DECISION_STATE: Record<
 > = {
   approve: 'approved',
   request_changes: 'changes_requested',
+  // A CHOICE is an approval of one option — no new state value (ADR §1's MOTIR-5887
+  // amendment, point 7). The option it picked is on `chosenOption` / `outcomeRef`.
+  choose: 'approved',
 };
+
+/** The one kind whose verbs are its OPTIONS rather than `approve` (point 5). */
+const CHOICE_KIND = 'decision_choice';
 
 export interface DecideGateInput {
   gateId: string;
   decision: GateDecision;
+  /**
+   * WHICH OPTION a `choose` picks (MOTIR-5893) — its id as the parse slugs it.
+   * Required with `choose` and meaningless with the other two verbs; the door
+   * refuses a `choose` without one as an option the choice does not hold.
+   */
+  optionId?: string | null;
   /** Why they said yes, or what they sent back. Free text, optional. */
   noteMd?: string | null;
   /**
@@ -1549,6 +1562,20 @@ export const approvalGatesService = {
         }
       }
 
+      // 3c · THE VERB MUST BE ONE THIS GATE OFFERS (MOTIR-5893; ADR §1's MOTIR-5887
+      //      amendment, point 5). A choice's verbs are its options plus *None of
+      //      these*; every other kind's are Approve plus Request changes. Checked
+      //      after the state and stale refusals, which describe the QUESTION, and
+      //      before anything is written. An option the choice does not hold is the
+      //      handler's to refuse, since only it reads the options.
+      const isChoice = locked.kind === CHOICE_KIND;
+      if (input.decision === 'choose' && !isChoice) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'choose_on_other_kind');
+      }
+      if (input.decision === 'approve' && isChoice) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'approve_on_choice');
+      }
+
       // 4 · RETENTION — an APPROVAL PINS the version it was given on
       //      (MOTIR-4913; ADR §6c, with its MOTIR-4911 amendment).
       //
@@ -1580,7 +1607,7 @@ export const approvalGatesService = {
       // `design_evidence`, so the two paths take the same two locks in the same
       // ORDER and a race resolves by waiting rather than by deadlocking.
       let filesKept: boolean | null = null;
-      if (input.decision === 'approve') {
+      if (DECISION_STATE[input.decision] === 'approved') {
         const pinnedId = await designEvidenceService.pinCurrentForWorkItem(locked.workItemId, tx);
         // Only a kind whose subject IS a design result has files to keep.
         filesKept = locked.kind === 'design_result' ? pinnedId === locked.subjectId : null;
@@ -1603,9 +1630,13 @@ export const approvalGatesService = {
         resolvedStatusKey,
       };
       const effect =
-        input.decision === 'approve'
-          ? await handler.approve(args)
-          : await handler.requestChanges(args);
+        input.decision === 'request_changes'
+          ? await handler.requestChanges(args)
+          : await handler.approve(
+              input.decision === 'choose'
+                ? { ...args, choice: { optionId: input.optionId ?? '' } }
+                : args,
+            );
 
       // 6 · WRITE THE DECISION — LAST, and carrying THE WHOLE AUDIT SET
       //     (MOTIR-5046; ADR §6a).
@@ -1659,7 +1690,13 @@ export const approvalGatesService = {
           // null is the honest record for those: the decision caused no
           // transition, and `statusDeferredReason` says why on the returned
           // effect. Never a stale value carried from a different arm.
-          outcomeRef: effect.statusWritten,
+          //
+          // ⚠️ EXCEPT ON A CHOICE, where it is the OPTION'S ID (ADR §1's MOTIR-5887
+          // amendment, point 7): Workflow A always writes `done`, so the status is
+          // implied by the kind and the column holds what only this decision caused —
+          // which option won. `chosenOption` carries the rest of the pick.
+          outcomeRef: effect.chosenOption ? effect.chosenOption.optionId : effect.statusWritten,
+          chosenOption: effect.chosenOption ?? null,
         },
         tx,
       );
