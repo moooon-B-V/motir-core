@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
+import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
@@ -192,14 +193,38 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
     {
       key: 'status',
       header: t('issues.columns.status'),
-      // 108px (was 130) — the widest status Pill ("In Progress" ≈ 88px) fits
-      // with room to spare, and the tighter footprint pushes back the width at
-      // which the row starts to clip (bug MOTIR-1307).
-      width: 108,
+      // 144px (was 108; MOTIR-5881, design MOTIR-5875 § *The List / Tree status
+      // cell — measured*). The track now holds the status pill AND the
+      // decision-waiting glyph: the widest pairing, *Implemented* (113.6px on its
+      // own — already 5.6px wider than the old 108px track, spilling into the
+      // row's right padding) + 6px gap + the 18px glyph, is 138px. The row's
+      // minimum moves 1204 → 1240px; nothing clips at 1280 (bug MOTIR-1307's
+      // concern), and every view shares this builder, so all three widen together.
+      width: 144,
       sortColumn: 'status',
       // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only Pill
-      // otherwise. The cell owns its own category→tone rendering.
-      cell: (r) => <InlineStatusCell row={r} />,
+      // otherwise. The cell owns its own category→tone rendering. The marker sits
+      // AFTER it and OUTSIDE its edit trigger, so it is never part of that button;
+      // the row link still owns the click (the marker is static).
+      // ⚠️ `w-full` IS LOAD-BEARING (found by MOTIR-5880's recording): the edit
+      // trigger is `-mx-1 max-w-full`, so inside a shrink-to-fit wrapper its
+      // percentage cap resolved against the wrapper's own width — 8px narrower
+      // than the pill, because of the negative margins — and *In Progress* / *To
+      // Do* broke onto two lines on every row WITHOUT a marker. Filling the cell
+      // gives the cap the 144px track to resolve against, as it had before.
+      cell: (r) => (
+        <span className="flex w-full min-w-0 items-center gap-1.5">
+          <InlineStatusCell row={r} />
+          {r.pendingDecision ? (
+            <DecisionWaitingMarker
+              form="glyph"
+              state={r.pendingDecision.state}
+              kind={r.pendingDecision.kind}
+              routedToName={r.pendingRoutedToName}
+            />
+          ) : null}
+        </span>
+      ),
     },
   ];
 }

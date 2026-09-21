@@ -82,6 +82,11 @@ const CANONICAL_JOB_KINDS = [
   // at the merge base rather than trusting this comment; that list changes
   // without warning from this side, which is the whole reason this guard exists.
   'plan',
+  // `author_bug` (Story MOTIR-4930 — MOTIR-5847 handler / MOTIR-5849 trigger);
+  // already in motir-ai's canonical set. Adding it HERE, with the trigger that
+  // sends it, closes the drift that card's envelope documented while this
+  // consumer was unbuilt.
+  'author_bug',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).

@@ -712,6 +712,43 @@ export const approvalGateRepository = {
   },
 
   /**
+   * EVERY `awaiting` gate on a SET of work items — the decision-waiting marker's
+   * read (Story MOTIR-4908 · MOTIR-5876), one query whatever the set's size.
+   *
+   * ⚠️ NOT {@link findAwaitingRoutedTo} WITH A LIST OF IDS, and the difference is
+   * the whole of why this exists. That read filters by the READER, so it can only
+   * ever say *yours*; a marker also has to say *someone else's*, which needs every
+   * awaiting gate on the set. The routing test moves to the service, which applies
+   * `routingTargetId` to the `assigneeId` / `reporterId` this selects — the same
+   * expression the queue's SQL spells, so the two cannot disagree about who a gate
+   * is routed to.
+   *
+   * ⚠️ THE CARRIED MERGE GATE IS EXCLUDED IN THE QUERY, by the same constant every
+   * queue read spreads. A design card with an open pull request holds two
+   * `awaiting` gates and asks ONE question (MOTIR-5712); a marker counting the merge
+   * gate would call a card someone else's when its primary is yours.
+   *
+   * Empty input costs no query: a board with no cards, or a page with no rows,
+   * must not pay a round trip to learn nothing.
+   *
+   * ⚠️ `tx` IS REQUIRED, for {@link findAwaitingRoutedTo}'s measured reason: without
+   * a bound `app.workspace_id` this returns `[]` on a populated fixture and raises
+   * nothing — every card would read *no decision waiting*.
+   */
+  async findAwaitingOnItems(
+    workItemIds: string[],
+    projectIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<AwaitingOnItemRow[]> {
+    if (workItemIds.length === 0 || projectIds.length === 0) return [];
+    return tx.approvalGate.findMany({
+      where: awaitingOnItemsWhere(workItemIds, projectIds),
+      select: AWAITING_ON_ITEM_SELECT,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * THE APPROVALS ROOM's PENDING half (Story MOTIR-5299 · MOTIR-5301) — one
    * project's `awaiting` gates as a window, in `design/approvals/design-notes.md`'s
    * order: `createdAt asc, id asc`.
@@ -862,6 +899,41 @@ const CARRIED_MERGE_GATE_EXCLUDED = {
     },
   },
 } as const satisfies Prisma.ApprovalGateWhereInput;
+
+/**
+ * The decision-waiting marker's predicate (MOTIR-5876): every `awaiting` gate on
+ * the given work items, less the merge gate a primary carries. No routing term —
+ * the marker's `others` state is exactly the rows a routing term would drop.
+ */
+function awaitingOnItemsWhere(
+  workItemIds: string[],
+  projectIds: string[],
+): Prisma.ApprovalGateWhereInput {
+  return {
+    projectId: { in: projectIds },
+    workItemId: { in: workItemIds },
+    state: 'awaiting',
+    ...CARRIED_MERGE_GATE_EXCLUDED,
+  };
+}
+
+/**
+ * What the marker reads off each gate: which card, which kind, when, and the two
+ * columns §2's routing rule is computed from. Nothing else — a marker draws no
+ * subject and names nobody by itself.
+ */
+const AWAITING_ON_ITEM_SELECT = {
+  id: true,
+  workItemId: true,
+  kind: true,
+  createdAt: true,
+  workItem: { select: { assigneeId: true, reporterId: true } },
+} as const satisfies Prisma.ApprovalGateSelect;
+
+/** One row of {@link approvalGateRepository.findAwaitingOnItems}, as Prisma returns it. */
+export type AwaitingOnItemRow = Prisma.ApprovalGateGetPayload<{
+  select: typeof AWAITING_ON_ITEM_SELECT;
+}>;
 
 /**
  * WHAT the Approvals room's read may see (MOTIR-5301).

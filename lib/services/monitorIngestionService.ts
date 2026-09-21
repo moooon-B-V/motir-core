@@ -515,7 +515,10 @@ export const monitorIngestionService = {
             folderId,
             descriptionMd: monitorBugBody(issue, connection.externalProjectSlug, previous),
           },
-          ctx,
+          // The provenance stamp the bug ENRICHMENT trigger reads (MOTIR-5849):
+          // this create commits before the link below does, so the event must say
+          // the link is coming. It changes nothing about the create itself.
+          { ...ctx, viaMonitorConnectionId: connection.id },
         );
       } catch (err) {
         if (isBinderRefusal(err)) {

@@ -17,6 +17,7 @@ import type {
   SprintSummaryDto,
 } from '@/lib/dto/boards';
 import type { SprintStateDto } from '@/lib/dto/sprints';
+import type { PendingDecisionDTO } from '@/lib/dto/approvalGate';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
 
 // Prisma → DTO converters for the board domain. The service calls these just
@@ -95,7 +96,8 @@ export function toBoardCardDto(
   row: WorkItem,
   opts: {
     ready: boolean;
-    awaitingAcceptance?: boolean;
+    /** The card's decision-waiting marker (MOTIR-5876); `null` when omitted. */
+    pendingDecision?: PendingDecisionDTO | null;
     swimlaneKey?: string;
     /**
      * The row's status CATEGORY (MOTIR-5474). Resolved by the CALLER, which holds
@@ -122,7 +124,7 @@ export function toBoardCardDto(
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     position: row.position,
     ready: opts.ready,
-    awaitingAcceptance: opts.awaitingAcceptance ?? false,
+    pendingDecision: opts.pendingDecision ?? null,
     ciState: row.ciState,
     statusCategory: opts.statusCategory ?? null,
   };

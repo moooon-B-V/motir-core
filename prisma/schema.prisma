@@ -10502,6 +10502,14 @@ model MonitorIssue {
   /// is deleted, so a re-filed bug can name the one it replaces.
   filedWorkItemIdentifier String? @map("filed_work_item_identifier")
 
+  /// The motir-ai `author_bug` job dispatched to PLAN the bug filed for this
+  /// issue (Story MOTIR-4930 · Subtask MOTIR-5849). `null` = never offered
+  /// enrichment. THE IDEMPOTENCY KEY: the enrichment trigger dispatches only while
+  /// it is null and writes it with the job id, so a redelivered
+  /// `work-item/created` event reads it and spends no second model call. It is
+  /// also what tells an enriched card from one that was never offered enrichment.
+  authoringJobId String? @map("authoring_job_id")
+
   // ── SYNC STATE (Story MOTIR-4931 · Subtask MOTIR-5701) ──────────────────────
   // What Motir did TO the provider for this issue, and what it last took FROM it.
 

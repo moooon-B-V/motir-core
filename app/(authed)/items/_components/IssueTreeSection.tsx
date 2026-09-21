@@ -6,6 +6,7 @@ import type { Locale } from '@/lib/i18n/locales';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import {
   buildIssueListHref,
@@ -23,7 +24,7 @@ import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkItemTreeNodeDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { toIssueRows, toIssueListRows } from './issueRows';
+import { collectTreeIds, toIssueRows, toIssueListRows, type PendingDecisionMap } from './issueRows';
 import { IssueTreeTable } from './IssueTreeTable';
 import { IssueTreeStaticTable } from './IssueTreeStaticTable';
 import { IssueListTable } from './IssueListTable';
@@ -85,6 +86,14 @@ export async function IssueTreeSection({
     estimationService.getEstimationConfig(projectId, ctx),
     projectAccessService.getCapabilities(projectId, ctx),
   ]);
+  // THE DECISION-WAITING MARKER (Story MOTIR-4908 · MOTIR-5881): each load below
+  // asks `pendingDecisionsFor` ONCE for the ids it just read — never per row — and
+  // hands the answer BESIDE the rows. The list/tree DTOs stay reader-neutral:
+  // they are shared with `/api/v1` and the AI search.
+  const pendingFor = async (workItemIds: string[]): Promise<PendingDecisionMap> =>
+    Object.fromEntries(
+      await approvalGatesService.pendingDecisionsFor({ projectId, workItemIds }, ctx),
+    );
   const withEstimation = (node: ReactNode) => (
     <EstimationConfigProvider config={estimationConfig} canEdit={caps.canEdit}>
       {node}
@@ -143,11 +152,12 @@ export async function IssueTreeSection({
       ctx,
     );
     if (items.length === 0) return empty;
+    const pending = await pendingFor(items.map((item) => item.id));
     return withEstimation(
       <div className="flex flex-col gap-3">
         {countLine(total)}
         <IssueListTable
-          rows={toIssueListRows(items, workflow, members, locale)}
+          rows={toIssueListRows(items, workflow, members, locale, pending)}
           sort={sort}
           filter={filter}
           pagination={{ total, page: clampedPage, pageSize }}
@@ -164,11 +174,12 @@ export async function IssueTreeSection({
   if (filtered) {
     const tree = await workItemsService.getProjectTree(projectId, repoFilter, ctx);
     if (tree.length === 0) return empty;
+    const pending = await pendingFor(collectTreeIds(tree));
     return withEstimation(
       <div className="flex flex-col gap-3">
         {countLine(countMatchedNodes(tree))}
         <IssueTreeStaticTable
-          rows={toIssueRows(tree, workflow, members, locale)}
+          rows={toIssueRows(tree, workflow, members, locale, pending)}
           workflow={workflow}
           members={members}
         />
@@ -195,10 +206,14 @@ export async function IssueTreeSection({
   // draws the folder rows and the same empty state below them, decided by the
   // read's `workItemTotal` rather than by counting rows (MOTIR-5541).
   if (initialLevel.total === 0 && !caps.canEdit) return empty;
+  const initialPending = await pendingFor(
+    initialLevel.rows.filter((row) => row.kind !== 'folder').map((row) => row.id),
+  );
   return withEstimation(
     <IssueTreeTable
       key={`${projectId}:${serializeSort(sort)}`}
       initialLevel={initialLevel}
+      initialPending={initialPending}
       sort={sort}
       filter={filter}
       workflow={workflow}

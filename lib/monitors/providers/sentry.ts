@@ -15,14 +15,16 @@ import {
   type MonitorProvider,
 } from '../provider';
 import { registerMonitorProvider } from '../registry';
-import type {
-  MonitorCredential,
-  NormalizedMonitorAssignee,
-  NormalizedMonitorHealth,
-  NormalizedMonitorIssue,
-  NormalizedMonitorIssueContext,
-  NormalizedMonitorIssuePage,
-  NormalizedMonitorProject,
+import {
+  MONITOR_ISSUE_FRAMES_MAX,
+  type MonitorCredential,
+  type NormalizedMonitorAssignee,
+  type NormalizedMonitorHealth,
+  type NormalizedMonitorIssue,
+  type NormalizedMonitorIssueContext,
+  type NormalizedMonitorIssuePage,
+  type NormalizedMonitorProject,
+  type NormalizedMonitorStackFrame,
 } from '../types';
 
 // The SENTRY implementation of the `MonitorProvider` seam (Story MOTIR-4926 ·
@@ -447,7 +449,7 @@ export const sentryMonitorProvider: MonitorProvider = {
 
   /**
    * `GET /organizations/{orgSlug}/issues/{issueId}/events/latest/` — the latest
-   * event's `environment` tag and `release.version`. A 404 is the typed
+   * event's `environment` tag, `release.version` and exception frames. A 404 is the typed
    * {@link MonitorIssueGoneError}. Consumed by MOTIR-5729 and MOTIR-5731.
    */
   async getIssueContext({
@@ -499,6 +501,85 @@ export function normalizeIssueContext(
   return {
     environment,
     release: typeof version === 'string' && version ? version : null,
+    frames: normalizeEventFrames(event),
+  };
+}
+
+/**
+ * ONE Sentry event payload → its stack frames (MOTIR-5846), ordered in-app first
+ * and most-recent call first, cut at {@link MONITOR_ISSUE_FRAMES_MAX}.
+ *
+ * Sentry states an event's exception as an `entries[]` item of
+ * `type: "exception"` whose `data.values[]` is the exception CHAIN, cause first —
+ * so the LAST value with frames is the exception that surfaced — and each
+ * value's `stacktrace.frames[]` is ordered OLDEST call first. Both DOCUMENTED
+ * EXPECTATIONS, read 2026-09-21. The two re-orderings below are therefore not
+ * cosmetic: an unordered cut would keep the framework's outermost frames and
+ * drop the application's own innermost ones, which are the ones a context ref
+ * is written from.
+ *
+ * Anything malformed is ABSENCE, never a guess: no exception entry, no frames,
+ * or a frame naming no file all contribute nothing, and the answer is `[]`.
+ */
+export function normalizeEventFrames(
+  event: Record<string, unknown>,
+): NormalizedMonitorStackFrame[] {
+  const entries = Array.isArray(event['entries']) ? (event['entries'] as unknown[]) : [];
+  const exception = entries.find(
+    (entry): entry is { data?: unknown } =>
+      !!entry && typeof entry === 'object' && (entry as { type?: unknown }).type === 'exception',
+  );
+  const data = exception?.data;
+  const values =
+    data && typeof data === 'object' && Array.isArray((data as { values?: unknown }).values)
+      ? (data as { values: unknown[] }).values
+      : [];
+  let rawFrames: unknown[] = [];
+  for (let i = values.length - 1; i >= 0; i -= 1) {
+    const frames = framesOfValue(values[i]);
+    if (frames.length > 0) {
+      rawFrames = frames;
+      break;
+    }
+  }
+  // Oldest-first → most-recent-first, then a STABLE partition: in-app frames
+  // keep their recency order ahead of everything else, and so do the rest.
+  const recentFirst = rawFrames
+    .map(normalizeFrame)
+    .filter((frame): frame is NormalizedMonitorStackFrame => frame !== null)
+    .reverse();
+  return [
+    ...recentFirst.filter((frame) => frame.inApp === true),
+    ...recentFirst.filter((frame) => frame.inApp !== true),
+  ].slice(0, MONITOR_ISSUE_FRAMES_MAX);
+}
+
+function framesOfValue(value: unknown): unknown[] {
+  if (!value || typeof value !== 'object') return [];
+  const stacktrace = (value as { stacktrace?: unknown }).stacktrace;
+  if (!stacktrace || typeof stacktrace !== 'object') return [];
+  const frames = (stacktrace as { frames?: unknown }).frames;
+  return Array.isArray(frames) ? frames : [];
+}
+
+/** One Sentry frame, or `null` when it names no file. `filename` is the path the
+ *  SDK reported relative to the project where it could; `absPath` and `module`
+ *  are the fallbacks, in that order, for runtimes that state only those. */
+function normalizeFrame(raw: unknown): NormalizedMonitorStackFrame | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const frame = raw as Record<string, unknown>;
+  const filePath = [frame['filename'], frame['absPath'], frame['module']].find(
+    (candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0,
+  );
+  if (!filePath) return null;
+  const fn = frame['function'];
+  const line = frame['lineNo'];
+  const inApp = frame['inApp'];
+  return {
+    filePath,
+    function: typeof fn === 'string' && fn ? fn : null,
+    lineNumber: typeof line === 'number' && Number.isInteger(line) && line > 0 ? line : null,
+    inApp: typeof inApp === 'boolean' ? inApp : null,
   };
 }
 

@@ -65,6 +65,12 @@ export interface RoutingJobOutcome {
   missing?: string[];
 }
 
+/** What the next `author_bug` job should settle as (MOTIR-5852 / MOTIR-5853). */
+export interface AuthorBugJobOutcome {
+  status?: 'succeeded' | 'failed' | 'running';
+  authoredBug?: unknown;
+}
+
 export interface AiJobsFixture {
   /**
    * The `ask_project` outcomes, CONSUMED IN ORDER — one per ask job submitted.
@@ -81,8 +87,19 @@ export interface AiJobsFixture {
    * wizard's own generate step reaches the same submit and must never be routed.
    */
   routing?: RoutingJobOutcome[];
-  /** Appended to by the mock: the job kind of every submit, in order. */
-  submitted?: { kind: string }[];
+  /**
+   * The `author_bug` results (Story MOTIR-4930 · MOTIR-5852 / MOTIR-5853),
+   * CONSUMED IN ORDER — one per author job submitted, the last repeating. Each
+   * names the job's STATUS and, for a success, the `authoredBug` answer the
+   * enrichment writes onto the bug. Absent ⇒ a job that succeeds with NO answer,
+   * which the write-back refuses as `invalid-answer` — so a spec that forgot to
+   * declare one sees an unenriched card rather than an invented one.
+   */
+  authorBug?: AuthorBugJobOutcome[];
+  /** Appended to by the mock: the job kind of every submit, in order — and
+   *  whether it carried a repository set (`context.code`), which is how a walk
+   *  shows a CODE-BLIND project's dispatch went without one (MOTIR-5853). */
+  submitted?: { kind: string; hasCode?: boolean }[];
 }
 
 const json = { headers: { 'content-type': 'application/json' } } as const;
@@ -105,13 +122,13 @@ function readFixture(): AiJobsFixture {
 }
 
 /** Record a submit so the SPEC can read back which job kinds actually ran. */
-function recordSubmit(kind: string): number {
+function recordSubmit(kind: string, hasCode: boolean): number {
   const p = fixturePath();
   const f = readFixture();
   const index = (f.submitted ?? []).filter((s) => s.kind === kind).length;
   if (!p) return index;
   try {
-    f.submitted = [...(f.submitted ?? []), { kind }];
+    f.submitted = [...(f.submitted ?? []), { kind, hasCode }];
     writeFixtureFileSync(p, JSON.stringify(f, null, 2));
   } catch {
     // Recording is diagnostic only — never fail the request over it.
@@ -123,6 +140,23 @@ function recordSubmit(kind: string): number {
 function askOutcomeAt(n: number): AskJobOutcome {
   const queue = readFixture().ask ?? [];
   if (queue.length === 0) return { intent: 'ask', answer: 'No answer was declared.' };
+  return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** Whether a submit body carried a repository set — `context.code`. */
+function submitCarriesCode(rawBody: string): boolean {
+  try {
+    const body = JSON.parse(rawBody) as { context?: { code?: unknown } };
+    return body.context?.code !== undefined && body.context.code !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** The author outcome for the `n`-th `author_bug` job, with the last entry repeating. */
+function authorBugOutcomeAt(n: number): AuthorBugJobOutcome {
+  const queue = readFixture().authorBug ?? [];
+  if (queue.length === 0) return { status: 'succeeded' };
   return queue[Math.min(n, queue.length - 1)]!;
 }
 
@@ -218,7 +252,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       const rawBody = String(req.body ?? '{}');
       const kind = kindOfSubmit(rawBody);
       notifySubmitObservers(rawBody);
-      const index = recordSubmit(kind);
+      const index = recordSubmit(kind, submitCarriesCode(rawBody));
       return { statusCode: 202, data: { jobId: jobIdFor(kind, index) }, responseOptions: json };
     })
     .persist();
@@ -252,6 +286,33 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       // exactly what the ENVELOPE contract says anyway (per-kind, additive).
       const outcome = askOutcomeAt(index);
       const routing = routingOutcomeAt(index);
+      if (kind === 'author_bug') {
+        const author = authorBugOutcomeAt(index);
+        const status = author.status ?? 'succeeded';
+        // Typed as the same loose record the arm below returns — undici infers
+        // the reply type from EVERY return, so two shapes leave it unresolvable.
+        const data: Record<string, unknown> =
+          status === 'failed'
+            ? {
+                status,
+                result: null,
+                error: {
+                  type: 'about:blank',
+                  title: 'AI job failed',
+                  status: 502,
+                  code: 'ai_job_failed',
+                  detail: 'The fixture declared this author_bug job failed.',
+                },
+              }
+            : {
+                status,
+                result:
+                  status === 'succeeded' && author.authoredBug !== undefined
+                    ? { authoredBug: author.authoredBug }
+                    : null,
+              };
+        return { statusCode: 200, data, responseOptions: json };
+      }
       const result: Record<string, unknown> =
         kind === 'ask_project'
           ? {
@@ -278,11 +339,8 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                 },
               }
             : {};
-      return {
-        statusCode: 200,
-        data: { status: 'succeeded', result },
-        responseOptions: json,
-      };
+      const settled: Record<string, unknown> = { status: 'succeeded', result };
+      return { statusCode: 200, data: settled, responseOptions: json };
     })
     .persist();
 }

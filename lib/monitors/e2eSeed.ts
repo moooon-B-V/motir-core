@@ -1,4 +1,4 @@
-import type { NormalizedMonitorAssignee } from './types';
+import type { NormalizedMonitorAssignee, NormalizedMonitorStackFrame } from './types';
 import { fakeMonitorState, type FakeMonitorIssue } from './providers/fake';
 
 // THE E2E SEEDING SEAM for the fake monitor provider (Story MOTIR-4929 ·
@@ -31,6 +31,9 @@ export interface SeedMonitorIssue {
   /** The latest event's environment and release (MOTIR-5728). */
   environment?: string | null;
   release?: string | null;
+  /** The latest event's stack frames, as the adapter would return them
+   *  (MOTIR-5846) — what an enrichment E2E drives a realistic trace with. */
+  frames?: NormalizedMonitorStackFrame[];
   /** Scopes the issue to ONE monitored project for a search; absent = every. */
   externalProjectId?: string | null;
 }
@@ -70,6 +73,7 @@ export function seedFakeMonitor(input: SeedFakeMonitorInput): void {
         shortId: issue.shortId ?? null,
         environment: issue.environment ?? null,
         release: issue.release ?? null,
+        frames: issue.frames ?? [],
         externalProjectId: issue.externalProjectId ?? null,
       }),
     );

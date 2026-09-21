@@ -1,6 +1,8 @@
 import type * as React from 'react';
 import { getTranslations } from 'next-intl/server';
 import { ContentSectionCard } from './ContentSectionCard';
+import { LATE_FALLBACK_ATTR } from './decisionAnchor';
+import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
 import { AcceptancePanel } from './AcceptancePanel';
 import { DesignResultSection } from './DesignResultSection';
 import { DecidedGateStatusBridge } from './DecidedGateStatusBridge';
@@ -172,13 +174,22 @@ function Block({ className }: { className: string }) {
  * and are cited by the asset rather than redrawn, so the fallback here holds
  * only the CARD, and each panel draws its own body once it arrives.
  */
-export function SectionCardSkeleton({ rows = 2 }: { rows?: number }) {
+export function SectionCardSkeleton({
+  rows = 2,
+  lateStackFallback = false,
+}: {
+  rows?: number;
+  /** Marks the upper late stack's first pending card as the place a header press
+   *  scrolls to before the gate's section has streamed (MOTIR-5878). */
+  lateStackFallback?: boolean;
+}) {
   const widths = ['w-2/3', 'w-1/2', 'w-3/4', 'w-1/3'];
   return (
     <div
       className="rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding) shadow-(--shadow-card)"
       data-surface="card"
       aria-busy="true"
+      {...(lateStackFallback ? { [LATE_FALLBACK_ATTR]: '' } : {})}
     >
       <div className="mb-(--spacing-md)" aria-hidden="true">
         <Block className="h-5 w-36" />
@@ -198,7 +209,7 @@ export function SectionCardSkeleton({ rows = 2 }: { rows?: number }) {
 export function LateUpperFallback() {
   return (
     <>
-      <SectionCardSkeleton rows={3} />
+      <SectionCardSkeleton rows={3} lateStackFallback />
       <SectionCardSkeleton rows={2} />
     </>
   );
@@ -306,6 +317,18 @@ export async function LateUpperSections({
     acceptanceLeads,
     hasOpenPullRequest(r.pullRequests, deliveries ?? []),
   );
+  // THE HEADER MARKER'S DESTINATIONS (Story MOTIR-4908 · MOTIR-5878; design
+  // § *The item header — where pressing it takes you*). Each section names the
+  // gate kinds whose frame it draws, derived from the SAME flags that decide where
+  // a frame goes above — so the marker lands wherever its gate is drawn today, and
+  // follows it when a later change moves it. The Development block always holds
+  // the merge frame and the decision port.
+  const developmentAnchors: ApprovalGateKindDTO[] = [
+    'pull_request_approval',
+    'decision_approval',
+    ...(designInDevelopment ? (['design_result'] as const) : []),
+    ...(acceptanceInDevelopment ? (['acceptance_result'] as const) : []),
+  ];
   return (
     <>
       {/* THE RUN — above Development, because the run is what produced it. It
@@ -347,6 +370,7 @@ export async function LateUpperSections({
                     : 'development.gloss',
             )}
             headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
+            decisionAnchor={developmentAnchors}
           >
             {canEdit ? <LinkPullRequestForm /> : null}
             <DevelopmentSectionBody
@@ -456,7 +480,11 @@ export async function LateUpperSections({
         unlinkAction={unlinkMonitorIssueAction}
       />
       {r.acceptanceEligibility && r.showAcceptance && !acceptanceInDevelopment ? (
-        <ContentSectionCard title={tAcceptance('title')} subtitle={tAcceptance('gloss')}>
+        <ContentSectionCard
+          title={tAcceptance('title')}
+          subtitle={tAcceptance('gloss')}
+          decisionAnchor={['acceptance_result']}
+        >
           <AcceptancePanel
             workItemId={itemId}
             itemIdentifier={itemIdentifier}
@@ -474,7 +502,11 @@ export async function LateUpperSections({
         </ContentSectionCard>
       ) : null}
       {showDesignResult ? (
-        <ContentSectionCard title={tDesignResult('title')} subtitle={tDesignResult('gloss')}>
+        <ContentSectionCard
+          title={tDesignResult('title')}
+          subtitle={tDesignResult('gloss')}
+          decisionAnchor={['design_result']}
+        >
           {/* A decision made in the approval OVERLAY (mounted in the shell, outside
               this page's optimistic status provider) reaches the status rail
               through here — MOTIR-5570. */}

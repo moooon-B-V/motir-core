@@ -133,10 +133,10 @@ describe('IssueTreeTable — lazy + sortable', () => {
     const dataTemplate = dataRow.style.gridTemplateColumns;
 
     // The fixed widths from buildIssueColumns are present — not collapsed to
-    // content-sized tracks that drift per row (Est. 72 + Status 108 are the
-    // MOTIR-1307 trims).
+    // content-sized tracks that drift per row (Est. 72 is the MOTIR-1307 trim;
+    // Status is 144 since it also holds the decision-waiting glyph — MOTIR-5881).
     expect(headerTemplate).not.toContain('max-content');
-    for (const px of ['120px', '150px', '72px', '108px']) {
+    for (const px of ['120px', '150px', '72px', '144px']) {
       expect(headerTemplate).toContain(px);
     }
     // The flexible Title track is FLOORED (bug MOTIR-1307) so it can't collapse

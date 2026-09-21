@@ -49,7 +49,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
 import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { usePeekRowClick } from './IssueQuickView';
-import { makeRowShaper, type IssueRowData } from './issueRows';
+import { makeRowShaper, type IssueRowData, type PendingDecisionMap } from './issueRows';
 import {
   createFolderAction,
   deleteFolderAction,
@@ -204,6 +204,12 @@ interface LevelState {
 export interface IssueTreeTableProps {
   /** The first page of project roots (from listRootIssues). */
   initialLevel: TreeLevelDto;
+  /**
+   * The decision-waiting answer for those roots (MOTIR-5881). Each level fetched
+   * later brings its own, merged into the same map, so a row appended by *Load
+   * more* or an expand carries its own level's marker.
+   */
+  initialPending?: PendingDecisionMap;
   sort: IssueSort;
   /** Preserved across a header-sort navigation (the filter applies to the Tree too). */
   filter: IssueFilter;
@@ -227,6 +233,7 @@ export interface IssueTreeTableProps {
 
 export function IssueTreeTable({
   initialLevel,
+  initialPending,
   sort,
   filter,
   workflow,
@@ -252,6 +259,10 @@ export function IssueTreeTable({
   );
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  // Every level's `pendingDecisionsFor` answer, merged by id (MOTIR-5881). A
+  // re-fetched level overwrites its own ids, so a decided gate's marker clears on
+  // the next read of that level.
+  const [pendingById, setPendingById] = useState<PendingDecisionMap>(() => initialPending ?? {});
   const [levels, setLevels] = useState<Record<string, LevelState>>(() => ({
     [ROOTS]: {
       rows: initialLevel.rows,
@@ -320,6 +331,20 @@ export function IssueTreeTable({
                 })
               : await listChildIssuesAction({ parentId, sortParam, offset });
         if (levelSeq.current[parentId] !== seq) return; // a newer read of this level won
+        if (result.ok) {
+          const levelIds = result.level.rows.filter((r) => r.kind !== 'folder').map((r) => r.id);
+          // `pending` may be absent from a result shaped before MOTIR-5881 (a test
+          // double); an absent answer is "nothing waiting" for this level's rows.
+          const fresh = result.pending ?? {};
+          setPendingById((prev) => {
+            const next = { ...prev };
+            for (const id of levelIds) {
+              if (fresh[id]) next[id] = fresh[id];
+              else delete next[id];
+            }
+            return next;
+          });
+        }
         setLevels((prev) => {
           const existing = prev[parentId];
           if (!result.ok) {
@@ -1066,7 +1091,7 @@ export function IssueTreeTable({
         }
         const node: TreeTableRow<TreeNode> = {
           id: dto.id,
-          data: { kind: 'issue', row: shape(dto) },
+          data: { kind: 'issue', row: shape(dto, pendingById) },
           hasChildren: dto.hasChildren,
           posinset: i + 1,
           setsize: total,
@@ -1099,7 +1124,7 @@ export function IssueTreeTable({
           },
         ]
       : rootRows;
-  }, [levels, expanded, shape, draft]);
+  }, [levels, expanded, shape, draft, pendingById]);
 
   // Columns: the shared issue cells, wrapped to (a) render synthetic status rows
   // in the tree column only, (b) make every header a sort button with aria-sort.

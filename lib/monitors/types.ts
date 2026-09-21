@@ -86,14 +86,51 @@ export interface NormalizedMonitorIssuePage {
 }
 
 /**
- * Two facts about an issue that its LIST row does not carry (Story MOTIR-4932 ·
- * Subtask MOTIR-5728): where it is happening and in which build. Sentry keeps
- * both on the issue's LATEST EVENT, so they are read one issue at a time.
+ * The most frames {@link NormalizedMonitorIssueContext.frames} ever carries
+ * (Story MOTIR-4930 · Subtask MOTIR-5846). A deep trace is dozens of framework
+ * frames around a handful of the application's own; the adapter orders the
+ * application's first and cuts here, so a consumer's prompt is bounded by a
+ * number it can read rather than by whatever the runtime's stack depth was.
+ */
+export const MONITOR_ISSUE_FRAMES_MAX = 20;
+
+/**
+ * One frame of the error's stack, as the monitor reported it (MOTIR-5846).
  *
- * Either is `null` when the latest event carries none — an event with no
- * release is ordinary, and `null` is the honest answer rather than a guess.
+ * `filePath` is the only required field — a frame that names no file cannot
+ * point anybody anywhere, so the adapter drops it rather than inventing one.
+ * The other three are `null` wherever the event does not state them, in the
+ * same register as the context's `environment` and `release`: a minified or
+ * native frame routinely has no line, and `null` is the honest answer rather
+ * than a guess. `inApp` is the MONITOR's own verdict on whether the frame is
+ * the application's code rather than a library's; it is passed through, never
+ * re-derived from the path.
+ */
+export interface NormalizedMonitorStackFrame {
+  filePath: string;
+  function: string | null;
+  lineNumber: number | null;
+  inApp: boolean | null;
+}
+
+/**
+ * What an issue's LATEST EVENT says that its LIST row does not carry (Story
+ * MOTIR-4932 · Subtask MOTIR-5728, frames added by MOTIR-4930 · MOTIR-5846):
+ * where it is happening, in which build, and where in the code it was thrown.
+ * Sentry keeps all three on the event, so they are read one issue at a time.
+ *
+ * `environment` / `release` are `null` when the latest event carries none — an
+ * event with no release is ordinary, and `null` is the honest answer rather
+ * than a guess. `frames` is `[]` by the same rule when the event carries no
+ * exception stack: ordered in-app first, then most-recent call first, and never
+ * longer than {@link MONITOR_ISSUE_FRAMES_MAX}.
+ *
+ * ⚠️ FRAMES ARE RETURNED, NEVER STORED. The reconciler persists `environment`
+ * and `release` and ignores `frames`; a consumer that needs them (the bug
+ * enrichment, MOTIR-5849) reads this call itself at the moment it needs them.
  */
 export interface NormalizedMonitorIssueContext {
   environment: string | null;
   release: string | null;
+  frames: NormalizedMonitorStackFrame[];
 }

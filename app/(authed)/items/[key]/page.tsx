@@ -47,6 +47,7 @@ import {
 } from './_components/LateSections';
 import { IssueExplanation } from './_components/IssueExplanation';
 import { PlacementBreadcrumb } from './_components/PlacementBreadcrumb';
+import { DecisionWaitingHeaderLink } from './_components/DecisionWaitingHeaderLink';
 import { PlacementProvider } from './_components/PlacementProvider';
 import { ChildList } from './_components/ChildList';
 import { ChildPanel } from './_components/ChildPanel';
@@ -234,6 +235,7 @@ export default async function IssueDetailPage({
     pendingPlans,
     planHistory,
     heldTransitions,
+    pendingDecisions,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -344,9 +346,25 @@ export default async function IssueDetailPage({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     }),
+    // THE HEADER'S DECISION-WAITING MARKER (Story MOTIR-4908 · MOTIR-5878). In THIS
+    // group for the held-transitions reason above: the header is what the reader
+    // lands on, and a marker arriving late would shift it. The late sections it
+    // points at stream in afterwards; the marker waits for them on a press.
+    approvalGatesService.pendingDecisionsFor(
+      { projectId: item.projectId, workItemIds: [item.id] },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    ),
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
+  // The marker's entry for THIS item, and the routed person named the way the
+  // board names members (`name || email`); a routee outside the member list falls
+  // back to the marker's own *this work item's assignee*.
+  const pendingDecision = pendingDecisions.get(item.id) ?? null;
+  const routedMember = pendingDecision?.routedToId
+    ? members.find((m) => m.userId === pendingDecision.routedToId)
+    : undefined;
+  const routedToName = routedMember ? routedMember.name || routedMember.email : null;
 
   // Archived state (Story 2.9 · Subtask 2.9.6) — an archived item's detail page
   // renders (the read doesn't filter `archivedAt`), so it gets a top-of-main
@@ -414,7 +432,10 @@ export default async function IssueDetailPage({
               the whole page wider than the viewport and clips the right cluster +
               core-fields rail. Short / no-ancestor items render exactly as before
               (the cell collapses to content width at the left). */}
-                  <div className="flex min-w-0 flex-1 items-center gap-x-3">
+                  {/* `flex-wrap gap-y-2` (MOTIR-5878): the decision-waiting marker joins
+              this cell after the breadcrumb, and at 390px it takes its own line
+              rather than squeezing the breadcrumb (design panel 6). */}
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
                     <PlacementBreadcrumb />
                     {/* 2.9.6: the always-visible "Archived" chip follows the breadcrumb
                 so the archived state stays legible when the page is scrolled past
@@ -425,6 +446,15 @@ export default async function IssueDetailPage({
                         <Archive className="size-3 text-(--el-text-muted)" aria-hidden />
                         {t('archivedEntry')}
                       </Pill>
+                    ) : null}
+                    {/* THE DECISION-WAITING MARKER (MOTIR-5878): loud when the decision
+                is the reader's, quiet naming who it waits on, nothing otherwise.
+                A pointer to the gate's section — never a Review & approve door. */}
+                    {pendingDecision ? (
+                      <DecisionWaitingHeaderLink
+                        decision={pendingDecision}
+                        routedToName={routedToName}
+                      />
                     ) : null}
                   </div>
                   <div className="ml-auto flex items-center gap-3">

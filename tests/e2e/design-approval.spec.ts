@@ -180,7 +180,15 @@ test.describe('a published design waits, the control clears it, and the work it 
 
       // ⚠️ THE PAGE INVITES AND SUBMITS NOTHING (MOTIR-5229). One control, and no
       // verb anywhere on the card: the decision is made in ONE place.
-      await expect(page.getByText('Awaiting you', { exact: true })).toBeVisible();
+      // Scoped to the SECTION that holds the gate: since MOTIR-4908 (MOTIR-5878) the page
+      // header carries the decision-waiting marker, which also reads "Awaiting you".
+      await expect(
+        page
+          .getByRole('main')
+          .locator('[data-surface="card"]')
+          .filter({ has: page.getByRole('heading', { level: 2, name: 'Design result' }) })
+          .getByText('Awaiting you', { exact: true }),
+      ).toBeVisible();
       // Scoped to the Design result section: the status control carries a
       // second door of the same name while this gate holds a move (MOTIR-5528).
       const door = page

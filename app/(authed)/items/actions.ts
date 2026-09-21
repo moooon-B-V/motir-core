@@ -6,6 +6,8 @@ import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import type { PendingDecisionMap } from './_components/issueRows';
 import { isIssueType } from '@/lib/issues/parentRules';
 import { isRelationshipKind } from '@/lib/workItems/linkRelationships';
 import { parseSort } from '@/lib/issues/issueListView';
@@ -266,7 +268,30 @@ export interface ListTreeLevelInput {
   offset?: number;
 }
 
-export type TreeLevelResult = { ok: true; level: TreeLevelDto } | { ok: false; error: string };
+/**
+ * A level plus `pendingDecisionsFor`'s answer for ITS work-item rows (Story
+ * MOTIR-4908 · MOTIR-5881) — asked once per level, never per row, and carried
+ * beside the DTOs rather than on them. A folder row gets no entry.
+ */
+export type TreeLevelResult =
+  | { ok: true; level: TreeLevelDto; pending: PendingDecisionMap }
+  | { ok: false; error: string };
+
+/** The decision-waiting answer for one level's work-item rows. */
+async function pendingForLevel(
+  level: TreeLevelDto,
+  ctx: { userId: string; workspaceId: string; projectId: string },
+): Promise<PendingDecisionMap> {
+  return Object.fromEntries(
+    await approvalGatesService.pendingDecisionsFor(
+      {
+        projectId: ctx.projectId,
+        workItemIds: level.rows.filter((row) => row.kind !== 'folder').map((row) => row.id),
+      },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    ),
+  );
+}
 
 export async function listRootIssuesAction(input: ListTreeLevelInput): Promise<TreeLevelResult> {
   const session = await getSession();
@@ -278,7 +303,7 @@ export async function listRootIssuesAction(input: ListTreeLevelInput): Promise<T
     { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
   );
-  return { ok: true, level };
+  return { ok: true, level, pending: await pendingForLevel(level, ctx) };
 }
 
 export async function listChildIssuesAction(
@@ -294,7 +319,7 @@ export async function listChildIssuesAction(
       { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );
-    return { ok: true, level };
+    return { ok: true, level, pending: await pendingForLevel(level, ctx) };
   } catch (err) {
     if (err instanceof WorkItemNotFoundError) {
       return { ok: false, error: 'That issue no longer exists.' };
@@ -322,7 +347,7 @@ export async function listFolderLevelAction(
       { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );
-    return { ok: true, level };
+    return { ok: true, level, pending: await pendingForLevel(level, ctx) };
   } catch (err) {
     if (err instanceof FolderNotFoundError) {
       return { ok: false, error: 'That folder no longer exists.' };

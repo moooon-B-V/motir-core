@@ -124,6 +124,39 @@ export const monitorIssueRepository = {
     });
   },
 
+  // ── THE BUG ENRICHMENT (Story MOTIR-4930 · Subtask MOTIR-5849) ────────────
+
+  /**
+   * The link ONE binding holds to ONE work item — the row the reconciler filed
+   * the bug from. Keyed on the connection as well as the item, because many
+   * issues may point at one work item (a hand-made link), and the enrichment
+   * trigger knows which binding filed it.
+   */
+  async findByWorkItemId(
+    connectionId: string,
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorIssue | null> {
+    return tx.monitorIssue.findFirst({ where: { connectionId, workItemId } });
+  },
+
+  /**
+   * Record the `author_bug` job dispatched for this link — ONCE. A CONDITIONAL
+   * update (`authoringJobId IS NULL`), so a second writer finds the key already
+   * taken and changes nothing. Returns whether THIS call wrote it.
+   */
+  async markAuthoringDispatched(
+    id: string,
+    authoringJobId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.monitorIssue.updateMany({
+      where: { id, authoringJobId: null },
+      data: { authoringJobId },
+    });
+    return result.count === 1;
+  },
+
   /** Write the issue's latest facts — the recurrence update. Nothing on the
    *  work item changes; the facts live here. */
   async updateFacts(
