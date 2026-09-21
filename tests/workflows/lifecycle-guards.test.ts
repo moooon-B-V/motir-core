@@ -175,10 +175,15 @@ describe('the seed and the backfill migration AGREE', () => {
     // `migrate deploy` applies them: deleting the status also cascades
     // MOTIR-5630's ejection edges (`approved → implemented`,
     // `in_review → implemented`, `implemented → approved`), which only its own
-    // backfill restores. The CHAIN is what must agree with the seed.
+    // backfill restores — and MOTIR-5804's then removes `implemented → approved`
+    // again. The CHAIN is what must agree with the seed.
     for (const migration of [
       '20260819090000_add_implemented_default_status',
       '20260916180000_add_queue_ejection_default_edges',
+      // MOTIR-5804 REMOVES `implemented → approved`, which 5630's backfill
+      // above just re-added; without it the backfilled project keeps an edge the
+      // seed no longer has. ORDER is `migrate deploy`'s — by timestamp.
+      '20260919200000_reask_ejection_default_edges',
       // MOTIR-5643's parking edges include `implemented → planning`, which the
       // status deletion above cascades away and only this backfill restores. Its
       // presence in the CHAIN is what proves that backfill complete.

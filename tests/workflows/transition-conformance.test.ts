@@ -200,15 +200,15 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'approved>done',
         'approved>in_progress',
         'approved>cancelled',
-        // MOTIR-5630: the merge-queue EJECTION (`approval-gates.md` §4 THIRD
-        // AMENDMENT, decision 7). A failure sends an approved (manual) or
-        // in-review (auto) card back to `implemented`, and Queue again returns
-        // it to `approved` on unchanged heads. `implemented>approved` WAS absent
-        // (MOTIR-5139); a HAND move into `approved` past an open pull request is
-        // still refused, by §6d rule 2b — `approved-status.test.ts` asserts it.
+        // MOTIR-5630 · MOTIR-5804: the merge-queue EJECTION (`approval-gates.md`
+        // §4 THIRD AMENDMENT, decision 7, as the FOURTH AMENDMENT's point 6
+        // amends it). A manual FAILURE sends an approved card back to REVIEW,
+        // where the merge question is asked again; an auto one sends an in-review
+        // card to `implemented`. `implemented>approved` is ABSENT again — an
+        // approval is only ever given from `in_review`.
+        'approved>in_review',
         'approved>implemented',
         'in_review>implemented',
-        'implemented>approved',
       ]),
     );
     expect(EDGES).toHaveLength(41);

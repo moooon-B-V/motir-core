@@ -21,12 +21,15 @@ import {
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
+import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
+import { unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
+import { classOfMergeRefusal, classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
 import type {
   ApproveAndMergeMemberOutcomeDTO,
@@ -40,7 +43,7 @@ import type { GithubPullRequestQueueExit } from '@/generated/prisma/client';
 import type { PullRequestStandingExitDTO } from '@/lib/dto/approvalGate';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { projectAccessService } from './projectAccessService';
-import { queueExitCardMoves } from './mergeQueueExitService';
+import { queueExitCardMoves, settleUnlandedOutcome } from './mergeQueueExitService';
 import {
   pullRequestApprovalMembersService,
   toQueueExitDto,
@@ -73,10 +76,14 @@ import { settleAfterPrimaryApproval } from './ciPromotion';
 //   3. the outcome is recorded on the PULL REQUEST (`merge_authority` / `merge_outcome_ref`),
 //      which is where it belonged all along — a fact about a pull request, not about a gate.
 //
-// ⚠️ NOTHING IS DECIDED HERE ANY MORE. The card's one gate was decided when the person
-// pressed *Approve and merge*; a merge that follows carries that decision out, and a
-// refusal leaves the approval standing with its reason on screen. That is why a retry can
-// address a single member without asking anyone to approve anything twice.
+// ⚠️ ONE APPROVAL AUTHORIZES ONE MERGE OR ENQUEUE ACTION (§4 FOURTH AMENDMENT, points 1
+// and 8; MOTIR-5802 · MOTIR-5833 · MOTIR-5834). The card's gate is decided when the
+// person presses *Approve and merge*, and the merge that follows CARRIES THAT DECISION
+// OUT — once. A host refusal is recorded on the pull request and SPENDS the approval, so
+// the card is asked again by class, and the row's *Retry merge* decides THAT fresh gate
+// rather than re-pressing the old one. §8's *"a retry is step (b) for that one gate
+// alone. The approval stands above it."* is struck: it is the same shortcut as *Queue
+// again*, one door over.
 
 /** The one gate a merge now carries out — the card's own (MOTIR-5611). */
 const APPROVAL_KIND = 'pull_request_approval' as const;
@@ -125,7 +132,9 @@ interface MergeTarget {
 async function checkMember(
   args: { approvalGateId: string; member: MemberVersion },
   ctx: ServiceContext,
-): Promise<{ kind: 'mergeable'; target: MergeTarget } | { kind: 'stale' }> {
+): Promise<
+  { kind: 'mergeable'; target: MergeTarget; approvalDecidedAt: Date | null } | { kind: 'stale' }
+> {
   const { approvalGateId, member } = args;
   return withWorkspaceContext(ctx, async (tx) => {
     const gate = await approvalGateRepository.findById(approvalGateId, tx);
@@ -187,6 +196,7 @@ async function checkMember(
 
     return {
       kind: 'mergeable',
+      approvalDecidedAt: gate.decidedAt,
       target: {
         pullRequestId: pr.id,
         workItemId: gate.workItemId,
@@ -259,10 +269,16 @@ async function mergeOrEnqueue(
 
   if (result.outcome === 'refused') {
     // A head that moved between the check and the merge (the host's 409) is the same
-    // withdrawn question step 1 would have found.
+    // withdrawn question step 1 would have found. NOTHING is recorded: the approval
+    // was never acted on, so it was not spent (§4 FOURTH AMENDMENT, point 2).
     if (result.refusal.code === 'subject_changed') {
       throw new ApprovalGateSupersededError(approvalGateId);
     }
+    // ⚠️ THE REFUSAL IS RECORDED, AND THE CARD IS SETTLED BY ITS CLASS (point 5;
+    // MOTIR-5833). One approval authorizes ONE attempt, and this one did not land —
+    // so the fact has to outlive this response, and the card must stop claiming an
+    // approval it has already spent.
+    await recordMergeRefusal(approvalGateId, target, result.refusal, ctx);
     throw new ApprovalGateMergeRefusedError(approvalGateId, REFUSAL_TAG[result.refusal.code], {
       permission: result.refusal.permission ?? null,
       reason: result.refusal.reason ?? null,
@@ -270,16 +286,23 @@ async function mergeOrEnqueue(
   }
 
   // STEP 3 — the outcome, on the PULL REQUEST. No gate is decided by a merge any more.
-  await withWorkspaceContext(ctx, (tx) =>
-    githubPullRequestRepository.recordMotirMerge(
+  await withWorkspaceContext(ctx, async (tx) => {
+    await githubPullRequestRepository.recordMotirMerge(
       target.pullRequestId,
       {
         mergeAuthority: 'gate',
         mergeOutcomeRef: result.outcome === 'merged' ? result.commitSha : `queue:${result.entryId}`,
       },
       tx,
-    ),
-  );
+    );
+    // This press LANDED, so any refusal the pull request still carried is history —
+    // the head is unchanged, so nothing else would retire it (MOTIR-5833).
+    await githubPullRequestMergeRefusalRepository.supersedeStanding(
+      target.pullRequestId,
+      new Date(),
+      tx,
+    );
+  });
   return result.outcome;
 }
 
@@ -440,18 +463,28 @@ export const pullRequestMergeService = {
   },
 
   /**
-   * RETRY one refused member of an approve-and-merge press — step 2 of {@link approveAndMerge}
-   * for that ONE pull request alone (MOTIR-5613).
+   * THE PULL-REQUEST ROW'S VERB — *Retry merge* on a refused member, *Queue again* on one the
+   * merge queue removed (MOTIR-5613 · MOTIR-5634), addressed by (a gate, the pull request).
    *
-   * ⚠️ ADDRESSED BY (THE CARD'S GATE, THE PULL REQUEST), and it decides NOTHING: the card's
-   * gate was decided when it was approved, and a retry carries that same decision out again
-   * for the one member the host refused. The approval must still stand, and the pull request
-   * must still be a member of it at the head it was approved at — otherwise this is a
-   * withdrawn question, refused with the door's own error rather than re-asked.
+   * ⚠️ WHICH GATE IT IS HANDED DECIDES WHAT THE PRESS MEANS (MOTIR-5802 · MOTIR-5834;
+   * §4 FOURTH AMENDMENT, points 1, 4 and 8):
+   *
+   *  · an `awaiting` gate — the RE-ASKED one — means the press IS the new approval. It goes
+   *    through {@link approveAndMergeGate}, the same path the frame's *Approve and merge*
+   *    takes, so the row's button and the frame's verb are one decision with one guard. The
+   *    reader's `stamp` is carried into it and the stale check is the door's own;
+   *  · a DECIDED gate means the press carries out a decision already made — the shipped
+   *    retry. It is refused (`MERGE_REQUEUE_NEEDS_APPROVAL`) the moment that approval has
+   *    been SPENT on an outcome that did not land, which is what point 1 forbids: a queue
+   *    exit standing at that head, or a host refusal recorded at it (MOTIR-5833). A
+   *    CAN'T-LAND outcome is refused with its own reason instead, because no approval,
+   *    however fresh, can land those commits — `motir fix` is the way forward.
+   *
+   * The pull request must still be a member of the gate at the head it names — otherwise
+   * this is a withdrawn question, refused with the door's own error rather than re-asked.
    */
   async retryApproveAndMergeMember(
-    // No `stamp`: a retry decides nothing — it carries out an approval already made.
-    input: Omit<DecideGateInput, 'decision' | 'gateId' | 'stamp'> & {
+    input: Omit<DecideGateInput, 'decision' | 'gateId'> & {
       approvalGateId: string;
       pullRequestId: string;
     },
@@ -462,9 +495,11 @@ export const pullRequestMergeService = {
       if (!approval || approval.kind !== APPROVAL_KIND) {
         throw new ApprovalGateNotFoundError(input.approvalGateId);
       }
+      // THE RE-ASKED GATE: the press is the new approval, and nothing below applies — the
+      // whole set is decided and acted on by the one door (point 4).
+      if (approval.state === 'awaiting') return { reask: true as const };
       // Each non-approved state gets the refusal that is TRUE of it: a withdrawn question
-      // is superseded, changes requested is a decision that merges nothing, and an
-      // awaiting gate has no press to retry a member of.
+      // is superseded, and changes requested is a decision that merges nothing.
       if (approval.state === 'superseded') {
         throw new ApprovalGateSupersededError(input.approvalGateId);
       }
@@ -499,9 +534,29 @@ export const pullRequestMergeService = {
           tx,
         )
       ).get(delivered.pullRequest.id);
+      // ⚠️ AND THE OTHER WAY THIS APPROVAL MAY ALREADY HAVE BEEN SPENT (MOTIR-5834): a
+      // refusal the HOST gave at an earlier press, standing at the head this member
+      // names. Before the refusal was recorded (MOTIR-5833) this door could not see it,
+      // which is exactly why §8 let a retry ride on the standing approval.
+      const refusal = (
+        await githubPullRequestMergeRefusalRepository.findLatestByPullRequests(
+          [delivered.pullRequest.id],
+          tx,
+        )
+      ).get(delivered.pullRequest.id);
+      const headNow = liveRowsAtLatestSha([...delivered.pullRequest.checkRuns])[0]?.commitSha;
       return {
         member,
         workItemId: approval.workItemId,
+        approvalDecidedAt: approval.decidedAt,
+        standingRefusal:
+          refusal &&
+          refusal.supersededAt === null &&
+          headNow !== undefined &&
+          refusal.headSha === headNow &&
+          !delivered.pullRequest.merged
+            ? refusal
+            : null,
         standingExit: exit && exit.requeuedAt === null ? exit : null,
         // Already put back and still waiting in the queue: a second press would enqueue
         // it twice (MOTIR-5634).
@@ -513,6 +568,27 @@ export const pullRequestMergeService = {
         pullRequestId: delivered.pullRequest.id,
       };
     });
+    // THE PRESS IS THE NEW APPROVAL (point 4): one decision, then every member acted on,
+    // exactly as the frame's own verb does it. The row reports ITS member's outcome; a
+    // member the decision no longer covers answers `no_merge_gate`, as it does there.
+    if (found && 'reask' in found) {
+      const { members } = await approveAndMergeGate(
+        {
+          gateId: input.approvalGateId,
+          noteMd: input.noteMd,
+          source: input.source,
+          stamp: input.stamp,
+        },
+        ctx,
+      );
+      return (
+        members.find((outcome) => outcome.pullRequestId === input.pullRequestId) ?? {
+          subjectVersion: members[0]?.subjectVersion ?? '',
+          pullRequestId: null,
+          outcome: 'no_merge_gate',
+        }
+      );
+    }
     // Not delivered by this card, or never a member of what was approved: there is no
     // question to carry out, and the card's gate is not re-asked.
     if (!found) throw new ApprovalGateSupersededError(input.approvalGateId);
@@ -523,6 +599,42 @@ export const pullRequestMergeService = {
         outcome: 'refused',
         refusal: toGateRefusal('MERGE_ALREADY_REQUEUED'),
       };
+    }
+    // ⚠️ §8's *RETRY MERGE ON THE STANDING APPROVAL* IS CLOSED (MOTIR-5834; §4 FOURTH
+    // AMENDMENT, point 8). The host refused, so the approval that sent this pull request
+    // has been SPENT: a retry under it would be the second act on one yes, which point 1
+    // forbids. The refusal already asked the card again (MOTIR-5833) — press THAT gate.
+    if (found.standingRefusal) {
+      const landingClass = classOfMergeRefusal(found.standingRefusal.code);
+      // The commits cannot land as they stand, so no approval, however fresh, re-presses
+      // them: `motir fix` is the way forward (point 2).
+      if (landingClass === 'cant_land') {
+        return {
+          subjectVersion: found.member.subjectVersion,
+          pullRequestId: found.pullRequestId,
+          outcome: 'refused',
+          // `subject_changed` is never recorded, so every code that reaches here has a
+          // tag; an unknown one (a second host) falls back to the generic refusal.
+          refusal: toGateRefusal(
+            REFUSAL_TAG[
+              found.standingRefusal.code as Exclude<MergeRefusalCode, 'subject_changed'>
+            ] ?? 'MERGE_REQUEUE_NEEDS_APPROVAL',
+          ),
+        };
+      }
+      if (
+        unlandedOutcomeOutranksApproval(
+          { at: found.standingRefusal.refusedAt },
+          found.approvalDecidedAt,
+        )
+      ) {
+        return {
+          subjectVersion: found.member.subjectVersion,
+          pullRequestId: found.pullRequestId,
+          outcome: 'refused',
+          refusal: toGateRefusal('MERGE_REQUEUE_NEEDS_APPROVAL'),
+        };
+      }
     }
     if (found.standingExit) {
       return queueAgainUnderApproval(
@@ -789,6 +901,34 @@ async function mergeMember(
     };
   }
 
+  // ⚠️ APPROVING THE RE-ASKED GATE RE-QUEUES AN EJECTED MEMBER (§4 FOURTH AMENDMENT,
+  // point 3; MOTIR-5805). A member whose latest merge-queue exit still stands at the head
+  // this approval names goes through the SAME path *Queue again* uses — claim the exit
+  // (`requeuedAt`, which lifts the card's red and the promotion hold), merge or enqueue,
+  // and release the claim if the host refuses — so the exit is stamped exactly once and
+  // a refusal leaves it standing to retry. The approval post-dates the exit, so that
+  // path's failure refusal does not fire.
+  const standingExit = await withWorkspaceContext(ctx, async (tx) =>
+    (
+      await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+        [target.pullRequestId],
+        tx,
+      )
+    ).get(target.pullRequestId),
+  );
+  if (
+    standingExit &&
+    standingExit.requeuedAt === null &&
+    standingExit.headSha === target.expectedHeadSha
+  ) {
+    return queueAgainUnderApproval(
+      approvalGateId,
+      member,
+      { workItemId: target.workItemId, exit: standingExit },
+      ctx,
+    );
+  }
+
   try {
     const outcome = await mergeOrEnqueue(approvalGateId, target, ctx);
     return { subjectVersion: member.subjectVersion, pullRequestId: target.pullRequestId, outcome };
@@ -812,16 +952,22 @@ async function mergeMember(
 }
 
 /**
- * QUEUE AGAIN under the card's DECIDED approval (Story MOTIR-5461 · MOTIR-5634;
- * `approval-gates.md` §4 THIRD AMENDMENT, decision 5). The member left the merge queue
- * and nobody has put it back; while it is still at the head the approval named, the
- * approval still describes it, so it is re-enqueued with no second question.
+ * PUT AN EXITED MEMBER BACK IN THE QUEUE under an approval that COVERS the exit (Story
+ * MOTIR-5461 · MOTIR-5634; narrowed to one act per approval by MOTIR-5802,
+ * `approval-gates.md` §4 FOURTH AMENDMENT, points 1 and 4). The only approval that covers
+ * an exit is one given AFTER it — the re-asked gate's own, which the row's verb or the
+ * frame's *Approve and merge* has just decided. An exit that PRE-DATES nothing, i.e. one
+ * standing against an older approval, is REFUSED here before anything is claimed, whatever
+ * its disposition: a neutral removal spends the yes exactly as a failure does.
  *
  * ⚠️ THE CLAIM COMES BEFORE THE HOST CALL. Two presses on one exit must enqueue ONCE,
  * so the first stamps the exit's `requeuedAt` under the card's row lock and the second
  * finds it stamped. A host that refuses releases the stamp, so the exit is offered
- * again; a success returns the card `implemented → approved`, carrying the decided
- * gate's id — the one write rule 2b lets into `approved` while a pull request is open.
+ * again.
+ *
+ * ⚠️ IT MOVES NO CARD. A neutral removal never moved the card out of `approved`, so
+ * there is nothing to return — and this was the last writer of `implemented → approved`,
+ * which the FOURTH AMENDMENT removes from the workflow.
  */
 async function queueAgainUnderApproval(
   approvalGateId: string,
@@ -830,12 +976,14 @@ async function queueAgainUnderApproval(
   ctx: ServiceContext,
 ): Promise<ApproveAndMergeMemberOutcome> {
   let target: MergeTarget;
+  let approvalDecidedAt: Date | null;
   try {
     const checked = await checkMember({ approvalGateId, member }, ctx);
     // A moved head: the approval no longer describes the code, so nothing is claimed.
     // The next green verdict raises the fresh question (decision 6).
     if (checked.kind === 'stale') throw new ApprovalGateSupersededError(approvalGateId);
     target = checked.target;
+    approvalDecidedAt = checked.approvalDecidedAt;
   } catch (err) {
     const refusal = memberRefusal(err);
     if (!refusal) throw err;
@@ -844,6 +992,36 @@ async function queueAgainUnderApproval(
       pullRequestId: null,
       outcome: 'refused',
       refusal,
+    };
+  }
+
+  // ⚠️ NO EXIT IS RE-QUEUED ON AN APPROVAL GIVEN BEFORE IT — WHATEVER ITS DISPOSITION
+  // (MOTIR-5802; `approval-gates.md` §4 FOURTH AMENDMENT, points 1 and 4). One approval
+  // authorizes ONE enqueue: the pull request left the queue without landing, so that yes
+  // has been used, and a NEUTRAL removal is no exception (Yue, 2026-09-19: *"re-ask
+  // too"*). The card is asked again on a fresh gate, and approving THAT re-queues
+  // (MOTIR-5805) — through this very function, whose approval then post-dates the exit.
+  // Nothing is claimed or written. (A moved head was answered above: the approval no
+  // longer describes the code.)
+  if (unlandedOutcomeOutranksApproval({ at: args.exit.exitedAt }, approvalDecidedAt)) {
+    return {
+      subjectVersion: member.subjectVersion,
+      pullRequestId: target.pullRequestId,
+      outcome: 'refused',
+      refusal: toGateRefusal('MERGE_REQUEUE_NEEDS_APPROVAL'),
+    };
+  }
+
+  // ⚠️ AND A CAN'T-LAND EXIT IS NEVER RE-QUEUED, whatever anyone approves (§4 FOURTH
+  // AMENDMENT, point 2). A conflict does not resolve by being asked again: the commits
+  // have to change, so the card sits at Implemented with `motir fix` (MOTIR-5803) and
+  // the next push re-arms the question.
+  if (classOfQueueExit(args.exit.rawReason) === 'cant_land') {
+    return {
+      subjectVersion: member.subjectVersion,
+      pullRequestId: target.pullRequestId,
+      outcome: 'refused',
+      refusal: toGateRefusal('MERGE_CONFLICT'),
     };
   }
 
@@ -892,15 +1070,65 @@ async function queueAgainUnderApproval(
     };
   }
 
-  const moved = await withWorkspaceContext(ctx, async (tx) => {
-    await queueExitCardMoves.lockCard(args.workItemId, tx);
-    const item = await workItemRepository.findById(args.workItemId, tx);
-    return item
-      ? queueExitCardMoves.returnCard(item, 'approved', ctx, tx, { decidingGateId: approvalGateId })
-      : null;
-  });
-  await queueExitCardMoves.emitMoved(args.workItemId, moved, ctx);
   return { subjectVersion: member.subjectVersion, pullRequestId: target.pullRequestId, outcome };
+}
+
+/**
+ * RECORD A HOST REFUSAL, AND SETTLE THE CARD BY ITS CLASS (§4 FOURTH AMENDMENT,
+ * point 5; MOTIR-5833).
+ *
+ * ⚠️ IN ITS OWN TRANSACTION, AFTER THE PRESS'S HAS COMMITTED. The approval committed
+ * in step 1 and the host call happened outside any transaction, so this write has
+ * nothing to roll back with — which is the point: the refusal must survive the press
+ * that was refused.
+ *
+ * The CLASS then decides what happens to the card, through the one entry point every
+ * source shares ({@link settleUnlandedOutcome}): a conflict or red checks hold it at
+ * `implemented` with `motir fix`, a setting sends it back to `in_review` with ONE
+ * fresh question naming that setting. `already_merged` settles nothing — the merge
+ * webhook owns that card — and `subject_changed` never reaches here at all.
+ *
+ * A failure to record is LOGGED AND SWALLOWED: the caller is about to throw the
+ * refusal a person is waiting to read, and losing that message to a bookkeeping
+ * error would be the worse outcome.
+ */
+async function recordMergeRefusal(
+  approvalGateId: string,
+  target: MergeTarget,
+  refusal: { code: MergeRefusalCode; permission?: string; reason?: string },
+  ctx: ServiceContext,
+): Promise<void> {
+  try {
+    await withWorkspaceContext(ctx, async (tx) => {
+      await queueExitCardMoves.lockCard(target.workItemId, tx);
+      await githubPullRequestMergeRefusalRepository.create(
+        {
+          pullRequestId: target.pullRequestId,
+          code: refusal.code,
+          headSha: target.expectedHeadSha,
+          approvalGateId,
+          permission: refusal.permission ?? null,
+          refusedAt: new Date(),
+        },
+        tx,
+      );
+      const landingClass = classOfMergeRefusal(refusal.code);
+      if (landingClass === null) return;
+      const item = await workItemRepository.findById(target.workItemId, tx);
+      if (!item) return;
+      const mode = (await projectRepository.findPrMergeMode(item.projectId, tx))?.prMergeMode;
+      // `auto` has no approval to spend and no person to ask, so it records nothing.
+      if (mode !== 'manual') return;
+      await settleUnlandedOutcome(item, landingClass, ctx, tx);
+    });
+  } catch (err) {
+    console.error('[pullRequestMergeService] the refusal could not be recorded', {
+      approvalGateId,
+      pullRequestId: target.pullRequestId,
+      code: refusal.code,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /** A member's refusal in the frame's own vocabulary — the mapping the decide action uses. */

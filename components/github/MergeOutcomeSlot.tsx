@@ -10,6 +10,7 @@ import {
   GitBranch,
   GitMerge,
   GitPullRequestArrow,
+  ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
@@ -55,7 +56,19 @@ export type RowMergeOutcome =
     }
   /** Removed, and a push moved the head since: the approval no longer describes the code,
    *  so nothing is offered (E3). */
-  | { kind: 'newCommits' };
+  | { kind: 'newCommits' }
+  // THE HOST REFUSED THE MERGE (MOTIR-5833; § 28 panels 3 and 4). What the row offers is
+  // the CLASS's answer to one question: could a person still make these commits land?
+  | {
+      kind: 'refusedSetting';
+      /** *Retry merge*, which DECIDES the re-asked gate (MOTIR-5834); `null` for a reader
+       *  who may not press it. */
+      onRetry: (() => void) | null;
+      retrying: boolean;
+    }
+  /** The commits cannot land as they stand — a conflict, or checks the host will not
+   *  merge past. No verb: `motir fix` is the way forward (§4 FOURTH AMENDMENT, point 2). */
+  | { kind: 'cannotLand' };
 
 const MergeOutcomeContext = createContext<ReadonlyMap<string, RowMergeOutcome> | null>(null);
 
@@ -91,14 +104,35 @@ export type PersistedRowOutcome =
   | 'leftQueue'
   | 'removedFromQueue'
   | 'newCommits'
-  | 'notMergedYet';
+  | 'notMergedYet'
+  /** The host refused the merge, and the CLASS says a person can still act — a setting
+   *  to change, then *Retry merge* (MOTIR-5833 · MOTIR-5834; § 28 panel 4). */
+  | 'refusedSetting'
+  /** The host refused, and the commits CANNOT land as they stand — a conflict, or red
+   *  checks. No verb at all; `motir fix` is the way forward (§ 28 panel 3). */
+  | 'cannotLand';
 
 export function persistedRowOutcome(
-  fact: Pick<PullRequestApprovalMemberDTO, 'queued' | 'retryable' | 'exit' | 'requeueable'>,
+  fact: Pick<
+    PullRequestApprovalMemberDTO,
+    'queued' | 'retryable' | 'exit' | 'exitAtApprovedHead' | 'refusal'
+  >,
 ): PersistedRowOutcome | null {
   if (fact.queued) return 'queued';
+  // ⚠️ THE HOST'S REFUSAL OUTRANKS AN OLDER EXIT (MOTIR-5833): it is the newest thing
+  // that happened to this pull request, and before it was recorded a reload could not
+  // say it happened at all.
+  if (fact.refusal) {
+    if (fact.refusal.landingClass === 'cant_land') return 'cannotLand';
+    if (fact.refusal.landingClass === 'setting') return 'refusedSetting';
+  }
   if (fact.exit && fact.exit.requeuedAt === null) {
-    if (!fact.requeueable) return 'newCommits';
+    // The HEAD decides *New commits*, not whether a verb is offered: an exit at the
+    // approved head may be unpressable (MOTIR-5802) and still *Left the queue*.
+    if (!fact.exitAtApprovedHead) return 'newCommits';
+    // A CONFLICT cannot land as it stands, whatever anybody approves (§4 FOURTH
+    // AMENDMENT, point 2), so the row says that rather than offering a retry.
+    if (fact.exit.rawReason === 'MERGE_CONFLICT') return 'cannotLand';
     return fact.exit.disposition === 'failure' ? 'leftQueue' : 'removedFromQueue';
   }
   if (fact.retryable) return 'notMergedYet';
@@ -112,6 +146,8 @@ const READ_ONLY: Record<PersistedRowOutcome, RowMergeOutcome> = {
   removedFromQueue: { kind: 'removedFromQueue', onQueueAgain: null, queueing: false },
   newCommits: { kind: 'newCommits' },
   notMergedYet: { kind: 'notMergedYet', onRetry: null, retrying: false },
+  refusedSetting: { kind: 'refusedSetting', onRetry: null, retrying: false },
+  cannotLand: { kind: 'cannotLand' },
 };
 
 /**
@@ -241,6 +277,40 @@ export function MergeOutcomeSlot({
         <Pill tone="neutral">
           <GitBranch className="h-3 w-3" aria-hidden />
           {t('newCommits')}
+        </Pill>
+      );
+    case 'refusedSetting':
+      return (
+        <>
+          {/* ⚠️ THE PILL SAYS THE CLASS; THE BAND SAYS WHICH SETTING (§ 28's slot table).
+              A pill is read at a glance beside a pull request's name, and a permission
+              string in it — *Blocked: contents: write* — reads as the row's own state
+              rather than as something a person can go and change. The record band names
+              the rule, in a sentence with room to say what to do about it. */}
+          <Pill severity="warning">
+            <ShieldAlert className="h-3 w-3" aria-hidden />
+            {t('settingHeld')}
+          </Pill>
+          {outcome.onRetry ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              disabled={outcome.retrying}
+              onClick={outcome.onRetry}
+            >
+              {t('retry')}
+            </Button>
+          ) : null}
+        </>
+      );
+    case 'cannotLand':
+      // No verb at all, deliberately: a button here would be guaranteed to fail, and
+      // `motir fix` is offered by the block's own part below the rows.
+      return (
+        <Pill severity="danger">
+          <CircleX className="h-3 w-3" aria-hidden />
+          {t('cannotLand')}
         </Pill>
       );
   }

@@ -297,8 +297,10 @@ describe('guard — the refusal matrix', () => {
           ),
       },
       {
+        // An In Review card is evaluated for a merge-queue ejection now (MOTIR-5803);
+        // with none standing it waits on review, and nothing is failing.
         name: 'in_review',
-        reason: 'not_implemented',
+        reason: 'not_failing',
         make: async () => {
           const c = await redCard(s, 'in review', 201);
           await workItemsService.updateStatus(c.id, 'in_review', s.ctx);

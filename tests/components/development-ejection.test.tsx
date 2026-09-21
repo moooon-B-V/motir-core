@@ -86,7 +86,10 @@ function members(over: Partial<PullRequestApprovalMemberDTO>): PullRequestApprov
       queued: false,
       retryable: false,
       exit: null,
+      exitAtApprovedHead: false,
       requeueable: false,
+      refusal: null,
+      retryDecidesGateId: null,
     },
     {
       subjectVersion: GATEWAY_V,
@@ -94,7 +97,10 @@ function members(over: Partial<PullRequestApprovalMemberDTO>): PullRequestApprov
       queued: false,
       retryable: false,
       exit: exit(),
+      exitAtApprovedHead: true,
       requeueable: true,
+      refusal: null,
+      retryDecidesGateId: null,
       ...over,
     },
   ];
@@ -217,7 +223,7 @@ describe('manual mode, on the card’s decided approval', () => {
   });
 
   it('E3 · a moved head: New commits since approval, and no Queue again', () => {
-    renderFrame({ members: members({ requeueable: false }) });
+    renderFrame({ members: members({ exitAtApprovedHead: false, requeueable: false }) });
     expect(within(gatewayRow()).getByText(pra.outcome.newCommits)).toBeTruthy();
     expect(queueAgain()).toBeNull();
     expect(screen.getByText(pra.exit.newCommits)).toBeTruthy();
@@ -254,6 +260,9 @@ describe('manual mode, on the card’s decided approval', () => {
       approvalGateId: APPROVED.id,
       pullRequestId: GATEWAY_PR.id,
       identifier: 'ACME-12',
+      // The press carries the stamp this read was shown: on the RE-ASKED gate it IS the
+      // approval, and the door refuses one made against a stamp that has moved (MOTIR-5802).
+      stamp: 'v1.stamp-on-screen',
     });
     // E2: the pill stays, the button waits, the record says what is happening.
     await waitFor(() => expect((queueAgain() as HTMLButtonElement).disabled).toBe(true));
@@ -284,7 +293,9 @@ describe('manual mode, on the card’s decided approval', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain(fill(pra.requeue.refusedTitle, { pr: GATEWAY_NAME }));
     expect(alert.textContent).toContain(en.approvalGate.refusal.mergeAlreadyRequeued.title);
-    expect(alert.textContent).toContain(pra.refused.standsAlone);
+    // ⚠️ AND CLAIMS NOTHING ABOUT THE APPROVAL (MOTIR-5834): nothing merged, so the band
+    // says only what its member's line says. *Your approval stands* is retired copy.
+    expect(alert.textContent).not.toContain('approval stands');
     expect(within(gatewayRow()).getByText(pra.outcome.leftQueue)).toBeTruthy();
     expect(queueAgain()).toBeTruthy();
     expect(rail()).toBe('implemented');
@@ -517,13 +528,17 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
     );
   });
 
-  it('X2 · a merge conflict: the conflict sentence, and Queue again is still offered', () => {
+  // ⚠️ REPLACES "…and Queue again is still offered" (MOTIR-5806; §4 FOURTH AMENDMENT,
+  // point 2): a conflict CANNOT LAND as it stands, so the row offers no verb at all and
+  // `motir fix` is the one way forward.
+  it('X2 · a merge conflict: no verb on the row, the cannot-merge pill, and the conflict sentence', () => {
     renderWithRepair(offer('MERGE_CONFLICT'), {
       rawReason: 'MERGE_CONFLICT',
       failingCheckName: null,
       failingCheckUrl: null,
     });
-    expect(queueAgain()).toBeTruthy();
+    expect(queueAgain()).toBeNull();
+    expect(within(gatewayRow()).getByText(pra.outcome.cannotLand)).toBeTruthy();
     expect(within(fixPart()).getByTestId('repair-which').textContent).toBe(
       sentence(fixMsg.which.conflict),
     );

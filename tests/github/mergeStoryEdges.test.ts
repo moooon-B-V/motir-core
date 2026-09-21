@@ -223,7 +223,7 @@ describe('the merge ENTRY POINT refuses before it reaches a host', () => {
   // could not act on is never re-asked.
   const retry = (approvalGateId: string, pullRequestId: string) =>
     pullRequestMergeService.retryApproveAndMergeMember(
-      { approvalGateId, pullRequestId, source: 'ui' },
+      { approvalGateId, pullRequestId, source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
       fx.ctx,
     );
 
@@ -310,12 +310,10 @@ describe('the merge ENTRY POINT refuses before it reaches a host', () => {
       ApprovalGateAlreadyDecidedError,
     );
 
-    // Still awaiting: there is no press to retry a member of.
-    const awaiting = await cardWithPr();
-    await expect(retry(awaiting.gate!.id, awaiting.pr.id)).rejects.toBeInstanceOf(
-      ApprovalGateNotFoundError,
-    );
-
+    // ⚠️ AWAITING IS NO LONGER A REFUSAL (MOTIR-5802; §4 FOURTH AMENDMENT, point 4):
+    // the row's press on the RE-ASKED gate IS the new approval, and it goes through the
+    // decide door. That path is asserted in `tests/github/queueAgain.test.ts`; what
+    // belongs here is that the two DECIDED states still refuse, above.
     expect(seam).not.toHaveBeenCalled();
   });
 

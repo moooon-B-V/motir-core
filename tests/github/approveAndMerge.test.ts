@@ -247,7 +247,7 @@ describe('one press: the approval, then every member', () => {
 });
 
 describe('partial success', () => {
-  it('a REFUSED member leaves the approval, the card and the other member standing, and names its refusal', async () => {
+  it('a REFUSED member leaves the approval and the other member standing, records the refusal, and settles the card by its class', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
       7: { outcome: 'merged', commitSha: 'merge-web' },
@@ -268,11 +268,21 @@ describe('partial success', () => {
       },
       { subjectVersion: web.version, pullRequestId: web.prId, outcome: 'merged' },
     ]);
-    // ⚠️ THE APPROVAL IS NOT UNDONE BY A REFUSED MERGE, and the refusal is recorded
-    // NOWHERE: the refused pull request simply has no outcome yet, which is what makes it
-    // retryable.
+    // ⚠️ THE APPROVAL IS NOT UNDONE BY A REFUSED MERGE — the decision happened and the
+    // row stays as history. What DID change (MOTIR-5833): the refusal is RECORDED on the
+    // pull request, and the card is settled by its class. `conflict` is CAN'T LAND, so
+    // the card is held at `implemented` with `motir fix` and asks nothing.
     expect((await gateRow(approval.id)).state).toBe('approved');
-    expect(await statusOf(item.id)).toBe('approved');
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(
+      await adminDb.githubPullRequestMergeRefusal.findMany({ where: { pullRequestId: api.prId } }),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'conflict',
+        supersededAt: null,
+        approvalGateId: approval.id,
+      }),
+    ]);
     expect(await prRecord(api.prId)).toEqual({ mergeAuthority: null, mergeOutcomeRef: null });
     expect(await prRecord(web.prId)).toEqual({
       mergeAuthority: 'gate',
@@ -325,7 +335,11 @@ describe('partial success', () => {
     expect(await prRecord(web.prId)).toEqual({ mergeAuthority: null, mergeOutcomeRef: null });
   });
 
-  it('RETRY merges only that member, under the approval that already stands', async () => {
+  // REPLACES "RETRY merges only that member, under the approval that already stands"
+  // (MOTIR-5613): §8's retry-on-the-standing-approval is struck (MOTIR-5834; §4 FOURTH
+  // AMENDMENT, point 8). A host refusal SPENDS the approval, so the row's verb may not
+  // re-press it — and `checks_not_green` is CAN'T LAND, which no approval can land.
+  it('RETRY is REFUSED on the approval the refusal already spent, and merges nothing', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
       7: { outcome: 'merged', commitSha: 'merge-web' },
@@ -340,30 +354,35 @@ describe('partial success', () => {
     const seam = stubHost({ 12: { outcome: 'merged', commitSha: 'merge-api' } });
 
     const retried = await pullRequestMergeService.retryApproveAndMergeMember(
-      { approvalGateId: approval.id, pullRequestId: api.prId, source: 'ui' },
+      {
+        approvalGateId: approval.id,
+        pullRequestId: api.prId,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
       fx.ctx,
     );
 
-    expect(retried).toEqual({
+    expect(retried).toMatchObject({
       subjectVersion: api.version,
       pullRequestId: api.prId,
-      outcome: 'merged',
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_CHECKS_NOT_GREEN' },
     });
-    // ONLY that one: one host call, and the sibling's record is the first press's.
-    expect(seam).toHaveBeenCalledTimes(1);
-    expect(await prRecord(api.prId)).toEqual({
-      mergeAuthority: 'gate',
-      mergeOutcomeRef: 'merge-api',
-    });
+    // No host was called, and the sibling's record is still the first press's.
+    expect(seam).not.toHaveBeenCalled();
+    expect(await prRecord(api.prId)).toEqual({ mergeAuthority: null, mergeOutcomeRef: null });
     expect(await prRecord(web.prId)).toEqual({
       mergeAuthority: 'gate',
       mergeOutcomeRef: 'merge-web',
     });
     // ⚠️ AND NOTHING WAS DECIDED AGAIN: the card's one gate still carries the instant of
-    // the original press, and there is still exactly one of it.
+    // the original press, and there is still exactly one of it. The card itself is held
+    // at `implemented`, where `motir fix` claims it.
     const gates = await adminDb.approvalGate.findMany({ where: { workItemId: item.id } });
     expect(gates).toHaveLength(1);
     expect(gates[0]!.decidedAt?.toISOString()).toBe(decidedAt);
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 });
 
@@ -439,7 +458,7 @@ describe('boundaries', () => {
 });
 
 describe('the members read — what a reload still knows (MOTIR-5484)', () => {
-  it('reads a queued member as queued, and a refused one as retryable — with no reason', async () => {
+  it('reads a queued member as queued, and a refused one with the refusal the host gave', async () => {
     const { item, approval, web, api } = await pressable();
     stubHost({
       7: { outcome: 'enqueued', entryId: 'MQE_9' },
@@ -454,7 +473,9 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
       { workItemId: item.id, approvalGateId: approval.id },
       fx.ctx,
     );
-    // In the set's own order, and nothing a refusal said survives into the read.
+    // In the set's own order. ⚠️ THE REFUSAL NOW SURVIVES THE PRESS (MOTIR-5833): the
+    // row reads it back with its class, which is what lets a RELOAD say why the merge
+    // did not land. `cant_land` offers no verb — the commits cannot combine.
     expect(members).toEqual([
       {
         subjectVersion: api.version,
@@ -462,7 +483,15 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
         queued: false,
         retryable: true,
         exit: null,
+        exitAtApprovedHead: true,
         requeueable: false,
+        refusal: {
+          code: 'conflict',
+          landingClass: 'cant_land',
+          permission: null,
+          refusedAt: expect.any(String),
+        },
+        retryDecidesGateId: null,
       },
       {
         subjectVersion: web.version,
@@ -470,7 +499,10 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
         queued: true,
         retryable: false,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
+        refusal: null,
+        retryDecidesGateId: null,
       },
     ]);
   });
@@ -501,14 +533,28 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
     ]);
   });
 
-  it('is empty for an approval gate that has not been approved', async () => {
+  // ⚠️ AN AWAITING GATE READS ITS MEMBERS TOO SINCE MOTIR-5802 — that is how the row
+  // offers the verb whose press IS the new approval. What it carries is the members with
+  // NO verbs: nothing has been attempted under this gate, so there is nothing to retry
+  // and nothing to put back.
+  it('carries an awaiting gate’s members with no verbs on them', async () => {
     const { item, approval } = await pressable();
-    expect(
-      await pullRequestMergeService.listApprovalMembers(
-        { workItemId: item.id, approvalGateId: approval.id },
-        fx.ctx,
-      ),
-    ).toEqual([]);
+    const members = await pullRequestMergeService.listApprovalMembers(
+      { workItemId: item.id, approvalGateId: approval.id },
+      fx.ctx,
+    );
+    expect(members).toHaveLength(2);
+    expect(members).toEqual(
+      members.map((member) => ({
+        ...member,
+        queued: false,
+        retryable: false,
+        requeueable: false,
+        exit: null,
+        exitAtApprovedHead: false,
+        retryDecidesGateId: approval.id,
+      })),
+    );
   });
 });
 
@@ -529,14 +575,23 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
 
     const view = await peek(item.identifier);
     expect(view.mergeMembers).toEqual([
-      // No merge-queue exit on either (MOTIR-5634 / MOTIR-5635 carry it on the same read).
+      // No merge-queue exit on either (MOTIR-5634 / MOTIR-5635 carry it on the same read)
+      // — and the quick view reads the host's refusal exactly as the frame does.
       {
         subjectVersion: api.version,
         pullRequestId: api.prId,
         queued: false,
         retryable: true,
         exit: null,
+        exitAtApprovedHead: true,
         requeueable: false,
+        refusal: {
+          code: 'conflict',
+          landingClass: 'cant_land',
+          permission: null,
+          refusedAt: expect.any(String),
+        },
+        retryDecidesGateId: null,
       },
       {
         subjectVersion: web.version,
@@ -544,7 +599,10 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
         queued: true,
         retryable: false,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
+        refusal: null,
+        retryDecidesGateId: null,
       },
     ]);
     expect(view.mergeMembers).toEqual(
@@ -555,9 +613,11 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
     );
   });
 
-  it('carries none while the gate still awaits', async () => {
+  it('carries the awaiting gate’s members, with no verbs on them (MOTIR-5802)', async () => {
     const { item } = await pressable();
-    expect((await peek(item.identifier)).mergeMembers).toEqual([]);
+    const members = (await peek(item.identifier)).mergeMembers ?? [];
+    expect(members).toHaveLength(2);
+    expect(members.every((m) => !m.queued && !m.retryable && !m.requeueable)).toBe(true);
   });
 
   it('carries none — and reads no gate — for a card with no linked pull request', async () => {
@@ -614,12 +674,14 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
     const { approval, api } = await pressable();
     const retry = (approvalGateId: string, pullRequestId: string) =>
       pullRequestMergeService.retryApproveAndMergeMember(
-        { approvalGateId, pullRequestId, source: 'ui' },
+        { approvalGateId, pullRequestId, source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
         fx.ctx,
       );
-    // The approval still awaits: there is no press to retry a member of.
-    await expect(retry(approval.id, api.prId)).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
+    // ⚠️ An AWAITING gate is no longer "nothing to retry": the row's press IS the new
+    // approval and goes through the decide door (MOTIR-5802) — asserted in
+    // `tests/github/queueAgain.test.ts`. What stays refused is a gate that is not there.
     await expect(retry('no-such-gate', api.prId)).rejects.toBeInstanceOf(ApprovalGateNotFoundError);
+    expect((await gateRow(approval.id)).state).toBe('awaiting');
 
     const other = await pressed();
     // A pull request that is not this card's, and one that does not exist at all: the
@@ -639,7 +701,12 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
     await adminDb.githubCheckRun.deleteMany({ where: { pullRequestId: web.prId } });
 
     const member = await pullRequestMergeService.retryApproveAndMergeMember(
-      { approvalGateId: approval.id, pullRequestId: web.prId, source: 'ui' },
+      {
+        approvalGateId: approval.id,
+        pullRequestId: web.prId,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
       fx.ctx,
     );
     expect(member).toEqual({
@@ -676,7 +743,12 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
     vi.spyOn(projectAccessService, 'assertPermission').mockRejectedValue(error());
 
     const member = await pullRequestMergeService.retryApproveAndMergeMember(
-      { approvalGateId: approval.id, pullRequestId: api.prId, source: 'ui' },
+      {
+        approvalGateId: approval.id,
+        pullRequestId: api.prId,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
       fx.ctx,
     );
     expect(member).toMatchObject({ outcome: 'refused', refusal });
@@ -690,7 +762,12 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
 
     await expect(
       pullRequestMergeService.retryApproveAndMergeMember(
-        { approvalGateId: approval.id, pullRequestId: api.prId, source: 'ui' },
+        {
+          approvalGateId: approval.id,
+          pullRequestId: api.prId,
+          source: 'ui',
+          stamp: DECIDED_WITHOUT_A_READER,
+        },
         fx.ctx,
       ),
     ).rejects.toThrow('the database fell over');
@@ -723,7 +800,10 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
         queued: false,
         retryable: false,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
+        refusal: null,
+        retryDecidesGateId: null,
       },
       {
         subjectVersion: web.version,
@@ -731,7 +811,10 @@ describe('the press and its retry refuse what they were not handed (MOTIR-5486 c
         queued: false,
         retryable: false,
         exit: null,
+        exitAtApprovedHead: false,
         requeueable: false,
+        refusal: null,
+        retryDecidesGateId: null,
       },
     ]);
   });

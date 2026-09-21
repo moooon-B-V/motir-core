@@ -3471,6 +3471,21 @@ anything."
 > the same defect as the recording claim it replaces, one clause over. This is a
 > decision for whoever schedules the two; the design states the end state.
 
+> **AMENDED 2026-09-20 (MOTIR-5524) — DISCHARGED: the second clause SHIPPED, and
+> the route taken was the second of the two above** (_ship the first clause
+> alone and add the second later_). MOTIR-4925 shipped the first clause by
+> itself; this card added _"it cannot be finished, and its status cannot be
+> moved by hand, until they do"_ to `approvals.acceptanceVideo.desc` in
+> `messages/en.json` and its `zh` twin, **after both prerequisites landed** —
+> **MOTIR-4949** (`acceptance_result` is a registered gate kind:
+> `lib/approvalGates/registry.ts`, and
+> `acceptanceResultGateHandler.statusIntent = ACCEPTANCE_APPROVAL_TARGET`) and
+> **MOTIR-4887** (a hand move onto a status an `awaiting` gate holds throws
+> `ApprovalGatePendingError` from `workItemsService.applyStatusTransition`, via
+> `heldMoves`' RULE 1). The copy above is therefore no longer a TARGET — it is
+> what ships. The flag is kept, struck through nowhere, as the record of why the
+> sentence arrived in two pieces.
+
 Footers: the no-plan state carries _"The plan is bought once, for the
 organisation — not per project."_ + **Upgrade**. ~~The read-only state carries
 _"Only a project admin can change this. You are seeing what this project has

@@ -429,10 +429,18 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
             { workItemId: itemId, kind: 'pull_request_approval' },
             ctx,
           );
-          // The members are read ONLY for an APPROVED gate: before the press there is
-          // nothing a merge could have done, and a withdrawn question merged nothing.
+          // ⚠️ AN AWAITING GATE IS READ TOO, BECAUSE IT MAY BE THE RE-ASKED ONE (Story
+          // MOTIR-5799 · MOTIR-5806; § 4 FOURTH AMENDMENT, point 4). This said *ONLY for
+          // an APPROVED gate: before the press there is nothing a merge could have done* —
+          // true until a press that did NOT land started raising a fresh question over the
+          // same commits. On that gate the member facts are the whole of what the row draws
+          // (the class pill, the verb, the reason band), so reading `[]` for it left the
+          // item page showing a plain *Checks passing* row on a card Motir had just asked
+          // again — with `motir fix` beside it saying the pull request left the merge
+          // queue. The approval-gate ROUTE (the overlay's read) already reads both.
+          // A withdrawn or decided-other-way question still merged nothing.
           const members =
-            read.gate?.state === 'approved'
+            read.gate?.state === 'approved' || read.gate?.state === 'awaiting'
               ? await pullRequestMergeService.listApprovalMembers(
                   { workItemId: itemId, approvalGateId: read.gate.id },
                   ctx,

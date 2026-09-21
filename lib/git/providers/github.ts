@@ -403,7 +403,11 @@ export const githubProvider: GitProvider = {
     name: string,
     ref: string,
   ): Promise<string> {
-    const { token } = await mintInstallationToken(installationId);
+    // The App is chosen by the repository's PROVENANCE (MOTIR-5861): a hosted
+    // repository is installed on the provisioning App ONLY, so a mint through the
+    // user-facing default cannot reach it and the indexer never gets a tarball.
+    const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+    const { token } = await mintInstallationToken(installationId, role);
     // ⚠️ `redirect: 'manual'` IS THE WHOLE METHOD. The sibling above lets `fetch`
     // follow the 302 and then buffers what comes back; this one stops at the
     // redirect and takes the URL. Same endpoint, same credential, and the body —
@@ -605,7 +609,10 @@ export const githubProvider: GitProvider = {
     base: string,
     head: string,
   ): Promise<CommitComparison> {
-    const { token } = await mintInstallationToken(installationId);
+    // Provenance, as above (MOTIR-5861). A hosted repository's comparison would
+    // throw GithubAppNotConfiguredError, which the drift count reads as no answer.
+    const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+    const { token } = await mintInstallationToken(installationId, role);
     const url =
       `${GITHUB_API}/repos/${owner}/${name}/compare/` +
       `${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
@@ -1334,7 +1341,11 @@ export const githubProvider: GitProvider = {
     runId: string,
     attempt: number,
   ): Promise<NormalizedWorkflowJob[]> {
-    const { token } = await mintInstallationToken(installationId);
+    // Provenance, as above (MOTIR-5861). A hosted repository is exactly the one
+    // whose Actions minutes Motir is billed for, so metering it is the case that
+    // matters most and the case the user-facing default cannot reach.
+    const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+    const { token } = await mintInstallationToken(installationId, role);
     // The ATTEMPT-scoped jobs endpoint, so a re-run reads only its OWN jobs —
     // `/runs/{id}/jobs` would return every attempt's jobs and double-count.
     //

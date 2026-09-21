@@ -90,8 +90,9 @@ describe('restoreDefaultTransitions — additive merge', () => {
     // Full default graph restored (41, incl. 7.8.11's in_review→blocked,
     // MOTIR-1625's in_progress→done, MOTIR-2425's five planning edges,
     // MOTIR-3003's seven implemented edges, MOTIR-5139's four approved edges,
-    // MOTIR-5630's three ejection edges and MOTIR-5643's five parking edges)
-    // + the one custom edge kept = 42.
+    // MOTIR-5630's three ejection edges, of which MOTIR-5804 swapped
+    // `implemented → approved` for `approved → in_review`, and MOTIR-5643's five
+    // parking edges) + the one custom edge kept = 42.
     expect(wf.transitions).toHaveLength(42);
     // Statuses untouched: 9 defaults + on_hold.
     expect(wf.statuses).toHaveLength(10);

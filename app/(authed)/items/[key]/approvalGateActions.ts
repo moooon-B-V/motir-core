@@ -211,11 +211,19 @@ export type RetryApproveAndMergeMemberActionResult =
   | { ok: true; member: ApproveAndMergeMemberOutcomeDTO }
   | { ok: false; refusal: GateRefusal };
 
-/** *Retry merge* on ONE refused member of an approved press (MOTIR-5484). */
+/**
+ * THE ROW'S VERB — *Retry merge* on a refused member, *Queue again* on one the queue
+ * removed (MOTIR-5484 · MOTIR-5634).
+ *
+ * ⚠️ ON THE RE-ASKED GATE THE PRESS IS THE NEW APPROVAL (MOTIR-5802; §4 FOURTH AMENDMENT,
+ * point 4), so the reader's `stamp` travels with it exactly as it does with *Approve and
+ * merge*: what they were shown is what they decided about.
+ */
 export async function retryApproveAndMergeMemberAction(input: {
   approvalGateId: string;
   pullRequestId: string;
   identifier: string;
+  stamp: string;
 }): Promise<RetryApproveAndMergeMemberActionResult> {
   const ctx = await requireContext();
   try {
@@ -225,6 +233,7 @@ export async function retryApproveAndMergeMemberAction(input: {
         pullRequestId: input.pullRequestId,
         noteMd: null,
         source: 'ui',
+        stamp: input.stamp,
       },
       ctx,
     );

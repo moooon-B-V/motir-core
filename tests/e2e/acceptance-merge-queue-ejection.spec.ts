@@ -1,11 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
-import { E2E_GITHUB_USER, E2E_INSTALLATION_ID } from './_helpers/github-const';
 import { linkPr } from './_helpers/pr-link';
 import {
   WEB_REPO,
@@ -17,28 +15,28 @@ import {
 import { adminDb } from '@/tests/helpers/adminDb';
 import type { GithubMergeCall, GithubMergeControl } from '@/lib/test-github-merge-mock';
 import en from '@/messages/en.json';
-import zh from '@/messages/zh.json';
 
 // A PULL REQUEST THE MERGE QUEUE EJECTS — THE ACCEPTANCE RECEIPT (Story MOTIR-5461 ·
 // Subtask MOTIR-5637; `design/github/approve-and-merge--ejected.mock.html`).
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
-// A person approves a green pull request and it joins its merge queue: the card is
-// Approved. The queue throws it out because a check failed. The card goes back to
-// Implemented, and the row says so honestly — *Left the queue*, the reason in words, and
-// the failing check, linked. The approval still stands, so ONE press of *Queue again* puts
-// it back with no new question and the card is Approved again. Then the other branches:
-// new commits after an ejection bring back exactly one fresh question, a neutral removal
-// leaves the card alone, and it all reads in Chinese.
+// A person approves a green pull request and it joins its merge queue: ONE question is
+// asked over the set, one press answers it, the row reads *Queued to merge*, and the card
+// is Approved.
+//
+// ⚠️ THE EJECTION HALF OF THIS RECEIPT WAS RETIRED (Story MOTIR-5799 · MOTIR-5808), and
+// the retirement note sits where its five chapters were, below. The FOURTH AMENDMENT makes
+// every one of them false: a press that does not land SPENDS the approval, so the card
+// returns to **In Review** and is asked again rather than sitting at Implemented under a
+// still-standing yes. The frozen receipt is untouched — it records what was watched and
+// approved in September — and the ejection now has its OWN receipt,
+// `acceptance-merge-unlanded-classes.spec.ts`, which walks all three reason classes.
 //
 // ── THE SEAMS ─────────────────────────────────────────────────────────────────
 //
 //   * GitHub's enqueue — `E2E_TEST_GITHUB_MERGE` (`lib/test-github-merge-mock.ts`), whose
 //     control marks the repository as requiring a merge queue, so every press ENQUEUES.
-//   * The queue's own deliveries — SIGNED `merge_group`, `pull_request` `dequeued` and
-//     `check_run` bodies to the real `/api/github/webhook` route, built from the REAL
-//     deliveries MOTIR-5627 captured (`tests/fixtures/github/merge-queue/`).
 //
 // ⚠️ A WEBHOOK REACHES THE ITEM PAGE ON THE NEXT RENDER. The page has no live channel, so
 // after each delivery the spec RELOADS, exactly as `acceptance-approve-and-merge.spec.ts`
@@ -63,29 +61,13 @@ type Scenario = keyof typeof PRS;
 const CONTROL_PATH = process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH']!;
 const JOURNAL_PATH = process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH']!;
 const WEB = `${WEB_REPO.owner}/${WEB_REPO.name}`;
-const GROUP_SHA = '5e1ec7ed5e1ec7ed5e1ec7ed5e1ec7ed5e1ec7ed';
 const pra = en.approvalGate.pullRequestApproval;
 
 const fill = (text: string, vars: Record<string, string | number>) =>
   text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key]));
-/** The tags the ejection's rich messages use — removed by name, not by pattern: a message is
- *  our own catalogue text, and a closed list says exactly what the page drops. */
-const RICH_TAGS = ['<b>', '</b>', '<link>', '</link>'] as const;
-/** A rich message as the page reads it — its tags gone. */
-const plain = (text: string, vars: Record<string, string | number> = {}) =>
-  RICH_TAGS.reduce((out, tag) => out.split(tag).join(''), fill(text, vars));
-
 const prName = (number: number) => `${WEB} · #${number}`;
 const headRefFor = (card: SeededCard, number: number) =>
   `ejected/${card.identifier.toLowerCase()}-${number}`;
-
-function captured(name: string): Record<string, unknown> {
-  const file = join(process.cwd(), 'tests/fixtures/github/merge-queue', `${name}.json`);
-  return JSON.parse(readFileSync(file, 'utf8')).payload as Record<string, unknown>;
-}
-
-const installation = { id: Number(E2E_INSTALLATION_ID) };
-const repository = { id: Number(WEB_REPO.providerRepoId) };
 
 function journal(): GithubMergeCall[] {
   try {
@@ -185,76 +167,6 @@ async function deliverGreen(page: Page, card: SeededCard, scenario: Scenario): P
   );
 }
 
-/** The queue starts testing a group that names `number` — the captured delivery. */
-function checksRequested(number: number): Record<string, unknown> {
-  const body = captured('merge-group-checks-requested');
-  const group = body['merge_group'] as Record<string, unknown>;
-  return {
-    ...body,
-    installation,
-    repository,
-    merge_group: {
-      ...group,
-      head_sha: GROUP_SHA,
-      head_ref: `refs/heads/gh-readonly-queue/main/pr-${number}-${group['base_sha'] as string}`,
-    },
-  };
-}
-
-/** The queue removed `number` — the captured `dequeued` delivery. */
-function dequeued(number: number, reason: string): Record<string, unknown> {
-  const body = captured('dequeued-ci-failure');
-  const pr = structuredClone(body['pull_request']) as Record<string, unknown>;
-  return {
-    ...body,
-    reason,
-    number,
-    installation,
-    repository,
-    pull_request: {
-      ...pr,
-      number,
-      head: { ...(pr['head'] as Record<string, unknown>), sha: headShaFor(number) },
-    },
-  };
-}
-
-const CHECK_NAME = 'Vitest (7/12)';
-const CHECK_URL = 'https://github.com/motir-projects-e2e/amerge-web/actions/runs/1/job/2';
-
-/** The queue's check that failed on the group's commit — the captured check run. */
-function failedGroupCheck(): Record<string, unknown> {
-  const body = captured('check-run-failed-merge-group');
-  return {
-    ...body,
-    installation,
-    repository,
-    check_run: {
-      ...(body['check_run'] as Record<string, unknown>),
-      head_sha: GROUP_SHA,
-      html_url: CHECK_URL,
-    },
-  };
-}
-
-/** A push to `number`: a new head. */
-function synchronize(card: SeededCard, number: number, headSha: string): Record<string, unknown> {
-  return {
-    action: 'synchronize',
-    installation,
-    repository,
-    pull_request: {
-      number,
-      state: 'open',
-      merged: false,
-      title: card.title,
-      head: { ref: headRefFor(card, number), sha: headSha },
-      base: { ref: WEB_REPO.defaultBranch },
-      user: { id: E2E_GITHUB_USER.id },
-    },
-  };
-}
-
 /** Press Approve and merge, confirm, and wait for the action. */
 async function pressApproveAndMerge(page: Page): Promise<void> {
   const dev = developmentCard(page);
@@ -267,15 +179,6 @@ async function pressApproveAndMerge(page: Page): Promise<void> {
     })
     .click();
   expect((await action).status()).toBe(200);
-}
-
-async function approvedIntoTheQueue(page: Page, card: SeededCard, scenario: Scenario) {
-  await open(page, card);
-  await pressApproveAndMerge(page);
-  await expect(
-    prRow(page, PRS[scenario].number).getByText(pra.outcome.queued, { exact: true }),
-  ).toBeVisible();
-  await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
 }
 
 test.describe('a pull request the merge queue ejects', () => {
@@ -301,7 +204,7 @@ test.describe('a pull request the merge queue ejects', () => {
     await deliverGreen(page, neutral, 'neutral');
   });
 
-  test('the queue ejects it, the card says why, and Queue again puts it back on the same approval', async ({
+  test('a green set asks ONE question, and the press puts it in the merge queue', async ({
     page,
     chapter,
     beat,
@@ -340,151 +243,35 @@ test.describe('a pull request the merge queue ejects', () => {
     );
     await beat();
 
-    await chapter('The merge queue ejects it: a check failed', async () => {
-      await deliver(page, 'merge_group', checksRequested(number), 'the queue tests the group');
-      await deliver(page, 'pull_request', dequeued(number, 'CI_FAILURE'), 'the queue removes it');
-      await deliver(page, 'check_run', failedGroupCheck(), 'the failed check reports');
-      await page.reload();
-
-      await expect(statusCard(page)).toContainText('Implemented', { timeout: 60_000 });
-      const row = prRow(page, number);
-      await expect(row.getByText(pra.outcome.leftQueue, { exact: true })).toBeVisible();
-      await expect(row.getByRole('button', { name: pra.outcome.queueAgain })).toBeVisible();
-      const dev = developmentCard(page);
-      await expect(
-        dev.getByText(
-          plain(pra.exit.left, { pr: prName(number), reason: pra.exit.reason.CI_FAILURE }),
-          { exact: true },
-        ),
-      ).toBeVisible();
-      const check = dev.getByRole('link', {
-        name: fill(pra.exit.openCheck, { check: CHECK_NAME }),
-      });
-      await expect(check).toHaveAttribute('href', CHECK_URL);
-      await expect(dev.getByText(plain(pra.exit.unchanged), { exact: true })).toBeVisible();
-      // The approval stands: the record still names who approved, and nothing is asked again.
-      await expect(dev.getByText(new RegExp(`Approved by ${seed.ownerName}`))).toBeVisible();
-      expect(await awaitingGates(ejected)).toBe(0);
-      await beat();
-      await show(row);
-      await beat();
-      await show(check);
-    });
-    await beat();
-
-    await chapter(
-      'Queue again: back in the queue, Approved, and nobody is asked again',
-      async () => {
-        const row = prRow(page, number);
-        await show(row);
-        const action = serverAction(page);
-        await row.getByRole('button', { name: pra.outcome.queueAgain }).click();
-        expect((await action).status()).toBe(200);
-        await expect(row.getByText(pra.outcome.queued, { exact: true })).toBeVisible();
-        await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
-        await expect(row.getByRole('button', { name: pra.outcome.queueAgain })).toHaveCount(0);
-        await atMostOneQuestion(ejected);
-        expect(await awaitingGates(ejected)).toBe(0);
-        await beat();
-        await show(statusCard(page));
-        await beat();
-
-        await page.goto('/workbench?tab=approvals');
-        const table = page.getByRole('table', { name: 'To approve' });
-        // The other two cards still wait; this one does not.
-        await expect(table.getByTestId(/^approval-row-/)).toHaveCount(2, { timeout: 60_000 });
-        await expect(
-          table.getByTestId(/^approval-row-/).filter({ hasText: ejected.identifier }),
-        ).toHaveCount(0);
-      },
-    );
-    await beat();
-
-    await chapter('New commits after an ejection: Motir asks again, once', async () => {
-      const n = PRS.rearmed.number;
-      await approvedIntoTheQueue(page, rearmed, 'rearmed');
-      await deliver(page, 'pull_request', dequeued(n, 'CI_FAILURE'), 'the queue removes it');
-      await page.reload();
-      await expect(statusCard(page)).toContainText('Implemented', { timeout: 60_000 });
-      await expect(
-        prRow(page, n).getByRole('button', { name: pra.outcome.queueAgain }),
-      ).toBeVisible();
-      await atMostOneQuestion(rearmed);
-
-      const pushed = 'feedfacefeedfacefeedfacefeedfacefeedface';
-      await deliver(page, 'pull_request', synchronize(rearmed, n, pushed), 'a push');
-      await atMostOneQuestion(rearmed);
-      await deliver(
-        page,
-        'check_suite',
-        checkSuitePayload({
-          conclusion: 'success',
-          headSha: pushed,
-          prNumber: n,
-          headBranch: headRefFor(rearmed, n),
-          repo: WEB_REPO,
-        }),
-        'green at the new head',
-      );
-      await page.reload();
-      await expect(statusCard(page)).toContainText('In Review', { timeout: 60_000 });
-      const dev = developmentCard(page);
-      await expect(dev.getByRole('button', { name: pra.verb.approveAndMerge })).toBeVisible();
-      await expect(dev.getByRole('button', { name: pra.outcome.queueAgain })).toHaveCount(0);
-      expect(await awaitingGates(rearmed)).toBe(1);
-      await beat();
-      await show(prRow(page, n));
-    });
-    await beat();
-
-    await chapter('Someone took it out of the queue: the card stays Approved', async () => {
-      const n = PRS.neutral.number;
-      await approvedIntoTheQueue(page, neutral, 'neutral');
-      await deliver(page, 'pull_request', dequeued(n, 'MANUAL'), 'someone removes it');
-      await page.reload();
-      await expect(
-        prRow(page, n).getByText(pra.outcome.removedFromQueue, { exact: true }),
-      ).toBeVisible({ timeout: 60_000 });
-      await expect(
-        prRow(page, n).getByRole('button', { name: pra.outcome.queueAgain }),
-      ).toBeVisible();
-      await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
-      await expect(
-        developmentCard(page).getByText(
-          plain(pra.exit.removed, { pr: prName(n), reason: pra.exit.reason.MANUAL }),
-          { exact: true },
-        ),
-      ).toBeVisible();
-      await atMostOneQuestion(neutral);
-      await beat();
-      await show(prRow(page, n));
-    });
-    await beat();
-
-    await chapter('The same ejection, in Chinese', async () => {
-      const zpra = zh.approvalGate.pullRequestApproval;
-      // A second genuine ejection of the first card, at the same head.
-      await deliver(page, 'pull_request', dequeued(number, 'CI_FAILURE'), 'ejected again');
-      await page
-        .context()
-        .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
-      await page.goto(`/items/${ejected.identifier}`);
-      const title = zh.github.development.title;
-      await expect(developmentCard(page, title)).toHaveCount(1, { timeout: 60_000 });
-      const row = prRow(page, number, title);
-      await expect(row.getByText(zpra.outcome.leftQueue, { exact: true })).toBeVisible();
-      await expect(row.getByRole('button', { name: zpra.outcome.queueAgain })).toBeVisible();
-      const dev = developmentCard(page, title);
-      await expect(
-        dev.getByText(
-          plain(zpra.exit.left, { pr: prName(number), reason: zpra.exit.reason.CI_FAILURE }),
-          { exact: true },
-        ),
-      ).toBeVisible();
-      await expect(dev.getByText(plain(zpra.exit.unchanged), { exact: true })).toBeVisible();
-      await atMostOneQuestion(ejected);
-      await show(row);
-    });
-    await beat();
+    // ⚠️ FIVE CHAPTERS WERE RETIRED HERE (Story MOTIR-5799 · MOTIR-5808;
+    // `docs/decisions/approval-gates.md` § 4 FOURTH AMENDMENT). They read:
+    //
+    //   · *The merge queue ejects it: a check failed* — the card at **Implemented**, the
+    //     approval still standing, *your approval still covers these commits*;
+    //   · *Queue again: back in the queue, Approved, and nobody is asked again*;
+    //   · *New commits after an ejection: Motir asks again, once* — from Implemented;
+    //   · *Someone took it out of the queue: the card stays Approved*;
+    //   · *The same ejection, in Chinese* — the same Implemented-era sentences.
+    //
+    // Every one of them was true when MOTIR-5461 was accepted, and the amendment makes
+    // every one of them false: a press that does not land SPENDS the approval, so a
+    // retryable exit returns the card to **In Review** and asks once more, a neutral
+    // removal does the same, and *Queue again* is the new approval rather than a second
+    // act on the old one.
+    //
+    // They were DELETED rather than re-pointed at today's behaviour. A receipt's spec
+    // records what a person watched and approved; rewriting its assertions to agree with
+    // the present edits history (`docs/decisions/acceptance-receipt-lifecycle.md` § 3,
+    // and `CLAUDE.md`'s *an `acceptance-*.spec.ts` is a RECEIPT*). The frozen receipt is
+    // untouched. What they covered now lives in:
+    //
+    //   · `tests/e2e/acceptance-merge-unlanded-classes.spec.ts` — the ejection end to
+    //     end, by class, with its own video (MOTIR-5808);
+    //   · `tests/integration/mergeQueueEjectionStoryGate.test.ts` and
+    //     `tests/github/mergeQueueExit.test.ts` — every reason class on real Postgres, in
+    //     a lane that runs on EVERY pull request.
+    //
+    // What remains above is the half the amendment leaves standing, and it is this
+    // story's own subject: a green set, ONE question, and the press that enqueues it.
   });
 });

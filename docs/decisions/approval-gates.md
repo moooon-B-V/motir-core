@@ -57,6 +57,17 @@
   and who may press. Row 4a's _"ONE transaction"_ is struck and replaced;
   nothing else in §8 changes.
 
+- **AMENDED 2026-09-19 (MOTIR-5800), at §4 and §8, by Yue.** §4's FOURTH
+  AMENDMENT: **one approval authorizes ONE merge or enqueue action.** Every
+  un-landed outcome — a queue exit of any disposition, or a host refusal at the
+  press — is CLASSED by reason: retryable and setting-blocked re-ask at
+  `in_review` with ONE fresh gate, a conflict drops to `implemented` with the
+  promotion held, and _Retry merge_ / _Queue again_ on the pull request's row
+  DECIDE that fresh gate rather than reusing the spent approval. The host's
+  refusal is recorded on the pull request, and `implemented → approved` leaves the
+  workflow. It supersedes the THIRD's decisions 5–7 and §8's point 5(e), each
+  struck in place and still readable.
+
 - **AMENDED 2026-09-19 (MOTIR-5672), at §1, §8 and _Deliberately NOT decided
   here_ — THE DECISION GATE.** A `coding_agent` decision card's subject is the
   `docs/decisions/*.md` file in its MANDATORY pull request; the gate is PRIMARY
@@ -1052,8 +1063,15 @@ An approval that does not merge is a note, not a gate.
 > removal writes nothing and moves nothing: the merge webhook already owns
 > `done` (§4 amendment).
 >
-> **5. THE CARD'S ONE DECIDED GATE STANDS, AND _QUEUE AGAIN_ REUSES IT WHILE THE
-> HEADS ARE UNCHANGED** (rung 1: GitHub; rung 3: MOTIR-5603's record).
+> **⚠️ SUPERSEDED by the FOURTH AMENDMENT below (MOTIR-5800, 2026-09-19)** for
+> EVERY un-landed removal in a `manual` project, NEUTRAL included: the merge
+> question is asked again on ONE fresh gate (or, for a `MERGE_CONFLICT`, the card
+> drops to `implemented` and no gate is raised), and _Queue again_ DECIDES that
+> gate rather than reusing the spent approval. It still holds for `auto` mode.
+> Kept visible as the record.
+>
+> ~~**5. THE CARD'S ONE DECIDED GATE STANDS, AND _QUEUE AGAIN_ REUSES IT WHILE THE
+> HEADS ARE UNCHANGED**~~ (rung 1: GitHub; rung 3: MOTIR-5603's record).
 >
 > - **An ejection neither supersedes nor re-opens the decided
 >   `pull_request_approval` gate.** A decided gate is a record (§6a), and the
@@ -1087,7 +1105,14 @@ An approval that does not merge is a note, not a gate.
 > - **Two presses on one exit enqueue once.** The card's row lock plus a
 >   `requeuedAt IS NULL` predicate decide it; the loser gets a named refusal.
 >
-> **6. NO SECOND GATE OVER THE SAME COMMITS, AND A PUSH RE-ARMS** (rung 2: the
+> **⚠️ SUPERSEDED by the FOURTH AMENDMENT below (MOTIR-5800, 2026-09-19)** in its
+> first half: a manual RETRYABLE or SETTING outcome now moves the card to
+> `in_review` and DOES raise ONE fresh gate over the same commits, computed from
+> the standing outcome rather than from the promotion. For a CAN'T-LAND outcome
+> the promotion hold below is exactly what the amendment keeps, and the push
+> re-arm is unchanged. Kept visible as the record.
+>
+> ~~**6. NO SECOND GATE OVER THE SAME COMMITS, AND A PUSH RE-ARMS**~~ (rung 2: the
 > shipped promotion). **This is the rule the story turns on, because the shipped
 > latch would otherwise break decision 5 by itself.** After a failure exit the
 > card is `implemented` while its members' OWN checks are still green: only the
@@ -1122,7 +1147,11 @@ An approval that does not merge is a note, not a gate.
 > as merge candidates was the alternative, and it was rejected: a card with one
 > member re-pushed and another still queued would then never be asked again.)
 >
-> **7. THE WORKFLOW EDGES** (rung 2: `DEFAULT_TRANSITIONS`, which carries 33
+> **⚠️ SUPERSEDED by the FOURTH AMENDMENT below (MOTIR-5800, 2026-09-19)** at its
+> second bullet: `implemented → approved` is REMOVED and `approved → in_review`
+> is DECLARED. The first and third bullets stand. Kept visible as the record.
+>
+> ~~**7. THE WORKFLOW EDGES**~~ (rung 2: `DEFAULT_TRANSITIONS`, which carries 33
 > edges at this base).
 >
 > - `approved → implemented` and `in_review → implemented` are declared
@@ -1205,6 +1234,181 @@ An approval that does not merge is a note, not a gate.
 > | 7            | MOTIR-5630 — the edges and their backfill                   |
 > | 8            | MOTIR-5633 — the failing check · MOTIR-5638 — the App grant |
 > | the surface  | MOTIR-5631 — the design delta · MOTIR-5635 — the frame      |
+
+> ### §4 — FOURTH AMENDMENT (MOTIR-5800, 2026-09-19): ONE APPROVAL = ONE MERGE/ENQUEUE ACTION — every un-landed outcome is classed by REASON, retryable and setting-blocked re-ask at `in_review` with ONE fresh gate, a conflict drops to `implemented` HELD, _Retry merge_ / _Queue again_ ARE the new approval, and `implemented → approved` leaves the workflow
+>
+> **DECIDED BY THE REQUESTER (Yue, 2026-09-19)**, first answering MOTIR-5144's
+> open criterion and then widening it at the design review of MOTIR-5801. Their
+> words:
+>
+> - _"every merge/requeue needs to be approved again, one approval for one
+>   merge/enqueue action"_
+> - _"retry merge is needed too, retry merge can be on the work item link PR"_
+> - _"if it's conflict the PR really can't be merged, retry is useless"_
+> - a NEUTRAL removal: _"re-ask too"_
+>
+> The requester's reasoning, in their terms: `approved` serves two gates, the
+> DESIGN gate and the MERGE gate. The design gate never rolls back. The merge gate
+> does — a pull request that did not land did not honour the yes a person gave
+> about those commits — and the yes was about ONE attempt.
+>
+> **What this reverses.** The THIRD AMENDMENT's decisions 5, 6 (first half) and 7
+> (second bullet), struck in place above, and §8's point 5(e) _"a retry is step (b)
+> for that one gate alone"_, struck in place below (point 8). Its decisions 1–4, 8
+> and 9 stand unchanged: the event, the reason map, the exit row, the failing check
+> and the delivery-GUID idempotency. **Every rule below is for a `manual`-mode
+> project.** `auto` mode is unchanged throughout and is restated at point 10.
+>
+> **1. ONE APPROVAL AUTHORIZES ONE MERGE OR ENQUEUE ACTION.** Once that action has
+> been attempted and has NOT landed, the approval is SPENT. No door re-performs it
+> on the same approval — not _Queue again_, not _Retry merge_, not a second press
+> of the same gate. _Why:_ an approval is a person saying "land these commits
+> now"; when that attempt fails, nobody has said "try again", and the product must
+> not supply that sentence on their behalf.
+>
+> **2. EVERY UN-LANDED OUTCOME IS CLASSED BY ITS REASON**, by ONE total map in
+> `lib/mergeQueue/queueExit.ts` over BOTH sources: the queue's exit reason
+> (`GithubPullRequestQueueExit.rawReason`) and the host's `MergeRefusalCode`
+> (`lib/git/types.ts`) when a press is refused.
+>
+> | class                       | reasons                                                                                                                                                              | the card                 | the gate                                    |
+> | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------------------------------- |
+> | **RETRYABLE**               | queue `CI_FAILURE`, `CI_TIMEOUT`, `INVALID_MERGE_COMMIT`, `GIT_TREE_INVALID`, and every NEUTRAL removal (`MANUAL`, `QUEUE_CLEARED`, `ROLL_BACK`, an unmapped reason) | `approved → in_review`   | ONE fresh awaiting gate                     |
+> | **CAN'T LAND AS IT STANDS** | queue `MERGE_CONFLICT`; host `conflict`, `checks_not_green`                                                                                                          | `approved → implemented` | none — the promotion is HELD at that head   |
+> | **BLOCKED BY A SETTING**    | queue `BRANCH_PROTECTIONS`; host `branch_protected`, `app_permission_missing`                                                                                        | `approved → in_review`   | ONE fresh awaiting gate, naming the setting |
+> | **LANDED**                  | `MERGE`, `ALREADY_MERGED`; host `already_merged`                                                                                                                     | unchanged                | none                                        |
+>
+> The reason for each class, one sentence each:
+>
+> - **RETRYABLE** — re-running the SAME commits can succeed (a flaky check, a
+>   cleared queue, a hand removal), so the question is worth asking again.
+> - **CAN'T LAND AS IT STANDS** — the same commits cannot land however many times
+>   anyone says yes, so asking would offer a button guaranteed to fail; the card
+>   goes back to `implemented`, where `motir fix` claims it.
+> - **BLOCKED BY A SETTING** — a person can change the setting and the same
+>   commits then land, so the question is asked and the surface NAMES the setting.
+> - `subject_changed` is **NOT an outcome at all.** It is the stale-stamp refusal
+>   (MOTIR-5232): the action was never attempted, so nothing was spent and no row
+>   is written.
+>
+> **3. THE RE-ASKED GATE** is ONE fresh awaiting `pull_request_approval` gate over
+> the SAME delivery-set version, standing alone.
+>
+> - **The decided gate row is never edited.** It is a record (§6a), and
+>   `trg_approval_gate_decided_immutable` refuses the write anyway. _Why:_ the
+>   first yes happened and stays true as history; what changed is that it did not
+>   land.
+> - **The re-ask is COMPUTED from the STANDING OUTCOME** — a queue exit that is
+>   not re-queued, or a recorded host refusal that is not superseded — at the
+>   member's CURRENT head and later than the approval. `resolveGateSet` treats
+>   such an outcome as making the merge question OWED even though the latest merge
+>   gate is `approved` at the same set version. _Why:_ the old row cannot carry the
+>   change, so the only honest input is the outcome record.
+> - **A decided `design_result` gate stays decided and is not re-asked**, also
+>   where the un-landed merge had been carried by the design approval (MOTIR-5664's
+>   one-press carry). _Why:_ the design was never the problem, only the merge. The
+>   new gate stands alone, drawn the way MOTIR-5667's state 2 draws a merge gate
+>   re-opened beside a decided design.
+> - **Exactly one.** A redelivered `dequeued` (the same delivery GUID, decision 9)
+>   raises nothing new, and the partial unique index on `awaiting` still holds.
+>   _Why:_ asking twice about one set of commits is the thing MOTIR-5603 retired.
+> - **A CAN'T-LAND outcome raises NOTHING, and the promotion is HELD at that
+>   head.** A green check at the same head must not raise a gate; the head moving
+>   is what re-arms it (point 6).
+>
+> **4. _RETRY MERGE_ AND _QUEUE AGAIN_ ARE THE NEW APPROVAL.** They stay on the
+> PULL REQUEST's own row, where the person sees the outcome — the requester's
+> _"retry merge can be on the work item link PR"_. Pressing one **DECIDES the
+> awaiting re-asked gate** with the member's stamp and then performs ONE merge or
+> enqueue, stamping the exit's `requeuedAt` or the refusal's `supersededAt` and
+> moving the card `in_review → approved` under that gate's `decidingGateId`. With
+> NO awaiting gate they refuse by name (`MERGE_REQUEUE_NEEDS_APPROVAL`) and press
+> nothing. Approving the gate from the item page or the full-screen overlay
+> performs the SAME action through the same service path. A CAN'T-LAND member
+> offers neither verb. _Why:_ the familiar button is kept where people look for it,
+> and it is made to MEAN the fresh yes rather than a replay of the spent one.
+>
+> **5. THE HOST'S REFUSAL IS RECORDED** on the pull request —
+> `GithubPullRequestMergeRefusal`: the `MergeRefusalCode`, the head it refused, the
+> gate whose approval it spent, and when — written in its own transaction after the
+> press's transaction has rolled back. _Why:_ before this the refusal existed only
+> in the press's HTTP response, so a reload showed a card reading **Approved** with
+> nothing anywhere saying the merge had been refused or why. A class cannot be
+> assigned to an outcome nobody wrote down.
+>
+> **6. `motir fix` IS FOR THE CLASSES WHERE THE CODE MAY BE AT FAULT.** It claims a
+> CAN'T-LAND card at `implemented` (where it already did) and a `CI_FAILURE` /
+> `CI_TIMEOUT` / `INVALID_MERGE_COMMIT` / `GIT_TREE_INVALID` card at `in_review`.
+> It REFUSES a BLOCKED-BY-A-SETTING card and a NEUTRAL one, naming what would help
+> instead. It is offered wherever the re-asked gate is decided: the item page's
+> Development block AND the full-screen approval overlay. A push after an un-landed
+> outcome supersedes the fresh gate `head moved`, and the next green raises exactly
+> one gate over the new commits (MOTIR-5604's path, unchanged) — which is also how
+> a CAN'T-LAND card leaves its hold. _Why:_ `motir fix` sends an agent to change
+> code; against branch protection or a hand removal it has nothing to change.
+>
+> **7. THE EDGES.** After this amendment the ejection edges in the default workflow
+> read:
+>
+> | edge                      | state        | writer                                                  |
+> | ------------------------- | ------------ | ------------------------------------------------------- |
+> | `approved → in_review`    | **DECLARED** | a RETRYABLE or SETTING outcome (point 2)                |
+> | `implemented → approved`  | **ABSENT**   | none — an approval is only ever given from `in_review`  |
+> | `approved → implemented`  | kept         | a CAN'T-LAND outcome (point 2); also a legal hand move  |
+> | `in_review → implemented` | kept         | an `auto` FAILURE removal (THIRD AMENDMENT, decision 3) |
+>
+> _Why:_ the absence of `implemented → approved` is what guarantees a card only
+> becomes Approved where CI has spoken and a person has said yes, and its only
+> product writer was _Queue again_, which point 4 turns into a gate decision.
+> Existing default workflows are converged by a KEY-joined migration that inserts
+> `approved → in_review` behind a `NOT EXISTS` guard and deletes only the
+> `implemented → approved` rows Motir's own backfill wrote, never a transition a
+> person added in the workflow editor.
+>
+> **8. §8's point 5(e) — _"a retry is step (b) for that one gate alone. The
+> approval stands above it."_ (MOTIR-5613) — is SUPERSEDED**, struck in place at
+> §8 below. A refused merge still writes no decision on its gate and still renders
+> its refusal on the surface naming that pull request; what changes is that the
+> retry no longer rides on the standing approval. The refusal is recorded (point
+> 5), classed (point 2), and the card leaves `approved` accordingly; _Retry merge_
+> then decides the fresh gate (point 4). _Why:_ that rule is the same shortcut as
+> _Queue again_, one door over, and point 1 admits no exception for it.
+>
+> **9. CARDS LEFT STRANDED BY THE OLD RULES ARE CONVERGED, by an operator, after
+> deploy.** Four populations, each moved through the SAME service entry point a
+> live outcome runs: a card at `implemented` with a standing RETRYABLE or SETTING
+> exit at its head (→ `in_review` plus one fresh gate); a card at `implemented`
+> with a standing `MERGE_CONFLICT` exit (already in its new state — counted, not
+> moved); a card at `approved` with a standing NEUTRAL exit (→ `in_review` plus one
+> gate); and a card at `approved` holding an un-landed member with no outcome at
+> all, which is a host refusal the press never recorded (a refusal row is written
+> with the backfill-only code `unrecorded`, classed RETRYABLE, then the same move).
+> A card whose head has moved is skipped: it re-arms on its next green, as today.
+> _Why:_ changing a rule going forward must not leave the cards caught under the
+> old one with no way back, and RETRYABLE is the safe default for an outcome nobody
+> recorded — a person is asked, and can still reach for `motir fix`.
+>
+> **10. `auto` MODE IS UNCHANGED.** No gate is raised, a failure exit still writes
+> `in_review → implemented`, and `requeueAutoMember` (MOTIR-5634) still
+> re-dispatches the same head on a person's press. _Why:_ there is no approval in
+> `auto` mode to spend, so point 1 has nothing to bind.
+>
+> **Not decided here:** GitLab merge trains (MOTIR-4608); any notification.
+> MOTIR-5785 (the design-card direct-merge defect) is `done` and its design-hold
+> refusal stays ahead of every merge or enqueue this amendment describes.
+>
+> **Which card builds which point** (Story MOTIR-5799):
+>
+> | points      | card                                                                  |
+> | ----------- | --------------------------------------------------------------------- |
+> | 2, 3, 7     | MOTIR-5805 — the class map, `settleUnlandedOutcome`, and the gate set |
+> | 1, 4        | MOTIR-5802 — no door reuses a spent approval after a queue exit       |
+> | 5           | MOTIR-5833 — the host refusal record                                  |
+> | 4, 8        | MOTIR-5834 — _Retry merge_ after a host refusal                       |
+> | 6 (claim)   | MOTIR-5803 — `motir fix` claims by class                              |
+> | 6 (surface) | MOTIR-5801 — the design · MOTIR-5806 — the frame and the overlay      |
+> | 7 (edges)   | MOTIR-5804 — the edges and their migration                            |
+> | 9           | MOTIR-5809 — the script · MOTIR-5810 — its production run             |
 
 ### 5. The line against Story 9.2 — DECIDED BY THE PLANNER (rung 3, and it re-scopes existing cards)
 
@@ -2435,9 +2639,14 @@ record holds then, and why a null FK would be the wrong answer.
 >   arrives only through the merge webhook, when the queue lands it. `done`'s one
 >   writer is unchanged.
 > - **(e) A refused merge or enqueue writes NO decision on its merge gate.** The
->   gate stays `awaiting` and decidable, the refusal renders on the surface naming
->   that pull request, and a retry is step (b) for that one gate alone. The
->   approval stands above it.
+>   gate stays `awaiting` and decidable, and the refusal renders on the surface
+>   naming that pull request. ~~and a retry is step (b) for that one gate alone.
+>   The approval stands above it.~~ **⚠️ SUPERSEDED by §4's FOURTH AMENDMENT
+>   (MOTIR-5800, 2026-09-19), point 8:** one approval authorizes ONE merge or
+>   enqueue action, so a retry does NOT ride on the standing approval. The refusal
+>   is recorded on the pull request, classed by reason, and the card leaves
+>   `approved` accordingly; _Retry merge_ then DECIDES the fresh gate the class
+>   raised. Kept visible as the record.
 >
 > **Why the approval is not held back until every merge succeeds:** a person did
 > approve, at that moment, and the record should say so. A merge that did not

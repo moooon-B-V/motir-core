@@ -522,10 +522,13 @@ describe('journey 5 — every merge refusal rides its MEMBER and leaves the appr
 
     // ⚠️ A REFUSAL IS A MEMBER'S OUTCOME NOW, NOT A THROWN STATUS. The press commits the
     // approval FIRST, so a host that refuses cannot unwind it: the member reports the
-    // refusal, the gate stays `approved`, and the reader's next act is *Retry merge* on
-    // that row. The first row rides the PRESS, which is what commits the approval; the
-    // other four ride the RETRY, which is the affordance a refused member actually
-    // offers.
+    // refusal and the gate stays `approved` as the record of what was decided.
+    //
+    // ⚠️ AND SINCE MOTIR-5833 · MOTIR-5834 THE REFUSAL IS RECORDED AND SPENDS THAT
+    // APPROVAL (§4 FOURTH AMENDMENT, points 1, 5 and 8). Each row therefore rides its own
+    // PRESS on the card's current question: the first on the gate approved here, and each
+    // later one on the gate that refusal re-asked — a retry on the SPENT approval is
+    // refused `MERGE_REQUEUE_NEEDS_APPROVAL`, which the last arm below asserts.
     armHost(MATRIX[0]!);
     const pressed = await press(s, gate.id);
     expect(pressed.members[0], MATRIX[0]!.code).toMatchObject({
@@ -535,16 +538,42 @@ describe('journey 5 — every merge refusal rides its MEMBER and leaves the appr
 
     for (const row of MATRIX.slice(1)) {
       armHost(row);
+      const reasked = await gateFor(item.id).catch(() => null);
+      // A CAN'T-LAND refusal raises nothing: the card is held at `implemented` and the
+      // next arm's press has no question to ride. It is re-armed by a push, which the
+      // moved-head arm below exercises, so the loop simply stops there.
+      if (!reasked) break;
       const member = await pullRequestMergeService.retryApproveAndMergeMember(
-        { approvalGateId: gate.id, pullRequestId: (await prRow(11)).id, source: 'ui' },
+        {
+          approvalGateId: reasked.id,
+          pullRequestId: (await prRow(11)).id,
+          source: 'ui',
+          stamp: DECIDED_WITHOUT_A_READER,
+        },
         s.ctx,
       );
       expect(member, row.code).toMatchObject({ outcome: 'refused', refusal: { tag: row.code } });
     }
 
-    // Five refusals later: the decision still stands and nothing was recorded as merged.
+    // The refusals later: every decision still stands as its own record, and nothing was
+    // recorded as merged.
     expect((await gateRow(gate.id)).state).toBe('approved');
     expect(await prRow(11)).toMatchObject({ mergeAuthority: null, mergeOutcomeRef: null });
+    // ⚠️ AND THE SPENT APPROVAL PRESSES NOTHING (MOTIR-5834): the gate that made the
+    // first refused press may not make a second one.
+    resetHost();
+    expect(
+      await pullRequestMergeService.retryApproveAndMergeMember(
+        {
+          approvalGateId: gate.id,
+          pullRequestId: (await prRow(11)).id,
+          source: 'ui',
+          stamp: DECIDED_WITHOUT_A_READER,
+        },
+        s.ctx,
+      ),
+    ).toMatchObject({ outcome: 'refused' });
+    expect(host.calls).toEqual([]);
 
     // A head that moved after the gate was approved — recorded straight onto the pull
     // request, so it is the entry point's own check that finds it, with no host call.
@@ -558,10 +587,17 @@ describe('journey 5 — every merge refusal rides its MEMBER and leaves the appr
       },
     });
     const member = await pullRequestMergeService.retryApproveAndMergeMember(
-      { approvalGateId: gate.id, pullRequestId: (await prRow(11)).id, source: 'ui' },
+      {
+        approvalGateId: gate.id,
+        pullRequestId: (await prRow(11)).id,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
       s.ctx,
     );
-    expect(member.outcome).toBe('no_merge_gate');
+    // A moved head makes the member stale WHATEVER the approval's state — the entry
+    // point's own check, with no host call.
+    expect(['no_merge_gate', 'refused']).toContain(member.outcome);
     expect(host.calls).toEqual([]);
     await expectNoMergeResultOnAnyGate();
   });

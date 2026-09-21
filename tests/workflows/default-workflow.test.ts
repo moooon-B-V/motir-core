@@ -73,7 +73,9 @@ describe('defaultWorkflow constant', () => {
     expect(new Set(positions).size).toBe(positions.length); // all distinct
   });
 
-  it('defines forty-one transitions, each referencing a known status key (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630 + MOTIR-5643)', () => {
+  it('defines forty-one transitions, each referencing a known status key (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003 + MOTIR-5139 + MOTIR-5630 + MOTIR-5804 + MOTIR-5643)', () => {
+    // 5804 is net ZERO (one edge out, one in) and 5643 adds five, so the sum is
+    // 41 whichever merged first — the arithmetic MOTIR-5643's card asked for.
     expect(DEFAULT_TRANSITIONS).toHaveLength(41);
     const keys = new Set(DEFAULT_STATUSES.map((s) => s.key));
     for (const [from, to] of DEFAULT_TRANSITIONS) {
@@ -82,15 +84,18 @@ describe('defaultWorkflow constant', () => {
     }
     const pairs = DEFAULT_TRANSITIONS.map(([f, t]) => `${f}->${t}`);
     expect(new Set(pairs).size).toBe(pairs.length); // no duplicate edges
-    // MOTIR-5630 — the merge-queue ejection's three edges, by key
-    // (`approval-gates.md` §4 THIRD AMENDMENT, decision 7).
+    // The merge-queue ejection's edges, by key (`approval-gates.md` §4 THIRD
+    // AMENDMENT, decision 7, as the FOURTH AMENDMENT's point 6 amends it —
+    // MOTIR-5804): `approved → in_review` is declared, `implemented → approved` is
+    // ABSENT, and the other two stay.
     expect(pairs).toEqual(
       expect.arrayContaining([
+        'approved->in_review',
         'approved->implemented',
         'in_review->implemented',
-        'implemented->approved',
       ]),
     );
+    expect(pairs).not.toContain('implemented->approved');
     // MOTIR-5643 — the planning PARKING edges, by key
     // (`agent-authored-plans.md` AMENDMENT 16, D10). Four in, one out.
     expect(pairs).toEqual(
