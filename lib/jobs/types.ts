@@ -515,6 +515,10 @@ export interface JobEventDataMap {
   'system.monitor-issue-reconcile': SystemScheduledData;
   /** ONE binding's poll, fanned out by the tick above (MOTIR-5581). */
   'monitor/connection.poll-requested': MonitorConnectionPollRequestedData;
+  /** The DLQ standing-depth filer (MOTIR-5869) — files one bug per job function
+   *  whose dead letters have stood undisposed for seven days. Cross-tenant by
+   *  design: `job_run_dlq` is deployment-wide. */
+  'system.dlq-standing-depth-sweep': SystemScheduledData;
 }
 
 /**
