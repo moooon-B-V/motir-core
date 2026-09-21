@@ -261,7 +261,15 @@ test.describe('a GitHub approval syncs into Motir', () => {
     writeControl({
       repositories: [repoKey(WEB_REPO), repoKey(API_REPO)],
       pullRequests: {
-        [prKey(API_REPO, PRS.refused.api.number)]: { outcome: 'refused', refusal: 'conflict' },
+        // ⚠️ A conflict the MERGE meets after the decision (§ 28), not one the press
+        // finds first: the host's read says `clean`, then the merge is refused
+        // (MOTIR-5915 — a `dirty` read would refuse at the press instead, § 30 Panel 5a).
+        [prKey(API_REPO, PRS.refused.api.number)]: {
+          outcome: 'refused',
+          refusal: 'conflict',
+          mergeable: true,
+          mergeableState: 'clean',
+        },
       },
       reviewerPermissions: {
         [MEMBER_REVIEWER.login]: 'write',

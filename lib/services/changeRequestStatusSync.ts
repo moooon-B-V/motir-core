@@ -52,6 +52,10 @@ import {
 } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { NO_ARTIFACT_MARKER } from '@/lib/workItems/artifactEvidence';
+import {
+  DeliveredItemsTransitionFailedError,
+  type DeliveredItemTransitionFailure,
+} from '@/lib/git/errors';
 
 // The provider-agnostic change-request → work-item status-sync state machine
 // (Story 7.10 · MOTIR-892, generalized for GitLab in Story 7.23 · MOTIR-1475).
@@ -703,17 +707,51 @@ async function syncOnce(
   // decides another's. A pull request delivering one card — nearly every pull
   // request — takes exactly the path it always did and returns exactly the result
   // it always returned; the loop is what a second card costs.
+  //
+  // ⚠️ ONE CARD'S FAULT DOES NOT END THE LOOP (MOTIR-5587). Each card moves in its
+  // own transaction, so a fault on card k — a transaction that could not start on a
+  // starved pool, a connection reset — says nothing about card k+1. It used to
+  // escape this loop, and every card after it was never attempted: `motir-ai#487`
+  // delivered 36 cards, 11 moved and 25 stayed at In Review, with nothing on any of
+  // them to say so. So a fault is caught PER CARD, reported ON that card, and the
+  // loop goes on.
+  //
+  // ⚠️ AND THE DELIVERY STILL FAILS AFTERWARDS — that is not a leftover. A sync that
+  // RETURNED lets the post-commit capture stamp `merged_at`, and a merged row with
+  // `merged_at` is invisible to the open-delivery reconcile (MOTIR-5390), the one
+  // thing that replays this delivery and finishes the job. Replaying is safe: a card
+  // already in its target reads `noop`, and the failure note is posted once per merge.
   const perItem: DeliveredItemResult[] = [];
+  const faults: DeliveredItemTransitionFailure[] = [];
   for (const decision of resolved.decisions) {
-    perItem.push(
-      await applyToDeliveredItem(cr, lifecycle, decision, {
-        workspaceId: resolved.workspaceId,
-        provider: resolved.provider,
-        mergeAlreadyRecorded: resolved.mergeAlreadyRecorded,
-        actorUserId,
-        ownerUserId: resolved.ownerUserId,
-      }),
-    );
+    try {
+      perItem.push(
+        await applyToDeliveredItem(cr, lifecycle, decision, {
+          workspaceId: resolved.workspaceId,
+          provider: resolved.provider,
+          mergeAlreadyRecorded: resolved.mergeAlreadyRecorded,
+          actorUserId,
+          ownerUserId: resolved.ownerUserId,
+        }),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      faults.push({ workItemId: decision.workItemId, message });
+      console.error('[changeRequestStatusSync] transition faulted; continuing with the rest', {
+        workItemId: decision.workItemId,
+        number: cr.number,
+        error: message,
+      });
+      if (!resolved.mergeAlreadyRecorded) {
+        await noteTransitionFault(decision.workItemId, message, cr, {
+          provider: resolved.provider,
+          actorCtx: { userId: actorUserId, workspaceId: resolved.workspaceId },
+        });
+      }
+    }
+  }
+  if (faults.length > 0) {
+    throw new DeliveredItemsTransitionFailedError(cr.number, resolved.decisions.length, faults);
   }
 
   const [first, ...rest] = perItem;
@@ -923,6 +961,59 @@ async function applyToDeliveredItem(
   }
 
   return { workItemId, outcome: 'transitioned', toStatus: targetKey };
+}
+
+/** Say ON the card that the merge could not move it (MOTIR-5587). Best-effort, like
+ *  every note in this file: a note that fails must not stop the next card from
+ *  being attempted. The fault is usually the database's, so this can fail for the
+ *  same reason — the error the delivery throws afterwards still names the card. */
+async function noteTransitionFault(
+  workItemId: string,
+  message: string,
+  cr: NormalizedChangeRequest,
+  shared: { provider: GitProviderId; actorCtx: { userId: string; workspaceId: string } },
+): Promise<void> {
+  try {
+    await commentsService.addComment(
+      workItemId,
+      {
+        bodyMd: transitionFaultCommentBody({
+          noun: changeRequestNoun(shared.provider),
+          number: cr.number,
+          message,
+        }),
+      },
+      shared.actorCtx,
+    );
+  } catch (noteErr) {
+    console.error('[changeRequestStatusSync] transition-fault note failed', {
+      workItemId,
+      number: cr.number,
+      error: noteErr instanceof Error ? noteErr.message : 'unknown',
+    });
+  }
+}
+
+/** The transition-fault note (MOTIR-5587) — posted on a delivered card whose move
+ *  FAULTED, as opposed to one the workflow or a gate REFUSED (those have their own
+ *  notes above). Same two obligations as its siblings: name the fact that answers
+ *  *"why isn't this Done?"*, and state what will complete the item. It quotes the
+ *  fault, so the reader is not sent to the server logs for it. */
+function transitionFaultCommentBody(args: {
+  noun: string;
+  number: number;
+  message: string;
+}): string {
+  // One line, and bounded: a Prisma message can carry a multi-line query dump.
+  const fault = args.message.split('\n')[0]!.slice(0, 300);
+  return (
+    `⚠️ **Merged, but this item could not be moved** — ${args.noun} #${args.number} merged, ` +
+    `and moving this item failed with an error, so its status is left unchanged:\n\n` +
+    `> ${fault}\n\n` +
+    `The other items this ${args.noun} delivers were still attempted. This one completes when ` +
+    `the merge is replayed — Motir re-reads merged ${args.noun}s it could not finish, or the ` +
+    `delivery can be redelivered from the provider — or when it is moved by hand.`
+  );
 }
 
 /** Narrow a whole-delivery result back to the per-card slice — `reportTransitionRefusal`
@@ -1324,7 +1415,10 @@ async function applyTransition(
 
 /** Map a transition failure to a logged no-op outcome — the webhook never crashes
  *  on a workflow that can't legally take the move. A truly unexpected error
- *  re-throws (a 500 the host retries).
+ *  re-throws to the per-card loop in `syncOnce`, which records it, goes on to the
+ *  next card, and fails the delivery once every card has been attempted
+ *  (MOTIR-5587). GitHub does not redeliver a failed delivery by itself; the
+ *  open-delivery reconcile (MOTIR-5390) is what replays it.
  *
  *  ⚠️ EVERY member of `STATUS_TRANSITION_REFUSALS` must have an arm here, and
  *  `tests/workItems/statusTransitionRefusals.test.ts` asserts it — the arms below

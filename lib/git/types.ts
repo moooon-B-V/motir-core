@@ -522,6 +522,29 @@ export interface MergeChangeRequestInput {
 }
 
 /**
+ * Which change request to ask the host about — the same address a merge takes, minus
+ * the head the decision saw (a READ has no head to pin; it reports the one it found).
+ */
+export type ChangeRequestMergeabilityInput = Omit<MergeChangeRequestInput, 'expectedHeadSha'>;
+
+/**
+ * The host's answer to *can this change request merge into its base right now?*
+ * (MOTIR-5913, for bug MOTIR-5907).
+ *
+ * ⚠️ `mergeable: null` IS "NOT COMPUTED YET", NEVER "CONFLICTED". GitHub computes it
+ * lazily — asynchronously after the base moves, and on first ask — so a caller that
+ * needs an answer retries, and one that gets none proceeds as if nothing were known.
+ * `mergeableState` is the host's raw word (`clean`, `dirty`, `blocked`, …), read
+ * against `'dirty'` alone.
+ */
+export interface ChangeRequestMergeability {
+  mergeable: boolean | null;
+  mergeableState: string | null;
+  /** The head the answer is about — a reading is only meaningful at this commit. */
+  headSha: string | null;
+}
+
+/**
  * Why a host refused a merge, in the SEAM's own words — never a host type and never
  * an HTTP status. The merge entry point maps these onto the gate's refusal union;
  * `subject_changed` becomes the shipped `APPROVAL_GATE_SUPERSEDED` there rather than

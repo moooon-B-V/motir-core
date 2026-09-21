@@ -1010,6 +1010,55 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
     expect(refreshCalls(sendSpy)).toHaveLength(0);
   });
 
+  /** The spy's calls that asked for the base-branch mergeability re-read (MOTIR-5914). */
+  function baseMovedCalls(sendSpy: { mock: { calls: unknown[][] } }) {
+    return dispatchedEvents(sendSpy).filter((e) => e.name === 'pull-request/base-moved');
+  }
+
+  it('a DEFAULT-branch push also asks for the mergeability re-read of the pull requests that target it (MOTIR-5914)', async () => {
+    const { workspace } = await makeScenario('push-base-moved@example.com');
+    const sendSpy = spySend();
+
+    await githubWebhookService.handleEvent('push', pushPayload());
+
+    const calls = baseMovedCalls(sendSpy);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.data).toMatchObject({
+      workspaceId: workspace.id,
+      baseRef: 'main',
+      baseHeadSha: 'a'.repeat(40),
+    });
+    expect((calls[0]!.data as { idempotencyKey: string }).idempotencyKey).toMatch(
+      new RegExp(`:${'a'.repeat(40)}$`),
+    );
+  });
+
+  it('a default-branch push with NO head sha still asks, keyed as `unknown` (MOTIR-5914)', async () => {
+    // `parsePushEvent` answers `headSha: null` for a payload with no `after`. The re-read
+    // is about the pull requests' mergeability, not about the head, so it still runs.
+    await makeScenario('push-base-moved-no-sha@example.com');
+    const sendSpy = spySend();
+    const { after: _after, ...noAfter } = pushPayload();
+
+    await githubWebhookService.handleEvent('push', noAfter);
+
+    const calls = baseMovedCalls(sendSpy);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.data).toMatchObject({ baseRef: 'main', baseHeadSha: null });
+    expect((calls[0]!.data as { idempotencyKey: string }).idempotencyKey).toMatch(/:unknown$/);
+  });
+
+  it('a push to a NON-default branch asks for NO mergeability re-read (MOTIR-5914)', async () => {
+    await makeScenario('push-feature-no-base-moved@example.com');
+    const sendSpy = spySend();
+
+    await githubWebhookService.handleEvent(
+      'push',
+      pushPayload({ ref: 'refs/heads/subtask/MOTIR-893-feature' }),
+    );
+    expect(baseMovedCalls(sendSpy)).toHaveLength(0);
+  });
+
   it('a tag push and a branch deletion are ignored (not branch pushes)', async () => {
     await makeScenario('push-tag@example.com');
     const sendSpy = spySend();

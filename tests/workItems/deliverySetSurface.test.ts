@@ -38,6 +38,8 @@ function pr(
     headSha: null,
     url: `https://github.com/${repoLabel}/pull/${number}`,
     githubReview: null,
+    baseRef: 'main',
+    conflicted: false,
     ...over,
   };
 }

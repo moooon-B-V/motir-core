@@ -19,6 +19,7 @@ import type {
 } from '@/lib/repositories/githubPullRequestRepository';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
 
 // Prisma → DTO conversion for the GitHub integration (Story 7.10 · MOTIR-1498 /
 // MOTIR-891). The mapper is the enforcement point for "no secret crosses the API
@@ -85,6 +86,9 @@ export function toLinkedPullRequestDto(
     ci: derivePrCiState(row.checkRuns),
     headSha: liveRowsAtLatestSha(row.checkRuns)[0]?.commitSha ?? null,
     url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.number}`,
+    baseRef: row.baseRef,
+    // Only an OPEN member can conflict: a merged or closed one merges into nothing more.
+    conflicted: !row.merged && row.state === 'open' && isConflictedAtCurrentHead(row),
   };
 }
 

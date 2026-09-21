@@ -147,7 +147,15 @@ describe('the late tier — the repair read is contained', () => {
   it('a repair read that ANSWERS is carried through to the block', async () => {
     repairView.mockResolvedValue({
       state: 'offer',
-      failing: [{ repo: CORE_PR.repo, number: CORE_PR.number, ci: 'failing', queueExit: null }],
+      failing: [
+        {
+          repo: CORE_PR.repo,
+          number: CORE_PR.number,
+          ci: 'failing',
+          queueExit: null,
+          conflict: null,
+        },
+      ],
       lastGaveUp: null,
     });
 

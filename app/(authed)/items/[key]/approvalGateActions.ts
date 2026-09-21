@@ -152,7 +152,12 @@ function refusalOf(err: unknown): GateRefusal | null {
   if (err instanceof ProjectNotFoundError) return toGateRefusal('APPROVAL_GATE_NOT_FOUND');
   if (err instanceof PermissionDeniedError) return toGateRefusal('APPROVAL_GATE_NOT_AUTHORISED');
   if (err instanceof ApprovalGateMergeRefusedError) {
-    return toGateRefusal(err.tag, { permission: err.permission, reason: err.reason });
+    return toGateRefusal(err.tag, {
+      permission: err.permission,
+      reason: err.reason,
+      atPress: err.atPress,
+      conflicts: err.conflicts,
+    });
   }
   // The host did not answer the merge: nothing was decided, and there is no refusal
   // of the host's to draw — the frame's unexpected arm, logged by the service.

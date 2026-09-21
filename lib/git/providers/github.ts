@@ -36,6 +36,8 @@ import type {
   RepoFileReadResult,
   CommitComparison,
   DeploymentState,
+  ChangeRequestMergeability,
+  ChangeRequestMergeabilityInput,
   MergeChangeRequestInput,
   MergeChangeRequestResult,
   MergeRefusal,
@@ -193,6 +195,26 @@ async function githubMergeFetch(url: string, init: RequestInit): Promise<Respons
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The repository URL and the installation-token headers every merge-side call uses.
+ *  The App is chosen by PROVENANCE (decision 7): a hosted repository mints through the
+ *  provisioning App, an imported one through the user-facing App. */
+async function githubMergeContext(input: {
+  installationId: string;
+  owner: string;
+  name: string;
+}): Promise<{ repoUrl: string; headers: Record<string, string> }> {
+  const role = githubAppRoleForRepo({ owner: input.owner }, provisioningOrgLogin());
+  const { token } = await mintInstallationToken(input.installationId, role);
+  return {
+    repoUrl: `${GITHUB_API}/repos/${input.owner}/${input.name}`,
+    headers: {
+      authorization: `Bearer ${token}`,
+      accept: 'application/vnd.github+json',
+      'user-agent': 'motir',
+    },
+  };
 }
 
 /** A JSON body as a plain object, or null — never an `any`. */
@@ -477,14 +499,7 @@ export const githubProvider: GitProvider = {
    * through the provisioning App, an imported one through the user-facing App.
    */
   async mergeChangeRequest(input: MergeChangeRequestInput): Promise<MergeChangeRequestResult> {
-    const role = githubAppRoleForRepo({ owner: input.owner }, provisioningOrgLogin());
-    const { token } = await mintInstallationToken(input.installationId, role);
-    const repoUrl = `${GITHUB_API}/repos/${input.owner}/${input.name}`;
-    const headers: Record<string, string> = {
-      authorization: `Bearer ${token}`,
-      accept: 'application/vnd.github+json',
-      'user-agent': 'motir',
-    };
+    const { repoUrl, headers } = await githubMergeContext(input);
 
     // 1. The allowed merge methods. A repository the App cannot see is a
     //    permission answer; one that is gone is a subject that changed.
@@ -591,6 +606,33 @@ export const githubProvider: GitProvider = {
     // and named a rule. It is a refusal with the host's own reason — never a throw,
     // because the host DID answer.
     return mergeRefused('branch_protected', message ? { reason: message } : {});
+  },
+
+  /**
+   * `GET /repos/{owner}/{name}/pulls/{number}` — the pull request's `mergeable` /
+   * `mergeable_state` and the head they are about (MOTIR-5913). Same App, same
+   * bounded fetch as {@link mergeChangeRequest}, whose step 2 reads the same URL.
+   */
+  async readChangeRequestMergeability(
+    input: ChangeRequestMergeabilityInput,
+  ): Promise<ChangeRequestMergeability> {
+    const { repoUrl, headers } = await githubMergeContext(input);
+    const res = await githubMergeFetch(`${repoUrl}/pulls/${input.number}`, {
+      method: 'GET',
+      headers,
+    });
+    if (!res.ok) {
+      throw new MergeChangeRequestError('github', 'unexpected_status', { status: res.status });
+    }
+    const pull = await mergeBodyOf(res);
+    const mergeable = pull?.['mergeable'];
+    const mergeableState = pull?.['mergeable_state'];
+    const headSha = objectOf(pull?.['head'])?.['sha'];
+    return {
+      mergeable: typeof mergeable === 'boolean' ? mergeable : null,
+      mergeableState: typeof mergeableState === 'string' ? mergeableState : null,
+      headSha: typeof headSha === 'string' ? headSha : null,
+    };
   },
 
   /**

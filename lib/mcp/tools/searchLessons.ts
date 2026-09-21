@@ -13,6 +13,7 @@ import {
   canonicalizeLessonPhases,
   preprocessLessonPhases,
 } from '@/lib/lessons/phaseAxis';
+import { LESSON_KINDS } from '@/lib/lessons/kindAxis';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
@@ -60,8 +61,9 @@ import { projectKeyField } from './sprintRef';
 
 export const SEARCH_LESSONS_TOOL_NAME = 'search_lessons';
 
-/** The store's routing-axis vocabularies, mirrored from motir-ai's enums. */
-const LESSON_KINDS = ['epic', 'story', 'task', 'bug', 'subtask'] as const;
+/** The store's routing-axis vocabularies, mirrored from motir-ai's enums. The
+ *  KIND axis lives in `lib/lessons/kindAxis.ts` (MOTIR-5622), shared with the
+ *  other lesson tool so the two cannot disagree. */
 const LESSON_TYPES = [
   'code',
   'design',
@@ -101,7 +103,10 @@ const inputSchema = {
     .array(z.enum(LESSON_KINDS))
     .optional()
     .describe(
-      'The work-item KIND(s) this search is about. Omitting it leaves the axis UNCONSTRAINED, ' +
+      'The LEVEL this search is about: the work-item KIND you are writing or laying under, or ' +
+        '"project" / "onboarding" when laying a project\'s top level ("onboarding" for a first ' +
+        'plan carved from the direction docs). Laying a level narrows on the target you lay ' +
+        'under, not the kind of its children. Omitting it leaves the axis UNCONSTRAINED, ' +
         'which is often right — a lesson tagged with no kind reaches every query either way.',
     ),
   types: z

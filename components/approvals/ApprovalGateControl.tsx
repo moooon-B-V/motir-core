@@ -104,7 +104,9 @@ export interface GateVerb {
    * disabled, while Request changes stays live. ⚠️ ONLY with the reason said in words
    * beside it, as the band's consequence line: the one case a disabled verb is honest is
    * a reader who may decide, looking at a subject that cannot yet be approved. State `B`
-   * and state `X` still render no verbs at all.
+   * and state `X` still render no verbs at all. The approval overlay disables BOTH verbs
+   * when the question was withdrawn under the reader (Subtask MOTIR-5917; § 30 Panel 4a),
+   * with its notice saying why.
    */
   disabled?: boolean;
   /**
@@ -187,6 +189,8 @@ export interface ApprovalGateControlProps {
    * false reassurance on the one surface built to be checkable.
    */
   filesKept?: boolean | null;
+  /** What a refusal's sentence may name — the card key and the host (MOTIR-5916). */
+  refusalContext?: RefusalContext;
   /**
    * WHERE THE FRAME SITS — `inline` (the default: a card on a page or inside a
    * row) or `fill` (Subtask MOTIR-5224: the approval OVERLAY, which IS the
@@ -248,8 +252,15 @@ export interface ApprovalGateControlProps {
    * over a DEAD port, which was false three times in four and pointed nowhere even on the
    * fourth. The default is now the fact every writer leaves true, and THIS PROP is where
    * a cause belongs: a kind whose own surface knows why supplies its own two sentences.
+   *
+   * ⚠️ `keepsRecord` WITHDRAWS THE VERBS, NEVER THE RECORD (Bug MOTIR-5884; `design/github`
+   * § 29, Panel 1). The dead port exists for a subject whose bytes are no longer current
+   * (a superseded design), and it is still the default. A kind whose subject STAYS true
+   * after the withdrawal — the pull requests, which merged, closed or moved but are all
+   * still on the card — sets it: the sentence moves into a band ABOVE the port, and the
+   * port keeps rendering, floorless and with no Expand, because nothing is being decided.
    */
-  withdrawnPort?: { port: ReactNode; cite: ReactNode };
+  withdrawnPort?: { port: ReactNode; cite: ReactNode; keepsRecord?: boolean };
   /**
    * THE RECORD BAND'S LEAD, when a kind says who decided in its own words (MOTIR-5678 —
    * *Decision accepted by Ada L. · 19 Sep*). Replaces the decider and the date; the rest of
@@ -381,8 +392,12 @@ function PortBox({
   showExpand,
   onToggleExpanded,
   focusOnMount = false,
+  floorless = false,
 }: {
   children: ReactNode;
+  /** Drop the floor, keep the ceiling (MOTIR-5884, § 29): a withdrawn frame that keeps its
+   *  record holds no decision surface open, so there is nothing for the floor to reserve. */
+  floorless?: boolean;
   /** Move focus to the port as it mounts — after *Show the current version*, so the
    *  reader starts again from the top of what changed (MOTIR-5235, Panel 4). */
   focusOnMount?: boolean;
@@ -448,8 +463,8 @@ function PortBox({
             // purpose — expanded, the viewport is the ceiling.
             'relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4'
           : sectioned
-            ? `relative mt-3 ${PORT_FLOOR} ${PORT_CEILING} overflow-y-auto border-t border-(--el-border-soft) pt-3`
-            : `relative ${PORT_FLOOR} ${PORT_CEILING} overflow-y-auto px-4 py-4`
+            ? `relative mt-3 ${floorless ? 'min-h-0' : PORT_FLOOR} ${PORT_CEILING} overflow-y-auto border-t border-(--el-border-soft) pt-3`
+            : `relative ${floorless ? 'min-h-0' : PORT_FLOOR} ${PORT_CEILING} overflow-y-auto px-4 py-4`
       }
       // The port is a scroll container in both forms, so it must be focusable to
       // be scrollable from the keyboard alone (a scrollable region with no
@@ -526,12 +541,14 @@ function RefusalAlert({
   refusal,
   sectioned,
   onShowCurrentVersion,
+  context,
 }: {
   refusal: GateRefusal;
   sectioned: boolean;
   onShowCurrentVersion?: () => void;
+  context?: RefusalContext;
 }) {
-  const { headline, nextAction } = useRefusalCopy(refusal);
+  const { headline, nextAction } = useRefusalCopy(refusal, context);
   const t = useTranslations('approvalGate.refusal.stale');
 
   // ⚠️ THE STALE REFUSAL IS THE ONLY ONE WITH A CONTROL (MOTIR-5235; design
@@ -591,7 +608,18 @@ function RefusalAlert({
  * request the approve-and-merge press could not merge), so the words stay these and a
  * second copy of them never exists.
  */
-export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAction: string } {
+/** What a refusal's sentence can NAME beyond the refusal itself — the card key and the host
+ *  (MOTIR-5916; § 30 Panels 5a and 5b). Absent, the shipped sentences are used unchanged. */
+export interface RefusalContext {
+  itemIdentifier: string;
+  /** The host's display name, as *Open on {host}* renders it. */
+  host: string;
+}
+
+export function useRefusalCopy(
+  refusal: GateRefusal,
+  context?: RefusalContext,
+): { headline: string; nextAction: string } {
   const t = useTranslations('approvalGate.refusal');
   const locale = useLocale();
   // The withdrawal's CAUSE sentences live beside state `G`'s, not under `refusal`,
@@ -720,6 +748,38 @@ export function useRefusalCopy(refusal: GateRefusal): { headline: string; nextAc
         ? t(`primaryPending.${refusal.primary}.next`)
         : t(`${nextActionKey}.next`);
 
+  // ⚠️ A CONFLICT FOUND AT THE PRESS WROTE NOTHING, AND SAYS SO (MOTIR-5916; design/github
+  // § 30 Panel 5a). The press-time host read refused before the decision write, so the
+  // card did not move and § 28's *your approval was spent* would be false. Named members
+  // and base come off the refusal; one shared base names it, several (or none recorded)
+  // say *its base branch*.
+  if (refusal.tag === 'MERGE_CONFLICT' && refusal.atPress && context) {
+    const names = refusal.conflicts.map((c) => c.pullRequest.replace('#', ' · #'));
+    const pr = new Intl.ListFormat(locale, { type: 'conjunction' }).format(names);
+    const bases = new Set(refusal.conflicts.map((c) => c.baseRef ?? null));
+    const base = bases.size === 1 ? [...bases][0]! : null;
+    const values = { host: context.host, pr, key: context.itemIdentifier };
+    const atPress =
+      base !== null
+        ? t('mergeConflict.atPress', { ...values, base })
+        : t('mergeConflict.atPressNoBase', values);
+    return { headline, nextAction: `${atPress} ${nextAction}` };
+  }
+  // ⚠️ A PRESS ON A TAB THAT HAD NOT HEARD THE WITHDRAWAL (Panel 5b): the shipped
+  // SUPERSEDED refusal, headed by the shared cause sentence, says the tab was stale and
+  // nothing moved — and a conflict's own next action follows, because that is what the
+  // reader has to do next.
+  if (
+    refusal.tag === 'APPROVAL_GATE_SUPERSEDED' &&
+    refusal.supersedeCause === 'conflict' &&
+    context
+  ) {
+    return {
+      headline,
+      nextAction: `${t('superseded.staleTab', { key: context.itemIdentifier })} ${t('mergeConflict.next')}`,
+    };
+  }
+
   return { headline, nextAction };
 }
 
@@ -832,6 +892,7 @@ export function ApprovalGateControl({
   changesRequestedLine,
   routedToLabel,
   filesKept = null,
+  refusalContext,
   layout = 'inline',
   alert,
   recordDetail,
@@ -899,6 +960,7 @@ export function ApprovalGateControl({
   // A KIND THAT KNOWS BETTER STILL WINS: `withdrawnPort` is the merge gate's own
   // two sentences, which name the pull request, and this is the default beneath it.
   const withdrawnSentence = t(`withdrawn.cause.${gate.supersededCause ?? 'unknown'}`);
+  const withdrawnKeepsRecord = withdrawn && withdrawnPort?.keepsRecord === true;
 
   // ⚠️ THE GATE LIVES HERE, IN THE FRAME'S OWN RENDER PATH — not in a consumer,
   // and not in the port. A consumer that passes a verb set and a failing port
@@ -1035,6 +1097,20 @@ export function ApprovalGateControl({
           re-probing the design port and spending a fresh signed URL. Nothing
           inside the dead port reports, which is exactly right — there is no
           subject there to have rendered or failed. */}
+      {/* STATE `G` THAT KEEPS ITS RECORD (Bug MOTIR-5884; § 29, Panel 1): the withdrawn
+          sentence is a BAND between band 1 and the port, so the reader learns why there is
+          no button before reading the rows it would have merged. § 20's withdrawn tokens,
+          unchanged — only the shape moved, from a centred box to a left-aligned band. */}
+      {withdrawnKeepsRecord && withdrawnPort ? (
+        <div
+          role="status"
+          className="flex flex-col gap-1 border-b border-(--el-border) bg-(--el-muted) px-3.5 py-2.5 text-[13px] text-(--el-text-secondary)"
+          data-withdrawn-band
+        >
+          <span>{withdrawnPort.port}</span>
+          <span className="text-xs">{withdrawnPort.cite}</span>
+        </div>
+      ) : null}
       <PortRenderStatusProvider reporter={reporter}>
         <PortBox
           expanded={expanded}
@@ -1042,12 +1118,13 @@ export function ApprovalGateControl({
           sectioned={sectioned}
           // Drawn where the asset draws it: a decision that is YOURS to make,
           // not yet made, over a subject that actually rendered — and never
-          // over `G`'s dead port, which has nothing to expand.
+          // over `G`'s port, dead or kept: there is no decision to expand into.
           showExpand={!fill && canDecide && !decided && !withdrawn && portShown}
           onToggleExpanded={() => setExpanded((v) => !v)}
           focusOnMount={focusPortOnMount}
+          floorless={withdrawnKeepsRecord}
         >
-          {withdrawn ? (
+          {withdrawn && !withdrawnKeepsRecord ? (
             <div className="flex flex-col items-center justify-center gap-1 bg-(--el-muted) px-4 py-10 text-center">
               <p className="text-[13px] text-(--el-text-secondary)">
                 {withdrawnPort ? withdrawnPort.port : withdrawnSentence}
@@ -1083,6 +1160,7 @@ export function ApprovalGateControl({
           refusal={phase.refusal}
           sectioned={sectioned}
           onShowCurrentVersion={onShowCurrentVersion}
+          context={refusalContext}
         />
       ) : null}
 

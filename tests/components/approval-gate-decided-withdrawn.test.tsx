@@ -173,6 +173,10 @@ describe('state G — superseded', () => {
       ['head_moved', 'A push moved the commits, so this question was withdrawn.'],
       ['member_closed', 'A pull request closed, so this question was withdrawn.'],
       ['member_drafted', 'A pull request went back to draft, so this question was withdrawn.'],
+      [
+        'conflict',
+        'A pull request conflicts with its base branch, so this question was withdrawn.',
+      ],
       ['set_changed', 'The pull requests changed, so this question was withdrawn.'],
       ['pulled_back', 'The work was pulled back out of review, so this question was withdrawn.'],
     ];

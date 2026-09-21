@@ -74,6 +74,10 @@ export interface RepairPullRequestDto {
    *  exactly when its latest exit is a failure, not re-queued, at its current head
    *  (`queueExitHoldsAtHead`), else null. */
   queueExit: RepairQueueExitDto | null;
+  /** The host reports this pull request CONFLICTED with its base at its head (MOTIR-5913's
+   *  stored reading) — a member failing for that alone has green checks and no exit. NOT on
+   *  the wire: the v1 presenter copies fields by name, and this one is the page's. */
+  conflicted: boolean;
 }
 
 /** Why the merge queue threw a pull request out, as the fixing agent is told it
@@ -123,6 +127,10 @@ export interface RepairPullRequestRefDto {
    *  failing member whose own `ci` is not `failing` and which carries a standing
    *  queue exit* (`design/github/design-notes.md` § 26, MOTIR-5718). */
   queueExit: { rawReason: string; failingCheckName: string | null } | null;
+  /** Set when the host reports the pull request conflicted at its head (MOTIR-5916; design
+   *  § 30's fix part) — the line then says it conflicts with `baseRef` and cannot be merged,
+   *  never *Checks are failing*, which would be false. */
+  conflict: { baseRef: string | null } | null;
 }
 
 /**

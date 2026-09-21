@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   ApprovalGateError,
+  ApprovalGateMergeRefusedError,
   ApprovalGatePrimaryPendingError,
   ApprovalGateStaleSubjectError,
   ApprovalGateVerbNotOfferedError,
@@ -160,7 +161,11 @@ export async function POST(
             : // …and a verb the gate does not offer says which of the three (MOTIR-5893).
               err instanceof ApprovalGateVerbNotOfferedError
               ? { code: err.code, error: err.message, reason: err.reason }
-              : { code: err.code, error: err.message },
+              : // …and a conflict found at the press says WHICH members and that nothing was
+                // written (MOTIR-5915).
+                err instanceof ApprovalGateMergeRefusedError && err.atPress
+                ? { code: err.code, error: err.message, atPress: true, conflicts: err.conflicts }
+                : { code: err.code, error: err.message },
         { status: APPROVAL_GATE_STATUS[err.tag] },
       );
     }

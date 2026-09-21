@@ -20,6 +20,8 @@ export const CORE_PR: LinkedPullRequestDto = {
   headSha: CORE_HEAD,
   url: 'https://github.com/moooon/motir-core/pull/131',
   githubReview: null,
+  baseRef: 'main',
+  conflicted: false,
 };
 
 export const GATEWAY_PR: LinkedPullRequestDto = {
@@ -32,6 +34,8 @@ export const GATEWAY_PR: LinkedPullRequestDto = {
   headSha: GATEWAY_HEAD,
   url: 'https://github.com/moooon/motir-gateway/pull/57',
   githubReview: null,
+  baseRef: 'main',
+  conflicted: false,
 };
 
 export const SECTIONED_BODY = [

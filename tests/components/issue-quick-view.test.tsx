@@ -125,6 +125,8 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           headSha: null,
           url: 'https://github.com/moooon/motir-core/pull/131',
           githubReview: null,
+          baseRef: 'main',
+          conflicted: false,
         },
         {
           id: 'pr-57',
@@ -136,6 +138,8 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           headSha: null,
           url: 'https://github.com/moooon/motir-gateway/pull/57',
           githubReview: null,
+          baseRef: 'main',
+          conflicted: false,
         },
         {
           id: 'pr-119',
@@ -147,6 +151,8 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           headSha: null,
           url: 'https://github.com/moooon/motir-core/pull/119',
           githubReview: null,
+          baseRef: 'main',
+          conflicted: false,
         },
       ],
     };

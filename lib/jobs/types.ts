@@ -515,6 +515,10 @@ export interface JobEventDataMap {
   'work-item/derivation.requested': WorkItemDerivationRequestedData;
   'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
   'pull-request/auto-merge.requested': PullRequestAutoMergeRequestedData;
+  /** A push moved a repository's DEFAULT branch (MOTIR-5914): re-read the host's
+   *  mergeability of every open pull request that targets it, and withdraw the question
+   *  over any that now conflict. Emitted by the push webhook after its own write. */
+  'pull-request/base-moved': PullRequestBaseMovedData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;
@@ -537,6 +541,24 @@ export interface MonitorConnectionPollRequestedData {
   connectionId: string;
   /** `<connectionId>:<tick run id>` — so a retried tick enqueues ONE poll of a
    *  binding per tick, never two. */
+  idempotencyKey: string;
+}
+
+/**
+ * The `pull-request/base-moved` event payload (MOTIR-5914, for bug MOTIR-5907;
+ * design/github § 30 rule 1). A conflict usually arrives with NO event on the pull
+ * request — another merge moves the BASE — so the push to that base is what asks.
+ */
+export interface PullRequestBaseMovedData {
+  /** The repository's tenant — `github_repo.workspace_id`. */
+  workspaceId: string;
+  /** The `github_repo` ROW id. */
+  repoId: string;
+  /** The branch that moved (the repository's default branch). */
+  baseRef: string;
+  /** The new head of that branch, when the delivery carried one. */
+  baseHeadSha: string | null;
+  /** `<repoId>:<baseHeadSha>` — a redelivered push for the same head enqueues nothing new. */
   idempotencyKey: string;
 }
 

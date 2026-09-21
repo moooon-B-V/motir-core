@@ -433,10 +433,21 @@ export class ApprovalGateMergeRefusedError extends ApprovalGateError {
   readonly code: MergeRefusalTag;
   readonly permission: string | null;
   readonly reason: string | null;
+  /** True when the refusal was found BEFORE the decision was written (MOTIR-5915; design
+   *  § 30 Panel 5a) — nothing was approved, so § 28's *your approval was spent* is false. */
+  readonly atPress: boolean;
+  /** The members the host reports conflicted, as `owner/name#number` with the base each
+   *  targets — what Panel 5a names. Empty on every other refusal. */
+  readonly conflicts: MergeConflictMember[];
   constructor(
     readonly gateId: string,
     tag: MergeRefusalTag,
-    extra: { permission?: string | null; reason?: string | null } = {},
+    extra: {
+      permission?: string | null;
+      reason?: string | null;
+      atPress?: boolean;
+      conflicts?: MergeConflictMember[];
+    } = {},
   ) {
     super(
       `The host refused the merge approval gate ${gateId} asks for (${tag}); nothing was decided.`,
@@ -445,8 +456,17 @@ export class ApprovalGateMergeRefusedError extends ApprovalGateError {
     this.code = tag;
     this.permission = extra.permission ?? null;
     this.reason = extra.reason ?? null;
+    this.atPress = extra.atPress ?? false;
+    this.conflicts = extra.conflicts ?? [];
     this.name = 'ApprovalGateMergeRefusedError';
   }
+}
+
+/** One member a press found conflicted (MOTIR-5915). `baseRef` is null on a row mirrored
+ *  before base branches were recorded — the copy then says *its base branch*. */
+export interface MergeConflictMember {
+  pullRequest: string;
+  baseRef: string | null;
 }
 
 /**

@@ -253,7 +253,7 @@ describe('H · refused — every member of the union renders in place, with a ne
       expect: /checks are not green\..*Wait for the checks to finish/,
     },
     {
-      refusal: { tag: 'MERGE_CONFLICT' },
+      refusal: { tag: 'MERGE_CONFLICT', atPress: false, conflicts: [] },
       expect: /conflicts with its base branch\..*Resolve the conflict on the branch/,
     },
     {

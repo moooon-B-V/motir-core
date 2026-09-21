@@ -55,6 +55,8 @@ const PR: LinkedPullRequestDto = {
   headSha: null,
   url: 'https://github.com/moooon/motir-core/pull/131',
   githubReview: null,
+  baseRef: 'main',
+  conflicted: false,
 };
 
 const REMOVE_ARIA = 'Remove the link to moooon/motir-core · #131';

@@ -34,6 +34,7 @@ import {
 } from './MergeOutcomeSlot';
 import { QueueExitLine } from './QueueExitLine';
 import { decisionDocumentShown } from './DecisionDocumentSlot';
+import { withdrawnMergeCopy, type WithdrawnMessage } from './withdrawnMergeCopy';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 
 // THE DEVELOPMENT BLOCK'S FRAME ARM (Story MOTIR-4906 · Subtask MOTIR-5336),
@@ -134,6 +135,19 @@ export interface CurrentHead {
   headSha: string;
 }
 
+/** A pull request's derived state as its ROW draws it — what splits a `member_closed`
+ *  withdrawal into *merged* and *closed without merging* (MOTIR-5884, § 29). */
+export interface RowState {
+  repo: string;
+  number: number;
+  state: 'open' | 'merged' | 'closed';
+  /** The host reports the row conflicted at its head (MOTIR-5916) — what names the member
+   *  in a `conflict` withdrawal. Absent = no. */
+  conflicted?: boolean;
+  /** The branch the row targets, for `{base}` (MOTIR-5916). */
+  baseRef?: string | null;
+}
+
 /** What the press, or a retry, reported about one member — the response's outcome, minus
  *  the ids a row does not need. */
 type PressOutcome =
@@ -173,11 +187,15 @@ export function DevelopmentGateFrame({
   itemIdentifier,
   runLabel,
   currentHeads = [],
+  rowStates = [],
+  terminal = false,
   actions,
   layout = 'flush',
   onShowCurrentVersion,
   gateKey = 0,
   decision = null,
+  notice,
+  verbsDisabled = false,
   children,
 }: {
   read: DevelopmentGateRead;
@@ -187,6 +205,10 @@ export function DevelopmentGateFrame({
   /** Band 1's meta — the run that delivered the pull requests, when known. */
   runLabel: string | null;
   currentHeads?: CurrentHead[];
+  /** Each row's derived state (MOTIR-5884) — read only by a withdrawn merge gate. */
+  rowStates?: RowState[];
+  /** The card sits in a DONE-category status: a withdrawn question promises no re-ask. */
+  terminal?: boolean;
   actions?: DevelopmentGateActions;
   /**
    * WHICH BOX the frame sits in (Story MOTIR-5437 · Subtask MOTIR-5440;
@@ -213,6 +235,19 @@ export function DevelopmentGateFrame({
   gateKey?: number;
   /** The decision port's facts — read only when the gate asked is `decision_approval`. */
   decision?: DecisionPortFacts | null;
+  /**
+   * A HOST's notice, drawn in the alert band between the port and band 3 — the approval
+   * overlay's *this question was withdrawn* (Subtask MOTIR-5917; § 30 Panel 4a). A member
+   * refusal from this frame's own press outranks it: that is the newer news.
+   */
+  notice?: ReactNode;
+  /**
+   * DISABLE both verbs, keeping them drawn so band 3 does not reflow (§ 30 Panel 4a — the
+   * one recorded departure from § 26, where a moved stamp keeps them live). Only honest with
+   * the reason said in words beside them, which is what `notice` is for; the server still
+   * refuses a press, so this claims no guarantee.
+   */
+  verbsDisabled?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
@@ -479,6 +514,36 @@ export function DevelopmentGateFrame({
     return head !== undefined && head.headSha !== member.headSha;
   });
   const decidedByThisReader = decided !== null && decided.id === read.gate.id;
+  // STATE `G` OF THE MERGE GATE (Bug MOTIR-5884; § 29): band 1's meta, the sentence and the
+  // cite all follow `supersededCause`, and `member_closed` is read off the ROWS as merged or
+  // closed. Only the merge kind — a decision gate's withdrawal is §27's and is not redrawn.
+  const withdrawnMerge =
+    gate.state === 'superseded' && gate.kind === 'pull_request_approval'
+      ? withdrawnMergeCopy({
+          cause: gate.supersededCause,
+          members: members.map((member) => {
+            const row = rowStates.find(
+              (candidate) =>
+                rowKey(candidate.repo, candidate.number) === rowKey(member.repo, member.number),
+            );
+            return {
+              name: nameOf(member),
+              state: row?.state ?? null,
+              // What names the member in a `conflict` withdrawal (MOTIR-5916): read off
+              // the ROW, the same stored reading its *Conflicts with* pill draws.
+              conflicted: row?.conflicted ?? false,
+              baseRef: row?.baseRef ?? null,
+            };
+          }),
+          moved: moved.map(nameOf),
+          terminal,
+          itemIdentifier,
+          host: t('host'),
+          nameList,
+        })
+      : null;
+  const say = (message: WithdrawnMessage): string =>
+    message.scope === 'pra' ? t(message.key, message.values) : tGate(message.key, message.values);
   // THE RE-ASKED GATE (Story MOTIR-5799 · MOTIR-5806; § 4 FOURTH AMENDMENT, point 4): a
   // question still awaiting, standing over commits an earlier press did not land. The
   // member facts are what say so — an exit nobody put back, or a refusal the host gave —
@@ -501,22 +566,24 @@ export function DevelopmentGateFrame({
         // just now — a press did not land, and the question came back.
         reasked
         ? t('reasked.meta', { count })
-        : gate.state === 'superseded'
-          ? moved.length > 0
-            ? t('meta.withdrawn', { count, pr: nameList(moved.map(nameOf)) })
-            : t('meta.withdrawnSet', { count })
-          : gate.state === 'approved'
-            ? decidedByThisReader
-              ? t('meta.approvedByYou', { count })
-              : gate.decidedByLabel
-                ? // The same fact, said where it happened (MOTIR-5599; design § 23).
-                  gate.decisionSource === 'github'
-                  ? t('github.meta.approved', { name: gate.decidedByLabel, count })
-                  : t('meta.approved', { name: gate.decidedByLabel, count })
-                : t('meta.count', { count })
-            : gate.state === 'awaiting' && runLabel
-              ? t('meta.delivered', { count, run: runLabel })
-              : t('meta.count', { count });
+        : withdrawnMerge
+          ? say(withdrawnMerge.meta)
+          : gate.state === 'superseded'
+            ? moved.length > 0
+              ? t('meta.withdrawn', { count, pr: nameList(moved.map(nameOf)) })
+              : t('meta.withdrawnSet', { count })
+            : gate.state === 'approved'
+              ? decidedByThisReader
+                ? t('meta.approvedByYou', { count })
+                : gate.decidedByLabel
+                  ? // The same fact, said where it happened (MOTIR-5599; design § 23).
+                    gate.decisionSource === 'github'
+                    ? t('github.meta.approved', { name: gate.decidedByLabel, count })
+                    : t('meta.approved', { name: gate.decidedByLabel, count })
+                  : t('meta.count', { count })
+              : gate.state === 'awaiting' && runLabel
+                ? t('meta.delivered', { count, run: runLabel })
+                : t('meta.count', { count });
 
   // ── THE DECISION PORT (MOTIR-5678; design §27) ──────────────────────────────────
   // A decision gate LEADS the frame the way a design gate does, and every band says so in
@@ -570,6 +637,7 @@ export function DevelopmentGateFrame({
           // Sending the pull requests back records a note and moves nothing, so it does not
           // confirm — a reversible act asked twice is friction rather than care.
           confirms: false,
+          disabled: verbsDisabled,
         },
         {
           decision: 'approve',
@@ -579,7 +647,7 @@ export function DevelopmentGateFrame({
           confirms: true,
           // A decision with no one document on screen cannot be accepted (§27 Panels 3a–3d):
           // Approve stays drawn and disabled, with the reason as band 3's line.
-          disabled: isDecision && !decisionShown,
+          disabled: verbsDisabled || (isDecision && !decisionShown),
         },
       ]
     : [];
@@ -893,6 +961,9 @@ export function DevelopmentGateFrame({
           // the audit column itself is untouched.
           gate={{ ...gate, subjectVersion: null }}
           canDecide={read.canDecide}
+          // What a refusal names — § 30 Panels 5a / 5b say which card did not move, and on
+          // which host the conflict was reported (MOTIR-5916).
+          refusalContext={{ itemIdentifier, host: t('host') }}
           // ⚠️ THE KIND LABEL FOLLOWS THE GATE, not the block (Story MOTIR-5652 ·
           // Subtask MOTIR-5667; `design-result.md` AMENDMENT 6 Q1). A design card
           // with commits holds TWO gates and the DESIGN one leads: the frame is its
@@ -926,7 +997,7 @@ export function DevelopmentGateFrame({
           consequence={consequence}
           confirmConsequences={confirmConsequences}
           routedToLabel={read.routedToLabel}
-          alert={alert}
+          alert={alert ?? notice}
           recordDetail={recordDetail}
           recordLead={
             decisionAccepted && gate.decidedByLabel && gate.decisionSource !== 'github'
@@ -949,13 +1020,21 @@ export function DevelopmentGateFrame({
                       : tGate(`withdrawn.cause.${gate.supersededCause ?? 'unknown'}`),
                   cite: tDecision('withdrawnNext'),
                 }
-              : {
-                  port:
-                    moved.length > 0
-                      ? t('withdrawn.port', { pr: nameList(moved.map(nameOf)) })
-                      : t('withdrawn.portSet'),
-                  cite: t('withdrawn.portCite'),
-                }
+              : withdrawnMerge
+                ? {
+                    port: say(withdrawnMerge.sentence),
+                    cite: say(withdrawnMerge.cite),
+                    // The pull requests are still on the card, merged, closed or moved: the
+                    // withdrawal takes the verbs and keeps them (§ 29, Panel 1).
+                    keepsRecord: true,
+                  }
+                : {
+                    port:
+                      moved.length > 0
+                        ? t('withdrawn.port', { pr: nameList(moved.map(nameOf)) })
+                        : t('withdrawn.portSet'),
+                    cite: t('withdrawn.portCite'),
+                  }
           }
           onDecide={onDecide}
           onShowCurrentVersion={() => {

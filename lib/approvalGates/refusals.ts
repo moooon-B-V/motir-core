@@ -91,7 +91,17 @@ export type GateRefusal =
   // ── THE MERGE REFUSALS (MOTIR-5512; `approval-gates.md` §4, second amendment
   // decision 8) — the host said no to the merge an approval performs.
   | { tag: 'MERGE_CHECKS_NOT_GREEN' }
-  | { tag: 'MERGE_CONFLICT' }
+  | {
+      tag: 'MERGE_CONFLICT';
+      /**
+       * Found AT THE PRESS, before anything was written (MOTIR-5915; design/github § 30
+       * Panel 5a) — the approval was not spent, so the copy must not say it was. False
+       * for a conflict the merge itself met after the decision (§ 28).
+       */
+      atPress: boolean;
+      /** The conflicted members and the base each targets, for `{pr}` / `{base}`. */
+      conflicts: { pullRequest: string; baseRef: string | null }[];
+    }
   | {
       tag: 'MERGE_BRANCH_PROTECTED';
       /**
@@ -152,6 +162,8 @@ export function toGateRefusal(
     supersedeCause?: string | null;
     moved?: readonly StampComponent[] | null;
     primary?: PendingPrimary | null;
+    atPress?: boolean | null;
+    conflicts?: readonly { pullRequest: string; baseRef: string | null }[] | null;
   },
 ): GateRefusal {
   switch (code) {
@@ -183,8 +195,16 @@ export function toGateRefusal(
     case 'APPROVAL_GATE_ALREADY_AWAITING':
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
-    case 'MERGE_CHECKS_NOT_GREEN':
+      return { tag: code };
+    // Only the conflict carries where it was found and which members (MOTIR-5915) — the
+    // tags above keep their bare shape.
     case 'MERGE_CONFLICT':
+      return {
+        tag: code,
+        atPress: extra?.atPress ?? false,
+        conflicts: extra?.conflicts ? [...extra.conflicts] : [],
+      };
+    case 'MERGE_CHECKS_NOT_GREEN':
     case 'MERGE_ALREADY_MERGED':
     case 'MERGE_ALREADY_REQUEUED':
     case 'MERGE_REQUEUE_NEEDS_APPROVAL':

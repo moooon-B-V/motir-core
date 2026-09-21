@@ -141,6 +141,7 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'head_moved'
   | 'member_closed'
   | 'member_drafted'
+  | 'conflict'
   | 'set_changed'
   | 'pulled_back'
   | 'unknown';

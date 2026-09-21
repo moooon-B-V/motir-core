@@ -54,6 +54,8 @@ function delivery(
       headSha: null,
       url: `https://github.com/${repoLabel}/pull/${number}`,
       githubReview: null,
+      baseRef: 'main',
+      conflicted: false,
     },
     baseRef,
     defaultBranch,

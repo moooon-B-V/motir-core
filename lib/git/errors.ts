@@ -216,3 +216,45 @@ export class ProviderPermissionReadError extends Error {
     this.status = detail.status ?? null;
   }
 }
+
+// ── A MERGE DELIVERY THAT COULD NOT MOVE EVERY CARD IT DELIVERS (MOTIR-5587) ──
+// The status sync moves each delivered card in its own transaction, so one card's
+// FAULT — a transaction that could not start, a connection reset — says nothing
+// about the next card. It used to escape the per-card loop, which left every card
+// after it untouched: `motir-ai#487` delivered 36 cards and 25 of them never moved.
+// The sync now attempts EVERY card and throws this afterwards, naming the ones it
+// could not move. It still throws, on purpose: a delivery that returned would let
+// the post-commit capture stamp `merged_at`, and a merged row WITH `merged_at` is
+// invisible to the open-delivery reconcile (MOTIR-5390) — the one thing that
+// replays the delivery and finishes the job.
+
+/** One delivered card whose transition faulted, and the fault's own message. */
+export interface DeliveredItemTransitionFailure {
+  workItemId: string;
+  message: string;
+}
+
+/** A merge delivery that attempted every delivered card and could not move some. */
+export class DeliveredItemsTransitionFailedError extends Error {
+  readonly code = 'DELIVERED_ITEMS_TRANSITION_FAILED' as const;
+  readonly changeRequestNumber: number;
+  /** How many delivered cards the sync ATTEMPTED — every one of them. */
+  readonly attempted: number;
+  readonly failed: readonly DeliveredItemTransitionFailure[];
+
+  constructor(
+    changeRequestNumber: number,
+    attempted: number,
+    failed: readonly DeliveredItemTransitionFailure[],
+  ) {
+    super(
+      `change request #${changeRequestNumber}: ${failed.length} of ${attempted} delivered ` +
+        `work items could not be moved (${failed.map((f) => f.workItemId).join(', ')}); ` +
+        `first fault: ${failed[0]?.message ?? 'unknown'}`,
+    );
+    this.name = 'DeliveredItemsTransitionFailedError';
+    this.changeRequestNumber = changeRequestNumber;
+    this.attempted = attempted;
+    this.failed = failed;
+  }
+}
