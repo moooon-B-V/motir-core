@@ -34,7 +34,13 @@ const APPROVED: ApprovalGateDTO = {
   outcomeRef: 'approved',
 };
 
-const NO_EXIT = { exit: null, requeueable: false } as const;
+const NO_EXIT = {
+  exit: null,
+  exitAtApprovedHead: false,
+  requeueable: false,
+  refusal: null,
+  retryDecidesGateId: null,
+} as const;
 const MEMBERS: PullRequestApprovalMemberDTO[] = [
   { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, queued: true, retryable: false, ...NO_EXIT },
   {
@@ -47,13 +53,17 @@ const MEMBERS: PullRequestApprovalMemberDTO[] = [
 ];
 
 /** The gateway member the merge queue removed, at the approved head (MOTIR-5635). */
-const exited = (disposition: 'failure' | 'neutral', requeueable: boolean) =>
+const exited = (disposition: 'failure' | 'neutral', atHead: boolean) =>
   [
     MEMBERS[0]!,
     {
       ...MEMBERS[1]!,
       retryable: false,
-      requeueable,
+      exitAtApprovedHead: atHead,
+      // ⚠️ NO VERB ON A SPENT APPROVAL, whatever the disposition (MOTIR-5802): the
+      // re-asked gate is what the row's press decides, and this fixture is the DECIDED
+      // gate's read.
+      requeueable: false,
       exit: {
         rawReason: disposition === 'failure' ? 'CI_FAILURE' : 'MANUAL',
         disposition,
@@ -138,9 +148,9 @@ describe('the quick view reads the persisted merge outcome (MOTIR-5650)', () => 
     ['neutral', true, pra.outcome.removedFromQueue],
     ['failure', false, pra.outcome.newCommits],
   ] as const)(
-    'reads an ejected member (%s, requeueable %s) as the item page does, with NO Queue again (MOTIR-5635)',
-    (disposition, requeueable, label) => {
-      const members = exited(disposition, requeueable);
+    'reads an ejected member (%s, at the approved head %s) as the item page does, with NO Queue again (MOTIR-5635)',
+    (disposition, atHead, label) => {
+      const members = exited(disposition, atHead);
       render(
         <DevelopmentSectionBody
           pullRequests={[CORE_PR, GATEWAY_PR]}

@@ -6841,7 +6841,7 @@ model GithubPullRequest {
   createdAt             DateTime            @default(now()) @map("created_at")
   updatedAt             DateTime            @updatedAt @map("updated_at")
 
-  repo               GithubRepo                   @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  repo               GithubRepo                      @relation(fields: [repoId], references: [id], onDelete: Cascade)
   checkRuns          GithubCheckRun[]
   deliveries         WorkItemDelivery[]
   // One per (head commit, delivered card) — THE feedback comment for that pair
@@ -6849,6 +6849,7 @@ model GithubPullRequest {
   ciFeedbackComments GithubCiFeedbackComment[]
   // Every time the merge queue removed it without merging it (MOTIR-5632).
   queueExits         GithubPullRequestQueueExit[]
+  mergeRefusals      GithubPullRequestMergeRefusal[]
   queueAttempts      GithubMergeQueueAttempt[]
   reviews            GithubPullRequestReview[]
 
@@ -6897,6 +6898,55 @@ model GithubPullRequestQueueExit {
 
   @@index([pullRequestId, exitedAt])
   @@map("github_pull_request_queue_exit")
+}
+
+/// ONE MERGE THE HOST REFUSED, recorded on the pull request (Story MOTIR-5799 ·
+/// MOTIR-5833; ADR `docs/decisions/approval-gates.md` §4 FOURTH AMENDMENT, point 5).
+///
+/// ⚠️ THE SIBLING OF `github_pull_request_queue_exit`, FOR THE OTHER WAY A MERGE FAILS
+/// TO LAND. The queue's removal arrives as a webhook and has always been recorded; a
+/// refusal at the PRESS existed only in that request's response, so a reload showed a
+/// card reading **Approved** with nothing anywhere saying the merge had been refused or
+/// why. One approval authorizes ONE attempt (point 1), so the attempt that was spent has
+/// to be a FACT the page can read back.
+///
+/// ⚠️ ROWS ACCUMULATE, exactly as exits do: a person may press again after changing the
+/// setting, and be refused again. The pull request's CURRENT refusal is its latest row —
+/// hence the (pull_request_id, refused_at) index.
+///
+/// ⚠️ `subject_changed` IS NEVER RECORDED. That refusal means the head moved under the
+/// press, so nothing was attempted and no approval was spent (MOTIR-5232's path).
+///
+/// ⚠️ TENANCY IS THE PARENT'S, COPIED EXACTLY — no workspace column, and an RLS policy
+/// that joins `github_pull_request → github_repo` explicitly, with the `system_admin`
+/// arm for the paths that resolve their tier before a workspace is bound.
+model GithubPullRequestMergeRefusal {
+  id             String    @id @default(cuid())
+  /// FK → GithubPullRequest.id (internal cuid).
+  pullRequestId  String    @map("pull_request_id")
+  /// The host's refusal, VERBATIM — one of `lib/git/types.ts`'s `MergeRefusalCode`
+  /// (`checks_not_green`, `conflict`, `branch_protected`, `app_permission_missing`,
+  /// `already_merged`), or a backfill-only code the convergence writes (MOTIR-5809).
+  code           String
+  /// The head the press was made against — what makes the refusal STOP STANDING when a
+  /// push moves it, the same rule an exit follows.
+  headSha        String    @map("head_sha")
+  /// The gate whose approval this press spent. Null for a press carried by a design
+  /// approval (MOTIR-5664) and for a row the convergence writes.
+  approvalGateId String?   @map("approval_gate_id")
+  /// `app_permission_missing` only — the permission the host said it needed.
+  permission     String?
+  refusedAt      DateTime  @map("refused_at")
+  /// Stamped when a later press at the same head SUCCEEDED, or the pull request merged.
+  /// Null while the refusal still stands. A PUSH needs no stamp: the head moves and the
+  /// row no longer names it.
+  supersededAt   DateTime? @map("superseded_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+
+  @@index([pullRequestId, refusedAt])
+  @@map("github_pull_request_merge_refusal")
 }
 
 /// ONE GITHUB REVIEW, mirrored (Story MOTIR-4910 · MOTIR-5594; ADR

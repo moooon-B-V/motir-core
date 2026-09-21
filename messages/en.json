@@ -6367,9 +6367,9 @@
           "pointer": "Run the fix from <link>{key}</link> — this work item was built as part of that run, so its repair runs there."
         },
         "which": {
-          "checks": "Nothing changed on your side? <b>Queue again</b> tries the same commits once more. If the failing check points at real code, <code>motir fix</code> hands it to an agent.",
-          "conflict": "A conflict needs new commits. <code>motir fix</code> hands it to an agent; <b>Queue again</b> will fail the same way until it is resolved.",
-          "other": "<b>Queue again</b> tries the same commits once more. If it leaves the queue the same way, <code>motir fix</code> hands it to an agent."
+          "checks": "Nothing changed on your side? <b>Approve</b> sends the same commits once more. If the failing check points at real code, <code>motir fix</code> hands it to an agent.",
+          "conflict": "A conflict needs new commits. <code>motir fix</code> hands it to an agent; approving again cannot land these commits, so nothing is offered until the branch moves.",
+          "other": "<b>Approve</b> sends the same commits once more. If it leaves the queue the same way, <code>motir fix</code> hands it to an agent."
         }
       },
       "emptyTitle": "No linked pull request",
@@ -8468,6 +8468,10 @@
         "title": "Someone already put this pull request back in the merge queue.",
         "next": "Nothing is left to do. Reload to see where it is now."
       },
+      "mergeRequeueNeedsApproval": {
+        "title": "These commits did not land, so the approval that sent them has been used.",
+        "next": "Approve the work item again to try once more. If a check failed for a real reason, run motir fix instead."
+      },
       "mergeAppPermissionMissing": {
         "title": "Motir's GitHub App is not allowed to merge here.",
         "next": "An organisation owner grants {permission} to Motir's GitHub App on GitHub, then you approve again.",
@@ -8562,12 +8566,13 @@
         "leftQueue": "Left the queue",
         "removedFromQueue": "Removed from the queue",
         "newCommits": "New commits since approval",
-        "queueAgain": "Queue again"
+        "queueAgain": "Queue again",
+        "settingHeld": "Blocked by a setting",
+        "cannotLand": "Cannot be merged"
       },
       "refused": {
         "title": "{pr} was not merged.",
-        "stands": "Your approval stands, and {other} merged.",
-        "standsAlone": "Your approval stands."
+        "stands": "{other} merged."
       },
       "withdrawn": {
         "port": "A push moved the head of {pr}, so this question was withdrawn.",
@@ -8595,11 +8600,18 @@
           "unknown": "GitHub did not say why."
         },
         "failingCheck": "Failing check: <link>{check}</link>",
-        "unchanged": "Your approval still covers these commits, so <b>Queue again</b> puts it back with no new approval.",
+        "unchanged": "Nothing changed on your side? <b>Queue again</b> approves these same commits once more and puts them back in the merge queue.",
+        "cannotLand": "These commits cannot land as they stand. <b>motir fix</b> hands the repair to an agent; a push brings the question back once its checks pass.",
         "newCommits": "It has new commits since your approval. Motir asks again when every check is green.",
         "auto": "Motir merges this project’s pull requests when they are green. <b>Queue again</b> sends it back at the same commits.",
         "partTitle": "Merge queue",
-        "openCheck": "Open the failing check {check} on GitHub"
+        "openCheck": "Open the failing check {check} on GitHub",
+        "reasked": {
+          "failure": "These commits did not land, so that approval is spent and Motir is asking you again. The press on the pull request — or <b>Approve and merge</b> below — is the new approval, and puts them back in the merge queue."
+        },
+        "neutral": {
+          "reasked": "They still did not land, so that approval is spent and Motir is asking you again. The press on the pull request — or <b>Approve and merge</b> below — is the new approval, and puts them back in the merge queue."
+        }
       },
       "requeue": {
         "progress": "Adding {pr} back to its merge queue…",
@@ -8619,6 +8631,24 @@
           "changesRequested": "Changes requested on GitHub by {name}",
           "notMember": "Not a Motir member"
         }
+      },
+      "reasked": {
+        "meta": "Asked again after the merge queue · {count, plural, one {# pull request} other {# pull requests}}",
+        "why": "Approving puts {pr} back in its repository’s merge queue, which merges it when the queue’s checks pass, then moves {key} to Approved.",
+        "confirm": {
+          "newApproval": "record that you approved these {count, plural, one {# commit} other {# commits}} again, with the time — a new approval, not the spent one;",
+          "requeue": "add {pr} back to its repository’s merge queue, which merges it when the queue’s checks pass;",
+          "merge": "merge {pr}, now that the setting allows it;"
+        },
+        "whySetting": "Approving merges {pr} once the setting allows it, then moves {key} to Approved."
+      },
+      "cannotLand": {
+        "line": "<b>{pr}</b> cannot be merged as it stands."
+      },
+      "setting": {
+        "line": "<b>{pr}</b> was not merged: a setting on the repository blocked it.",
+        "linePermission": "<b>{pr}</b> was not merged: Motir’s GitHub App is missing <b>{permission}</b> there.",
+        "reasked": "Change the setting, then press again — this press is a new approval, and merges the same commits. <b>motir fix</b> is not offered: there is no code for an agent to change."
       }
     },
     "statusHeld": {

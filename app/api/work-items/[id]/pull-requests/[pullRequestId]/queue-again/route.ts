@@ -12,9 +12,11 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // pull request the merge queue removed back into the queue, while its head is unchanged.
 //
 // ONE route for both merge modes, and the body says which door:
-//   * `{ approvalGateId }` — a `manual` project: the card's DECIDED approval is reused
-//     (`retryApproveAndMergeMember`). The answer is that member's outcome, and a host
-//     refusal is a member outcome of a 200, exactly as the decide route reports one.
+//   * `{ approvalGateId, stamp }` — a `manual` project (`retryApproveAndMergeMember`). On
+//     the card's RE-ASKED gate the press IS the new approval and `stamp` is what the reader
+//     was shown (MOTIR-5802); on a decided gate it carries out the decision already made.
+//     The answer is that member's outcome, and a host refusal is a member outcome of a 200,
+//     exactly as the decide route reports one.
 //   * `{}` — an `auto` project: a person's press re-sends the automatic merge for the
 //     same head (`requeueAutoMember`).
 //
@@ -44,11 +46,16 @@ export async function POST(
     typeof body.approvalGateId === 'string' && body.approvalGateId.trim() !== ''
       ? body.approvalGateId.trim()
       : null;
+  const stamp = typeof body.stamp === 'string' ? body.stamp : '';
 
   try {
     if (approvalGateId) {
       const member = await pullRequestMergeService.retryApproveAndMergeMember(
-        { approvalGateId, pullRequestId, noteMd: null, source: 'api' },
+        // The reader's stamp, when they rendered a gate (MOTIR-5802): on the RE-ASKED gate
+        // the press IS the approval, and the door refuses one made against a stamp that has
+        // moved. A caller that read no gate sends none and is refused as stale there, which
+        // is the honest answer — and a decided gate's retry never reads it.
+        { approvalGateId, pullRequestId, noteMd: null, source: 'api', stamp },
         ctx,
       );
       return NextResponse.json({ member }, { status: 200 });

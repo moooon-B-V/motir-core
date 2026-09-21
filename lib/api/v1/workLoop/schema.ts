@@ -511,6 +511,7 @@ export const workItemRepairRefusalSchema = z.enum([
   'no_pull_requests',
   'ci_running',
   'not_failing',
+  'repair_not_code',
 ]);
 
 /** One failing pull request a fixing agent is handed. */

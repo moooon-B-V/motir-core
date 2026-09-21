@@ -26,8 +26,10 @@ import { withProjectSession } from '../session.js';
 import { requireAgent } from './auto.js';
 import { CI_WATCH_EVENT, CI_WATCH_STOP_REASON } from './dispatch.js';
 
-// `motir fix <key>` (Story MOTIR-5460 · MOTIR-5465) — hand an `implemented`
-// card's RED pull requests to an agent, after the run that opened them has ended.
+// `motir fix <key>` (Story MOTIR-5460 · MOTIR-5465) — hand a card's RED pull
+// requests to an agent, after the run that opened them has ended: an `implemented`
+// card, or an `in_review` one the merge queue threw out for a reason a code change
+// could answer (MOTIR-5803; a setting or a hand removal is refused `repair_not_code`).
 //
 // ── Everything it needs already ships, except the claim and the checkout ─────
 // The fixing loop is `runCiWatchPhase` exactly as `motir run` calls it: the same
@@ -91,8 +93,8 @@ const bindSigint = (handler: () => void): (() => void) => {
  */
 const REFUSAL_LINES = {
   not_implemented: () =>
-    'it is not at Implemented. `motir fix` picks up a card whose run has ended and whose pull ' +
-    'requests went red afterwards.',
+    'it is not waiting on a repair. `motir fix` picks up a card whose run has ended and whose ' +
+    'pull requests went red afterwards, or that the merge queue threw out.',
   repair_on_run_target: (claim) =>
     `its pull requests belong to the run on ${claim.runTargetKey ?? 'its parent'} — ` +
     `run \`motir fix ${claim.runTargetKey ?? '<that key>'}\` instead.`,
@@ -101,6 +103,13 @@ const REFUSAL_LINES = {
     'its checks are still running and nothing has failed yet. Wait for the verdict, and run ' +
     'this again if it goes red.',
   not_failing: () => 'nothing is failing on its open pull requests, so there is nothing to repair.',
+  // ⚠️ THE MERGE FAILED, AND NO CODE CHANGE ANSWERS IT (MOTIR-5803; `approval-gates.md`
+  // §4 FOURTH AMENDMENT, point 6). An agent would push nothing and the run would be
+  // spent, so the refusal names what would actually help.
+  repair_not_code: () =>
+    'its merge did not land for a reason no code change fixes — a repository setting blocked ' +
+    'it, or somebody took the pull request out of the queue. Approve it again in Motir, or ' +
+    'change the setting the card names; there is nothing here for an agent to repair.',
 } as const satisfies Record<WorkItemRepairRefusal, (claim: WorkItemRepairClaim) => string>;
 
 /** A refused repair, in words. Exported so the vocabulary can be pinned. */
@@ -230,7 +239,7 @@ export function renderRepairGaveUp(input: {
     lines.push(`  ${pr.repo}#${pr.number} — failing: ${checks} (${pr.url})`);
   }
   lines.push(
-    `The card stays at Implemented. Look at the failure, then run \`motir fix ${key}\` again.`,
+    `The card stays where it is. Look at the failure, then run \`motir fix ${key}\` again.`,
   );
   return lines.join('\n');
 }

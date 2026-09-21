@@ -399,37 +399,25 @@ test.describe('a GitHub approval syncs into Motir', () => {
     await beat();
   });
 
-  test('a merge the host refuses leaves the approval standing, and retries that row alone', async ({
-    page,
-  }) => {
-    const web = PRS.refused.web.number;
-    const api = PRS.refused.api.number;
-
-    await deliverReview(page, { repo: WEB_REPO, number: web, reviewer: MEMBER_REVIEWER });
-    expect(
-      await deliverReview(page, { repo: API_REPO, number: api, reviewer: MEMBER_REVIEWER }),
-    ).toBe('decided_approved');
-
-    await page.goto(`/items/${seed.refused.identifier}`);
-    // ⚠️ THE DECISION STANDS. A host refusing one merge cannot unwind a person's approval —
-    // and must not re-ask the question, which is what a withdrawn gate would do.
-    await expect(statusCard(page)).toContainText(gate.state.approved, { timeout: 60_000 });
-    // ⚠️ `notMergedYet`, NOT `refused`. The red *Not merged* pill is the in-page wording,
-    // held only for the life of the press that saw the host's reason; a page loaded later
-    // reads the persisted outcome and says the neutral thing it can still stand behind.
-    await expect(
-      prRow(page, API_REPO, api).getByText(pra.outcome.notMergedYet, { exact: true }),
-    ).toBeVisible();
-    await expect(
-      prRow(page, API_REPO, api).getByRole('button', { name: pra.outcome.retry }),
-    ).toBeVisible();
-    // The other member merged regardless — a refusal is scoped to its own row, which is what
-    // the ABSENCE of a retry there says. Its merge is proven at the seam.
-    expect(mergePresses()).toContain(prKey(WEB_REPO, web));
-    await expect(
-      prRow(page, WEB_REPO, web).getByRole('button', { name: pra.outcome.retry }),
-    ).toHaveCount(0);
-  });
+  // ⚠️ A TEST WAS REMOVED HERE, AND THE RECEIPT IT BELONGS TO IS UNTOUCHED (Story
+  // MOTIR-5799 · MOTIR-5808; `docs/decisions/approval-gates.md` § 4 FOURTH AMENDMENT,
+  // point 1). It read *a merge the host refuses leaves the approval standing, and retries
+  // that row alone*, and that was true when MOTIR-4910 was accepted. It is not true now:
+  // a press that does not land SPENDS the approval, so a refusal re-asks (a setting) or
+  // drops the card to Implemented (a conflict), and *Retry merge* decides a FRESH gate
+  // rather than riding the old one.
+  //
+  // It was DELETED rather than re-pointed at the new behaviour, because a receipt's spec
+  // records what a person watched and approved — rewriting its assertions to agree with
+  // today edits history (`docs/decisions/acceptance-receipt-lifecycle.md` § 3, and
+  // `CLAUDE.md`'s *an `acceptance-*.spec.ts` is a RECEIPT*). The host-refusal behaviour is
+  // covered where it now lives:
+  //
+  //   · `tests/e2e/acceptance-merge-unlanded-classes.spec.ts` — journey 3, the setting
+  //     class end to end, with its own video;
+  //   · `tests/integration/mergeStoryJourney.test.ts` journey 5 and
+  //     `tests/github/mergeRefusalRecord.test.ts` — every refusal code, by class, on real
+  //     Postgres, in a lane that runs on EVERY pull request.
 
   test('changes requested on GitHub decides the question the other way, and merges nothing', async ({
     page,

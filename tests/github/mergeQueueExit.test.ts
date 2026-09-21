@@ -30,6 +30,9 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
+import { getGitProvider } from '@/lib/git';
+import type { GitProvider } from '@/lib/git/provider';
 import { designEvidenceService, designPrefix } from '@/lib/services/designEvidenceService';
 import { makeWorkWaitOn } from '@/tests/helpers/designWaits';
 import { shaFor } from '../helpers/commitShaFixtures';
@@ -39,9 +42,13 @@ import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import { workItemCiStateBackfillService } from '@/lib/services/workItemCiStateBackfillService';
+import { mergeQueueExitService } from '@/lib/services/mergeQueueExitService';
+import type { NormalizedMergeQueueExit } from '@/lib/git/types';
 
 // THE EJECTION ARM (Story MOTIR-5461 · MOTIR-5632; `docs/decisions/approval-gates.md`
-// §4 THIRD AMENDMENT, decisions 1–4, 6 and 9), on a REAL Postgres, through the real
+// §4 THIRD AMENDMENT, decisions 1–4, 6 and 9 — and, since Story MOTIR-5799 · MOTIR-5805,
+// the FOURTH AMENDMENT: a manual FAILURE re-asks the merge question on ONE fresh gate at
+// `in_review`, and approving it re-queues), on a REAL Postgres, through the real
 // webhook service — the door a GitHub delivery walks. The `dequeued` bodies are the
 // REAL deliveries MOTIR-5627 captured (`tests/fixtures/github/merge-queue/`), with only
 // the installation, the repository id, the number and the head re-pointed at this
@@ -240,7 +247,7 @@ afterAll(async () => {
 });
 
 describe('a FAILURE removal', () => {
-  it('in a manual project: one exit row, the queued record cleared, the card back at implemented, the approval untouched', async () => {
+  it('in a manual project: one exit row, the queued record cleared, the card back at IN REVIEW with ONE fresh gate over the same commits, the approval untouched', async () => {
     const { item, approved } = await approvedAndQueued('fail-manual@example.com');
     sent.length = 0;
 
@@ -255,6 +262,7 @@ describe('a FAILURE removal', () => {
       disposition: 'failure',
       rawReason: 'CI_FAILURE',
       moved: [item.identifier],
+      reasked: [item.identifier],
       clearedQueuedOutcome: true,
     });
     const [row, ...more] = await exits(11);
@@ -271,12 +279,22 @@ describe('a FAILURE removal', () => {
     expect((await pr(11)).mergeAuthority).toBe('gate');
     // The sibling approved at its own head stays in the queue.
     expect((await pr(12)).mergeOutcomeRef).toBe('queue:entry-12');
-    expect(await statusOf(item.id)).toBe('implemented');
+    // §4 FOURTH AMENDMENT, point 1: back to review, where a fresh yes comes from.
+    expect(await statusOf(item.id)).toBe('in_review');
 
-    // The decided gate is a record: byte-for-byte what it was.
+    // The decided gate is a record: byte-for-byte what it was…
     const after = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: approved.id } });
     expect(after).toEqual(approved);
-    expect(await awaitingGates(item.id)).toEqual([]);
+    // …and the merge question is asked AGAIN (point 2): exactly ONE awaiting gate over
+    // the SAME set version the approval named.
+    const [fresh, ...more2] = await awaitingGates(item.id);
+    expect(more2).toEqual([]);
+    expect(fresh).toMatchObject({
+      kind: KIND,
+      subjectId: item.id,
+      subjectVersion: approved.subjectVersion,
+    });
+    expect(fresh!.id).not.toBe(approved.id);
 
     // One transition event, after commit.
     expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([
@@ -284,13 +302,13 @@ describe('a FAILURE removal', () => {
         data: expect.objectContaining({
           workItemId: item.id,
           fromStatusKey: 'approved',
-          toStatusKey: 'implemented',
+          toStatusKey: 'in_review',
         }),
       }),
     ]);
   });
 
-  it('in an auto project: the card moves from in_review to implemented', async () => {
+  it('in an auto project: the card moves from in_review to implemented, and NO gate is raised (unchanged)', async () => {
     const s = await makeScenario('fail-auto@example.com', 'auto');
     const item = await card(s, 'Auto merged', [21]);
     await ci(21, 'sha-auto');
@@ -303,24 +321,44 @@ describe('a FAILURE removal', () => {
       'guid-auto-1',
     );
 
-    expect(result).toMatchObject({ outcome: 'recorded', moved: [item.identifier] });
+    expect(result).toMatchObject({ outcome: 'recorded', moved: [item.identifier], reasked: [] });
     expect(await statusOf(item.id)).toBe('implemented');
+    expect(await gates(item.id)).toEqual([]);
   });
 
+  // ⚠️ BY CLASS, NOT BY DISPOSITION (§4 FOURTH AMENDMENT, point 2; MOTIR-5805). All
+  // five are `failure` rows; what differs is what a person can do about them.
   it.each([
-    'CI_TIMEOUT',
-    'MERGE_CONFLICT',
-    'INVALID_MERGE_COMMIT',
-    'GIT_TREE_INVALID',
-    'BRANCH_PROTECTIONS',
-  ])('%s is a failure too', async (reason) => {
+    ['CI_TIMEOUT', 'in_review', 1],
+    ['INVALID_MERGE_COMMIT', 'in_review', 1],
+    ['GIT_TREE_INVALID', 'in_review', 1],
+    // A setting somebody can change: the same commits land once it is changed.
+    ['BRANCH_PROTECTIONS', 'in_review', 1],
+    // CAN'T LAND: the commits cannot combine, so the card is held and NOTHING is asked.
+    ['MERGE_CONFLICT', 'implemented', 0],
+  ] as const)('%s settles the card at %s with %i gate(s)', async (reason, status, gateCount) => {
     const { item } = await approvedAndQueued(`fail-${reason}@example.com`);
     await eject(
       dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason }),
       `guid-${reason}`,
     );
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe(status);
+    expect(await awaitingGates(item.id)).toHaveLength(gateCount);
     expect((await exits(11))[0]).toMatchObject({ rawReason: reason, disposition: 'failure' });
+  });
+
+  it('a CONFLICT held at Implemented raises nothing on a green check at the SAME head', async () => {
+    const { item } = await approvedAndQueued('conflict-hold@example.com');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: 'MERGE_CONFLICT' }),
+      'guid-conflict-hold',
+    );
+    expect(await statusOf(item.id)).toBe('implemented');
+
+    await ci(11, 'sha-a');
+
+    expect(await awaitingGates(item.id)).toEqual([]);
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 
   it('moves only a card at the enqueued status, and names the rest', async () => {
@@ -381,7 +419,7 @@ describe('a FAILURE removal', () => {
 });
 
 describe('NEUTRAL, UNKNOWN and LANDED removals', () => {
-  it('a manual removal writes a neutral row, clears the queued record and leaves the card approved', async () => {
+  it('a manual removal writes a neutral row, clears the queued record and ASKS AGAIN', async () => {
     const { item } = await approvedAndQueued('manual@example.com');
 
     const result = await eject(
@@ -389,13 +427,21 @@ describe('NEUTRAL, UNKNOWN and LANDED removals', () => {
       'guid-manual',
     );
 
-    expect(result).toMatchObject({ outcome: 'recorded', disposition: 'neutral', moved: [] });
+    expect(result).toMatchObject({
+      outcome: 'recorded',
+      disposition: 'neutral',
+      moved: [item.identifier],
+      reasked: [item.identifier],
+    });
     expect((await exits(11))[0]).toMatchObject({ rawReason: 'MANUAL', disposition: 'neutral' });
     expect((await pr(11)).mergeOutcomeRef).toBeNull();
-    expect(await statusOf(item.id)).toBe('approved');
+    // ⚠️ A NEUTRAL REMOVAL RE-ASKS TOO (MOTIR-5805; Yue, 2026-09-19). The approval sent
+    // the pull request to the queue and it did not land, so the yes has been used.
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingGates(item.id)).toHaveLength(1);
   });
 
-  it('an unrecognised reason is recorded neutral, moves nothing, and is logged raw once', async () => {
+  it('an unrecognised reason is recorded neutral, asks again, and is logged raw once', async () => {
     const { item } = await approvedAndQueued('unknown@example.com');
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -404,8 +450,14 @@ describe('NEUTRAL, UNKNOWN and LANDED removals', () => {
       'guid-unknown',
     );
 
-    expect(result).toMatchObject({ outcome: 'recorded', disposition: 'neutral', moved: [] });
-    expect(await statusOf(item.id)).toBe('approved');
+    // Unrecognised is `neutral` (it moves nothing on the disposition axis) and
+    // RETRYABLE (a person is asked, and can still reach for `motir fix`).
+    expect(result).toMatchObject({
+      outcome: 'recorded',
+      disposition: 'neutral',
+      moved: [item.identifier],
+    });
+    expect(await statusOf(item.id)).toBe('in_review');
     const logged = warn.mock.calls.filter((call) =>
       String(call[0]).includes('unrecognised merge-queue removal reason'),
     );
@@ -448,11 +500,13 @@ describe('IDEMPOTENCY — keyed on the delivery GUID', () => {
 
     expect(second).toMatchObject({ outcome: 'duplicate' });
     expect(await exits(11)).toHaveLength(1);
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('in_review');
+    // A redelivered `dequeued` raises no second gate and moves nothing.
+    expect(await awaitingGates(item.id)).toHaveLength(1);
   });
 
   it('two deliveries at the same head and reason are two exits', async () => {
-    await approvedAndQueued('two@example.com');
+    const { item } = await approvedAndQueued('two@example.com');
     const body = dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' });
 
     await eject(body, 'guid-first');
@@ -460,46 +514,153 @@ describe('IDEMPOTENCY — keyed on the delivery GUID', () => {
 
     expect(second).toMatchObject({ outcome: 'recorded' });
     expect(await exits(11)).toHaveLength(2);
+    // The card is already at `in_review` and already asking: still ONE gate.
+    expect(await awaitingGates(item.id)).toHaveLength(1);
   });
 });
 
-describe('the PROMOTION HOLD (decision 6)', () => {
-  it('after a failure exit, a green check at the SAME head leaves the card implemented with no awaiting gate', async () => {
+describe('the PROMOTION HOLD (decision 6) and the re-ask', () => {
+  it('after a failure exit, a green check at the SAME head asks nothing twice — still ONE gate, still in_review', async () => {
     const { item } = await approvedAndQueued('hold@example.com');
     await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-hold');
+    const [reasked] = await awaitingGates(item.id);
 
     const result = await laterCheck(11, 'sha-a', 'lint');
     expect(result).toMatchObject({ event: 'ci', ciState: 'passing' });
 
-    expect(await statusOf(item.id)).toBe('implemented');
-    expect(await awaitingGates(item.id)).toEqual([]);
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect((await awaitingGates(item.id)).map((g) => g.id)).toEqual([reasked!.id]);
   });
 
-  it('the card ARRIVING at implemented by hand is held too', async () => {
+  it('a card a person moves back to implemented by hand is held there — the latch does not promote it', async () => {
     const { s, item } = await approvedAndQueued('hold-edge2@example.com');
     await eject(dequeued('dequeued-manual', { number: 11, headSha: 'sha-a' }), 'guid-neutral');
     await eject(dequeued('dequeued-ci-failure', { number: 12, headSha: 'sha-b' }), 'guid-fail-12');
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('in_review');
 
     // A person moves it out and back in: the latch (edge 2) must not promote it.
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
     await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
 
     expect(await statusOf(item.id)).toBe('implemented');
-    expect(await awaitingGates(item.id)).toEqual([]);
   });
 
-  it('a push to a NEW head re-arms: green promotes to in_review with exactly ONE fresh awaiting gate', async () => {
+  it('a push to a NEW head supersedes the re-asked gate `head moved`, and the next green raises exactly ONE over the new commits', async () => {
     const { item, approved } = await approvedAndQueued('rearm@example.com');
     await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-rearm');
+    const [reasked] = await awaitingGates(item.id);
 
     await ci(11, 'sha-a2');
 
     expect(await statusOf(item.id)).toBe('in_review');
+    expect(
+      await adminDb.approvalGate.findUniqueOrThrow({ where: { id: reasked!.id } }),
+    ).toMatchObject({ state: 'superseded', supersededCause: 'head_moved' });
     const fresh = await awaitingGates(item.id);
     expect(fresh).toHaveLength(1);
     expect(fresh[0]!.subjectVersion).toBe('moooon/acme#11@sha-a2,moooon/acme#12@sha-b');
     expect(fresh[0]!.id).not.toBe(approved.id);
+    expect(fresh[0]!.id).not.toBe(reasked!.id);
+  });
+});
+
+// ── §4 FOURTH AMENDMENT, point 3 (MOTIR-5805): APPROVING THE RE-ASKED GATE RE-QUEUES ──
+describe('approving the re-asked gate', () => {
+  const github = getGitProvider('github') as Required<GitProvider>;
+  const ciStateOf = async (id: string) =>
+    (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).ciState;
+
+  async function ejected(email: string) {
+    const out = await approvedAndQueued(email);
+    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), `g-${email}`);
+    const [reasked] = await awaitingGates(out.item.id);
+    return { ...out, reasked: reasked! };
+  }
+
+  it('enqueues the ejected member through the merge seam, stamps the exit, lifts the red, and moves the card to approved', async () => {
+    const { s, item, reasked } = await ejected('reask-approve@example.com');
+    expect(await ciStateOf(item.id)).toBe('failing');
+    const host = vi
+      .spyOn(github, 'mergeChangeRequest')
+      .mockResolvedValue({ outcome: 'enqueued', entryId: 'MQE_again' });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: reasked.id, source: 'ui' },
+      s.ctx,
+    );
+
+    // #11 left the queue and is re-enqueued; #12 never left and is enqueued as the
+    // approval names it — each member of the set is carried out.
+    const onEleven = result.members.find((m) => m.subjectVersion.includes('#11@'));
+    expect(onEleven).toMatchObject({ outcome: 'enqueued' });
+    expect(host.mock.calls.some(([args]) => args.number === 11)).toBe(true);
+    expect((await exits(11))[0]!.requeuedAt).not.toBeNull();
+    expect((await pr(11)).mergeOutcomeRef).toBe('queue:MQE_again');
+    expect(await statusOf(item.id)).toBe('approved');
+    expect(await ciStateOf(item.id)).not.toBe('failing');
+    expect(
+      await adminDb.approvalGate.findUniqueOrThrow({ where: { id: reasked.id } }),
+    ).toMatchObject({ state: 'approved' });
+  });
+
+  // ⚠️ REWRITTEN FROM THE OPPOSITE RULE (MOTIR-5834; §4 FOURTH AMENDMENT, points 2 and 8).
+  // It used to read *the approval stands and the retry re-queues under it*. A host
+  // CONFLICT is `cant_land`: the same commits cannot land however many times anyone says
+  // yes, so the approval is spent, the card falls back to `implemented`, NOTHING is asked
+  // again, and the retry is refused rather than re-queueing on a spent yes.
+  it('a CONFLICT the host refuses spends the approval, drops the card to implemented, asks nothing, and refuses the retry', async () => {
+    const { s, item, reasked } = await ejected('reask-refused@example.com');
+    vi.spyOn(github, 'mergeChangeRequest').mockResolvedValue({
+      outcome: 'refused',
+      refusal: { code: 'conflict' },
+    });
+
+    const result = await pullRequestMergeService.approveAndMerge(
+      { stamp: DECIDED_WITHOUT_A_READER, gateId: reasked.id, source: 'ui' },
+      s.ctx,
+    );
+
+    expect(result.members.find((m) => m.subjectVersion.includes('#11@'))).toMatchObject({
+      outcome: 'refused',
+      refusal: { tag: 'MERGE_CONFLICT' },
+    });
+    expect((await exits(11))[0]!.requeuedAt).toBeNull();
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaitingGates(item.id)).toEqual([]);
+
+    // The refusal stands at this head, so the retry acts on nothing and calls no host.
+    vi.restoreAllMocks();
+    const host = vi.spyOn(github, 'mergeChangeRequest');
+    const retried = await pullRequestMergeService.retryApproveAndMergeMember(
+      {
+        approvalGateId: reasked.id,
+        pullRequestId: (await pr(11)).id,
+        noteMd: null,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      s.ctx,
+    );
+    expect(retried).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
+    expect(host).not.toHaveBeenCalled();
+    expect((await exits(11))[0]!.requeuedAt).toBeNull();
+  });
+
+  it('a STALE stamp is refused by the shipped stamp check, and nothing is enqueued', async () => {
+    const { s, item, reasked } = await ejected('reask-stale@example.com');
+    const host = vi.spyOn(github, 'mergeChangeRequest');
+
+    await expect(
+      pullRequestMergeService.approveAndMerge(
+        { stamp: 'v1.a-stamp-for-something-else', gateId: reasked.id, source: 'ui' },
+        s.ctx,
+      ),
+    ).rejects.toMatchObject({ code: 'APPROVAL_GATE_STALE_SUBJECT' });
+
+    expect(host).not.toHaveBeenCalled();
+    expect((await exits(11))[0]!.requeuedAt).toBeNull();
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingGates(item.id)).toEqual([reasked]);
   });
 });
 
@@ -584,15 +745,19 @@ describe('a DESIGN card the queue ejects', () => {
     return { s, item, design };
   }
 
-  it('leaves the DESIGN gate decided and holds the card with no awaiting gate', async () => {
+  it('leaves the DESIGN gate decided and re-asks ONLY the merge — one awaiting merge gate, standing alone', async () => {
     const { item, design } = await designedAndQueued('mq-design-eject@example.com');
 
     await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-d1');
 
-    // Decision 6's hold is UNCHANGED: the merge question comes back through Queue
-    // again and through a push, not as a second ask about commits already approved.
-    expect(await statusOf(item.id)).toBe('implemented');
-    expect(await awaitingGates(item.id)).toEqual([]);
+    // §4 FOURTH AMENDMENT, point 2: the MERGE question is asked again, alone.
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingGates(item.id)).toHaveLength(1);
+    expect(
+      await adminDb.approvalGate.count({
+        where: { workItemId: item.id, kind: 'design_result', state: 'awaiting' },
+      }),
+    ).toBe(0);
 
     // And the design decision is exactly as it was. Nobody is asked a second time
     // whether the design is right, because nothing about the design changed.
@@ -611,7 +776,7 @@ describe('a DESIGN card the queue ejects', () => {
     // turn a commits problem into a shipped design nobody approved.
     const { s, item } = await designedAndQueued('mq-design-republish@example.com');
     await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-d2');
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('in_review');
 
     const prefix = designPrefix(s.workspace.id, item.id);
     blobs.set(`${prefix}v2.mock.html`, { contentType: 'text/html', size: 2048 });
@@ -772,13 +937,13 @@ describe('an ejected card reads RED (MOTIR-5717)', () => {
     expect(await ciStateOf(item.id)).toBe('running');
   });
 
-  it('a further green check at the SAME head keeps the card red and does not promote it', async () => {
+  it('a further green check at the SAME head keeps the card red and moves nothing', async () => {
     const { item } = await approvedAndQueued('red-same-head@example.com');
     await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-red-4');
 
     await laterCheck(11, 'sha-a', 'lint');
 
-    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await statusOf(item.id)).toBe('in_review');
     expect(await ciStateOf(item.id)).toBe('failing');
   });
 
@@ -797,5 +962,102 @@ describe('an ejected card reads RED (MOTIR-5717)', () => {
     const real = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
     expect(real.changed).toEqual(rehearsal.changed);
     expect(await ciStateOf(item.id)).toBe('failing');
+  });
+});
+
+// ── THE DELIVERIES THAT REACH NO CARD (MOTIR-5805) ──────────────────────────────
+//
+// `recordExit` is the ONE entry point every un-landed queue outcome goes through, so its
+// refusals are load-bearing in a way a webhook handler's usually are not: each one names
+// a different missing row, and a delivery that cannot be tied to a card must say WHICH
+// link is missing rather than failing anonymously. Driven directly, because a signed
+// delivery cannot carry an installation the tenant has never heard of.
+describe('a removal that reaches no card says which link is missing', () => {
+  const exitFor = (over: Partial<NormalizedMergeQueueExit> = {}): NormalizedMergeQueueExit => ({
+    providerRepoId: REPO_PROVIDER_ID,
+    number: 11,
+    headSha: 'sha-a',
+    rawReason: 'CI_FAILURE',
+    ...over,
+  });
+
+  it('with no delivery id it is MALFORMED — never recorded without an idempotency key', async () => {
+    const result = await mergeQueueExitService.recordExit({
+      installationId: INSTALLATION_ID,
+      exit: exitFor(),
+      deliveryId: null,
+    });
+    expect(result).toMatchObject({ outcome: 'malformed', disposition: 'failure' });
+  });
+
+  it('with no installation id at all, and with one nobody has installed', async () => {
+    for (const installationId of [null, 'inst-nobody-installed']) {
+      const result = await mergeQueueExitService.recordExit({
+        installationId,
+        exit: exitFor(),
+        deliveryId: `guid-unknown-inst-${installationId ?? 'null'}`,
+      });
+      expect(result, `installationId=${installationId}`).toMatchObject({
+        outcome: 'unknown_installation',
+      });
+    }
+  });
+
+  it('a repository the installation does not carry is UNKNOWN REPO, not an unknown card', async () => {
+    await makeScenario('exit-unknown-repo@example.com');
+    const result = await mergeQueueExitService.recordExit({
+      installationId: INSTALLATION_ID,
+      exit: exitFor({ providerRepoId: '424242' }),
+      deliveryId: 'guid-unknown-repo',
+    });
+    expect(result).toMatchObject({ outcome: 'unknown_repo' });
+  });
+
+  it('a pull request Motir has never mirrored is UNKNOWN PULL REQUEST', async () => {
+    await makeScenario('exit-unknown-pr@example.com');
+    const result = await mergeQueueExitService.recordExit({
+      installationId: INSTALLATION_ID,
+      exit: exitFor({ number: 9999 }),
+      deliveryId: 'guid-unknown-pr',
+    });
+    expect(result).toMatchObject({ outcome: 'unknown_pull_request' });
+  });
+});
+
+describe('a CAN’T-LAND exit is never re-queued, whatever anyone approved', () => {
+  it('a conflict that PRE-DATES the approval still refuses — the class decides, not the clock', async () => {
+    const { s, item, approved } = await approvedAndQueued('cantland-predates@example.com');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: 'MERGE_CONFLICT' }),
+      'guid-cantland-predates',
+    );
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaitingGates(item.id)).toEqual([]);
+
+    // ⚠️ TWO RULES MEET HERE, AND ONLY ONE OF THEM IS ABOUT TIME. *No exit is re-queued on
+    // an approval given before it* (point 1) would let this one through, because the exit
+    // is backdated to before the approval — so what refuses it is the CLASS (point 2): the
+    // same commits cannot land however many times anyone says yes. Backdated rather than
+    // staged, because the order is the whole point and a second approval would change it.
+    await adminDb.githubPullRequestQueueExit.updateMany({
+      where: { pullRequestId: (await pr(11)).id },
+      data: { exitedAt: new Date(approved.decidedAt!.getTime() - 60_000) },
+    });
+    const host = vi.spyOn(getGitProvider('github') as Required<GitProvider>, 'mergeChangeRequest');
+
+    const outcome = await pullRequestMergeService.retryApproveAndMergeMember(
+      {
+        approvalGateId: approved.id,
+        pullRequestId: (await pr(11)).id,
+        noteMd: null,
+        source: 'ui',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      s.ctx,
+    );
+
+    expect(outcome).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
+    expect(host).not.toHaveBeenCalled();
+    expect((await exits(11))[0]!.requeuedAt).toBeNull();
   });
 });

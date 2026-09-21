@@ -17,7 +17,15 @@ import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepos
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
-import { derivePrCiState } from '@/lib/github/prCiState';
+import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
+import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import {
+  classOfMergeRefusal,
+  classOfQueueExit,
+  type LandingClass,
+} from '@/lib/mergeQueue/queueExit';
+import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
+import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import { mergeCandidateHead } from './mergeGates';
 import { workflowsService } from './workflowsService';
 
@@ -144,8 +152,55 @@ export async function gateSetFor(
         moved ? signals.movedHead!.headSha : (head ?? undefined),
       ),
       isMergeCandidate: head !== null,
+      merged: delivery.pullRequest.merged,
     });
   }
+
+  // ⚠️ AN UN-LANDED OUTCOME STANDING AT A MEMBER'S HEAD RE-ASKS THE MERGE, AND ITS
+  // CLASS SAYS WHETHER IT ASKS AT ALL (§4 FOURTH AMENDMENT, points 2–3; MOTIR-5802 ·
+  // MOTIR-5805). Read over EVERY disposition, not only the failures the promotion hold
+  // reads: a NEUTRAL removal spends the approval exactly as a failure does (Yue,
+  // 2026-09-19: *"re-ask too"*), so it must reach the predicate. One indexed read, and
+  // nothing for nearly every card.
+  const latestExits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+    deliveries.map((delivery) => delivery.githubPullRequestId),
+    tx,
+  );
+  // ⚠️ AND A HOST REFUSAL IS THE OTHER SOURCE (MOTIR-5833). The queue's removal and the
+  // refusal at the press are two ways the SAME approval fails to land, so both feed the
+  // one predicate; a refusal stands while nothing superseded it and the head it names is
+  // still the member's.
+  const latestRefusals = await githubPullRequestMergeRefusalRepository.findLatestByPullRequests(
+    deliveries.map((delivery) => delivery.githubPullRequestId),
+    tx,
+  );
+  const standingOutcomes = deliveries.flatMap((delivery) => {
+    const head = liveRowsAtLatestSha([...delivery.pullRequest.checkRuns])[0]?.commitSha;
+    const outcomes: { at: Date; landingClass: LandingClass }[] = [];
+    const exit = latestExits.get(delivery.githubPullRequestId);
+    // The RULE is `deliverySet.ts`'s `queueExitStandsAtHead` — the promotion hold's own
+    // twin, one disposition wider — so the two readers cannot disagree about which exit
+    // still describes the code.
+    if (queueExitStandsAtHead(exit, head)) {
+      outcomes.push({ at: exit!.exitedAt, landingClass: classOfQueueExit(exit!.rawReason) });
+    }
+    const refusal = latestRefusals.get(delivery.githubPullRequestId);
+    const refusalClass = refusal ? classOfMergeRefusal(refusal.code) : null;
+    if (
+      refusal &&
+      refusalClass !== null &&
+      refusal.supersededAt === null &&
+      head &&
+      refusal.headSha === head &&
+      !delivery.pullRequest.merged
+    ) {
+      outcomes.push({ at: refusal.refusedAt, landingClass: refusalClass });
+    }
+    return outcomes;
+  });
+  // The LATEST outcome is the one the question is about; an older one is history.
+  const standingUnlandedOutcome =
+    standingOutcomes.sort((a, b) => b.at.getTime() - a.at.getTime())[0] ?? null;
 
   const set = resolveGateSet({
     currentDesignEvidence: currentDesign
@@ -167,6 +222,7 @@ export async function gateSetFor(
     prMergeMode: mode?.prMergeMode ?? null,
     cardIsTerminal: isTerminalStatus(item, terminalByProject),
     workItemId: item.id,
+    standingUnlandedOutcome,
     // THE DECISION QUESTION (MOTIR-5677) — read from the SAME delivery rows as the
     // merge question, off the capture MOTIR-5674 writes, so the two can never be about
     // different pull requests and no host is called.

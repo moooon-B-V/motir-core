@@ -568,6 +568,8 @@ export function ApprovalOverlay() {
             // THE DECISION PORT (MOTIR-5678, §27 Panel 7) — the document leads, and the
             // block draws no How to test for it.
             decision={subject.decision ? { document: subject.decision.document, gate } : null}
+            // `motir fix` beside the approve, exactly as the page draws it (MOTIR-5806).
+            repair={subject.repair ?? null}
             designResult={
               subject.designEvidence ? (
                 <DesignResultPanel

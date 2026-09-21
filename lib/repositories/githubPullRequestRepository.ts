@@ -154,6 +154,20 @@ export type ReconcileCandidate = GithubPullRequest & {
 };
 
 export const githubPullRequestRepository = {
+  /**
+   * Every OPEN pull request Motir has neither merged nor queued — no `merge_outcome_ref`
+   * at all (MOTIR-5809). Cross-tenant, under the system arm: it is the candidate scan for
+   * a press whose refusal nobody recorded, and the card's own gate is then read under its
+   * own workspace context.
+   */
+  async listOpenWithNoMergeOutcome(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.githubPullRequest.findMany({
+      where: { state: 'open', merged: false, mergeOutcomeRef: null },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  },
+
   /** One PR by its `(repo, number)` identity, or null. */
   async findByRepoAndNumber(
     repoId: string,

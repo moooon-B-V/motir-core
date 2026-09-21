@@ -547,11 +547,13 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
   {
     path: 'fix',
     // Story MOTIR-5460 · MOTIR-5465 — the command the item page's Development
-    // block offers on an Implemented card whose pull requests went red after its
-    // run ended. It sits beside `run` because it is the same work loop's repair.
+    // block offers on a card whose pull requests went red after its run ended, or
+    // whose merge did not land for a reason THE CODE could answer (MOTIR-5803: a
+    // conflict waits at Implemented, a failed check at In Review; a setting or a
+    // hand removal is refused). It sits beside `run` — the same work loop's repair.
     signature: '<key>',
     description:
-      'Hand an Implemented work item’s failing pull requests — including one the merge queue ejected — to your agent, on their own branches.',
+      'Hand a work item whose pull requests are failing, or whose merge could not land because of its code, to your agent, on their own branches.',
     helpGroup: HELP_GROUP.workLoop,
     options: [
       {

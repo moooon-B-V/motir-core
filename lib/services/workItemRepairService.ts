@@ -1,5 +1,5 @@
 import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
-import type { Prisma } from '@/generated/prisma/client';
+import type { GithubCheckRun, GithubPullRequestQueueExit, Prisma } from '@/generated/prisma/client';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   RepairPullRequestDto,
@@ -14,6 +14,9 @@ import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
+import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
+import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
+import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { standingQueueFailures } from '@/lib/services/deliveryVerdict';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -25,6 +28,8 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE REPAIR CLAIM (Story MOTIR-5460 · MOTIR-5464) — hand an `implemented` card's
 // red pull requests to ONE fixing agent, after the run that opened them has ended.
+// Since MOTIR-5803 it also takes an `in_review` card the merge queue EJECTED (a
+// standing failure exit at a member's head), where a manual ejection now leaves it.
 //
 // ── Why the keyed claim cannot do it ────────────────────────────────────────
 // `workItemsService.claimWorkItem` admits the to-do category (or the caller's own
@@ -82,6 +87,51 @@ function ladderKeysOf(statuses: readonly WorkflowStatusDto[]) {
 }
 
 /**
+ * Every member's latest merge-queue exit that still STANDS at its current head, of any
+ * disposition (MOTIR-5803). `standingQueueFailures` answers the narrower question the
+ * promotion hold asks — a FAILURE holding the card — and the repair claim needs the
+ * wider one, because a neutral removal is a real outcome to refuse rather than an
+ * absence to report as *nothing is failing*.
+ */
+async function standingExitsAtHead(
+  openRows: ReadonlyArray<{ pullRequest: { id: string; checkRuns: readonly GithubCheckRun[] } }>,
+  tx: Prisma.TransactionClient,
+): Promise<GithubPullRequestQueueExit[]> {
+  const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
+    openRows.map((row) => row.pullRequest.id),
+    tx,
+  );
+  const standing: GithubPullRequestQueueExit[] = [];
+  for (const row of openRows) {
+    const exit = exits.get(row.pullRequest.id);
+    const head = liveRowsAtLatestSha([...row.pullRequest.checkRuns])[0]?.commitSha;
+    // The RULE is `deliverySet.ts`'s, never re-derived here — the promotion hold reads
+    // its narrower twin, and the two must not drift.
+    if (queueExitStandsAtHead(exit, head)) standing.push(exit!);
+  }
+  return standing;
+}
+
+/**
+ * COULD A CODE CHANGE ANSWER THIS OUTCOME? (§4 FOURTH AMENDMENT, point 6; MOTIR-5803.)
+ *
+ * `motir fix` hands the pull request to an agent that changes code and pushes, so the
+ * question is not whether the merge failed but whether the CODE is a plausible cause:
+ *
+ *  · a queue FAILURE whose class is `retryable` — the checks failed or timed out, the
+ *    merge commit or tree could not be built: yes, the code may be at fault;
+ *  · `cant_land` — a conflict: the code MUST change, and this is the only way forward;
+ *  · `setting` (branch protection, a missing app permission) and every NEUTRAL removal
+ *    (`MANUAL`, `QUEUE_CLEARED`, `ROLL_BACK`, an unmapped reason): no. Nothing in the
+ *    repository is wrong, and a person is what is needed.
+ */
+function repairableOutcome(exit: { rawReason: string; disposition: string }): boolean {
+  const landingClass = classOfQueueExit(exit.rawReason);
+  if (landingClass === 'cant_land') return true;
+  return landingClass === 'retryable' && exit.disposition === 'failure';
+}
+
+/**
  * THE PREDICATE — whether a card can be repaired, and with what. ONE function,
  * read by the claim (under its row lock) and by the Development block (without
  * one), so the page never offers a command the claim would refuse
@@ -98,10 +148,15 @@ async function evaluate(
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
 ): Promise<Evaluation> {
-  if (
-    item.archivedAt !== null ||
-    rankOfStatus(item.status, statuses, ladderKeysOf(statuses)) !== RUNG_RANK.implemented
-  ) {
+  const rank = rankOfStatus(item.status, statuses, ladderKeysOf(statuses));
+  // ⚠️ IN REVIEW IS ADMITTED TOO — but only for a card the merge queue threw out for a
+  // reason a CODE CHANGE could fix (MOTIR-5803; `approval-gates.md` §4 FOURTH AMENDMENT,
+  // point 6). A retryable or setting-blocked outcome returns the card to In Review with a
+  // fresh approve-to-merge gate, and `motir fix` is the answer only where the code may be
+  // at fault. An ordinary In Review card is waiting on a person, not on a repair, so it is
+  // refused below as `not_failing`.
+  const inReview = rank === RUNG_RANK.in_review;
+  if (item.archivedAt !== null || (rank !== RUNG_RANK.implemented && !inReview)) {
     return { ok: false, reason: 'not_implemented', runTargetKey: null, failing: [] };
   }
 
@@ -122,6 +177,25 @@ async function evaluate(
     new Map(openRows.map((d) => [d.pullRequest.id, d.pullRequest])),
     tx,
   );
+  // In Review: the ONLY admission is a standing outcome at a member's current head whose
+  // reason a CODE CHANGE could answer. The read is of EVERY disposition, not just the
+  // failures `standingQueueFailures` holds the promotion on, because the two refusals
+  // differ and a person deserves the true one: no outcome at all is `not_failing`, and an
+  // outcome no agent can act on is `repair_not_code`.
+  if (inReview) {
+    const standing = await standingExitsAtHead(openRows, tx);
+    if (standing.length === 0) {
+      return { ok: false, reason: 'not_failing', runTargetKey: null, failing: [] };
+    }
+    // ⚠️ A REASON NO CODE CHANGE FIXES IS REFUSED BY NAME (point 6). `motir fix` sends an
+    // agent to change code: against branch protection, a missing app permission or a hand
+    // removal from the queue it has nothing to change, and the run would be spent finding
+    // nothing. What helps there is a person — approving again, or changing the setting —
+    // and the refusal says so.
+    if (!standing.some(repairableOutcome)) {
+      return { ok: false, reason: 'repair_not_code', runTargetKey: null, failing: [] };
+    }
+  }
   const open = openRows.map((d) => ({
     row: d,
     ci: derivePrCiState(d.pullRequest.checkRuns),

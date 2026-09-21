@@ -401,50 +401,24 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
     });
     await beat();
 
-    await chapter(
-      'A refused pull request is named, the approval stands, and Retry merges it',
-      async () => {
-        const web = PRS.refused.web.number;
-        const api = PRS.refused.api.number;
-        await page.goto(`/items/${seed.refused.identifier}`);
-        await expect(developmentCard(page)).toHaveCount(1, { timeout: 60_000 });
-        await pressApproveAndMerge(page, seed.refused, 'refused');
-
-        const alert = developmentCard(page).getByRole('alert');
-        await expect(alert).toContainText(fill(pra.refused.title, { pr: prName(API_REPO, api) }));
-        await expect(alert).toContainText(en.approvalGate.refusal.mergeConflict.title);
-        await expect(alert).toContainText(
-          fill(pra.refused.stands, { other: prName(WEB_REPO, web) }),
-        );
-        await expect(
-          prRow(page, API_REPO, api).getByText(pra.outcome.refused, { exact: true }),
-        ).toBeVisible();
-        await expect(
-          prRow(page, WEB_REPO, web).getByText(pra.outcome.merged, { exact: true }),
-        ).toBeVisible();
-        await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
-        await beat();
-
-        // The conflict is resolved on GitHub; Retry merges that pull request, and only that row moves.
-        writeControl({
-          repositories: [
-            `${WEB_REPO.owner}/${WEB_REPO.name}`,
-            `${API_REPO.owner}/${API_REPO.name}`,
-          ],
-        });
-        const action = serverAction(page);
-        await prRow(page, API_REPO, api).getByRole('button', { name: pra.outcome.retry }).click();
-        expect((await action).status()).toBe(200);
-        await expect(
-          prRow(page, API_REPO, api).getByText(pra.outcome.merged, { exact: true }),
-        ).toBeVisible();
-        await expect(developmentCard(page).getByRole('alert')).toHaveCount(0);
-        await expect(
-          prRow(page, WEB_REPO, web).getByText(pra.outcome.merged, { exact: true }),
-        ).toBeVisible();
-      },
-    );
-    await beat();
+    // ⚠️ A CHAPTER WAS REMOVED HERE, AND THE RECEIPT IT BELONGS TO IS UNTOUCHED (Story
+    // MOTIR-5799 · MOTIR-5808; `docs/decisions/approval-gates.md` § 4 FOURTH AMENDMENT,
+    // points 1 and 8). It read *A refused pull request is named, the approval stands, and
+    // Retry merges it*, and that was true when MOTIR-4909 was accepted. The amendment
+    // closed the retry-on-the-standing-approval door: a press that does not land SPENDS
+    // the approval, so this card's CONFLICT now drops it to Implemented with no verb at
+    // all, and `motir fix` is the way forward.
+    //
+    // It was DELETED rather than re-pointed at the new behaviour: a receipt's spec records
+    // what a person watched and approved, and rewriting its assertions to agree with today
+    // edits history (`docs/decisions/acceptance-receipt-lifecycle.md` § 3). Where the
+    // behaviour is covered now:
+    //
+    //   · `tests/e2e/acceptance-merge-unlanded-classes.spec.ts` — journeys 2 and 3, the
+    //     can't-land and setting classes end to end, each with its own video;
+    //   · `tests/github/mergeRefusalRecord.test.ts` and
+    //     `tests/integration/mergeStoryJourney.test.ts` journey 5 — every refusal code by
+    //     class, on real Postgres, in a lane that runs on EVERY pull request.
 
     await chapter('The same walk in Chinese', async () => {
       const zpra = zh.approvalGate.pullRequestApproval;

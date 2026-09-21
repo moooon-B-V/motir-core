@@ -82,6 +82,30 @@ export const githubPullRequestQueueExitRepository = {
     return result.count;
   },
 
+  /** Every pull request holding a FAILURE exit nobody has re-queued — the candidate
+   *  set of the ejected-card convergence (MOTIR-5809). Distinct ids; whether that exit
+   *  is still the pull request's LATEST is the caller's to check. Cross-tenant: read
+   *  under the system context. */
+  async listPullRequestIdsWithStandingFailure(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.githubPullRequestQueueExit.findMany({
+      where: { disposition: 'failure', requeuedAt: null },
+      select: { pullRequestId: true },
+      distinct: ['pullRequestId'],
+    });
+    return rows.map((row) => row.pullRequestId);
+  },
+
+  /** The same scan, over EVERY disposition (MOTIR-5809): a NEUTRAL removal spends an
+   *  approval exactly as a failure does, so the convergence has to see it. */
+  async listPullRequestIdsWithStandingExit(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.githubPullRequestQueueExit.findMany({
+      where: { requeuedAt: null },
+      select: { pullRequestId: true },
+      distinct: ['pullRequestId'],
+    });
+    return rows.map((row) => row.pullRequestId);
+  },
+
   /** Each pull request's LATEST exit, keyed by pull request id — ONE query for a
    *  whole delivery set. A pull request never ejected is simply absent. Ties on
    *  `exitedAt` fall to the newest row. */

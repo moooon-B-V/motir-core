@@ -188,6 +188,13 @@ export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map
 // (`20260916180000_add_queue_ejection_default_edges`). They are the merge-queue
 // EJECTION's (`docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 7),
 // and each is justified beside the `approved` block below.
+//
+// MOTIR-5804 REMOVES one of those three and ADDS one, so the total STAYS
+// THIRTY-SIX (`docs/decisions/approval-gates.md` §4 FOURTH AMENDMENT, point 6):
+// `implemented → approved` leaves — an approval is only ever given from
+// `in_review` — and `approved → in_review` joins, the move a `manual` project's
+// FAILURE ejection now makes to put the merge question back to a person. The
+// backfill is `20260919200000_reask_ejection_default_edges`.
 export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // Forward main path
   ['todo', 'in_progress'],
@@ -283,19 +290,18 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   ['implemented', 'done'],
 
   // `approved` (MOTIR-5139) — a person's YES, between CI's verdict and the
-  // merge. ONE edge in and THREE out — plus the ejection's TWO more in and ONE
-  // more out (MOTIR-5630), at the end of this list.
+  // merge. ONE edge in and THREE out — plus the ejection's TWO more out
+  // (MOTIR-5630 · MOTIR-5804), at the end of this list.
   //
-  // ⚠️ `implemented → approved` WAS deliberately absent (MOTIR-5139): an
+  // ⚠️ `implemented → approved` IS deliberately ABSENT (MOTIR-5139): an
   // undeclared hop is a 422 under the `restricted` policy, and this is the one
-  // that would let a person approve past a build that never ran. It is declared
-  // now for ONE writer — _Queue again_ putting an ejected pull request back into
-  // the merge queue (MOTIR-5634) — which carries the card's DECIDED approval
-  // gate, whose `subjectVersion` names heads CI already judged green. What still
-  // stops a person from dragging a card past CI is §6d rule 2b in
-  // `applyStatusTransition`: while an open pull request delivers the card, a hand
-  // move into `approved` is refused unless it is a deciding gate's own write. A
-  // card with no open pull request has no build to skip.
+  // that would let a person approve past a build that never ran. MOTIR-5630
+  // declared it for _Queue again_ reusing an ejected card's decided approval;
+  // the FOURTH AMENDMENT (MOTIR-5804) REMOVED it again, because an approval is
+  // only ever given from `in_review` — a failure ejection now asks the person
+  // again there (`approved → in_review`, below) rather than reusing the old yes.
+  // §6d rule 2b in `applyStatusTransition` still refuses a hand move into
+  // `approved` while an open pull request delivers the card.
   // `tests/workflows/approved-status.test.ts` asserts both halves.
   ['in_review', 'approved'],
   // The merge lands. This is the edge, not the writer: `changeRequestStatusSync`
@@ -310,20 +316,23 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // convention note in this constant's header. Cancellation is legal from every
   // non-terminal state; `approved` is non-terminal.
   ['approved', 'cancelled'],
-  // ── The merge-queue EJECTION (MOTIR-5630) ──────────────────────────────────
-  // `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 7. A queue
-  // that removes a pull request for a FAILURE sends every card it delivers back
-  // to `implemented` — committed code whose build (the queue's merge commit) has
-  // not passed. The ejection's own write is a system write, which skips the edge
-  // check; the edges are declared anyway so the workflow editor shows the real
-  // lifecycle and a person can make the same move by hand.
-  //   • `approved → implemented`  — a `manual` project's card the queue ejected
-  //     after a person approved it.
+  // ── The merge-queue EJECTION (MOTIR-5630 · MOTIR-5804) ─────────────────────
+  // `docs/decisions/approval-gates.md` §4 THIRD AMENDMENT, decision 7, as the
+  // FOURTH AMENDMENT's point 6 amends it. The ejection's own write is a system
+  // write, which skips the edge check; the edges are declared anyway so the
+  // workflow editor shows the real lifecycle and a person can make the same move
+  // by hand.
+  //   • `approved → in_review`    — a `manual` project's card the queue ejected
+  //     for a FAILURE after a person approved it: the merge question is asked
+  //     again, on ONE fresh gate, and In Review is where a fresh yes comes from.
   //   • `in_review → implemented` — an `auto` project's card, which never
-  //     reaches `approved` because no person decides it.
-  //   • `implemented → approved`  — _Queue again_ on unchanged heads, reusing the
-  //     card's one decided approval (see the note at the top of this block).
+  //     reaches `approved` because no person decides it; a failure sends it back
+  //     to committed code whose build (the queue's merge commit) has not passed.
+  //   • `approved → implemented`  — kept as a legal HAND move; no system writer
+  //     since the FOURTH AMENDMENT.
+  // `implemented → approved` is NOT here — see the note at the top of the
+  // `approved` block.
+  ['approved', 'in_review'],
   ['approved', 'implemented'],
   ['in_review', 'implemented'],
-  ['implemented', 'approved'],
 ];
