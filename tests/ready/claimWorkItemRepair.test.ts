@@ -872,3 +872,57 @@ describe('claimRepair — a standing merge-queue failure (MOTIR-5719)', () => {
     });
   });
 });
+
+// A CONFLICT IS A FAILING MEMBER (MOTIR-5913, for bug MOTIR-5907; design/github § 30
+// rule 2). A pull request the host reports `dirty` at its head is held at Implemented
+// with its own checks GREEN, and `motir fix` is the answer the item page offers — so the
+// claim must take it instead of refusing `not_failing`.
+describe('claimRepair — a member the host reports conflicted (MOTIR-5913)', () => {
+  const HEAD = 'c'.repeat(40); // the head `deliveredPr` writes its check rows at
+
+  it('claims an implemented card whose only defect is a member `dirty` at its head', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'conflicted' });
+    await setStatus(card.id, 'implemented');
+    const repo = await connectRepairRepo(fx, 'web');
+    const pr = await deliveredPr(fx, card.id, repo, {
+      headRef: 'a',
+      checks: { Vitest: 'success' },
+    });
+    await adminDb.githubPullRequest.update({
+      where: { id: pr.id },
+      data: { mergeableState: 'dirty', mergeableStateHeadSha: HEAD },
+    });
+
+    const result = await claim(fx, card.identifier);
+    expect(result.outcome).toBe('claimed');
+    expect(result.pullRequests.map((p) => p.number)).toEqual([pr.number]);
+  });
+
+  it('still refuses not_failing when the members are clean, unknown, or dirty only at an OLDER head', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'clean' });
+    await setStatus(card.id, 'implemented');
+    const repo = await connectRepairRepo(fx, 'web');
+    const clean = await deliveredPr(fx, card.id, repo, {
+      headRef: 'a',
+      checks: { Vitest: 'success' },
+    });
+    await deliveredPr(fx, card.id, repo, { headRef: 'b', checks: { Vitest: 'success' } });
+    const stale = await deliveredPr(fx, card.id, repo, {
+      headRef: 'c',
+      checks: { Vitest: 'success' },
+    });
+    await adminDb.githubPullRequest.update({
+      where: { id: clean.id },
+      data: { mergeableState: 'clean', mergeableStateHeadSha: HEAD },
+    });
+    await adminDb.githubPullRequest.update({
+      where: { id: stale.id },
+      data: { mergeableState: 'dirty', mergeableStateHeadSha: 'f'.repeat(40) },
+    });
+
+    expect((await claim(fx, card.identifier)).reason).toBe('not_failing');
+    expect(await fixRuns(card.id)).toHaveLength(0);
+  });
+});

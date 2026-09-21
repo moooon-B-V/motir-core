@@ -558,6 +558,37 @@ export const githubPullRequestRepository = {
    * from. Nothing about the row changes on a link any more, so there is nothing
    * to re-read FOR — only the row itself. */
 
+  /** Store the host's answer to *can this merge into its base?* and the head it is
+   *  about (MOTIR-5913, for bug MOTIR-5907). Written by whoever ASKED the host — the
+   *  base-branch push re-evaluation, the press-time read, the reconcile tick — never
+   *  from a webhook payload, which does not carry a conflict that the BASE caused.
+   *  Write path → `tx`. */
+  async setMergeability(
+    pullRequestId: string,
+    reading: { mergeableState: string | null; headSha: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.githubPullRequest.update({
+      where: { id: pullRequestId },
+      data: { mergeableState: reading.mergeableState, mergeableStateHeadSha: reading.headSha },
+    });
+  },
+
+  /** FORGET a stored mergeability reading — a new head's is uncomputed, so a
+   *  `synchronize` clears it rather than let the old head's `dirty` hold the new one
+   *  (MOTIR-5913). One statement over the row; a row with nothing stored matches
+   *  nothing. Write path → `tx`. */
+  async clearMergeability(pullRequestId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: {
+        id: pullRequestId,
+        OR: [{ mergeableState: { not: null } }, { mergeableStateHeadSha: { not: null } }],
+      },
+      data: { mergeableState: null, mergeableStateHeadSha: null },
+    });
+    return result.count;
+  },
+
   /** Record a merge MOTIR performed onto the pull request's row (MOTIR-5520;
    *  `approval-gates.md` §4 second amendment, decision 9) — WHO or WHAT authorised
    *  it and WHAT it produced. Written only by Motir's own merge paths (the gate's

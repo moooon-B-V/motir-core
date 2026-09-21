@@ -682,3 +682,103 @@ describe('a DRAFT is not a merge candidate (MOTIR-5699)', () => {
     expect((await gatesOf(item.id)).filter((g) => g.state === 'awaiting')).toHaveLength(1);
   });
 });
+
+// A CONFLICTED MEMBER IS NOT A MERGE CANDIDATE (MOTIR-5913, for bug MOTIR-5907). The host's
+// `mergeable_state` is stored with the head it was read at, and a member the host reports
+// `dirty` AT ITS CURRENT HEAD is asked about nobody, is not promoted to In Review, and is
+// what a `synchronize` clears. `null` — GitHub has not computed — changes nothing.
+describe('a CONFLICTED member is not a merge candidate (MOTIR-5913)', () => {
+  const openGreen = {
+    state: 'open',
+    merged: false,
+    draft: false,
+    repo: { provider: 'github' },
+    checkRuns: [
+      {
+        id: 'c1',
+        pullRequestId: 'p1',
+        commitSha: 'sha-a',
+        checkName: 'ci / vitest',
+        conclusion: 'success',
+        status: 'completed',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ],
+  } as unknown as Parameters<typeof mergeCandidateHead>[0] & object;
+
+  it('`dirty` AT the head has no merge head; at an OLDER head, or unknown, it is still a candidate', () => {
+    expect(
+      mergeCandidateHead({ ...openGreen, mergeableState: 'dirty', mergeableStateHeadSha: 'sha-a' }),
+    ).toBeNull();
+    expect(
+      mergeCandidateHead({
+        ...openGreen,
+        mergeableState: 'dirty',
+        mergeableStateHeadSha: 'sha-old',
+      }),
+    ).toBe('sha-a');
+    expect(
+      mergeCandidateHead({ ...openGreen, mergeableState: null, mergeableStateHeadSha: null }),
+    ).toBe('sha-a');
+    expect(
+      mergeCandidateHead({ ...openGreen, mergeableState: 'clean', mergeableStateHeadSha: 'sha-a' }),
+    ).toBe('sha-a');
+  });
+
+  async function storeReading(
+    number: number,
+    mergeableState: string | null,
+    headSha: string | null,
+  ) {
+    await adminDb.githubPullRequest.update({
+      where: { id: await prId(number) },
+      data: { mergeableState, mergeableStateHeadSha: headSha },
+    });
+  }
+
+  it('a member stored `dirty` at the head its checks go green on is NOT promoted and raises NO gate', async () => {
+    const s = await makeScenario('mg-conflict-hold@example.com');
+    const item = await cardWithPrs(s, 'Conflicted', [31]);
+    await storeReading(31, 'dirty', 'sha-c');
+
+    await ci({ conclusion: 'success', headSha: 'sha-c', number: 31 });
+
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await gatesOf(item.id)).toEqual([]);
+  });
+
+  it('a reading at an OLDER head does not hold: green at the new head promotes with ONE gate', async () => {
+    const s = await makeScenario('mg-conflict-old-head@example.com');
+    const item = await cardWithPrs(s, 'Old reading', [32]);
+    await storeReading(32, 'dirty', 'sha-before');
+
+    await ci({ conclusion: 'success', headSha: 'sha-after', number: 32 });
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#32@sha-after']);
+  });
+
+  it('a `synchronize` CLEARS the reading, and the resolving head going green asks exactly ONCE', async () => {
+    const s = await makeScenario('mg-conflict-resolve@example.com');
+    const item = await cardWithPrs(s, 'Resolve', [33]);
+    await storeReading(33, 'dirty', 'sha-1');
+    await ci({ conclusion: 'success', headSha: 'sha-1', number: 33 });
+    expect(await statusOf(item.id)).toBe('implemented');
+
+    const headRef = `subtask/${item.identifier}-33`;
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('synchronize', 33, headRef, { head: { ref: headRef, sha: 'sha-2' } }),
+    );
+    const row = await adminDb.githubPullRequest.findUniqueOrThrow({
+      where: { id: await prId(33) },
+    });
+    expect([row.mergeableState, row.mergeableStateHeadSha]).toEqual([null, null]);
+
+    await ci({ conclusion: 'success', headSha: 'sha-2', number: 33 });
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#33@sha-2']);
+    expect((await gatesOf(item.id)).filter((g) => g.state === 'awaiting')).toHaveLength(1);
+  });
+});

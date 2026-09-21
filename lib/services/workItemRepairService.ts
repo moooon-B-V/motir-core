@@ -1,4 +1,5 @@
 import { derivePrCiState, liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
 import type { GithubCheckRun, GithubPullRequestQueueExit, Prisma } from '@/generated/prisma/client';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
@@ -196,13 +197,19 @@ async function evaluate(
       return { ok: false, reason: 'repair_not_code', runTargetKey: null, failing: [] };
     }
   }
+  // ⚠️ AND SO IS A MEMBER THE HOST REPORTS CONFLICTED AT ITS HEAD (MOTIR-5913, for bug
+  // MOTIR-5907; design/github § 30 rule 2). A conflict withdrawn before any press holds
+  // the card at Implemented with green checks, and `motir fix` is the answer the band
+  // offers — so it must not be refused `not_failing`. The fixing prompt merges the base
+  // first (`renderFixPrompt`), which is exactly what resolving a conflict takes.
   const open = openRows.map((d) => ({
     row: d,
     ci: derivePrCiState(d.pullRequest.checkRuns),
     exit: queueHeld.get(d.pullRequest.id) ?? null,
+    conflicted: isConflictedAtCurrentHead(d.pullRequest),
   }));
   const failing: RepairPullRequestDto[] = open
-    .filter((m) => m.ci === 'failing' || m.exit !== null)
+    .filter((m) => m.ci === 'failing' || m.exit !== null || m.conflicted)
     .map(({ row, ci, exit }) => ({
       repo: `${row.repo.owner}/${row.repo.name}`,
       number: row.pullRequest.number,

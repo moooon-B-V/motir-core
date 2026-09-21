@@ -11,7 +11,13 @@ import {
   shaToReReadFromHost,
 } from './checkSetReconcile';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
-import { collectDeliveries, classifyDeliveries, standingQueueFailures } from './deliveryVerdict';
+import {
+  collectDeliveries,
+  classifyDeliveries,
+  standingQueueFailures,
+  type DeliveredPullRequest,
+} from './deliveryVerdict';
+import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
 import { deliverySetIsGreen, deliveryStateForPromotion } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -207,7 +213,25 @@ async function isPromotable(
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
   if (!(await everyDeliveryIsGreen(item, tx))) return false;
-  return !(await heldByQueueFailure(await collectDeliveries(item, tx), tx));
+  const byId = await collectDeliveries(item, tx);
+  if (heldByConflict(byId)) return false;
+  return !(await heldByQueueFailure(byId, tx));
+}
+
+/**
+ * THE CONFLICT HOLD (MOTIR-5913, for bug MOTIR-5907; design/github § 30 rule 2) —
+ * true while any OPEN delivering pull request is stored `dirty` at its current head.
+ *
+ * A conflict is the CAN'T-LAND class however it is found (§ 28's class table): a card
+ * whose set cannot combine with its base stays at Implemented, because In Review
+ * means a person is being asked and nobody should be. It lifts the way the queue hold
+ * does — a PUSH clears the reading (`synchronize`), and the next green promotes.
+ */
+function heldByConflict(byId: Map<string, DeliveredPullRequest>): boolean {
+  for (const pr of byId.values()) {
+    if (pr.state === 'open' && !pr.merged && isConflictedAtCurrentHead(pr)) return true;
+  }
+  return false;
 }
 
 /**
