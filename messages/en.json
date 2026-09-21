@@ -8718,6 +8718,10 @@
     "subjectGone": {
       "body": "The design was removed after this approval was asked for, so there is nothing here to approve. Open the work item to see what it holds now."
     },
+    "withdrawn": {
+      "conflict": "{pr} now conflicts with {base}, so this question was withdrawn.",
+      "next": "There is nothing left to approve here."
+    },
     "moved": {
       "one": "{thing} changed since you opened this.",
       "several": "{things} changed since you opened this.",

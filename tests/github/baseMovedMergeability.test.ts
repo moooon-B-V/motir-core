@@ -11,6 +11,7 @@ import {
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
+import { workbenchWatermarkService } from '@/lib/services/workbenchWatermarkService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
@@ -209,6 +210,27 @@ describe('a push to the base withdraws the question over a member it put in conf
       (await adminDb.approvalGate.findMany({ where: { workItemId: item.id, state: 'awaiting' } }))
         .length,
     ).toBe(0);
+  });
+
+  it('To approve LEARNS it live (§ 30 Panel 3): the watermark names the approvals tab and its count drops by one', async () => {
+    // The held row is the shipped client half (MOTIR-5242): a row the re-read no longer
+    // returns is HELD as *Decided elsewhere*, whatever removed it. What a `conflict`
+    // withdrawal owes that chain is the NUDGE — the watermark the live stream compares —
+    // and a withdrawal that moved no watermark would leave an open tab asking forever.
+    const { repo, members } = await inReview();
+    const reader = { ...fx.ctx, projectId: fx.projectId };
+    const before = await workbenchWatermarkService.read(reader);
+    expect(before.tabs.approvals.count).toBe(1);
+    stubHost({
+      7: [{ mergeable: false, mergeableState: 'dirty', headSha: members[7]!.head }],
+      12: [{ mergeable: true, mergeableState: 'clean', headSha: members[12]!.head }],
+    });
+
+    await runJob({ workspaceId: fx.workspaceId, repoId: repo.id, baseRef: 'main' });
+
+    const after = await workbenchWatermarkService.read(reader, before.cursor);
+    expect(after.moved).toContain('approvals');
+    expect(after.tabs.approvals.count).toBe(0);
   });
 
   it('`mergeable: null` on EVERY retry leaves the gate awaiting and the card in review — after the bounded waits', async () => {

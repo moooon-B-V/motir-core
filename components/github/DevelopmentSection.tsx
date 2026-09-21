@@ -433,6 +433,8 @@ export function DevelopmentSectionBody({
   gateLayout = 'flush',
   onShowCurrentVersion,
   gateKey,
+  gateNotice,
+  gateVerbsDisabled = false,
   cardTerminal = false,
   designResult = null,
   repair = null,
@@ -524,6 +526,10 @@ export function DevelopmentSectionBody({
   onShowCurrentVersion?: () => void;
   /** Which of that host's re-reads is on screen — the frame remounts on a new one. */
   gateKey?: number;
+  /** A HOST's notice for the frame's alert band, and whether it disables the verbs — the
+   *  overlay's live withdrawal (MOTIR-5917, § 30 Panel 4a). Passed straight to the frame. */
+  gateNotice?: ReactNode;
+  gateVerbsDisabled?: boolean;
   /**
    * The card sits in a DONE-category status (Bug MOTIR-5884; § 29's cite table). A
    * withdrawn merge question on such a card is never asked again, so its cite promises
@@ -748,6 +754,8 @@ export function DevelopmentSectionBody({
         layout={gateLayout}
         onShowCurrentVersion={onShowCurrentVersion}
         gateKey={gateKey}
+        notice={gateNotice}
+        verbsDisabled={gateVerbsDisabled}
       >
         {block}
       </DevelopmentGateFrame>

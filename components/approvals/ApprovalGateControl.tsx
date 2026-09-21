@@ -104,7 +104,9 @@ export interface GateVerb {
    * disabled, while Request changes stays live. ⚠️ ONLY with the reason said in words
    * beside it, as the band's consequence line: the one case a disabled verb is honest is
    * a reader who may decide, looking at a subject that cannot yet be approved. State `B`
-   * and state `X` still render no verbs at all.
+   * and state `X` still render no verbs at all. The approval overlay disables BOTH verbs
+   * when the question was withdrawn under the reader (Subtask MOTIR-5917; § 30 Panel 4a),
+   * with its notice saying why.
    */
   disabled?: boolean;
   /**

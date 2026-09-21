@@ -246,9 +246,66 @@ function SubjectMovedNotice({
       ? t('one', { thing: things[0]! })
       : t('several', { things: listFormat(things, t('and')) });
   return (
+    <LiveNotice
+      testId="approval-subject-moved"
+      headline={headline}
+      next={t('next')}
+      control={tStale('control')}
+      onShow={onShow}
+    />
+  );
+}
+
+/**
+ * THE QUESTION WAS WITHDRAWN UNDER AN OPEN OVERLAY (Subtask MOTIR-5917;
+ * `design/github/design-notes.md` § 30 Panel 4a). A base-branch push put a member in
+ * conflict and the approve-to-merge gate was superseded with `conflict` — which moves no
+ * STAMP, so § 26's notice above never fires for it. Same place, same tokens, same
+ * *Show the current version*; the difference is what the frame does with its verbs,
+ * which the host decides (they are disabled, because the question is gone).
+ */
+function ConflictWithdrawnNotice({
+  conflict,
+  onShow,
+}: {
+  /** The member the host reports conflicted, and the branch it conflicts with; null when
+   *  the probe's rows name none (the rows and the gate are read in one pass, so this is a
+   *  race with a later push, and the sentence falls back to the cause's own words). */
+  conflict: { pr: string; base: string } | null;
+  onShow: () => void;
+}) {
+  const t = useTranslations('approvalOverlay.withdrawn');
+  const tGate = useTranslations('approvalGate');
+  return (
+    <LiveNotice
+      testId="approval-withdrawn-conflict"
+      headline={conflict ? t('conflict', conflict) : tGate('withdrawn.cause.conflict')}
+      next={t('next')}
+      control={tGate('refusal.stale.control')}
+      onShow={onShow}
+    />
+  );
+}
+
+/** § 26 DECISION 2's notice band: band 3's first child, untinted, the reason in words and
+ *  the one control that replaces the render. */
+function LiveNotice({
+  testId,
+  headline,
+  next,
+  control,
+  onShow,
+}: {
+  testId: string;
+  headline: string;
+  next: string;
+  control: string;
+  onShow: () => void;
+}) {
+  return (
     <div
       role="status"
-      data-testid="approval-subject-moved"
+      data-testid={testId}
       className="flex flex-wrap items-start gap-x-3 gap-y-2 border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
     >
       <div className="flex min-w-0 flex-1 basis-full gap-2.5 sm:basis-0">
@@ -257,7 +314,7 @@ function SubjectMovedNotice({
           aria-hidden
         />
         <p className="text-[13px] leading-snug text-(--el-text-strong)">
-          <b>{headline}</b> <span className="text-(--el-text-secondary)">{t('next')}</span>
+          <b>{headline}</b> <span className="text-(--el-text-secondary)">{next}</span>
         </p>
       </div>
       <Button
@@ -268,7 +325,7 @@ function SubjectMovedNotice({
         leftIcon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}
         onClick={onShow}
       >
-        {tStale('control')}
+        {control}
       </Button>
     </div>
   );
@@ -382,9 +439,14 @@ export function ApprovalOverlay() {
   // that replaces the render.
   const live = useWorkbenchLiveSignal();
   const [moved, setMoved] = useState<StampComponent[]>([]);
+  // THE QUESTION WENT AWAY (MOTIR-5917; § 30 Panel 4a) — the gate this reader holds is now
+  // superseded with `conflict`. `undefined` = not withdrawn; the value is what the notice
+  // names. Never a re-render of the frame: only *Show the current version* replaces it.
+  const [withdrawn, setWithdrawn] = useState<{ conflict: { pr: string; base: string } | null }>();
   const settledRead =
     token !== null && load?.token === token && load.outcome === 'read' ? load.read : null;
   const heldStamp = settledRead?.stamp ?? null;
+  const heldGateId = settledRead?.gate?.id ?? null;
   useEffect(() => {
     // Nothing to compare against: no live question, or nothing on screen yet.
     if (itemKey === null || kind === null || !heldStamp || live.nudge === 0) return;
@@ -398,6 +460,28 @@ export function ApprovalOverlay() {
         setMoved((prev) =>
           prev.join(',') === probe.movedSince.join(',') ? prev : probe.movedSince,
         );
+        // ⚠️ A WITHDRAWAL MOVES NO STAMP, so `movedSince` is `[]` for it and the probe's
+        // GATE is what says so: the same row, no longer awaiting, superseded for a
+        // conflict. Only the gate THIS READER HOLDS counts — a later gate would be a new
+        // question with its own stamp.
+        if (
+          probe.gate?.id === heldGateId &&
+          probe.gate.state === 'superseded' &&
+          probe.gate.supersededCause === 'conflict'
+        ) {
+          const conflicted =
+            probe.subject.state === 'resolved' && probe.subject.kind === 'pull_request_approval'
+              ? probe.subject.pullRequests.find((pr) => pr.conflicted)
+              : undefined;
+          setWithdrawn(
+            (prev) =>
+              prev ?? {
+                conflict: conflicted?.baseRef
+                  ? { pr: `${conflicted.repo} · #${conflicted.number}`, base: conflicted.baseRef }
+                  : null,
+              },
+          );
+        }
       } catch {
         // A failed probe says nothing. The reader keeps what they have, and the
         // stamp still protects the press — a notice is a courtesy layered on a
@@ -405,13 +489,14 @@ export function ApprovalOverlay() {
       }
     })();
     return () => controller.abort();
-  }, [live.nudge, heldStamp, itemKey, kind]);
+  }, [live.nudge, heldStamp, heldGateId, itemKey, kind]);
   // A fresh render — a different address, or *Show the current version* — carries
   // a fresh stamp, so the notice it was about is gone.
   const shownFor = useRef<string | null>(null);
   if (shownFor.current !== heldStamp) {
     shownFor.current = heldStamp;
     if (moved.length > 0) setMoved([]);
+    if (withdrawn) setWithdrawn(undefined);
   }
 
   if (!open) return null;
@@ -611,6 +696,17 @@ export function ApprovalOverlay() {
             // The approve-to-merge port re-reads through the SAME overlay read.
             onShowCurrentVersion={() => setReread((n) => n + 1)}
             gateKey={settled?.outcome === 'read' ? settled.reread : 0}
+            // § 30 Panel 4a: the question was withdrawn under the reader. The frame stays as
+            // it was drawn; the notice says why, and the verbs stay put but cannot be pressed.
+            gateNotice={
+              withdrawn && !decidedState ? (
+                <ConflictWithdrawnNotice
+                  conflict={withdrawn.conflict}
+                  onShow={() => setReread((n) => n + 1)}
+                />
+              ) : undefined
+            }
+            gateVerbsDisabled={withdrawn !== undefined && !decidedState}
           />
         ) : subject.kind === 'acceptance_result' ? (
           // THE ACCEPTANCE PORT (MOTIR-4950) — the recording the gate asks about, read

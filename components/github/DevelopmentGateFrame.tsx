@@ -194,6 +194,8 @@ export function DevelopmentGateFrame({
   onShowCurrentVersion,
   gateKey = 0,
   decision = null,
+  notice,
+  verbsDisabled = false,
   children,
 }: {
   read: DevelopmentGateRead;
@@ -233,6 +235,19 @@ export function DevelopmentGateFrame({
   gateKey?: number;
   /** The decision port's facts — read only when the gate asked is `decision_approval`. */
   decision?: DecisionPortFacts | null;
+  /**
+   * A HOST's notice, drawn in the alert band between the port and band 3 — the approval
+   * overlay's *this question was withdrawn* (Subtask MOTIR-5917; § 30 Panel 4a). A member
+   * refusal from this frame's own press outranks it: that is the newer news.
+   */
+  notice?: ReactNode;
+  /**
+   * DISABLE both verbs, keeping them drawn so band 3 does not reflow (§ 30 Panel 4a — the
+   * one recorded departure from § 26, where a moved stamp keeps them live). Only honest with
+   * the reason said in words beside them, which is what `notice` is for; the server still
+   * refuses a press, so this claims no guarantee.
+   */
+  verbsDisabled?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
@@ -622,6 +637,7 @@ export function DevelopmentGateFrame({
           // Sending the pull requests back records a note and moves nothing, so it does not
           // confirm — a reversible act asked twice is friction rather than care.
           confirms: false,
+          disabled: verbsDisabled,
         },
         {
           decision: 'approve',
@@ -631,7 +647,7 @@ export function DevelopmentGateFrame({
           confirms: true,
           // A decision with no one document on screen cannot be accepted (§27 Panels 3a–3d):
           // Approve stays drawn and disabled, with the reason as band 3's line.
-          disabled: isDecision && !decisionShown,
+          disabled: verbsDisabled || (isDecision && !decisionShown),
         },
       ]
     : [];
@@ -981,7 +997,7 @@ export function DevelopmentGateFrame({
           consequence={consequence}
           confirmConsequences={confirmConsequences}
           routedToLabel={read.routedToLabel}
-          alert={alert}
+          alert={alert ?? notice}
           recordDetail={recordDetail}
           recordLead={
             decisionAccepted && gate.decidedByLabel && gate.decisionSource !== 'github'
