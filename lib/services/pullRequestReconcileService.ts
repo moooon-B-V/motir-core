@@ -15,6 +15,7 @@ import { workflowsService } from './workflowsService';
 import { reconcileGatesFor } from './gateSetFor';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
 import { readReportedCheckSet } from './checkSetReconcile';
+import { pullRequestMergeabilityService } from './pullRequestMergeabilityService';
 
 // THE OPEN-DELIVERY RECONCILE (MOTIR-5390) — the path that makes a lost
 // `pull_request` delivery recoverable instead of permanent.
@@ -219,6 +220,15 @@ export const pullRequestReconcileService = {
 
         if (read.pullRequest['state'] !== 'closed') {
           summary.stillOpen += 1;
+          // THE MERGEABILITY BACKSTOP (MOTIR-5914, for bug MOTIR-5907). The read above
+          // already carries the host's `mergeable` / `mergeable_state`, so this tick is
+          // also the failure path of the base-branch re-read: a lost push delivery, a
+          // failed enqueue, or a member GitHub had not computed within that job's waits
+          // is settled here — BEFORE the promotion and the re-ask below, so a member
+          // that now conflicts is neither promoted nor asked about. Not counted on the
+          // summary: that is a memoized step result (`reconcile-open-deliveries-v3`), and
+          // widening it would owe an id bump for a number nothing reads.
+          await settleMergeability(candidate, read.pullRequest);
           // ⚠️ STILL OPEN IS NOT NOTHING TO DO (Subtask MOTIR-5671). This sweep
           // exists as the backstop for a delivery nobody heard, and a LOST EVENT
           // costs a card its gate exactly as it costs it a merge: every raise in
@@ -270,6 +280,29 @@ export const pullRequestReconcileService = {
     return summary;
   },
 };
+
+/**
+ * Store the host's mergeability from a pull request this tick has just READ, and
+ * withdraw the question over any card it now conflicts for (MOTIR-5914). A `null`
+ * answer stores nothing — GitHub has not computed, and "not known" is never a conflict.
+ */
+async function settleMergeability(
+  candidate: ReconcileCandidate,
+  pull: Record<string, unknown>,
+): Promise<void> {
+  const mergeable = pull['mergeable'];
+  const mergeableState = pull['mergeable_state'];
+  const head = pull['head'];
+  const headSha =
+    head && typeof head === 'object' && typeof (head as Record<string, unknown>)['sha'] === 'string'
+      ? ((head as Record<string, unknown>)['sha'] as string)
+      : null;
+  await pullRequestMergeabilityService.settleReading(candidate.repo.workspaceId, candidate.id, {
+    mergeable: typeof mergeable === 'boolean' ? mergeable : null,
+    mergeableState: typeof mergeableState === 'string' ? mergeableState : null,
+    headSha,
+  });
+}
 
 /**
  * Whether the pull request still delivers at least one card that could move — not

@@ -57,6 +57,7 @@ import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
 import { pullRequestReconcile } from './definitions/pullRequestReconcile';
 import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
+import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
 import {
   monitorConnectionPoll,
   monitorIssueReconcileTick,
@@ -136,6 +137,7 @@ export const jobDefinitions = [
   accountErasureSweep,
   pullRequestReconcile,
   pullRequestAutoMerge,
+  pullRequestBaseMoved,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick and
   // its per-connection fan-out.
   monitorIssueReconcileTick,

@@ -168,6 +168,24 @@ export const githubPullRequestRepository = {
     return rows.map((row) => row.id);
   },
 
+  /**
+   * Every OPEN, unmerged pull request on one repository that TARGETS `baseRef` and
+   * delivers at least one work item (MOTIR-5914) — the set a push to that branch can
+   * newly put in conflict. Under the system arm, like the other delivery-bound scans:
+   * `github_pull_request` and `work_item_delivery` both carry `app.system_admin`.
+   */
+  async listOpenDeliveringByRepoAndBase(
+    repoId: string,
+    baseRef: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; number: number }>> {
+    return tx.githubPullRequest.findMany({
+      where: { repoId, baseRef, state: 'open', merged: false, deliveries: { some: {} } },
+      select: { id: true, number: true },
+      orderBy: { number: 'asc' },
+    });
+  },
+
   /** One PR by its `(repo, number)` identity, or null. */
   async findByRepoAndNumber(
     repoId: string,

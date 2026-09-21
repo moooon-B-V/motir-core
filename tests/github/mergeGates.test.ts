@@ -26,6 +26,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { promoteDeliveredCardsOnGreen } from '@/lib/services/ciPromotion';
 import { mergeCandidateHead } from '@/lib/services/mergeGates';
+import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
 import { raisePullRequestApprovalGate } from '@/lib/services/pullRequestApprovalGates';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -757,6 +758,36 @@ describe('a CONFLICTED member is not a merge candidate (MOTIR-5913)', () => {
 
     expect(await statusOf(item.id)).toBe('in_review');
     expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#32@sha-after']);
+  });
+
+  it('the RESOLVING PATH end to end (MOTIR-5914): a conflict withdraws the asked gate and holds the card; a push that resolves it and goes green asks exactly ONCE', async () => {
+    const s = await makeScenario('mg-conflict-e2e@example.com');
+    const item = await cardWithPrs(s, 'Conflict then resolve', [34]);
+    await ci({ conclusion: 'success', headSha: 'sha-a', number: 34 });
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#34@sha-a']);
+
+    // The base moved and the host now reports the member conflicted at its head.
+    await pullRequestMergeabilityService.settleReading(s.workspace.id, await prId(34), {
+      mergeable: false,
+      mergeableState: 'dirty',
+      headSha: 'sha-a',
+    });
+    expect((await gatesOf(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'conflict'],
+    ]);
+    expect(await statusOf(item.id)).toBe('implemented');
+
+    const headRef = `subtask/${item.identifier}-34`;
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('synchronize', 34, headRef, { head: { ref: headRef, sha: 'sha-b' } }),
+    );
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 34 });
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await awaitingVersions(item.id)).toEqual(['moooon/acme#34@sha-b']);
+    expect((await gatesOf(item.id)).filter((g) => g.state === 'awaiting')).toHaveLength(1);
   });
 
   it('a `synchronize` CLEARS the reading, and the resolving head going green asks exactly ONCE', async () => {

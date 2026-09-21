@@ -4583,6 +4583,10 @@ enum ApprovalGateSupersedeCause {
   member_closed
   /// A member pull request was converted back to a DRAFT (MOTIR-5699).
   member_drafted
+  /// A member pull request CONFLICTS with its base branch — the host reports it
+  /// `dirty` at its head, found by a base-branch push or at the press (MOTIR-5914,
+  /// for bug MOTIR-5907; design/github § 30).
+  conflict
   /// A delivery row joined or left the card.
   set_changed
   /// The work was pulled out of review, or moved to Cancelled.

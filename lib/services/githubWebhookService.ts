@@ -15,6 +15,7 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubInstallationService } from './githubInstallationService';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { listPullRequestFiles, type PullRequestFiles } from '@/lib/github/pullRequestFiles';
 import { captureDecisionDocument } from './decisionDocumentCaptureService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
@@ -604,6 +605,19 @@ export const githubWebhookService = {
       repoOwner: resolved.repoOwner,
       repoName: resolved.repoName,
       defaultBranch: resolved.defaultBranch,
+    });
+    // ⚠️ THE BASE MOVED, SO ASK WHETHER ITS PULL REQUESTS STILL MERGE (MOTIR-5914, for bug
+    // MOTIR-5907; design/github § 30 rule 1). A conflict usually arrives exactly like this —
+    // another merge moves the base and GitHub sends the conflicted pull request nothing —
+    // so this push is the only event that can withdraw its approve-and-merge question.
+    // POST-write and best-effort: `sendEvent` swallows a transport failure, and the
+    // reconcile tick re-reads open delivering pull requests if this never runs.
+    await sendEvent('pull-request/base-moved', {
+      workspaceId: resolved.workspaceId,
+      repoId: resolved.repoRowId,
+      baseRef: resolved.defaultBranch,
+      baseHeadSha: push.headSha ?? null,
+      idempotencyKey: `${resolved.repoRowId}:${push.headSha ?? 'unknown'}`,
     });
     return { event: 'push', outcome: 'refresh_enqueued' };
   },
