@@ -9071,6 +9071,33 @@
       "title": "Move this error's link from <link>{key}</link> to this work item?",
       "body": "{key} keeps its other links and its history. From the next check, this error's count and resolve-back follow this work item.",
       "action": "Move link"
+    },
+    "evidence": {
+      "show": "Show evidence",
+      "hide": "Hide evidence",
+      "summaryLatest": "latest event {when}",
+      "summaryNoException": "no exception",
+      "summaryStale": "out of date",
+      "neverRead": "Evidence not read yet — it arrives with the next check.",
+      "noException": "This event carried no exception, so there is no stack trace — it was logged as a message.",
+      "stale": "The last check failed <t>{when}</t>. This is the latest event read before that, from <b>{eventWhen}</b>.",
+      "exception": "Exception",
+      "showFullMessage": "Show full message",
+      "showLess": "Show less",
+      "request": "Request",
+      "stackTrace": "Stack trace",
+      "framesGrouped": "{inApp} in your code · {framework} framework · most recent call first",
+      "framesFlat": "{count, plural, one {# frame} other {# frames}}, most recent call first",
+      "frameIn": "in {function}",
+      "showFramework": "Show {count, plural, one {# framework frame} other {# framework frames}}",
+      "hideFramework": "Hide framework frames",
+      "tags": "Tags",
+      "showAllTags": "Show all {count} tags",
+      "latestEvent": "Latest event <t>{when}</t>",
+      "eventId": "Event {id}",
+      "copyEventId": "Copy event ID",
+      "copied": "Copied",
+      "copyFailed": "Couldn't copy — select the ID instead."
     }
   }
 }

@@ -23,6 +23,7 @@ import type { ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
 import type { PlanTreeSkeletonItem } from '@/lib/dto/ai';
 import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { CommentDTO } from '@/lib/dto/comments';
+import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import { definePayload } from './define';
 
 // The WORK-ITEM payload shapes (Story 11.6 · Subtask 11.6.2 — MOTIR-2228).
@@ -85,6 +86,56 @@ export type McpWorkItemChild = z.infer<typeof mcpWorkItemChildSchema>;
  * `IssueDetailDto` — the very thing being removed — so the schema pins the parts
  * that DERIVE and passes the rest through untouched.
  */
+/**
+ * One monitor link on a work item, as `get_work_item` returns it under
+ * `errors` (Story MOTIR-5975 · Subtask MOTIR-5981) — `MonitorIssueLinkDto`, the
+ * SAME row the item page's Errors section renders, read by the same
+ * `monitorIssueService.listForWorkItem`. Declared so the parse at the tool
+ * rejects a row that drifted from it: an `evidence` block is REQUIRED.
+ */
+const monitorEvidenceSchema = z.object({
+  state: z.enum(['never_read', 'present', 'no_exception']),
+  stale: z.boolean(),
+  exception: z.object({ type: z.string().nullable(), message: z.string().nullable() }).nullable(),
+  frames: z.array(
+    z.object({
+      filePath: z.string(),
+      function: z.string().nullable(),
+      lineNumber: z.number().nullable(),
+      inApp: z.boolean().nullable(),
+    }),
+  ),
+  tags: z.array(z.object({ key: z.string(), value: z.string() })),
+  request: z.object({ method: z.string().nullable(), path: z.string() }).nullable(),
+  eventId: z.string().nullable(),
+  eventAt: z.string().nullable(),
+  readAt: z.string().nullable(),
+  lastFailedAt: z.string().nullable(),
+});
+
+export const mcpMonitorIssueLinkSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    level: z.string().nullable(),
+    culprit: z.string().nullable(),
+    permalink: z.string().nullable(),
+    eventCount: z.number(),
+    firstSeenAt: z.string(),
+    lastSeenAt: z.string(),
+    environment: z.string().nullable(),
+    release: z.string().nullable(),
+    connection: z.object({
+      id: z.string(),
+      orgSlug: z.string().nullable(),
+      projectSlug: z.string(),
+    }),
+    evidence: monitorEvidenceSchema,
+  })
+  // The resolve-back and assignee notes ride through unchanged; the fields an
+  // agent is TOLD to rely on are the ones named above.
+  .catchall(z.unknown());
+
 export const getWorkItemPayload = definePayload({
   schema: z
     .object({
@@ -99,12 +150,20 @@ export const getWorkItemPayload = definePayload({
        */
       folderId: z.string().nullable().optional(),
       folderPath: z.array(z.string()).nullable().optional(),
+      /**
+       * The work item's monitor links with their stored facts and EVIDENCE
+       * (Story MOTIR-5975 · MOTIR-5981) — read from Motir's store, never live
+       * from the monitor. `[]` for a work item with none; absent on the
+       * projected answer, where a proposal has no link.
+       */
+      errors: z.array(mcpMonitorIssueLinkSchema).optional(),
     })
     .catchall(z.unknown()) as unknown as z.ZodType<
     {
       children: McpWorkItemChild[];
       folderId?: string | null;
       folderPath?: string[] | null;
+      errors?: MonitorIssueLinkDto[];
     } & Record<string, unknown>
   >,
   probes: [

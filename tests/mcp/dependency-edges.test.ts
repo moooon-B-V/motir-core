@@ -600,6 +600,9 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
       item: toolItem,
       deliveries: _deliveries,
       folderPath: _folderPath,
+      // The work item's monitor links (MOTIR-5981): a tool-only read, like
+      // `deliveries`, that the aggregate DTO does not carry.
+      errors: _errors,
       ...restOfTool
     } = structured;
     const {

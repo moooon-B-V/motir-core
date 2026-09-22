@@ -21,6 +21,7 @@ import { Pill } from '@/components/ui/Pill';
 import { Popover } from '@/components/ui/Popover';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { MonitorLinkRefusal } from '../actions';
+import { MonitorErrorEvidence } from './MonitorErrorEvidence';
 
 // The work-item page's ERRORS section — its rows (Story MOTIR-4932 · Subtask
 // MOTIR-5732), drawn by `design/monitoring/work-item-errors.mock.html` and
@@ -269,9 +270,13 @@ export function ErrorRow({ link, action }: { link: MonitorIssueLinkDto; action?:
         )}
         {action}
       </div>
-      {/* Resolve line first, then the note (§14 panel 4). */}
+      {/* Resolve line first, then the note (§14 panel 4), then the EVIDENCE
+          (§15 Decision 1): the notes are about the LINK, the evidence is about
+          the EVENT. On a GONE issue the evidence is KEPT and never marked stale
+          (§15 Decision 3): Motir's copy is then the only place it can be read. */}
       <ResolveNote link={link} />
       <AssigneeNote link={link} />
+      <MonitorErrorEvidence evidence={gone ? { ...link.evidence, stale: false } : link.evidence} />
     </li>
   );
 }
@@ -391,7 +396,10 @@ export function MonitorErrorsList({
     return res;
   }
   return (
-    <ul className="m-0 list-none p-0" data-testid="errors-list">
+    // `@container` is what the rows' `@max-[30rem]` rules query (§15 Decision 4's
+    // finding): without it neither the row's narrow layout nor the evidence
+    // block's ever applied.
+    <ul className="@container m-0 list-none p-0" data-testid="errors-list">
       {links.map((link) => (
         <ErrorRow
           key={link.id}

@@ -861,6 +861,50 @@ Three things about it are load-bearing:
   `main`. Merged onto anything else, the work reached no trunk; merged with
   `baseRef: null`, whether it did cannot be told.
 
+The aggregate also **declares** **`errors`** (Story MOTIR-5975 · MOTIR-5981) —
+every monitor issue linked to the card, with the facts and the latest event's
+**EVIDENCE** Motir has stored: the same rows the item page's Errors section
+renders, read through the same service. This is the read an agent makes to
+start on a monitor-filed bug without an account on the monitor.
+
+```jsonc
+"errors": [
+  {
+    "id": "cm…", "title": "PrismaClientKnownRequestError: Transaction API error: …",
+    "level": "error", "eventCount": 112, "environment": "production", "release": "2026.09.20-1",
+    "connection": { "id": "cm…", "orgSlug": "acme", "projectSlug": "web" },
+    "evidence": {
+      "state": "present", "stale": false,
+      "exception": { "type": "PrismaClientKnownRequestError", "message": "Transaction API error: A commit cannot be executed on an expired transaction. …" },
+      "frames": [{ "filePath": "lib/services/githubWebhookService.ts", "function": "handle", "lineNumber": 88, "inApp": true }],
+      "tags": [{ "key": "transaction", "value": "POST /api/github/webhook" }],
+      "request": { "method": "POST", "path": "/api/github/webhook" },
+      "eventId": "9fac2ceed9344f2bbfdd1fdacb0ed9b1", "eventAt": "2026-09-20T18:04:11.000Z",
+      "readAt": "2026-09-20T18:30:02.000Z", "lastFailedAt": null
+    }
+  }
+]
+```
+
+What each part guarantees:
+
+- **It is Motir's STORE, never a live read.** Nothing on this call reaches the
+  monitor. The evidence is what the reconciling poll or a hand-made link last
+  read, so it can be older than the monitor's own view.
+- **`evidence.state`** is one of three values, derived once for every surface:
+  `present` (an exception or stack frames), `no_exception` (the event was read
+  and carried no exception — its tags and request may still be present) or
+  `never_read` (no latest event has been read for this link yet; it arrives on
+  a later check). **`stale: true`** means the last check FAILED after the
+  evidence was read, so what stands is older than the last attempt;
+  `lastFailedAt` says when.
+- **Frames are in-app first, then most recent call first**, cut at 20. Tags
+  have already had every user-identifying key removed (`user`, `user.*`, `ip`,
+  `ip_address`, `client_ip`, `email`, `username`), and the request is a method
+  and a PATH — no query string, header, cookie or body is ever stored.
+- **`[]` means the card has no monitor link.** On the projected answer
+  (`planId`) the key is absent: a proposal has no link.
+
 #### `get_work_item_activity`
 
 Read one page of a work item's **discussion and change trail** — the comments

@@ -33,6 +33,7 @@ import { codeGraphIndex } from './definitions/codeGraphIndex';
 import { codeGraphRefresh } from './definitions/codeGraphRefresh';
 import { outwardBugTelemetryOnCreated } from './definitions/outwardBugTelemetry';
 import { monitorBugEnrichOnCreated } from './definitions/monitorBugEnrich';
+import { monitorBugEnrichBackfill } from './definitions/monitorBugEnrichBackfill';
 import { autoPlanCadenceTick } from './definitions/autoPlanCadenceTick';
 import { ciMinutesReconcile } from './definitions/ciMinutesReconcile';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
@@ -112,6 +113,7 @@ export const jobDefinitions = [
   codeGraphRefresh,
   outwardBugTelemetryOnCreated,
   monitorBugEnrichOnCreated,
+  monitorBugEnrichBackfill,
   autoPlanCadenceTick,
   ciMinutesReconcile,
   ciActionsGateSweep,

@@ -933,7 +933,20 @@ describe('SEARCH and the latest event’s CONTEXT (MOTIR-4932 · MOTIR-5728)', (
     expect(new URL(calls[0]!.url).pathname).toBe(
       '/api/0/organizations/m/issues/4501/events/latest/',
     );
-    expect(context).toEqual({ environment: 'production', release: '1.4.2', frames: [] });
+    expect(context).toEqual({
+      environment: 'production',
+      release: '1.4.2',
+      frames: [],
+      exception: null,
+      // Every tag that names no person is carried, `environment` included.
+      tags: [
+        { key: 'level', value: 'error' },
+        { key: 'environment', value: 'production' },
+      ],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    });
   });
 
   it('answers NULL for each fact the latest event does not carry', async () => {
@@ -944,15 +957,44 @@ describe('SEARCH and the latest event’s CONTEXT (MOTIR-4932 · MOTIR-5728)', (
         orgSlug: 'm',
         externalIssueId: '1',
       }),
-    ).resolves.toEqual({ environment: null, release: null, frames: [] });
+    ).resolves.toEqual({
+      environment: null,
+      release: null,
+      frames: [],
+      exception: null,
+      tags: [{ key: 'level', value: 'error' }],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    });
     // Malformed shapes are absence, never a guess.
-    expect(normalizeIssueContext({})).toEqual({ environment: null, release: null, frames: [] });
+    expect(normalizeIssueContext({})).toEqual({
+      environment: null,
+      release: null,
+      frames: [],
+      exception: null,
+      tags: [],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    });
     expect(
       normalizeIssueContext({
         tags: [null, 'x', { key: 'environment', value: '' }],
         release: { version: 7 },
       }),
-    ).toEqual({ environment: null, release: null, frames: [] });
+    ).toEqual({
+      environment: null,
+      release: null,
+      frames: [],
+      exception: null,
+      // Only the well-formed entry survives the tag filter; an empty value is
+      // still a stated value.
+      tags: [{ key: 'environment', value: '' }],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    });
   });
 
   it('a 404 from events/latest/ is the typed GONE answer; a 500 is the provider’s reason verbatim', async () => {
@@ -1076,8 +1118,26 @@ describe('SEARCH and the latest event’s CONTEXT (MOTIR-4932 · MOTIR-5728)', (
 
     const context = (externalIssueId: string) =>
       fakeMonitorProvider.getIssueContext({ accessToken: 'x', orgSlug: 'y', externalIssueId });
-    expect(await context('a')).toEqual({ environment: 'production', release: '1.4.2', frames: [] });
-    expect(await context('b')).toEqual({ environment: null, release: null, frames: [] });
+    expect(await context('a')).toEqual({
+      environment: 'production',
+      release: '1.4.2',
+      frames: [],
+      exception: null,
+      tags: [],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    });
+    expect(await context('b')).toEqual({
+      environment: null,
+      release: null,
+      frames: [],
+      exception: null,
+      tags: [],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    });
     await expect(context('nope')).rejects.toBeInstanceOf(MonitorIssueGoneError);
     state.deletedIssues.add('a');
     await expect(context('a')).rejects.toBeInstanceOf(MonitorIssueGoneError);
@@ -1095,5 +1155,64 @@ describe('SEARCH and the latest event’s CONTEXT (MOTIR-4932 · MOTIR-5728)', (
     // Not consumed: a fan-out can fail the same project on every call.
     await expect(search('x', 20, 'fake-worker')).rejects.toMatchObject({ status: 503 });
     await expect(search('typeerror')).resolves.toHaveLength(1);
+  });
+});
+
+describe('the FAKE honours the latest event’s EVIDENCE (MOTIR-5975 · MOTIR-5977)', () => {
+  const seedIssue = {
+    title: 'Error',
+    culprit: null,
+    level: 'error',
+    eventCount: 1,
+    firstSeenAt: new Date('2026-09-20T00:00:00.000Z'),
+    lastSeenAt: new Date('2026-09-20T00:00:00.000Z'),
+    permalink: null,
+    assignee: null,
+  };
+  const read = (externalIssueId: string) =>
+    fakeMonitorProvider.getIssueContext({ accessToken: 'x', orgSlug: 'y', externalIssueId });
+
+  it('filters its RAW tags and its request URL exactly as the Sentry adapter would', async () => {
+    const eventAt = new Date('2026-09-20T18:04:11.000Z');
+    fakeMonitorState().issues = [
+      {
+        ...seedIssue,
+        externalId: 'seeded',
+        exception: { type: 'PrismaClientKnownRequestError', message: 'expired transaction' },
+        rawTags: [
+          { key: 'environment', value: 'production' },
+          { key: 'user.email', value: 'someone@example.com' },
+          { key: 'route', value: '/api/github/webhook' },
+        ],
+        requestMethod: 'post',
+        requestUrl: 'https://app.example/api/github/webhook?x=1',
+        eventId: 'ev-1',
+        eventAt,
+      },
+    ];
+    const context = await read('seeded');
+    expect(context).toMatchObject({
+      exception: { type: 'PrismaClientKnownRequestError', message: 'expired transaction' },
+      tags: [
+        { key: 'environment', value: 'production' },
+        { key: 'route', value: '/api/github/webhook' },
+      ],
+      request: { method: 'POST', path: '/api/github/webhook' },
+      eventId: 'ev-1',
+      eventAt,
+    });
+    expect(JSON.stringify(context)).not.toContain('someone@example.com');
+    expect(JSON.stringify(context)).not.toContain('x=1');
+  });
+
+  it('an unseeded issue answers every evidence field as null / []', async () => {
+    fakeMonitorState().issues = [{ ...seedIssue, externalId: 'bare' }];
+    expect(await read('bare')).toMatchObject({
+      exception: null,
+      tags: [],
+      request: null,
+      eventId: null,
+      eventAt: null,
+    });
   });
 });

@@ -15,13 +15,18 @@ import {
   MonitorProviderCallError,
 } from '@/lib/monitors/errors';
 import { MONITOR_SEARCH_ISSUES_LIMIT } from '@/lib/monitors/provider';
-import type { NormalizedMonitorIssue, NormalizedMonitorIssueContext } from '@/lib/monitors/types';
+import type { NormalizedMonitorIssue } from '@/lib/monitors/types';
 import { monitorConnectionRepository } from '@/lib/repositories/monitorConnectionRepository';
 import {
   monitorIssueRepository,
   type MonitorIssueFacts,
 } from '@/lib/repositories/monitorIssueRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  contextFactsOf,
+  writeLinkFacts,
+  type MonitorContextRead,
+} from '@/lib/services/monitorContextRead';
 import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
 import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -75,10 +80,7 @@ async function editableItem(
   return { id: item.id, projectId: item.projectId, identifier: item.identifier };
 }
 
-function factsOf(
-  issue: NormalizedMonitorIssue,
-  context: NormalizedMonitorIssueContext | null,
-): MonitorIssueFacts {
+function factsOf(issue: NormalizedMonitorIssue, read: MonitorContextRead): MonitorIssueFacts {
   return {
     title: issue.title,
     culprit: issue.culprit,
@@ -87,7 +89,7 @@ function factsOf(
     eventCount: issue.eventCount,
     firstSeenAt: issue.firstSeenAt,
     lastSeenAt: issue.lastSeenAt,
-    ...(context ? { environment: context.environment, release: context.release } : {}),
+    ...contextFactsOf(read),
   };
 }
 
@@ -248,15 +250,19 @@ export const monitorIssueLinkService = {
             'The monitor no longer has this issue.',
           );
         }
-        let latest: NormalizedMonitorIssueContext | null = null;
+        // The SAME three outcomes the reconciler records (MOTIR-5979): a read
+        // stores its evidence, a failure stamps only the check, and a gone
+        // issue stops the link altogether.
+        let latest: MonitorContextRead;
         try {
-          latest = await provider.getIssueContext({
+          const context = await provider.getIssueContext({
             ...read,
             externalIssueId: input.externalIssueId,
           });
+          latest = { outcome: 'read', context, at: new Date() };
         } catch (err) {
           if (err instanceof MonitorIssueGoneError) throw err;
-          latest = null;
+          latest = { outcome: 'failed', at: new Date() };
         }
         return { issue: found, context: latest };
       },
@@ -311,12 +317,12 @@ export const monitorIssueLinkService = {
               holder?.identifier ?? row.filedWorkItemIdentifier ?? row.workItemId,
             );
           }
-          await monitorIssueRepository.updateFacts(row.id, facts, tx);
+          await writeLinkFacts(row.id, facts, context, tx);
           await monitorIssueRepository.repoint(row.id, item.id, item.identifier, tx);
           return 'moved' as const;
         }
 
-        await monitorIssueRepository.updateFacts(row.id, facts, tx);
+        await writeLinkFacts(row.id, facts, context, tx);
         await monitorIssueRepository.markFiled(row.id, item.id, item.identifier, tx);
         return 'linked' as const;
       },

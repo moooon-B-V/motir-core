@@ -1,4 +1,9 @@
-import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
+import type {
+  MonitorEvidenceFrameDto,
+  MonitorIssueEvidenceDto,
+  MonitorIssueLinkDto,
+} from '@/lib/dto/monitorIssueLink';
+import type { MonitorIssue } from '@/generated/prisma/client';
 import { readOrgSlug } from '@/lib/mappers/monitorMappers';
 import {
   MONITOR_ASSIGNEE_SYNC_NOTES,
@@ -16,6 +21,79 @@ function toAssigneeNote(value: string | null): MonitorAssigneeSyncNote | null {
   return value !== null && (MONITOR_ASSIGNEE_SYNC_NOTES as readonly string[]).includes(value)
     ? (value as MonitorAssigneeSyncNote)
     : null;
+}
+
+/** The stored frames, re-validated on the way out: a JSON column is trusted to
+ *  be well-formed only as far as each field's type, and a frame naming no file
+ *  is dropped exactly as the adapter drops one. */
+function readFrames(value: unknown): MonitorEvidenceFrameDto[] {
+  if (!Array.isArray(value)) return [];
+  const frames: MonitorEvidenceFrameDto[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const frame = raw as Record<string, unknown>;
+    if (typeof frame['filePath'] !== 'string' || !frame['filePath']) continue;
+    frames.push({
+      filePath: frame['filePath'],
+      function: typeof frame['function'] === 'string' ? frame['function'] : null,
+      lineNumber: typeof frame['lineNumber'] === 'number' ? frame['lineNumber'] : null,
+      inApp: typeof frame['inApp'] === 'boolean' ? frame['inApp'] : null,
+    });
+  }
+  return frames;
+}
+
+/** The stored tags, re-validated the same way. */
+function readTags(value: unknown): { key: string; value: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(
+      (tag): tag is { key: string; value: string } =>
+        !!tag &&
+        typeof tag === 'object' &&
+        typeof (tag as { key?: unknown }).key === 'string' &&
+        typeof (tag as { value?: unknown }).value === 'string',
+    )
+    .map((tag) => ({ key: tag.key, value: tag.value }));
+}
+
+/**
+ * The link's EVIDENCE and its display state (Story MOTIR-5975 · Subtask
+ * MOTIR-5979). The ONE derivation every surface reads:
+ *
+ * - `never_read` ⇔ `evidence_read_at IS NULL`;
+ * - `no_exception` ⇔ read, with no exception type or message and no frames;
+ * - `present` otherwise;
+ * - `stale` ⇔ `evidence_checked_at > evidence_read_at`, both present — a
+ *   never-read link has nothing old to be stale ABOUT, so it stays `never_read`
+ *   however many checks have failed.
+ */
+export function toMonitorIssueEvidenceDto(row: MonitorIssue): MonitorIssueEvidenceDto {
+  const frames = readFrames(row.frames);
+  const exception =
+    row.exceptionType !== null || row.exceptionMessage !== null
+      ? { type: row.exceptionType, message: row.exceptionMessage }
+      : null;
+  const readAt = row.evidenceReadAt;
+  const checkedAt = row.evidenceCheckedAt;
+  const stale = readAt !== null && checkedAt !== null && checkedAt.getTime() > readAt.getTime();
+  return {
+    state:
+      readAt === null
+        ? 'never_read'
+        : exception === null && frames.length === 0
+          ? 'no_exception'
+          : 'present',
+    stale,
+    exception,
+    frames,
+    tags: readTags(row.tags),
+    request: row.requestPath !== null ? { method: row.requestMethod, path: row.requestPath } : null,
+    eventId: row.eventId,
+    eventAt: row.eventAt?.toISOString() ?? null,
+    readAt: readAt?.toISOString() ?? null,
+    lastFailedAt: stale ? checkedAt!.toISOString() : null,
+  };
 }
 
 export function toMonitorIssueLinkDto(row: MonitorIssueWithConnection): MonitorIssueLinkDto {
@@ -44,5 +122,6 @@ export function toMonitorIssueLinkDto(row: MonitorIssueWithConnection): MonitorI
       error: row.resolveError,
     },
     assigneeNote: toAssigneeNote(row.assigneeSyncNote),
+    evidence: toMonitorIssueEvidenceDto(row),
   };
 }

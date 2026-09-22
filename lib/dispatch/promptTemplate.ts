@@ -17,6 +17,7 @@ import type {
 } from '@/lib/dto/workItems';
 import { splitPlanBody } from '@/lib/markdown/planBody';
 import type { DesignVerdictDto } from '@/lib/dto/designAccess';
+import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 
 // The canonical DISPATCH-PROMPT grammar (Story 7.9 · MOTIR-1802) — the
 // open-core, deterministic rebuild of the cancelled 7.7.2 `generate_prompt` job.
@@ -304,6 +305,14 @@ export interface DispatchPromptSource {
    * an agent about to build a rendered surface to go and look.
    */
   designReference?: DesignVerdictDto[];
+  /**
+   * The ERRORS linked to this work item (Story MOTIR-5975 · Subtask MOTIR-5982)
+   * — every monitor link with its stored facts and evidence, as
+   * `monitorIssueService.listForWorkItem` returns them: read from Motir's store,
+   * never from the monitor. Omitted or EMPTY renders the prompt byte-identical
+   * to one without the field, which is every card that is not a monitor bug.
+   */
+  errorEvidence?: MonitorIssueLinkDto[];
   parent: { key: string; title: string } | null;
   projectName: string;
   /** The project key, e.g. `PROD` — the identifier prefix. */
@@ -2050,6 +2059,98 @@ function commitContract(src: DispatchPromptSource): string[] {
   ];
 }
 
+/** Indent every line of a possibly multi-line value, so a long message stays
+ *  inside its block instead of reading as the prompt's own text. */
+function indentBlock(text: string, pad: string): string[] {
+  return text.split(/\r?\n/).map((line) => `${pad}${line}`);
+}
+
+/**
+ * The ERROR EVIDENCE section (Story MOTIR-5975 · Subtask MOTIR-5982): what the
+ * monitor recorded for each error linked to this work item, so an agent handed a
+ * monitor-filed bug starts from the exception, the stack and the request rather
+ * than from a one-line title. A dispatched agent reads THIS prompt and nothing
+ * else — it never opens the item page.
+ *
+ * ⚠️ IT IS A RENDERING OF STORED FACTS, like the design reference. It fetches
+ * nothing, never re-derives `evidence.state`, and cuts nothing below the store's
+ * own bounds. The tags were filtered at the provider seam, so there is no second
+ * filter here — a second home for the denylist is one that drifts.
+ *
+ * ⚠️ AN EMPTY LIST RENDERS NOTHING — not a heading, not a blank line — so a work
+ * item with no link gets the prompt it always got.
+ */
+export function renderErrorEvidence(links: readonly MonitorIssueLinkDto[]): string[] {
+  if (links.length === 0) return [];
+  const lines: string[] = [
+    'What the error monitor recorded for the errors linked to this work item — read',
+    'from Motir, never live from the monitor. Start your diagnosis here. Tags have had',
+    'every user-identifying key removed; the request is a method and a path only.',
+  ];
+  links.forEach((link, index) => {
+    const { evidence } = link;
+    const where = [link.connection.orgSlug, link.connection.projectSlug].filter(Boolean).join('/');
+    lines.push(
+      '',
+      `Error ${index + 1} of ${links.length}: ${link.title}`,
+      `  ${[
+        link.level ?? 'unknown level',
+        `seen ${link.eventCount} time${link.eventCount === 1 ? '' : 's'}`,
+        link.environment ? `environment ${link.environment}` : null,
+        link.release ? `release ${link.release}` : null,
+        where ? `monitor ${where}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')}`,
+    );
+    if (evidence.state === 'never_read') {
+      lines.push(
+        '  The latest event has not been read yet, so there is no evidence to show — it',
+        '  arrives on a later check. Do not read its absence as "the error has no stack".',
+      );
+      return;
+    }
+    if (evidence.stale) {
+      lines.push(
+        `  OUT OF DATE: the last check of this error failed at ${evidence.lastFailedAt}.`,
+        `  What follows was read at ${evidence.readAt} and may be older than the error now is.`,
+      );
+    }
+    if (evidence.exception) {
+      const head = evidence.exception.type ?? 'Exception';
+      if (evidence.exception.message) {
+        lines.push(`  Exception: ${head}`, ...indentBlock(evidence.exception.message, '    '));
+      } else {
+        lines.push(`  Exception: ${head}`);
+      }
+    } else {
+      lines.push('  No exception: the latest event carried no exception and no stack.');
+    }
+    if (evidence.frames.length > 0) {
+      lines.push('  Stack frames (the application’s own first, then most recent call first):');
+      for (const frame of evidence.frames) {
+        const at =
+          frame.lineNumber === null ? frame.filePath : `${frame.filePath}:${frame.lineNumber}`;
+        const fn = frame.function ? ` ${frame.function}` : '';
+        lines.push(`    ${frame.inApp === true ? '[app] ' : '      '}${at}${fn}`);
+      }
+    }
+    if (evidence.tags.length > 0) {
+      lines.push('  Tags:');
+      for (const tag of evidence.tags) lines.push(`    ${tag.key} = ${tag.value}`);
+    }
+    if (evidence.request) {
+      lines.push(
+        `  Request: ${[evidence.request.method, evidence.request.path].filter(Boolean).join(' ')}`,
+      );
+    }
+    lines.push(
+      `  Event: ${evidence.eventId ?? 'id not recorded'}${evidence.eventAt ? ` at ${evidence.eventAt}` : ''}`,
+    );
+  });
+  return lines;
+}
+
 /** The closing note a MANUAL item gets in place of a GIT WORKFLOW section. */
 const MANUAL_CLOSING = [
   'There is no git workflow for this work item: it is human work with no branch and',
@@ -2081,6 +2182,14 @@ function gitWorkflow(src: DispatchPromptSource, sessionBranch: string | null): s
       : sessionLineageWorkflow(src, sessionBranch);
   }
   return repos ? multiRepoPerItemPrWorkflow(src, repos) : perItemPrWorkflow(src);
+}
+
+/** The ERROR EVIDENCE section with its trailing separator, or nothing at all. */
+function errorEvidenceBlock(links: readonly MonitorIssueLinkDto[]): string[] {
+  const body = renderErrorEvidence(links);
+  return body.length === 0
+    ? []
+    : [...section('ERROR EVIDENCE — what the monitor recorded for this work item', body), ''];
 }
 
 export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDispatchPrompt {
@@ -2158,6 +2267,10 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
     '',
     ...section('ACCEPTANCE CRITERIA — every one must hold', acceptanceSection(acceptanceCriteria)),
     '',
+    // The ERROR EVIDENCE (MOTIR-5982) sits with the card's own WHAT — after its
+    // criteria, before the git workflow — and renders NOTHING for a card with no
+    // monitor link, so every other prompt is byte-identical to before.
+    ...errorEvidenceBlock(src.errorEvidence ?? []),
     ...closing,
   ];
 

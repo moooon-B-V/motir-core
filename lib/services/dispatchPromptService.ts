@@ -12,6 +12,7 @@ import { resolveDispatchRepo } from '@/lib/workItems/targetRepo';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { designAccessService } from '@/lib/services/designAccessService';
+import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import { readProject } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -198,7 +199,7 @@ export const dispatchPromptService = {
 
     // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
     // The access gate (`getWorkItemByIdentifier`) is awaited above, and none
-    // of these six arms has a refusal path — `resolveDispatchRepoForItem`
+    // of these arms has a refusal path — `resolveDispatchRepoForItem`
     // returns `null` for an unresolvable repo instead of throwing, and
     // `listRepoDelivery` classifies rather than refuses. (The archived refusal
     // over the whole SET is raised AFTER this settles, in
@@ -213,6 +214,7 @@ export const dispatchPromptService = {
       runScope,
       openDependentKeys,
       designReference,
+      errorEvidence,
     ] = await Promise.all([
       item.parentId
         ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -257,6 +259,12 @@ export const dispatchPromptService = {
       designAccessService
         .designsForWorkItem(item.identifier, ctx)
         .catch(() => [] as DesignVerdictDto[]),
+      // The ERRORS linked to this card (Story MOTIR-5975 · MOTIR-5982) — the
+      // SAME read the item page's Errors section and `get_work_item` make, over
+      // Motir's store: no provider call, and no refusal path of its own (the
+      // access gate above has already admitted the item). `[]` is the ordinary
+      // answer and renders nothing.
+      monitorIssueService.listForWorkItem(item.id, ctx),
     ]);
 
     const targetRepo = dispatchRepo?.name ?? null;
@@ -275,6 +283,7 @@ export const dispatchPromptService = {
       openDependentKeys,
       advisories,
       designReference,
+      errorEvidence,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,
       projectKey: project.identifier,

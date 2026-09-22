@@ -23,6 +23,8 @@ const {
   errorsSectionState,
   levelPillProps,
 } = await import('@/app/(authed)/items/[key]/_components/MonitorErrorsSection');
+const { evidenceView } =
+  await import('@/app/(authed)/items/[key]/_components/MonitorErrorEvidence');
 
 afterEach(() => {
   cleanup();
@@ -47,6 +49,18 @@ function link(overrides: Partial<MonitorIssueLinkDto> = {}): MonitorIssueLinkDto
     connection: { id: 'c1', orgSlug: 'acme', projectSlug: 'checkout-api' },
     resolve: { state: null, attemptedAt: null, resolvedAt: null, error: null },
     assigneeNote: null,
+    evidence: {
+      state: 'never_read',
+      stale: false,
+      exception: null,
+      frames: [],
+      tags: [],
+      request: null,
+      eventId: null,
+      eventAt: null,
+      readAt: null,
+      lastFailedAt: null,
+    },
     ...overrides,
   };
 }
@@ -428,5 +442,256 @@ describe('the remaining row arms', () => {
       expect(screen.queryByRole('button', { name: m.unlink.action })).toBeNull(),
     );
     expect(unlinkAction).not.toHaveBeenCalled();
+  });
+});
+
+// ── THE EVIDENCE BLOCK (Story MOTIR-5975 · Subtask MOTIR-5980), drawn by
+// `design/monitoring/work-item-errors--evidence.mock.html` + design-notes §15.
+describe('§15 — the EVIDENCE block inside a row', () => {
+  const e = en.monitorErrors.evidence;
+  const frames = [
+    {
+      filePath: 'lib/services/githubWebhookService.ts',
+      function: 'upsertPr',
+      lineNumber: 412,
+      inApp: true,
+    },
+    { filePath: 'app/api/github/webhook/route.ts', function: null, lineNumber: 74, inApp: true },
+    { filePath: 'node_modules/next/server.js', function: 'handle', lineNumber: null, inApp: false },
+    { filePath: 'node_modules/prisma/runtime.js', function: 'commit', lineNumber: 9, inApp: null },
+  ];
+  const present: MonitorIssueLinkDto['evidence'] = {
+    state: 'present',
+    stale: false,
+    exception: { type: 'PrismaClientKnownRequestError', message: 'expired transaction' },
+    frames,
+    tags: Array.from({ length: 14 }, (_, i) => ({ key: `k${i}`, value: `v${i}` })),
+    request: { method: 'POST', path: '/api/github/webhook' },
+    eventId: '3f9a1c7e04b2d88a91c0',
+    eventAt: '2026-09-19T11:50:00.000Z',
+    readAt: '2026-09-19T11:52:00.000Z',
+    lastFailedAt: null,
+  };
+  const withEvidence = (evidence: Partial<MonitorIssueLinkDto['evidence']>) =>
+    link({ evidence: { ...present, ...evidence } });
+  const row = (l: MonitorIssueLinkDto) => {
+    renderRow(l);
+    return screen.getByTestId('error-row');
+  };
+  const open = () => fireEvent.click(screen.getByRole('button', { name: new RegExp(e.show) }));
+
+  it('evidenceView is TOTAL over state × stale', () => {
+    for (const state of ['never_read', 'present', 'no_exception'] as const) {
+      for (const stale of [false, true]) {
+        const view = evidenceView({ state, stale });
+        if (state === 'never_read') expect(view).toEqual({ kind: 'never_read' });
+        else expect(view).toEqual({ kind: 'block', exception: state === 'present', stale });
+      }
+    }
+  });
+
+  it('present: collapsed by default, the door summarises type · request · latest event', () => {
+    const r = row(withEvidence({ state: 'present' }));
+    const door = within(r).getByRole('button', { name: new RegExp(e.show) });
+    expect(door.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('evidence-block')).toBeNull();
+    const summary = within(r).getByTestId('evidence-summary').textContent!;
+    expect(summary).toContain('PrismaClientKnownRequestError');
+    expect(summary).toContain('POST /api/github/webhook');
+    expect(summary).toContain('latest event');
+  });
+
+  it('present, open: exception, request, in-app frames with framework folded, tags, footer', () => {
+    row(withEvidence({ state: 'present' }));
+    open();
+    const block = screen.getByTestId('evidence-block');
+    expect(block.textContent).toContain('PrismaClientKnownRequestError: expired transaction');
+    expect(block.textContent).toContain('POST /api/github/webhook');
+    expect(block.textContent).toContain('2 in your code · 2 framework · most recent call first');
+    // In-app frames show as path:line and "in function"; a null function drops "in …".
+    expect(block.textContent).toContain('lib/services/githubWebhookService.ts:412');
+    expect(block.textContent).toContain('in upsertPr');
+    expect(block.textContent).toContain('app/api/github/webhook/route.ts:74');
+    expect(block.querySelectorAll('[data-frame="framework"]')).toHaveLength(0);
+    fireEvent.click(within(block).getByRole('button', { name: 'Show 2 framework frames' }));
+    const fw = block.querySelectorAll('[data-frame="framework"]');
+    expect(fw).toHaveLength(2);
+    // A null lineNumber prints the path alone — never "unknown"; inApp null is framework.
+    expect(fw[0]!.textContent).toBe('node_modules/next/server.jsin handle');
+    expect(fw[1]!.textContent).toContain('node_modules/prisma/runtime.js:9');
+    // 12 tags, then the fold.
+    expect(block.querySelectorAll('[data-tag]')).toHaveLength(12);
+    fireEvent.click(within(block).getByRole('button', { name: 'Show all 14 tags' }));
+    expect(block.querySelectorAll('[data-tag]')).toHaveLength(14);
+    expect(block.textContent).toContain('Event 3f9a1c7e04b2…');
+    expect(block.textContent).toContain('Latest event');
+    expect(screen.queryByText(new RegExp('out of date'))).toBeNull();
+  });
+
+  it('a trace with NO in-app frame shows flat and ungrouped', () => {
+    row(withEvidence({ state: 'present', frames: frames.slice(2) }));
+    open();
+    const block = screen.getByTestId('evidence-block');
+    expect(block.textContent).toContain('2 frames, most recent call first');
+    expect(within(block).queryByRole('button', { name: /framework frames/ })).toBeNull();
+  });
+
+  it('never_read: NO door, the quiet clock note', () => {
+    const r = row(
+      withEvidence({
+        state: 'never_read',
+        exception: null,
+        frames: [],
+        tags: [],
+        request: null,
+        eventId: null,
+        eventAt: null,
+        readAt: null,
+      }),
+    );
+    expect(within(r).queryByRole('button', { name: new RegExp(e.show) })).toBeNull();
+    expect(r.textContent).toContain(e.neverRead);
+  });
+
+  it('no_exception: the door says so, the block opens on the quiet sentence and keeps request + tags', () => {
+    row(withEvidence({ state: 'no_exception', exception: null, frames: [] }));
+    expect(screen.getByTestId('evidence-summary').textContent).toContain(e.summaryNoException);
+    open();
+    const block = screen.getByTestId('evidence-block');
+    expect(block.textContent).toContain(e.noException);
+    expect(block.textContent).not.toContain(e.stackTrace);
+    expect(block.textContent).toContain('POST /api/github/webhook');
+    expect(block.querySelectorAll('[data-tag]').length).toBeGreaterThan(0);
+  });
+
+  it('stale: the OLD evidence still shows with its event time, under the failed-check line', () => {
+    row(withEvidence({ state: 'present', stale: true, lastFailedAt: '2026-09-19T11:58:00.000Z' }));
+    expect(screen.getByTestId('evidence-summary').textContent).toContain(e.summaryStale);
+    open();
+    const block = screen.getByTestId('evidence-block');
+    const stale = block.querySelector('[data-evidence-block="stale"]')!;
+    expect(stale.textContent).toContain('The last check failed');
+    expect(block.textContent).toContain('PrismaClientKnownRequestError: expired transaction');
+  });
+
+  it('gone: the evidence is KEPT and not marked stale', () => {
+    row(
+      link({
+        resolve: { state: 'gone', attemptedAt: null, resolvedAt: null, error: null },
+        evidence: { ...present, stale: true, lastFailedAt: '2026-09-19T11:58:00.000Z' },
+      }),
+    );
+    expect(screen.getByTestId('evidence-summary').textContent).not.toContain(e.summaryStale);
+    open();
+    expect(
+      screen.getByTestId('evidence-block').querySelector('[data-evidence-block="stale"]'),
+    ).toBeNull();
+  });
+
+  it('the list is a @container, so the rows’ narrow rules can apply', () => {
+    render(
+      <MonitorErrorsList
+        links={[link()]}
+        canWrite={false}
+        unlinkAction={vi.fn()}
+        workItemId="wi"
+        identifier="MOT-1"
+      />,
+      { now: NOW },
+    );
+    expect(screen.getByTestId('errors-list').className).toContain('@container');
+  });
+
+  it('renders the block in zh', () => {
+    render(
+      <ul>
+        <ErrorRow link={withEvidence({ state: 'present' })} />
+      </ul>,
+      { now: NOW, locale: 'zh', messages: zh },
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(zh.monitorErrors.evidence.show) }),
+    );
+    expect(screen.getByTestId('evidence-block').textContent).toContain(
+      zh.monitorErrors.evidence.exception,
+    );
+  });
+});
+
+describe('§15 — the evidence block’s remaining arms', () => {
+  const base: MonitorIssueLinkDto['evidence'] = {
+    state: 'present',
+    stale: false,
+    exception: { type: 'Error', message: 'short' },
+    frames: [],
+    tags: [],
+    request: null,
+    eventId: 'abcdef0123456789',
+    eventAt: '2026-09-19T11:50:00.000Z',
+    readAt: '2026-09-19T11:52:00.000Z',
+    lastFailedAt: null,
+  };
+  const openRow = (evidence: Partial<MonitorIssueLinkDto['evidence']>) => {
+    renderRow(link({ evidence: { ...base, ...evidence } }));
+    fireEvent.click(screen.getByRole('button', { name: /Show evidence/ }));
+    return screen.getByTestId('evidence-block');
+  };
+
+  it('a long message is clamped with a fold that opens and closes it — never cut', () => {
+    const block = openRow({ exception: { type: 'Error', message: 'x'.repeat(400) } });
+    expect(screen.getByTestId('evidence-message').className).toContain('line-clamp-4');
+    fireEvent.click(within(block).getByRole('button', { name: 'Show full message' }));
+    expect(screen.getByTestId('evidence-message').className).not.toContain('line-clamp-4');
+    fireEvent.click(within(block).getByRole('button', { name: 'Show less' }));
+    expect(screen.getByTestId('evidence-message').className).toContain('line-clamp-4');
+  });
+
+  it('a type-only and a message-only exception each print what they have', () => {
+    expect(openRow({ exception: { type: 'TypeOnly', message: null } }).textContent).toContain(
+      'TypeOnly',
+    );
+    cleanup();
+    const block = openRow({ exception: { type: null, message: 'only the message' } });
+    expect(block.textContent).toContain('only the message');
+    expect(block.textContent).not.toContain('null');
+  });
+
+  it('a request with no method prints the path alone; no event id and no event time drop their parts', () => {
+    const block = openRow({ request: { method: null, path: '/p' }, eventId: null, eventAt: null });
+    expect(block.querySelector('[data-evidence-block="request"]')!.textContent).toContain('/p');
+    expect(block.textContent).not.toContain('Event ');
+    expect(screen.getByTestId('evidence-summary').textContent).not.toContain('latest event');
+  });
+
+  it('stale with no event time still names the failed check', () => {
+    const block = openRow({ stale: true, eventAt: null, lastFailedAt: '2026-09-19T11:58:00.000Z' });
+    expect(block.querySelector('[data-evidence-block="stale"]')!.textContent).toContain(
+      'The last check failed',
+    );
+  });
+
+  it('copies the WHOLE event id, says Copied, and a denied clipboard says so and leaves the id', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const block = openRow({});
+    await act(async () => {
+      fireEvent.click(within(block).getByRole('button', { name: 'Copy event ID' }));
+    });
+    expect(writeText).toHaveBeenCalledWith('abcdef0123456789');
+    expect(block.textContent).toContain('Copied');
+    expect(block.textContent).toContain('Event abcdef012345…');
+
+    writeText.mockRejectedValueOnce(new Error('denied'));
+    await act(async () => {
+      fireEvent.click(within(block).getByRole('button', { name: 'Copy event ID' }));
+    });
+    expect(block.textContent).toContain("Couldn't copy — select the ID instead.");
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+  });
+
+  it('closing the door hides the block again', () => {
+    openRow({});
+    fireEvent.click(screen.getByRole('button', { name: /Hide evidence/ }));
+    expect(screen.queryByTestId('evidence-block')).toBeNull();
   });
 });
