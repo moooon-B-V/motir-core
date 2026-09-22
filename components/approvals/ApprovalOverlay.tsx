@@ -454,6 +454,53 @@ export function ApprovalOverlay() {
     return () => controller.abort();
   }, [itemKey, kind, reread]);
 
+  // ⚠️ AFTER A PRESS THAT MERGES, THE ROWS ARE RE-READ — AND ONLY THE ROWS (Bug MOTIR-6079).
+  // The frame's `router.refresh()` reaches the server surfaces behind the overlay, never
+  // this client island, so a merged or queued pull request kept its old row until the
+  // overlay was closed and opened again. It is not *Show the current version*: that re-read
+  // remounts the frame (a fresh stamp), which would throw away the outcome, the refusal and
+  // the decided record the press just drew — and for a PRIMARY it would re-port the block
+  // away, because a decided design or acceptance gate is no longer ported by it. So the
+  // read is the MERGE gate's (whichever gate led the frame, the rows are its delivery set),
+  // and it patches the row facts into the read on screen and leaves the gate and stamp
+  // alone. This moves nothing under a reader mid-sentence: it lands the result of their own
+  // press, the inline-edit half of the page-state contract.
+  const rereadRows = useCallback(() => {
+    if (itemKey === null || kind === null) return;
+    const forToken = tokenOf(itemKey, kind);
+    void (async () => {
+      try {
+        const fresh = await fetchApprovalGateOverlay(itemKey, 'pull_request_approval');
+        if (fresh?.subject.state !== 'resolved' || fresh.subject.kind !== 'pull_request_approval') {
+          return;
+        }
+        const { pullRequests, repoDelivery, deliveries, members } = fresh.subject;
+        setLoad((prev) =>
+          prev?.token === forToken &&
+          prev.outcome === 'read' &&
+          prev.read.subject.state === 'resolved' &&
+          prev.read.subject.kind === 'pull_request_approval'
+            ? {
+                ...prev,
+                read: {
+                  ...prev.read,
+                  subject: {
+                    ...prev.read.subject,
+                    pullRequests,
+                    repoDelivery,
+                    deliveries,
+                    members,
+                  },
+                },
+              }
+            : prev,
+        );
+      } catch {
+        // A failed re-read changes nothing: the rows keep what the press reported.
+      }
+    })();
+  }, [itemKey, kind]);
+
   // ⚠️ WHAT THIS READER IS LOOKING AT MAY HAVE MOVED (Story MOTIR-5238 · Subtask
   // MOTIR-5243). The Workbench host holds ONE stream and hands its signal down;
   // this surface OPENS NOTHING — `useWorkbenchLiveSignal` reads the context, and
@@ -741,12 +788,25 @@ export function ApprovalOverlay() {
               canDecide: read.canDecide && !decidedState,
               routedToLabel: read.routedToLabel,
               members: subject.members,
+              // A STORY RUN'S ACCEPTANCE is versioned by its recording, so the members the
+              // press merges come from the merge gate's version (Bug MOTIR-6079) — the value
+              // the item page hands the same frame. Absent for every other port.
+              mergeSubjectVersion: subject.mergeSubjectVersion,
               earlierApproval: read.earlierApproval,
             }}
             gateActions={{
               decide: decideApprovalGateAction,
-              approveAndMerge: approveAndMergeAction,
-              retryMember: retryApproveAndMergeMemberAction,
+              // A press that merges re-reads the rows it merged (`rereadRows`, MOTIR-6079).
+              approveAndMerge: async (input) => {
+                const result = await approveAndMergeAction(input);
+                if (result.ok) rereadRows();
+                return result;
+              },
+              retryMember: async (input) => {
+                const result = await retryApproveAndMergeMemberAction(input);
+                if (result.ok) rereadRows();
+                return result;
+              },
             }}
             gateLayout="fill"
             // The approve-to-merge port re-reads through the SAME overlay read.

@@ -517,6 +517,32 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(body.subject.acceptanceGate.kind).toBe('acceptance_result');
   });
 
+  it('an ACCEPTANCE-led port reads its members against the MERGE gate and hands back that gate’s version (MOTIR-6079)', async () => {
+    // The acceptance gate is versioned by its RECORDING's commit and its id owns no member
+    // facts, so a port read against it counts nothing — the overlay's frame named no pull
+    // request and a reload drew no per-row fact. The item page reads both off the merge
+    // gate (`LateSections`' `mergeSubjectVersion`, `r.mergeGate.members`); so does this.
+    const { story } = await storyWithReceipt();
+    await deliver(story, { name: 'core', number: 41 });
+    const merge = await rawGate(story, 'pull_request_approval', story.id);
+    const setVersion = `acme/core#41@${'a'.repeat(40)}`;
+    await adminDb.approvalGate.update({
+      where: { id: merge.id },
+      data: { subjectVersion: setVersion },
+    });
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: story.identifier, kind: 'acceptance_result' })
+    ).json();
+
+    expect(body.gate).toMatchObject({ kind: 'acceptance_result', state: 'awaiting' });
+    expect(body.subject.kind).toBe('pull_request_approval');
+    expect(body.subject.mergeSubjectVersion).toBe(setVersion);
+    expect(body.subject.members).toHaveLength(1);
+    expect(body.subject.members[0]).toMatchObject({ subjectVersion: setVersion });
+  });
+
   it('an ACCEPTANCE gate with NO awaiting merge question keeps its own port — the recording alone', async () => {
     // A SINGLE-CARD run: the story delivers nothing of its own, so there is nothing for
     // the press to merge and the port is the receipt (point 3).
