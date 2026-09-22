@@ -422,6 +422,73 @@ async function assertStatusOpen(
  *   written for, *the queue ejects the pull request and an agent comes back and
  *   re-publishes the asset*, was the one shape it let through.
  */
+/**
+ * PUBLISHING HANDS THE CARD TO A PERSON, SO THE PUBLISH MOVES IT TO REVIEW —
+ * and ONLY when nothing else owns its status (Bug MOTIR-6009).
+ *
+ * The defect this closes: both `motir run` paths wrote `implemented` after a
+ * publish, which claims *the branch is pushed and CI decides when this becomes
+ * reviewable*. A design card opens no pull request (`design-result.md`
+ * AMENDMENT 5 Q1), so no verdict ever arrives — the promotion keys on a linked
+ * delivery — and the card sat in the Implemented column while its own
+ * `awaiting` gate waited on a reviewer. Two callers each decided the status for
+ * themselves and both decided it wrong, which is why the write belongs HERE,
+ * in the transaction that raises the question: every door is then correct
+ * without having to know the rule.
+ *
+ * ⚠️ THE DISCRIMINATOR IS THE OPEN DELIVERY, AND IT IS DELIBERATELY THE SAME
+ * QUESTION `designResultHandler.approve` ASKS AT DECISION TIME
+ * (`countOpenByWorkItem`): with an open pull request the PR lifecycle owns the
+ * card — `implemented` on push, `in_review` on green, `done` on merge — and a
+ * write here would be a SECOND writer racing it, which is the collision ADR §8
+ * exists to end. Without one there is nothing else that can move the card,
+ * which is precisely why the publish must.
+ *
+ * ⚠️ IT ONLY EVER MOVES FORWARD. `hopsToReview` returns nothing for a card
+ * already at `in_review`, and the rank test refuses anything above it, so a
+ * republish on an `approved` card — the revise loop — is not dragged back a
+ * rung on its way. A card BELOW review walks there by DECLARED edges only, so
+ * a project whose workflow cannot reach `in_review` from where the card stands
+ * keeps its status rather than having one forced on it.
+ *
+ * ⚠️ THE WALK IS `choiceGateService`'s, called rather than re-derived — its own
+ * contract says *"one walk, not two"*, and this is its third caller. The import
+ * is LAZY for the reason that module's header gives: the walk is applied
+ * through `workItemsService`, which imports THIS module, so naming it at the
+ * top would close the cycle.
+ *
+ * Silent by design when there is nothing to do: no hops, an open delivery, or a
+ * card at or above review each return without writing.
+ */
+async function moveToReviewWhenUndelivered(
+  item: WorkItem,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if ((await workItemDeliveryRepository.countOpenByWorkItem(item.id, tx)) > 0) return;
+
+  // The row as this transaction has left it — `assertCardOpen` above locked and
+  // re-read it, and the status is what that read is about.
+  const current = (await workItemRepository.findById(item.id, tx)) ?? item;
+  const statuses = await workflowsService.listStatusesByProject(
+    current.projectId,
+    ctx.workspaceId,
+    tx,
+  );
+  const rank = rankOfStatus(current.status, statuses, {
+    reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
+    implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
+    approvedKey: statuses.find((s) => s.key === 'approved')?.key ?? null,
+  });
+  if (rank >= RUNG_RANK.in_review) return;
+
+  const { hopsToReview } = await import('@/lib/services/choiceGateService');
+  const { workItemsService } = await import('@/lib/services/workItemsService');
+  for (const key of await hopsToReview(current, tx)) {
+    await workItemsService.applyStatusTransition(current.id, key, ctx, tx);
+  }
+}
+
 async function assertDesignSettled(
   item: WorkItem,
   ctx: ServiceContext,
@@ -768,6 +835,13 @@ async function persistEvidence(
       },
       tx,
     );
+
+    // THE STATUS FOLLOWS THE QUESTION, in the same transaction that asked it
+    // (Bug MOTIR-6009). It is placed AFTER the gate deliberately: the card is
+    // In Review *because* somebody has been asked, so a rollback that loses the
+    // gate must lose the status with it — and the early return above, where the
+    // predicate says this card owes no design gate, must not move it at all.
+    await moveToReviewWhenUndelivered(args.item, ctx, tx);
 
     // Re-read so the caller gets the evidence WITH its just-inserted assets.
     // Non-null by construction: the row was created in THIS transaction, a few

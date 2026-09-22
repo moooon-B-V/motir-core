@@ -36,6 +36,14 @@ import { servePrivateObjectStore } from './object-store';
 // and the spec would fail on the status assertion for a reason that has nothing
 // to do with the gate. It is also the honest shape: an agent claims the card,
 // publishes from it, and the reviewer arrives afterwards.
+//
+// ⚠️ AND THE PUBLISH ITSELF THEN MOVES IT TO `in_review` (Bug MOTIR-6009): a
+// design card has no pull request, so nothing else would ever move it out of
+// the status a run left it in, and the publish writes it in the transaction
+// that raises the gate. `in_review → done` is a declared edge too, so the
+// approval below is unaffected — but a spec asserting the BEFORE state reads
+// In Review, not In Progress. That is why this seed stays `in_progress`: what
+// it seeds is where the AGENT leaves the card, not where the reviewer finds it.
 
 // ⚠️ THE TWO DIRECT WRITES GO THROUGH `adminDb`, NOT `@/lib/db`, AND THE GUARD
 // THAT SAYS SO IS RATCHETED. `tests/rls/test-singleton-statement-guard.test.ts`

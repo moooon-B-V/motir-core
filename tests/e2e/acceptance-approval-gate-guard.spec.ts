@@ -139,7 +139,11 @@ test.describe('a pending approval holds the move it performs, and says so where 
     );
 
     const board = await getBoard(page.request);
-    const inProgress = columnByStatus(board, 'in_progress');
+    // ⚠️ IN REVIEW, because the PUBLISH put it there (Bug MOTIR-6009): a design
+    // card has no pull request, so the publish writes the status in the
+    // transaction that raises the gate. The refusal under test is unchanged —
+    // the gate owns `done`, whichever status the card is dragged FROM.
+    const heldColumn = columnByStatus(board, 'in_review');
     const doneColumn = columnByStatus(board, 'done');
     const columns = page.getByRole('group', { name: en.boards.boardLabel });
     const boardCard = () => columns.getByTestId(`board-card-${seed.designKey}`);
@@ -157,10 +161,11 @@ test.describe('a pending approval holds the move it performs, and says so where 
         expect(move.status()).toBe(409);
         expect(((await move.json()) as { code: string }).code).toBe('APPROVAL_GATE_PENDING');
 
-        // It is back in In Progress, and the held line is ON the card — not a toast.
+        // It is back in the column it came from, and the held line is ON the
+        // card — not a toast.
         await expect(
           columns
-            .getByTestId(`board-column-${inProgress.id}`)
+            .getByTestId(`board-column-${heldColumn.id}`)
             .getByTestId(`board-card-${seed.designKey}`),
         ).toBeVisible();
         const onCard = boardCard().locator('xpath=..').getByRole('status');
@@ -175,7 +180,7 @@ test.describe('a pending approval holds the move it performs, and says so where 
         await expect(
           page.getByRole('status').filter({ hasText: en.boards.moveRejectedTitle }),
         ).toHaveCount(0);
-        expect(await statusOf(seed.designId)).toBe('in_progress');
+        expect(await statusOf(seed.designId)).toBe('in_review');
       },
     );
     await beat();
