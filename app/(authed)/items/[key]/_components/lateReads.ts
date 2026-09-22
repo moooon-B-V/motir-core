@@ -17,7 +17,8 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
 import { choiceGateService } from '@/lib/services/choiceGateService';
-import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
+import { decisionConfirmationGateService } from '@/lib/services/decisionConfirmationGateService';
+import type { ChoiceBodyDTO, DecisionConfirmationBodyDTO } from '@/lib/dto/approvalGate';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
@@ -172,6 +173,15 @@ export interface LateReads {
   choiceGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     body: ChoiceBodyDTO | null;
   };
+  /**
+   * A `human` DECISION work item's confirm question (Story MOTIR-5871 · MOTIR-5954) —
+   * the gate, read exactly as `choiceGate` is, and the BODY's parse with the record it
+   * would stamp, gate or no gate, so the page can render the defect state. `body: null`
+   * for any card that is not a `human` decision, and on a failed read.
+   */
+  confirmGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
+    body: DecisionConfirmationBodyDTO | null;
+  };
   mergeGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
     members: PullRequestApprovalMemberDTO[];
     /** An `auto` card's standing merge-queue exits, read only when there is no gate
@@ -292,6 +302,25 @@ async function readChoiceGate(input: LateReadsInput): Promise<LateReads['choiceG
   }
 }
 
+const NO_CONFIRM_GATE: LateReads['confirmGate'] = { ...NO_CHOICE_GATE, body: null };
+
+/** A `human` decision's gate and body (MOTIR-5954) — only for that card, contained. */
+async function readConfirmGate(input: LateReadsInput): Promise<LateReads['confirmGate']> {
+  if (input.itemType !== 'decision' || input.itemExecutor !== 'human') return NO_CONFIRM_GATE;
+  try {
+    const [read, body] = await Promise.all([
+      approvalGatesService.getForWorkItem(
+        { workItemId: input.itemId, kind: 'decision_confirmation' },
+        input.ctx,
+      ),
+      decisionConfirmationGateService.readBody(input.itemId, input.ctx),
+    ]);
+    return { ...read, body };
+  } catch {
+    return NO_CONFIRM_GATE;
+  }
+}
+
 /** One page of a card's run history — the same default the route serves. */
 export const RUN_HISTORY_PAGE = 20;
 
@@ -323,6 +352,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       monitorHasConnection,
       decisionGate,
       choiceGate,
+      confirmGate,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
       projectAccessService.getCommentCapabilities(projectId, ctx),
@@ -531,6 +561,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       })(),
       readDecisionGate(input),
       readChoiceGate(input),
+      readConfirmGate(input),
     ]);
 
     return {
@@ -558,6 +589,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       monitorHasConnection,
       decisionGate,
       choiceGate,
+      confirmGate,
     };
   })();
 }

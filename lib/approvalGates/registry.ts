@@ -1,5 +1,6 @@
 import type { ApprovalGate, ApprovalGateKind, Prisma, WorkItem } from '@/generated/prisma/client';
 import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
+import type { ConfirmedRecord } from '@/lib/approvalGates/decisionConfirmationRecord';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -7,6 +8,7 @@ import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
 import { acceptanceResultGateHandler } from '@/lib/approvalGates/acceptanceResultHandler';
 import { decisionApprovalGateHandler } from '@/lib/approvalGates/decisionApprovalHandler';
 import { decisionChoiceGateHandler } from '@/lib/approvalGates/decisionChoiceHandler';
+import { decisionConfirmationGateHandler } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
@@ -73,12 +75,17 @@ import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 // MOTIR-4950 registers the FOURTH: `acceptance_result`, a story's acceptance receipt —
 // the kind the approval vocabulary was generalised FROM (§1's evidence table), joining
 // the registry at last (§1's MOTIR-5787 amendment).
+//
+// MOTIR-5954 registers `decision_confirmation`: a person confirms — or overturns — a
+// decision the planner settled WITH them, on a `decision` + `human` work item (Story
+// MOTIR-5871; §1's MOTIR-5952 amendment).
 export type RegisteredGateKind =
   | 'design_result'
   | 'decision_approval'
   | 'acceptance_result'
   | 'pull_request_approval'
-  | 'decision_choice';
+  | 'decision_choice'
+  | 'decision_confirmation';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -153,6 +160,11 @@ export interface GateEffect {
    *  approve and written by the door onto the deciding row, which then records the
    *  option's id as `outcomeRef`. Absent on every other kind's effect. */
   chosenOption?: ChosenOption;
+  /** WHAT A CONFIRMED DECISION'S RECORD WAS (MOTIR-5954) — returned by the
+   *  `decision_confirmation` handler's approve and written by the door onto the
+   *  deciding row: the counting markdown attachment's identity, or `none`. Absent on
+   *  every other kind's effect. */
+  confirmedRecord?: ConfirmedRecord;
 }
 
 /**
@@ -332,6 +344,15 @@ export interface GateHandler<TSubject = unknown> {
 
   /** What `request_changes` DOES, beyond recording the decision. */
   requestChanges(args: GateEffectArgs): Promise<GateEffect>;
+
+  /**
+   * What `overturn` DOES, beyond recording the decision (MOTIR-5956; ADR §1's
+   * MOTIR-5952 amendment, points 6–7) — offered ONLY by `decision_confirmation`,
+   * which is why it is optional here: the door refuses the verb on any kind that
+   * does not supply it. `resolvedStatusKey` is the project's `cancelled` status BY
+   * KEY, or null — never the category fallback, which would write `done`.
+   */
+  overturn?(args: GateEffectArgs): Promise<GateEffect>;
 }
 
 /**
@@ -344,6 +365,7 @@ export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   pull_request_approval: pullRequestApprovalGateHandler,
   acceptance_result: acceptanceResultGateHandler,
   decision_choice: decisionChoiceGateHandler,
+  decision_confirmation: decisionConfirmationGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

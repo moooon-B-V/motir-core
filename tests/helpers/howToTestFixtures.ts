@@ -103,6 +103,8 @@ export const AWAITING_MERGE_GATE: ApprovalGateDTO = {
   decidedUnderAuthority: null,
   decisionSource: null,
   outcomeRef: null,
+  confirmedRecord: null,
+  replanOwed: null,
   chosenOption: null,
   createdAt: '2026-09-13T14:10:00.000Z',
   updatedAt: '2026-09-13T14:10:00.000Z',

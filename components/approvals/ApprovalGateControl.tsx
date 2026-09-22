@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { AlertTriangle, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill, type PillProps } from '@/components/ui/Pill';
+import { FormField } from '@/components/ui/FormField';
+import { Textarea } from '@/components/ui/Textarea';
 import { PortRenderStatusProvider, usePortRenderStatus } from './portRenderStatus';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 import type { GateDecision } from '@/lib/dto/approvalGate';
@@ -123,6 +125,20 @@ export interface GateVerb {
    * names and `onDecide` passes it to the door. Absent on every other verb.
    */
   optionId?: string;
+  /**
+   * A REQUIRED NOTE this verb records (Story MOTIR-5871 · MOTIR-5960; design
+   * `approval-control--decision-confirm.mock.html` Panel 2) — a `decision_confirmation`
+   * gate's *Overturn* says what was ACTUALLY discussed. The confirm band draws the field
+   * and refuses an empty press IN PLACE, before anything reaches the door; the door
+   * refuses it again regardless (`overturn_needs_a_note`). Absent on every other verb.
+   */
+  note?: { label: string; helper: string; required: string };
+  /**
+   * The confirm band's words FOR THIS VERB, when a kind's verbs confirm different acts
+   * (MOTIR-5960 — *Confirming this will:* and *Overturning this will:*). Absent, the
+   * frame-level `confirmTitle` / `confirmConsequences` / `confirmProceedLabel` apply.
+   */
+  confirm?: { title: ReactNode; consequences: ReactNode[]; proceedLabel: string };
 }
 
 export interface ApprovalGateControlProps {
@@ -271,7 +287,12 @@ export interface ApprovalGateControlProps {
    * Record the decision. Resolves to a refusal the frame draws IN PLACE, or
    * null on success — at which point the caller has already reconciled.
    */
-  onDecide: (decision: GateDecision, optionId?: string) => Promise<GateRefusal | null>;
+  onDecide: (
+    decision: GateDecision,
+    optionId?: string,
+    /** The verb's REQUIRED note (MOTIR-5960), trimmed — only a `note` verb passes one. */
+    noteMd?: string,
+  ) => Promise<GateRefusal | null>;
   /**
    * RE-READ what is being decided, in place — the STALE refusal's one control,
    * *Show the current version* (Story MOTIR-5232 · Subtask MOTIR-5235; design
@@ -909,6 +930,9 @@ export function ApprovalGateControl({
   const tGithub = useTranslations('approvalGate.pullRequestApproval.github');
   const tPort = useTranslations('approvalGate.port');
   const [ownPhase, setPhase] = useState<Phase>({ kind: 'awaiting' });
+  // A `note` verb's draft, and whether an empty press was just refused (MOTIR-5960).
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteRefused, setNoteRefused] = useState(false);
   // ⚠️ A REQUEST FROM OUTSIDE THE VERB ROW OPENS THE SAME BAND (§ 28 panel 8a), and it is
   // DERIVED rather than written into state: a press is a render's fact here, and an effect
   // that set the phase would fight every phase the press itself writes (and is what
@@ -930,7 +954,10 @@ export function ApprovalGateControl({
   // a static port and every state MOTIR-4792 shipped are untouched.
   const { reporter, status: portStatus } = usePortRenderStatus();
 
-  const decided = gate.state === 'approved' || gate.state === 'changes_requested';
+  // An OVERTURN is a decision too (MOTIR-5956) — a person refused the direction, with
+  // a note — so it takes the verb-less, decided treatment, never the awaiting arm.
+  const decided =
+    gate.state === 'approved' || gate.state === 'changes_requested' || gate.state === 'overturned';
   // ⚠️ `withdrawn` IS NOT A KIND OF `decided`, and the whole of state `G` is
   // that distinction. `superseded` is written by the PRODUCT when a newer
   // version is published (ADR §6b) — no actor, no authority, no note — so it
@@ -974,6 +1001,13 @@ export function ApprovalGateControl({
   const portFailed = portStatus === 'failed';
 
   async function run(verb: GateVerb) {
+    // A verb that REQUIRES a note is refused in place while it has none (MOTIR-5960):
+    // the band stays open with the field's error, and nothing reaches the door.
+    const note = verb.note ? noteDraft.trim() : undefined;
+    if (verb.note && !note) {
+      setNoteRefused(true);
+      return;
+    }
     setPhase({ kind: 'pending' });
     // A verb that carries its own act runs THAT (§ 28 panel 8a: a row's *Queue again* is
     // an approval, and it is this frame's confirm, pending and refusal that report it).
@@ -981,9 +1015,11 @@ export function ApprovalGateControl({
     // is called exactly as it always was.
     const refusal = verb.perform
       ? await verb.perform()
-      : verb.optionId !== undefined
-        ? await onDecide(verb.decision, verb.optionId)
-        : await onDecide(verb.decision);
+      : note !== undefined
+        ? await onDecide(verb.decision, undefined, note)
+        : verb.optionId !== undefined
+          ? await onDecide(verb.decision, verb.optionId)
+          : await onDecide(verb.decision);
     // On success the CALLER has reconciled and re-rendered us with the decided
     // gate, so there is no success branch to draw here — which is what keeps
     // this component free of the write's own state.
@@ -996,7 +1032,9 @@ export function ApprovalGateControl({
     : decided
       ? gate.state === 'approved'
         ? (approvedStateLabel ?? t('state.approved'))
-        : t('state.changesRequested')
+        : gate.state === 'overturned'
+          ? t('state.overturned')
+          : t('state.changesRequested')
       : phase.kind === 'pending'
         ? t('state.recording')
         : canDecide
@@ -1255,13 +1293,36 @@ export function ApprovalGateControl({
               className={`${sectioned ? 'mt-3 ' : ''}border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3`}
             >
               <p className="text-[13px] font-semibold text-(--el-text)">
-                {confirmTitle ?? t('confirm.title')}
+                {phase.verb.confirm?.title ?? confirmTitle ?? t('confirm.title')}
               </p>
               <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
-                {confirmConsequences.map((line, i) => (
+                {(phase.verb.confirm?.consequences ?? confirmConsequences).map((line, i) => (
                   <li key={i}>{line}</li>
                 ))}
               </ul>
+              {phase.verb.note ? (
+                // THE REQUIRED NOTE (MOTIR-5960, design Panel 2): the shipped FormField +
+                // Textarea, and the FormField error treatment on an empty press.
+                <FormField
+                  className="mt-3"
+                  htmlFor={`gate-note-${gate.id}`}
+                  label={phase.verb.note.label}
+                  helperText={phase.verb.note.helper}
+                  error={noteRefused ? phase.verb.note.required : undefined}
+                  errorVariant="box"
+                >
+                  <Textarea
+                    id={`gate-note-${gate.id}`}
+                    value={noteDraft}
+                    onChange={(event) => {
+                      setNoteDraft(event.target.value);
+                      if (noteRefused) setNoteRefused(false);
+                    }}
+                    rows={3}
+                    aria-invalid={noteRefused || undefined}
+                  />
+                </FormField>
+              ) : null}
               <div className="mt-3 flex flex-wrap justify-end gap-2">
                 <Button
                   variant="ghost"
@@ -1275,7 +1336,9 @@ export function ApprovalGateControl({
                   {t('confirm.cancel')}
                 </Button>
                 <Button variant="primary" size="sm" onClick={() => run(phase.verb)} type="button">
-                  {confirmProceedLabel ?? t('confirm.proceed', { verb: phase.verb.label })}
+                  {phase.verb.confirm?.proceedLabel ??
+                    confirmProceedLabel ??
+                    t('confirm.proceed', { verb: phase.verb.label })}
                 </Button>
               </div>
             </div>

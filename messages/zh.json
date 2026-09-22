@@ -7498,7 +7498,8 @@
         "pull_request_approval": "合并请求审批",
         "pull_request_merge": "合并请求合并",
         "acceptance_result": "验收视频",
-        "decision_choice": "选择"
+        "decision_choice": "选择",
+        "decision_confirmation": "确认决策"
       },
       "reviewRow": "查看 {key} {title}",
       "pullRequest": {
@@ -8308,6 +8309,7 @@
       "recording": "正在记录",
       "approved": "已批准",
       "changesRequested": "已要求修改",
+      "overturned": "已推翻",
       "withdrawn": "已撤回"
     },
     "verb": {
@@ -8669,7 +8671,8 @@
         "decision_approval": "决策审批",
         "pull_request_merge": "合并审批",
         "acceptance_result": "验收审批",
-        "decision_choice": "选择"
+        "decision_choice": "选择",
+        "decision_confirmation": "决策"
       },
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",
@@ -8768,6 +8771,85 @@
       },
       "youSaid": "你说过",
       "stale": "你阅读期间选项已更改。"
+    },
+    "decisionConfirm": {
+      "kindLabel": "确认决策",
+      "sectionTitle": "决策",
+      "meta": "{changes} · 取代 {count} 项",
+      "eyebrow": {
+        "decision": "决策",
+        "whatChanged": "变更内容",
+        "supersedes": "取代 · {count}",
+        "resultingDirection": "结果方向"
+      },
+      "change": {
+        "workflow": "工作流程",
+        "more_requirement": "增加需求",
+        "less_requirement": "减少需求"
+      },
+      "record": {
+        "link": "书面记录",
+        "detail": "{size} · {count} 个 Markdown 附件中最新的一个",
+        "none": "没有书面记录。你确认的就是上面的决策。"
+      },
+      "consequence": "如果这是你们达成的一致，请确认。确认后 {key} 将变为已完成。",
+      "verb": {
+        "confirm": "确认",
+        "overturn": "推翻"
+      },
+      "confirmStep": {
+        "title": "确认后将：",
+        "recordWith": "记录你已确认此决策，并附上书面记录 {file}。",
+        "recordWithout": "记录你已确认此决策。",
+        "done": "将 {key} 变为已完成。",
+        "nothingElse": "不改变其他任何内容——被取代的工作项已体现重新规划后的样子。",
+        "proceed": "确认"
+      },
+      "overturnStep": {
+        "title": "推翻后将：",
+        "record": "记录这不是讨论的结果，并附上你的说明。",
+        "cancelled": "将 {key} 变为已取消。",
+        "owed": "为 {keys} 留下待进行的重新规划。在有人重新规划之前，其他内容不会改变。",
+        "proceed": "推翻"
+      },
+      "note": {
+        "label": "实际讨论的是什么？",
+        "helper": "必填。在重新规划之前，这里是唯一记录正确方向的地方。",
+        "required": "请说明实际讨论的内容——推翻需要附上说明。"
+      },
+      "state": {
+        "confirmed": "已确认",
+        "overturned": "已推翻"
+      },
+      "band": {
+        "confirmedBy": "{name} 已确认 · {when}",
+        "withRecord": "已确认（附书面记录）",
+        "withoutRecord": "已确认（无书面记录）",
+        "recordRemoved": "记录已移除——确认后该文件被删除",
+        "overturnedBy": "{name} 已推翻 · {when}",
+        "replanOwed": "待重新规划",
+        "replanOwedDetail": "针对此决策取代的工作——目前尚未改变任何内容"
+      },
+      "cta": {
+        "body": "全屏查看此决策，然后确认或推翻。",
+        "button": "查看并确认"
+      },
+      "defect": {
+        "title": "暂时无法确认",
+        "no_decision_section": "此决策缺少 ## Decision 部分。需要用一段话写明你们商定的方向。",
+        "no_change_section": "此决策没有说明变更内容。请在 ## What changed 下添加 **Change:** 行。",
+        "unknown_change": "“{value}” 不是决策可记录的变更类型。请使用工作流程、增加需求或减少需求。",
+        "no_supersedes_section": "此决策没有说明取代了什么。请添加 ## Supersedes 部分，列出它改变的已批准工作。",
+        "empty_supersedes": "## Supersedes 未列出任何工作项。决策会改变已批准的工作——请按键列出每一项。",
+        "no_resulting_direction": "此决策缺少 ## Resulting direction。请完整说明史诗现在的方向，这样无需把多个决策拼在一起理解。",
+        "tail": "在描述修正之前无人能确认；描述完整后会立即发起确认。它仍可手动移至已完成。"
+      },
+      "row": {
+        "awaiting": "{changes} · 取代 {count} 项 · {decision}",
+        "confirmedWith": "已确认（附书面记录）· 取代 {count} 项",
+        "confirmedWithout": "已确认（无书面记录）· 取代 {count} 项",
+        "overturned": "已推翻 · {count} 个工作项待重新规划"
+      }
     }
   },
   "approvalOverlay": {

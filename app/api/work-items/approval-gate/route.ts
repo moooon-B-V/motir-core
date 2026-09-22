@@ -7,6 +7,7 @@ import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceServ
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { decisionDocumentService } from '@/lib/services/decisionDocumentService';
 import { choiceGateService } from '@/lib/services/choiceGateService';
+import { decisionConfirmationGateService } from '@/lib/services/decisionConfirmationGateService';
 import { howToTestService } from '@/lib/services/howToTestService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
@@ -180,6 +181,15 @@ async function readSubject(
     case 'decision_choice': {
       const choice = await choiceGateService.readPort(gate.workItemId, ctx);
       return choice ? { state: 'resolved', kind: 'decision_choice', choice } : { state: 'gone' };
+    }
+    // THE CONFIRM PORT (Story MOTIR-5871 · MOTIR-5954): the decision's four sections,
+    // parsed from the work item's own body — which IS the subject — with the record it
+    // would stamp. A body that no longer parses is `gone`, as a choice's is.
+    case 'decision_confirmation': {
+      const confirm = await decisionConfirmationGateService.readPort(gate.workItemId, ctx);
+      return confirm
+        ? { state: 'resolved', kind: 'decision_confirmation', confirm }
+        : { state: 'gone' };
     }
     /* v8 ignore next 4 -- unreachable by construction: `kind` is narrowed to
        `RegisteredGateKind`, and registering a second kind is a compile error

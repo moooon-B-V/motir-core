@@ -42,7 +42,12 @@ describe('toPlanTreeSkeleton', () => {
     });
     // The batched revision map (MOTIR-1531): the epic has a latest revision, the
     // story has none → `revision: null`.
-    const out = toPlanTreeSkeleton([epic, story], new Map([['id_e', 'rev_e']]), new Map());
+    const out = toPlanTreeSkeleton(
+      [epic, story],
+      new Map([['id_e', 'rev_e']]),
+      new Map(),
+      new Map(),
+    );
     expect(out).toEqual([
       {
         key: 'MOTIR-1',
@@ -53,6 +58,7 @@ describe('toPlanTreeSkeleton', () => {
         parentKey: null,
         revision: 'rev_e',
         folderId: null,
+        decision: null,
       },
       {
         key: 'MOTIR-2',
@@ -63,22 +69,23 @@ describe('toPlanTreeSkeleton', () => {
         parentKey: 'MOTIR-1',
         revision: null,
         folderId: null,
+        decision: null,
       },
     ]);
   });
 
   it('maps an empty project to an empty skeleton', () => {
-    expect(toPlanTreeSkeleton([], new Map(), new Map())).toEqual([]);
+    expect(toPlanTreeSkeleton([], new Map(), new Map(), new Map())).toEqual([]);
   });
 
   it('yields parentKey=null for a parent outside the batch', () => {
     const orphan = summary({ id: 'id_o', identifier: 'MOTIR-9', parentId: 'id_missing' });
-    expect(toPlanTreeSkeleton([orphan], new Map(), new Map())[0]!.parentKey).toBeNull();
+    expect(toPlanTreeSkeleton([orphan], new Map(), new Map(), new Map())[0]!.parentKey).toBeNull();
   });
 
   it('leaves revision null when the item has no entry in the batched map', () => {
     const item = summary({ id: 'id_o', identifier: 'MOTIR-9' });
-    expect(toPlanTreeSkeleton([item], new Map(), new Map())[0]!.revision).toBeNull();
+    expect(toPlanTreeSkeleton([item], new Map(), new Map(), new Map())[0]!.revision).toBeNull();
   });
 
   // MOTIR-5410 — the item's OWN folder placement rides the row, from the batched
@@ -86,7 +93,12 @@ describe('toPlanTreeSkeleton', () => {
   it('carries folderId for a filed row and null for every other row', () => {
     const filed = summary({ id: 'id_f', identifier: 'MOTIR-3', kind: 'epic' });
     const loose = summary({ id: 'id_l', identifier: 'MOTIR-4', kind: 'epic' });
-    const out = toPlanTreeSkeleton([filed, loose], new Map(), new Map([['id_f', 'fold_1']]));
+    const out = toPlanTreeSkeleton(
+      [filed, loose],
+      new Map(),
+      new Map([['id_f', 'fold_1']]),
+      new Map(),
+    );
     expect(out.map((r) => [r.key, r.folderId])).toEqual([
       ['MOTIR-3', 'fold_1'],
       ['MOTIR-4', null],
@@ -109,8 +121,46 @@ describe('toSkeletonRows', () => {
       ],
       new Map(),
       new Map([['id_a', 'fold_9']]),
+      new Map(),
     );
     expect(rows[0]!.folderId).toBe('fold_9');
+  });
+
+  // MOTIR-5958 — a `human` decision's confirmation rides the row from the batched
+  // map; every other row carries `decision: null`.
+  it('carries the decision block for a decision row and null for every other row', () => {
+    const block = {
+      state: 'confirmed' as const,
+      decidedAt: '2026-09-21T00:00:00.000Z',
+      replanOwed: null,
+    };
+    const rows = toSkeletonRows(
+      [
+        {
+          id: 'id_d',
+          parentId: null,
+          kind: 'task',
+          identifier: 'MOTIR-8',
+          title: 'D',
+          status: 'done',
+        },
+        {
+          id: 'id_x',
+          parentId: null,
+          kind: 'task',
+          identifier: 'MOTIR-9',
+          title: 'X',
+          status: 'todo',
+        },
+      ],
+      new Map(),
+      new Map(),
+      new Map([['id_d', block]]),
+    );
+    expect(rows.map((r) => [r.key, r.decision])).toEqual([
+      ['MOTIR-8', block],
+      ['MOTIR-9', null],
+    ]);
   });
 });
 

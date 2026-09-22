@@ -83,6 +83,32 @@ export const attachmentRepository = {
     });
   },
 
+  /**
+   * A DECISION'S WRITTEN RECORDS (Story MOTIR-5871 · MOTIR-5954 / MOTIR-5960; ADR
+   * `approval-gates.md` §1's MOTIR-5952 amendment, point 8) — every markdown file the
+   * item's attachments panel lists (`text/markdown`, or a `.md` filename), NEWEST
+   * first: the first is the record, the count is what the port names, and the ids say
+   * whether a STAMPED record still exists. The SAME source predicate as the panel, so a
+   * design result's extracted `design-notes.md` — markdown too, but lifecycle-owned —
+   * never counts.
+   */
+  async findMarkdownByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Attachment[]> {
+    return tx.attachment.findMany({
+      where: {
+        workItemId,
+        source: { notIn: [...LIFECYCLE_OWNED_SOURCES] },
+        OR: [
+          { mimeType: 'text/markdown' },
+          { originalFilename: { endsWith: '.md', mode: 'insensitive' } },
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   /** The panel's total count ("Show more (N)" + the header badge, 5.2.2). */
   async countByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<number> {
     const client = tx ?? dbRead;

@@ -145,6 +145,17 @@ function reads(): LateReads {
       movedSince: [],
       body: null,
     },
+    // Not a `human` decision — no confirm gate, no body (MOTIR-5954).
+    confirmGate: {
+      gate: null,
+      canDecide: false,
+      routedToLabel: null,
+      earlierApproval: null,
+      settingsDoor: null,
+      stamp: null,
+      movedSince: [],
+      body: null,
+    },
   };
 }
 
@@ -313,6 +324,8 @@ describe('the late stack — a design result with open linked pull requests (Q8)
             decidedUnderAuthority: null,
             decisionSource: null,
             outcomeRef: null,
+            confirmedRecord: null,
+            replanOwed: null,
             chosenOption: null,
             createdAt: '2026-09-14T00:00:00.000Z',
             updatedAt: '2026-09-14T00:00:00.000Z',

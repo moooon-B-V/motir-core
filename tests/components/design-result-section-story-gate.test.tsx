@@ -90,6 +90,8 @@ function gate(state: ApprovalGateDTO['state'], id: string): ApprovalGateDTO {
     decidedUnderAuthority: decided ? 'assignee' : null,
     decisionSource: decided ? 'ui' : null,
     outcomeRef: state === 'approved' ? 'done' : null,
+    confirmedRecord: null,
+    replanOwed: null,
     chosenOption: null,
     createdAt: '2026-09-08T04:00:00.000Z',
     updatedAt: '2026-09-08T04:00:00.000Z',
@@ -120,6 +122,12 @@ const EXPECTED: Record<string, (canDecide: boolean) => void> = {
   },
   changes_requested: () => {
     expect(screen.getByText(en.approvalGate.record.willRepublish)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
+  },
+  // MOTIR-5956 — a decided state, never the awaiting door. (The door refuses `overturn`
+  // on a design gate, so this is the fold's totality rather than a real design row.)
+  overturned: () => {
+    expect(screen.getByText(en.approvalGate.state.overturned, { exact: true })).toBeTruthy();
     expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
   },
   superseded: () => {

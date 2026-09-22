@@ -5,6 +5,13 @@ import type {
   ParsedChoice,
 } from '@/lib/approvalGates/choiceOptions';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
+import type { ConfirmedRecord } from '@/lib/approvalGates/decisionConfirmationRecord';
+import type {
+  DecisionChange,
+  DecisionDefect,
+  DecisionDraft,
+  ParsedDecision,
+} from '@/lib/approvalGates/decisionRecord';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
 // and this DTO is imported by client components. An `import type` is erased.
@@ -46,7 +53,8 @@ export type ApprovalGateKindDTO =
   | 'pull_request_approval'
   | 'pull_request_merge'
   | 'acceptance_result'
-  | 'decision_choice';
+  | 'decision_choice'
+  | 'decision_confirmation';
 
 /**
  * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
@@ -127,7 +135,13 @@ export interface HeldTransitionDTO {
 
 /** Where a gate's decision stands (ADR §6b). Mirrors the `ApprovalGateState`
  *  Prisma enum. */
-export type ApprovalGateStateDTO = 'awaiting' | 'approved' | 'changes_requested' | 'superseded';
+export type ApprovalGateStateDTO =
+  | 'awaiting'
+  | 'approved'
+  | 'changes_requested'
+  | 'superseded'
+  /** A person refused a `decision_confirmation` gate's direction (MOTIR-5956) — terminal. */
+  | 'overturned';
 
 /**
  * WHY a `superseded` gate was withdrawn — mirrors the `ApprovalGateSupersedeCause`
@@ -181,7 +195,7 @@ export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
  * `decision_choice`), which is why the door takes a decision rather than
  * exposing `approve()` / `requestChanges()` as separate methods.
  */
-export type GateDecision = 'approve' | 'request_changes' | 'choose';
+export type GateDecision = 'approve' | 'request_changes' | 'choose' | 'overturn';
 
 /** WHAT A CHOICE'S DECISION PICKED — see {@link ChosenOption} (MOTIR-5893). */
 export type ChosenOptionDTO = ChosenOption;
@@ -252,6 +266,18 @@ export interface ApprovalGateDTO {
   /** WHAT WAS CHOSEN, on an approved `decision_choice` gate (MOTIR-5893) — and there
    *  `outcomeRef` is the option's id rather than a status key. Null everywhere else. */
   chosenOption: ChosenOptionDTO | null;
+  /** WHAT A CONFIRMED DECISION'S WRITTEN RECORD WAS, on an approved
+   *  `decision_confirmation` gate (MOTIR-5954) — the markdown attachment's identity,
+   *  or `{ kind: 'none' }`. Null everywhere else. */
+  confirmedRecord: ConfirmedRecordDTO | null;
+  /**
+   * THE RE-PLAN AN OVERTURN OWES (MOTIR-5956; ADR §1's MOTIR-5952 amendment, point 7)
+   * — the work items the overturned decision's `## Supersedes` named. DERIVED, never
+   * stored: the overturned gate plus its subject's parse. Null on every gate that is
+   * not an `overturned` `decision_confirmation`. The overturn itself changed none of
+   * them: re-planning is a planning act a person starts.
+   */
+  replanOwed: { keys: string[] } | null;
 
   createdAt: string;
   updatedAt: string;
@@ -414,6 +440,89 @@ export type ChoiceBodyDTO =
   | { ok: true; port: DecisionChoicePortDTO }
   | { ok: false; defects: ChoiceDefectDTO[]; draft: ChoiceDraft };
 
+/** WHAT A CONFIRMED DECISION'S RECORD WAS — see {@link ConfirmedRecord} (MOTIR-5954). */
+export type ConfirmedRecordDTO = ConfirmedRecord;
+
+/**
+ * A DECISION'S PORT — what the frame renders for a `decision_confirmation` gate
+ * (Story MOTIR-5871; ADR §1's MOTIR-5952 amendment, point 2): the decision, what
+ * changed, what it supersedes and the resulting direction — the parser's answer
+ * verbatim (`lib/approvalGates/decisionRecord.ts`) — plus the record it would stamp
+ * if confirmed now, so the port can draw the link or its absence (point 8).
+ */
+export type DecisionConfirmationPortDTO = Omit<ParsedDecision, 'ok'> & {
+  record: ConfirmedRecordDTO;
+  /** Each `## Supersedes` key with the work item's TITLE, or null for a key that names
+   *  nothing in this project — drawn as plain mono text, never a defect (MOTIR-5960). */
+  supersedesItems: SupersededItemDTO[];
+  /** How many counting markdown records the item holds; the port names the newest. */
+  recordCount: number;
+  /** The ids of those records — a decided band reads *record removed* when its STAMPED
+   *  attachment is no longer among them, never by comparing it with the newest. */
+  presentRecordIds: string[];
+  /** The epic this decision governs — the overturned band's Re-plan door. */
+  epic: DecisionEpicDTO | null;
+};
+
+/**
+ * THE EPIC a decision governs, as the overturned band's **Re-plan** entrance needs it
+ * (MOTIR-5960; design Panel 4a — the shipped `WorkItemPlanEntrance` on the epic). Null
+ * when the decision has no epic ancestor. `canPlan` is the VIEWER's `work_item:edit`,
+ * resolved with the read so the item page and the overlay draw the same door.
+ */
+export interface DecisionEpicDTO {
+  key: string;
+  title: string;
+  hasDescription: boolean;
+  archived: boolean;
+  statusCategory: 'todo' | 'in_progress' | 'done' | null;
+  canPlan: boolean;
+}
+
+/** One key a decision supersedes, as the port's work-item chip draws it (MOTIR-5960). */
+export interface SupersededItemDTO {
+  key: string;
+  title: string | null;
+}
+
+/** The ONE reason a decision's body cannot be asked yet — the closed set point 3 fixes. */
+export type DecisionDefectDTO = DecisionDefect;
+
+/**
+ * WHAT THE ITEM PAGE KNOWS ABOUT A DECISION'S BODY, gate or no gate (MOTIR-5954,
+ * the card's point 6). A defective body raises no gate, so the page cannot learn
+ * its state from one: this carries the parse itself, and the port renders the
+ * defect state from it (MOTIR-5960). Null for a work item that is not a `human`
+ * decision.
+ */
+export type DecisionConfirmationBodyDTO =
+  | { ok: true; port: DecisionConfirmationPortDTO }
+  | {
+      ok: false;
+      defect: DecisionDefectDTO;
+      draft: DecisionDraft;
+      record: ConfirmedRecordDTO;
+      supersedesItems: SupersededItemDTO[];
+      recordCount: number;
+      presentRecordIds: string[];
+      epic: DecisionEpicDTO | null;
+    };
+
+/**
+ * WHICH DECISION is waiting, at row scale (MOTIR-5954) — read from the work item's
+ * own body. What a DECIDED row says about the record is the gate's own stamp
+ * (`confirmedRecord`), never re-read from a body that may since have changed.
+ */
+export interface DecisionConfirmationSubjectSummaryDTO {
+  kind: 'decision_confirmation';
+  /** The `## Decision` section's first line, as written. */
+  decision: string;
+  /** The `**Change:**` values. */
+  changes: DecisionChange[];
+  /** How many work items `## Supersedes` names. */
+  supersedesCount: number;
+}
+
 export interface DecisionChoiceSubjectSummaryDTO {
   kind: 'decision_choice';
   /** How many options the body offers. */
@@ -442,6 +551,7 @@ export interface UnregisteredSubjectSummaryDTO {
     | 'acceptance_result'
     | 'pull_request_approval'
     | 'decision_choice'
+    | 'decision_confirmation'
   >;
 }
 
@@ -461,6 +571,7 @@ export type ApprovalGateSubjectSummaryDTO =
   | PullRequestApprovalSubjectSummaryDTO
   | AcceptanceResultSubjectSummaryDTO
   | DecisionChoiceSubjectSummaryDTO
+  | DecisionConfirmationSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */
@@ -569,7 +680,7 @@ export interface ApprovalQueuePageDto {
 export interface ApprovalRecordDecidedRowDto {
   gateId: string;
   kind: ApprovalGateKindDTO;
-  state: Extract<ApprovalGateStateDTO, 'approved' | 'changes_requested'>;
+  state: Extract<ApprovalGateStateDTO, 'approved' | 'changes_requested' | 'overturned'>;
   /** ISO-8601 — when the decision was recorded. The section's sort key. */
   decidedAt: string;
   /**
@@ -600,6 +711,12 @@ export interface ApprovalRecordDecidedRowDto {
    * choice sent back with *None of these*.
    */
   chosenOption: ChosenOptionDTO | null;
+  /**
+   * WHAT A CONFIRMED DECISION'S RECORD WAS (MOTIR-5961) — off the immutable row, so the
+   * row says *with* or *without a written record* after the body changed. Null on every
+   * other kind and on an overturned decision.
+   */
+  confirmedRecord: ConfirmedRecordDTO | null;
 }
 
 /** One SECTION of the room: its rows on this page, and its total over every page. */
@@ -671,6 +788,16 @@ export type ApprovalGateOverlaySubjectDTO =
        * body that no longer parses is `gone`: there is nothing left to pick from.
        */
       choice: DecisionChoicePortDTO;
+    }
+  | {
+      state: 'resolved';
+      kind: 'decision_confirmation';
+      /**
+       * THE CONFIRM PORT (Story MOTIR-5871 · MOTIR-5954) — the parsed decision the gate
+       * asks about, with the record it would stamp. A body that no longer parses is
+       * `gone`: there is nothing left to confirm.
+       */
+      confirm: DecisionConfirmationPortDTO;
     }
   | {
       state: 'resolved';

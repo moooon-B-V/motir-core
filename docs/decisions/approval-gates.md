@@ -100,6 +100,17 @@
   plus one refusal, the effect is terminal (Workflow A), and the record stamps
   the chosen option.
 
+- **AMENDED 2026-09-21 (MOTIR-5952, for Story MOTIR-5871), at §1, §8 and
+  _Deliberately NOT decided here_ — the `decision_confirmation` kind is
+  REGISTERED.** A `type: decision` work item with `executor: human` — a decision
+  the planner already made WITH the person, written down so they can accept it —
+  raised no gate at all. §1 gains a sixth kind, keyed on exactly that pair: its
+  subject is the work item's own body, parsed into four sections; its verbs are
+  **Confirm** and **Overturn**, and Overturn is a refusal with its own state
+  rather than `request_changes`; both effects are terminal (Workflow A); the
+  written record is OPTIONAL and, until pages ship, a markdown ATTACHMENT; and
+  two decisions on one epic ACCUMULATE rather than supersede.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -181,19 +192,20 @@ half-wired.
 **The registry** is `Record<ApprovalGateKind, GateHandler>`. **What a third kind
 must supply to register — the table this record exists to make re-usable:**
 
-| a handler supplies                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 | for `decision_choice` — §1's MOTIR-5887 AMENDMENT                                                                                                                                                                 |
-| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **how to resolve the SUBJECT** from the gate row   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) | the `## Why this is a choice`, `## Options` and `## What this choice gates` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 1–2) |
-| **who it ROUTES to**                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    | the same                                                                                                                                                                                                          |
-| **which PERMISSION authorises a decision**         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            | `work_item:edit`, under §2's AUTHORITY rule in force (point 4)                                                                                                                                                    |
-| **which STATUS TRANSITION the gate owns**, or none | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  | the move into the project's `done` category — a choice never has a pull request (point 6)                                                                                                                         |
-| **what `approve` DOES**                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  | there is no `approve`: each OPTION is a verb, `choose(optionId)`, which records the pick and writes `done` (points 5–6)                                                                                           |
-| **what `request_changes` DOES**                    | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 | **None of these — revise the options**: records `changes_requested`, moves nothing (point 5)                                                                                                                      |
-| **what to RETAIN on approval**, or nothing         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              | nothing to pin — the chosen option is SNAPSHOTTED onto the immutable gate row (point 7)                                                                                                                           |
+| a handler supplies                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 | for `decision_choice` — §1's MOTIR-5887 AMENDMENT                                                                                                                                                                 | for `decision_confirmation` — §1's MOTIR-5952 AMENDMENT                                                                                                                                                                                                                                             |
+| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **how to resolve the SUBJECT** from the gate row   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) | the `## Why this is a choice`, `## Options` and `## What this choice gates` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 1–2) | the `## Decision`, `## What changed`, `## Supersedes` and `## Resulting direction` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 2–3). The optional record is resolved beside it, never as the subject (point 8) |
+| **who it ROUTES to**                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    | the same                                                                                                                                                                                                          | the same                                                                                                                                                                                                                                                                                            |
+| **which PERMISSION authorises a decision**         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            | `work_item:edit`, under §2's AUTHORITY rule in force (point 4)                                                                                                                                                    | `work_item:edit`, under §2's AUTHORITY rule in force (point 5)                                                                                                                                                                                                                                      |
+| **which STATUS TRANSITION the gate owns**, or none | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  | the move into the project's `done` category — a choice never has a pull request (point 6)                                                                                                                         | the move into the project's `done` category on Confirm, and into `cancelled` on Overturn — a `human` decision never has a pull request (point 7)                                                                                                                                                    |
+| **what `approve` DOES**                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  | there is no `approve`: each OPTION is a verb, `choose(optionId)`, which records the pick and writes `done` (points 5–6)                                                                                           | **Confirm**: records the decision, stamps the record or its absence, writes `done` (points 7–8)                                                                                                                                                                                                     |
+| **what `request_changes` DOES**                    | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 | **None of these — revise the options**: records `changes_requested`, moves nothing (point 5)                                                                                                                      | **not offered — OVERTURN instead**: records `overturned` with its REQUIRED note, writes `cancelled`, touches no other work item; the re-plan it owes is derived from `## Supersedes` (points 6–7)                                                                                                   |
+| **what to RETAIN on approval**, or nothing         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              | nothing to pin — the chosen option is SNAPSHOTTED onto the immutable gate row (point 7)                                                                                                                           | nothing to pin — the record's IDENTITY is snapshotted onto the immutable gate row; the body is the subject (point 8)                                                                                                                                                                                |
 
 _The third column is added by §8's FIFTH AMENDMENT (MOTIR-5672, 2026-09-19); the
 first two are unchanged. The fourth is added by §1's MOTIR-5887 amendment
-(2026-09-21), below, whose points it cites._
+(2026-09-21), below, whose points it cites. The fifth is added by §1's MOTIR-5952
+amendment (2026-09-21), below the MOTIR-5887 one, whose points it cites._
 
 A third kind is then a row in the enum, a handler, and a renderer for its
 subject body. **No second vocabulary, no second control, no second decide door.**
@@ -772,9 +784,338 @@ decision` + `executor: human` — the verb-set paragraph above, §8's fifth
 > option row, then commit it — is MOTIR-5888's to draw.
 >
 > **Not decided here:** where a choice work item may be created or when one is
-> warranted (MOTIR-4915's placement rule); the DECISION work item's own gate
-> (MOTIR-5871); and whether a lay session may write a choice's body
+> warranted (MOTIR-4915's placement rule); ~~the DECISION work item's own gate
+> (MOTIR-5871)~~ **AMENDED (MOTIR-5952, 2026-09-21): decided — §1's MOTIR-5952
+> amendment, directly below**; and whether a lay session may write a choice's body
 > (MOTIR-5870).
+
+> ### §1 — AMENDMENT (MOTIR-5952, 2026-09-21): `decision_confirmation` is REGISTERED — keyed on a `human` decision, its subject is the parsed body, its verbs are Confirm and Overturn, its record is optional, and decisions ACCUMULATE
+>
+> **What was MISSING.** Story MOTIR-5871 makes the planner lay a `decision` work
+> item at the epic whenever a re-plan changes already-approved work by WORKFLOW,
+> MORE requirement or LESS requirement. That work item carries a decision the
+> planner settled WITH the person in the conversation, and it needs a gate the
+> person can REFUSE: _"that's not what we discussed"_. Verified on `origin/main`
+> `5b9ad67fb`, no existing kind asks the question:
+>
+> - `decision_approval` answers `null` — `asksTheDecisionQuestion`
+>   (`lib/approvalGates/decisionDocument.ts`) is `type === 'decision' &&
+executor === 'coding_agent'`, and its subject is a `docs/decisions/*.md`
+>   file captured from an OPEN pull request, which a `human` decision never has.
+> - `decision_choice` requires `type: choice` (the MOTIR-5887 amendment above).
+> - `design_result`, `pull_request_approval`, `pull_request_merge` and
+>   `acceptance_result` each need an evidence row or a pull request.
+>
+> So a `human` decision work item was plain text: nothing asked anybody to confirm
+> it, nothing held a hand move to `done`, and nothing recorded who agreed. **This
+> amendment settles the HANDLER ROW** — the sixth column of §1's table cites the
+> points below. It ships no code: the kind, its parser, its raise and Confirm are
+> MOTIR-5954's; Overturn is MOTIR-5956's; the port is drawn by MOTIR-5953 and built
+> by MOTIR-5960 and MOTIR-5961; the planner's rule is MOTIR-5955's (the runbook)
+> and MOTIR-5957's (the shipped planner).
+>
+> #### 1 — the KIND is `decision_confirmation`, and the three decision kinds are DISJOINT over `(type, executor)`
+>
+> | `type`     | `executor`     | kind                                                                                   |
+> | ---------- | -------------- | -------------------------------------------------------------------------------------- |
+> | `decision` | `coding_agent` | `decision_approval` — **unchanged**: the agent researched and proposed, in a PR        |
+> | `decision` | `human`        | **`decision_confirmation`** — the planner decided WITH the person; the person confirms |
+> | `choice`   | any            | `decision_choice` — **unchanged**: nobody decided; the person picks                    |
+>
+> **Why a NEW kind rather than one of the two beside it.** Reusing
+> `decision_approval` would mean giving a `human` decision a pull request so
+> there is a document to capture, and a `human` decision is never dispatched, so
+> no run exists to open one. Reusing `decision_choice` would put a decided
+> question behind a verb set whose premise is that nothing was decided. The
+> keying is the taxonomy ADR's Amendment 3 §1d gloss read literally: _"a decision
+> already made — by the agent researching it, or by the planner with the person in
+> conversation — written down so a person can accept it"_. The executor is what
+> tells the two halves of that sentence apart, and its default stays `human`.
+>
+> **The gate is keyed on `type` + `executor` and NOTHING ELSE** — not on where the
+> work item hangs, and not on whether a re-plan produced it. A `human` decision
+> written by hand, anywhere, gets the same gate.
+>
+> #### 2 — the SUBJECT is the work item's own BODY, parsed — the `decision_choice` arrangement
+>
+> The planner writes the body at LAY, in the conversation where the direction was
+> settled (Story MOTIR-5870's phase exception), so the content exists before any
+> record could. A structured copy beside it would be a second source of truth
+> with two writers. The canonical structure, in this ORDER:
+>
+> ```
+> ## Decision
+> <the direction agreed in the conversation, in one paragraph>
+>
+> ## What changed
+> **Change:** <workflow · more requirement · less requirement>
+> <what the approved plan said before, and what it says now>
+>
+> ## Supersedes
+> <each already-approved work item this re-plan changed or removed, by key — and
+> any earlier decision work item on this epic that this one partially contradicts,
+> by key; never empty>
+>
+> ## Resulting direction
+> <the epic's direction in full after this decision, so a reader never has to
+> fold N decisions together>
+> ```
+>
+> - **`**Change:**` carries ONE OR MORE of three values**, separated by `·` or a
+>   comma, each matched case-insensitively:
+>
+>   | `**Change:**` value | change id          | what moved                                               |
+>   | ------------------- | ------------------ | -------------------------------------------------------- |
+>   | `workflow`          | `workflow`         | how the approved work is sequenced or performed          |
+>   | `more requirement`  | `more_requirement` | the person committed to MORE than the approved plan held |
+>   | `less requirement`  | `less_requirement` | the person dropped part of what the approved plan held   |
+>
+>   **DEVIATION from the planner's recommendation, with its reason:** the card
+>   read the line as one value. One re-plan routinely drops a story AND
+>   re-orders what remains, and forcing a single value makes the decision
+>   misstate itself; the three remain a CLOSED set, so an unknown value is still
+>   a defect. The values are stored in the order written, de-duplicated.
+>
+> - **`## Supersedes` is a list of work-item KEYS** — every `<PROJECT>-<n>` token
+>   in the section, bare or as the text of a link, in the order written,
+>   de-duplicated. The parser is PURE and does not resolve them: a key that names
+>   nothing renders as plain text on the port, never as a defect, because a
+>   removed work item is precisely what a LESS-requirement decision supersedes.
+> - **`subjectVersion` is a hash of the four sections**, the section bodies
+>   whitespace-normalised. Editing anything else in the body — a closing note, a
+>   typo outside the four — does not retire a pending confirmation; changing the
+>   decision does. An edit that moves it trips the shipped stale-stamp refusal
+>   (`APPROVAL_GATE_STALE_SUBJECT`, MOTIR-5232) for anyone who pressed against
+>   the old version.
+> - **Where the subject lives stays the handler's business** (§1's MOTIR-4911
+>   amendment): the gate row stores the opaque `subjectId` (the work item).
+>
+> #### 3 — a COMPLETE body raises a gate; an incomplete one raises NONE and says why
+>
+> The parser (`parseDecisionRecord`, beside `choiceOptions.ts`) returns the
+> parsed sections or EXACTLY ONE defect reason — the FIRST it meets, in the
+> section order above. The set is CLOSED:
+>
+> | reason                   | when                                                                 |
+> | ------------------------ | -------------------------------------------------------------------- |
+> | `no_decision_section`    | `## Decision` is missing or empty                                    |
+> | `no_change_section`      | `## What changed` is missing, or carries no `**Change:**` line       |
+> | `unknown_change`         | a `**Change:**` value is not one of the three — the reason QUOTES it |
+> | `no_supersedes_section`  | `## Supersedes` is missing                                           |
+> | `empty_supersedes`       | `## Supersedes` names no work-item key                               |
+> | `no_resulting_direction` | `## Resulting direction` is missing or empty                         |
+>
+> A body that does not parse raises NO gate, and the item renders the reason
+> rather than a broken port — `decision_choice`'s point 2 behaviour. **With no
+> gate, nothing is held**: a hand move to `done` on a defective decision
+> succeeds, which is the _"both steps optional"_ promise of point 7 applied to the
+> gate itself. Motir helps build an auditable project; it does not trap a person
+> behind a body they chose not to finish.
+>
+> **Why `## Supersedes` may never be empty.** The trigger for laying this work
+> item is a re-plan that changes ALREADY-APPROVED work; a decision that
+> supersedes nothing was laid on no trigger, and an empty section is how that
+> mistake shows.
+>
+> #### 4 — RAISE and SUPERSEDE: `choiceGateService.reconcile`'s shape
+>
+> - **Raised** `awaiting` on a `decision` + `human` work item whose body parses
+>   complete, that has **no open blocker**, and that is **not in a
+>   `done`-category status** — at three call sites, the ones `reconcileChoiceGate`
+>   already has in `workItemsService`: on create; on an update to `descriptionMd`,
+>   `type` **or `executor`**; and when its last open blocker reaches `done`. The
+>   work item then moves to `in_review` along DECLARED workflow edges only, as a
+>   choice does; where the workflow offers no path, the gate is still raised and
+>   the status left alone.
+> - **Superseded `withdrawn`** when the work item stops being a `human`
+>   decision (its type or its executor changed). `executor` is the new trigger a
+>   choice does not have: flipping a decision to `coding_agent` hands it to
+>   `decision_approval`, and the pending confirmation must not linger beside it.
+> - **Superseded `republished`** when an edit moves `subjectVersion`, followed by
+>   a fresh gate from the new body; when the body stops parsing, superseded and
+>   none raised. No new `ApprovalGateSupersedeCause` value is needed.
+> - **A hand move to `cancelled` WITHDRAWS the question; it is not an overturn.**
+>   A hand move to `done` is HELD while the gate awaits (§6d's rule 1 — the kind's
+>   status intent resolves to the `done` category), but `cancelled` is never held
+>   (`heldMoves.ts`, `CANCELLED_STATUS_KEY`), and the shipped pull-back rule
+>   already supersedes every awaiting gate on that move with cause `pulled_back`
+>   (§6d's amendment, rule 6 — `workItemsService.applyStatusTransition`). Nothing
+>   new is built for it; it is stated because the two look alike from outside:
+>   an overturn is a DECISION with a decider and a note, a cancel is the question
+>   going away, and the record tells them apart by carrying no decider.
+> - `raiseOnReviewEntry` skips this kind, as it skips `decision_choice`: the raise
+>   is the reconcile's, never a review-entry side effect.
+>
+> #### 5 — ROUTING and AUTHORITY: §2, unchanged
+>
+> Routed to `assigneeId ?? reporterId`. Both verbs are decided under §2's
+> AUTHORITY rule **in force** — the assignee, or the reporter when there is no
+> assignee (§2's second amendment), or a holder of `approval:decide_any` (§2's
+> third amendment) — with `work_item:edit` as the permission floor. The person
+> who settled the direction with the planner is the natural assignee; nothing in
+> the gate requires it.
+>
+> #### 6 — the VERBS are CONFIRM and OVERTURN, and Overturn is NOT `request_changes`
+>
+> - **Confirm** is this kind's `approve`.
+> - **Overturn** is a new verb on the decide door (`GateDecision` gains
+>   `overturn`, on the route, the server action and the service — MOTIR-5956).
+>   _"That's not what we discussed"_ does not ask somebody to revise the text; it
+>   refuses the DIRECTION, and the honest consequence is a re-plan of the work it
+>   changed. Folding it into `request_changes` would leave a refused decision
+>   looking like one waiting for an edit.
+>   - **(a) A new `ApprovalGateState` value: `overturned`**, not an overloaded
+>     `changes_requested`. `changes_requested` is non-terminal in every kind that
+>     has it — the subject is revised and a fresh gate asks again — and a reader
+>     counting refusals would mis-read an overturn as a pending revision. The
+>     decided-row immutability trigger (`trg_approval_gate_decided_immutable`)
+>     covers it exactly as it covers the other decided states.
+>   - **(b) Overturn REQUIRES a note** — what was actually discussed. An empty
+>     note is refused with a typed validation error. The note is the only place
+>     the correct direction is written down until the re-plan happens.
+>   - **(c) Both verbs sit under point 5's authority** — no separate permission.
+> - **`request_changes` is NOT offered on this kind**, and `overturn` is offered
+>   on NO other kind; the decide door refuses either with
+>   `ApprovalGateVerbNotOfferedError`. A decision whose WORDING is off is edited
+>   (point 4 re-asks); one whose DIRECTION is off is overturned. There is no third
+>   case for a middle verb to cover.
+>
+> #### 7 — the EFFECTS are TERMINAL: Workflow A
+>
+> A `human` decision never has a pull request, so nothing would ever merge and
+> nothing else would write a status.
+>
+> - **Confirm** writes the project's `done`-category status through
+>   `applyStatusTransition` with `decidingGateId` — `decision_choice`'s point 6,
+>   exempting only this gate from the held-move guard (§6d's amendment, rule 5).
+>   `outcomeRef` carries `statusWritten`, as on every kind but `decision_choice`.
+> - **Overturn** writes the project's `cancelled` status (category `done`,
+>   `lib/workflows/defaultWorkflow.ts`) through the same exempt path, so the
+>   decision stops counting as open work, and stamps `overturned` with its note.
+>   **It writes to NO other work item.** The re-plan it implies is a planning act a
+>   person starts — the gate does not undo the plan, move a status or file a card.
+>   **What is owed is DERIVED, not stored twice**: an overturned gate plus the keys
+>   its subject's `## Supersedes` parsed. It is readable in two places — the
+>   port's overturned record band (MOTIR-5960), and the gate DTO as
+>   `replanOwed: { keys: string[] }` (null on any other state), which the AI
+>   boundary read carries to the planner (MOTIR-5958).
+> - A project whose workflow has no `cancelled` status still records the
+>   overturn; the status is then left where it is and the stamp's
+>   `outcomeRef` is null. The DECISION is the audit; the status is a
+>   convenience.
+>
+> #### 8 — the RECORD is OPTIONAL, never what the gate reads, and — for now — an ATTACHMENT
+>
+> The gate's subject is the body. A longer written record is welcome and is never
+> a precondition: **a decision is confirmable with no record at all.**
+>
+> **The record's interim home is an ATTACHMENT on the decision work item — a
+> TEMPORARY solution by requester decision (2026-09-21), until the pages epic
+> ships and a PAGE replaces it through MOTIR-5761's resolver.** A page is the
+> long-term home because an epic can span repositories and a `docs/decisions/*.md`
+> file must pick one; a `human` decision is never dispatched, so no run or pull
+> request writes one either. **The pull-request / `docs/decisions/` path is not a
+> record for this kind.**
+>
+> - **Which attachment counts:** one linked to the decision work item itself,
+>   that the item's attachments PANEL lists (the source is not in
+>   `attachmentRepository.LIFECYCLE_OWNED_SOURCES` — so a design result's
+>   extracted `design-notes.md`, which is `text/markdown` too, never counts), and
+>   that is MARKDOWN: `mimeType` `text/markdown`, or an `originalFilename` ending
+>   in `.md`. With more than one, the NEWEST by `createdAt`, and the port says
+>   which file it chose. No repository and no pull request is involved.
+> - **The STAMP at Confirm** — the `Attachment` row carries no content hash, so
+>   the stamp is its identity: `{ kind: 'attachment', attachmentId,
+originalFilename, mimeType, sizeBytes, createdAt }`, written into a new
+>   nullable JSON column on `approval_gate` in the deciding write, under the
+>   decided-row trigger — `decision_choice`'s `chosenOption` pattern. With no
+>   counting attachment it stamps `{ kind: 'none' }`. **A later replacement is
+>   detectable by ID, not by content**: a different newest attachment is a
+>   different id, and nothing can tell whether an edited file with the same name
+>   says the same thing. That is the honest limit of an attachment, and the page
+>   arm's reason to exist.
+> - **Deletion.** `attachmentsService.deleteAttachment` is a HARD delete — the
+>   row is unlinked in the transaction and removed once its blob is gone, with no
+>   tombstone — so a confirmed record can vanish. The AUDIT survives because the
+>   subject was the body and the stamp holds the file's identity. The record band
+>   then reads **_record removed_**, naming the stamped filename with no link;
+>   never a broken link.
+> - **No record** — the band reads, in words, **_Confirmed without a written
+>   record_**; with one, **_Confirmed with a written record_** and the file's
+>   name as a link. Neither is an error.
+> - **The move to pages is a RESOLVER change, never a migration on the gate
+>   table** (§1's MOTIR-4911 amendment). The seam is one function,
+>   `resolveDecisionRecord(workItemId)`, returning `{ kind: 'attachment', … }` or
+>   `{ kind: 'none' }`; MOTIR-5761 adds a `{ kind: 'page', pageId, … }` arm and
+>   the renderer that draws it. The stamp is a DISCRIMINATED union for exactly
+>   that reason: a page stamp is a new arm in a JSON column, and every gate
+>   confirmed against an attachment keeps reading as one.
+>
+> #### 9 — DECISIONS ACCUMULATE: a second decision never supersedes the first
+>
+> Two `decision_confirmation` gates on two work items under one epic are
+> INDEPENDENT. Confirming the later one changes nothing on the earlier one, which
+> stays `done`, stamped and readable.
+>
+> **Why supersede is wrong here, and not merely unnecessary.** Each decision
+> explains a contradiction between what SHIPPED and what is now planned, and the
+> shipped half does not go away: the code from the earlier direction is still in
+> the repository, and the re-plan could not have rewritten the work items that
+> built it — `validateProposals` refuses a `modify` or `remove` of a
+> done-category target (`PlanTargetImmutableError`,
+> `lib/plans/validateProposals.ts`). A card that later deletes what a `done` card
+> shipped is indistinguishable from a mistake without the decision that
+> explains it, and that need is PERMANENT. A superseded decision would be a false
+> statement about code that still exists.
+>
+> **What the later decision does instead** is name the earlier one in its own
+> `## Supersedes` by key and restate the direction IN FULL under `## Resulting
+direction` — so _"why does this card delete story 6's tests?"_ follows one
+> reference, and _"how do I lay story 7?"_ reads the latest decision without
+> folding N of them. Readers are shown them in order, oldest-confirmed first.
+>
+> #### 10 — the CALENDAR rule the readers apply: a confirmed decision is auditable INTENT, not enforcement
+>
+> The decision-authority ladder points the wrong way here on its own: rung 3 ranks
+> an explicit, informed decision above the shipped code, so a later pass could
+> read a confirmed decision as authority and "repair" code that contradicts it —
+> when the person changed the project by hand and the code is simply NEWER.
+>
+> **A reader compares the gate's `decidedAt` with the date of the code it
+> contradicts** — the instrument the corpus already uses for _a `done` design
+> blocker that merged AFTER the card_, whose trigger is the calendar:
+>
+> - **Decision newer** ⇒ it governs work not yet done.
+> - **Code newer and contradicting** ⇒ the decision is STALE, the code is what
+>   IS, and the contradiction is a finding to REPORT — never a repair to perform.
+>
+> This record states the rule. The readers that apply it are the dispatched
+> prompt (MOTIR-5959) and the planner (MOTIR-5955 · MOTIR-5957); the gate itself
+> enforces nothing about code.
+>
+> #### 11 — where the work item HANGS: a fact about placement the gate does NOT enforce
+>
+> A `task` under the epic whose work it governs — the nearest not-`done`
+> ancestor, or parentless when that epic is `done` — the same home as a choice
+> work item, because its readers are the same: the person at approval, and the
+> next `(lay, epic)` pass, whose SURVEY reads the epic's own children. **Never in
+> the epic's body**: the epic body's first section is the capability _"in THEIR
+> words rather than the code's"_, and a decision is implementation or workflow
+> detail. The planner's rule owns the placement (MOTIR-5955 · MOTIR-5957); the
+> gate is keyed on point 1 alone.
+>
+> #### 12 — the KIND table's row
+>
+> | kind                    | the port shows                                                                                                                                                            | fires when                                                                                            |
+> | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+> | `decision_confirmation` | the DECISION, what CHANGED (its change values), what it SUPERSEDES as work-item chips, the RESULTING direction, and the record link or its absence — or the defect reason | a **`decision` + `human`** work item whose body parses complete, unblocked, not done — **never** a PR |
+>
+> **The frame is the SAME component** as every other kind's; the port is new
+> content and two verbs inside it. How the Overturn note is drawn is MOTIR-5953's.
+>
+> **Not decided here:** WHEN a re-plan lays a decision work item, and the
+> `type-decision` authoring bar (MOTIR-5955 · MOTIR-5957); the PAGE resolver
+> (MOTIR-5761); any automatic re-plan on an overturn — there is none, by point 7.
 
 ### 2. Routing and authority — DECIDED BY THE REQUESTER (Yue, 2026-09-08)
 
@@ -2758,6 +3099,22 @@ implemented → in_review → [ design_result | decision_choice ] → done
 For `decision_choice` row 1 is the author writing a body that parses (there is
 no agent publish), and row 3 is **Choose {option}** rather than **Approve**.
 
+**AMENDED (MOTIR-5952, 2026-09-21): `decision_confirmation` takes Workflow A
+too.** A `human` decision never has a pull request either, and it is the one
+Workflow A kind with TWO terminal effects — Confirm writes `done`, Overturn
+writes `cancelled` (§1's MOTIR-5952 amendment, point 7).
+
+```
+implemented → in_review → [ design_result | decision_choice | decision_confirmation ] → done
+                           approve / choose / confirm is TERMINAL
+                                              └ overturn is TERMINAL too → cancelled
+```
+
+For `decision_confirmation` row 1 is the planner writing a body that parses (at
+lay, in the conversation), row 3 is **Confirm**, and row 3′ is **Overturn** —
+which, unlike **Request changes**, is terminal: it writes `cancelled` and
+records the re-plan it owes.
+
 ~~`implemented → in_review → [ design_result | decision_approval ] → done`~~
 **AMENDED (MOTIR-5672, 2026-09-19): a decision never takes Workflow A.** Its
 pull request is MANDATORY, so a merge always writes its `done` (§8's FIFTH
@@ -3929,7 +4286,9 @@ owed there.
   domain will later replace. ~~`decision_choice`, the N-option verb set, is named in
   §1 and likewise ships nothing here.~~ **AMENDED (MOTIR-5887, 2026-09-21):
   `decision_choice` is decided too — keyed on `type: choice`, its handler row in
-  §1's MOTIR-5887 amendment.**
+  §1's MOTIR-5887 amendment.** **AMENDED (MOTIR-5952, 2026-09-21): and the
+  DECISION work item's own gate — `decision_confirmation`, keyed on `type:
+decision` + `executor: human` — is decided in §1's MOTIR-5952 amendment.**
 - **Re-homing the ACCEPTANCE gate.** `AcceptancePanel` is the language §1
   generalises from and is deliberately left where it is; folding it onto the
   Approvals tab is its own story.

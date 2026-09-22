@@ -10,6 +10,7 @@ import {
 import { dbRead } from '@/lib/db';
 import { sqlStateOf } from '@/lib/prisma/sqlstate';
 import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
+import type { ConfirmedRecord } from '@/lib/approvalGates/decisionConfirmationRecord';
 import {
   ApprovalGateAlreadyAwaitingError,
   ApprovalGateDecidedImmutableError,
@@ -144,6 +145,99 @@ export const approvalGateRepository = {
    *
    * Served by `approval_gate_work_item_id_idx`.
    */
+  /**
+   * A `human` DECISION's latest confirm question, for every such work item in a set
+   * (Story MOTIR-5871 · MOTIR-5958) — the AI boundary's skeleton and item reads carry
+   * it so the planner can date and order an epic's decisions.
+   *
+   * ⚠️ ONE STATEMENT, however many decisions the set holds: the work items are
+   * filtered to `type = decision` + `executor = human` HERE, since the skeleton rows
+   * carry neither field, and each is joined LATERALLY to its latest
+   * `decision_confirmation` gate — the live question first, else the most recent. A
+   * decision with no gate at all (a defective body) is a row with a null state. The
+   * body rides along because an overturn's owed re-plan is derived from it.
+   */
+  async findDecisionConfirmationsByWorkItemIds(
+    workItemIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      workItemId: string;
+      descriptionMd: string | null;
+      state: ApprovalGateState | null;
+      decidedAt: Date | null;
+    }>
+  > {
+    if (workItemIds.length === 0) return [];
+    return tx.$queryRaw`
+      SELECT wi."id" AS "workItemId", wi."descriptionMd" AS "descriptionMd",
+             g."state" AS "state", g."decided_at" AS "decidedAt"
+      FROM "work_item" wi
+      LEFT JOIN LATERAL (
+        SELECT ag."state", ag."decided_at"
+        FROM "approval_gate" ag
+        WHERE ag."work_item_id" = wi."id" AND ag."kind" = 'decision_confirmation'
+        ORDER BY (ag."state" = 'awaiting') DESC, ag."created_at" DESC
+        LIMIT 1
+      ) g ON TRUE
+      WHERE wi."id" = ANY(${workItemIds}::text[])
+        AND wi."type"::text = 'decision'
+        AND wi."executor"::text = 'human'`;
+  },
+
+  /**
+   * The CONFIRMED decisions governing a work item (Story MOTIR-5871 · MOTIR-5959) —
+   * every `human` decision under the item's NEAREST `epic` ancestor whose latest
+   * `decision_confirmation` gate is `approved`, OLDEST confirmation first. The
+   * dispatched prompt hands them to a run with the calendar rule.
+   *
+   * ⚠️ ONE STATEMENT: the walk UP to the epic, the walk DOWN its subtree and the
+   * latest-gate join are all in SQL, so the read costs the same whether the epic
+   * holds one decision or twenty. No epic ancestor — or none confirmed — is `[]`.
+   * An overturned decision governs nothing and an awaiting one is not agreed, so
+   * the latest gate must be `approved`; an archived work item is not read.
+   */
+  async findConfirmedDecisionsUnderEpicOf(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{ identifier: string; title: string; descriptionMd: string | null; decidedAt: Date }>
+  > {
+    return tx.$queryRaw`
+      WITH RECURSIVE up AS (
+        SELECT wi."id", wi."parentId", wi."kind"::text AS "kind", 0 AS "depth"
+        FROM "work_item" wi WHERE wi."id" = ${workItemId}
+        UNION ALL
+        SELECT p."id", p."parentId", p."kind"::text, up."depth" + 1
+        FROM "work_item" p JOIN up ON p."id" = up."parentId"
+      ),
+      epic AS (
+        SELECT "id" FROM up WHERE "kind" = 'epic' ORDER BY "depth" ASC LIMIT 1
+      ),
+      down AS (
+        SELECT e."id" FROM epic e
+        UNION ALL
+        SELECT c."id" FROM "work_item" c JOIN down ON c."parentId" = down."id"
+      )
+      SELECT wi."identifier" AS "identifier", wi."title" AS "title",
+             wi."descriptionMd" AS "descriptionMd", g."decided_at" AS "decidedAt"
+      FROM down
+      JOIN "work_item" wi ON wi."id" = down."id"
+      JOIN LATERAL (
+        SELECT ag."state", ag."decided_at"
+        FROM "approval_gate" ag
+        WHERE ag."work_item_id" = wi."id" AND ag."kind" = 'decision_confirmation'
+        ORDER BY (ag."state" = 'awaiting') DESC, ag."created_at" DESC
+        LIMIT 1
+      ) g ON TRUE
+      WHERE wi."type"::text = 'decision'
+        AND wi."executor"::text = 'human'
+        AND wi."archivedAt" IS NULL
+        AND g."state" = 'approved'
+        AND g."decided_at" IS NOT NULL
+      ORDER BY g."decided_at" ASC, wi."identifier" ASC`;
+  },
+
   async findLatestByWorkItem(
     workItemId: string,
     kind: ApprovalGateKind,
@@ -343,7 +437,7 @@ export const approvalGateRepository = {
   async decide(
     id: string,
     data: {
-      state: Extract<ApprovalGateState, 'approved' | 'changes_requested'>;
+      state: Extract<ApprovalGateState, 'approved' | 'changes_requested' | 'overturned'>;
       /** WHO said yes. NULLABLE since MOTIR-5596: a decision synced out of GitHub
        *  may have been made by somebody with no Motir account at all, and the
        *  column has always been nullable for the neighbouring reason (`SetNull`
@@ -366,10 +460,13 @@ export const approvalGateRepository = {
       outcomeRef: string | null;
       /** What a CHOICE picked (MOTIR-5893) — null on every other decision. */
       chosenOption: ChosenOption | null;
+      /** What a CONFIRMED decision's record was (MOTIR-5954) — null on every other
+       *  decision. */
+      confirmedRecord: ConfirmedRecord | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<ApprovalGate> {
-    const { chosenOption, ...rest } = data;
+    const { chosenOption, confirmedRecord, ...rest } = data;
     try {
       return await tx.approvalGate.update({
         where: { id },
@@ -377,6 +474,7 @@ export const approvalGateRepository = {
         data: {
           ...rest,
           chosenOption: chosenOption === null ? Prisma.DbNull : { ...chosenOption },
+          confirmedRecord: confirmedRecord === null ? Prisma.DbNull : { ...confirmedRecord },
         },
       });
     } catch (err) {
@@ -980,7 +1078,8 @@ function recordsAwaitingWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateW
 function recordsDecidedWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWhereInput {
   return {
     projectId: { in: scope.projectIds },
-    state: { in: ['approved', 'changes_requested'] },
+    // An OVERTURN is a decision a person made (MOTIR-5956) — the room lists it.
+    state: { in: ['approved', 'changes_requested', 'overturned'] },
     ...(scope.fullView ? {} : { decidedById: scope.userId }),
   };
 }
@@ -1038,6 +1137,8 @@ const RECORD_GATE_SELECT = {
   subjectVersion: true,
   // What a CHOICE picked (MOTIR-5897) — a decided choice row names it.
   chosenOption: true,
+  // What a CONFIRMED decision's record was (MOTIR-5961) — its row says with or without.
+  confirmedRecord: true,
 } as const satisfies Prisma.ApprovalGateSelect;
 
 /** One row of the Approvals room's read, as Prisma returns it. */

@@ -288,6 +288,7 @@ describe('the record is immutable once decided', () => {
             decidedUnderAuthority: 'assignee',
             decisionSource: 'ui',
             outcomeRef: 'managed-object-storage',
+            confirmedRecord: null,
             chosenOption: {
               ...CHOSEN,
               optionId: 'managed-object-storage',

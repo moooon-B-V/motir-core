@@ -75,6 +75,8 @@ describe('every production mount of the approval frame NAMES who it is waiting o
       'components/approvals/ApprovalOverlay.tsx',
       // The choice gate's kind frame (MOTIR-5896) — mounted by the overlay and the page.
       'components/approvals/ChoiceGate.tsx',
+      // The decision's confirm kind frame (MOTIR-5960) — mounted by the overlay and the page.
+      'components/approvals/DecisionConfirmGate.tsx',
       'components/github/DevelopmentGateFrame.tsx',
     ]);
   });

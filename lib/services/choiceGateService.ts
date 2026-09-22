@@ -51,7 +51,7 @@ export interface ChoiceReconcile {
 
 const NOTHING: ChoiceReconcile = { raised: false, superseded: 0, hopsToReview: [] };
 
-async function hasOpenBlocker(
+export async function hasOpenBlocker(
   item: WorkItem,
   workspaceId: string,
   tx: Prisma.TransactionClient,
@@ -70,8 +70,14 @@ async function hasOpenBlocker(
  * The shortest walk from the item's status to `in_review` over the project's
  * DECLARED transitions (point 3: "by declared workflow edges only"). An `open`
  * project permits any move, so the walk is one hop. No path ⇒ no hops.
+ *
+ * Exported for the decision's confirm gate, which raises on the same rule
+ * (`decisionConfirmationGateService`, MOTIR-5954) — one walk, not two.
  */
-async function hopsToReview(item: WorkItem, tx: Prisma.TransactionClient): Promise<string[]> {
+export async function hopsToReview(
+  item: WorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
   if (item.status === REVIEW_KEY) return [];
   const [project, statuses, transitions] = await Promise.all([
     projectRepository.findById(item.projectId, tx),

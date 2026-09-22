@@ -16,6 +16,9 @@ import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import { readProject } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { parseDecisionRecord } from '@/lib/approvalGates/decisionRecord';
+import type { ConfirmedDecisionForPrompt } from '@/lib/dispatch/promptTemplate';
 
 // The DISPATCH-PROMPT read (Story 7.9 · MOTIR-1802) — resolve everything the
 // canonical prompt is assembled from, then hand it to the PURE assembler
@@ -214,6 +217,7 @@ export const dispatchPromptService = {
       runScope,
       openDependentKeys,
       designReference,
+      confirmedDecisions,
       errorEvidence,
     ] = await Promise.all([
       item.parentId
@@ -259,6 +263,12 @@ export const dispatchPromptService = {
       designAccessService
         .designsForWorkItem(item.identifier, ctx)
         .catch(() => [] as DesignVerdictDto[]),
+      // The CONFIRMED DECISIONS on this card's epic (MOTIR-5959) — ONE statement,
+      // however many the epic holds. Like the design read it has no refusal path:
+      // a decision that could not be read never stops a dispatch.
+      readConfirmedDecisions(item.id, ctx.workspaceId).catch(
+        () => [] as ConfirmedDecisionForPrompt[],
+      ),
       // The ERRORS linked to this card (Story MOTIR-5975 · MOTIR-5982) — the
       // SAME read the item page's Errors section and `get_work_item` make, over
       // Motir's store: no provider call, and no refusal path of its own (the
@@ -283,6 +293,7 @@ export const dispatchPromptService = {
       openDependentKeys,
       advisories,
       designReference,
+      confirmedDecisions,
       errorEvidence,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,
@@ -336,3 +347,29 @@ export const dispatchPromptService = {
     };
   },
 };
+
+/**
+ * The epic's CONFIRMED decisions as the prompt renders them (MOTIR-5959) — oldest
+ * confirmation first, each reduced to the two sections a run acts on. The body is
+ * re-read through the ONE parser; a body edited after its confirmation still gives
+ * up its sections from the draft, so a decision is never dropped for an edit.
+ */
+async function readConfirmedDecisions(
+  workItemId: string,
+  workspaceId: string,
+): Promise<ConfirmedDecisionForPrompt[]> {
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    approvalGateRepository.findConfirmedDecisionsUnderEpicOf(workItemId, tx),
+  );
+  return rows.map((row) => {
+    const parse = parseDecisionRecord(row.descriptionMd);
+    const sections = parse.ok ? parse : parse.draft;
+    return {
+      key: row.identifier,
+      title: row.title,
+      decidedAt: row.decidedAt.toISOString(),
+      decisionMd: sections.decisionMd,
+      resultingDirectionMd: sections.resultingDirectionMd,
+    };
+  });
+}

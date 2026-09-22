@@ -92,6 +92,40 @@ later. A description that is not complete asks nothing: the section says what is
 missing instead, and nobody can choose until it is fixed. Editing the options of a
 waiting choice withdraws the question and asks it again about the new options.
 
+### When a decision asks you to confirm it
+
+When a re-plan changes work you **already approved** — a different workflow, more
+than was agreed, or less — the planner lays a `type: decision` work item on the epic
+that says **why**. It is a decision the planner made **with you, in the
+conversation**: it asks nothing new, and your job is to say whether that is what was
+agreed.
+
+Motir asks it **on its own, from the work item's description**, once the description
+reads complete and nothing it waits on is still open. The work item's page shows a
+**Decision** section with four parts — the **decision**, **what changed** and how,
+the approved work it **supersedes**, and the epic's **resulting direction** in full —
+plus the decision's written record, if it has one, as a link. **Review & confirm**
+opens the full-screen view.
+
+- **Confirm** records that you agree and moves the work item to **Done**. Nothing
+  else changes: the work it supersedes was re-planned already.
+- **Overturn** is for _"that's not what we discussed"_. It needs a short note saying
+  what **was** discussed, moves the work item to **Cancelled**, and leaves a
+  **re-plan owed** for the work it superseded. The overturn itself changes no other
+  work item; the page offers the epic's **Re-plan** door so someone can start it.
+
+**The written record is optional.** For now it is a Markdown file attached to the
+decision work item; confirming names that file on the record, and the record says
+_Confirmed without a written record_ when there is none — never an error. If the file
+is deleted later, the record still names it and says it was removed.
+
+**Decisions accumulate.** A later decision on the same epic never replaces an earlier
+one: both stay, each explaining the direction the epic took at the time. A decision
+is a record of what was agreed, not a rule — where the code was changed on purpose
+after a decision, the code is what the product does. A description that is not
+complete asks nothing; the section says what is missing, and the work item can still
+be moved to Done by hand.
+
 ## What you see
 
 The gate always renders as the same three bands, in the same order, and the order

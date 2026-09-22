@@ -7502,7 +7502,8 @@
         "pull_request_approval": "Pull-request approval",
         "pull_request_merge": "Pull-request merge",
         "acceptance_result": "Acceptance video",
-        "decision_choice": "Choice"
+        "decision_choice": "Choice",
+        "decision_confirmation": "Confirm decision"
       },
       "reviewRow": "Review {key} {title}",
       "pullRequest": {
@@ -8312,6 +8313,7 @@
       "recording": "Recording",
       "approved": "Approved",
       "changesRequested": "Changes requested",
+      "overturned": "Overturned",
       "withdrawn": "Withdrawn"
     },
     "verb": {
@@ -8673,7 +8675,8 @@
         "decision_approval": "decision approval",
         "pull_request_merge": "merge approval",
         "acceptance_result": "acceptance approval",
-        "decision_choice": "choice"
+        "decision_choice": "choice",
+        "decision_confirmation": "decision"
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",
@@ -8772,6 +8775,85 @@
       },
       "youSaid": "You said",
       "stale": "The options changed while you were reading."
+    },
+    "decisionConfirm": {
+      "kindLabel": "Confirm decision",
+      "sectionTitle": "Decision",
+      "meta": "{changes} · supersedes {count}",
+      "eyebrow": {
+        "decision": "Decision",
+        "whatChanged": "What changed",
+        "supersedes": "Supersedes · {count}",
+        "resultingDirection": "Resulting direction"
+      },
+      "change": {
+        "workflow": "workflow",
+        "more_requirement": "more requirement",
+        "less_requirement": "less requirement"
+      },
+      "record": {
+        "link": "Written record",
+        "detail": "{size} · newest of {count, plural, =1 {# markdown attachment} other {# markdown attachments}}",
+        "none": "No written record. The decision above is what you confirm."
+      },
+      "consequence": "Confirm it if this is what you agreed. Confirming moves {key} to Done.",
+      "verb": {
+        "confirm": "Confirm",
+        "overturn": "Overturn"
+      },
+      "confirmStep": {
+        "title": "Confirming this will:",
+        "recordWith": "Record that you confirmed this decision, with its written record {file}.",
+        "recordWithout": "Record that you confirmed this decision.",
+        "done": "Move {key} to Done.",
+        "nothingElse": "Change nothing else — the work items it supersedes already say what the re-plan made them.",
+        "proceed": "Yes, confirm"
+      },
+      "overturnStep": {
+        "title": "Overturning this will:",
+        "record": "Record that this is not what was discussed, with your note.",
+        "cancelled": "Move {key} to Cancelled.",
+        "owed": "Leave a re-plan owed for {keys}. Nothing else changes until someone re-plans.",
+        "proceed": "Yes, overturn"
+      },
+      "note": {
+        "label": "What was actually discussed?",
+        "helper": "Required. It is the only place the right direction is written down until the re-plan.",
+        "required": "Say what was actually discussed — an overturn needs a note."
+      },
+      "state": {
+        "confirmed": "Confirmed",
+        "overturned": "Overturned"
+      },
+      "band": {
+        "confirmedBy": "Confirmed by {name} · {when}",
+        "withRecord": "Confirmed with a written record",
+        "withoutRecord": "Confirmed without a written record",
+        "recordRemoved": "record removed — the file was deleted after it was confirmed",
+        "overturnedBy": "Overturned by {name} · {when}",
+        "replanOwed": "Re-plan owed",
+        "replanOwedDetail": "for the work this decision superseded — nothing has changed yet"
+      },
+      "cta": {
+        "body": "Review the decision full screen, then confirm or overturn it.",
+        "button": "Review & confirm"
+      },
+      "defect": {
+        "title": "Can't be confirmed yet",
+        "no_decision_section": "This decision has no ## Decision section. It needs the direction you agreed, in a paragraph.",
+        "no_change_section": "This decision does not say what changed. Add a **Change:** line under ## What changed.",
+        "unknown_change": "“{value}” is not a change a decision records. Use workflow, more requirement or less requirement.",
+        "no_supersedes_section": "This decision does not say what it supersedes. Add a ## Supersedes section naming the approved work it changed.",
+        "empty_supersedes": "## Supersedes names no work item. A decision changes approved work — name each item by its key.",
+        "no_resulting_direction": "This decision has no ## Resulting direction. Say where the epic stands now, in full, so nobody has to add decisions together.",
+        "tail": "No one can confirm it until the description is fixed; it is asked as soon as it reads complete. It can still be moved to Done by hand."
+      },
+      "row": {
+        "awaiting": "{changes} · supersedes {count} · {decision}",
+        "confirmedWith": "Confirmed with a written record · supersedes {count}",
+        "confirmedWithout": "Confirmed without a written record · supersedes {count}",
+        "overturned": "Overturned · re-plan owed for {count, plural, =1 {# work item} other {# work items}}"
+      }
     }
   },
   "approvalOverlay": {

@@ -206,7 +206,7 @@ export class ApprovalGateAlreadyDecidedError extends ApprovalGateError {
   readonly code = 'APPROVAL_GATE_ALREADY_DECIDED' as const;
   constructor(
     readonly gateId: string,
-    readonly state: 'approved' | 'changes_requested',
+    readonly state: 'approved' | 'changes_requested' | 'overturned',
     readonly decidedById: string | null,
     readonly decidedAt: Date | null,
     /**
@@ -317,7 +317,17 @@ export class ApprovalGateStaleSubjectError extends ApprovalGateError {
 }
 
 /** Why {@link ApprovalGateVerbNotOfferedError} refused — the three shapes a verb can miss by. */
-export type VerbNotOfferedReason = 'choose_on_other_kind' | 'approve_on_choice' | 'unknown_option';
+export type VerbNotOfferedReason =
+  | 'choose_on_other_kind'
+  | 'approve_on_choice'
+  | 'unknown_option'
+  /** `request_changes` sent to a `decision_confirmation` gate, whose refusal is
+   *  OVERTURN (ADR §1's MOTIR-5952 amendment, point 6). */
+  | 'request_changes_on_confirmation'
+  /** `overturn` sent to a kind that confirms no decision (MOTIR-5956). */
+  | 'overturn_on_other_kind'
+  /** `overturn` with no note — what was actually discussed is REQUIRED (point 6b). */
+  | 'overturn_needs_a_note';
 
 /**
  * A decision whose VERB this gate does not offer (Story MOTIR-4914 · Subtask
@@ -327,7 +337,12 @@ export type VerbNotOfferedReason = 'choose_on_other_kind' | 'approve_on_choice' 
  *
  *   · `choose_on_other_kind` — `choose` sent to a gate that asks no choice;
  *   · `approve_on_choice`    — `approve` sent to a choice, which recommends nothing;
- *   · `unknown_option`       — an `optionId` the choice does not hold.
+ *   · `unknown_option`       — an `optionId` the choice does not hold;
+ *   · `request_changes_on_confirmation` — `request_changes` sent to a
+ *     `decision_confirmation` gate (MOTIR-5954), whose refusal is Overturn;
+ *   · `overturn_on_other_kind` — `overturn` sent to any other kind (MOTIR-5956);
+ *   · `overturn_needs_a_note` — `overturn` with an empty note (MOTIR-5956): a
+ *     request-shape refusal like the others, and nothing is written.
  *
  * ⚠️ NOT THE STALE REFUSAL, even for `unknown_option`. The stamp check runs first,
  * so by the time an option is looked up the options are exactly the ones the
