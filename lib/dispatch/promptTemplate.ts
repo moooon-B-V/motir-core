@@ -271,6 +271,18 @@ export function parseFindingsPolicy(
   };
 }
 
+/** One confirmed decision as a dispatched prompt renders it (MOTIR-5959). */
+export interface ConfirmedDecisionForPrompt {
+  key: string;
+  title: string;
+  /** ISO-8601 — when a person confirmed it: the date the calendar rule compares. */
+  decidedAt: string;
+  /** The body's `## Decision` section. */
+  decisionMd: string;
+  /** The body's `## Resulting direction` section — the epic's direction in full. */
+  resultingDirectionMd: string;
+}
+
 export interface DispatchPromptSource {
   /** The `PROD-<n>` identifier. */
   key: string;
@@ -304,6 +316,17 @@ export interface DispatchPromptSource {
    * an agent about to build a rendered surface to go and look.
    */
   designReference?: DesignVerdictDto[];
+  /**
+   * The CONFIRMED DECISIONS on this card's epic (Story MOTIR-5871 · Subtask
+   * MOTIR-5959; ADR `approval-gates.md` §1's MOTIR-5952 amendment, points 9–10) —
+   * every `human` decision under the nearest `epic` ancestor whose confirm gate was
+   * approved, OLDEST confirmation first. Overturned and awaiting decisions are never
+   * here: one governs nothing, the other is not yet agreed.
+   *
+   * EMPTY renders nothing at all — the normal case, since most epics carry no
+   * decision, and a block saying so on every prompt is a block agents skip.
+   */
+  confirmedDecisions?: ConfirmedDecisionForPrompt[];
   parent: { key: string; title: string } | null;
   projectName: string;
   /** The project key, e.g. `PROD` — the identifier prefix. */
@@ -1117,9 +1140,67 @@ function contextSection(
   // not something it would find by reading the card body.
   facts.push(...designReferenceSection(src.designReference ?? []));
 
+  // The epic's CONFIRMED DECISIONS and the calendar rule (MOTIR-5959) — beside the
+  // design reference and for the same reason: the direction the work was agreed to
+  // take is something the agent must know BEFORE it starts.
+  facts.push(...confirmedDecisionsSection(src.confirmedDecisions ?? []));
+
   facts.push('', 'CARD DESCRIPTION');
   facts.push('', narrative.length > 0 ? narrative : '(The card carries no description body.)');
   return facts;
+}
+
+/**
+ * THE EPIC'S CONFIRMED DECISIONS, and the CALENDAR RULE that says how to read them
+ * (Story MOTIR-5871 · Subtask MOTIR-5959; ADR `approval-gates.md` §1's MOTIR-5952
+ * amendment, point 10).
+ *
+ * ⚠️ A confirmed decision is auditable INTENT, not enforcement. The instruction
+ * exists because the other reading — treat the decision as law — would have an
+ * agent "fix" code a person changed later on purpose, turning a record into a
+ * regression. So the section tells the agent to DATE the contradiction before it
+ * acts, and to REPORT a newer contradicting code path rather than change it.
+ *
+ * EMPTY renders nothing: most epics carry no decision.
+ */
+function confirmedDecisionsSection(decisions: readonly ConfirmedDecisionForPrompt[]): string[] {
+  if (decisions.length === 0) return [];
+  const lines: string[] = [
+    '',
+    'CONFIRMED DECISIONS ON THIS EPIC — the direction a person agreed, oldest first',
+  ];
+  for (const decision of decisions) {
+    lines.push(
+      '',
+      `  ${decision.key} — ${decision.title}`,
+      `    confirmed ${decision.decidedAt}`,
+      '    Decision:',
+      ...indent(decision.decisionMd, '      '),
+      '    Resulting direction:',
+      ...indent(decision.resultingDirectionMd, '      '),
+    );
+  }
+  lines.push(
+    '',
+    'HOW TO READ THEM — the calendar rule:',
+    '  - A confirmed decision is the direction agreed for work NOT YET DONE. Where a',
+    '    decision is NEWER than the code it describes, the decision governs your work.',
+    '  - Where the code you are reading CONTRADICTS a decision, date that code first:',
+    '    `git log -1 --format=%cI -- <path>`. If it was committed AFTER the decision was',
+    '    confirmed, the code is what IS — a person changed it later. DO NOT change it to',
+    '    match the decision. REPORT the contradiction instead: the decision key, the path',
+    '    and the commit date, in your pull request body AND in a comment on this card —',
+    '    then carry on with the card’s own scope.',
+    '  - The latest decision restates the whole direction; an earlier one explains why',
+    '    something shipped. Read them in order, and never undo shipped work on the',
+    '    strength of an older decision alone.',
+  );
+  return lines;
+}
+
+function indent(markdown: string, prefix: string): string[] {
+  const body = markdown.trim();
+  return (body.length > 0 ? body : '(empty)').split('\n').map((line) => `${prefix}${line}`);
 }
 
 /** The ACCEPTANCE CRITERIA section — the card's own criteria, or the honest

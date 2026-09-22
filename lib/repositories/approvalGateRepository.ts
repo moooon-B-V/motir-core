@@ -185,6 +185,59 @@ export const approvalGateRepository = {
         AND wi."executor"::text = 'human'`;
   },
 
+  /**
+   * The CONFIRMED decisions governing a work item (Story MOTIR-5871 · MOTIR-5959) —
+   * every `human` decision under the item's NEAREST `epic` ancestor whose latest
+   * `decision_confirmation` gate is `approved`, OLDEST confirmation first. The
+   * dispatched prompt hands them to a run with the calendar rule.
+   *
+   * ⚠️ ONE STATEMENT: the walk UP to the epic, the walk DOWN its subtree and the
+   * latest-gate join are all in SQL, so the read costs the same whether the epic
+   * holds one decision or twenty. No epic ancestor — or none confirmed — is `[]`.
+   * An overturned decision governs nothing and an awaiting one is not agreed, so
+   * the latest gate must be `approved`; an archived work item is not read.
+   */
+  async findConfirmedDecisionsUnderEpicOf(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{ identifier: string; title: string; descriptionMd: string | null; decidedAt: Date }>
+  > {
+    return tx.$queryRaw`
+      WITH RECURSIVE up AS (
+        SELECT wi."id", wi."parentId", wi."kind"::text AS "kind", 0 AS "depth"
+        FROM "work_item" wi WHERE wi."id" = ${workItemId}
+        UNION ALL
+        SELECT p."id", p."parentId", p."kind"::text, up."depth" + 1
+        FROM "work_item" p JOIN up ON p."id" = up."parentId"
+      ),
+      epic AS (
+        SELECT "id" FROM up WHERE "kind" = 'epic' ORDER BY "depth" ASC LIMIT 1
+      ),
+      down AS (
+        SELECT e."id" FROM epic e
+        UNION ALL
+        SELECT c."id" FROM "work_item" c JOIN down ON c."parentId" = down."id"
+      )
+      SELECT wi."identifier" AS "identifier", wi."title" AS "title",
+             wi."descriptionMd" AS "descriptionMd", g."decided_at" AS "decidedAt"
+      FROM down
+      JOIN "work_item" wi ON wi."id" = down."id"
+      JOIN LATERAL (
+        SELECT ag."state", ag."decided_at"
+        FROM "approval_gate" ag
+        WHERE ag."work_item_id" = wi."id" AND ag."kind" = 'decision_confirmation'
+        ORDER BY (ag."state" = 'awaiting') DESC, ag."created_at" DESC
+        LIMIT 1
+      ) g ON TRUE
+      WHERE wi."type"::text = 'decision'
+        AND wi."executor"::text = 'human'
+        AND wi."archivedAt" IS NULL
+        AND g."state" = 'approved'
+        AND g."decided_at" IS NOT NULL
+      ORDER BY g."decided_at" ASC, wi."identifier" ASC`;
+  },
+
   async findLatestByWorkItem(
     workItemId: string,
     kind: ApprovalGateKind,
