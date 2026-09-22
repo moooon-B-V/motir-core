@@ -168,8 +168,13 @@ describe('ONE CONTROL — the approval frame is SHARED and COMPOSABLE (MOTIR-479
     // shared control — `ChoiceGateFrame` holds the choice's selection and derives its
     // verbs from it. A surface may render one instead of the control directly, and
     // each kind frame is itself held to rendering the control, so the rule is the
-    // same rule one hop further out rather than an exemption from it.
-    const KIND_FRAMES = ['components/approvals/ChoiceGate.tsx'];
+    // same rule one hop further out rather than an exemption from it. `DecisionConfirmGateFrame`
+    // (MOTIR-5960) is the second: the decision's sections and its Confirm · Overturn verbs.
+    const KIND_FRAMES = [
+      'components/approvals/ChoiceGate.tsx',
+      // The decision's confirm port and its Confirm · Overturn verbs (MOTIR-5960).
+      'components/approvals/DecisionConfirmGate.tsx',
+    ];
     for (const frame of KIND_FRAMES) {
       expect(codeOf(frame), `${frame} is a kind frame that does not render the control`).toContain(
         "from '@/components/approvals/ApprovalGateControl'",
