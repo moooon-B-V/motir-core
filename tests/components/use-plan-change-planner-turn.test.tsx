@@ -110,6 +110,8 @@ function session(turns: PlanChangeTurnDto[]): PlanChangeSessionDto {
     turnCount: turns.length,
     lastJobId: 'job-1',
     lastSubmittedAt: '2026-08-05T10:00:00.000Z',
+    lastActivityAt: '2026-01-01T00:00:00.000Z',
+    origin: 'conversation',
     createdAt: '2026-08-05T09:00:00.000Z',
     updatedAt: '2026-08-05T10:00:00.000Z',
     turns,

@@ -75,6 +75,16 @@ export interface PlanChangeTurnDto {
   createdAt: string;
 }
 
+/** Which door opened a planning session (AMENDMENT 17 §4) — the
+ *  `PlanSessionOrigin` enum, restated so the boundary does not import Prisma. */
+export type PlanSessionOriginDto =
+  | 'conversation'
+  | 'mcp'
+  | 'generation'
+  | 'expand'
+  | 'cadence'
+  | 'legacy';
+
 /**
  * The project's plan-change conversation as the rail renders it. `turns` is the
  * FULL ordered thread (the resume payload — re-opening the workspace re-reads
@@ -98,6 +108,11 @@ export interface PlanChangeSessionDto {
   turnCount: number;
   lastJobId: string | null;
   lastSubmittedAt: string | null;
+  /** When the session was last used — every turn and every submit moves it
+   *  (AMENDMENT 17 §3). The resume window and the Plans list read it. */
+  lastActivityAt: string;
+  /** Which door opened the session (AMENDMENT 17 §4). */
+  origin: PlanSessionOriginDto;
   createdAt: string;
   updatedAt: string;
   turns: PlanChangeTurnDto[];

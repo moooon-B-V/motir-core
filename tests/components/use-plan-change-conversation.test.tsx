@@ -92,6 +92,8 @@ function session(bodies: string[], targetKeys: string[] = []): PlanChangeSession
     turnCount: bodies.length,
     lastJobId: null,
     lastSubmittedAt: null,
+    lastActivityAt: '2026-01-01T00:00:00.000Z',
+    origin: 'conversation',
     createdAt: '2026-07-27T09:00:00.000Z',
     updatedAt: '2026-07-27T10:00:00.000Z',
     turns: bodies.map((body, seq) => ({

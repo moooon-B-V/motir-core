@@ -94,6 +94,8 @@ function session(bodies: string[]): PlanChangeSessionDto {
     turnCount: bodies.length,
     lastJobId: null,
     lastSubmittedAt: null,
+    lastActivityAt: '2026-01-01T00:00:00.000Z',
+    origin: 'conversation',
     createdAt: '2026-08-20T09:00:00.000Z',
     updatedAt: '2026-08-20T10:00:00.000Z',
     turns: bodies.map((body, seq) => ({

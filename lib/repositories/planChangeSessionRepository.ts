@@ -24,11 +24,13 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.create({ data });
   },
 
-  /** The project's conversation FOR ONE SCOPE — the RESUME read (re-opening the
-   *  planning workspace, or re-opening the panel on the same work items, reloads
-   *  the thread from here). `scopeKey` is the canonical anchor-set discriminator
-   *  (`''` = the project-wide thread; 7.12.3 · MOTIR-909), so this reads exactly
-   *  the row the `(project_id, scope_key)` unique admits. Workspace-scoped so a
+  /** The project's MOST RECENTLY ACTIVE conversation for one scope — the RESUME
+   *  read (re-opening the planning workspace, or re-opening the panel on the same
+   *  work items, reloads the thread from here). `scopeKey` is the canonical
+   *  anchor-set discriminator (`''` = the project-wide thread; 7.12.3 ·
+   *  MOTIR-909). A scope now holds MANY sessions (AMENDMENT 17 §2 — the
+   *  `(project_id, scope_key)` unique is gone), so the read ORDERS by
+   *  `lastActivityAt` and is deterministic when two exist. Workspace-scoped so a
    *  project id from another tenant resolves to null. Optional `tx` for use
    *  inside a transaction. */
   async findByProjectAndScope(
@@ -38,7 +40,10 @@ export const planChangeSessionRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<PlanChangeSession | null> {
     const client = tx ?? dbRead;
-    return client.planChangeSession.findFirst({ where: { projectId, scopeKey, workspaceId } });
+    return client.planChangeSession.findFirst({
+      where: { projectId, scopeKey, workspaceId },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
   },
 
   /**

@@ -114,6 +114,8 @@ const IDLE: PlanChangeConversationState = {
     turnCount: 0,
     lastJobId: null,
     lastSubmittedAt: null,
+    lastActivityAt: '2026-01-01T00:00:00.000Z',
+    origin: 'conversation',
     createdAt: '',
     updatedAt: '',
     turns: [],
