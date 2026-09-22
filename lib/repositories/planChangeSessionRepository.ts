@@ -61,6 +61,79 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.findFirst({ where: { id, workspaceId } });
   },
 
+  /** One session BY ID, scoped to a project — the by-id address every door uses
+   *  (AMENDMENT 17 §2). A session id from another project (or tenant) resolves to
+   *  null, so the caller refuses it rather than writing to it. */
+  async findByIdInProject(
+    id: string,
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({ where: { id, projectId, workspaceId } });
+  },
+
+  /** The RESUME read (AMENDMENT 17 §3): this member's OWN most recent session for
+   *  the scope, active at or after `since`. Another member's session never
+   *  qualifies — auto-resume is own-only. Served by the
+   *  `(project_id, scope_key, created_by_id, last_activity_at)` index. */
+  async findResumableForUser(
+    projectId: string,
+    scopeKey: string,
+    userId: string,
+    workspaceId: string,
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({
+      where: {
+        projectId,
+        scopeKey,
+        workspaceId,
+        createdById: userId,
+        lastActivityAt: { gte: since },
+      },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /** The ids of this member's OTHER sessions of the scope — the predecessors a new
+   *  session may take a live target lease over from (AMENDMENT 17 §6). */
+  async listIdsForUserInScope(
+    projectId: string,
+    scopeKey: string,
+    userId: string,
+    workspaceId: string,
+    excludeId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.planChangeSession.findMany({
+      where: { projectId, scopeKey, workspaceId, createdById: userId, id: { not: excludeId } },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  },
+
+  /**
+   * Serialize resume-or-start for ONE member in ONE scope, for the rest of the
+   * transaction (`pg_advisory_xact_lock`). This is the write guard that replaced
+   * the dropped `(project_id, scope_key)` unique (AMENDMENT 17 §2): the choice
+   * between appending to a recent session and creating a new one is READ-DERIVED
+   * (it reads `lastActivityAt`), so two tabs sending a first turn at once must
+   * queue here and the second must re-read after the first commits. Keyed on the
+   * member as well as the scope because auto-resume is own-only (§3) — two
+   * members starting sessions in one scope do not contend. `folderRepository`'s
+   * structure lock is the precedent.
+   */
+  async lockScopeForUser(
+    projectId: string,
+    scopeKey: string,
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`plan-session:${projectId}:${scopeKey}:${userId}`}, 0))`;
+  },
+
   /** The thread that SUBMITTED a given job (Story MOTIR-2786 · MOTIR-2787) — the
    *  reverse of `submit`'s `lastJobId` write, and how a plan decision finds the
    *  conversation whose target lock it should release. Workspace-scoped, so a job

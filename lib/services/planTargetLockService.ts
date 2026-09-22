@@ -110,8 +110,10 @@ export interface PlanTargetLockOutcome {
   workItemId: string;
   identifier: string;
   /** `acquired` — a fresh lease. `refreshed` — this session already held it.
-   *  `reclaimed` — the previous holder's lease had expired. */
-  disposition: 'acquired' | 'refreshed' | 'reclaimed';
+   *  `reclaimed` — the previous holder's lease had expired. `handed_over` — a
+   *  live lease moved from the member's OWN older session of the same scope to
+   *  this one (AMENDMENT 17 §6). */
+  disposition: 'acquired' | 'refreshed' | 'reclaimed' | 'handed_over';
   /** Whether the status was moved to `planning` (or, on a refresh/reclaim, is
    *  being held there by this lease). */
   statusHeld: boolean;
@@ -218,13 +220,22 @@ async function acquireOne(
   pctx: PlanTargetLockContext,
   now: Date,
   tx: Prisma.TransactionClient,
+  takeOverFrom: ReadonlySet<string> = new Set(),
 ): Promise<PlanTargetLockOutcome> {
   const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
   const expiresAt = expiryFor(holder, now);
   const existing = await planTargetLockRepository.findByWorkItemId(item.id, tx);
 
   if (existing) {
-    if (!heldBy(existing, holder) && !isExpired(existing.expiresAt, now)) {
+    // A live lease held by one of the caller's OWN predecessor sessions of this
+    // scope passes to the new session (AMENDMENT 17 §6) — the member starting a
+    // fresh conversation must not be refused by their own older one. The row
+    // moves in place, so there is no instant with no holder.
+    const handedOver =
+      existing.sessionId !== null &&
+      takeOverFrom.has(existing.sessionId) &&
+      !isExpired(existing.expiresAt, now);
+    if (!heldBy(existing, holder) && !handedOver && !isExpired(existing.expiresAt, now)) {
       throw new PlanTargetLockedError(
         item.identifier,
         await holderName(existing.heldById, tx),
@@ -243,7 +254,11 @@ async function acquireOne(
     return {
       workItemId: item.id,
       identifier: item.identifier,
-      disposition: heldBy(existing, holder) ? 'refreshed' : 'reclaimed',
+      disposition: heldBy(existing, holder)
+        ? 'refreshed'
+        : handedOver
+          ? 'handed_over'
+          : 'reclaimed',
       statusHeld: updated.statusHeld,
       expiresAt: updated.expiresAt,
     };
@@ -384,13 +399,22 @@ export const planTargetLockService = {
     pctx: PlanTargetLockContext,
     now: Date,
     tx: Prisma.TransactionClient,
+    opts: {
+      /** Sessions whose LIVE leases this acquire may take over rather than be
+       *  refused by — the caller's own older sessions of the SAME scope
+       *  (AMENDMENT 17 §6). Any other holder still refuses. */
+      takeOverFrom?: readonly string[];
+    } = {},
   ): Promise<PlanTargetLockOutcome[]> {
     if (identifiers.length === 0) return [];
+    const takeOverFrom = new Set(opts.takeOverFrom ?? []);
     const targets = await resolveTargets(identifiers, pctx.projectId, tx);
     const outcomes: PlanTargetLockOutcome[] = [];
     for (const item of targets) {
       await workItemRepository.lockById(item.id, tx);
-      outcomes.push(await acquireOne(item, { kind: 'session', sessionId }, pctx, now, tx));
+      outcomes.push(
+        await acquireOne(item, { kind: 'session', sessionId }, pctx, now, tx, takeOverFrom),
+      );
     }
     return outcomes;
   },

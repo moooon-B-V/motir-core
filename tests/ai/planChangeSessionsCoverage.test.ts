@@ -222,73 +222,27 @@ describe('planChangeSessionsService — error classification is not a catch-all'
     await expect(planChangeSessionsService.getOrCreateForProject(c)).rejects.toBe(boom);
   });
 
-  it('RECOVERS the winner’s thread when the create is refused as a conflict', async () => {
-    // The P2002 recovery arm. Since MOTIR-6020 dropped `@@unique([projectId,
-    // scopeKey])` (AMENDMENT 17 §2) a real race no longer raises it — see the
-    // next test — so the conflict is simulated; the recovery read inside the
-    // catch runs for real and must return the winner.
+  it('serializes one member’s opens of a scope under the scope lock — the second finds the first’s row', async () => {
+    // MOTIR-6021 replaced the dropped unique's P2002 "read the winner" branch with
+    // `lockScopeForUser` + a re-read INSIDE the lock, so two concurrent opens by
+    // one member queue rather than fork.
     const c = ctx(fx);
-    const winner = await withWorkspaceContext(
-      { userId: c.userId, workspaceId: c.workspaceId, projectId: c.projectId },
-      (tx) =>
-        planChangeSessionRepository.create(
-          { workspaceId: c.workspaceId, projectId: c.projectId, createdById: c.userId },
-          tx,
-        ),
-    );
+    const [a, b] = await Promise.all([
+      planChangeSessionsService.getOrCreateForProject(c),
+      planChangeSessionsService.getOrCreateForProject(c),
+    ]);
 
-    const findByProjectAndScope = planChangeSessionRepository.findByProjectAndScope.bind(
-      planChangeSessionRepository,
-    );
-    const spy = vi.spyOn(planChangeSessionRepository, 'findByProjectAndScope');
-    // Only the FIRST read (the pre-read) sees an empty project.
-    spy.mockResolvedValueOnce(null);
-    spy.mockImplementation(findByProjectAndScope);
-    vi.spyOn(planChangeSessionRepository, 'create').mockRejectedValueOnce(
-      new Prisma.PrismaClientKnownRequestError('unique violation', {
-        code: 'P2002',
-        clientVersion: 'test',
-      }),
-    );
-
-    const resolved = await planChangeSessionsService.getOrCreateForProject(c);
-
-    expect(resolved.id).toBe(winner.id);
+    expect(a.id).toBe(b.id);
     const rows = await adminDb.planChangeSession.findMany({ where: { projectId: c.projectId } });
     expect(rows).toHaveLength(1);
   });
 
-  it('lets a create that lost the pre-read race write a SECOND session for the scope — legal since AMENDMENT 17 §2', async () => {
-    // The shape MOTIR-6020 relaxed: one scope, many sessions. Until the service
-    // addresses sessions by id (MOTIR-6021) this is the only behaviour change a
-    // racing open can observe, and the card that dropped the unique names it.
-    const c = ctx(fx);
-    await withWorkspaceContext(
-      { userId: c.userId, workspaceId: c.workspaceId, projectId: c.projectId },
-      (tx) =>
-        planChangeSessionRepository.create(
-          { workspaceId: c.workspaceId, projectId: c.projectId, createdById: c.userId },
-          tx,
-        ),
-    );
-    vi.spyOn(planChangeSessionRepository, 'findByProjectAndScope').mockResolvedValueOnce(null);
-
-    await planChangeSessionsService.getOrCreateForProject(c);
-
-    const rows = await adminDb.planChangeSession.findMany({ where: { projectId: c.projectId } });
-    expect(rows).toHaveLength(2);
-  });
-
-  it('rethrows the unique violation when the winner cannot be re-read', async () => {
-    // The `if (winner)` guard's other arm: a P2002 that is NOT the open race
-    // (or a row the caller may not see) must not be swallowed into a silent
-    // success — there is no thread to return, so the error escapes.
+  it('lets a create failure escape — no conflict is swallowed into a silent success', async () => {
     const c = ctx(fx);
     const conflict = new Prisma.PrismaClientKnownRequestError('unique violation', {
       code: 'P2002',
       clientVersion: 'test',
     });
-    vi.spyOn(planChangeSessionRepository, 'findByProjectAndScope').mockResolvedValue(null);
     vi.spyOn(planChangeSessionRepository, 'create').mockRejectedValueOnce(conflict);
 
     await expect(planChangeSessionsService.getOrCreateForProject(c)).rejects.toBe(conflict);

@@ -207,6 +207,15 @@ async function appendLocked(
  * It also answers for the right thread when a project has several: a contextual
  * conversation and the project-wide one are different rows, and the mailbox
  * belongs to whichever of them SUBMITTED this job.
+ *
+ * ⚠️ IT STAYS KEYED BY `last_job_id`, and NOT by `Plan.sessionId`, on purpose
+ * (MOTIR-6021; AMENDMENT 17 §5, §7). The mailbox addresses a RUNNING job, and a
+ * job belongs to exactly the session that submitted it — which is what
+ * `last_job_id` records while the run is live. Several sessions of one scope
+ * (§2) do not change that: each has its own `last_job_id`, so two sessions can
+ * never both answer for one job. Going through `Plan.sessionId` would ask a
+ * different question — which conversation a PLAN belongs to — and a mid-run
+ * message is addressed to a run, not to a plan.
  */
 async function findThreadForJob(jobId: string, pctx: MailboxContext) {
   return withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
