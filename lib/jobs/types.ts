@@ -524,6 +524,10 @@ export interface JobEventDataMap {
   'system.monitor-issue-reconcile': SystemScheduledData;
   /** ONE binding's poll, fanned out by the tick above (MOTIR-5581). */
   'monitor/connection.poll-requested': MonitorConnectionPollRequestedData;
+  /** A monitor-filed bug the enrichment never reached, found by the poll's
+   *  standing backfill sweep (Story MOTIR-5975 · MOTIR-5983). Consumed by the
+   *  SAME dispatch-and-apply the `work-item/created` enrichment runs. */
+  'monitor-issue/enrichment-backfill': MonitorEnrichmentBackfillData;
   /** The DLQ standing-depth filer (MOTIR-5869) — files one bug per job function
    *  whose dead letters have stood undisposed for seven days. Cross-tenant by
    *  design: `job_run_dlq` is deployment-wide. */
@@ -541,6 +545,24 @@ export interface MonitorConnectionPollRequestedData {
   connectionId: string;
   /** `<connectionId>:<tick run id>` — so a retried tick enqueues ONE poll of a
    *  binding per tick, never two. */
+  idempotencyKey: string;
+}
+
+/**
+ * The `monitor-issue/enrichment-backfill` event payload (Story MOTIR-5975 ·
+ * MOTIR-5983) — the `work-item/created` enrichment trigger's fields, rebuilt by
+ * the backfill sweep from a link row, plus the dedup key.
+ */
+export interface MonitorEnrichmentBackfillData {
+  workspaceId: string;
+  projectId: string;
+  workItemId: string;
+  /** The binding's binder — the identity the bug was filed as. */
+  actorId: string;
+  viaMonitorConnectionId: string;
+  /** `monitor-enrich-backfill:<monitor_issue.id>` — ONE enqueue per link, for
+   *  good: a double emit, or two polls emitting before either run starts, lands
+   *  one queue row, so one `author_bug` is submitted. */
   idempotencyKey: string;
 }
 

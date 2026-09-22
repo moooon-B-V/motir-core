@@ -1,4 +1,8 @@
-import type { NormalizedMonitorAssignee, NormalizedMonitorStackFrame } from './types';
+import type {
+  NormalizedMonitorAssignee,
+  NormalizedMonitorException,
+  NormalizedMonitorStackFrame,
+} from './types';
 import { fakeMonitorState, type FakeMonitorIssue } from './providers/fake';
 
 // THE E2E SEEDING SEAM for the fake monitor provider (Story MOTIR-4929 ·
@@ -34,6 +38,16 @@ export interface SeedMonitorIssue {
   /** The latest event's stack frames, as the adapter would return them
    *  (MOTIR-5846) — what an enrichment E2E drives a realistic trace with. */
   frames?: NormalizedMonitorStackFrame[];
+  /** The latest event's EVIDENCE (Story MOTIR-5975 · MOTIR-5985): the surfaced
+   *  exception, its tags UNFILTERED (so a spec can seed `user.email` and watch
+   *  the seam drop it), the request URL query string and all, and which event it
+   *  was. The fake runs them through the SAME filters the Sentry adapter does. */
+  exception?: NormalizedMonitorException | null;
+  rawTags?: { key: string; value: string }[];
+  requestMethod?: string | null;
+  requestUrl?: string | null;
+  eventId?: string | null;
+  eventAt?: string | null;
   /** Scopes the issue to ONE monitored project for a search; absent = every. */
   externalProjectId?: string | null;
 }
@@ -43,6 +57,9 @@ export interface SeedFakeMonitorInput {
   issues?: SeedMonitorIssue[];
   /** Arms ONE failure of the next listing, with a status (and the provider's words). */
   failNextListing?: { status: number; reason?: string };
+  /** Arms ONE failure of the next latest-event CONTEXT read (MOTIR-5985) — how the
+   *  acceptance lane shows a refused read leaving the stored evidence standing. */
+  failNextContext?: { status: number; reason?: string };
   /** Makes every `searchIssues` for ONE monitored project fail (MOTIR-5734) — the
    *  picker's per-connection failure line. `null` clears it. */
   failSearchForProject?: { externalProjectId: string; status: number; reason?: string } | null;
@@ -74,12 +91,21 @@ export function seedFakeMonitor(input: SeedFakeMonitorInput): void {
         environment: issue.environment ?? null,
         release: issue.release ?? null,
         frames: issue.frames ?? [],
+        exception: issue.exception ?? null,
+        rawTags: issue.rawTags ?? [],
+        requestMethod: issue.requestMethod ?? null,
+        requestUrl: issue.requestUrl ?? null,
+        eventId: issue.eventId ?? null,
+        eventAt: issue.eventAt ? new Date(issue.eventAt) : null,
         externalProjectId: issue.externalProjectId ?? null,
       }),
     );
   }
   if (input.failNextListing) {
     state.failNextStatus.set('listIssuesSince', input.failNextListing);
+  }
+  if (input.failNextContext) {
+    state.failNextStatus.set('getIssueContext', input.failNextContext);
   }
   if (input.failSearchForProject === null) {
     state.failSearchForProject.clear();

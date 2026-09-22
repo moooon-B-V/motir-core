@@ -112,6 +112,60 @@ async function inProject<T>(
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId, projectId }, fn);
 }
 
+/**
+ * A fresh grant for an organisation SUPERSEDES the workspace's older grants for
+ * it (MOTIR-6005): their bindings move onto the fresh grant, and each older grant
+ * left with no binding is deleted.
+ *
+ * ⚠️ WHY A RECONNECT NEEDS THIS AT ALL. A Sentry integration cannot be
+ * re-authorised while installed, so the only recovery from a dead credential is
+ * uninstall → reinstall — and the reinstall arrives under a NEW provider
+ * installation id, which the upsert above stores as a second row. Without this,
+ * the bindings (and the room, which shows the oldest grant) stay on the dead one.
+ *
+ * ⚠️ IT MOVES, IT NEVER RE-CREATES. A binding's `monitor_issue` links hang off
+ * the binding, so moving the row keeps them; deleting and re-binding would drop
+ * them and the next poll would file every live issue as a duplicate bug.
+ *
+ * A binding the fresh grant ALREADY holds for the same (project, monitored
+ * project) is left where it is rather than colliding with the unique index, and
+ * its grant is then kept — nothing here deletes a binding.
+ */
+async function adoptSupersededGrants(
+  args: { workspaceId: string; provider: string; orgSlug: string; grantId: string },
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const supersededIds = await monitorInstallationRepository.listOtherIdsForOrg(
+    {
+      workspaceId: args.workspaceId,
+      provider: args.provider,
+      orgSlug: args.orgSlug,
+      excludeId: args.grantId,
+    },
+    tx,
+  );
+  if (supersededIds.length === 0) return;
+
+  const held = new Set(
+    (await monitorConnectionRepository.listPairsForInstallation(args.grantId, tx)).map(
+      (c) => `${c.projectId}\u0000${c.externalProjectId}`,
+    ),
+  );
+  for (const oldId of supersededIds) {
+    const pairs = await monitorConnectionRepository.listPairsForInstallation(oldId, tx);
+    const movable = pairs.filter((c) => !held.has(`${c.projectId}\u0000${c.externalProjectId}`));
+    await monitorConnectionRepository.moveToInstallation(
+      movable.map((c) => c.id),
+      args.grantId,
+      tx,
+    );
+    for (const c of movable) held.add(`${c.projectId}\u0000${c.externalProjectId}`);
+    if ((await monitorConnectionRepository.countForInstallation(oldId, tx)) === 0) {
+      await monitorInstallationRepository.deleteById(oldId, tx);
+    }
+  }
+}
+
 export const monitorConnectionService = {
   /**
    * Persist the GRANT a provider's authorisation just issued, and land the
@@ -171,8 +225,8 @@ export const monitorConnectionService = {
 
     const installation = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: input.projectId },
-      (tx) =>
-        monitorInstallationRepository.upsertByProviderInstallation(
+      async (tx) => {
+        const row = await monitorInstallationRepository.upsertByProviderInstallation(
           {
             provider: input.provider,
             installationId: input.providerInstallationId,
@@ -183,7 +237,15 @@ export const monitorConnectionService = {
             ...(orgSlug ? { metadata: { orgSlug } } : {}),
           },
           tx,
-        ),
+        );
+        if (orgSlug) {
+          await adoptSupersededGrants(
+            { workspaceId: ctx.workspaceId, provider: input.provider, orgSlug, grantId: row.id },
+            tx,
+          );
+        }
+        return row;
+      },
     );
 
     return { installationId: installation.id, orgSlug: readOrgSlug(installation.metadata) };

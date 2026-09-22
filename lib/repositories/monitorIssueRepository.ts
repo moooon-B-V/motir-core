@@ -1,5 +1,6 @@
 import type { MonitorIssue, Prisma } from '@/generated/prisma/client';
 import type { MonitorAssigneeSyncNote } from '@/lib/monitors/syncStates';
+import type { NormalizedMonitorStackFrame, NormalizedMonitorTag } from '@/lib/monitors/types';
 
 // Monitor-issue repository — single Prisma operations on the `monitor_issue`
 // table (Story MOTIR-4929 · Subtask MOTIR-5576): the link between ONE provider
@@ -51,6 +52,32 @@ export interface MonitorIssueFacts {
    */
   environment?: string | null;
   release?: string | null;
+  /**
+   * When a context read was last ATTEMPTED and FAILED (MOTIR-5979). OPTIONAL
+   * under the same rule: absent leaves it standing. A SUCCESSFUL read writes it
+   * with the evidence instead, through {@link monitorIssueRepository.updateEvidenceIfNotOlder},
+   * so a late read of an older event cannot move it either.
+   */
+  evidenceCheckedAt?: Date;
+}
+
+/**
+ * The latest event's EVIDENCE as one successful read wrote it (Story MOTIR-5975 ·
+ * Subtask MOTIR-5979). Every field is the read's answer, `null`s and `[]`s
+ * included — a read that found no exception records that it found none.
+ * `readAt` is the moment of the read: it stamps both `evidence_read_at` and
+ * `evidence_checked_at`.
+ */
+export interface MonitorIssueEvidence {
+  exceptionType: string | null;
+  exceptionMessage: string | null;
+  frames: NormalizedMonitorStackFrame[];
+  tags: NormalizedMonitorTag[];
+  requestMethod: string | null;
+  requestPath: string | null;
+  eventId: string | null;
+  eventAt: Date | null;
+  readAt: Date;
 }
 
 export interface InsertMonitorIssueInput extends MonitorIssueFacts {
@@ -165,6 +192,49 @@ export const monitorIssueRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<MonitorIssue> {
     return tx.monitorIssue.update({ where: { id }, data: facts });
+  },
+
+  /**
+   * Write one read's EVIDENCE — unless the row already holds a NEWER event
+   * (MOTIR-5979). ONE conditional statement: the `WHERE` is the guard, so the
+   * comparison runs against the committed row. Two writers racing on one link
+   * serialise on the row, and Postgres re-evaluates the losing `UPDATE`'s
+   * `WHERE` against the winner's committed values — so whichever commits last,
+   * the row ends holding the later event, and the loser is a no-op rather than
+   * an error.
+   *
+   * "Not older" is `event_at IS NULL OR event_at <= incoming`. A read whose
+   * event states no time cannot be ordered at all, so it writes only over a row
+   * that has never held a dated event. Returns whether THIS call wrote.
+   */
+  async updateEvidenceIfNotOlder(
+    id: string,
+    evidence: MonitorIssueEvidence,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.monitorIssue.updateMany({
+      where: {
+        id,
+        ...(evidence.eventAt === null
+          ? { eventAt: null }
+          : { OR: [{ eventAt: null }, { eventAt: { lte: evidence.eventAt } }] }),
+      },
+      data: {
+        exceptionType: evidence.exceptionType,
+        exceptionMessage: evidence.exceptionMessage,
+        // A normalized frame / tag is plain JSON by construction (strings,
+        // numbers, booleans, nulls); the cast only erases the interface names.
+        frames: evidence.frames as unknown as Prisma.InputJsonValue,
+        tags: evidence.tags as unknown as Prisma.InputJsonValue,
+        requestMethod: evidence.requestMethod,
+        requestPath: evidence.requestPath,
+        eventId: evidence.eventId,
+        eventAt: evidence.eventAt,
+        evidenceReadAt: evidence.readAt,
+        evidenceCheckedAt: evidence.readAt,
+      },
+    });
+    return result.count === 1;
   },
 
   /**
@@ -458,6 +528,111 @@ export const monitorIssueRepository = {
 
   /** Lock one link by id `FOR UPDATE` — the assignee decision's serialisation
    *  point. Returns null when there is none (or RLS hides it). */
+  // ── THE STANDING BACKFILL SWEEP (Story MOTIR-5975 · Subtask MOTIR-5983) ─────
+
+  /**
+   * Links of ONE binding that point at a LIVE work item and whose latest event has
+   * never been read — the evidence the page walk cannot reach, because the poll
+   * lists only issues seen since its watermark. ONE bounded query.
+   *
+   * Ordered by the last ATTEMPT first (`evidence_checked_at`, never-checked
+   * first), then by age: a link whose read keeps failing — a gone issue, say —
+   * rotates to the back rather than holding the window for ever.
+   */
+  async listNeverReadLinked(
+    connectionId: string,
+    doneStatusKeys: readonly string[],
+    /** Skip a link already CHECKED at or after this instant — the poll's start, so
+     *  a link whose read the page walk just attempted is not read twice in one
+     *  poll, and a failed read there stays the answer until the next poll. */
+    checkedBefore: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; externalIssueId: string }>> {
+    if (limit <= 0) return [];
+    return tx.monitorIssue.findMany({
+      where: {
+        connectionId,
+        evidenceReadAt: null,
+        OR: [{ evidenceCheckedAt: null }, { evidenceCheckedAt: { lt: checkedBefore } }],
+        workItem: { is: { archivedAt: null, status: { notIn: [...doneStatusKeys] } } },
+      },
+      orderBy: [
+        { evidenceCheckedAt: { sort: 'asc', nulls: 'first' } },
+        { createdAt: 'asc' },
+        { id: 'asc' },
+      ],
+      take: limit,
+      select: { id: true, externalIssueId: true },
+    });
+  },
+
+  /**
+   * Links of ONE binding whose work item is a bug the reconciler FILED, never offered
+   * enrichment (`authoring_job_id IS NULL`), not archived, not in a done-category
+   * status, and still EXACTLY as filed: its description is the body its `created`
+   * revision recorded and its explanation is empty. ONE bounded query, oldest
+   * link first.
+   *
+   * ⚠️ "FILED" IS TWO CONDITIONS, BECAUSE ONE IS NOT ENOUGH. The link's
+   * `filed_work_item_identifier` must be the item's own identifier — but a
+   * HAND-MADE link records the card's identifier there too (`markFiled` is the
+   * write both paths share), so that alone would offer a person's own card to the
+   * model. The discriminator is ORDER: the reconciler inserts the link row and
+   * THEN creates the bug, in one transaction, so a filed bug is never older than
+   * its link; a hand-linked card existed before the link was made.
+   *
+   * The as-filed comparison is here, in SQL, so the window CONVERGES: an edited
+   * card never qualifies and so can never occupy a slot a later poll needs. The
+   * service re-checks every candidate with `isStillAsFiled`, the predicate the
+   * write itself uses, before spending anything on it.
+   */
+  async listEnrichmentBackfillCandidates(
+    connectionId: string,
+    doneStatusKeys: readonly string[],
+    /** Only bugs CREATED before this instant — the created-trigger's own window
+     *  (see `MONITOR_ENRICHMENT_BACKFILL_GRACE_MS`). */
+    createdBefore: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workItemId: string }>> {
+    if (limit <= 0) return [];
+    return tx.$queryRaw<Array<{ id: string; workItemId: string }>>`
+      SELECT mi.id, mi.work_item_id AS "workItemId"
+        FROM monitor_issue mi
+        JOIN work_item wi ON wi.id = mi.work_item_id
+       WHERE mi.connection_id = ${connectionId}
+         AND mi.authoring_job_id IS NULL
+         AND mi.filed_work_item_identifier = wi.identifier
+         AND wi."createdAt" >= mi.created_at
+         AND wi."archivedAt" IS NULL
+         AND wi."createdAt" < ${createdBefore}
+         AND wi.status <> ALL(${[...doneStatusKeys]}::text[])
+         AND wi."explanationMd" IS NULL
+         AND wi."descriptionMd" IS NOT DISTINCT FROM (
+               SELECT r.diff -> 'descriptionMd' ->> 'to'
+                 FROM work_item_revision r
+                WHERE r."workItemId" = wi.id AND r."changeKind" = 'created'
+                ORDER BY r."changedAt" ASC
+                LIMIT 1)
+       ORDER BY mi.created_at ASC, mi.id ASC
+       LIMIT ${limit}`;
+  },
+
+  /**
+   * Write ONLY what a context read decides — `environment` / `release` on a read,
+   * `evidenceCheckedAt` on a failure — for a link the page walk did not list, so
+   * there are no issue facts to write beside them (MOTIR-5983). Its evidence
+   * rides {@link updateEvidenceIfNotOlder}, as on every other path.
+   */
+  async updateContextFacts(
+    id: string,
+    facts: Pick<MonitorIssueFacts, 'environment' | 'release' | 'evidenceCheckedAt'>,
+    tx: Prisma.TransactionClient,
+  ): Promise<MonitorIssue> {
+    return tx.monitorIssue.update({ where: { id }, data: facts });
+  },
+
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<MonitorIssue | null> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM monitor_issue WHERE id = ${id} FOR UPDATE`;

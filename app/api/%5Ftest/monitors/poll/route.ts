@@ -39,6 +39,10 @@ export async function POST(req: Request): Promise<Response> {
   );
   if (!mine) return notFound();
 
-  seedFakeMonitor({ issues: body?.issues, failNextListing: body?.failNextListing });
+  seedFakeMonitor({
+    issues: body?.issues,
+    failNextListing: body?.failNextListing,
+    failNextContext: body?.failNextContext,
+  });
   return NextResponse.json(await monitorIngestionService.pollConnection(connectionId));
 }

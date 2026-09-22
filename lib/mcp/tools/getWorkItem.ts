@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { commentsService } from '@/lib/services/commentsService';
+import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectedWorkItem } from '@/lib/services/planProjectionService';
@@ -208,6 +209,11 @@ export async function runGetWorkItem(
   const { placementFolder: _pagePlacementOnly, ...publishedDetail } = detail;
   const folderPath =
     detail.folderId === null ? null : await workItemsService.getFolderPath(detail.folderId, ctx);
+  // The work item's ERRORS (Story MOTIR-5975 · MOTIR-5981): every monitor link
+  // with its stored facts and evidence, through the SAME read the item page's
+  // Errors section renders — so the two surfaces cannot disagree, and neither
+  // calls the monitor. `[]` is the ordinary answer for a work item with no link.
+  const errors = await monitorIssueService.listForWorkItem(detail.item.id, ctx);
   const structured = {
     ...publishedDetail,
     folderId: detail.folderId,
@@ -217,6 +223,7 @@ export async function runGetWorkItem(
       presentMcpWorkItemChild(child, edges[child.id], (id) => keyById.get(id)),
     ),
     deliveries,
+    errors,
   };
   return toolOk(
     summarize(detail, item.commentCount, folderPath),
@@ -240,6 +247,10 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         COMMENT_COUNT_DESCRIPTION +
         ' ' +
         ITEM_ONLY_COMMENT_COUNT_NOTE +
+        ' A committed item also carries `errors`: every monitor issue linked to it, with the ' +
+        'facts and the latest event’s EVIDENCE Motir has stored — exception, stack frames, tags, ' +
+        'request line — and `evidence.state` (`present`, `no_exception` or `never_read`, plus ' +
+        '`stale`). It is read from Motir’s store, never live from the monitor; `[]` means none.' +
         ' Pass `planId` to read the card as it would stand once that plan materializes — the ' +
         'live tree ⊕ the plan’s proposals, so you can see what you proposed without merging ' +
         '`get_plan` against this call yourself. ' +

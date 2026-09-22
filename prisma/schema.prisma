@@ -10545,6 +10545,33 @@ model MonitorIssue {
   environment String?
   release     String?
 
+  /// The latest event's EVIDENCE, as last read (Story MOTIR-5975 · Subtask
+  /// MOTIR-5979): what the work-item page's Errors section, `get_work_item` and
+  /// the dispatch prompt all render, so none of them calls the provider. Written
+  /// by a SUCCESSFUL context read only — the reconcile visit and the hand-made
+  /// link — and only when the event read is not OLDER than the stored one, so a
+  /// late read of an earlier event never overwrites a newer one. A failed read
+  /// leaves every one of these standing and moves only `evidenceCheckedAt`.
+  ///
+  /// `frames` / `tags` `NULL` = never read; `[]` = read, and there were none.
+  /// The tags have already been through the user-identifying filter
+  /// (`lib/monitors/evidence.ts`), and the request is a method and a PATH — no
+  /// query, header, cookie or body ever reaches this row.
+  exceptionType    String?   @map("exception_type")
+  exceptionMessage String?   @map("exception_message")
+  frames           Json?
+  tags             Json?
+  requestMethod    String?   @map("request_method")
+  requestPath      String?   @map("request_path")
+  eventId          String?   @map("event_id")
+  eventAt          DateTime? @map("event_at")
+  /// When the evidence above was last READ successfully. `NULL` = never read.
+  evidenceReadAt   DateTime? @map("evidence_read_at")
+  /// When a context read was last ATTEMPTED — a success writes it with
+  /// `evidenceReadAt`, a failure writes it alone. Later than `evidenceReadAt` =
+  /// the evidence is STALE: the last check failed, and what stands is older.
+  evidenceCheckedAt DateTime? @map("evidence_checked_at")
+
   /// FK → WorkItem.id, `onDelete: SetNull`. A DELETED bug leaves this row with a
   /// null pointer — which is exactly how the reconciler tells "its work item was
   /// deleted" apart from "never filed" (the second has no identifier below).

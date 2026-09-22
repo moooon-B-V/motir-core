@@ -113,24 +113,81 @@ export interface NormalizedMonitorStackFrame {
   inApp: boolean | null;
 }
 
+/** The longest exception MESSAGE the context carries, in characters (Story
+ *  MOTIR-5975 · Subtask MOTIR-5977). A longer one is cut and ends in `…`, so a
+ *  reader always knows it was cut — never silently. */
+export const MONITOR_EVIDENCE_MESSAGE_MAX = 4000;
+
+/** The most TAGS the context carries — after the user-identifying ones are
+ *  dropped, in the order the event states them (MOTIR-5977). */
+export const MONITOR_EVIDENCE_TAGS_MAX = 30;
+
+/** The longest tag VALUE the context carries, in characters (MOTIR-5977). */
+export const MONITOR_EVIDENCE_TAG_VALUE_MAX = 200;
+
+/** The longest request PATH the context carries, in characters (MOTIR-5977). */
+export const MONITOR_EVIDENCE_PATH_MAX = 500;
+
+/** The exception that SURFACED on the latest event (MOTIR-5977): its type
+ *  (`PrismaClientKnownRequestError`) and its full message, bounded by
+ *  {@link MONITOR_EVIDENCE_MESSAGE_MAX}. Either is `null` where the event does
+ *  not state it. */
+export interface NormalizedMonitorException {
+  type: string | null;
+  message: string | null;
+}
+
+/** One tag of the latest event, AFTER the user-identifying filter
+ *  (`lib/monitors/evidence.ts`) has run. */
+export interface NormalizedMonitorTag {
+  key: string;
+  value: string;
+}
+
+/** The request that triggered the latest event (MOTIR-5977): its method and its
+ *  PATH ONLY. No scheme, host, query string, fragment, header, cookie or body is
+ *  ever read, so none can be carried. */
+export interface NormalizedMonitorRequest {
+  method: string | null;
+  path: string;
+}
+
 /**
  * What an issue's LATEST EVENT says that its LIST row does not carry (Story
- * MOTIR-4932 · Subtask MOTIR-5728, frames added by MOTIR-4930 · MOTIR-5846):
- * where it is happening, in which build, and where in the code it was thrown.
- * Sentry keeps all three on the event, so they are read one issue at a time.
+ * MOTIR-4932 · Subtask MOTIR-5728, frames added by MOTIR-4930 · MOTIR-5846, the
+ * rest of the EVIDENCE by MOTIR-5975 · MOTIR-5977): where it is happening, in
+ * which build, where in the code it was thrown, what it said, what request
+ * triggered it, and which event it was. Sentry keeps all of it on the event, so
+ * it is read one issue at a time — in ONE request.
  *
  * `environment` / `release` are `null` when the latest event carries none — an
  * event with no release is ordinary, and `null` is the honest answer rather
  * than a guess. `frames` is `[]` by the same rule when the event carries no
  * exception stack: ordered in-app first, then most-recent call first, and never
- * longer than {@link MONITOR_ISSUE_FRAMES_MAX}.
+ * longer than {@link MONITOR_ISSUE_FRAMES_MAX}. `exception` and `request` are
+ * `null` when the event has no such entry; `tags` is `[]` when it has none left
+ * after the filter; `eventId` / `eventAt` are `null` when absent or malformed.
  *
- * ⚠️ FRAMES ARE RETURNED, NEVER STORED. The reconciler persists `environment`
- * and `release` and ignores `frames`; a consumer that needs them (the bug
- * enrichment, MOTIR-5849) reads this call itself at the moment it needs them.
+ * ⚠️ USER-IDENTIFYING DATA NEVER LEAVES THE SEAM. `tags` has already been
+ * through `filterEvidenceTags` and `request.path` through `requestPathOf`, in
+ * EVERY adapter, so no consumer can store or show what this returns without the
+ * filter having run.
+ *
+ * ⚠️ WHAT IS STORED, AND WHERE: every SUCCESSFUL read — the reconcile visit
+ * and the hand-made link — stores ALL of it on the `monitor_issue` link:
+ * `environment` / `release` (MOTIR-5729) and the evidence, frames included
+ * (MOTIR-5979), unless the link already holds a newer event. The work-item
+ * page, `get_work_item` and the dispatch prompt read the STORE, never this call;
+ * the bug enrichment (MOTIR-5849) still reads the frames here, at the moment it
+ * needs them.
  */
 export interface NormalizedMonitorIssueContext {
   environment: string | null;
   release: string | null;
   frames: NormalizedMonitorStackFrame[];
+  exception: NormalizedMonitorException | null;
+  tags: NormalizedMonitorTag[];
+  request: NormalizedMonitorRequest | null;
+  eventId: string | null;
+  eventAt: Date | null;
 }

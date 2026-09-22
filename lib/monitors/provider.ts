@@ -379,6 +379,18 @@ export interface MonitorProvider {
    * in-app first, then most-recent call first, and cut at
    * `MONITOR_ISSUE_FRAMES_MAX`. No exception entry is `frames: []`.
    *
+   * THE EVIDENCE (MOTIR-5975 · MOTIR-5977) rides the same response: the
+   * surfaced exception's `type` and `value` (the message, bounded by
+   * `MONITOR_EVIDENCE_MESSAGE_MAX`); the event's `tags` with every
+   * user-identifying key dropped (`filterEvidenceTags`, `lib/monitors/evidence.ts`);
+   * the `type: "request"` entry's `method` and the PATH of its `url`
+   * (`requestPathOf` — no query, fragment, header, cookie or body is ever read);
+   * and the event's `eventID` and `dateCreated`. Absent or malformed is `null` /
+   * `[]`. The filters run INSIDE every adapter, so what this returns is already
+   * safe to store and show. Its consumer is the evidence store on the link
+   * (MOTIR-5979), which the item page, `get_work_item` and the dispatch prompt
+   * all read.
+   *
    * ⚠️ THE FRAMES RIDE THE SAME REQUEST. The event is already fetched for the
    * two facts above, so carrying its stack costs nothing extra against
    * `MONITOR_CONTEXT_READS_PER_POLL` — which is why this is one method and not

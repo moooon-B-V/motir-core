@@ -289,6 +289,12 @@ describe('the per-poll CAP', () => {
         where: { connectionId, environment: 'production' },
       });
       expect(withContext).toBe(MONITOR_CONTEXT_READS_PER_POLL);
+      // The issue past the budget was SKIPPED, not failed: its evidence was
+      // neither read nor checked (MOTIR-5979), so it stays `never_read`.
+      const checked = await adminDb.monitorIssue.count({
+        where: { connectionId, evidenceCheckedAt: { not: null } },
+      });
+      expect(checked).toBe(MONITOR_CONTEXT_READS_PER_POLL);
     },
   );
 });

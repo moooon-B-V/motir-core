@@ -14,16 +14,19 @@ import {
   MONITOR_VERIFY_INSTALL_TIMEOUT_MS,
   type MonitorProvider,
 } from '../provider';
+import { boundExceptionMessage, filterEvidenceTags, requestPathOf } from '../evidence';
 import { registerMonitorProvider } from '../registry';
 import {
   MONITOR_ISSUE_FRAMES_MAX,
   type MonitorCredential,
   type NormalizedMonitorAssignee,
+  type NormalizedMonitorException,
   type NormalizedMonitorHealth,
   type NormalizedMonitorIssue,
   type NormalizedMonitorIssueContext,
   type NormalizedMonitorIssuePage,
   type NormalizedMonitorProject,
+  type NormalizedMonitorRequest,
   type NormalizedMonitorStackFrame,
 } from '../types';
 
@@ -449,8 +452,9 @@ export const sentryMonitorProvider: MonitorProvider = {
 
   /**
    * `GET /organizations/{orgSlug}/issues/{issueId}/events/latest/` — the latest
-   * event's `environment` tag, `release.version` and exception frames. A 404 is the typed
-   * {@link MonitorIssueGoneError}. Consumed by MOTIR-5729 and MOTIR-5731.
+   * event's `environment` tag, `release.version`, exception frames and the rest
+   * of its EVIDENCE (MOTIR-5977). A 404 is the typed {@link MonitorIssueGoneError}.
+   * Consumed by MOTIR-5729 and MOTIR-5731.
    */
   async getIssueContext({
     accessToken,
@@ -477,10 +481,17 @@ export const sentryMonitorProvider: MonitorProvider = {
 
 /**
  * ONE Sentry event payload → the issue's context. Sentry states an event's tags
- * as `[{ key, value }]` and its release as `{ version }` (or `null`) — both
- * DOCUMENTED EXPECTATIONS, read 2026-09-19. Anything else is `null`, never a
- * guess: "no release" is an ordinary event, and a made-up one is a lie on the
- * card.
+ * as `[{ key, value }]`, its release as `{ version }` (or `null`), its id as
+ * `eventID` and its time as `dateCreated` — all DOCUMENTED EXPECTATIONS, read
+ * 2026-09-19 and, for the evidence fields, 2026-09-22 (Sentry, "Retrieve an
+ * Issue Event" and "Event Payloads": the Exception, Request and Tags
+ * interfaces). Anything else is `null` / `[]`, never a guess: "no release" is an
+ * ordinary event, and a made-up one is a lie on the work item.
+ *
+ * ⚠️ THE EVIDENCE IS FILTERED HERE, AT THE SEAM (MOTIR-5977). Tags go through
+ * `filterEvidenceTags`, the request's URL through `requestPathOf`, and of the
+ * request entry only `method` and `url` are read — `query`, `headers`,
+ * `cookies`, `data` and `env` never are, so they cannot leak downstream.
  */
 export function normalizeIssueContext(
   event: Record<string, unknown>,
@@ -498,11 +509,77 @@ export function normalizeIssueContext(
   const release = event['release'];
   const version =
     release && typeof release === 'object' ? (release as { version?: unknown }).version : null;
+  const eventId = event['eventID'];
   return {
     environment,
     release: typeof version === 'string' && version ? version : null,
     frames: normalizeEventFrames(event),
+    exception: normalizeEventException(event),
+    tags: filterEvidenceTags(tags),
+    request: normalizeEventRequest(event),
+    eventId: typeof eventId === 'string' && eventId ? eventId : null,
+    eventAt: readOptionalDate(event['dateCreated']),
   };
+}
+
+/** The event's `entries[]` item of the given `type`, or `undefined`. */
+function entryOfType(event: Record<string, unknown>, type: string): { data?: unknown } | undefined {
+  const entries = Array.isArray(event['entries']) ? (event['entries'] as unknown[]) : [];
+  return entries.find(
+    (entry): entry is { data?: unknown } =>
+      !!entry && typeof entry === 'object' && (entry as { type?: unknown }).type === type,
+  );
+}
+
+/** The exception chain's `values[]` — cause first — or `[]`. */
+function exceptionValues(event: Record<string, unknown>): unknown[] {
+  const data = entryOfType(event, 'exception')?.data;
+  return data && typeof data === 'object' && Array.isArray((data as { values?: unknown }).values)
+    ? (data as { values: unknown[] }).values
+    : [];
+}
+
+/**
+ * The exception that SURFACED (MOTIR-5977) — the SAME value
+ * {@link normalizeEventFrames} takes its frames from: the LAST value carrying
+ * frames, falling back to the last value when none does. Its `type` and its
+ * `value` (the message), bounded by `MONITOR_EVIDENCE_MESSAGE_MAX`. No exception
+ * entry, or a surfaced value stating neither, is `null`.
+ */
+export function normalizeEventException(
+  event: Record<string, unknown>,
+): NormalizedMonitorException | null {
+  const values = exceptionValues(event);
+  if (values.length === 0) return null;
+  let surfaced: unknown = values[values.length - 1];
+  for (let i = values.length - 1; i >= 0; i -= 1) {
+    if (framesOfValue(values[i]).length > 0) {
+      surfaced = values[i];
+      break;
+    }
+  }
+  if (!surfaced || typeof surfaced !== 'object') return null;
+  const { type, value } = surfaced as { type?: unknown; value?: unknown };
+  const exceptionType = typeof type === 'string' && type ? type : null;
+  const message = typeof value === 'string' && value ? boundExceptionMessage(value) : null;
+  return exceptionType === null && message === null ? null : { type: exceptionType, message };
+}
+
+/**
+ * The request that triggered the event (MOTIR-5977): the `entries[]` item of
+ * `type: "request"` — its `data.method` and the PATH of its `data.url`. Nothing
+ * else on the entry is read. No request entry, or one whose URL does not parse,
+ * is `null`.
+ */
+export function normalizeEventRequest(
+  event: Record<string, unknown>,
+): NormalizedMonitorRequest | null {
+  const data = entryOfType(event, 'request')?.data;
+  if (!data || typeof data !== 'object') return null;
+  const { method, url } = data as { method?: unknown; url?: unknown };
+  const path = requestPathOf(url);
+  if (path === null) return null;
+  return { method: typeof method === 'string' && method ? method.toUpperCase() : null, path };
 }
 
 /**
@@ -524,16 +601,7 @@ export function normalizeIssueContext(
 export function normalizeEventFrames(
   event: Record<string, unknown>,
 ): NormalizedMonitorStackFrame[] {
-  const entries = Array.isArray(event['entries']) ? (event['entries'] as unknown[]) : [];
-  const exception = entries.find(
-    (entry): entry is { data?: unknown } =>
-      !!entry && typeof entry === 'object' && (entry as { type?: unknown }).type === 'exception',
-  );
-  const data = exception?.data;
-  const values =
-    data && typeof data === 'object' && Array.isArray((data as { values?: unknown }).values)
-      ? (data as { values: unknown[] }).values
-      : [];
+  const values = exceptionValues(event);
   let rawFrames: unknown[] = [];
   for (let i = values.length - 1; i >= 0; i -= 1) {
     const frames = framesOfValue(values[i]);
@@ -632,6 +700,14 @@ function readDate(value: unknown): Date {
     if (!Number.isNaN(parsed.getTime())) return parsed;
   }
   return new Date();
+}
+
+/** A date the provider stated, or `null` — for a fact that is OPTIONAL, where
+ *  "now" would be a guess dressed up as a reading (MOTIR-5977's `eventAt`). */
+function readOptionalDate(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 /**
