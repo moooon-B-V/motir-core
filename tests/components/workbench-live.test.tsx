@@ -135,8 +135,6 @@ function controllableStream() {
   };
 }
 
-const PAGE = { total: 2, page: 1, pageSize: 25 };
-
 beforeEach(() => {
   pathname = '/workbench';
   params = new URLSearchParams('tab=approvals');
@@ -164,7 +162,7 @@ describe('ONE STREAM, HELD BY THE HOST', () => {
           <ApprovalsList
             rows={[row('gate-1', 5147, 'One')]}
             label="To approve"
-            pagination={PAGE}
+            ceiling={null}
             empty={EMPTY}
           />
         </WorkbenchLive>,
@@ -229,7 +227,7 @@ describe('RECONNECTING says so — and is not a loading state', () => {
           <ApprovalsList
             rows={[row('gate-1', 5147, 'Still perfectly readable')]}
             label="To approve"
-            pagination={PAGE}
+            ceiling={null}
             empty={EMPTY}
           />
         </WorkbenchLive>,
@@ -258,7 +256,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     await act(async () => {
       view = renderWithIntl(
         <WorkbenchLive>
-          <ApprovalsList rows={first} label="To approve" pagination={PAGE} empty={EMPTY} />
+          <ApprovalsList rows={first} label="To approve" ceiling={null} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -269,12 +267,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     await act(async () => {
       view.rerender(
         <WorkbenchLive>
-          <ApprovalsList
-            rows={[first[0]!]}
-            label="To approve"
-            pagination={{ ...PAGE, total: 1 }}
-            empty={EMPTY}
-          />
+          <ApprovalsList rows={[first[0]!]} label="To approve" ceiling={null} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -298,7 +291,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     await act(async () => {
       view = renderWithIntl(
         <WorkbenchLive>
-          <ApprovalsList rows={first} label="To approve" pagination={PAGE} empty={EMPTY} />
+          <ApprovalsList rows={first} label="To approve" ceiling={null} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -312,7 +305,7 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
           <ApprovalsList
             rows={[...first, row('gate-9', 5239, 'Arrived under the reader')]}
             label="To approve"
-            pagination={PAGE}
+            ceiling={null}
             empty={EMPTY}
           />
         </WorkbenchLive>,
@@ -323,14 +316,22 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     expect(screen.getByText('New')).toBeTruthy();
   });
 
-  it('DROPS its held rows on a LOAD — a pager move is not a nudge', async () => {
+  it('DROPS its held rows on a LOAD — a remount (the next navigation) is not a nudge', async () => {
+    // Before MOTIR-5998 the load was a PAGER move; the tab has no pager now, so
+    // the next load is a navigation back to the tab, which MOUNTS the list anew.
     controllableStream();
     const first = [row('gate-1', 5147, 'The first'), row('gate-2', 4942, 'The second')];
     let view!: ReturnType<typeof renderWithIntl>;
     await act(async () => {
       view = renderWithIntl(
         <WorkbenchLive>
-          <ApprovalsList rows={first} label="To approve" pagination={PAGE} empty={EMPTY} />
+          <ApprovalsList
+            key="visit-1"
+            rows={first}
+            label="To approve"
+            ceiling={null}
+            empty={EMPTY}
+          />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -338,22 +339,29 @@ describe('THE HELD ROW — § 20’s settled rule survives a live re-read', () =
     await act(async () => {
       view.rerender(
         <WorkbenchLive>
-          <ApprovalsList rows={[first[0]!]} label="To approve" pagination={PAGE} empty={EMPTY} />
+          <ApprovalsList
+            key="visit-1"
+            rows={[first[0]!]}
+            label="To approve"
+            ceiling={null}
+            empty={EMPTY}
+          />
         </WorkbenchLive>,
       );
       await Promise.resolve();
     });
     expect(screen.getByTestId('approval-row-gate-2')).toBeTruthy();
 
-    // PAGE 2 — a view the reader asked for. § 26: a held row leaves on the next
-    // LOAD, which is exactly this.
+    // A NEW VISIT — a view the reader asked for. § 26: a held row leaves on the
+    // next LOAD, which is exactly this.
     await act(async () => {
       view.rerender(
         <WorkbenchLive>
           <ApprovalsList
-            rows={[row('gate-7', 5008, 'Page two')]}
+            key="visit-2"
+            rows={[first[0]!]}
             label="To approve"
-            pagination={{ ...PAGE, page: 2 }}
+            ceiling={null}
             empty={EMPTY}
           />
         </WorkbenchLive>,
@@ -556,7 +564,7 @@ describe('a row THIS READER decided survives a frame, with its state pill', () =
     await act(async () => {
       view = renderWithIntl(
         <WorkbenchLive>
-          <ApprovalsList rows={rows} label="To approve" pagination={PAGE} empty={EMPTY} />
+          <ApprovalsList rows={rows} label="To approve" ceiling={null} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -593,12 +601,7 @@ describe('a row THIS READER decided survives a frame, with its state pill', () =
     await act(async () => {
       view.rerender(
         <WorkbenchLive>
-          <ApprovalsList
-            rows={[rows[0]!]}
-            label="To approve"
-            pagination={{ ...PAGE, total: 1 }}
-            empty={EMPTY}
-          />
+          <ApprovalsList rows={[rows[0]!]} label="To approve" ceiling={null} empty={EMPTY} />
         </WorkbenchLive>,
       );
       await Promise.resolve();
@@ -627,12 +630,7 @@ describe('THE ARRIVAL INTO AN EMPTY TAB — the one a reader is certainly watchi
   // own states, which is what makes the row that replaces it an arrival at all.
   it('a row landing in a tab that was EMPTY carries `New`', async () => {
     const view = renderWithIntl(
-      <ApprovalsList
-        rows={[]}
-        label="To approve"
-        pagination={{ ...PAGE, total: 0 }}
-        empty={EMPTY}
-      />,
+      <ApprovalsList rows={[]} label="To approve" ceiling={null} empty={EMPTY} />,
     );
     // The tab holds nothing, and says so — no table, and no pager under it.
     expect(screen.getByText('Nothing is waiting')).toBeTruthy();
@@ -643,7 +641,7 @@ describe('THE ARRIVAL INTO AN EMPTY TAB — the one a reader is certainly watchi
       <ApprovalsList
         rows={[row('gate-9', 5147, 'Arrived while you were reading')]}
         label="To approve"
-        pagination={{ ...PAGE, total: 1 }}
+        ceiling={null}
         empty={EMPTY}
       />,
     );
@@ -659,21 +657,9 @@ describe('THE ARRIVAL INTO AN EMPTY TAB — the one a reader is certainly watchi
     // "Nothing is waiting" over the decision the reader has just made.
     const only = [row('gate-1', 5147, 'The one they decided')];
     const view = renderWithIntl(
-      <ApprovalsList
-        rows={only}
-        label="To approve"
-        pagination={{ ...PAGE, total: 1 }}
-        empty={EMPTY}
-      />,
+      <ApprovalsList rows={only} label="To approve" ceiling={null} empty={EMPTY} />,
     );
-    view.rerender(
-      <ApprovalsList
-        rows={[]}
-        label="To approve"
-        pagination={{ ...PAGE, total: 0 }}
-        empty={EMPTY}
-      />,
-    );
+    view.rerender(<ApprovalsList rows={[]} label="To approve" ceiling={null} empty={EMPTY} />);
 
     expect(screen.getByTestId('approval-row-gate-1')).toBeTruthy();
     expect(screen.queryByText('Nothing is waiting')).toBeNull();

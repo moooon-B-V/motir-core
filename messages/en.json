@@ -7527,7 +7527,8 @@
       },
       "choiceMeta": "{count} options · {question}",
       "choiceDecided": "Chose <label>{label}</label> · {bestFor}",
-      "choiceNoneChosen": "{count} options · none chosen"
+      "choiceNoneChosen": "{count} options · none chosen",
+      "ceiling": "Showing the first {shown} of {total}. <link>Approvals</link> lists every one."
     },
     "live": {
       "new": "New",

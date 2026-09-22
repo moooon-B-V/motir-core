@@ -144,7 +144,7 @@ describe('CLAIM 1 · routing is `assigneeId ?? reporterId`, and the NEGATIVE cas
       reporterId: meCtx.userId,
     });
 
-    const mine = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const mine = await approvalGatesService.listAwaitingMe(meCtx);
     const ids = mine.items.map((row) => row.gateId);
 
     // POSITIVE — both shapes the predicate admits.
@@ -213,7 +213,7 @@ describe('CLAIM 2 · access is enforced IN the query, over a population the read
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
     };
-    const scoped = await approvalGatesService.listAwaitingMe(readerCtx, { limit: 100 });
+    const scoped = await approvalGatesService.listAwaitingMe(readerCtx);
 
     // ⚠️ STRICTLY FEWER — the inequality is the assertion. A reader who could
     // see everything would make this line read `5 < 5` and fail.
@@ -232,7 +232,7 @@ describe('CLAIM 2 · access is enforced IN the query, over a population the read
       ...readerCtx,
       projectId: hiddenProject.id,
     });
-    expect(atHidden).toMatchObject({ items: [], total: 0, page: 1 });
+    expect(atHidden).toEqual({ items: [], total: 0, truncated: false });
   });
 });
 
@@ -245,7 +245,7 @@ describe('CLAIM 3 · the COUNT and the LIST are one answer, not two', () => {
     await gate({ title: 'Theirs', assigneeId: otherId, reporterId: meCtx.userId });
     await gate({ title: 'Already approved', assigneeId: meCtx.userId, state: 'approved' });
 
-    const before = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const before = await approvalGatesService.listAwaitingMe(meCtx);
     expect(before.total).toBe(4);
     expect(await approvalGatesService.countAwaitingMe(meCtx)).toBe(before.total);
     // The STRIP reads the same number through `tabCounts`, which is the seam the
@@ -259,7 +259,7 @@ describe('CLAIM 3 · the COUNT and the LIST are one answer, not two', () => {
       data: { state: 'changes_requested' },
     });
 
-    const after = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const after = await approvalGatesService.listAwaitingMe(meCtx);
     expect(after.total).toBe(3);
     expect(await approvalGatesService.countAwaitingMe(meCtx)).toBe(after.total);
     expect((await homeService.tabCounts(meCtx)).approvals).toBe(3);
@@ -272,7 +272,7 @@ describe('CLAIM 3 · the COUNT and the LIST are one answer, not two', () => {
       await gate({ title: `Already ${state}`, assigneeId: meCtx.userId, state });
     }
 
-    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
 
     // POSITIVE CONTROL: the awaiting one IS returned, so the filter is selecting
     // rather than emptying.
@@ -283,8 +283,8 @@ describe('CLAIM 3 · the COUNT and the LIST are one answer, not two', () => {
   });
 });
 
-describe('CLAIM 4 · paging is the shipped OFFSET contract, not a keyset', () => {
-  it('partitions the set across a boundary — no repeats, no drops, an honest total', async () => {
+describe('CLAIM 4 · the tab reads the WHOLE set — no page — under a ceiling it SAYS (MOTIR-5998)', () => {
+  it('reads every gate once — no repeats, no drops, an honest total', async () => {
     for (let i = 0; i < 7; i += 1) {
       await gate({
         title: `Waiting ${i}`,
@@ -293,36 +293,33 @@ describe('CLAIM 4 · paging is the shipped OFFSET contract, not a keyset', () =>
       });
     }
 
-    const p1 = await approvalGatesService.listAwaitingMe(meCtx, { page: 1, limit: 3 });
-    const p2 = await approvalGatesService.listAwaitingMe(meCtx, { page: 2, limit: 3 });
-    const p3 = await approvalGatesService.listAwaitingMe(meCtx, { page: 3, limit: 3 });
+    const queue = await approvalGatesService.listAwaitingMe(meCtx);
 
-    const seen = [...p1.items, ...p2.items, ...p3.items].map((r) => r.gateId);
+    const seen = queue.items.map((r) => r.gateId);
     // NO DROPS — every gate in the set appears exactly once …
     expect(seen).toHaveLength(7);
-    // … and NO REPEATS across either boundary.
+    // … and NO REPEATS.
     expect(new Set(seen).size).toBe(7);
-    // The total is the whole SET, never the window.
-    for (const page of [p1, p2, p3]) expect(page.total).toBe(7);
-    expect(p1.page).toBe(1);
-    expect(p2.page).toBe(2);
+    expect(queue).toMatchObject({ total: 7, truncated: false });
   });
 
-  it('CLAMPS a page past the end to the LAST page, with the real total — `windowFor`s contract', async () => {
+  it('a ceiling below the set keeps the OLDEST and reports the whole total', async () => {
+    const created: string[] = [];
     for (let i = 0; i < 4; i += 1) {
-      await gate({
+      const made = await gate({
         title: `Waiting ${i}`,
         assigneeId: meCtx.userId,
         createdAt: new Date(Date.UTC(2026, 8, i + 1)),
       });
+      created.push(made.gate.id);
     }
 
-    const clamped = await approvalGatesService.listAwaitingMe(meCtx, { page: 99, limit: 3 });
+    const cut = await approvalGatesService.listAwaitingMe(meCtx, { ceiling: 3 });
 
-    // NOT an empty window and NOT an error — the same answer `/items` gives.
-    expect(clamped.page).toBe(2);
-    expect(clamped.total).toBe(4);
-    expect(clamped.items).toHaveLength(1);
+    // The oldest-waiting come first, so the cut drops the NEWEST — the question
+    // that has waited least is the one a reader loses to the ceiling.
+    expect(cut.items.map((r) => r.gateId)).toEqual(created.slice(0, 3));
+    expect(cut).toMatchObject({ total: 4, truncated: true });
   });
 
   it('orders oldest-waiting first, against `createdAt` values set EXPLICITLY', async () => {
@@ -343,7 +340,7 @@ describe('CLAIM 4 · paging is the shipped OFFSET contract, not a keyset', () =>
       createdAt: new Date('2026-09-01T00:00:00Z'),
     });
 
-    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
 
     expect(page.items.map((r) => r.gateId)).toEqual([
       oldest.gate.id,
@@ -364,7 +361,7 @@ describe('THE BOUNDARY · a kind this build registers no handler for', () => {
       kind: 'pull_request_merge',
     });
 
-    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
 
     // NOT DROPPED — the fixture's two gates are both in the answer.
     expect(page.total).toBe(2);

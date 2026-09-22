@@ -7523,7 +7523,8 @@
       },
       "choiceMeta": "{count} 个选项 · {question}",
       "choiceDecided": "选择了「<label>{label}</label>」· {bestFor}",
-      "choiceNoneChosen": "{count} 个选项 · 未选择"
+      "choiceNoneChosen": "{count} 个选项 · 未选择",
+      "ceiling": "仅显示前 {shown} 项，共 {total} 项。<link>审批</link>中列出了全部。"
     },
     "live": {
       "new": "新增",

@@ -272,7 +272,7 @@ describe('`yours` EQUALS the To-approve tab, over one fixture', () => {
     const yours = [...map].filter(([, v]) => v.state === 'yours').map(([id]) => id);
 
     const meCtx: HomeActorContext = { ...fx.ctx, projectId: fx.projectId };
-    const tab = await approvalGatesService.listAwaitingMe(meCtx, { limit: 50 });
+    const tab = await approvalGatesService.listAwaitingMe(meCtx);
     const tabDecidable = tab.items.filter((row) => row.canDecide).map((row) => row.workItem.id);
 
     expect(yours.sort()).toEqual(tabDecidable.sort());

@@ -64,12 +64,7 @@ function decisionRow(
 
 function renderRows(rows: ApprovalQueueRowDto[]) {
   return renderWithIntl(
-    <ApprovalsList
-      rows={rows}
-      label="To approve"
-      pagination={{ total: rows.length, page: 1, pageSize: 25 }}
-      empty={<p>Nothing</p>}
-    />,
+    <ApprovalsList rows={rows} label="To approve" ceiling={null} empty={<p>Nothing</p>} />,
   );
 }
 

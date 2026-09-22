@@ -65,7 +65,7 @@ import {
 // `/api/mcp` with a `CLI_TOKEN_GRANT` bearer, exactly as
 // `design-approval.spec.ts` does: the `awaiting` gate is created BY
 // `designEvidenceService` at publish, so a seeded one would be an assertion
-// against a row the product never made. The pager's filler gates are written
+// against a row the product never made. The no-pager test's filler gates are written
 // directly — `approvals-tab-seed.ts` states that trade in full, and nothing is
 // ever asserted about them individually.
 //
@@ -338,32 +338,32 @@ test.describe('every decision waiting on you, in one place', () => {
     await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
   });
 
-  test('past one page it inherits the shipped pager, and page two holds different rows', async ({
+  test('past the old 25-row window every approval is on ONE tab — no pager, and `page=2` changes nothing', async ({
     page,
     baseURL,
   }) => {
     const client = await agentSession(seed.token, baseURL!);
     expect((await publish(client, seed.designKey)).isError ?? false).toBe(false);
-    // `HOME_PAGE_SIZE` is 25, so 25 filler gates plus the published one is a
-    // boundary. See `approvals-tab-seed.ts` for why these are written directly.
+    // 25 filler gates plus the published one is one past the window the tab used
+    // to page at (MOTIR-5998). See `approvals-tab-seed.ts` for why these are
+    // written directly.
     await plantFillerGates(seed, STORY_TITLE_EXPORT, 25);
 
     await signIn(page, seed.reviewerEmail, seed.password);
     await page.goto('/workbench?tab=approvals');
 
-    await expect(rows(page)).toHaveCount(25);
-    const firstPage = await rows(page).evaluateAll((nodes) =>
+    await expect(rows(page)).toHaveCount(26);
+    await expect(page.getByRole('button', { name: 'Page 2' })).toHaveCount(0);
+    const whole = await rows(page).evaluateAll((nodes) =>
       nodes.map((n) => (n as HTMLElement).dataset['testid']),
     );
 
-    await page.getByRole('button', { name: 'Page 2' }).click();
-
-    await expect(page).toHaveURL(/tab=approvals&page=2/);
-    await expect(rows(page)).toHaveCount(1);
-    const secondPage = await rows(page).evaluateAll((nodes) =>
+    // A stale bookmark carrying a page reads the SAME set — the tab has no pages.
+    await page.goto('/workbench?tab=approvals&page=2');
+    await expect(rows(page)).toHaveCount(26);
+    const again = await rows(page).evaluateAll((nodes) =>
       nodes.map((n) => (n as HTMLElement).dataset['testid']),
     );
-    // The window MOVED rather than being re-served.
-    expect(secondPage.filter((id) => firstPage.includes(id))).toEqual([]);
+    expect(again).toEqual(whole);
   });
 });

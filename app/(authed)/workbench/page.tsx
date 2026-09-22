@@ -262,6 +262,8 @@ export default async function WorkbenchPage({
   //
   // `?cursor=` is neither read nor emitted any more — MOTIR-4852 retired the
   // keyset and this card took the last reader of the token off the route.
+  // ⚠️ IGNORED on `?tab=approvals`: that tab lists its whole set with no pager
+  // (MOTIR-5998), so a stale `&page=2` renders the same rows as page one.
   const page = parsePage(params['page']);
 
   const t = await getTranslations('workbench');
@@ -348,7 +350,7 @@ export default async function WorkbenchPage({
              that decide who may see this page. The fallback is the list's own
              shape so the frame does not shift when the rows arrive. */
           <Suspense fallback={<ApprovalsPending />}>
-            <ApprovalsTab ctx={ctx} page={page} />
+            <ApprovalsTab ctx={ctx} />
           </Suspense>
         ) : (
           <WorkbenchList

@@ -378,15 +378,20 @@ test.describe('the Workbench keeps itself current while you are looking at it', 
     const toApprove = en.workbench.tabs.toApprove;
     const rows = (p: Page) => rowsIn(p, toApprove);
 
-    // `HOME_PAGE_SIZE` is 25, so 26 filler gates make the queue two pages AND
-    // make page one taller than the fold — the two things a "you were not
+    // 26 filler gates make the list taller than the fold — what a "you were not
     // disturbed" claim needs. Nothing is ever asserted about a filler
     // individually (`approvals-tab-seed.ts` states that trade).
+    //
+    // ⚠️ AMENDED by MOTIR-5998 (Story MOTIR-5996), which REMOVED the tab's pager:
+    // the queue is one unpaged list now, so all 26 render, and the walk's former
+    // last step — "the pager's page survives an update too" — exercised a control
+    // that no longer exists and was removed rather than rewritten. Every other
+    // assertion in this test is unchanged.
     await plantFillerGates(seed, STORY_TITLE_EXPORT, 26);
 
     await signIn(page, seed.reviewerEmail, seed.password);
     await page.goto('/workbench?tab=approvals');
-    await expect(rows(page)).toHaveCount(25);
+    await expect(rows(page)).toHaveCount(26);
 
     const last = rows(page).last();
     await last.scrollIntoViewIfNeeded();
@@ -406,18 +411,6 @@ test.describe('the Workbench keeps itself current while you are looking at it', 
       'page',
     );
     expect(await documentStamp(page)).toBe('undisturbed');
-
-    // THE PAGER'S PAGE, the same way. Moving to page two is the reader's own act —
-    // a LOAD in § 26's sense, which is why the held rows are dropped there — but it
-    // is still the same document, so the stamp is re-laid rather than re-checked.
-    await page.getByRole('button', { name: 'Page 2' }).click();
-    await expect(page).toHaveURL(/tab=approvals&page=2/);
-    await stampDocument(page, 'page-two');
-
-    expect((await publishDesignResult(client, seed.secondDesignKey)).isError ?? false).toBe(false);
-    await expect.poll(() => badgeCount(page, toApprove), { timeout: 60_000 }).toBe(28);
-    await expect(page).toHaveURL(/tab=approvals&page=2/);
-    expect(await documentStamp(page)).toBe('page-two');
 
     await client.close();
   });

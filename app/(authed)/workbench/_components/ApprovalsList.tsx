@@ -1,9 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { IssueListPager } from '../../items/_components/IssueListPager';
-import { workbenchTabHref } from '@/lib/workbench/tab';
 import { ApprovalRow, APPROVALS_GRID_TEMPLATE } from '@/components/approvals/ApprovalRow';
 import { useLiveRows } from './useLiveRows';
 import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
@@ -17,19 +15,30 @@ import type { ReactNode } from 'react';
 // ONE approvals row the Workbench and the Approval records room both render. Its
 // header carries the row's contract: it OPENS the approval overlay, it holds no
 // frame and no decide path, and a row decided in the overlay SETTLES in place
-// rather than vanishing. This list is the tab's table, its header and its pager.
+// rather than vanishing. This list is the tab's table and its header.
+//
+// ⚠️ NO PAGER (Story MOTIR-5996 · MOTIR-5998; `design/workbench/design-notes.md`
+// § 28, DECISION 5). The tab lists every approval routed to its reader: one
+// person's queue is short, and a pager on a short list only hides its oldest
+// questions behind a click nobody makes. The read is bounded by the service's
+// ceiling, and when that bites, ONE line under the last row says so and points at
+// the Approvals room, which lists every one with its own pager.
 
 const GRID_TEMPLATE = APPROVALS_GRID_TEMPLATE;
 
 export function ApprovalsList({
   rows,
   label,
-  pagination,
+  ceiling,
   empty,
 }: {
   rows: ApprovalQueueRowDto[];
   label: string;
-  pagination: { total: number; page: number; pageSize: number };
+  /**
+   * Set when the read's ceiling CUT the set: how many rows are shown and how many
+   * are waiting. `null` — the ordinary case — draws nothing.
+   */
+  ceiling: { shown: number; total: number } | null;
   /**
    * What an empty tab shows — rendered HERE rather than instead of this
    * component (Story MOTIR-5238 · MOTIR-5245's E2E finding).
@@ -48,12 +57,11 @@ export function ApprovalsList({
   empty: ReactNode;
 }) {
   const t = useTranslations('workbench.approvals');
-  const router = useRouter();
   // THE LIVE RULE, for the one tab § 20's settled-row decision is about
   // (Story MOTIR-5238 · MOTIR-5242). The reset key is the "next load" § 26
-  // names: a `router.refresh()` keeps the address and holds its rows, a pager
-  // move changes the page and starts clean.
-  const live = useLiveRows(rows, `approvals:${pagination.page}`, (row) => row.gateId);
+  // names: a `router.refresh()` keeps the address and holds its rows. With no
+  // pager there is one window, so the key is constant (MOTIR-5998).
+  const live = useLiveRows(rows, 'approvals', (row) => row.gateId);
 
   // ⚠️ `live.rows`, NOT `rows` — a HELD row keeps the list non-empty, so a queue
   // the reader has just emptied does not flip to the empty state underneath the
@@ -99,15 +107,28 @@ export function ApprovalsList({
           ))}
         </div>
       </div>
-      {/* The shipped pager, inherited unchanged — `design/workbench/design-notes.md`
-          records that this tab gets it "for free the moment MOTIR-4794 renders
-          rows into the shared list". */}
-      <IssueListPager
-        total={pagination.total}
-        page={pagination.page}
-        pageSize={pagination.pageSize}
-        onPage={(page) => router.push(workbenchTabHref('approvals', page))}
-      />
+      {ceiling === null ? null : (
+        /* THE CEILING LINE (§ 28, DECISION 5) — a note, never an alert: nothing is
+           wrong, the list is merely long. The strip's count stays the true total,
+           which is why this line has to say how many are shown. */
+        <div
+          role="note"
+          className="flex flex-wrap items-center gap-x-1 border-t border-(--el-border) bg-(--el-surface-soft) px-4 py-2.5 text-xs text-(--el-text-secondary)"
+        >
+          {t.rich('ceiling', {
+            shown: ceiling.shown,
+            total: ceiling.total,
+            link: (chunks) => (
+              <Link
+                href="/approvals"
+                className="font-medium text-(--el-link) hover:underline focus-visible:underline focus-visible:outline-none"
+              >
+                {chunks}
+              </Link>
+            ),
+          })}
+        </div>
+      )}
     </div>
   );
 }

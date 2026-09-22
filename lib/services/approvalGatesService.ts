@@ -7,7 +7,7 @@ import type {
   ApprovalGatePendingPayloadDTO,
   EarlierApprovalDTO,
   HeldTransitionDTO,
-  ApprovalQueuePageDto,
+  ApprovalQueueDto,
   ApprovalQueueRowDto,
   ApprovalRecordsPageDto,
   GateDecision,
@@ -379,6 +379,24 @@ export interface ApprovalQueueListOptions {
    * `pageSize`, which is `/items`' word for the same number.
    */
   limit?: number;
+}
+
+/**
+ * THE TO-APPROVE READ'S SAFETY BOUND (Story MOTIR-5996 · MOTIR-5998). The tab lists
+ * every approval routed to its reader with no pager, because one person's queue is
+ * short; this ceiling exists only so a pathological queue cannot turn one render
+ * into an unbounded query. It sits far above any real queue, and when it bites the
+ * DTO says so (`truncated`) and the list says so in words.
+ */
+export const APPROVAL_QUEUE_CEILING = 500;
+
+/** How a caller narrows the To-approve read — only its ceiling, and only a test lowers it. */
+export interface ApprovalQueueReadOptions {
+  /**
+   * Overrides {@link APPROVAL_QUEUE_CEILING}. A TEST SEAM: exercising the bound
+   * at its real value would mean seeding 501 gates.
+   */
+  ceiling?: number;
 }
 
 /** The ceiling a caller-supplied page size is clamped to — `homeService`'s. */
@@ -955,11 +973,16 @@ export const approvalGatesService = {
    * computed per gate by {@link getForWorkItem} — do not collapse the two axes
    * back into one query.
    *
-   * ⚠️ COUNT FIRST, THEN THE WINDOW — the same order `/items` and `homeService`
-   * use, for the same two reasons: the total is the pager's denominator, and
-   * knowing it is what lets an out-of-range page CLAMP to the last one instead
-   * of fetching an empty offset. Both halves call one `where` builder in the
-   * repository, so the badge and the list cannot disagree.
+   * ⚠️ THE WHOLE SET, NOT A PAGE (Story MOTIR-5996 · MOTIR-5998). One reader's
+   * queue is short, and a pager on a short list only hides its oldest questions
+   * behind a click nobody makes. The read is bounded by {@link APPROVAL_QUEUE_CEILING}
+   * — a SAFETY bound, not a page — and `truncated` says when it bit, so the tab
+   * can say so in words rather than drop rows silently
+   * (`design/workbench/design-notes.md` § 28, DECISION 5).
+   *
+   * ⚠️ COUNT FIRST, THEN THE SET — so the total is the true size of the awaiting
+   * set even when the ceiling cuts the rows. Both halves call one `where`
+   * builder in the repository, so the badge and the list cannot disagree.
    *
    * ⚠️ THE ACCESS DECISION IS THE SERVICE'S AND TRAVELS INTO THE QUERY. RLS is
    * WORKSPACE-rooted, so what this could leak is a PRIVATE PROJECT inside the
@@ -973,17 +996,16 @@ export const approvalGatesService = {
    */
   async listAwaitingMe(
     ctx: HomeActorContext,
-    options: ApprovalQueueListOptions = {},
-  ): Promise<ApprovalQueuePageDto> {
-    const pageSize = clampApprovalQueueLimit(options.limit);
+    options: ApprovalQueueReadOptions = {},
+  ): Promise<ApprovalQueueDto> {
+    const ceiling = options.ceiling ?? APPROVAL_QUEUE_CEILING;
     return withWorkspaceContext(ctx, async (tx) => {
       const scope = await routingScope(ctx, tx);
 
       const total = await approvalGateRepository.countAwaitingRoutedTo(scope, tx);
-      const { page, skip } = approvalQueueWindow(total, options.page, pageSize);
       const rows = await approvalGateRepository.findAwaitingRoutedTo(
         scope,
-        { skip, take: pageSize },
+        { skip: 0, take: ceiling },
         tx,
       );
 
@@ -993,7 +1015,7 @@ export const approvalGatesService = {
       // kind enum is asserted.
       const subjects = await summarizeGateSubjects(rows, tx);
 
-      // ⚠️ THE AUTHORITY ANSWER, resolved ONCE for the page rather than per row.
+      // ⚠️ THE AUTHORITY ANSWER, resolved ONCE for the set rather than per row.
       // Every row here is in the ACTIVE project, so the permission floor is one
       // question, and asking it per gate would be N identical reads. It is the
       // FLOOR only: ADR §2's relationship arm is already satisfied by the
@@ -1013,7 +1035,7 @@ export const approvalGatesService = {
         scope.projectIds.length > 0 &&
         (await projectAccessService.getCapabilities(ctx.projectId, ctx, tx)).canEdit;
 
-      // THE *WAITING ON* NAMES, resolved ONCE for the page — the same discipline
+      // THE *WAITING ON* NAMES, resolved ONCE for the set — the same discipline
       // `summarizeGateSubjects` keeps one read up, and for the same reason: a
       // 25-row queue that named its recipients one at a time would be 25 round
       // trips to draw one list. The ids are §2's routing rule read off each row,
@@ -1038,8 +1060,7 @@ export const approvalGatesService = {
           ),
         ),
         total,
-        page,
-        pageSize,
+        truncated: total > rows.length,
       };
     });
   },

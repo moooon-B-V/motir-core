@@ -289,10 +289,7 @@ async function everySurface(actor: Actor, opts: { canEdit: boolean }) {
       readings.moveCard = { A: moved.card.pendingDecision?.state };
     }
   }
-  const tab = await approvalGatesService.listAwaitingMe(
-    { ...actor, projectId: fx.projectId },
-    { limit: 50 },
-  );
+  const tab = await approvalGatesService.listAwaitingMe({ ...actor, projectId: fx.projectId });
   const tabYours = new Set(tab.items.filter((r) => r.canDecide).map((r) => r.workItem.id));
   return { readings, tabYours, direct };
 }

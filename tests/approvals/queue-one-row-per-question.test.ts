@@ -101,7 +101,7 @@ describe('the To approve tab lists a design card with a pull request ONCE', () =
   it('lists the DESIGN gate and not the merge gate it carries — and leaves single-gate cards alone', async () => {
     const { both, mergeOnly, designOnly } = await seed();
 
-    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
 
     expect(page.items.map((row) => row.gateId).sort()).toEqual(
       [
@@ -116,7 +116,7 @@ describe('the To approve tab lists a design card with a pull request ONCE', () =
   it('the badge, the home count and the list agree on the same number', async () => {
     await seed();
 
-    const listed = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const listed = await approvalGatesService.listAwaitingMe(meCtx);
     const badge = await approvalGatesService.countAwaitingMe(meCtx);
     const home = await homeService.tabCounts(meCtx);
 
@@ -132,7 +132,7 @@ describe('the To approve tab lists a design card with a pull request ONCE', () =
       data: { state: 'approved', decidedById: meCtx.userId, decidedAt: new Date() },
     });
 
-    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
     const onThisCard = page.items.filter((row) => row.workItem.id === both.id);
 
     expect(onThisCard.map((row) => row.gateId)).toEqual([both.gates.pull_request_approval]);
@@ -146,7 +146,7 @@ describe('the To approve tab lists a design card with a pull request ONCE', () =
       data: { state: 'superseded' },
     });
 
-    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
 
     expect(
       page.items.filter((row) => row.workItem.id === both.id).map((row) => row.gateId),
@@ -162,7 +162,7 @@ describe('a DECISION card with a pull request is listed ONCE too (MOTIR-4907 · 
     ]);
     const mergeOnly = await cardWith('Code card', ['pull_request_approval']);
 
-    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
 
     expect(page.items.map((row) => row.gateId).sort()).toEqual(
       [decision.gates.decision_approval, mergeOnly.gates.pull_request_approval].sort(),
@@ -180,7 +180,7 @@ describe('a DECISION card with a pull request is listed ONCE too (MOTIR-4907 · 
       data: { state: 'approved', decidedById: meCtx.userId, decidedAt: new Date() },
     });
 
-    const page = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const page = await approvalGatesService.listAwaitingMe(meCtx);
     expect(page.items.map((row) => row.gateId)).toEqual([decision.gates.pull_request_approval]);
   });
 });

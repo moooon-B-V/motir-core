@@ -254,7 +254,7 @@ describe('SEAM 2 · a decision made in the overlay, seen from the tab', () => {
     const card = await designCard();
     await publish(card);
     signIn(owner());
-    const queue = await approvalGatesService.listAwaitingMe(actorCtx(), { page: 1 });
+    const queue = await approvalGatesService.listAwaitingMe(actorCtx());
     expect(queue.items).toHaveLength(1);
     // The strip's OWN read — the number the To approve badge renders.
     expect((await homeService.tabCounts(actorCtx())).approvals).toBe(1);
@@ -266,7 +266,7 @@ describe('SEAM 2 · a decision made in the overlay, seen from the tab', () => {
         <ApprovalsList
           rows={queue.items}
           label="To approve"
-          pagination={{ total: queue.total, page: queue.page, pageSize: queue.pageSize }}
+          ceiling={queue.truncated ? { shown: queue.items.length, total: queue.total } : null}
           empty={EMPTY}
         />
         <ApprovalOverlay />
@@ -323,9 +323,7 @@ describe('SEAM 3 · the overlay is SCOPED — the actor’s view and the populat
     const elsewhere = await makeWorkItemFixture({ name: 'Elsewhere', identifier: 'ELSE' });
     const outsider = { id: elsewhere.owner.id, email: elsewhere.owner.email };
     signIn(outsider, elsewhere);
-    expect(
-      (await approvalGatesService.listAwaitingMe(actorCtx(elsewhere), { page: 1 })).total,
-    ).toBe(0);
+    expect((await approvalGatesService.listAwaitingMe(actorCtx(elsewhere))).total).toBe(0);
 
     nav.go(address);
     renderWithIntl(<ApprovalOverlay />);

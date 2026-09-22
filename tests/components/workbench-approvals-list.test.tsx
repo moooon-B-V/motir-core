@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
+import zh from '@/messages/zh.json';
 import { announceGateDecided } from '@/lib/approvals/decidedGates';
 import type {
   ApprovalGateDTO,
@@ -77,12 +78,11 @@ function designRow(over: Partial<ApprovalQueueRowDto> = {}): ApprovalQueueRowDto
   };
 }
 
-const PAGINATION = { total: 1, page: 1, pageSize: 25 };
 const OPENED = '/workbench?tab=approvals&page=2&approval=MOTIR-5147&approvalKind=design_result';
 
 function renderRows(rows: ApprovalQueueRowDto[]) {
   return renderWithIntl(
-    <ApprovalsList rows={rows} label="To approve" pagination={PAGINATION} empty={EMPTY} />,
+    <ApprovalsList rows={rows} label="To approve" ceiling={null} empty={EMPTY} />,
   );
 }
 
@@ -410,20 +410,55 @@ describe('the Approvals list — a gate decided in the OVERLAY settles its row',
   });
 });
 
-describe('the Approvals list — the pager', () => {
-  it('navigates within the approvals tab, never to another one', () => {
+describe('the Approvals list — NO PAGER, and the CEILING line (MOTIR-5998, design-notes § 28)', () => {
+  it('lists thirty rows on one tab and draws no pager', () => {
+    const rows = Array.from({ length: 30 }, (_, i) =>
+      designRow({
+        gateId: `gate-${i}`,
+        workItem: { ...designRow().workItem, id: `wi-${i}`, identifier: `MOTIR-${9000 + i}` },
+      }),
+    );
+    renderRows(rows);
+
+    expect(
+      screen.getAllByRole('row').filter((r) => r.dataset.testid?.startsWith('approval-row-')),
+    ).toHaveLength(30);
+    expect(screen.queryByRole('button', { name: 'Page 2' })).toBeNull();
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
+  it('under the last row, says how many are shown of how many, and links to the Approvals room', () => {
     renderWithIntl(
       <ApprovalsList
         rows={[designRow()]}
         label="To approve"
-        pagination={{ total: 60, page: 1, pageSize: 25 }}
+        ceiling={{ shown: 500, total: 514 }}
         empty={EMPTY}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Page 2' }));
+    const note = screen.getByRole('note');
+    expect(note.textContent).toBe('Showing the first 500 of 514. Approvals lists every one.');
+    expect(within(note).getByRole('link', { name: 'Approvals' }).getAttribute('href')).toBe(
+      '/approvals',
+    );
+  });
 
-    expect(push).toHaveBeenCalledWith('/workbench?tab=approvals&page=2');
+  it('says it in zh too', () => {
+    renderWithIntl(
+      <ApprovalsList
+        rows={[designRow()]}
+        label="待审批"
+        ceiling={{ shown: 500, total: 514 }}
+        empty={EMPTY}
+      />,
+      { locale: 'zh', messages: zh },
+    );
+
+    expect(screen.getByRole('note').textContent).toBe(
+      '仅显示前 500 项，共 514 项。审批中列出了全部。',
+    );
   });
 });
 
