@@ -186,7 +186,9 @@ async function submitOneShot(
 ): Promise<PlanSubmitResult> {
   const session = await client.appendPlanTurn({ ...scope, body });
   info(`Turn ${session.turnCount} added to the ${scopeLabel(session.targetKeys)} conversation.`);
-  return client.submitPlanSession(scope);
+  // Submit THE session the turn landed on (MOTIR-6028), never whichever one the
+  // scope resolves to by the time the submit arrives.
+  return client.submitPlanSession({ ...scope, sessionId: session.id });
 }
 
 /**
@@ -230,13 +232,19 @@ async function converse(
         );
         return null;
       case 'turn':
-        session = await client.appendPlanTurn({ ...scope, body: input.body });
+        // Every turn of this invocation lands on the session it opened
+        // (MOTIR-6028) — a scope can hold several conversations.
+        session = await client.appendPlanTurn({
+          ...scope,
+          body: input.body,
+          sessionId: session.id,
+        });
         info(
           `Turn ${session.turnCount} added — NOT submitted. /submit sends every turn as one change.`,
         );
         continue;
       case 'submit':
-        return client.submitPlanSession(scope);
+        return client.submitPlanSession({ ...scope, sessionId: session.id });
     }
   }
 }

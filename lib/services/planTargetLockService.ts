@@ -388,8 +388,8 @@ export const planTargetLockService = {
    *
    * The caller that needs it is the session OPEN: a thread row that commits while
    * its leases do not is precisely the split the story forbids, because the thread
-   * would then exist, be resumable, and hold nothing. So `getOrCreateForScope`
-   * creates the row and takes the lock in ONE transaction, and a refusal rolls the
+   * would then exist, be resumable, and hold nothing. So the session start
+   * (`planChangeSessionsService`'s resume-or-start) creates the row and takes the lock in ONE transaction, and a refusal rolls the
    * whole open back — the conversation was never opened, because its targets were
    * taken. `tx` is REQUIRED; this method never opens a transaction.
    */

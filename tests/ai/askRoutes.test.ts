@@ -8,6 +8,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addressOf, openTestSession } from '../helpers/planSession';
 
 // The ASK seam, route-level (Story MOTIR-1343 · MOTIR-1819) — `POST /api/ai/ask`
 // and `POST /api/ai/ask/settle`, against a REAL Postgres. Only `getSession` /
@@ -90,14 +91,18 @@ async function seedPendingQuestion(question: string): Promise<void> {
   submitJobMock.mockResolvedValue({ jobId: 'job-augment-q' });
   // The thread has to EXIST before a turn can be appended to it — the ask door
   // opens it itself, but this helper writes through the service directly.
-  await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
-  await planChangeSessionsService.appendTurn('add payments', activeCtx.current!);
-  await planChangeSessionsService.submit(activeCtx.current!);
+  const thread = await openTestSession(activeCtx.current!);
+  await planChangeSessionsService.appendTurn('add payments', activeCtx.current!, addressOf(thread));
+  await planChangeSessionsService.submit(activeCtx.current!, addressOf(thread));
   getJobMock.mockResolvedValue({
     status: 'succeeded',
     result: { turn: { message: 'One thing first.', question } },
   });
-  await planChangeSessionsService.recordPlannerTurn('job-augment-q', activeCtx.current!);
+  await planChangeSessionsService.recordPlannerTurn(
+    'job-augment-q',
+    activeCtx.current!,
+    addressOf(thread),
+  );
   submitJobMock.mockClear();
   submitJobMock.mockResolvedValue({ jobId: 'job-augment-answer' });
 }
@@ -173,7 +178,7 @@ describe('POST /api/ai/ask — the gates and the body', () => {
   });
 
   it('404s when a re-run names a turn that is not on this thread', async () => {
-    await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    await openTestSession(activeCtx.current!);
     const res = await ask(askReq({ turnId: 'no-such-turn' }));
     expect(res.status).toBe(404);
     await expect(res.json()).resolves.toMatchObject({ code: 'PLAN_CHANGE_TURN_NOT_FOUND' });
@@ -187,7 +192,7 @@ describe('POST /api/ai/ask — the gates and the body', () => {
     // The failure posture (ADR §4): a failed submit is recoverable IN PLACE. The
     // person's words are on the thread, so a retry re-runs the same turn rather
     // than asking them to type it again.
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.map((t) => t.body)).toEqual(['which stories are blocked?']);
     expect(thread.turns[0]!.jobId).toBeNull();
   });
@@ -216,7 +221,7 @@ describe('POST /api/ai/ask — the ONE door', () => {
     const dto = (await res.json()) as { jobId: string; turnId: string };
     expect(dto.jobId).toBe('job-ask-1');
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.at(-1)).toMatchObject({
       id: dto.turnId,
       role: 'user',
@@ -243,7 +248,7 @@ describe('POST /api/ai/ask — the ONE door', () => {
       'ask_project',
     );
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     const reply = thread.turns.filter((t) => t.role === 'user').at(-1)!;
     // The turn records what actually RAN, and keeps the affordance fact.
     expect(reply).toMatchObject({ body: 'money in', isAnswer: true, intent: 'plan_change' });
@@ -260,7 +265,7 @@ describe('POST /api/ai/ask — the ONE door', () => {
     expect(dto.outcome).toBeUndefined();
     expect((submitJobMock.mock.calls[0] as unknown as [string])[0]).toBe('ask_project');
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     // The affordance fact is still recorded — the transcript keeps facts rather
     // than tidying away one that turned out not to route anything.
     expect(thread.turns.at(-1)).toMatchObject({ isAnswer: true, intent: 'ask' });
@@ -274,14 +279,14 @@ describe('POST /api/ai/ask — the ONE door', () => {
     const res = await ask(askReq({ body: 'money in', isAnswer: true }));
     const dto = (await res.json()) as { turnId: string };
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.at(-1)).toMatchObject({ id: dto.turnId, isAnswer: true, intent: 'ask' });
   });
 
   it('defaults `isAnswer` to false — it is opt-in, and never inferred from words', async () => {
     await ask(askReq({ body: 'why is it blocked?' }));
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.at(-1)!.isAnswer).toBe(false);
   });
 
@@ -291,7 +296,7 @@ describe('POST /api/ai/ask — the ONE door', () => {
     // The turn ran as an ask because the SERVER decided so; the job that was
     // submitted is the ask job, not a plan-edit one.
     expect((submitJobMock.mock.calls[0] as unknown as [string])[0]).toBe('ask_project');
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.at(-1)!.intent).toBe('ask');
   });
 });
@@ -309,7 +314,7 @@ describe('POST /api/ai/ask/settle — filing what the job produced', () => {
     const body = (await res.json()) as { outcome: string };
     expect(body.outcome).toBe('answered');
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.at(-1)).toMatchObject({
       role: 'assistant',
       body: 'One story is blocked.',
@@ -327,7 +332,7 @@ describe('POST /api/ai/ask/settle — filing what the job produced', () => {
     await settle(settleReq({ jobId: asked.jobId }));
     await settle(settleReq({ jobId: asked.jobId }));
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.filter((t) => t.role === 'assistant')).toHaveLength(1);
   });
 
@@ -344,7 +349,7 @@ describe('POST /api/ai/ask/settle — filing what the job produced', () => {
       outcome: string;
     };
     expect(body.outcome).toBe('silent');
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.filter((t) => t.role === 'assistant')).toHaveLength(0);
   });
 
@@ -357,7 +362,7 @@ describe('POST /api/ai/ask/settle — filing what the job produced', () => {
     getJobMock.mockResolvedValue(answered('The plan and the code graph do not answer that.'));
 
     await settle(settleReq({ jobId: asked.jobId }));
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.at(-1)).toMatchObject({
       role: 'assistant',
       citations: [],
@@ -365,7 +370,7 @@ describe('POST /api/ai/ask/settle — filing what the job produced', () => {
   });
 
   it('yields `silent` for a job this thread never submitted — a stale replay is not an error', async () => {
-    await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    await openTestSession(activeCtx.current!);
     const body = (await (await settle(settleReq({ jobId: 'job-from-another-life' }))).json()) as {
       outcome: string;
     };
@@ -402,7 +407,7 @@ describe('the REDIRECT — a turn the handler hands back', () => {
     expect(body.jobId).toBe('job-augment-9');
     expect(body.planId).toBeTruthy();
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     const userTurn = thread.turns.find((t) => t.id === asked.turnId)!;
     // The disposition moved. Nothing was CORRECTED — nobody was ever shown a
     // wrong answer — and the two are different facts.
@@ -440,7 +445,7 @@ describe('the CORRECTION — re-running one turn the other way', () => {
     };
     expect(body.outcome).toBe('redirected');
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.filter((t) => t.role === 'user')).toHaveLength(1);
     expect(thread.turns.find((t) => t.id === asked.turnId)).toMatchObject({
       intent: 'plan_change',
@@ -469,7 +474,7 @@ describe('the CORRECTION — re-running one turn the other way', () => {
     expect(kind).toBe('ask_project');
     expect(context.prompt).toBe('why is this blocked?');
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.find((t) => t.id === asked.turnId)).toMatchObject({
       intent: 'ask',
       intentCorrected: true,
@@ -483,7 +488,7 @@ describe('the CORRECTION — re-running one turn the other way', () => {
     };
     getJobMock.mockResolvedValue(answered('Nothing is blocked.'));
     await settle(settleReq({ jobId: asked.jobId }));
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     const assistantTurn = thread.turns.find((t) => t.role === 'assistant')!;
 
     const res = await ask(askReq({ turnId: assistantTurn.id }));
@@ -498,7 +503,7 @@ describe('the CORRECTION — re-running one turn the other way', () => {
     // shipped door, so it too carries no intent.
     const { POST: startSession } = await import('@/app/api/ai/plan-change/session/route');
     await startSession(req('/api/ai/plan-change/session', { body: 'legacy turn' }));
-    const before = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const before = await openTestSession(activeCtx.current!);
     const legacy = before.turns.at(-1)!;
     expect(legacy.intent).toBeNull();
 
@@ -507,7 +512,7 @@ describe('the CORRECTION — re-running one turn the other way', () => {
     expect(res.status).toBe(200);
     expect((submitJobMock.mock.calls.at(-1) as unknown as [string])[0]).toBe('ask_project');
 
-    const after = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const after = await openTestSession(activeCtx.current!);
     expect(after.turns.find((t) => t.id === legacy.id)).toMatchObject({
       intent: 'ask',
       intentCorrected: false,
@@ -518,14 +523,14 @@ describe('the CORRECTION — re-running one turn the other way', () => {
     submitJobMock.mockRejectedValueOnce(new MotirAiUnavailableError('down'));
     await ask(askReq({ body: 'which stories are blocked?' }));
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     const turnId = thread.turns[0]!.id;
     submitJobMock.mockResolvedValue({ jobId: 'job-ask-2' });
 
     const res = await ask(askReq({ turnId }));
     expect(res.status).toBe(200);
 
-    const after = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const after = await openTestSession(activeCtx.current!);
     expect(after.turns.filter((t) => t.role === 'user')).toHaveLength(1);
     expect(after.turns[0]).toMatchObject({
       intent: 'ask',
@@ -569,7 +574,7 @@ describe('the shipped plan-change path is untouched', () => {
     // ONE planning kind since MOTIR-4304 — the shipped plan-change path is
     // untouched in every other respect, which is what this describe asserts.
     expect((submitJobMock.mock.calls.at(-1) as unknown as [string])[0]).toBe('plan');
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     // Its turns carry no intent — the shipped path decides none, and nothing
     // back-filled one onto them.
     expect(thread.turns.filter((t) => t.role === 'user').every((t) => t.intent === null)).toBe(

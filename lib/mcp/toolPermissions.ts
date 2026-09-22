@@ -280,8 +280,8 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // comment. They spend the owner's AI credits; a token wired to file work
   // items can no longer fire one.
   expand_item: 'ai:plan',
-  // `getOrCreateForScope` asserts `ai:plan` — opening the thread is already a
-  // planning act at the gate, whatever the old `read` scope implied.
+  // `openPublic` / `openForScope` assert `ai:plan` — opening a conversation is
+  // already a planning act at the gate, whatever the old `read` scope implied.
   open_plan_session: 'ai:plan',
   append_plan_turn: 'ai:plan',
   submit_plan_session: 'ai:plan',

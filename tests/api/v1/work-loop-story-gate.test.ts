@@ -413,8 +413,10 @@ describe('service → schema → response, per resource, against real Postgres',
 
   it('the PLAN SESSION maps from the real service output', async () => {
     const pctx = await projectContext();
-    await planChangeSessionsService.getOrCreateForScope(pctx, buildScope([]));
-    const dto = await planChangeSessionsService.appendTurn('a turn', pctx);
+    const opened = await planChangeSessionsService.openForScope(pctx, buildScope([]));
+    const dto = await planChangeSessionsService.appendTurn('a turn', pctx, {
+      sessionId: opened.id,
+    });
 
     const mapped = presentPlanSession(dto);
 

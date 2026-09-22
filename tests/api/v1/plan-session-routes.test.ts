@@ -27,6 +27,7 @@ import { planChangeSessionsService } from '@/lib/services/planChangeSessionsServ
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The planning CONVERSATION over /api/v1 (Story 11.7 · Subtask 11.7.6 —
@@ -135,7 +136,7 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
     );
 
     const project = await projectsService.getByKey(caller.projectKey, caller.ctx);
-    const viaService = await planChangeSessionsService.getOrCreateForScope(
+    const viaService = await planChangeSessionsService.openForScope(
       {
         userId: caller.ctx.userId,
         workspaceId: caller.ctx.workspaceId,
@@ -397,7 +398,7 @@ describe('the conversation’s contract', () => {
     expect(byId.get('submitPlanSession')?.permission).toBe(TOOL_PERMISSIONS.submit_plan_session);
     // ⚠️ THE MOUNT MOVED. It was `read`-scoped despite being a POST, on the
     // reasoning that opening a thread changes nothing — but
-    // `planChangeSessionsService.getOrCreateForScope` asserts `ai:plan`, so the
+    // `planChangeSessionsService.openForScope` asserts `ai:plan`, so the
     // scope was over-permissive relative to its own gate. All three now name
     // what the service asks for (MOTIR-2577; ADR §5 records the one legacy
     // read-only token this narrows).
@@ -405,16 +406,101 @@ describe('the conversation’s contract', () => {
     expect(TOOL_PERMISSIONS.append_plan_turn).toBe('ai:plan');
   });
 
-  it('accepts NO session id anywhere — the thread is addressed by scope alone', () => {
-    // The property that makes forking a second conversation about one anchor set
-    // impossible. Asserted on the declared request bodies, so a later card
-    // cannot quietly add one.
+  it('accepts an OPTIONAL session id on every conversation body — never in the path (MOTIR-6028)', () => {
+    // REVERSED by MOTIR-6028 (AMENDMENT 17 §2). This used to assert that NO
+    // session id existed anywhere, because a thread's identity was its scope. A
+    // scope now holds many conversations, so the id is how a client stays on one
+    // — additive and optional, so a client built before it keeps working.
     const conversation = WORK_LOOP_OPERATIONS.filter((op) => op.path.includes('plan-session'));
     expect(conversation).toHaveLength(3);
     for (const op of conversation) {
       const declared = JSON.stringify(op.requestBody?.schema ?? {});
-      expect(declared, `${op.operationId} must not take a session id`).not.toMatch(/sessionId/i);
+      expect(declared, `${op.operationId} takes an optional sessionId`).toMatch(/"sessionId"/);
+      expect(declared, `${op.operationId} must not REQUIRE it`).not.toMatch(
+        /"required":\[[^\]]*"sessionId"/,
+      );
       expect(op.parameters.map((p) => p.name)).toEqual(['projectKey']);
     }
+  });
+});
+
+describe('the conversation addressed BY ID (MOTIR-6028)', () => {
+  beforeEach(async () => {
+    await truncateAuthTables();
+    vi.clearAllMocks();
+  });
+
+  /** Two conversations of the project-wide scope: an OLDER one gone quiet past
+   *  the 2-hour window (so the next open starts a NEWER one), and that newer one. */
+  async function twoConversations(caller: V1ProjectCaller) {
+    const older = await json<V1PlanSession>(await open(caller));
+    await append(caller, { sessionId: older.id, body: 'the older conversation' });
+    await adminDb.planChangeSession.update({
+      where: { id: older.id },
+      data: { lastActivityAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
+    });
+    const newer = await json<V1PlanSession>(await open(caller));
+    expect(newer.id).not.toBe(older.id);
+    return { older, newer };
+  }
+
+  it('open returns the session id, and open WITH it returns that exact session', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
+    const { older } = await twoConversations(caller);
+
+    const reopened = await json<V1PlanSession>(await open(caller, { sessionId: older.id }));
+    expect(reopened.id).toBe(older.id);
+    expect(reopened.turns.map((t) => t.body)).toEqual(['the older conversation']);
+  });
+
+  it('append and submit given an id land on THAT session, even with a newer one in the scope', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
+    const { older, newer } = await twoConversations(caller);
+    acceptJob('job_older');
+
+    const appended = await json<V1PlanSession>(
+      await append(caller, { sessionId: older.id, body: 'and one more' }),
+    );
+    expect(appended.id).toBe(older.id);
+    const res = await submit(caller, { sessionId: older.id });
+    expect(res.status).toBe(202);
+
+    const rows = await adminDb.planChangeSession.findMany({
+      where: { id: { in: [older.id, newer.id] } },
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(older.id)!.lastJobId).toBe('job_older');
+    expect(byId.get(newer.id)!.lastJobId).toBeNull();
+    expect(byId.get(newer.id)!.turnCount).toBe(0);
+  });
+
+  it('WITHOUT an id: a first turn starts a conversation, and the next call resumes it', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
+    acceptJob('job_resumed');
+
+    const first = await json<V1PlanSession>(await append(caller, { body: 'start here' }));
+    const second = await json<V1PlanSession>(await append(caller, { body: 'and continue' }));
+    expect(second.id).toBe(first.id);
+    expect(second.turns.map((t) => t.body)).toEqual(['start here', 'and continue']);
+
+    expect((await submit(caller)).status).toBe(202);
+    const row = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: first.id } });
+    expect(row.lastJobId).toBe('job_resumed');
+  });
+
+  it('404s PLAN_SESSION_NOT_FOUND for a session id from another project, on every door', async () => {
+    const theirs = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
+    const foreign = await json<V1PlanSession>(await open(theirs));
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
+
+    for (const res of [
+      await open(caller, { sessionId: foreign.id }),
+      await append(caller, { sessionId: foreign.id, body: 'stray' }),
+      await submit(caller, { sessionId: foreign.id }),
+    ]) {
+      expect(res.status).toBe(404);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_SESSION_NOT_FOUND');
+    }
+    expect(submitJob).not.toHaveBeenCalled();
   });
 });

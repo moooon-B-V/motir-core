@@ -872,6 +872,14 @@ describe('the routes are actually WIRED to the guards', () => {
       service: 'lib/services/planChangeSessionsService.ts',
       reaches: 'aiPlanEditsService.submit',
     },
+    // The PUBLIC doors' submit (MOTIR-6028) — `submit_plan_session` and the v1
+    // submissions route resolve the addressed session through it, and it
+    // delegates to `this.submit`, the entry above.
+    {
+      call: 'planChangeSessionsService.submitPublic(',
+      service: 'lib/services/planChangeSessionsService.ts',
+      reaches: 'return this.submit(',
+    },
   ];
 
   it('each named job-submitting call really does reach a model job', () => {

@@ -1,17 +1,18 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
+import type { PlanChangeScope } from '@/lib/planChange/scope';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { EmptyPlanChangeTurnError, PlanChangeTurnNotFoundError } from '@/lib/planChange/errors';
-import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import {
   createTestWorkItem,
   makeWorkItemFixture,
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { addressOf, openTestSession } from '../helpers/planSession';
 import { truncateAuthTables } from '../helpers/db';
 
 // The conversation store's INTENT + CITATION extension (Story MOTIR-1343 ·
@@ -55,6 +56,16 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
 
+// The session each case works on (MOTIR-6028). Every write names its session by
+// id now that the scope-keyed wrappers are gone; `openCurrent` opens (or resumes)
+// it the way the public `open` doors do and remembers its address.
+let current: { sessionId: string } = { sessionId: '' };
+async function openCurrent(pctx: ProjectContext, scope?: PlanChangeScope) {
+  const session = await openTestSession(pctx, scope);
+  current = addressOf(session);
+  return session;
+}
+
 function projectCtx(fx: WorkItemFixture): ProjectContext {
   return {
     userId: fx.ownerId,
@@ -70,9 +81,9 @@ function projectCtx(fx: WorkItemFixture): ProjectContext {
  *  with no error (MOTIR-2846's shape). */
 async function threadRows(fx: WorkItemFixture) {
   return withWorkspaceServiceContext(fx.workspaceId, async (tx) => {
-    const session = await planChangeSessionRepository.findByProjectAndScope(
+    const session = await planChangeSessionRepository.findByIdInProject(
+      current.sessionId,
       fx.projectId,
-      PROJECT_SCOPE_KEY,
       fx.workspaceId,
       tx,
     );
@@ -83,6 +94,7 @@ async function threadRows(fx: WorkItemFixture) {
 let fx: WorkItemFixture;
 
 beforeEach(async () => {
+  current = { sessionId: '' };
   await truncateAuthTables();
   fx = await makeWorkItemFixture();
 });
@@ -95,15 +107,15 @@ afterAll(async () => {
 describe('a user turn carries the SERVER-RESOLVED intent', () => {
   it('writes the intent its caller resolved, and defaults to null when nobody did', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
     // The shipped plan-change append passes no intent — its turns stay null,
     // exactly as every turn written before the model existed does. That is why
     // the migration back-fills nothing: a back-fill would assert a
     // classification that never ran.
-    await planChangeSessionsService.appendTurn('Split the billing epic', ctx);
+    await planChangeSessionsService.appendTurn('Split the billing epic', ctx, current);
     // The ask path passes what motir-ai resolved.
-    await planChangeSessionsService.appendTurn('Why is MOTIR-1342 blocked?', ctx, undefined, {
+    await planChangeSessionsService.appendTurn('Why is MOTIR-1342 blocked?', ctx, current, {
       intent: 'ask',
     });
 
@@ -115,11 +127,11 @@ describe('a user turn carries the SERVER-RESOLVED intent', () => {
 
   it('surfaces the intent on the DTO so the rail can follow the latest turn', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
     const dto = await planChangeSessionsService.appendTurn(
       'Which stories are blocked?',
       ctx,
-      undefined,
+      current,
       {
         intent: 'ask',
       },
@@ -136,15 +148,16 @@ describe('a user turn carries the SERVER-RESOLVED intent', () => {
 describe('the ANSWER turn', () => {
   it('appends as an `assistant` turn carrying its citations', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
     const cited = await createTestWorkItem(fx, { kind: 'story', title: 'Billing' });
 
-    await planChangeSessionsService.appendTurn('Which stories are blocked?', ctx, undefined, {
+    await planChangeSessionsService.appendTurn('Which stories are blocked?', ctx, current, {
       intent: 'ask',
     });
     const dto = await planChangeSessionsService.appendAnswerTurn(
       { jobId: 'job-ask-1', body: 'One story is blocked.', citations: [cited.identifier] },
       ctx,
+      current,
     );
 
     const answer = dto.turns.at(-1)!;
@@ -165,15 +178,17 @@ describe('the ANSWER turn', () => {
 
   it('is IDEMPOTENT on the job id — a replayed settle appends nothing', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
     await planChangeSessionsService.appendAnswerTurn(
       { jobId: 'job-ask-1', body: 'The first answer.' },
       ctx,
+      current,
     );
     const second = await planChangeSessionsService.appendAnswerTurn(
       { jobId: 'job-ask-1', body: 'The first answer.' },
       ctx,
+      current,
     );
 
     expect(second.turns.filter((t) => t.role === 'assistant')).toHaveLength(1);
@@ -182,15 +197,15 @@ describe('the ANSWER turn', () => {
 
   it('refuses an empty body — an answer with nothing in it is not an answer', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
     await expect(
-      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-ask-1', body: '   ' }, ctx),
+      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-ask-1', body: '   ' }, ctx, current),
     ).rejects.toBeInstanceOf(EmptyPlanChangeTurnError);
   });
 
   it('records an honest NO-ANSWER with no citations rather than citing loosely', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
     const dto = await planChangeSessionsService.appendAnswerTurn(
       {
         jobId: 'job-ask-1',
@@ -198,6 +213,7 @@ describe('the ANSWER turn', () => {
         citations: [],
       },
       ctx,
+      current,
     );
     expect(dto.turns.at(-1)!.citations).toEqual([]);
   });
@@ -206,7 +222,7 @@ describe('the ANSWER turn', () => {
 describe('citations are validated before they persist', () => {
   it('drops a key that names no work item, and keeps the ones that do — in citation order', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
     const a = await createTestWorkItem(fx, { kind: 'story', title: 'A' });
     const b = await createTestWorkItem(fx, { kind: 'story', title: 'B' });
 
@@ -219,6 +235,7 @@ describe('citations are validated before they persist', () => {
         citations: [b.identifier, `${fx.projectIdentifier}-99999`, a.identifier, b.identifier],
       },
       ctx,
+      current,
     );
 
     expect(dto.turns.at(-1)!.citations).toEqual([b.identifier, a.identifier]);
@@ -226,7 +243,7 @@ describe('citations are validated before they persist', () => {
 
   it('drops a citation that resolves in ANOTHER project — a chip must never cross a tenant', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
     const mine = await createTestWorkItem(fx, { kind: 'story', title: 'Mine' });
 
     // A second, independent tenant with an item of its own. The resolve is
@@ -239,6 +256,7 @@ describe('citations are validated before they persist', () => {
     const dto = await planChangeSessionsService.appendAnswerTurn(
       { jobId: 'job-ask-1', body: 'One story.', citations: [theirs.identifier, mine.identifier] },
       ctx,
+      current,
     );
 
     expect(dto.turns.at(-1)!.citations).toEqual([mine.identifier]);
@@ -248,20 +266,26 @@ describe('citations are validated before they persist', () => {
 describe('a correction re-runs the SAME turn', () => {
   it('moves the intent, latches `intentCorrected`, and appends no second user turn', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
     const asked = await planChangeSessionsService.appendTurn(
       'Split the billing epic',
       ctx,
-      undefined,
+      current,
       {
         intent: 'ask',
       },
     );
     const turnId = asked.turns.at(-1)!.id;
 
-    const corrected = await planChangeSessionsService.recordTurnIntent(turnId, 'plan_change', ctx, {
-      corrected: true,
-    });
+    const corrected = await planChangeSessionsService.recordTurnIntent(
+      turnId,
+      'plan_change',
+      ctx,
+      {
+        corrected: true,
+      },
+      current,
+    );
 
     // The person said one thing once: one turn, re-run, not two.
     expect(corrected.turns.filter((t) => t.role === 'user')).toHaveLength(1);
@@ -276,11 +300,11 @@ describe('a correction re-runs the SAME turn', () => {
 
   it('records a REDIRECT without claiming a correction — the two are different facts', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
     const asked = await planChangeSessionsService.appendTurn(
       'Split the billing epic',
       ctx,
-      undefined,
+      current,
       {
         intent: 'ask',
       },
@@ -290,7 +314,13 @@ describe('a correction re-runs the SAME turn', () => {
     // The ask job classified the turn as a plan change before anyone saw an
     // answer. The disposition moves; nothing was corrected, because nothing was
     // ever shown to be wrong.
-    const redirected = await planChangeSessionsService.recordTurnIntent(turnId, 'plan_change', ctx);
+    const redirected = await planChangeSessionsService.recordTurnIntent(
+      turnId,
+      'plan_change',
+      ctx,
+      {},
+      current,
+    );
     expect(redirected.turns.at(-1)).toMatchObject({
       intent: 'plan_change',
       intentCorrected: false,
@@ -299,42 +329,48 @@ describe('a correction re-runs the SAME turn', () => {
 
   it('LATCHES the flag — a later redirect does not un-record an earlier correction', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
-    const asked = await planChangeSessionsService.appendTurn('Split it', ctx, undefined, {
+    await openCurrent(ctx);
+    const asked = await planChangeSessionsService.appendTurn('Split it', ctx, current, {
       intent: 'ask',
     });
     const turnId = asked.turns.at(-1)!.id;
 
-    await planChangeSessionsService.recordTurnIntent(turnId, 'plan_change', ctx, {
-      corrected: true,
-    });
-    const again = await planChangeSessionsService.recordTurnIntent(turnId, 'ask', ctx);
+    await planChangeSessionsService.recordTurnIntent(
+      turnId,
+      'plan_change',
+      ctx,
+      {
+        corrected: true,
+      },
+      current,
+    );
+    const again = await planChangeSessionsService.recordTurnIntent(turnId, 'ask', ctx, {}, current);
 
     expect(again.turns.at(-1)).toMatchObject({ intent: 'ask', intentCorrected: true });
   });
 
   it('refuses a turn id that is not on this thread', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
     await expect(
-      planChangeSessionsService.recordTurnIntent('no-such-turn', 'ask', ctx),
+      planChangeSessionsService.recordTurnIntent('no-such-turn', 'ask', ctx, {}, current),
     ).rejects.toBeInstanceOf(PlanChangeTurnNotFoundError);
   });
 
   it('refuses a turn belonging to ANOTHER tenant, as absent rather than forbidden', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    const mine = addressOf(await openCurrent(ctx));
 
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
     const otherCtx = projectCtx(other);
-    await planChangeSessionsService.getOrCreateForProject(otherCtx);
-    const theirs = await planChangeSessionsService.appendTurn('Their turn', otherCtx);
+    await openCurrent(otherCtx);
+    const theirs = await planChangeSessionsService.appendTurn('Their turn', otherCtx, current);
     const theirTurnId = theirs.turns.at(-1)!.id;
 
     // The lookup is scoped by session AND workspace, so a foreign turn is simply
-    // absent — the no-existence-leak posture, not a 403.
+    // absent from OUR session — the no-existence-leak posture, not a 403.
     await expect(
-      planChangeSessionsService.recordTurnIntent(theirTurnId, 'ask', ctx),
+      planChangeSessionsService.recordTurnIntent(theirTurnId, 'ask', ctx, {}, mine),
     ).rejects.toBeInstanceOf(PlanChangeTurnNotFoundError);
   });
 });
@@ -342,7 +378,7 @@ describe('a correction re-runs the SAME turn', () => {
 describe('the answer append shares the SHIPPED row-locked allocation', () => {
   it('SERIALIZES a concurrent user append and answer append into two ordered turns', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
     // Both read the same `turnCount` before either commits. Without the
     // `SELECT … FOR UPDATE` + re-read they would both allocate seq 0, and the
@@ -350,10 +386,14 @@ describe('the answer append shares the SHIPPED row-locked allocation', () => {
     // as two turns. This is the criterion that would fail if the answer append
     // grew a SECOND, unlocked path of its own.
     await Promise.all([
-      planChangeSessionsService.appendTurn('Which stories are blocked?', ctx, undefined, {
+      planChangeSessionsService.appendTurn('Which stories are blocked?', ctx, current, {
         intent: 'ask',
       }),
-      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-ask-1', body: 'One is.' }, ctx),
+      planChangeSessionsService.appendAnswerTurn(
+        { jobId: 'job-ask-1', body: 'One is.' },
+        ctx,
+        current,
+      ),
     ]);
 
     const rows = await threadRows(fx);
@@ -361,9 +401,9 @@ describe('the answer append shares the SHIPPED row-locked allocation', () => {
     expect(rows.map((r) => r.role).sort()).toEqual(['assistant', 'user']);
 
     const session = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndScope(
+      planChangeSessionRepository.findByIdInProject(
+        current.sessionId,
         fx.projectId,
-        PROJECT_SCOPE_KEY,
         fx.workspaceId,
         tx,
       ),
@@ -373,11 +413,11 @@ describe('the answer append shares the SHIPPED row-locked allocation', () => {
 
   it('SERIALIZES two concurrent answer appends for DIFFERENT jobs', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
     await Promise.all([
-      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-a', body: 'A' }, ctx),
-      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-b', body: 'B' }, ctx),
+      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-a', body: 'A' }, ctx, current),
+      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-b', body: 'B' }, ctx, current),
     ]);
 
     const rows = await threadRows(fx);
@@ -387,11 +427,11 @@ describe('the answer append shares the SHIPPED row-locked allocation', () => {
 
   it('lets two concurrent REPLAYS of one job through as a single turn (the skip is under the lock)', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
     await Promise.all([
-      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-same', body: 'Once' }, ctx),
-      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-same', body: 'Once' }, ctx),
+      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-same', body: 'Once' }, ctx, current),
+      planChangeSessionsService.appendAnswerTurn({ jobId: 'job-same', body: 'Once' }, ctx, current),
     ]);
 
     const rows = await threadRows(fx);
@@ -402,11 +442,11 @@ describe('the answer append shares the SHIPPED row-locked allocation', () => {
 describe('the shipped plan-change path is behaviourally unchanged', () => {
   it('appends and accumulates exactly as before, with a null intent throughout', async () => {
     const ctx = projectCtx(fx);
-    const opened = await planChangeSessionsService.getOrCreateForProject(ctx);
+    const opened = await openCurrent(ctx);
     expect(opened.turns).toEqual([]);
 
-    await planChangeSessionsService.appendTurn('Add auth to the billing epic', ctx);
-    const after = await planChangeSessionsService.appendTurn('Make them smaller', ctx);
+    await planChangeSessionsService.appendTurn('Add auth to the billing epic', ctx, current);
+    const after = await planChangeSessionsService.appendTurn('Make them smaller', ctx, current);
 
     expect(after.turnCount).toBe(2);
     expect(after.turns.map((t) => t.body)).toEqual([

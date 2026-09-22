@@ -1538,19 +1538,33 @@ export type V1PlanSession = z.infer<typeof planSessionSchema>;
  * list, so two spellings of one thread would look different at the edge before
  * the service normalised them.
  *
- * Omitted or empty means the PROJECT-WIDE thread. There is deliberately no
- * session id here or anywhere else on this resource: a thread's identity is
- * `(project, anchor set)`, and handing a client an id is exactly how a second
- * conversation about one anchor set gets forked.
+ * Omitted or empty means the PROJECT-WIDE thread.
+ *
+ * `sessionId` (MOTIR-6028; AMENDMENT 17 §2) names ONE conversation — the `id`
+ * a previous call on this resource returned. A scope now holds many sessions
+ * over time, so the id is how a client keeps talking to the same one. OPTIONAL:
+ * without it the caller's resumable session for the scope is used (or, on the
+ * first turn, a new one starts), which is what every client built before the id
+ * existed already does.
  */
+const planSessionIdField = z
+  .string()
+  .min(1)
+  .optional()
+  .describe(
+    'The `id` of the planning session to address, as a previous call returned it. ' +
+      'Omit to use your resumable session for the scope (or start one with a turn).',
+  );
+
 export const planSessionScopeBodySchema = z
-  .object({ targetKeys: z.array(z.string().min(1)).optional() })
+  .object({ targetKeys: z.array(z.string().min(1)).optional(), sessionId: planSessionIdField })
   .strict();
 
 /** `POST …/plan-session/turns` — the scope, plus what to say. */
 export const planTurnBodySchema = z
   .object({
     targetKeys: z.array(z.string().min(1)).optional(),
+    sessionId: planSessionIdField,
     /** What you want changed about the plan. */
     body: z.string().min(1),
   })

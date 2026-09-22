@@ -3140,6 +3140,13 @@ page create nothing and take no lock. **Superseded:** the `PlanChangeSession` mo
 _"ONE thread per project … a get-or-create with no ambiguity about WHICH thread resumes"_, the
 `@@unique([projectId, scopeKey])` it rests on, and `getOrCreateForScope` as a mount read.
 
+**The public `open` doors are an explicit start, not a look** (MOTIR-6028): `POST
+/api/v1/projects/{key}/plan-session` and the MCP `open_plan_session` resume the
+caller's recent session for the scope or create one, with no turn. They are an
+API client's or agent's deliberate "I am about to talk", and the deployed `motir
+plan` CLI reads a session from `open` before its first turn. The browser never
+calls them; its mount stays a read that creates nothing.
+
 ### §2 — cardinality: many sessions per scope, each addressed by its ID
 
 A `(projectId, scopeKey)` pair holds any number of sessions over time; two sessions of one scope are

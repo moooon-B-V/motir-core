@@ -77,6 +77,7 @@ import {
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
+  PlanSessionNotFoundError,
   PlanTargetLockedError,
   TooManyPlanChangeTargetsError,
 } from '@/lib/planChange/errors';
@@ -509,6 +510,8 @@ export function toToolError(err: unknown): CallToolResult {
   // path's motir-ai failures are `MotirAiError`s, already mapped above.
   if (
     err instanceof PlanChangeSessionNotFoundError ||
+    // A `sessionId` that names no session of this project (MOTIR-6028).
+    err instanceof PlanSessionNotFoundError ||
     err instanceof EmptyPlanChangeIntentError ||
     err instanceof EmptyPlanChangeTurnError ||
     err instanceof TooManyPlanChangeTargetsError ||

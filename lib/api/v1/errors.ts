@@ -439,6 +439,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // a scope in another tenant never reaches the service, because the project
   // read answers 404 first.
   PLAN_CHANGE_SESSION_NOT_FOUND: 404,
+  // MOTIR-6028: a `sessionId` that names no session of THIS project — 404, the
+  // same no-existence-leak answer as a missing thread.
+  PLAN_SESSION_NOT_FOUND: 404,
   // ⚠️ 409, not 422. Two writers appended to one thread and lost the race for a
   // `seq`; the body was perfectly valid when it was sent. 422 would tell the
   // caller to fix its body, which is the wrong instruction — the right one is to

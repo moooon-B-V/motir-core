@@ -24,9 +24,11 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.create({ data });
   },
 
-  /** The project's MOST RECENTLY ACTIVE conversation for one scope — the RESUME
-   *  read (re-opening the planning workspace, or re-opening the panel on the same
-   *  work items, reloads the thread from here). `scopeKey` is the canonical
+  /** The project's MOST RECENTLY ACTIVE conversation for one scope, of any
+   *  member. ⚠️ NO PRODUCTION READER since MOTIR-6028 — every door addresses a
+   *  session by id, and the resume read is {@link findResumableForUser}. It is
+   *  kept because the E2E harness, the RLS fallback-arm guard and several suites
+   *  read a scope's latest session through it; do not route a door back onto it. `scopeKey` is the canonical
    *  anchor-set discriminator (`''` = the project-wide thread; 7.12.3 ·
    *  MOTIR-909). A scope now holds MANY sessions (AMENDMENT 17 §2 — the
    *  `(project_id, scope_key)` unique is gone), so the read ORDERS by
