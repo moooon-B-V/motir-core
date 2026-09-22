@@ -8,6 +8,7 @@ import {
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
+  PlanSessionNotFoundError,
   PlanTargetLockedError,
 } from '@/lib/planChange/errors';
 import {
@@ -28,6 +29,9 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   // answer a question about somebody else's job.
   if (
     err instanceof PlanChangeSessionNotFoundError ||
+    // A session addressed BY ID that is not this project's (MOTIR-6023): 404,
+    // the same no-existence-leak answer as a missing thread.
+    err instanceof PlanSessionNotFoundError ||
     err instanceof PlanChangeTurnNotFoundError ||
     err instanceof PlanChangeMailboxJobMismatchError
   ) {
@@ -107,5 +111,22 @@ export function noActiveProject(): NextResponse {
   return NextResponse.json(
     { code: 'NO_ACTIVE_PROJECT', error: 'No active project.' },
     { status: 404 },
+  );
+}
+
+/**
+ * The session a request ADDRESSES (MOTIR-6023; AMENDMENT 17 §2) — every
+ * conversation door names its session by id, because a scope now holds many.
+ * Returns the id, or `null` when it is absent or not a non-empty string.
+ */
+export function readSessionId(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/** The 400 a door answers when the `sessionId` it requires is missing. */
+export function missingSessionId(): NextResponse {
+  return NextResponse.json(
+    { code: 'BAD_REQUEST', error: '`sessionId` is required — name the conversation by its id.' },
+    { status: 400 },
   );
 }

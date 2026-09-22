@@ -494,10 +494,10 @@ describe('the CORRECTION — re-running one turn the other way', () => {
     // A turn appended through the shipped plan-change door has a null intent
     // (nothing classified it). Re-running it through the ask door must not read
     // that absence as anything but "not yet decided", and the default is `ask`.
-    const { POST: openSession } = await import('@/app/api/ai/plan-change/session/route');
-    const { POST: appendTurnRoute } = await import('@/app/api/ai/plan-change/session/turns/route');
-    await openSession();
-    await appendTurnRoute(req('/api/ai/plan-change/session/turns', { body: 'legacy turn' }));
+    // The first turn STARTS the conversation (MOTIR-6023), through the same
+    // shipped door, so it too carries no intent.
+    const { POST: startSession } = await import('@/app/api/ai/plan-change/session/route');
+    await startSession(req('/api/ai/plan-change/session', { body: 'legacy turn' }));
     const before = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
     const legacy = before.turns.at(-1)!;
     expect(legacy.intent).toBeNull();
@@ -554,14 +554,16 @@ describe('an ask WRITES NO WORK ITEM', () => {
 
 describe('the shipped plan-change path is untouched', () => {
   it('its submit still opens a PLANNING job over the accumulated turns', async () => {
-    const { POST: openSession } = await import('@/app/api/ai/plan-change/session/route');
-    const { POST: appendTurnRoute } = await import('@/app/api/ai/plan-change/session/turns/route');
+    const { POST: startSession } = await import('@/app/api/ai/plan-change/session/route');
     const { POST: submitRoute } = await import('@/app/api/ai/plan-change/session/submit/route');
 
-    await openSession();
-    await appendTurnRoute(req('/api/ai/plan-change/session/turns', { body: 'add payments' }));
+    const started = (await (
+      await startSession(req('/api/ai/plan-change/session', { body: 'add payments' }))
+    ).json()) as { id: string };
     submitJobMock.mockResolvedValue({ jobId: 'job-augment-1' });
-    const res = await submitRoute();
+    const res = await submitRoute(
+      req('/api/ai/plan-change/session/submit', { sessionId: started.id }),
+    );
     expect(res.status).toBe(200);
 
     // ONE planning kind since MOTIR-4304 — the shipped plan-change path is

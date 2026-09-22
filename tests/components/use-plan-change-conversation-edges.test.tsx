@@ -51,7 +51,7 @@ const {
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  openPlanChangeSession: open,
+  findResumableSession: open,
   appendPlanChangeTurn: append,
   submitPlanChange: submit,
   // The anchored half (MOTIR-910) is exercised by exactly one case here — the
@@ -887,7 +887,7 @@ describe('usePlanChangeConversation — the quiet arms', () => {
       await hook.result.current.retry();
     });
 
-    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything());
+    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything(), null);
   });
 
   it('a plan-run stream failure while a proposal is pending returns to REVIEW', async () => {

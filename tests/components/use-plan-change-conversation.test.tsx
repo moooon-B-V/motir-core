@@ -45,7 +45,7 @@ const {
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  openPlanChangeSession: open,
+  findResumableSession: open,
   appendPlanChangeTurn: append,
   submitPlanChange: submit,
   resumeContextualSession: resumeAnchored,
@@ -288,6 +288,8 @@ describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
       expect.anything(),
       // MOTIR-2226: no question is pending, so the turn is not a reply.
       false,
+      // The conversation the rail holds (MOTIR-6023).
+      's1',
     );
     // One call does open-or-resume + append + submit, so neither project-thread
     // hop fires — a targeted turn must not land in the project conversation.
@@ -345,7 +347,7 @@ describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
 
     // The accumulated intent goes out again with NO new turn appended (MOTIR-910's
     // resubmit), addressed to the set the failed turn actually landed in.
-    expect(resubmitAnchored).toHaveBeenCalledWith('w-812', ['MOTIR-918'], expect.anything());
+    expect(resubmitAnchored).toHaveBeenCalledWith('w-812', ['MOTIR-918'], expect.anything(), 's1');
     expect(submitAnchored).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
   });
@@ -375,7 +377,12 @@ describe('usePlanChangeConversation — a turn', () => {
 
     // ONE door and no intent on the wire (MOTIR-1343 · ADR §1): the client posts
     // the text and the `isAnswer` affordance flag, and nothing else.
-    expect(submitAsk).toHaveBeenCalledWith('Add recurring invoices.', expect.anything(), false);
+    expect(submitAsk).toHaveBeenCalledWith(
+      'Add recurring invoices.',
+      expect.anything(),
+      false,
+      's1',
+    );
     expect(append).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
     // …and when the door says the turn was a plan change, the run lands in
@@ -484,7 +491,7 @@ describe('usePlanChangeConversation — failure is recoverable in place', () => 
 
     // A retry re-runs the TURN, naming it — no second `user` turn is appended
     // and no fresh submit is invented (ADR §3: the person said one thing once).
-    expect(rerunAsk).toHaveBeenCalledWith('t0', {}, expect.anything());
+    expect(rerunAsk).toHaveBeenCalledWith('t0', { sessionId: 's1' }, expect.anything());
     expect(submitAsk).not.toHaveBeenCalled();
     expect(append).not.toHaveBeenCalled();
   });
@@ -841,6 +848,8 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
       [],
       expect.anything(),
       false,
+      // A never-planned item holds no session yet — the first turn starts one.
+      null,
     );
     // The project thread's two-call shape is never used here.
     expect(append).not.toHaveBeenCalled();
@@ -873,7 +882,7 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
       await result.current.retry();
     });
 
-    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything());
+    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything(), 's1');
     expect(submitAnchored).not.toHaveBeenCalled();
     expect(result.current.state.jobId).toBe('job-anchored-2');
   });

@@ -5,7 +5,7 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import {
-  openPlanChangeSession,
+  findResumableSession,
   recordPlannerTurn,
   rerunAskTurn,
   resubmitContextualPlan,
@@ -471,7 +471,9 @@ export function usePlanChangeConversation({
             // is seeded from that same item, and any target the user adds later
             // starts a differently-scoped thread anyway.
             await resumeContextualSession(anchorId, [], controller.signal)
-          : { session: await openPlanChangeSession(controller.signal), planId: null };
+          : // The caller's RESUMABLE project-wide session, or none — a look creates
+            // nothing; the first turn starts the session (AMENDMENT 17 §1, §3).
+            { session: await findResumableSession(controller.signal), planId: null };
         if (!mountedRef.current) return;
         setState((s) => ({ ...s, phase: 'idle', session, planId: planId ?? null }));
 
@@ -570,7 +572,9 @@ export function usePlanChangeConversation({
       // not take the run down with it.
       let asked = false;
       try {
-        const withTurn = await recordPlannerTurn(jobId, anchor, controller.signal);
+        const sessionId = stateRef.current.session?.id;
+        if (!sessionId) throw new Error('no session to narrate into');
+        const withTurn = await recordPlannerTurn(sessionId, jobId, anchor, controller.signal);
         if (!mountedRef.current) return;
         asked = pendingQuestion(withTurn.turns) !== null;
         setState((s) => ({ ...s, session: withTurn }));
@@ -649,8 +653,13 @@ export function usePlanChangeConversation({
         submitter ??
         (anchor
           ? (signal: AbortSignal) =>
-              resubmitContextualPlan(anchor.anchorId, anchor.targetKeys, signal)
-          : (signal: AbortSignal) => submitPlanChange(signal));
+              resubmitContextualPlan(
+                anchor.anchorId,
+                anchor.targetKeys,
+                signal,
+                stateRef.current.session?.id ?? null,
+              )
+          : (signal: AbortSignal) => submitPlanChange(stateRef.current.session?.id ?? '', signal));
 
       try {
         const { jobId, planId, session } = await submit(controller.signal);
@@ -823,7 +832,11 @@ export function usePlanChangeConversation({
         );
         if (failed || !mountedRef.current) return;
 
-        const settled = await settleAskJob(submitted.jobId, controller.signal);
+        const settled = await settleAskJob(
+          submitted.jobId,
+          controller.signal,
+          submitted.session?.id ?? stateRef.current.session?.id ?? null,
+        );
         if (!mountedRef.current) return;
 
         if (settled.outcome === 'redirected') {
@@ -915,7 +928,12 @@ export function usePlanChangeConversation({
         // and the next sentence must not be swallowed as a replay of this one.
         const idempotencyKey = `turn:${jobId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
         try {
-          const delivery = await attachMidRunTurn(jobId, body, idempotencyKey);
+          const delivery = await attachMidRunTurn(
+            stateRef.current.session?.id ?? '',
+            jobId,
+            body,
+            idempotencyKey,
+          );
           if (!mountedRef.current) return;
           setState((s) => ({
             ...s,
@@ -976,7 +994,14 @@ export function usePlanChangeConversation({
         }));
         stoppingRef.current = false;
         await run(anchor, (signal) =>
-          submitContextualPlan(anchor.anchorId, body, anchor.targetKeys, signal, isAnswer),
+          submitContextualPlan(
+            anchor.anchorId,
+            body,
+            anchor.targetKeys,
+            signal,
+            isAnswer,
+            stateRef.current.session?.id ?? null,
+          ),
         );
         return;
       }
@@ -1004,7 +1029,9 @@ export function usePlanChangeConversation({
         queued: [],
       }));
       stoppingRef.current = false;
-      await runAsk((signal) => submitAskTurn(body, signal, isAnswer));
+      await runAsk((signal) =>
+        submitAskTurn(body, signal, isAnswer, stateRef.current.session?.id ?? null),
+      );
     },
     [run, runAsk],
   );
@@ -1027,7 +1054,9 @@ export function usePlanChangeConversation({
     // pointed at what actually failed.
     if (!anchor && lastAskTurnRef.current) {
       const turnId = lastAskTurnRef.current;
-      await runAsk((signal) => rerunAskTurn(turnId, {}, signal));
+      await runAsk((signal) =>
+        rerunAskTurn(turnId, { sessionId: stateRef.current.session?.id ?? null }, signal),
+      );
       return;
     }
     await run(anchor);
@@ -1055,7 +1084,13 @@ export function usePlanChangeConversation({
         errorCode: null,
         outOfCredits: false,
       }));
-      await runAsk((signal) => rerunAskTurn(turnId, { flip: true }, signal));
+      await runAsk((signal) =>
+        rerunAskTurn(
+          turnId,
+          { flip: true, sessionId: stateRef.current.session?.id ?? null },
+          signal,
+        ),
+      );
     },
     [runAsk],
   );
@@ -1183,7 +1218,11 @@ export function usePlanChangeConversation({
     const timer = setInterval(() => {
       void (async () => {
         try {
-          const delivery = await peekMailbox(jobId, controller.signal);
+          const delivery = await peekMailbox(
+            stateRef.current.session?.id ?? '',
+            jobId,
+            controller.signal,
+          );
           if (!mountedRef.current) return;
           const stillWaiting = new Set(delivery.turns.map((t) => t.id));
           setState((s) => ({
@@ -1235,7 +1274,7 @@ export function usePlanChangeConversation({
     stoppingRef.current = true;
     setState((s) => ({ ...s, stopping: true }));
     try {
-      await stopPlanChangeRun(jobId, `stop:${jobId}`);
+      await stopPlanChangeRun(stateRef.current.session?.id ?? '', jobId, `stop:${jobId}`);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (!mountedRef.current) return;

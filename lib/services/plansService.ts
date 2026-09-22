@@ -4268,6 +4268,26 @@ export const plansService = {
   },
 
   /**
+   * A SESSION's still-undecided plan (MOTIR-6023; AMENDMENT 17 §5) — the
+   * by-session sibling of {@link findPendingPlanIdForJob}, reading the COLUMN:
+   * the session's latest plan, when it is not yet decided. Browse-gated; a
+   * session of another project answers `null`.
+   */
+  async findPendingPlanIdForSession(
+    projectId: string,
+    sessionId: string,
+    ctx: ServiceContext,
+  ): Promise<string | null> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findLatestBySession(sessionId, tx),
+    );
+    if (!plan || plan.projectId !== projectId) return null;
+    if (plan.status === 'approved' || plan.status === 'declined') return null;
+    return plan.id;
+  },
+
+  /**
    * The plan a job produced, by job id — REGARDLESS of decision state
    * (MOTIR-1825). The OUTCOME-read sibling of
    * {@link plansService.findPendingPlanIdForJob}, which deliberately hides an

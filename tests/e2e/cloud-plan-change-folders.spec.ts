@@ -28,6 +28,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { persistAskTurn } from './_helpers/plan-session-turn';
 import { markProjectOnboarded } from './_helpers/ai-augment-replan-seed';
 import { seedFolderPlan, seedFolderRoadmap } from './_helpers/roadmap-seed';
 
@@ -73,19 +74,9 @@ async function stubAsk(page: Page, planId: string): Promise<void> {
       await route.continue();
       return;
     }
-    const turnsUrl = new URL('/api/ai/plan-change/session/turns', route.request().url()).toString();
-    let body: unknown = {};
-    try {
-      body = JSON.parse(route.request().postData() ?? '{}');
-    } catch {
-      body = {};
-    }
-    const appended = await route.fetch({
-      url: turnsUrl,
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      postData: JSON.stringify({ body: (body as { body?: string }).body ?? '' }),
-    });
+    // Through the real session doors — the held session, or a first turn that
+    // starts one (MOTIR-6023).
+    const appended = await persistAskTurn(route);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

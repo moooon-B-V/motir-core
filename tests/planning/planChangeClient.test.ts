@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   attachMidRunTurn,
-  openPlanChangeSession,
+  findResumableSession,
+  getPlanChangeSession,
+  startPlanChangeSession,
   appendPlanChangeTurn,
   peekMailbox,
   stopPlanChangeRun,
@@ -62,30 +64,61 @@ const SESSION = {
   turns: [],
 };
 
-describe('planChangeClient — the three session calls hit the SHIPPED endpoints', () => {
-  it('opens/resumes the thread with a bodyless POST', async () => {
+describe('planChangeClient — the session calls hit the SHIPPED endpoints, by session id', () => {
+  it('RESUMES with a bodyless GET — looking creates nothing (MOTIR-6023)', async () => {
     fetchMock.mockResolvedValue(jsonResponse(SESSION));
 
-    await expect(openPlanChangeSession()).resolves.toEqual(SESSION);
+    await expect(findResumableSession()).resolves.toEqual(SESSION);
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session');
+    expect(init.method).toBeUndefined();
+    expect(init.body).toBeUndefined();
+    expect(init.headers).toMatchObject({ Accept: 'application/json' });
+  });
+
+  it('reads NO resumable session as null, not an error', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(null));
+
+    await expect(findResumableSession()).resolves.toBeNull();
+  });
+
+  it('reopens ONE session by id, encoded into the query', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(SESSION));
+
+    await expect(getPlanChangeSession('s 1')).resolves.toEqual(SESSION);
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session?id=s%201');
+    expect(init.method).toBeUndefined();
+  });
+
+  it('STARTS a session with its first turn as a POST { body, isAnswer }', async () => {
+    // A fresh Response per call — a body may only be read once.
+    fetchMock.mockImplementation(async () => jsonResponse(SESSION));
+
+    await expect(startPlanChangeSession('Plan billing')).resolves.toEqual(SESSION);
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/ai/plan-change/session');
     expect(init.method).toBe('POST');
-    // The open call carries NO body — passing `undefined` must omit the key
-    // entirely rather than serialize `"undefined"`, which the route would 400.
-    expect('body' in init).toBe(false);
     expect(init.headers).toMatchObject({
       Accept: 'application/json',
       'Content-Type': 'application/json',
     });
+    expect(JSON.parse(init.body as string)).toEqual({ body: 'Plan billing', isAnswer: false });
+
+    await startPlanChangeSession('money in', undefined, true);
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ body: 'money in', isAnswer: true });
   });
 
   it('flags a reply sent from the ANSWER BAR (MOTIR-2226)', async () => {
     fetchMock.mockResolvedValue(jsonResponse(SESSION));
 
-    await appendPlanChangeTurn('Taking money from customers.', undefined, true);
+    await appendPlanChangeTurn('s1', 'Taking money from customers.', undefined, true);
 
     expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      sessionId: 's1',
       body: 'Taking money from customers.',
       isAnswer: true,
     });
@@ -94,23 +127,24 @@ describe('planChangeClient — the three session calls hit the SHIPPED endpoints
   it('records the PLANNER’s turn for a settled job — the project thread', async () => {
     fetchMock.mockResolvedValue(jsonResponse(SESSION));
 
-    await expect(recordPlannerTurn('job-1', null)).resolves.toEqual(SESSION);
+    await expect(recordPlannerTurn('s1', 'job-1', null)).resolves.toEqual(SESSION);
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/ai/plan-change/session/planner-turn');
     expect(init.method).toBe('POST');
-    // No anchor: the project-wide thread, addressed by the active project alone.
-    expect(JSON.parse(init.body as string)).toEqual({ jobId: 'job-1' });
+    // No anchor: the session is named by id alone.
+    expect(JSON.parse(init.body as string)).toEqual({ sessionId: 's1', jobId: 'job-1' });
   });
 
   it('records it on an ANCHORED thread by its anchor set', async () => {
     fetchMock.mockResolvedValue(jsonResponse(SESSION));
 
-    await recordPlannerTurn('job-1', { anchorId: 'wi_812', targetKeys: ['MOTIR-918'] });
+    await recordPlannerTurn('s1', 'job-1', { anchorId: 'wi_812', targetKeys: ['MOTIR-918'] });
 
     // The scope key is never computed client-side — the anchor set travels and
     // the contextual service resolves (and view-gates) it.
     expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      sessionId: 's1',
       jobId: 'job-1',
       anchorId: 'wi_812',
       targetKeys: ['MOTIR-918'],
@@ -120,19 +154,22 @@ describe('planChangeClient — the three session calls hit the SHIPPED endpoints
   it('surfaces a failed recording as a typed client error', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ code: 'MOTIR_AI_UNAVAILABLE' }, 502));
 
-    await expect(recordPlannerTurn('job-1', null)).rejects.toBeInstanceOf(PlanEditsClientError);
+    await expect(recordPlannerTurn('s1', 'job-1', null)).rejects.toBeInstanceOf(
+      PlanEditsClientError,
+    );
   });
 
-  it('appends a turn as { body } to the turns endpoint', async () => {
+  it('appends a turn as { sessionId, body } to the turns endpoint', async () => {
     fetchMock.mockResolvedValue(jsonResponse(SESSION));
 
-    await expect(appendPlanChangeTurn('Split the billing epic')).resolves.toEqual(SESSION);
+    await expect(appendPlanChangeTurn('s1', 'Split the billing epic')).resolves.toEqual(SESSION);
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/ai/plan-change/session/turns');
     // `isAnswer` rides on every turn (MOTIR-2226) — false unless the composer
     // sent it from the answer bar.
     expect(JSON.parse(init.body as string)).toEqual({
+      sessionId: 's1',
       body: 'Split the billing epic',
       isAnswer: false,
     });
@@ -142,14 +179,14 @@ describe('planChangeClient — the three session calls hit the SHIPPED endpoints
     const result = { jobId: 'job-augment-1', session: SESSION };
     fetchMock.mockResolvedValue(jsonResponse(result));
 
-    await expect(submitPlanChange()).resolves.toEqual(result);
+    await expect(submitPlanChange('s1')).resolves.toEqual(result);
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/ai/plan-change/session/submit');
     expect(init.method).toBe('POST');
-    // Submit sends nothing either — the intent is the PERSISTED thread, not a
-    // client-side payload. That is the whole point of the seam.
-    expect('body' in init).toBe(false);
+    // Submit names the session and nothing else — the intent is the PERSISTED
+    // thread, not a client-side payload. That is the whole point of the seam.
+    expect(JSON.parse(init.body as string)).toEqual({ sessionId: 's1' });
   });
 
   it('forwards the abort signal so an unmounting rail cancels in flight', async () => {
@@ -157,13 +194,19 @@ describe('planChangeClient — the three session calls hit the SHIPPED endpoints
     fetchMock.mockImplementation(async () => jsonResponse(SESSION));
     const controller = new AbortController();
 
-    await openPlanChangeSession(controller.signal);
+    await findResumableSession(controller.signal);
     expect(lastCall()[1].signal).toBe(controller.signal);
 
-    await appendPlanChangeTurn('x', controller.signal);
+    await getPlanChangeSession('s1', controller.signal);
     expect(lastCall()[1].signal).toBe(controller.signal);
 
-    await submitPlanChange(controller.signal);
+    await startPlanChangeSession('x', controller.signal);
+    expect(lastCall()[1].signal).toBe(controller.signal);
+
+    await appendPlanChangeTurn('s1', 'x', controller.signal);
+    expect(lastCall()[1].signal).toBe(controller.signal);
+
+    await submitPlanChange('s1', controller.signal);
     expect(lastCall()[1].signal).toBe(controller.signal);
   });
 });
@@ -236,7 +279,7 @@ describe('planChangeClient — the planId echo is read DEFENSIVELY (MOTIR-1745)'
     // must degrade to "nothing to confirm" rather than fail to parse.
     fetchMock.mockResolvedValue(jsonResponse({ jobId: 'job-ctx-1', session: SESSION }));
 
-    const res = await submitPlanChange();
+    const res = await submitPlanChange('s1');
     expect(res.jobId).toBe('job-ctx-1');
     expect(res.planId).toBeUndefined();
   });
@@ -262,7 +305,7 @@ describe('planChangeClient — failures surface as ONE error type', () => {
   it('throws PlanEditsClientError carrying the status and the typed code', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ code: 'PLAN_CHANGE_SESSION_NOT_FOUND' }, 404));
 
-    const err = await appendPlanChangeTurn('x').catch((e: unknown) => e);
+    const err = await appendPlanChangeTurn('s1', 'x').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PlanEditsClientError);
     expect((err as PlanEditsClientError).status).toBe(404);
     expect((err as PlanEditsClientError).code).toBe('PLAN_CHANGE_SESSION_NOT_FOUND');
@@ -273,7 +316,7 @@ describe('planChangeClient — failures surface as ONE error type', () => {
     // an unhandled parse throw — the rail branches on the class, not the body.
     fetchMock.mockResolvedValue(new Response('<html>bad gateway</html>', { status: 502 }));
 
-    const err = await submitPlanChange().catch((e: unknown) => e);
+    const err = await submitPlanChange('s1').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PlanEditsClientError);
     expect((err as PlanEditsClientError).status).toBe(502);
     expect((err as PlanEditsClientError).code).toBeNull();
@@ -282,7 +325,7 @@ describe('planChangeClient — failures surface as ONE error type', () => {
   it('degrades to a null code when the JSON error body carries no code', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: 'nope' }, 400));
 
-    const err = await openPlanChangeSession().catch((e: unknown) => e);
+    const err = await startPlanChangeSession('x').catch((e: unknown) => e);
     expect((err as PlanEditsClientError).code).toBeNull();
   });
 
@@ -291,7 +334,7 @@ describe('planChangeClient — failures surface as ONE error type', () => {
     // its own: the rail's out-of-credits branch is one check for every AI call.
     fetchMock.mockResolvedValue(jsonResponse({ code: 'MOTIR_AI_OUT_OF_CREDITS' }, 402));
 
-    const err = (await submitPlanChange().catch((e: unknown) => e)) as PlanEditsClientError;
+    const err = (await submitPlanChange('s1').catch((e: unknown) => e)) as PlanEditsClientError;
     expect(err.isOutOfCredits).toBe(true);
   });
 });
@@ -341,6 +384,28 @@ describe('the anchored transport — a work item’s own thread', () => {
 
     const [, init] = lastCall();
     expect(JSON.parse(init.body as string)).toEqual({ resubmit: true });
+  });
+
+  it('names the HELD session on a resume, a turn and a retry (MOTIR-6023)', async () => {
+    fetchMock.mockImplementation(async () =>
+      jsonResponse({ jobId: 'j', sessionId: 's1', session: SESSION }),
+    );
+
+    await resumeContextualSession('wi_123', [], undefined, 's1');
+    expect(lastCall()[0]).toBe('/api/work-items/wi_123/ai/plan?sessionId=s1');
+
+    await resumeContextualSession('wi_123', ['MOTIR-9'], undefined, 's1');
+    expect(lastCall()[0]).toBe('/api/work-items/wi_123/ai/plan?targetKey=MOTIR-9&sessionId=s1');
+
+    await submitContextualPlan('wi_123', 'Split.', [], undefined, false, 's1');
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      prompt: 'Split.',
+      isAnswer: false,
+      sessionId: 's1',
+    });
+
+    await resubmitContextualPlan('wi_123', [], undefined, 's1');
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ resubmit: true, sessionId: 's1' });
   });
 
   it('encodes the anchor id into the path', async () => {
@@ -447,6 +512,36 @@ describe('the ask door', () => {
     expect(JSON.parse(init.body as string)).toEqual({ jobId: 'j1' });
   });
 
+  it('names the HELD session on a new turn, a re-run and a settle (MOTIR-6023)', async () => {
+    fetchMock.mockImplementation(async () =>
+      jsonResponse({ jobId: 'j1', turnId: 't0', session: SESSION }),
+    );
+
+    await submitAskTurn('why?', undefined, false, 's1');
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      body: 'why?',
+      isAnswer: false,
+      sessionId: 's1',
+    });
+
+    await rerunAskTurn('t0', { sessionId: 's1' });
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ turnId: 't0', sessionId: 's1' });
+
+    await rerunAskTurn('t0', { flip: true, sessionId: 's1' });
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({
+      turnId: 't0',
+      flip: true,
+      sessionId: 's1',
+    });
+
+    await settleAskJob('j1', undefined, 's1');
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ jobId: 'j1', sessionId: 's1' });
+
+    // A null session is OMITTED, never sent as `null`.
+    await submitAskTurn('why?', undefined, false, null);
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ body: 'why?', isAnswer: false });
+  });
+
   it('raises the ONE error type a caller branches on', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ code: 'MOTIR_AI_OUT_OF_CREDITS' }, 402));
 
@@ -471,14 +566,15 @@ describe('the mailbox doors', () => {
   it('attaches a mid-run turn — job, body and the PER-SEND idempotency key, nothing else', async () => {
     fetchMock.mockResolvedValue(jsonResponse(DELIVERY));
 
-    await expect(attachMidRunTurn('job-1', 'Also drop it.', 'turn:job-1:k1')).resolves.toEqual(
-      DELIVERY,
-    );
+    await expect(
+      attachMidRunTurn('s1', 'job-1', 'Also drop it.', 'turn:job-1:k1'),
+    ).resolves.toEqual(DELIVERY);
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/ai/plan-change/session/mailbox');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({
+      sessionId: 's1',
       jobId: 'job-1',
       body: 'Also drop it.',
       idempotencyKey: 'turn:job-1:k1',
@@ -488,11 +584,11 @@ describe('the mailbox doors', () => {
   it('PEEKS the mailbox as a GET keyed on the job — the read the composer polls', async () => {
     fetchMock.mockResolvedValue(jsonResponse(DELIVERY));
 
-    await expect(peekMailbox('job 1')).resolves.toEqual(DELIVERY);
+    await expect(peekMailbox('s 1', 'job 1')).resolves.toEqual(DELIVERY);
 
     const [url, init] = lastCall();
-    // Encoded, so a job id is never a path or query injection.
-    expect(url).toBe('/api/ai/plan-change/session/mailbox?jobId=job%201');
+    // Encoded, so neither id is ever a path or query injection.
+    expect(url).toBe('/api/ai/plan-change/session/mailbox?jobId=job%201&sessionId=s%201');
     expect(init.method).toBeUndefined();
     expect(init.body).toBeUndefined();
   });
@@ -500,7 +596,7 @@ describe('the mailbox doors', () => {
   it('a failed peek raises the ONE error type, carrying the door’s code', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ code: 'PLAN_CHANGE_JOB_NOT_RUNNING' }, 409));
 
-    const err = await peekMailbox('job-1').catch((e: unknown) => e);
+    const err = await peekMailbox('s1', 'job-1').catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(PlanEditsClientError);
     expect((err as PlanEditsClientError).status).toBe(409);
@@ -510,7 +606,7 @@ describe('the mailbox doors', () => {
   it('raises a STOP through the same mailbox, keyed per click', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ turns: [], stopped: true }));
 
-    await expect(stopPlanChangeRun('job-1', 'stop:job-1')).resolves.toEqual({
+    await expect(stopPlanChangeRun('s1', 'job-1', 'stop:job-1')).resolves.toEqual({
       turns: [],
       stopped: true,
     });
@@ -519,6 +615,7 @@ describe('the mailbox doors', () => {
     expect(url).toBe('/api/ai/plan-change/session/mailbox/stop');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({
+      sessionId: 's1',
       jobId: 'job-1',
       idempotencyKey: 'stop:job-1',
     });
@@ -529,11 +626,11 @@ describe('the mailbox doors', () => {
     fetchMock.mockImplementation(async () => jsonResponse(DELIVERY));
     const controller = new AbortController();
 
-    await attachMidRunTurn('job-1', 'x', 'k', controller.signal);
+    await attachMidRunTurn('s1', 'job-1', 'x', 'k', controller.signal);
     expect(lastCall()[1].signal).toBe(controller.signal);
-    await peekMailbox('job-1', controller.signal);
+    await peekMailbox('s1', 'job-1', controller.signal);
     expect(lastCall()[1].signal).toBe(controller.signal);
-    await stopPlanChangeRun('job-1', 'k', controller.signal);
+    await stopPlanChangeRun('s1', 'job-1', 'k', controller.signal);
     expect(lastCall()[1].signal).toBe(controller.signal);
   });
 });

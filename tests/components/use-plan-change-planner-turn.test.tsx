@@ -44,7 +44,7 @@ const {
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  openPlanChangeSession: open,
+  findResumableSession: open,
   appendPlanChangeTurn: append,
   submitPlanChange: submit,
   recordPlannerTurn: record,
@@ -185,7 +185,7 @@ describe('recording the planner turn on settle', () => {
     await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
     await sendOne(hook);
 
-    expect(record).toHaveBeenCalledWith('job-1', null, expect.anything());
+    expect(record).toHaveBeenCalledWith('s1', 'job-1', null, expect.anything());
     // The narration lands without a reload — the thread the server returned is
     // the one the rail now renders.
     await waitFor(() =>
@@ -271,7 +271,7 @@ describe('the answer flag is derived from the thread the user was looking at', (
     // rides the ONE DOOR now (ADR §1's wire table lists `isAnswer` on it), which
     // is why routing the reply through a classifier does not cost the thread its
     // "Answered — planning resumed" marker.
-    expect(submitAsk).toHaveBeenCalledWith('money in', expect.anything(), true);
+    expect(submitAsk).toHaveBeenCalledWith('money in', expect.anything(), true, 's1');
   });
 
   it('does NOT flag it when nothing is pending', async () => {
@@ -279,6 +279,6 @@ describe('the answer flag is derived from the thread the user was looking at', (
     await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
     await sendOne(hook);
 
-    expect(submitAsk).toHaveBeenCalledWith('add payments', expect.anything(), false);
+    expect(submitAsk).toHaveBeenCalledWith('add payments', expect.anything(), false, 's1');
   });
 });

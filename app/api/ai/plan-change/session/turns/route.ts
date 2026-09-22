@@ -3,10 +3,17 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
-import { mapPlanChangeError, noActiveProject } from '../../_errors';
+import {
+  mapPlanChangeError,
+  missingSessionId,
+  noActiveProject,
+  readSessionId,
+} from '../../_errors';
 
-// POST /api/ai/plan-change/session/turns — append one turn to the active
-// project's plan-change conversation (Story 7.30 · MOTIR-1728). Appending
+// POST /api/ai/plan-change/session/turns — append one turn to ONE plan-change
+// conversation, named by `sessionId` (Story 7.30 · MOTIR-1728; by id since
+// MOTIR-6023 — a scope holds many sessions, so the id is the only address that
+// names exactly one). Appending
 // ACCUMULATES; it does not submit. The response is the updated session with its
 // full ordered thread.
 //
@@ -41,10 +48,18 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  const sessionId = readSessionId((body as { sessionId?: unknown })?.sessionId);
+  if (!sessionId) return missingSessionId();
+
   try {
-    const result = await planChangeSessionsService.appendTurn(rawBody, ctx, undefined, {
-      isAnswer: (body as { isAnswer?: unknown })?.isAnswer === true,
-    });
+    const result = await planChangeSessionsService.appendTurn(
+      rawBody,
+      ctx,
+      { sessionId },
+      {
+        isAnswer: (body as { isAnswer?: unknown })?.isAnswer === true,
+      },
+    );
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);

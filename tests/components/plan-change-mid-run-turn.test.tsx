@@ -32,7 +32,7 @@ const streamContextual = vi.fn();
 const readPending = vi.fn();
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  openPlanChangeSession: (...a: unknown[]) => openSession(...a),
+  findResumableSession: (...a: unknown[]) => openSession(...a),
   resumeContextualSession: (...a: unknown[]) => resumeContextual(...a),
   recordPlannerTurn: (...a: unknown[]) => recordPlannerTurn(...a),
   submitContextualPlan: (...a: unknown[]) => submitContextualPlan(...a),
@@ -153,6 +153,7 @@ describe('THE BRANCH — one control, two destinations, chosen by the phase', ()
 
     expect(attachMidRunTurn).toHaveBeenCalledTimes(1);
     expect(attachMidRunTurn).toHaveBeenCalledWith(
+      's1',
       'job-1',
       'Also drop the narration card.',
       expect.any(String),

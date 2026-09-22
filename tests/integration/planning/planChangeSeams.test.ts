@@ -102,9 +102,57 @@ vi.mock('next/navigation', () => ({
   },
 }));
 
-const { POST: openSessionRoute } = await import('@/app/api/ai/plan-change/session/route');
-const { POST: appendTurnRoute } = await import('@/app/api/ai/plan-change/session/turns/route');
-const { POST: submitRoute } = await import('@/app/api/ai/plan-change/session/submit/route');
+const { GET: readSessionRoute, POST: startSessionRoute } =
+  await import('@/app/api/ai/plan-change/session/route');
+const { POST: turnsRoute } = await import('@/app/api/ai/plan-change/session/turns/route');
+const { POST: submitDoor } = await import('@/app/api/ai/plan-change/session/submit/route');
+
+// The conversation the journey works on (MOTIR-6023). Every door names its
+// session by id; the wrappers below keep the journey reading as it did —
+// "open" is a READ of the resumable session (it creates nothing), the FIRST
+// turn starts the session, and every later write names it.
+let heldSessionId: string | null = null;
+
+async function openSessionRoute(): Promise<Response> {
+  const res = await readSessionRoute(
+    new Request('http://localhost:3000/api/ai/plan-change/session'),
+  );
+  const body = (await res.clone().json()) as { id: string } | null;
+  if (body) heldSessionId = body.id;
+  return res;
+}
+
+async function appendTurnRoute(req: Request): Promise<Response> {
+  const body = (await req.json()) as Record<string, unknown>;
+  if (!heldSessionId) {
+    const res = await startSessionRoute(
+      new Request('http://localhost:3000/api/ai/plan-change/session', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    );
+    if (res.ok) heldSessionId = ((await res.clone().json()) as { id: string }).id;
+    return res;
+  }
+  return turnsRoute(
+    new Request('http://localhost:3000/api/ai/plan-change/session/turns', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...body, sessionId: heldSessionId }),
+    }),
+  );
+}
+
+async function submitRoute(): Promise<Response> {
+  return submitDoor(
+    new Request('http://localhost:3000/api/ai/plan-change/session/submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId: heldSessionId }),
+    }),
+  );
+}
 const { POST: approvePlanRoute } = await import('@/app/api/plans/[id]/approve/route');
 // ⚠️ RE-POINTED (MOTIR-4732). This used to import `app/(planning)/planning/page`
 // and drive the route's Server Component. That route is DELETED — the workspace
@@ -198,6 +246,7 @@ function trailFrom(found: Awaited<ReturnType<typeof readAnchor>>) {
 let fx: WorkItemFixture;
 
 beforeEach(async () => {
+  heldSessionId = null;
   await truncateAuthTables();
   submitJobMock.mockClear();
   submitJobMock.mockResolvedValue({ jobId: 'job-augment-1' });

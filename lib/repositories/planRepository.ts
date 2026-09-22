@@ -50,6 +50,14 @@ export const planRepository = {
    * — a cross-tenant lookup returns `null` (→ 404, never 403). Newest-first so a
    * re-submitted job resolves to its latest plan. Read-only.
    */
+  /** A session's LATEST plan row — the pending-plan read (AMENDMENT 17 §5). */
+  async findLatestBySession(sessionId: string, tx: Prisma.TransactionClient): Promise<Plan | null> {
+    return tx.plan.findFirst({
+      where: { sessionId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   /** The id of a session's LATEST plan — "is this plan the conversation's current
    *  one?" (AMENDMENT 17 §5), the question `lastJobId` used to answer only for
    *  the latest submit. `tx` required: it guards a following release. */

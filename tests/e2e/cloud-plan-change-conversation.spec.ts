@@ -26,8 +26,9 @@
 // server-side fetch out of a route handler is NOT reachable from `page.route` —
 // mistakes #112 / #152). Everything on THIS side of that hop runs REAL:
 //
-//   • the conversation thread — `POST /api/ai/plan-change/session` (open/resume)
-//     and `…/session/turns` (append) are motir-core + Postgres, so the turns the
+//   • the conversation thread — `GET /api/ai/plan-change/session` (resume),
+//     `POST …/session` (a first turn starts it) and `…/session/turns` (append,
+//     by `sessionId` — MOTIR-6023) are motir-core + Postgres, so the turns the
 //     rail renders are genuinely persisted rows, not stub echoes. The submit stub
 //     even re-reads the live session, so the thread is never faked;
 //   • the PROPOSALS — the run's output is a real `Plan`, seeded through the same
@@ -45,6 +46,7 @@ import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
 import type { Page, Route } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { persistAskTurn, readNamedSession } from './_helpers/plan-session-turn';
 import {
   seedAiAugmentReplan,
   seedPlanChangeProposal,
@@ -130,8 +132,8 @@ async function stubPlanChangeSubmit(
   await page.route('**/api/ai/plan-change/session/submit', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     const run = runs[Math.min(call, runs.length - 1)]!;
-    const sessionUrl = new URL('/api/ai/plan-change/session', route.request().url()).toString();
-    const live = await route.fetch({ url: sessionUrl });
+    // The session the retry NAMED, re-read by id (MOTIR-6023).
+    const live = await readNamedSession(route);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -151,19 +153,9 @@ async function stubPlanChangeSubmit(
     call += 1;
     // Append the turn for real first, so the thread the rail reads back is the
     // persisted one — the door's own job, and the half this stub must not fake.
-    const turnsUrl = new URL('/api/ai/plan-change/session/turns', route.request().url()).toString();
-    let body: unknown = {};
-    try {
-      body = JSON.parse(route.request().postData() ?? '{}');
-    } catch {
-      body = {};
-    }
-    const appended = await route.fetch({
-      url: turnsUrl,
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      postData: JSON.stringify({ body: (body as { body?: string }).body ?? '' }),
-    });
+    // Through the real session doors — the held session, or a first turn that
+    // starts one (MOTIR-6023).
+    const appended = await persistAskTurn(route);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

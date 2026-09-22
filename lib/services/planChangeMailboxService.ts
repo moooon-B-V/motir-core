@@ -29,6 +29,7 @@ import {
   PlanChangeMailboxJobMismatchError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
+  PlanSessionNotFoundError,
 } from '@/lib/planChange/errors';
 
 // THE BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — the pipe between a user
@@ -81,6 +82,10 @@ const RUNNING_STATUSES: ReadonlySet<string> = new Set(['queued', 'running']);
 export interface AttachTurnInput {
   /** The run this turn is addressed at. Must be the thread's current run. */
   jobId: string;
+  /** The SESSION the caller believes is running this job (MOTIR-6023;
+   *  AMENDMENT 17 §2). When given it must exist in this project and must BE the
+   *  job's thread — a message never lands on a sibling session of the scope. */
+  sessionId?: string;
   /** What the user typed. */
   body: string;
   /**
@@ -239,9 +244,28 @@ async function findThreadForJob(jobId: string, pctx: MailboxContext) {
 async function requireThreadForJob(
   jobId: string,
   pctx: MailboxContext,
+  expectedSessionId?: string,
 ): Promise<{ sessionId: string }> {
+  // The ADDRESSED session first (MOTIR-6023): an id from another project is
+  // `PLAN_SESSION_NOT_FOUND`, the same answer every session door gives it.
+  if (expectedSessionId !== undefined) {
+    const addressed = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByIdInProject(
+        expectedSessionId,
+        pctx.projectId,
+        pctx.workspaceId,
+        tx,
+      ),
+    );
+    if (!addressed) throw new PlanSessionNotFoundError(expectedSessionId);
+  }
   const session = await findThreadForJob(jobId, pctx);
   if (!session) throw new PlanChangeMailboxJobMismatchError(jobId);
+  // The job is running on a DIFFERENT session of this project — from the
+  // caller's side that job is not on their conversation.
+  if (expectedSessionId !== undefined && session.id !== expectedSessionId) {
+    throw new PlanChangeMailboxJobMismatchError(jobId);
+  }
   return { sessionId: session.id };
 }
 
@@ -265,7 +289,7 @@ export const planChangeMailboxService = {
     // steering or ending a run is a plan-change WRITE, and `ai:plan` is the
     // decided policy for it (docs/decisions/permission-inventory.md R5).
     await projectAccessService.assertPermission(pctx.projectId, pctx, 'ai:plan');
-    const { sessionId } = await requireThreadForJob(input.jobId, pctx);
+    const { sessionId } = await requireThreadForJob(input.jobId, pctx, input.sessionId);
     if (!body) throw new EmptyPlanChangeTurnError();
 
     // ⚠️ OUTSIDE the transaction, deliberately (side-effects-outside-tx): this
@@ -311,12 +335,13 @@ export const planChangeMailboxService = {
     jobId: string,
     idempotencyKey: string,
     pctx: MailboxContext,
+    expectedSessionId?: string,
   ): Promise<MailboxDeliveryDto> {
     // The same gate every plan-change door carries (`planChangeSessionsService`):
     // steering or ending a run is a plan-change WRITE, and `ai:plan` is the
     // decided policy for it (docs/decisions/permission-inventory.md R5).
     await projectAccessService.assertPermission(pctx.projectId, pctx, 'ai:plan');
-    const { sessionId } = await requireThreadForJob(jobId, pctx);
+    const { sessionId } = await requireThreadForJob(jobId, pctx, expectedSessionId);
     // No RUNNING check: stopping an already-finished run is a NO-OP that answers
     // cleanly, not an error. The control is reachable in states where the click
     // is redundant — the run may settle between render and click — so it has to
@@ -346,11 +371,19 @@ export const planChangeMailboxService = {
    * A frame would be better and is a `motir-ai` card, not this one. If one ever
    * lands, this door stops being the composer's only answer and it can go.
    */
-  async peekForJob(jobId: string, pctx: MailboxContext): Promise<MailboxDeliveryDto> {
+  async peekForJob(
+    jobId: string,
+    pctx: MailboxContext,
+    expectedSessionId?: string,
+  ): Promise<MailboxDeliveryDto> {
     // The same gate every plan-change door carries (`planChangeSessionsService`):
     // steering or ending a run is a plan-change WRITE, and `ai:plan` is the
     // decided policy for it (docs/decisions/permission-inventory.md R5).
     await projectAccessService.assertPermission(pctx.projectId, pctx, 'ai:plan');
+    if (expectedSessionId !== undefined) {
+      const { sessionId } = await requireThreadForJob(jobId, pctx, expectedSessionId);
+      return planChangeMailboxService.peek(jobId, sessionId, pctx);
+    }
     const session = await findThreadForJob(jobId, pctx);
     // Same reading as the boundary read: no thread for this job means nothing is
     // waiting, which is true, and is not an error.

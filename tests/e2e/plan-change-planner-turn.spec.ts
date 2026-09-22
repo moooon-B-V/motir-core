@@ -33,6 +33,7 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { persistAskTurn, readNamedSession } from './_helpers/plan-session-turn';
 import { seedAiAugmentReplan, markProjectOnboarded } from './_helpers/ai-augment-replan-seed';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
@@ -97,19 +98,9 @@ async function stubAiAccess(page: Page): Promise<void> {
 async function stubSubmit(page: Page, jobId: string): Promise<void> {
   await page.route('**/api/ai/ask', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
-    let sent: { body?: string; isAnswer?: boolean } = {};
-    try {
-      sent = JSON.parse(route.request().postData() ?? '{}') as typeof sent;
-    } catch {
-      sent = {};
-    }
-    const turnsUrl = new URL('/api/ai/plan-change/session/turns', route.request().url()).toString();
-    const appended = await route.fetch({
-      url: turnsUrl,
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      postData: JSON.stringify({ body: sent.body ?? '', isAnswer: sent.isAnswer === true }),
-    });
+    // Through the real session doors — the held session, or a first turn that
+    // starts one (MOTIR-6023) — carrying the answer-bar flag as the ask door does.
+    const appended = await persistAskTurn(route);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -188,8 +179,8 @@ async function stubPlannerTurn(
       }
     }
 
-    const sessionUrl = new URL('/api/ai/plan-change/session', route.request().url()).toString();
-    const live = await route.fetch({ url: sessionUrl });
+    // The session the recording NAMED, re-read by id (MOTIR-6023).
+    const live = await readNamedSession(route);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -338,10 +329,18 @@ test('a question the user ignores is SUPERSEDED — marked, never dropped and ne
     (r) => r.url().includes('/api/ai/plan-change/session/turns') && r.request().method() === 'POST',
   );
   await page.evaluate(async () => {
+    // A second surface names the conversation by id (MOTIR-6023): it reads the
+    // caller's resumable session, then appends to exactly that one.
+    const session = (await (await fetch('/api/ai/plan-change/session')).json()) as {
+      id: string;
+    } | null;
     await fetch('/api/ai/plan-change/session/turns', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ body: 'Actually — re-sequence the Billing epic first.' }),
+      body: JSON.stringify({
+        sessionId: session?.id ?? '',
+        body: 'Actually — re-sequence the Billing epic first.',
+      }),
     });
   });
   expect((await appended).status()).toBe(200);
