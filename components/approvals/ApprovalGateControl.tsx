@@ -1014,13 +1014,22 @@ export function ApprovalGateControl({
     // an approval, and it is this frame's confirm, pending and refusal that report it).
     // Only a verb that NAMES an option passes one, so every other kind's `onDecide`
     // is called exactly as it always was.
-    const refusal = verb.perform
-      ? await verb.perform()
-      : note !== undefined
-        ? await onDecide(verb.decision, undefined, note)
-        : verb.optionId !== undefined
-          ? await onDecide(verb.decision, verb.optionId)
-          : await onDecide(verb.decision);
+    // ⚠️ A SEND THAT THROWS — the action failed, the network died — is the union's own
+    // `UNEXPECTED` arm (`lib/approvalGates/refusals.ts`), drawn IN PLACE like every other
+    // refusal. Unhandled, the rejection left the frame at *Recording…* for ever, with no
+    // way on (MOTIR-6077 found it by injecting a 5xx).
+    let refusal: GateRefusal | null;
+    try {
+      refusal = verb.perform
+        ? await verb.perform()
+        : note !== undefined
+          ? await onDecide(verb.decision, undefined, note)
+          : verb.optionId !== undefined
+            ? await onDecide(verb.decision, verb.optionId)
+            : await onDecide(verb.decision);
+    } catch {
+      refusal = { tag: 'UNEXPECTED' };
+    }
     // A note verb the DOOR refused as not offered is the empty-reason refusal arriving
     // late (a stale client, a race — MOTIR-6075): it is answered IN PLACE, with the
     // field's own error, exactly as the empty press above is. The band stays open.
@@ -1406,7 +1415,10 @@ export function ApprovalGateControl({
                       disabled={
                         verb.disabled === true ||
                         phase.kind === 'pending' ||
-                        phase.kind === 'refused'
+                        // ⚠️ EXCEPT `UNEXPECTED` — a send that failed in transit is RETRIED,
+                        // and its own copy says so ("check your connection and try again").
+                        // Every other refusal is about the question and would be refused again.
+                        (phase.kind === 'refused' && phase.refusal.tag !== 'UNEXPECTED')
                       }
                       aria-disabled={verb.disabled === true ? true : undefined}
                       onClick={() =>

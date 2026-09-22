@@ -181,6 +181,52 @@ describe('the refusal verb ASKS WHY (ADR §10a)', () => {
   });
 });
 
+describe('a send that FAILS in transit is shown in place and retried (MOTIR-6077)', () => {
+  it('a thrown decide is the UNEXPECTED refusal, and the verb stays pressable with the reason kept', async () => {
+    const onDecide = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce(null);
+    renderWithIntl(<Frame gate={GATE} onDecide={onDecide} />);
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    fireEvent.change(screen.getByLabelText(reason.label), { target: { value: 'Too tall.' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: reason.proceed }));
+    });
+
+    expect(screen.getByText(en.approvalGate.refusal.unexpected.title)).toBeTruthy();
+    const verb = screen.getByRole('button', {
+      name: en.approvalGate.verb.requestChanges,
+    }) as HTMLButtonElement;
+    expect(verb.disabled).toBe(false);
+
+    // The retry: the band reopens with what was typed, and the second send lands.
+    fireEvent.click(verb);
+    expect((screen.getByLabelText(reason.label) as HTMLTextAreaElement).value).toBe('Too tall.');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: reason.proceed }));
+    });
+    expect(onDecide).toHaveBeenLastCalledWith('request_changes', undefined, 'Too tall.');
+  });
+
+  it('any OTHER refusal still withholds the verbs — it would be refused again', async () => {
+    const onDecide = vi.fn(async () => ({ tag: 'APPROVAL_GATE_SUPERSEDED' }) as GateRefusal);
+    renderWithIntl(<Frame gate={GATE} onDecide={onDecide} />);
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    fireEvent.change(screen.getByLabelText(reason.label), { target: { value: 'x' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: reason.proceed }));
+    });
+    expect(
+      (
+        screen.getByRole('button', {
+          name: en.approvalGate.verb.requestChanges,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+});
+
 describe('the DECIDED record QUOTES the reason (design Panel 4)', () => {
   const noop = vi.fn(async () => null);
 
