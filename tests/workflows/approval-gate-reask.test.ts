@@ -89,6 +89,20 @@ async function publish(label: string) {
   );
 }
 
+/**
+ * Put the card BACK below review after a publish.
+ *
+ * ⚠️ THE PUBLISH ITSELF NOW MOVES A CARD WITH NO OPEN DELIVERY TO `in_review`
+ * (Bug MOTIR-6009) — the question and the status are written together. Every
+ * test below is about RE-ENTERING review, so each has to leave it first;
+ * without this the move under test is a same-status no-op and nothing is asked
+ * again. The pull-back is also what the rule under test describes: *a card
+ * returning to review*.
+ */
+async function leaveReview() {
+  await workItemsService.updateStatus(card.id, 'in_progress', fx.ctx);
+}
+
 const gatesOf = () =>
   adminDb.approvalGate.findMany({ where: { workItemId: card.id }, orderBy: { createdAt: 'asc' } });
 
@@ -175,6 +189,7 @@ describe('a card returning to review is asked again', () => {
   // at all. Both ends are corrected together, for the same reason they had to match.
   it('raises the design gate on a card WITH an open pull request — a link is not an answer (MOTIR-5662)', async () => {
     await publish('v1');
+    await leaveReview();
     const [a] = await gatesOf();
     await adminDb.approvalGate.update({ where: { id: a!.id }, data: { state: 'superseded' } });
     const installation = await adminDb.githubInstallation.create({
@@ -234,6 +249,7 @@ describe('a card returning to review is asked again', () => {
 
   it('a SYSTEM move into review raises one when the subject has no live gate', async () => {
     await publish('v1');
+    await leaveReview();
     const [a] = await gatesOf();
     await adminDb.approvalGate.update({ where: { id: a!.id }, data: { state: 'superseded' } });
 
