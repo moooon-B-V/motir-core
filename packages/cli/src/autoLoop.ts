@@ -50,6 +50,35 @@ export function classifyReadyItem(item: {
   return 'dispatch';
 }
 
+/**
+ * A `decision` card an AGENT runs — dispatched like any other, but on a pull
+ * request of its OWN and never onto a session branch (MOTIR-6094).
+ *
+ * Approving a decision also authorises the merge of the pull request linked to
+ * it, so a decision linked to a session pull request would carry every other
+ * card of the run into `main` on one press. The server's prompt already keeps
+ * such a card off the lineage (`isAgentDecisionItem`, restated here for the
+ * reason {@link classifyReadyItem} gives); a scoped drain additionally holds the
+ * decision's dependents until its gate is approved, because nothing else in
+ * that loop would.
+ */
+export function isAgentDecisionItem(item: {
+  type?: string | null;
+  executor?: string | null;
+}): boolean {
+  return item.type === 'decision' && item.executor !== 'human';
+}
+
+/**
+ * The status keys at which a decision's GATE has been answered yes — what
+ * releases the work that waits on it (MOTIR-6094).
+ *
+ * `approved` is the press; `done` is the merge that follows it. A `cancelled`
+ * decision is deliberately NOT here: an overturned decision is a re-plan still
+ * owed, and building on it is the one thing the hold exists to prevent.
+ */
+export const DECISION_RELEASED_STATUS_KEYS: ReadonlySet<string> = new Set(['approved', 'done']);
+
 /** How one dispatched item ended. */
 export type AutoOutcome =
   /** Agent exited 0 and the work was recorded on the session branch. */

@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { drainScope, readScopeEdges, type ScopeDrainInput } from '../src/commands/scopeDrain.js';
+import {
+  drainScope,
+  readHeldDecisions,
+  readScopeEdges,
+  type ScopeDrainInput,
+} from '../src/commands/scopeDrain.js';
 import { closeOutContainer, closeOutRepos } from '../src/commands/auto.js';
 import { orderClaimedSet, unsatisfiedBlockers, type ScopeEdges } from '../src/scopedRun.js';
 import { autoExitCode, renderAutoSummary, type AutoSummary } from '../src/autoLoop.js';
@@ -104,6 +109,8 @@ let replanned: Set<string>;
 let statusOf: Map<string, string>;
 /** Keys whose per-card claim re-assert is REFUSED (defensive; see the test). */
 let claimRefuses: Set<string>;
+/** A `type` a test pins for one key's `get_work_item` read; every other key reads `code`. */
+let typeOf: Map<string, string>;
 /** Per-key repository SET, for the multi-repository card (MOTIR-3135). */
 let repoSets: Record<string, NonNullable<DispatchPrompt['targetRepos']>>;
 /** Per-key primary repository, so a card can be routed at a missing checkout. */
@@ -171,6 +178,8 @@ function client(): MotirClient {
       item: {
         identifier: key,
         status: replanned.has(key) ? 'planning' : (statusOf.get(key) ?? 'in_review'),
+        type: typeOf.get(key) ?? 'code',
+        executor: 'coding_agent',
       },
     }),
   };
@@ -236,6 +245,7 @@ beforeEach(() => {
   replanned = new Set();
   statusOf = new Map();
   claimRefuses = new Set();
+  typeOf = new Map();
   repoSets = {};
   repoOf = {};
   vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
@@ -859,5 +869,157 @@ describe('the drain opens each repository’s session pull request as its work l
       expect(created(log).some((line) => line.endsWith(`@${join(fake.root, repo)}`))).toBe(true);
     }
     expect(log.some((line) => line.includes(join(fake.root, 'motir-gateway')))).toBe(false);
+  });
+});
+
+// ── a DECISION child ships on its OWN pull request (MOTIR-6094) ─────────────
+//
+// Approving a decision also authorises the merge of the pull request linked to
+// it (`approval-gates.md` §8's FIFTH AMENDMENT, clause 5). A decision child that
+// joined the session would be linked to the SESSION pull request — the only one
+// there is — and one press meant to accept a document would merge every other
+// card of the story. So it never joins, and what waits on it waits for a PERSON.
+
+describe('a decision child never joins the session, and its dependents are held', () => {
+  const decision = (key: string): DispatchItem => member(key, { type: 'decision' });
+
+  it('reads the decision’s prompt with NO session seed, and it lands on its own pull request', async () => {
+    const { run, log } = recordingGit();
+    const summary = await drive([decision('PROD-2'), member('PROD-3')], {}, { run });
+
+    // The decision's prompt read carries no seed; the code card's does.
+    expect(fake.dispatched).toEqual(['PROD-2', 'PROD-3']);
+    expect(fake.promptSeeds).toEqual([false, true]);
+    // Implemented via its OWN pull request — never integrated on the session.
+    expect(summary.records.find((r) => r.key === 'PROD-2')).toMatchObject({
+      outcome: 'implemented',
+      sessionBranch: null,
+    });
+    expect(fake.calls).not.toContain('integrated:PROD-2');
+    // The session branch carries the code card alone.
+    expect(summary.repos[0]?.keys).toEqual(['PROD-3']);
+    // ONE session pull request, opened on the CODE card's account.
+    expect(created(log)).toHaveLength(1);
+  });
+
+  it('never links the session pull request to the decision card', async () => {
+    const { run } = recordingGit();
+    await drive([decision('PROD-2'), member('PROD-3'), member('PROD-4')], {}, { run });
+
+    // The only link the drain declares is the CONTAINER's (two landed code
+    // cards share PROD-1; re-declared per landed card, an upsert). Nothing names
+    // the decision, so approving its gate carries no merge of the pull request
+    // the rest of the story is on.
+    expect(fake.links.some((l) => l.startsWith('PROD-2@'))).toBe(false);
+    expect([...new Set(fake.links)]).toEqual(['PROD-1@https://github.test/pull/9001']);
+  });
+
+  it('holds a dependent of the decision and NAMES it, like a skipped manual card', async () => {
+    const summary = await drive([decision('PROD-2'), member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+    expect(fake.dispatched).toEqual(['PROD-2']);
+    expect(summary.skipped).toEqual([
+      { key: 'PROD-3', title: 'Item PROD-3', reason: 'blocked_in_scope', blockedBy: ['PROD-2'] },
+    ]);
+    expect(fake.stderr).toContain('PROD-3: held — waiting on decision PROD-2 to be approved.');
+  });
+
+  it('a decision that FAILED is a blocker that did not land, not one awaiting approval', async () => {
+    const summary = await drive(
+      [decision('PROD-2'), member('PROD-3')],
+      { 'PROD-3': ['PROD-2'] },
+      {
+        opts: { keepGoing: true },
+        agentResults: (key) =>
+          key === 'PROD-2' ? { exitCode: 1, signal: null } : { exitCode: 0, signal: null },
+      },
+    );
+
+    expect(summary.skipped[0]).toMatchObject({ key: 'PROD-3', blockedBy: ['PROD-2'] });
+    expect(fake.stderr).toContain('PROD-3: skipped — waiting on PROD-2, which did not land.');
+  });
+
+  it('on a RE-RUN, a decision an earlier run shipped still holds its dependents until approved', async () => {
+    // PROD-2 was shipped by an earlier run and waits on its gate at In Review,
+    // so it is not a member of this claim — and `unsatisfiedBlockers`, in-scope
+    // only, cannot see it. The pre-drain read is what does.
+    typeOf.set('PROD-2', 'decision');
+    statusOf.set('PROD-2', 'in_review');
+
+    const summary = await drive([member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+    expect(fake.dispatched).toEqual([]);
+    expect(summary.skipped[0]).toMatchObject({ key: 'PROD-3', blockedBy: ['PROD-2'] });
+  });
+
+  it.each(['approved', 'done'])(
+    'an earlier decision at %s releases its dependents',
+    async (status) => {
+      typeOf.set('PROD-2', 'decision');
+      statusOf.set('PROD-2', status);
+
+      await drive([member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+      expect(fake.dispatched).toEqual(['PROD-3']);
+    },
+  );
+
+  it('a CANCELLED decision still holds — an overturned decision is a re-plan owed', async () => {
+    typeOf.set('PROD-2', 'decision');
+    statusOf.set('PROD-2', 'cancelled');
+
+    await drive([member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+    expect(fake.dispatched).toEqual([]);
+  });
+
+  it('a non-member blocker that is NOT a decision holds nothing', async () => {
+    statusOf.set('PROD-2', 'in_review');
+
+    await drive([member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+    expect(fake.dispatched).toEqual(['PROD-3']);
+  });
+});
+
+describe('readHeldDecisions', () => {
+  it('reads each NON-member blocker once, and a failed read is named, not held', async () => {
+    const reads: string[] = [];
+    const client = {
+      getWorkItem: async (key: string) => {
+        reads.push(key);
+        if (key === 'PROD-9') throw new Error('boom');
+        return {
+          item: {
+            identifier: key,
+            status: 'in_review',
+            type: 'decision',
+            executor: 'coding_agent',
+          },
+        };
+      },
+    } as unknown as MotirClient;
+
+    const held = await readHeldDecisions(client, [member('PROD-3'), member('PROD-4')], {
+      'PROD-3': ['PROD-2', 'PROD-4', 'PROD-9'],
+      'PROD-4': ['PROD-2'],
+    });
+
+    // PROD-4 is a member — the loop itself tracks it — so it is never read.
+    expect(reads).toEqual(['PROD-2', 'PROD-9']);
+    expect([...held]).toEqual(['PROD-2']);
+    expect(fake.stderr).toContain('Could not read PROD-9');
+  });
+
+  it('a HUMAN decision is not an agent’s — its gate is the confirmation, and it is a member when open', async () => {
+    const client = {
+      getWorkItem: async (key: string) => ({
+        item: { identifier: key, status: 'in_progress', type: 'decision', executor: 'human' },
+      }),
+    } as unknown as MotirClient;
+
+    const held = await readHeldDecisions(client, [member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+    expect(held.size).toBe(0);
   });
 });

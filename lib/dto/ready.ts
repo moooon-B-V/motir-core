@@ -111,6 +111,27 @@ export function isManualReadyItem(item: {
 }
 
 /**
+ * A `decision` card an AGENT runs — the one agent-runnable type that must ship on
+ * a pull request of its OWN, never on a session branch (MOTIR-6094).
+ *
+ * ⚠️ BECAUSE ITS APPROVAL IS ALSO A MERGE. The decision gate raises over the
+ * card's delivery set, and approving it authorises the merge of every pull
+ * request that set holds (`approval-gates.md` §8's FIFTH AMENDMENT, clause 5 —
+ * `resolveGateSet`'s carry). On a session branch the only pull request to link
+ * is the SESSION one, which carries every other card of the run, so one press
+ * meant to answer "is this decision right?" would merge code nobody reviewed.
+ *
+ * A `human` decision card is manual ({@link isManualReadyItem}) and never
+ * dispatched, so it is excluded here.
+ */
+export function isAgentDecisionItem(item: {
+  type: WorkItemTypeDto | null;
+  executor: ExecutorDto | null;
+}): boolean {
+  return item.type === 'decision' && !isManualReadyItem(item);
+}
+
+/**
  * The dispatch payload (`POST /api/ready/next`) — `ReadyItemDto` PLUS everything
  * a coding agent needs to actually run the item: the full Markdown body, the
  * context-file references, the resolved keys of the (now-terminal) blockers that
