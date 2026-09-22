@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@/generated/prisma/client';
-import { readOrgSlug } from '@/lib/mappers/monitorMappers';
+import { readInstallPending, readOrgSlug } from '@/lib/mappers/monitorMappers';
 import { decodeMonitorConnectState, encodeMonitorConnectState } from '@/lib/monitors/connectState';
 import { mapMonitorError } from '@/lib/monitors/errorResponse';
 import {
@@ -143,6 +143,21 @@ describe('readOrgSlug — provider-shaped metadata, read defensively', () => {
     expect(readOrgSlug({ orgSlug: '' })).toBeNull();
     expect(readOrgSlug({ orgSlug: 3 })).toBeNull();
     expect(readOrgSlug({ orgSlug: 'acme-inc' })).toBe('acme-inc');
+  });
+});
+
+describe('readInstallPending — the connect-follow-up marker, read defensively (MOTIR-6008)', () => {
+  it('answers false for metadata that is not an object', () => {
+    expect(readInstallPending(null)).toBe(false);
+    expect(readInstallPending('pending')).toBe(false);
+    expect(readInstallPending(7)).toBe(false);
+  });
+
+  it('answers true only for the literal `installPending: true`', () => {
+    expect(readInstallPending({})).toBe(false);
+    expect(readInstallPending({ orgSlug: 'acme' })).toBe(false);
+    expect(readInstallPending({ installPending: 'true' })).toBe(false);
+    expect(readInstallPending({ installPending: true })).toBe(true);
   });
 });
 
