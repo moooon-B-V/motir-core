@@ -278,7 +278,7 @@ describe('one holder per card (D4)', () => {
     expect(after!.id).toBe(before!.id);
   });
 
-  it('a HAND-PARKED card is ADOPTED — statusHeld false, and decline restores nothing', async () => {
+  it('a HAND-PARKED card is ADOPTED — statusHeld false, no prior status to restore', async () => {
     const id = await itemAt('todo');
     await workItemsService.updateStatus(id, PLANNING_STATUS_KEY, fx.ctx);
 
@@ -287,7 +287,8 @@ describe('one holder per card (D4)', () => {
     expect(await lockFor(id)).toMatchObject({
       planId,
       priorStatus: PLANNING_STATUS_KEY,
-      // Nothing recorded where it came from, so there is nothing to restore.
+      // Nothing recorded where it came from, so there is nothing to restore —
+      // every release RESTS it instead (MOTIR-6066, planTargetAdoptedRelease.test.ts).
       statusHeld: false,
     });
   });
