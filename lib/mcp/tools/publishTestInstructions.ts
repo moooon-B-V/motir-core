@@ -164,8 +164,10 @@ export function registerPublishTestInstructions(
       description:
         'Put a RUN\'s HOW TO TEST onto its RUN TARGET (by identifier, e.g. "ACME-7") — the work ' +
         'item the run was launched against: the story for a story or scoped run, the card itself ' +
-        'for a single-card run. Call it ONCE per run, before the run finishes (before the card ' +
-        'goes to implemented, or before the run\'s pull requests are marked ready). "bodyMd" is ' +
+        'for a single-card run. Call it before the run finishes (before the card goes to ' +
+        "implemented, or before the run's pull requests are marked ready), and again whenever a " +
+        'later commit changes a step it describes: How to test belongs to the work item, not to a ' +
+        'commit. "bodyMd" is ' +
         'RICH TEXT (Markdown) with sections — the precondition, local setup and, when the run ' +
         'creates or changes a rendered surface, the click-path — and EVERY command in its own ' +
         'fenced code block, which the page renders click-to-copy. "repos" names each repository ' +
@@ -173,7 +175,7 @@ export function registerPublishTestInstructions(
         'Development block with its pull requests — the evidence of the one approve-to-merge ' +
         'decision — beside the preview each repository reported and the checks CI ran; nothing ' +
         'else writes it. Do not include the branch fetch — Motir adds it from the pull request. ' +
-        "The same call repeated by the same run changes nothing; a later run's publish " +
+        'The same call repeated by the same run changes nothing; any other publish ' +
         'supersedes and the earlier stays as history. Every limit is a refusal naming the field. ' +
         'It does not replace the How to test section of a pull-request body. Honors the same ' +
         'access checks as the UI.',

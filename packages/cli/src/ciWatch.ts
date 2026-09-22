@@ -51,6 +51,13 @@ import type { MotirClient, WorkItemDelivery } from './client.js';
 export const CI_FIX_ATTEMPTS = 5;
 
 /**
+ * The MCP tool that writes How to test (`lib/dispatch/promptTemplate.ts`'s
+ * `HOW_TO_TEST_TOOL_NAME`). Re-stated rather than imported because the CLI is a
+ * standalone package that cannot reach into the Next app.
+ */
+export const HOW_TO_TEST_TOOL_NAME = 'publish_test_instructions';
+
+/**
  * `1 attempt` / `2 attempts`, in the one place both report lines read it from.
  *
  * Exported so it can be asserted directly: the SINGULAR arm is unreachable while
@@ -349,6 +356,14 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
  *
  * It is repair work on pull requests that already exist — NOT a new card. It
  * links nothing, claims nothing, and transitions nothing.
+ *
+ * ⚠️ BUT IT KEEPS HOW TO TEST TRUE (MOTIR-6065). How to test is written for the
+ * WORK ITEM, not for a commit, and the item page no longer flags a record whose
+ * commit the pull request has moved past. A fix that changes a step the record
+ * describes — a migration, a seed, a flag, a click-path — is the one commit after
+ * the handover that can make it wrong, and this agent is the only party that
+ * knows, so it re-publishes. The pull request body's `## How to test` section is
+ * where it reads the current text: it has no other read of the record.
  */
 export function renderFixPrompt(input: {
   key: string;
@@ -471,7 +486,15 @@ export function renderFixPrompt(input: {
   lines.push('     a first-hit cold-compile timeout, a different test failing each run —');
   lines.push('     then **say so and change NOTHING**. Pushing a speculative patch to');
   lines.push('     chase a flake makes the diff worse and hides the real signal.');
-  lines.push('4. Do not touch the work item: leave its status, and record no');
+  lines.push('4. **Keep How to test true.** How to test belongs to the work item, not');
+  lines.push('   to a commit. If a commit you push changes anything it describes — a');
+  lines.push('   precondition, a setup, migrate or seed command, a click-path step —');
+  lines.push(`   publish the whole corrected text with the ${HOW_TO_TEST_TOOL_NAME}`);
+  lines.push(`   tool, on ${input.key} or on the item the pull request body's`);
+  lines.push('   "## How to test" section says it was written onto, and update that');
+  lines.push('   section of the body to match. The body shows you the current text. A');
+  lines.push('   fix that changes none of them — the usual case — publishes nothing.');
+  lines.push('5. Do not move the work item: leave its status, and record no');
   lines.push('   transition. The build decides when it moves.');
   lines.push('');
   lines.push('Changing nothing is a legitimate outcome and is sometimes the right one.');

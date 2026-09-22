@@ -760,6 +760,54 @@ describe('arrivalLevel', () => {
 
     expect(arrival?.id).toBe('wi_p2');
   });
+
+  it('names a ROOT epic ONCE when the plan both modifies it and adds a story under it (bug MOTIR-6078)', () => {
+    // The epic is in the plan through a `modify`, keyed by its work item
+    // (MOTIR-3160), so the walk reaches it as a plan node, crumbs it with its
+    // key (MOTIR-4266) and runs out at its null parent. The fall-through then
+    // prepended the CONTAINER's `parentTrail` — the story's, which already ends
+    // at the epic — so the epic was named twice. The TOPMOST item's trail is the
+    // one that sits above the walk, and a root's is empty.
+    const epic = item({
+      planItemId: 'pi_epic',
+      nodeId: 'wi_epic',
+      op: 'modify',
+      identifier: 'MOTIR-6010',
+      title: 'Refine AI planning',
+      parentNodeId: null,
+      parentIdentifier: null,
+      parentTrail: [],
+    });
+    const story = item({
+      planItemId: 'pi_story',
+      nodeId: 'pi_story',
+      op: 'add',
+      title: 'A refusal story',
+      parentNodeId: 'wi_epic',
+      parentIdentifier: 'MOTIR-6010',
+      parentTitle: 'Refine AI planning',
+      parentTrail: [{ id: 'wi_epic', identifier: 'MOTIR-6010', title: 'Refine AI planning' }],
+    });
+    const subs = [0, 1, 2].map((i) =>
+      item({
+        planItemId: `pi_sub_${i}`,
+        nodeId: `pi_sub_${i}`,
+        op: 'add',
+        parentNodeId: 'pi_story',
+        parentIdentifier: null,
+        parentTrail: [],
+      }),
+    );
+
+    const arrival = arrivalLevel([epic, story, ...subs], NEW);
+
+    expect(arrival?.id).toBe('pi_story');
+    expect(arrival?.trail.map((c) => c.id)).toEqual(['wi_epic', 'pi_story']);
+    expect(arrival?.trail.map((c) => c.label)).toEqual([
+      'MOTIR-6010 · Refine AI planning',
+      'New · A refusal story',
+    ]);
+  });
 });
 
 // ── THE REMOVED EDGE (bug MOTIR-4092) ────────────────────────────────────────

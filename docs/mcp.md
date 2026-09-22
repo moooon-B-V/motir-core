@@ -1841,10 +1841,15 @@ the one approve-to-merge decision — beside the preview each repository reporte
 and the checks CI ran. **Nothing else writes it.** It does **not** replace the
 `## How to test` section of a pull-request body — both are written.
 
-Call it **once per run, before the run finishes** — before a single card moves
-to `implemented`, or before a story/scoped run's pull requests are marked ready.
-Do **not** include the branch fetch — Motir composes it from each pull request's
-own `headRef`.
+Call it **before the run finishes** — before a single card moves to
+`implemented`, or before a story/scoped run's pull requests are marked ready —
+**and again whenever a later commit changes a step it describes** (MOTIR-6065).
+How to test is written for the **work item**, not for a commit: the item page
+does not flag a record whose commit the pull request has since moved past, so
+the agent that pushes the commit — the run itself, or a CI-fixing agent after
+it — is the one that keeps the steps true. A commit that changes none of them
+needs no new publish. Do **not** include the branch fetch — Motir composes it
+from each pull request's own `headRef`.
 
 **`repos` is OPTIONAL, and that is not an invitation to skip it** (MOTIR-5689).
 It became optional because a PERSON writes How to test through the same writer,

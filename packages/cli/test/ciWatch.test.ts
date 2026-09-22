@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CI_FIX_ATTEMPTS,
+  HOW_TO_TEST_TOOL_NAME,
   NOTHING_TO_CHANGE_DETAIL,
   ciVerdict,
   failingDeliveries,
@@ -514,11 +515,31 @@ describe('the fixing prompt', () => {
     expect(prompt).toContain('Changing nothing is a legitimate outcome');
   });
 
-  it('forbids opening a new pull request or touching the card', () => {
+  it('forbids opening a new pull request or moving the card', () => {
     // It is repair work on pull requests that already exist — not a new card.
     expect(prompt).toContain('Open no new pull');
     expect(prompt).toContain('link nothing');
-    expect(prompt).toContain('Do not touch the work item');
+    expect(prompt).toContain('Do not move the work item: leave its status');
+  });
+
+  // MOTIR-6065: How to test is written for the WORK ITEM, not for a commit, and
+  // the item page no longer flags a record whose commit the pull request moved
+  // past. A fix is the one commit after the handover that can make the steps
+  // wrong, and only this agent knows whether it did.
+  it('keeps How to test true: a fix that changes a step it describes re-publishes it', () => {
+    const flat = prompt.replace(/\s+/g, ' ');
+    expect(flat).toContain('Keep How to test true.');
+    expect(flat).toContain('How to test belongs to the work item, not to a commit.');
+    expect(flat).toContain(
+      `publish the whole corrected text with the ${HOW_TO_TEST_TOOL_NAME} tool, on PROD-1`,
+    );
+    expect(flat).toContain('update that section of the body to match');
+    expect(flat).toContain('A fix that changes none of them — the usual case — publishes nothing.');
+  });
+
+  it('names the How-to-test tool the server registers, byte for byte', () => {
+    // Re-typed ON PURPOSE: the CLI cannot import `lib/dispatch/promptTemplate.ts`.
+    expect(HOW_TO_TEST_TOOL_NAME).toBe('publish_test_instructions');
   });
 
   it('says the PUSH is the verification, and bans the wider local re-run', () => {

@@ -2327,17 +2327,14 @@ async function restPlanTargets(
     }
 
     // The SAME predicate the ready set and Pass 2b use, so `blocked` here can
-    // never mean something different from "not ready" there.
-    const blockerRows = await workItemLinkRepository.findBlockerStatesForItems([item.id], tx);
-    const terminalByProject =
-      blockerRows.length > 0
-        ? await workflowsService.getTerminalStatusKeysByProjects(
-            blockerRows.map((b) => b.projectId),
-            ctx.workspaceId,
-            tx,
-          )
-        : new Map<string, Set<string>>();
-    const hasOpenBlocker = !classifyBlockerReadiness(blockerRows, terminalByProject).ready;
+    // never mean something different from "not ready" there — read through the
+    // one helper a plan's RELEASE also rests an adopted target with (MOTIR-6066),
+    // so approve and decline cannot disagree about what "open blocker" means.
+    const hasOpenBlocker = await planTargetLockService.hasOpenBlockerWithin(
+      item.id,
+      ctx.workspaceId,
+      tx,
+    );
 
     const decision = restingStatusFor({
       archived: item.archivedAt !== null,

@@ -172,13 +172,11 @@ describe('seam 1 — a scoped story run: close-out prompt → MCP publish → th
     expect(dto.record!.author).toMatchObject({ kind: 'run', runId: s.runId });
     expect(dto.record!.previewPath).toBe(`/items/${s.story.identifier}`);
 
-    // Both sections were written at their pull requests' heads: nothing is stale.
-    expect(dto.stale).toEqual([]);
-
     // A push to the story's web pull request moves its head past the section — and
-    // the read names THAT pull request's repository, which is how the binding shows
-    // (MOTIR-5691: the per-repository preview, fetch line and checks are retired,
-    // design/github § 25; stale is what remains derived).
+    // the read does NOT flag it (MOTIR-6065): How to test is written for the work
+    // item, not for a commit, so a new head changes nothing on the read. The
+    // agent that pushed is the one told to re-publish when its commit changed
+    // the steps.
     const MOVED = 'f'.repeat(40);
     await adminDb.githubCheckRun.create({
       data: {
@@ -189,7 +187,7 @@ describe('seam 1 — a scoped story run: close-out prompt → MCP publish → th
       },
     });
     const moved = await howToTestService.getForWorkItem(s.story.id, s.fx.ctx);
-    expect(moved.stale).toEqual([{ repoName: 'acme/web', recordSha: WEB_HEAD, headSha: MOVED }]);
+    expect(moved).toEqual(dto);
     // The agent was told not to write the fetch — and Motir no longer composes one:
     // the pull request's row links out to the host, which shows its own checkout.
     expect(RUN_BODY).not.toContain('git fetch');
@@ -203,7 +201,6 @@ describe('seam 1 — a scoped story run: close-out prompt → MCP publish → th
         state: 'tested_via_ancestor',
         runTarget: { key: s.story.identifier },
         record: null,
-        stale: [],
       });
     }
   });
@@ -273,7 +270,6 @@ describe('seam 2 — a single-card run: the per-item prompt → a publish on the
       state: 'record',
       record: { bodyMd: body, author: { kind: 'run', runId: run.id } },
       // The card's section has no pull request bound, so there is no head to move.
-      stale: [],
     });
     // The single-card record is the card's own — the story's page is untouched.
     expect((await howToTestService.getForWorkItem(s.story.id, s.fx.ctx)).state).toBe(

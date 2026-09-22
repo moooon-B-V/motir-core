@@ -111,6 +111,16 @@
   written record is OPTIONAL and, until pages ship, a markdown ATTACHMENT; and
   two decisions on one epic ACCUMULATE rather than supersede.
 
+- **AMENDED 2026-09-23 (MOTIR-6072, for Story MOTIR-6067) — §10, NEW: A
+  REFUSAL SAYS WHY, and what FOLLOWS a refusal, per kind.** Every refusal a
+  person presses now carries a REQUIRED reason (`request_changes_needs_a_note`);
+  a GitHub-sourced one carries the review body or says it had none. §10's table
+  decides, per kind, the verdict offered at the press, the status a refusal
+  writes (a return to To do is a gate-owned SYSTEM write), and where the planner
+  opens. It changes the meaning of §1's _what `request_changes` DOES_ row, §3's
+  _Request changes … moves nothing_ and §5's line against 9.2; each carries a
+  pointer. It strikes nothing.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -192,15 +202,15 @@ half-wired.
 **The registry** is `Record<ApprovalGateKind, GateHandler>`. **What a third kind
 must supply to register — the table this record exists to make re-usable:**
 
-| a handler supplies                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 | for `decision_choice` — §1's MOTIR-5887 AMENDMENT                                                                                                                                                                 | for `decision_confirmation` — §1's MOTIR-5952 AMENDMENT                                                                                                                                                                                                                                             |
-| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **how to resolve the SUBJECT** from the gate row   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) | the `## Why this is a choice`, `## Options` and `## What this choice gates` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 1–2) | the `## Decision`, `## What changed`, `## Supersedes` and `## Resulting direction` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 2–3). The optional record is resolved beside it, never as the subject (point 8) |
-| **who it ROUTES to**                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    | the same                                                                                                                                                                                                          | the same                                                                                                                                                                                                                                                                                            |
-| **which PERMISSION authorises a decision**         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            | `work_item:edit`, under §2's AUTHORITY rule in force (point 4)                                                                                                                                                    | `work_item:edit`, under §2's AUTHORITY rule in force (point 5)                                                                                                                                                                                                                                      |
-| **which STATUS TRANSITION the gate owns**, or none | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  | the move into the project's `done` category — a choice never has a pull request (point 6)                                                                                                                         | the move into the project's `done` category on Confirm, and into `cancelled` on Overturn — a `human` decision never has a pull request (point 7)                                                                                                                                                    |
-| **what `approve` DOES**                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  | there is no `approve`: each OPTION is a verb, `choose(optionId)`, which records the pick and writes `done` (points 5–6)                                                                                           | **Confirm**: records the decision, stamps the record or its absence, writes `done` (points 7–8)                                                                                                                                                                                                     |
-| **what `request_changes` DOES**                    | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 | **None of these — revise the options**: records `changes_requested`, moves nothing (point 5)                                                                                                                      | **not offered — OVERTURN instead**: records `overturned` with its REQUIRED note, writes `cancelled`, touches no other work item; the re-plan it owes is derived from `## Supersedes` (points 6–7)                                                                                                   |
-| **what to RETAIN on approval**, or nothing         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              | nothing to pin — the chosen option is SNAPSHOTTED onto the immutable gate row (point 7)                                                                                                                           | nothing to pin — the record's IDENTITY is snapshotted onto the immutable gate row; the body is the subject (point 8)                                                                                                                                                                                |
+| a handler supplies                                                                                                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 | for `decision_choice` — §1's MOTIR-5887 AMENDMENT                                                                                                                                                                 | for `decision_confirmation` — §1's MOTIR-5952 AMENDMENT                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **how to resolve the SUBJECT** from the gate row                                                                                   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) | the `## Why this is a choice`, `## Options` and `## What this choice gates` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 1–2) | the `## Decision`, `## What changed`, `## Supersedes` and `## Resulting direction` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 2–3). The optional record is resolved beside it, never as the subject (point 8) |
+| **who it ROUTES to**                                                                                                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    | the same                                                                                                                                                                                                          | the same                                                                                                                                                                                                                                                                                            |
+| **which PERMISSION authorises a decision**                                                                                         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            | `work_item:edit`, under §2's AUTHORITY rule in force (point 4)                                                                                                                                                    | `work_item:edit`, under §2's AUTHORITY rule in force (point 5)                                                                                                                                                                                                                                      |
+| **which STATUS TRANSITION the gate owns**, or none                                                                                 | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  | the move into the project's `done` category — a choice never has a pull request (point 6)                                                                                                                         | the move into the project's `done` category on Confirm, and into `cancelled` on Overturn — a `human` decision never has a pull request (point 7)                                                                                                                                                    |
+| **what `approve` DOES**                                                                                                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  | there is no `approve`: each OPTION is a verb, `choose(optionId)`, which records the pick and writes `done` (points 5–6)                                                                                           | **Confirm**: records the decision, stamps the record or its absence, writes `done` (points 7–8)                                                                                                                                                                                                     |
+| **what `request_changes` DOES** — ⚠️ §10 (MOTIR-6072) makes its reason REQUIRED on every kind and decides what FOLLOWS it per kind | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 | **None of these — revise the options**: records `changes_requested`, moves nothing (point 5)                                                                                                                      | **not offered — OVERTURN instead**: records `overturned` with its REQUIRED note, writes `cancelled`, touches no other work item; the re-plan it owes is derived from `## Supersedes` (points 6–7)                                                                                                   |
+| **what to RETAIN on approval**, or nothing                                                                                         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              | nothing to pin — the chosen option is SNAPSHOTTED onto the immutable gate row (point 7)                                                                                                                           | nothing to pin — the record's IDENTITY is snapshotted onto the immutable gate row; the body is the subject (point 8)                                                                                                                                                                                |
 
 _The third column is added by §8's FIFTH AMENDMENT (MOTIR-5672, 2026-09-19); the
 first two are unchanged. The fourth is added by §1's MOTIR-5887 amendment
@@ -1387,6 +1397,13 @@ it inherits the `completedAt` stamp and every existing guard.
 **Request changes** records the decision and moves nothing. **It re-dispatches
 nothing** — the revise loop is Story 9.2's (§5).
 
+> **⚠️ AMENDED BY §10 (MOTIR-6072, 2026-09-23).** Request changes on a design
+> now carries a REQUIRED reason and a VERDICT: **Revise** returns the design card
+> to To do through a gate-owned system write, and **Re-plan** opens the planner
+> and moves nothing. _Moves nothing_ above is therefore true only of Re-plan.
+> _It re-dispatches nothing_ still holds: the next run is whichever picks the card
+> up, and making it automatic is still 9.2's (§10g).
+
 > ### §3 — AMENDMENT (MOTIR-4911, 2026-09-08): approval writes `done` ONLY when nothing will ever merge
 >
 > **What was WRONG, and it is the clause that produced the confusion this whole
@@ -2089,6 +2106,12 @@ An approval that does not merge is a note, not a gate.
 | the routing surface                            | `Project.designApprovalGate` and the HOLD it applies to the `motir auto` loop |
 
 **9.2's review UI COMPOSES this record's control rather than drawing its own.**
+
+> **⚠️ RE-DRAWN BY §10g (MOTIR-6072, 2026-09-23).** Returning a sent-back card to
+> To do, handing its reason to the next run, and opening the planner on a refusal
+> are now Epic MOTIR-6010's. The table above keeps the HOSTED, automatic
+> re-dispatch and its preview for 9.2; read _the revise-chat re-dispatch after a
+> rejection_ as that automatic loop only.
 
 **Why the decision moved out of 9.2 at all:** 9.2 sits behind hosted agent
 execution (MOTIR-683), so leaving design approval there means nobody can approve
@@ -4126,6 +4149,258 @@ repositories produce no preview has two paths rather than three, and says so.
 >    Motir's record is authoritative, and a person's later edit does not rewrite
 >    the pull-request body. The quick-view peek and the approval overlay's port
 >    (MOTIR-5214 / MOTIR-5438) draw no edit door.
+
+### 10. A REFUSAL SAYS WHY, and what FOLLOWS a refusal, per kind — NEW (MOTIR-6072, 2026-09-23), the WHAT DECIDED BY THE REQUESTER (Yue, 2026-09-22), the HOW by the planner
+
+**What was MISSING.** Every section above settles a refusal the same way:
+`request_changes` _records the decision and moves nothing_ (§1's handler table,
+§3, and every kind's `requestChanges` in `lib/approvalGates/*Handler.ts`). The
+one exception is Overturn, which requires a note and writes `cancelled` (§1's
+MOTIR-5952 amendment, point 6). So a person who sends a design, a video, a
+decision or a set of pull requests back gets a row saying THAT they refused, and
+nothing about WHY. Whoever picks the work up next (a teammate, an agent, the
+planner) has to guess. And nothing happens next: §5 reserved the whole
+after-a-refusal loop for Story 9.2.
+
+**Read at base `0d01a9256`.** This section decides the rule once, for the four
+stories of Epic MOTIR-6010 that build it (MOTIR-6067 · 6068 · 6069 · 6070 · 6071).
+Each of them cites this section rather than re-reading the request.
+**No behaviour ships in this section.** It strikes nothing above. Where it
+changes what an earlier clause means, the pointer at that clause says so
+(§1's handler table, §3, §5).
+
+**What the requester settled (Yue, 2026-09-22, rung 3), written down as the
+rule:**
+
+1. A person must be able to give a **REASON** for every refusal.
+2. **A decision gate** refused (`decision_approval` _Request changes_,
+   `decision_confirmation` _Overturn_) means the decision is not what the
+   planner and the person agreed. **The planner opens, offering a re-plan** —
+   the conversation phase again, starting from the reason.
+3. **A choice gate** answered _None of these_ behaves like a refused decision.
+   **Choosing an option ALSO opens the planner**, offering to plan with the
+   choice.
+4. **A design gate** refused is a **VERDICT**: **Re-plan** (the design changes
+   the cards planned after it, so the planner opens) or **Revise** (a small
+   change: the reason is recorded, the design card goes back to **To do**, and a
+   later agent run picks it up).
+5. **An acceptance-video gate** is like the design gate. A small change inside
+   the not-done work's scope is an agent **re-run**; otherwise a **re-plan**. On
+   a **story run** nothing under the story is done, so the re-plan may re-plan
+   ALL its subtasks. On a story whose **last subtask run** has finished,
+   approval would only move the story's status, so the re-plan **plans a
+   remedy**.
+
+#### 10a. The reason is REQUIRED on every refusal a person presses — rung 3 (the requester), mechanics rung 2 (Overturn's shipped note)
+
+- **Scope.** The verbs are `request_changes` on every kind that offers it
+  (`design_result`, `acceptance_result`, `decision_approval`,
+  `pull_request_approval`), its choice spelling _None of these — revise the
+  options_ on `decision_choice` (the same verb, §1's MOTIR-5887 amendment,
+  point 5), and `overturn` on `decision_confirmation`, which already requires
+  one.
+- **Where it is enforced: the ONE decide door**, `approvalGatesService.decide`,
+  beside Overturn's check (`lib/services/approvalGatesService.ts`, step 3c,
+  `overturn_needs_a_note`). A screen-only rule would be a suggestion: the REST
+  route and the server action would still send an empty refusal. A
+  `request_changes` whose trimmed `noteMd` is empty is refused with
+  **`ApprovalGateVerbNotOfferedError(gateId, 'request_changes_needs_a_note')`**
+  — the same error class and reason shape as `overturn_needs_a_note`, so the
+  route's status map and the UI's refusal copy already have a slot for it.
+- **Which sources it applies to: every source a PERSON presses from** —
+  `ui` and `api` (`ApprovalGateDecisionSource`). **A `github` refusal is never
+  refused for its reason**: nobody pressed it in Motir, it has already happened
+  on the host, and refusing it would leave the gate awaiting over a decision a
+  reviewer has made. The rule keys on `source`, never on the caller.
+- **What is stored: the text as written**, in `approval_gate.note_md`, in the
+  deciding write, under `trg_approval_gate_decided_immutable`. Nothing about the
+  row's immutability changes.
+- **Approve, Confirm and `choose` keep their OPTIONAL note.** A yes needs no
+  justification; a no is the feedback somebody has to act on.
+
+#### 10b. A GITHUB-SOURCED refusal carries the REVIEW BODY, or says it had none — rung 2 (§8's FOURTH AMENDMENT)
+
+Today the review sync writes `noteMd: null` for a `request_changes` decision
+(`lib/services/pullRequestReviewSync.ts`, `evaluateOne`), and it could not do
+anything else: `github_pull_request_review` stores no body
+(`prisma/schema.prisma`, `model GithubPullRequestReview`). So:
+
+- **The review BODY is captured.** A new nullable `body` column on
+  `github_pull_request_review`, written from `review.body` on every
+  `submitted` / `edited` delivery (`githubWebhookService`'s
+  `pull_request_review` arm, via the normalised event in `lib/git/types.ts`).
+  Expand-only. An empty or absent body is stored as NULL.
+- **The deciding review's body is the reason.** §8's FOURTH AMENDMENT decision 1
+  decides the gate `changes_requested` on the FIRST countable changes-requested
+  review; that review's body is passed as `noteMd`, trimmed, NULL when empty.
+- **A surface tells the two apart by `decisionSource`, already on the row.** A
+  `changes_requested` gate with `decisionSource: github` and a null `noteMd`
+  reads **_no reason given on GitHub_** — never a blank, and never the Motir
+  wording, because nobody in Motir was asked. With a body, the record quotes it
+  and says it came from a GitHub review by `decidedByLabel`.
+- **Still one-directional** (decision 9): Motir posts nothing back to the review.
+
+#### 10c. HOW a card goes back to To do: a GATE-OWNED SYSTEM WRITE, never a new workflow edge — rung 2
+
+**The shipped facts.** `DEFAULT_TRANSITIONS` (`lib/workflows/defaultWorkflow.ts`)
+declares no edge into `todo` from `implemented`, `in_review` or `approved`; the
+project's live workflow is the same (`todo` is reachable only from
+`in_progress`, `blocked`, `planning` and `cancelled`). And
+`applyStatusTransition`'s `decidingGateId` option exempts ONE thing — the
+held-move guard for the deciding gate (§6d's amendment, rule 5). **It does not
+skip the legal-edge check**; only `system: true` does
+(`lib/services/workItemsService.ts`, `applyStatusTransition`, _Legal-edge
+validation, EXCEPT under a system context_). So Confirm and Overturn's own
+write — `{ decidingGateId }` alone — would be refused `IllegalTransitionError`
+for `in_review → todo`.
+
+**The decision.** A refusal that returns a card to To do writes it through
+`workItemsService.applyStatusTransition(workItemId, <target>, ctx, tx,
+{ system: true, decidingGateId: gate.id })`, inside the decide door's
+transaction, from the kind's handler — the same place every other gate effect
+writes its status.
+
+**Why not a new workflow edge.** A new `in_review → todo` edge would let ANY
+writer make that move — a board drag, the REST status route, a script — and
+remove the `IllegalTransitionError` every blind writer of `todo` relies on
+today (the lesson _a new workflow edge removes a refusal_). The move is correct
+only as the consequence of a recorded refusal, so it belongs to the gate, and
+the refusal stays in place for everybody else. The `system` write still
+validates that the target is a real status of the project, and still passes
+the tenant and project-access gates; it skips only the edge list.
+
+**What `<target>` is.** The project's status that is BOTH `isInitial` and in the
+`todo` category — To do in the default workflow. **A project whose workflow has
+no such status** gets the refusal and its verdict recorded and **no status
+written**: the handler returns `{ statusWritten: null, statusDeferredReason:
+'no_status_in_target_category' }`, Overturn's shipped answer for a project with
+no `cancelled`. The DECISION is the audit; the status is a convenience.
+
+**The pull-back rule still runs.** The move is below `implemented`, so §6d's
+amendment rule 6 supersedes every OTHER `awaiting` gate on the card with cause
+`pulled_back` (the approve-to-merge gate included). That is correct: the
+commits are about to change.
+
+#### 10d. The verdict is STORED on the decided gate — in a column of its own, NOT in `outcomeRef` — rung 2, DEVIATING from the card's recommendation
+
+The card recommended `outcomeRef`, beside `chosenOption`'s precedent, _"unless
+the reading of shipped code contradicts it"_. It does. **`outcomeRef` is read as
+a STATUS KEY by the surfaces that repaint the card after a decision**:
+`DevelopmentGateFrame` applies `result.gate.outcomeRef` as the optimistic
+status, and so do `DecidedGateStatusBridge` and `OptimisticStatusProvider`
+(`app/(authed)/items/[key]/_components/`). `decision_choice` got away with an
+option id there only because the overlay special-cases it (MOTIR-5893). A
+verdict value in that column would paint `re_plan` onto the card as its status.
+And a **Revise** does write a status (10c), so `outcomeRef` must keep carrying
+it.
+
+**The decision.**
+
+- **A new nullable enum column `approval_gate.refusal_verdict`**,
+  `ApprovalGateRefusalVerdict = revise | re_plan`. Stamped in the deciding
+  write, under the decided-row trigger. NULL on every approval, on every kind
+  that offers no verdict, and on every gate decided before this section.
+- **`outcomeRef` is unchanged**: it carries `statusWritten` — To do's key on a
+  Revise, NULL on a Re-plan.
+- **The decide door takes the verdict** as `refusalVerdict` beside `noteMd`, on
+  the route, the server action and the service. The door refuses a verdict on a
+  kind or case that offers none, and refuses a verdict-offering refusal that
+  names none, both as `ApprovalGateVerbNotOfferedError` (`refusal_verdict_not_offered`
+  / `refusal_verdict_required`). A GitHub-sourced refusal carries no verdict:
+  nobody was asked, and it behaves as a plain refusal (it moves nothing).
+
+#### 10e. A sent-back design stays OPEN to a revised publish — already true on shipped code, restated so no later card narrows it back
+
+§6c's second amendment and MOTIR-5658's Q3 (_"a decided design gate closes the
+design"_) read as if any decision closed it. **The shipped refusal is already
+narrowed to `approved`**: `assertDesignSettled`
+(`lib/services/designEvidenceService.ts`) refuses a republish only over an
+APPROVED current result, with an open delivery, at or above `implemented`, and
+says in its own header why `changes_requested` must stay open — _"it is the one
+that ASKS FOR A NEW VERSION"_. The status half, `assertStatusOpen`, refuses only
+a `done`-category card, and neither verdict writes one.
+
+**So nothing is built for (e).** It is the rule: **a `changes_requested` design
+gate — either verdict — never closes the design.** A Revise's return to To do
+(10c) is what makes the next run's publish the ordinary revise loop, and that
+publish supersedes nothing that was approved.
+
+#### 10f. The planner offer is a SEEDED, UNSENT first turn, addressed by the GATE — rung 3
+
+- **The press opens the planning surface straight after the decision commits**,
+  on the card the table below names as the anchor, in the `replan` mode the
+  launcher already has (`lib/planning/launcher.ts`, `PlanningLaunchContext`
+  gains `{ kind: 'refused-gate'; gateId }`).
+- **It is addressed by the GATE ID, never by the reason's text in a URL.** The
+  surface reads the decided gate server-side and composes the first turn from
+  the row: the card's key and title, the kind, what was refused, and the reason
+  quoted. A reason in a query string would leak into history, logs and referrers,
+  and would be editable by anyone who can edit a link. The gate is also the
+  authorisation: the surface opens only for a person who can read the gate's work
+  item.
+- **The turn is UNSENT.** The person reads it, can edit it, and sends it. Nothing
+  is billed and no session is started until they do (Story MOTIR-6011's session
+  begins at the first SENT turn).
+- **A decided record keeps a door to it**: the record band of a refused gate that
+  offers the planner shows **Re-plan with AI**, which opens the same seeded turn.
+  If the person already started that conversation, the door returns to it while
+  it is recent (MOTIR-6011's rule); otherwise it seeds a new one.
+- **Nothing about the plan is automatic.** The planner PROPOSES; a person approves
+  the plan, as for every plan.
+
+#### 10g. §5 re-drawn — the line against Story 9.2
+
+| owned by Epic MOTIR-6010 (this section)                                                                              | still Story 9.2's (MOTIR-693)                                                       |
+| -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| the REASON on every refusal, and where it is shown                                                                   | the ephemeral hosted PREVIEW, its deploy and teardown                               |
+| the VERDICT at the press, and returning a card to To do (10c)                                                        | the HOSTED, AUTOMATIC re-dispatch after a refusal — the revise-chat and its preview |
+| handing the reason to WHICHEVER run picks the card up next (the dispatch prompt carries the latest refusal's reason) | `Project.designApprovalGate` and the HOLD it applies to the `motir auto` loop       |
+| opening the planner, seeded, on a refused decision / choice / design / video, and on a picked option                 |                                                                                     |
+
+9.2 may later make the run after a Revise automatic. It does not own the
+hand-back, which is this epic's.
+
+#### 10h. THE FOLLOW-UP TABLE — one row per kind × case
+
+"Planner anchor" is the work item the seeded re-plan opens on. "Status written"
+is what the refusal's own handler writes; every other effect named in the rows
+above this section is unchanged.
+
+| kind · case                                                  | refusal verb(s), reason REQUIRED (10a)     | verdict at the press (10d)                 | status written by the refusal                                                                                                                                                                | planner opens (10f) — anchor                                                                                                             | built by                     |
+| ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `design_result`                                              | Request changes                            | **Revise** · **Re-plan**                   | **Revise**: the DESIGN CARD → To do (10c). **Re-plan**: none                                                                                                                                 | **Re-plan** only — anchored on the design card's PARENT (the cards planned after the design), seeded with the design card and the reason | MOTIR-6070                   |
+| `acceptance_result` · STORY run (the gate on the run target) | Request changes                            | **Re-run** (stored `revise`) · **Re-plan** | **Re-run**: the STORY and EVERY not-`done` child → To do (10c) — a story re-run's scope claim re-asserts the to-do category on every member (`scopeClaimService`, step 5). **Re-plan**: none | **Re-plan** only — anchored on the STORY; it may re-plan ALL its subtasks                                                                | MOTIR-6071                   |
+| `acceptance_result` · SUBTASK runs, last one finished        | Request changes                            | none — Re-plan is the only answer          | none — nothing under the story is open to re-run                                                                                                                                             | **always** — anchored on the STORY, seeded to PLAN A REMEDY                                                                              | MOTIR-6071                   |
+| `decision_approval`                                          | Request changes                            | none                                       | none (unchanged: the pull request stays open, the merge stays HELD — §8's FIFTH AMENDMENT clause 5)                                                                                          | **always** — anchored on the decision card, seeded to re-plan from the reason                                                            | MOTIR-6068                   |
+| `decision_confirmation`                                      | Overturn (note already required)           | none                                       | `cancelled` (unchanged, §1's MOTIR-5952 amendment point 7)                                                                                                                                   | **always** — anchored on the decision card; the seed also names the keys `replanOwed` derives from `## Supersedes`                       | MOTIR-6068                   |
+| `decision_choice` · None of these                            | None of these — revise the options         | none                                       | none (unchanged)                                                                                                                                                                             | **always** — anchored on the choice card, seeded to re-plan from the reason                                                              | MOTIR-6068                   |
+| `decision_choice` · an option chosen                         | — (not a refusal; its note stays optional) | none                                       | `done` (unchanged, §1's MOTIR-5887 amendment point 6)                                                                                                                                        | **offered** — anchored on the choice card, seeded to plan `## What this choice gates` with the chosen option                             | MOTIR-6069                   |
+| `pull_request_approval`                                      | Request changes                            | none                                       | none (unchanged)                                                                                                                                                                             | **none** — the author reads the reason on the card and the pull request, as today                                                        | MOTIR-6067 (the reason only) |
+| `plan_approval` (MOTIR-6012)                                 | — no refusal verb                          | —                                          | —                                                                                                                                                                                            | —                                                                                                                                        | out                          |
+
+**Four notes on the table:**
+
+- **The acceptance Re-run is stored as `revise`.** The two verbs are one verdict
+  (_a small change, send the same work back_) spelled for what the reviewer is
+  looking at: a design is revised, a story is re-run. One enum value keeps the
+  audit's question — _did they send it back or re-plan it?_ — one column wide.
+- **Which acceptance row applies is read from the gate, not guessed**: the story
+  run is the case where the gate is the PRIMARY over a story-run delivery set
+  (§1's MOTIR-5903 amendment); the finished case is the one raised once nothing
+  under the story is open.
+- **A refusal from GitHub** on any of these is a plain refusal: reason from 10b,
+  no verdict, no status, no planner. It lands on `pull_request_approval`, the only
+  kind the review sync decides.
+- **The next run is handed the reason.** On a Revise / Re-run the dispatch prompt
+  for the returned card carries the latest `changes_requested` gate's reason, as
+  _what the reviewer asked for_ (MOTIR-6070 / MOTIR-6071 build it).
+
+#### 10i. What this section does NOT decide
+
+The HOSTED automatic re-dispatch (9.2, 10g); a refusal verb on the plan gate
+(MOTIR-6012 has none); posting anything back to GitHub (§8's FOURTH AMENDMENT
+decision 9); and the copy and layout of the reason field and the verdict pair,
+which are MOTIR-6073's to draw.
 
 ---
 

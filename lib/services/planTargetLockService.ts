@@ -9,11 +9,14 @@ import {
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { PlanTargetLockedError } from '@/lib/planChange/errors';
+import { restingStatusFor } from '@/lib/plans/restingStatus';
+import { classifyBlockerReadiness } from '@/lib/workItems/blockerReadiness';
 import {
   PLANNING_STATUS_KEY,
   PLAN_TARGET_LOCK_SWEEP_BATCH_SIZE,
@@ -60,8 +63,10 @@ import {
 //   2. *"an item parked at `planning` without one is never disturbed"* — a
 //      hand-parked item is now ADOPTED when a plan names it as a target
 //      (`acquireForPlanWithin`), which is what retires the runbook's manual
-//      `transition_status` step. It is still never disturbed by the SWEEP or by
-//      a release, because both read rows rather than statuses.
+//      `transition_status` step. A card parked by hand with NO plan naming it is
+//      still never disturbed by the sweep or a release, because both read rows
+//      rather than statuses; an ADOPTED one is RESTED at `todo` / `blocked` by
+//      every release of its plan (MOTIR-6066, `restAdoptedTarget`).
 //
 // ── WHO HOLDS IT: A SESSION, OR A PLAN ──────────────────────────────────────
 // MOTIR-5645 / AMENDMENT 16 D5. A planning conversation holds its targets from
@@ -136,7 +141,7 @@ export interface PlanTargetHandOff {
  *  output says why it walked past a row its read had selected. */
 export interface PlanTargetLockSweepEntry {
   workItemId: string;
-  outcome: 'restored' | 'left_as_is' | 'unattributable' | 'plan_awaiting_review';
+  outcome: PlanTargetReleaseOutcome | 'unattributable' | 'plan_awaiting_review';
 }
 
 /**
@@ -280,11 +285,14 @@ async function acquireOne(
   // `transition_status` step produces — takes `statusHeld: false` and
   // `priorStatus: 'planning'`, because nothing recorded where it came from.
   //
-  // That is the honest record and it gives each decision the right answer:
-  // APPROVE rests it at `todo` or `blocked` from its live edges like any other
-  // target (AMENDMENT 16 D6 — *"a target parked by hand before the plan existed
-  // is treated the same way"*), while DECLINE leaves it exactly where it was,
-  // because restoring a status we never observed would be inventing one.
+  // That is the honest record: there is no prior status to RESTORE, because
+  // restoring a status we never observed would be inventing one. So every
+  // decision RESTS it instead — APPROVE at `todo` or `blocked` from its live
+  // edges like any other target (AMENDMENT 16 D6), and since MOTIR-6066 a
+  // DECLINE, an emptying withdraw, a discarded close and the abandoned-plan sweep
+  // too (`releaseOne` → `restAdoptedTarget`). Leaving it parked, as D8 first
+  // said, stranded it: the lock row is gone after release, so nothing ever moved
+  // it again.
   const statusHeld = shouldHoldStatus(item.status, planningIsLegal);
 
   try {
@@ -325,7 +333,8 @@ async function acquireOne(
 
 /**
  * Release ONE lease inside the caller's transaction, restoring the item's prior
- * status.
+ * status — or, for a target a PLAN adopted from a hand-park, RESTING it at `todo`
+ * / `blocked`, since there is no observed prior status to restore (MOTIR-6066).
  *
  * ⚠️ The restore is CONDITIONAL on the item still being at `planning`. A user who
  * dragged the card out of the Planning column has performed a MANUAL RELEASE —
@@ -339,12 +348,15 @@ async function releaseOne(
   actor: ServiceContext,
   tx: Prisma.TransactionClient,
   opts: { system?: boolean } = {},
-): Promise<'restored' | 'left_as_is'> {
+): Promise<PlanTargetReleaseOutcome> {
   await workItemRepository.lockById(lock.workItemId, tx);
   const item = await workItemRepository.findById(lock.workItemId, tx);
   await planTargetLockRepository.deleteById(lock.id, tx);
 
-  if (!lock.statusHeld || !item || item.status !== PLANNING_STATUS_KEY) return 'left_as_is';
+  if (!item || item.status !== PLANNING_STATUS_KEY) return 'left_as_is';
+  if (!lock.statusHeld) {
+    return isAdoptedByPlan(lock) ? restAdoptedTarget(item, actor, tx) : 'left_as_is';
+  }
   await workItemsService.applyStatusTransition(lock.workItemId, lock.priorStatus, actor, tx, {
     // The restore is AUTHORITATIVE, not an interactive move: it puts the item
     // back where it was, and `planning → <prior>` may not be an edge the project's
@@ -355,7 +367,92 @@ async function releaseOne(
   return 'restored';
 }
 
+/** What one release did to its target: `restored` to the status it was parked
+ *  from, `rested` at `todo` / `blocked` from its live edges (an ADOPTED target —
+ *  MOTIR-6066), or `left_as_is`. */
+export type PlanTargetReleaseOutcome = 'restored' | 'rested' | 'left_as_is';
+
+/**
+ * Whether a lock is a PLAN's adoption of a HAND-PARKED card — a card that was
+ * already at `planning` with no lock row when the plan named it, so the plan
+ * recorded `priorStatus: 'planning'` and moved nothing (`acquireOne`).
+ *
+ * PLAN-held only, deliberately. A SESSION that opens on a hand-parked card still
+ * leaves it where the person put it on release (MOTIR-2425): a planning
+ * conversation is not a decision about the card, and a session has no approve
+ * that rests its targets either, so resting them on its release alone would make
+ * the two endings of one conversation disagree.
+ */
+function isAdoptedByPlan(lock: PlanTargetLock): boolean {
+  return lock.planId !== null && lock.priorStatus === PLANNING_STATUS_KEY;
+}
+
+/**
+ * Whether a work item has a `blocked_by` that is not finished — the SAME
+ * predicate the ready set, materialize's birth-status pass and approve's resting
+ * status use (`classifyBlockerReadiness`), so `blocked` written by a release can
+ * never mean something different from "not ready" there.
+ */
+async function hasOpenBlockerWithin(
+  workItemId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const blockerRows = await workItemLinkRepository.findBlockerStatesForItems([workItemId], tx);
+  if (blockerRows.length === 0) return false;
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    blockerRows.map((b) => b.projectId),
+    workspaceId,
+    tx,
+  );
+  return !classifyBlockerReadiness(blockerRows, terminalByProject).ready;
+}
+
+/**
+ * REST an adopted target instead of leaving it parked (bug MOTIR-6066; AMENDMENT
+ * 16 D8 as amended 2026-09-22).
+ *
+ * An adopted card has no observed prior status to restore — the plan found it
+ * already at `planning`. D8 used to answer "then leave it", and that stranded it:
+ * the lock row is deleted here, so no sweep ever reaches it again, and nothing in
+ * the product moves a card out of `planning` on its own. The requester overruled
+ * it: every decision returns a plan's targets, so a decline, an emptying
+ * withdraw, a discarded close and the abandoned-plan sweep rest an adopted card
+ * exactly as approve does — `blocked` with an open blocker, `todo` without.
+ *
+ * A SYSTEM write, like the restore beside it: `planning → todo` may not be an
+ * edge a restricted custom graph declares, and refusing would strand the card.
+ * A project whose workflow has no such status at all keeps the card where it is,
+ * because a status the workflow does not offer is never written.
+ */
+async function restAdoptedTarget(
+  item: { id: string; projectId: string; archivedAt: Date | null; status: string },
+  actor: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<PlanTargetReleaseOutcome> {
+  const decision = restingStatusFor({
+    archived: item.archivedAt !== null,
+    currentStatus: item.status,
+    hasOpenBlocker: await hasOpenBlockerWithin(item.id, actor.workspaceId, tx),
+  });
+  if (!decision.write) return 'left_as_is';
+  const statuses = await workflowsService.listStatusesByProject(
+    item.projectId,
+    actor.workspaceId,
+    tx,
+  );
+  if (!statuses.some((s) => s.key === decision.toKey)) return 'left_as_is';
+  await workItemsService.applyStatusTransition(item.id, decision.toKey, actor, tx, {
+    system: true,
+  });
+  return 'rested';
+}
+
 export const planTargetLockService = {
+  /** The shared open-blocker read, exposed so approve's resting pass
+   *  (`plansService.restPlanTargets`) asks it the same way a release does. */
+  hasOpenBlockerWithin,
+
   /**
    * Take the lock on every target in a scope — the acquire that runs when a
    * planning session OPENS or RESUMES.
@@ -550,13 +647,13 @@ export const planTargetLockService = {
   async releaseForSession(
     sessionId: string,
     pctx: PlanTargetLockContext,
-  ): Promise<Array<{ workItemId: string; outcome: 'restored' | 'left_as_is' }>> {
+  ): Promise<Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }>> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       async (tx) => {
         const locks = await planTargetLockRepository.listBySessionId(sessionId, tx);
-        const results: Array<{ workItemId: string; outcome: 'restored' | 'left_as_is' }> = [];
+        const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
         for (const lock of locks) {
           results.push({ workItemId: lock.workItemId, outcome: await releaseOne(lock, ctx, tx) });
         }
@@ -570,10 +667,13 @@ export const planTargetLockService = {
    * (MOTIR-5646; AMENDMENT 16 D8) — the twin of the release above, for the
    * DECLINE side of a decision.
    *
-   * ⚠️ THIS IS THE RESTORE PATH ONLY, and the asymmetry with approve is the whole
+   * ⚠️ THIS IS THE RESTORE PATH, and the asymmetry with approve is the whole
    * of D6 vs D8. A decline, a withdraw that empties the plan and a close that
    * materializes nothing have changed NOTHING about the card, so the card goes
-   * back to the status it was parked from. An APPROVE does not come through here
+   * back to the status it was parked from. The one exception is a target the
+   * plan ADOPTED from a hand-park: it has no observed prior status, so it RESTS
+   * at `todo` / `blocked` from its live edges, as approve would rest it
+   * (MOTIR-6066) — a declined plan never leaves its target parked. An APPROVE does not come through here
    * at all: it has already given each target its RESTING status inside its own
    * transaction (`plansService.restPlanTargets`) and deleted the lock, so this
    * finds nothing left to do — which is what makes calling it on every decision
@@ -588,13 +688,13 @@ export const planTargetLockService = {
   async releaseForPlan(
     planId: string,
     pctx: PlanTargetLockContext,
-  ): Promise<Array<{ workItemId: string; outcome: 'restored' | 'left_as_is' }>> {
+  ): Promise<Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }>> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       async (tx) => {
         const locks = await planTargetLockRepository.listByPlanId(planId, tx);
-        const results: Array<{ workItemId: string; outcome: 'restored' | 'left_as_is' }> = [];
+        const results: Array<{ workItemId: string; outcome: PlanTargetReleaseOutcome }> = [];
         for (const lock of locks) {
           results.push({ workItemId: lock.workItemId, outcome: await releaseOne(lock, ctx, tx) });
         }

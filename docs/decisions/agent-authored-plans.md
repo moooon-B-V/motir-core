@@ -3017,12 +3017,43 @@ that never had a `sourceJobId` to resolve through. It stays CONDITIONAL on the c
 `planning`: a person who moved it out by hand has released it themselves, and writing a remembered
 status over their move would undo a human decision.
 
+**⚠️ D8 AS AMENDED (bug MOTIR-6066, 2026-09-22) — a target the plan ADOPTED is RESTED, not left
+parked.** D8 as first written had one arm D6 did not: a card that was ALREADY at `planning` with no
+lock row when the plan named it — the shape the runbook's hand `transition_status` produces — is
+adopted with `priorStatus: 'planning'` and `statusHeld: false`, and `releaseOne` then read that as
+_"nothing to restore"_ and left it where it was. The reasoning was honest (restoring a status nobody
+observed would be inventing one) and the outcome was not: the release deletes the lock row, the sweep
+reads rows, and nothing in the product moves a card out of `planning` on its own, so **a declined
+plan stranded its hand-parked target at Planning for good** — out of every ready list, with no
+surface asking anyone to move it. Approve never had the gap, because D6 rests every target from its
+live edges whoever parked it.
+
+> **The requester, 2026-09-22:** a declined plan must not leave its target parked — declining
+> returns its cards to To Do, just as approving puts them at To Do or Blocked.
+
+So **every release of a PLAN-held lock that finds an adopted target still at `planning` RESTS it by
+D6's predicate** — `blocked` when a live `blocked_by` is open, else `todo` — as a `{ system: true }`
+write recorded in the card's history (`planTargetLockService.restAdoptedTarget`). That covers the
+decline, a withdraw that empties the plan, a discarded close, and the abandoned-plan sweep (D9),
+because all four release through the same `releaseOne`. What does NOT change:
+
+- **A target the plan parked ITSELF** — an observed prior status on the lock — is still RESTORED to
+  that status. Nothing about the card changed, so it goes back exactly where it was.
+- **A card a person moved out of `planning`** before the decision is still left alone, by both arms.
+- **A project whose workflow has no `todo` / `blocked` status** keeps the card where it is — a status
+  the workflow does not offer is never written, the same conservative arm D6 takes.
+- **A SESSION-held lock is untouched.** A planning conversation that opens on a hand-parked card
+  still leaves it where the person put it on release (MOTIR-2425): a conversation is not a decision
+  about the card, and a session has no approve that rests its targets, so resting them on its release
+  alone would make the two endings of one conversation disagree.
+
 ### D9 — the ABANDONED-PLAN exit: 24 hours, reusing the threshold that already exists
 
 A crashed author leaves a plan `generating` with no terminal event, which is the whole reason the
 session lease exists. **The window for a PLAN-held lock is `ABANDONED_PLAN_MAX_AGE_HOURS` — 24
 hours — measured from the plan's last write**, and the sweep then releases it, restoring each
-target's prior status per D8.
+target's prior status per D8 (or, for a target the plan adopted from a hand-park, resting it at
+`todo` / `blocked` — D8 as amended by MOTIR-6066).
 
 The number is not chosen; it is **the one already shipped for this exact population**.
 `abandonedPlanService` uses `ABANDONED_PLAN_MAX_AGE_HOURS` as the crashed-worker arm and as the only

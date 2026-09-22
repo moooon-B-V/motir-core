@@ -550,6 +550,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // against a production build), not from a green CI run — there is none yet.
   // Re-measure from the first green `playwright-report-bulk-*` artifact with it.
   'approval-overlay.spec.ts': 2.8,
+  // MOTIR-6042 — the acceptance recording fits the overlay at three viewports.
+  // Measured LOCALLY against a production build (3.5 s + 4.0 s over two tests,
+  // warm), not from a green CI run — there is none yet. Recorded at ~1.5x, per the
+  // calibration note, since a local reading runs at or below the CI cost.
+  // Re-measure from the first green `playwright-report-bulk-*` artifact with it.
+  'approval-overlay-video-fits.spec.ts': 11.0,
   // MOTIR-5724, completed by MOTIR-5726. BOTH promoted out of the acceptance lane
   // by MOTIR-5724 (they were `acceptance-approval-overlay.spec.ts` and
   // `acceptance-approvals-tab.spec.ts`), which is why they arrive here together.

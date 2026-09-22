@@ -1,13 +1,10 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { testInstructionsRepository } from '@/lib/repositories/testInstructionsRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
-import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { toTestInstructionsDto } from '@/lib/mappers/testInstructionsMappers';
-import { staleSections } from '@/lib/howToTest/assemble';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import { authorOf, dispatchRunLabel } from '@/lib/howToTest/author';
@@ -21,27 +18,24 @@ export { dispatchRunLabel } from '@/lib/howToTest/author';
 /**
  * The HOW TO TEST read (Story MOTIR-4906 · Subtask MOTIR-5333) — per RUN TARGET
  * (`docs/decisions/approval-gates.md` §9's 2026-09-13 amendment): the item's
- * current record, and which of its repository sections were written for a commit
- * the bound pull request has since moved past (`design/github/design-notes.md`
+ * current record and its earlier versions (`design/github/design-notes.md`
  * § 25). A child of a container run that carries no record of its own answers
  * `tested_via_ancestor`, naming the nearest ancestor that does.
  *
  * ⚠️ IT NO LONGER DERIVES PER-REPOSITORY FACTS (MOTIR-5691). The preview, the
  * fetch line and the checks went with the sub-block that drew them, and so did
- * the two deployment reads that fed the preview. The deliveries and the project's
- * repositories stay, because STALE needs each section's bound pull request and
- * the repository's name.
+ * the two deployment reads that fed the preview. ⚠️ AND IT NO LONGER DERIVES
+ * STALE (MOTIR-6065): How to test is written for the work item, not for a
+ * commit, so the subtree, the project's repositories and the deliveries it read
+ * to compare each section's commit with its pull request's head went too.
  *
  * Called from the server-rendered item page (MOTIR-5336). It adds no HTTP route,
- * writes nothing, calls no host API, and only IMPORTS `prCiState`'s head rule.
+ * writes nothing and calls no host API.
  *
  * ⚠️ BOUNDED QUERIES, independent of how many repositories or pull requests: the
  * ancestors (1), the subtree (1), the item's record history (1), the ancestors'
  * current records (1), the latest leg run and scope run (2), the PUBLISHERS of
- * the current record and every history row TOGETHER (1 — MOTIR-5454), the
- * project's repositories (1), and the deliveries of the item and its descendants
- * with their check rows (1). The subtree, the repositories and the deliveries are
- * read only for a record that HAS sections.
+ * the current record and every history row TOGETHER (1 — MOTIR-5454).
  */
 export const howToTestService = {
   async getForWorkItem(workItemId: string, ctx: ServiceContext): Promise<HowToTestDto> {
@@ -100,7 +94,6 @@ export const howToTestService = {
             runTarget: { key: target.holder.identifier },
             owedBy: null,
             record: null,
-            stale: [],
             history: historyDto,
           };
         }
@@ -117,7 +110,6 @@ export const howToTestService = {
             ? { runId: latest.id, label: dispatchRunLabel(latest.command, latest.startedAt) }
             : null,
           record: null,
-          stale: [],
           history: historyDto,
         };
       }
@@ -130,52 +122,11 @@ export const howToTestService = {
         bodyMd: record.bodyMd,
         previewPath: record.previewPath,
       };
-      // A record with NO sections — every person's save (§ 25), and an agent's that
-      // named no repository — can never be stale: there is no commit for a head to
-      // have moved past. So the three reads below, which exist only to answer
-      // that, are not made.
-      if (record.repos.length === 0) {
-        return {
-          state: 'record',
-          runTarget: null,
-          owedBy: null,
-          record: recordDto,
-          stale: [],
-          history: historyDto,
-        };
-      }
-
-      const [subtree, projectRepos] = await Promise.all([
-        workItemRepository.findSubtree(item.id, tx),
-        projectRepoRepository.listByProject(item.projectId, ctx.workspaceId, tx),
-      ]);
-      const descendantIds = subtree.filter((row) => row.id !== item.id).map((row) => row.id);
-      const deliveries = await workItemDeliveryRepository.listByWorkItemsWithChecks(
-        [item.id, ...descendantIds],
-        tx,
-      );
-      const toPr = (delivery: (typeof deliveries)[number]) => ({
-        id: delivery.pullRequest.id,
-        repoId: delivery.pullRequest.repoId,
-        state: delivery.pullRequest.state,
-        checkRuns: delivery.pullRequest.checkRuns,
-      });
-      const own = deliveries.filter((d) => d.workItemId === item.id).map(toPr);
-      const descendants = deliveries.filter((d) => d.workItemId !== item.id).map(toPr);
-
-      const nameOf = new Map<string, string>();
-      for (const row of projectRepos) {
-        if (row.githubRepo)
-          nameOf.set(row.githubRepo.id, `${row.githubRepo.owner}/${row.githubRepo.name}`);
-      }
-      for (const d of deliveries) nameOf.set(d.repo.id, `${d.repo.owner}/${d.repo.name}`);
-
       return {
         state: 'record',
         runTarget: null,
         owedBy: null,
         record: recordDto,
-        stale: staleSections(record.repos, own, descendants, (id) => nameOf.get(id) ?? id),
         history: historyDto,
       };
     });
