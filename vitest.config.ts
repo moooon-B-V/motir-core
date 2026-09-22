@@ -2403,7 +2403,6 @@ export default defineConfig({
         'lib/services/testInstructionsService.ts',
         'lib/services/repoDeploymentService.ts',
         'lib/services/howToTestService.ts',
-        'lib/howToTest/assemble.ts',
         'lib/mcp/tools/publishTestInstructions.ts',
         'lib/dispatch/runCloseOutPrompt.ts',
         'app/api/v1/dispatch-runs/[id]/close-out-prompt/route.ts',
@@ -5140,7 +5139,6 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
-        'lib/howToTest/assemble.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/mcp/tools/publishTestInstructions.ts': {
           lines: 90,
           functions: 90,

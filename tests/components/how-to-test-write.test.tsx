@@ -44,7 +44,6 @@ const MISSING: HowToTestDto = {
   runTarget: null,
   owedBy: { runId: 'run-318', label: 'Parent run #318' },
   record: null,
-  stale: [],
   history: [],
 };
 
@@ -128,7 +127,6 @@ describe('Panel 13h — NO door', () => {
       runTarget: { key: 'ACME-7' },
       owedBy: null,
       record: null,
-      stale: [],
       history: [],
     });
     expect(screen.getByRole('link', { name: 'ACME-7' })).toBeTruthy();

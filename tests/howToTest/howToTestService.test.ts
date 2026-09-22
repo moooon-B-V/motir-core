@@ -12,14 +12,7 @@ import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository'
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { ERASED_USER_NAME } from '@/lib/users/accountErasure';
-import { derivePrCiState } from '@/lib/github/prCiState';
-import {
-  liveHeadSha,
-  pickPullRequest,
-  staleSections,
-  type HowToTestPullRequestInput,
-} from '@/lib/howToTest/assemble';
-import type { TestInstructionsRepoDTO } from '@/lib/dto/testInstructions';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -27,14 +20,15 @@ import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { organizationIdOf } from '../helpers/organizationOf';
 import { randomToken } from '../helpers/random';
 
-// The HOW TO TEST read (Story MOTIR-4906 · MOTIR-5333 — per RUN TARGET). Two halves:
+// The HOW TO TEST read (Story MOTIR-4906 · MOTIR-5333 — per RUN TARGET), on real
+// Postgres: a child with no record must point at its run target, and the query
+// count must not grow with the number of repositories.
 //
-//   - the PURE assembly — since MOTIR-5691 only STALE is derived (design/github
-//     § 25), so this is the binding and the head rule it rests on;
-//   - the SERVICE on real Postgres, where a story's sections must bind to the
-//     story's own session pull requests before a child's, a child with no record
-//     must point at its run target, the head must be the one `prCiState` names,
-//     and the query count must not grow with the number of repositories.
+// ⚠️ NOTHING IS DERIVED FROM THE PULL REQUESTS ANY MORE (MOTIR-6065). The last
+// derived fact, STALE, compared each section's commit with its pull request's
+// head and fired on every push — How to test is written for the work item, not
+// for a commit. The cases below pin that the read makes none of the reads that
+// comparison needed.
 //
 // ⚠️ THE PREVIEW, THE FETCH LINE AND THE CHECKS ARE GONE, with the sub-block that
 // drew them. So is `repoDeploymentRepository`'s read pair: a read of How to test
@@ -56,114 +50,6 @@ afterAll(async () => {
 
 const HEAD = 'a'.repeat(40);
 const OLD = 'b'.repeat(40);
-
-function section(over: Partial<TestInstructionsRepoDTO> = {}): TestInstructionsRepoDTO {
-  return {
-    repoId: 'repo-1',
-    commitSha: HEAD,
-    ...over,
-  };
-}
-
-function check(
-  name: string,
-  conclusion: string,
-  commitSha = HEAD,
-  at = '2026-09-13T10:00:00Z',
-  suite = 's1',
-) {
-  return { checkName: name, conclusion, commitSha, createdAt: new Date(at), checkSuiteId: suite };
-}
-
-function pr(over: Partial<HowToTestPullRequestInput> = {}): HowToTestPullRequestInput {
-  return {
-    id: 'pr-1',
-    repoId: 'repo-1',
-    state: 'open',
-    checkRuns: [check('Vitest', 'success'), check('Lint', 'failure')],
-    ...over,
-  };
-}
-
-const nameOf = (id: string) => (id === 'repo-1' ? 'acme/web' : `name-of-${id}`);
-
-describe('staleSections — the one derived fact (design/github § 25, Panel 12g)', () => {
-  it('a section written for the head is not stale', () => {
-    expect(staleSections([section()], [pr()], [], nameOf)).toEqual([]);
-  });
-
-  it('a section written for an older commit is stale, named by repository and both commits', () => {
-    expect(staleSections([section({ commitSha: OLD })], [pr()], [], nameOf)).toEqual([
-      { repoName: 'acme/web', recordSha: OLD, headSha: HEAD },
-    ]);
-  });
-
-  it('a section written against an ABBREVIATED sha of the head is not stale', () => {
-    expect(staleSections([section({ commitSha: HEAD.slice(0, 7) })], [pr()], [], nameOf)).toEqual(
-      [],
-    );
-  });
-
-  it('a section with no bound pull request, or one with no reported head, cannot be stale', () => {
-    expect(staleSections([section({ commitSha: OLD })], [], [], nameOf)).toEqual([]);
-    expect(
-      staleSections([section({ commitSha: OLD })], [pr({ checkRuns: [] })], [], nameOf),
-    ).toEqual([]);
-  });
-
-  it("binds the run target's OWN pull request before a descendant's, per repository, in the record's order", () => {
-    const sections = [section({ repoId: 'repo-2', commitSha: OLD }), section({ commitSha: OLD })];
-    const own = [pr({ id: 'own-web', checkRuns: [check('A', 'success', OLD)] })];
-    const descendants = [
-      pr({ id: 'child-web', checkRuns: [check('A', 'success', HEAD)] }),
-      pr({ id: 'child-api', repoId: 'repo-2', checkRuns: [check('A', 'success', HEAD)] }),
-    ];
-    // web binds to the target's own pull request, which is AT the section's commit —
-    // so it is not stale although a descendant's pull request in web moved on. api
-    // falls back to the child's, which did move.
-    expect(staleSections(sections, own, descendants, nameOf)).toEqual([
-      { repoName: 'name-of-repo-2', recordSha: OLD, headSha: HEAD },
-    ]);
-  });
-
-  it('the head is the one prCiState judges — across a re-run and an older sha', () => {
-    const rows = [
-      check('Vitest', 'failure', OLD, '2026-09-13T09:00:00Z', 'old'),
-      check('Vitest', 'failure', HEAD, '2026-09-13T10:00:00Z', 'run-1'),
-      check('Vitest', 'success', HEAD, '2026-09-13T10:05:00Z', 'run-2'),
-    ];
-    expect(liveHeadSha(rows)).toBe(HEAD);
-    expect(derivePrCiState(rows)).toBe('passing');
-    expect(liveHeadSha([])).toBeNull();
-  });
-});
-
-describe('pickPullRequest — the run target first, then its descendants', () => {
-  const row = (id: string, repoId: string, state = 'open') => ({ id, repoId, state });
-
-  it("prefers the target's own pull request in the repository over a descendant's", () => {
-    expect(pickPullRequest('web', [row('own', 'web', 'closed')], [row('child', 'web')])?.id).toBe(
-      'own',
-    );
-  });
-
-  it('falls back to a descendant, preferring an open one, else the most recently linked', () => {
-    expect(
-      pickPullRequest(
-        'web',
-        [row('own-api', 'api')],
-        [row('c1', 'web', 'closed'), row('c2', 'web')],
-      )?.id,
-    ).toBe('c2');
-    expect(
-      pickPullRequest('web', [], [row('c1', 'web', 'closed'), row('c2', 'web', 'closed')])?.id,
-    ).toBe('c2');
-  });
-
-  it('returns null when no pull request anywhere is in the repository', () => {
-    expect(pickPullRequest('web', [row('a', 'api')], [row('b', 'api')])).toBeNull();
-  });
-});
 
 describe('dispatchRunLabel', () => {
   it('labels a run as its operator typed it', () => {
@@ -255,7 +141,6 @@ describe('howToTestService.getForWorkItem', () => {
       runTarget: null,
       owedBy: null,
       record: null,
-      stale: [],
       history: [],
     });
   });
@@ -265,7 +150,7 @@ describe('howToTestService.getForWorkItem', () => {
   // this pins that: the card is given a CONNECTED repository and a LINKED pull
   // request, so an implementation that answered `record_missing` on an empty
   // section list — or that filled the list from the deliveries — fails here.
-  it('a record with NO repository sections is `record`, with an empty `stale` — not `record_missing`', async () => {
+  it('a record with NO repository sections is `record` — not `record_missing`', async () => {
     const fx = await makeWorkItemFixture();
     const card = await createTestWorkItem(fx, { kind: 'task', title: 'Body only' });
     const web = await connectRepo(fx, 'web');
@@ -277,40 +162,21 @@ describe('howToTestService.getForWorkItem', () => {
       fx.ctx,
     );
 
-    // A record with no sections can never be stale, so the three reads that only
-    // exist to answer that are not made (MOTIR-5691).
-    const deliveries = vi.spyOn(workItemDeliveryRepository, 'listByWorkItemsWithChecks');
-    const projectRepos = vi.spyOn(projectRepoRepository, 'listByProject');
     const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
     expect(dto.state).toBe('record');
-    expect(dto.stale).toEqual([]);
     expect(dto.record?.bodyMd).toBe(BODY);
     expect(dto.record?.previewPath).toBe('/items/ACME-1');
-    expect(deliveries).not.toHaveBeenCalled();
-    expect(projectRepos).not.toHaveBeenCalled();
   });
 
-  it("a STORY run: sections bind to the story's own session pull requests first, and only a MOVED one is stale", async () => {
+  // ⚠️ NO STALE (MOTIR-6065). The story's web section is written for an OLDER
+  // commit than its session pull request's head — exactly the case the retired
+  // stale line fired on. The read must not compare them, must not carry a stale
+  // field in any form, and must not make the three reads the comparison needed.
+  it('a record WITH sections whose pull request moved on is a plain `record` — no stale, no pull-request reads', async () => {
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story run' });
-    const child = await createTestWorkItem(fx, {
-      kind: 'subtask',
-      title: 'A child',
-      parentId: story.id,
-    });
     const web = await connectRepo(fx, 'web');
-    const api = await connectRepo(fx, 'api');
-    // A child's own per-card pull request in web, at an OLDER head — it must NOT win
-    // over the story's, or web would read stale.
-    await linkedPr(fx, child.id, web.id, 'subtask/child-web', [
-      { name: 'Vitest', conclusion: 'failure', sha: OLD },
-    ]);
     await linkedPr(fx, story.id, web.id, 'parent/story-web', [
-      { name: 'Vitest', conclusion: 'success', sha: HEAD },
-    ]);
-    // api has no pull request on the story — the child's is the fallback, and it has
-    // moved past the commit the api section was written for.
-    await linkedPr(fx, child.id, api.id, 'subtask/child-api', [
       { name: 'Vitest', conclusion: 'success', sha: HEAD },
     ]);
     await testInstructionsService.publish(
@@ -318,14 +184,14 @@ describe('howToTestService.getForWorkItem', () => {
         workItemId: story.id,
         bodyMd: BODY,
         previewPath: '/items/ACME-1',
-        repos: [
-          { repoId: web.id, commitSha: HEAD },
-          { repoId: api.id, commitSha: OLD },
-        ],
+        repos: [{ repoId: web.id, commitSha: OLD }],
       },
       fx.ctx,
     );
 
+    const deliveries = vi.spyOn(workItemDeliveryRepository, 'listByWorkItemsWithChecks');
+    const projectRepos = vi.spyOn(projectRepoRepository, 'listByProject');
+    const subtree = vi.spyOn(workItemRepository, 'findSubtree');
     const dto = await howToTestService.getForWorkItem(story.id, fx.ctx);
     expect(dto.state).toBe('record');
     expect(dto.record).toMatchObject({
@@ -335,32 +201,17 @@ describe('howToTestService.getForWorkItem', () => {
       bodyMd: BODY,
       previewPath: '/items/ACME-1',
     });
-    expect(dto.stale).toEqual([{ repoName: 'acme/api', recordSha: OLD, headSha: HEAD }]);
-    // The retired per-repository shape is not on the wire in any form.
+    // Neither the retired per-repository shape nor the retired stale pairs are on
+    // the wire in any form.
     expect(Object.keys(dto).sort()).toEqual(
-      ['history', 'owedBy', 'record', 'runTarget', 'stale', 'state'].sort(),
+      ['history', 'owedBy', 'record', 'runTarget', 'state'].sort(),
     );
-    expect(JSON.stringify(dto)).not.toMatch(/fetchCommand|preview"|"ci"|git fetch/);
-  });
-
-  it('a section whose repository has no pull request anywhere reads no_pull_request', async () => {
-    const fx = await makeWorkItemFixture();
-    const card = await createTestWorkItem(fx, { kind: 'task', title: 'No PR' });
-    const web = await connectRepo(fx, 'web');
-    await testInstructionsService.publish(
-      {
-        workItemId: card.id,
-        bodyMd: 'A service only — no rendered surface.',
-        repos: [{ repoId: web.id, commitSha: HEAD }],
-      },
-      fx.ctx,
+    expect(JSON.stringify(dto)).not.toMatch(
+      /fetchCommand|preview"|"ci"|git fetch|stale|recordSha|headSha/,
     );
-    const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
-    expect(dto.record).toMatchObject({
-      bodyMd: 'A service only — no rendered surface.',
-    });
-    // A section no pull request carries has no head to have moved past.
-    expect(dto.stale).toEqual([]);
+    expect(deliveries).not.toHaveBeenCalled();
+    expect(projectRepos).not.toHaveBeenCalled();
+    expect(subtree).not.toHaveBeenCalled();
   });
 
   it('a CHILD with no record of its own answers tested_via_ancestor, naming the nearest ancestor that has one', async () => {
@@ -383,7 +234,6 @@ describe('howToTestService.getForWorkItem', () => {
       state: 'tested_via_ancestor',
       runTarget: { key: story.identifier },
       record: null,
-      stale: [],
     });
     await publish(task.id);
     expect((await howToTestService.getForWorkItem(leaf.id, fx.ctx)).runTarget).toEqual({
@@ -607,11 +457,9 @@ describe('howToTestService.getForWorkItem', () => {
     await howToTestService.getForWorkItem(one.id, fx.ctx);
     const forOne = count();
     spies.forEach((s) => s.mockClear());
-    const dto = await howToTestService.getForWorkItem(three.id, fx.ctx);
+    await howToTestService.getForWorkItem(three.id, fx.ctx);
     const forThree = count();
 
-    // Every one of the three moved past HEAD — and still no extra read.
-    expect(dto.stale).toHaveLength(3);
     expect(forThree).toBe(forOne);
   });
 });

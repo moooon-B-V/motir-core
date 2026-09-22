@@ -1688,6 +1688,14 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
  * in progress over a missing note is worse than the honest *record missing* state
  * the item page renders, naming this run.
  *
+ * ⚠️ "ONCE" IS PER VERSION OF THE STEPS, NOT PER RUN (MOTIR-6065). How to test is
+ * written for the WORK ITEM, not for a commit, so a later commit that changes a
+ * step it describes owes a re-publish, and one that changes none owes nothing.
+ * The item page no longer flags a record whose commit the pull request has moved
+ * past — the agent that made the commit is the only party that knows whether the
+ * steps moved. The CLI's CI-fix prompt (`renderFixPrompt`) carries the same duty
+ * for the commits a fixing agent pushes after this run hands over.
+ *
  * Rendered only where the outcome protocol renders — a MANUAL item opens no pull
  * request and gets no protocol at all, so it gets no step.
  */
@@ -1726,6 +1734,12 @@ function howToTestStep(src: DispatchPromptSource): string[] {
     '        none, e.g. "no rendered surface changed: a service and its tests".',
     '        If the publish is refused, say so in your FINISHED report and still do',
     '        step 5 — a refused publish does not prevent the transition.',
+    `        How to test belongs to ${src.key}, not to a commit. If a later commit`,
+    '        in this run changes anything it describes — a precondition, a setup,',
+    '        migrate or seed command, a click-path step — publish it again with',
+    '        the whole corrected text (the new version supersedes; the old one',
+    '        stays as history). A commit that changes none of them needs no new',
+    '        publish.',
   ];
 }
 

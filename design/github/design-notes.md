@@ -2395,6 +2395,17 @@ they went. So, explicitly:
 
 ### _Stale_ — where it lives, and what it costs
 
+> **⚠️ AMENDED 2026-09-22 (MOTIR-6065) — the line is RETIRED; the row below that rejected
+> _dropped with the rest_ is overturned.** Yue: How to test is written for the **work item**, not for a
+> commit. The line fired on every push, a CI fix included, while the steps stayed exactly as true, so
+> it said _stale_ far more often than the steps were. The case this section kept it for — a later
+> push that DID change a migration, a seed or a flag the body names — is now answered at its source:
+> the agent that pushes the commit is the one party that knows whether the steps moved, and its
+> prompt tells it to re-publish How to test when they did (the dispatch prompt's step 4b and the
+> CLI's CI-fix prompt; `motir-meta` `prompts/run.md`'s how-to-test rule). The read carries no stale
+> pairs, the block draws no Panel 12g line, and `stale.title` / `stale.pill` are retired from both
+> catalogs. Everything below is kept as the record of why the line existed.
+
 _"Written for `a1b2c3d` — `moooon/motir-core` is now at `e4f5a6b`"_ is the one signal the box
 carried that exists **nowhere else**: it is a relation between the RECORD and the pull request, not
 a fact of either alone. The three candidate homes:
