@@ -73,6 +73,7 @@ const CONFIRMED: ApprovalRecordDecidedRowDto = {
     sizeBytes: 100,
     createdAt: new Date().toISOString(),
   },
+  refusalReason: null,
 };
 
 describe('a WAITING decision row', () => {

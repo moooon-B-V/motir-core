@@ -209,8 +209,15 @@ test.describe('a person picks one of N options, and the pick is stamped', () => 
       const dialog = overlayFor(page, seed.none);
       await expect(dialog).toHaveCount(1, { timeout: 60_000 });
       await expect(dialog.getByText(ch.situation.contradicts_your_decision)).toBeVisible();
-      const action = serverAction(page);
       await dialog.getByRole('button', { name: ch.verb.noneOfThese, exact: true }).click();
+      // A refusal SAYS WHY (MOTIR-6075) — the band asks, and only then sends.
+      await dialog
+        .getByLabel(en.approvalGate.reason.choice.label)
+        .fill('We need the files in our own bucket.');
+      const action = serverAction(page);
+      await dialog
+        .getByRole('button', { name: en.approvalGate.reason.choice.proceed, exact: true })
+        .click();
       expect((await action).status()).toBe(200);
       await expect(dialog.getByText(ch.record.willRevise, { exact: true })).toBeVisible();
     });

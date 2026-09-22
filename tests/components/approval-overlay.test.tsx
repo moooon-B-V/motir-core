@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { refuseWithReason } from '../helpers/refuseWithReason';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
@@ -458,6 +459,33 @@ describe('the frame, composed at full size', () => {
     expect(shallowPush).not.toHaveBeenCalled();
   });
 
+  it('Request changes on a design ASKS WHY: empty is refused in place, filled sends the reason (MOTIR-6075)', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(readOf());
+    await renderOverlay();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: en.approvalGate.reason.proceed }));
+    });
+    expect(screen.getByText(en.approvalGate.reason.required)).toBeTruthy();
+    expect(decideApprovalGateAction).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(en.approvalGate.reason.label), {
+      target: { value: 'The empty state needs the illustration.' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: en.approvalGate.reason.proceed }));
+    });
+    expect(decideApprovalGateAction).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        decision: 'request_changes',
+        noteMd: 'The empty state needs the illustration.',
+      }),
+    );
+  });
+
   it('draws a refusal IN PLACE and neither closes nor refreshes on it', async () => {
     openAt('GATE-1', 'design_result');
     fetchApprovalGateOverlay.mockResolvedValue(readOf());
@@ -466,9 +494,7 @@ describe('the frame, composed at full size', () => {
       refusal: { tag: 'APPROVAL_GATE_ALREADY_DECIDED', decidedByLabel: 'Sam Someone' },
     });
     await renderOverlay();
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
-    });
+    await refuseWithReason();
     expect(screen.getByRole('alert')).toBeTruthy();
     expect(refresh).not.toHaveBeenCalled();
     expect(announceGateDecided).not.toHaveBeenCalled();
@@ -493,10 +519,7 @@ describe('a STALE press (Story MOTIR-5232 · Subtask MOTIR-5235)', () => {
     ok: false as const,
     refusal: { tag: 'APPROVAL_GATE_STALE_SUBJECT' as const, moved },
   });
-  const requestChanges = () =>
-    act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
-    });
+  const requestChanges = () => refuseWithReason();
 
   it('draws the refusal IN PLACE naming what moved, with its ONE control — and writes, refreshes and closes nothing', async () => {
     openAt('GATE-1', 'design_result');
@@ -592,9 +615,7 @@ describe('a STALE press (Story MOTIR-5232 · Subtask MOTIR-5235)', () => {
     fetchApprovalGateOverlay.mockResolvedValue(readOf());
     decideApprovalGateAction.mockResolvedValue(staleRefusal(['pull_requests']));
     await renderOverlay(zh as unknown as Record<string, unknown>);
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: zh.approvalGate.verb.requestChanges }));
-    });
+    await refuseWithReason({ messages: zh as unknown as typeof en });
     const alert = screen.getByRole('alert');
     expect(within(alert).getByText(zh.approvalGate.refusal.stale.pullRequests)).toBeTruthy();
     expect(within(alert).getByText(zh.approvalGate.refusal.stale.next)).toBeTruthy();
@@ -801,11 +822,7 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
       stamp: 'v1.the-current-pull-requests',
     });
 
-    await act(async () => {
-      fireEvent.click(
-        within(dialog).getByRole('button', { name: en.approvalGate.verb.requestChanges }),
-      );
-    });
+    await refuseWithReason({ scope: within(dialog) });
     const alert = within(dialog).getByRole('alert');
     expect(within(alert).getByText(en.approvalGate.refusal.stale.pullRequests)).toBeTruthy();
 
@@ -817,13 +834,7 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
     expect(fetchApprovalGateOverlay).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('alert')).toBeNull();
 
-    await act(async () => {
-      fireEvent.click(
-        within(screen.getByRole('dialog')).getByRole('button', {
-          name: en.approvalGate.verb.requestChanges,
-        }),
-      );
-    });
+    await refuseWithReason({ scope: within(screen.getByRole('dialog')) });
     expect(decideApprovalGateAction).toHaveBeenLastCalledWith(
       expect.objectContaining({ stamp: 'v1.the-current-pull-requests' }),
     );
@@ -1085,9 +1096,7 @@ describe('the ACCEPTANCE port — a story\u2019s recording, in the shared frame'
     });
     await renderOverlay();
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
-    });
+    await refuseWithReason();
     const alert = screen.getByRole('alert');
     expect(within(alert).getByText(en.approvalGate.refusal.stale.subject)).toBeTruthy();
 

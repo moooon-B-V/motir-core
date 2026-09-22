@@ -147,8 +147,16 @@ is built this way and why the buttons are never moved above the subject.
 | **Approve**         | that you said yes, to **this exact version**, and when | the work item to **Done** — unless a pull request is going to merge for it, in which case see below  |
 | **Request changes** | that you sent it back, and your note explaining why    | **nothing.** The card stays where it is; the agent revises and publishes a new version to be decided |
 
-**Approving asks you to confirm.** Sending something back does not — a reversible
-act asked about twice is friction rather than care.
+**Approving asks you to confirm. Sending something back asks you WHY.** Pressing
+_Request changes_ — or _None of these_ on a choice — opens the same band, with a field
+for your reason, and it will not send until you have written one.
+
+**Why you are asked for a reason.** A refusal is the most useful thing a reviewer
+tells the next person, and it is the one thing that was thrown away: the record said
+_that_ you sent the work back, never _what_ you wanted instead. Whoever picks it up
+next — a teammate, an agent, the planner — works from your reason, and anyone who
+opens the card, the approval or the Approvals room later reads it, quoted, beside
+who asked and when.
 
 **Neither verb re-runs the agent.** Requesting changes records the decision; the
 revise loop that dispatches a new run off the back of it is not built yet.
@@ -287,7 +295,9 @@ one is approved, the card moves to **Approved** and the merges start.
 
 **Requesting changes on GitHub** is an answer too: it decides the card's question,
 records who asked and that it happened on GitHub, and merges nothing. The card stays
-in review.
+in review. **What the reviewer wrote in the review is kept as the reason**, and a
+review with no text reads _No reason given on GitHub_ — Motir never refuses a GitHub
+review for having no reason, because nobody pressed anything in Motir.
 
 **A reviewer who has no Motir account.** This is ordinary on a repository Motir
 hosts, and the record says so plainly rather than leaving a blank: it names their

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { refuseWithReason } from '../helpers/refuseWithReason';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
@@ -490,7 +491,7 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
     });
     renderFrame({ gate: AWAITING }, actions);
 
-    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    await refuseWithReason();
 
     await waitFor(() =>
       expect(screen.getByText(en.approvalGate.state.changesRequested)).toBeTruthy(),
@@ -500,11 +501,27 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
       decision: 'request_changes',
       identifier: 'ACME-12',
       stamp: 'v1.stamp-on-screen',
+      // A refusal SAYS WHY (MOTIR-6075) — the band's reason travels with the press.
+      noteMd: 'Needs changes.',
     });
     expect(actions.approveAndMerge).not.toHaveBeenCalled();
     expect(refreshSpy).toHaveBeenCalled();
     // Nothing was merged, so no row reports anything.
     expect(screen.queryByText(pra.outcome.merged)).toBeNull();
+  });
+
+  it('an EMPTY Request changes is refused in place and reaches no door (MOTIR-6075)', async () => {
+    const actions = fakeActions({ decide: vi.fn() });
+    renderFrame({ gate: AWAITING }, actions);
+
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    // The pull requests' own words: the commits go back, nothing merges.
+    expect(screen.getByText(en.approvalGate.reason.consequence.commitsBack)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.reason.proceed }));
+
+    expect(screen.getByText(en.approvalGate.reason.required)).toBeTruthy();
+    expect(actions.decide).not.toHaveBeenCalled();
+    expect(actions.approveAndMerge).not.toHaveBeenCalled();
   });
 
   it('a Request changes the door refuses is drawn by the frame, and nothing repaints', async () => {
@@ -515,7 +532,7 @@ describe('the arms around the press (MOTIR-5486 coverage floor)', () => {
     });
     renderFrame({ gate: AWAITING }, actions);
 
-    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    await refuseWithReason();
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
     expect(screen.getByRole('alert').textContent).toContain(
@@ -669,7 +686,7 @@ describe('a STALE press on the item page (Story MOTIR-5232 · Subtask MOTIR-5235
       }),
     });
     const { rerender } = renderFrame({ gate: AWAITING }, actions);
-    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.verb.requestChanges }));
+    await refuseWithReason();
     await screen.findByRole('alert');
     rerender(
       <DevelopmentSectionBody

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { refuseWithReason } from '../../helpers/refuseWithReason';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
@@ -436,9 +437,7 @@ describe('SEAM 2 · a decision made in the overlay, seen from the tab', () => {
 
     // REQUEST CHANGES — the decision that records and merges nothing, so this
     // seam asserts the reconcile without driving MOTIR-4882's merge path.
-    fireEvent.click(
-      within(dialog).getByRole('button', { name: en.approvalGate.verb.requestChanges }),
-    );
+    await refuseWithReason({ scope: within(dialog) });
     await within(dialog).findAllByText(en.approvalGate.state.changesRequested, {}, SLOW);
 
     // ⚠️ ONE PAGE STATE: nothing re-rendered the list from the server (the refresh

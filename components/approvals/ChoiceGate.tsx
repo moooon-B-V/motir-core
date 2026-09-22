@@ -6,6 +6,7 @@ import { CircleAlert, CircleCheck } from 'lucide-react';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import type { ChoiceOption, ChoiceSituation, ChoiceWhy } from '@/lib/approvalGates/choiceOptions';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
+import { useNoneOfTheseVerb } from './RefusalReason';
 import type { ApprovalGateDTO, ChoiceDefectDTO, GateDecision } from '@/lib/dto/approvalGate';
 import {
   ApprovalGateControl,
@@ -285,7 +286,11 @@ export interface ChoiceGateFrameProps {
   /** The card's `KEY-<n>`, named in the consequence and confirm lines. */
   identifier: string;
   layout?: ApprovalGateControlProps['layout'];
-  onDecide: (decision: GateDecision, optionId?: string) => Promise<GateRefusal | null>;
+  onDecide: (
+    decision: GateDecision,
+    optionId?: string,
+    noteMd?: string,
+  ) => Promise<GateRefusal | null>;
   alert?: ReactNode;
   onShowCurrentVersion?: () => void;
   focusPortOnMount?: boolean;
@@ -310,6 +315,7 @@ export function ChoiceGateFrame({
   const t = useTranslations('approvalGate.choice');
   const format = useFormatter();
   const situationLabel = useSituationLabel();
+  const noneOfThese = useNoneOfTheseVerb();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = port.options.find((option) => option.id === selectedId) ?? null;
   const decided = gate.state === 'approved' || gate.state === 'changes_requested';
@@ -324,12 +330,8 @@ export function ChoiceGateFrame({
   // Before a pick the commit verb is drawn DISABLED with its reason as the
   // consequence line (the frame's honest-disabled rule, MOTIR-5678).
   const verbs: GateVerb[] = [
-    {
-      decision: 'request_changes',
-      label: t('verb.noneOfThese'),
-      variant: 'secondary',
-      confirms: false,
-    },
+    // *None of these* is a refusal, so it SAYS WHY (ADR §10a; design Panel 3).
+    noneOfThese(identifier),
     {
       decision: 'choose',
       label: selected ? t('verb.choose', { label: selected.label }) : t('verb.chooseEmpty'),

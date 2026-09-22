@@ -55,8 +55,8 @@ export async function openAcceptanceOverlay(page: Page): Promise<Locator> {
  * Decide the story's acceptance question in the overlay and close it, leaving the reader
  * back on the item page — which is where every caller's assertion is.
  *
- * `Approve` confirms; `Request changes` does not (`ApprovalGateControl`'s verb set says
- * which, and only the approving verb carries a confirm step).
+ * Both verbs confirm: `Approve` with its consequences, `Request changes` with its
+ * REQUIRED reason (ADR `approval-gates.md` §10a, MOTIR-6075).
  */
 export async function decideAcceptanceInOverlay(
   page: Page,
@@ -68,6 +68,10 @@ export async function decideAcceptanceInOverlay(
 
   if (decision === 'approve') {
     await overlay.getByRole('button', { name: `Yes, ${verb}`, exact: true }).click();
+  } else {
+    // A refusal SAYS WHY (MOTIR-6075): the band asks for a reason before it sends.
+    await overlay.getByLabel('What needs to change?').fill('The recording stops before the merge.');
+    await overlay.getByRole('button', { name: 'Yes, request changes', exact: true }).click();
   }
 
   // THE AUTHORITATIVE SIGNAL — the frame redraws from the action's OWN response, so the

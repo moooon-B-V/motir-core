@@ -211,10 +211,12 @@ test.describe('deciding an approval gate repaints the item page in place', () =>
     seed = await seedDesignApproval('repaint-changes');
     await arriveAtTheGate(page, baseURL!, seed);
 
-    // A reversible act asked twice is friction rather than care, so this verb
-    // does not confirm — one press is the whole decision.
+    // A refusal SAYS WHY (MOTIR-6075): the verb opens the band, and the band sends it
+    // with its reason.
     const dialog = await openTheOverlay(page, seed);
     await dialog.getByRole('button', { name: 'Request changes' }).click();
+    await dialog.getByLabel('What needs to change?').fill('The fold is wrong.');
+    await dialog.getByRole('button', { name: 'Yes, request changes' }).click();
     await expect(dialog.getByText('Changes requested', { exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
