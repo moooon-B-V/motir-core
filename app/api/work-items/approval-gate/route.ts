@@ -118,7 +118,9 @@ async function readSubject(
           { workItemId: gate.workItemId, kind: 'pull_request_approval' },
           ctx,
         );
-        if (merge.gate?.state === 'awaiting') return readDevelopmentBlock(gate, item, ctx);
+        if (merge.gate?.state === 'awaiting') {
+          return readDevelopmentBlock(gate, item, ctx, { merge: merge.gate });
+        }
       }
       const { evidence, filesKept } = await designEvidenceService.getForGateSubject(
         { workItemId: gate.workItemId, subjectId: gate.subjectId },
@@ -151,7 +153,15 @@ async function readSubject(
           { workItemId: gate.workItemId, kind: 'pull_request_approval' },
           ctx,
         );
-        if (merge.gate?.state === 'awaiting') return readDevelopmentBlock(gate, item, ctx);
+        // ⚠️ AND IT HANDS THE BLOCK THE MERGE GATE (Bug MOTIR-6079): the acceptance gate is
+        // versioned by its recording's commit, so the frame counts the press's members out
+        // of the merge gate's version, exactly as the item page's `LateSections` does.
+        if (merge.gate?.state === 'awaiting') {
+          return readDevelopmentBlock(gate, item, ctx, {
+            merge: merge.gate,
+            namesMembers: true,
+          });
+        }
       }
       const evidence = await acceptanceEvidenceService.getForGateSubject(
         { workItemId: gate.workItemId, subjectId: gate.subjectId },
@@ -202,17 +212,25 @@ async function readSubject(
 }
 
 /**
- * THE DEVELOPMENT BLOCK as a port — the approve-to-merge gate's own, and a design
- * gate's while it carries one (see the `design_result` arm).
+ * THE DEVELOPMENT BLOCK as a port — the approve-to-merge gate's own, and a design or
+ * acceptance gate's while it carries one (see those arms).
  *
- * ⚠️ `members` is read against the gate HANDED IN, and only once it is approved — a
- * design gate still awaiting has merged nothing, exactly like an awaiting merge gate.
+ * ⚠️ `members` is read against the MERGE gate: the gate handed in when it is one, else
+ * the `companion.merge` a primary arm read beside it (Bug MOTIR-6079). Member facts are
+ * recorded on the merge gate only, so a primary's own id answers none — the item page's
+ * late stack reads `r.mergeGate.members` whichever gate leads its frame, and this is that.
+ *
+ * `companion.namesMembers` also hands back the merge gate's VERSION, for a primary whose own
+ * version is not a delivery set and whose frame the item page hands the same value
+ * (`LateSections`' `mergeSubjectVersion` — today the story run's acceptance only).
  */
 async function readDevelopmentBlock(
   gate: ApprovalGateDTO,
   item: { id: string; type: string | null; targetRepos: readonly string[] },
   ctx: ServiceContext,
+  companion: { merge: ApprovalGateDTO; namesMembers?: boolean } | null = null,
 ): Promise<ApprovalGateOverlaySubjectDTO> {
+  const membersGate = companion?.merge ?? gate;
   // THE DEVELOPMENT BLOCK as the port (Story MOTIR-5437 · MOTIR-5439). The subject
   // is the card's DELIVERY SET (`pullRequestApprovalHandler.resolveSubject`), so a
   // set that has emptied — every pull request unlinked — is GONE, exactly as the
@@ -236,9 +254,9 @@ async function readDevelopmentBlock(
     // awaiting, and its members are what carry the row's verb — *Queue again* /
     // *Retry merge*, whose press decides that very gate. The item page's late stack
     // reads both for the same reason, and `approval-gate-route.test.ts` COMPARES them.
-    gate.state === 'approved' || gate.state === 'awaiting'
+    membersGate.state === 'approved' || membersGate.state === 'awaiting'
       ? pullRequestMergeService.listApprovalMembers(
-          { workItemId: gate.workItemId, approvalGateId: gate.id },
+          { workItemId: gate.workItemId, approvalGateId: membersGate.id },
           ctx,
         )
       : Promise.resolve([]),
@@ -264,6 +282,7 @@ async function readDevelopmentBlock(
     designEvidence,
     isDesignCard: item.type === 'design',
     members,
+    ...(companion?.namesMembers ? { mergeSubjectVersion: companion.merge.subjectVersion } : {}),
     repair,
     acceptanceEvidence,
     acceptanceGate: acceptanceRead.gate,
