@@ -39,6 +39,7 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     title: row.title,
     summary: row.summary,
     sourceJobId: row.sourceJobId,
+    sessionId: row.sessionId,
     origin: row.origin,
     // WHO ASKED for it (MOTIR-2986) — null on a cadence plan, deliberately: the
     // watcher's context carries the project owner only so the job has a

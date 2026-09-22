@@ -99,6 +99,14 @@ export interface PlanEditSubmitResult {
  */
 export interface PlanEditSubmitOptions {
   origin?: PlanOriginDto;
+  /**
+   * The planning CONVERSATION this submit comes from (AMENDMENT 17 §5;
+   * MOTIR-6022) — `planChangeSessionsService.submit` passes its session's id, so
+   * the plan joins that session. Absent ⇒ no conversation: the plan gets a new
+   * session of the door's origin — `cadence` for the watcher, `expand` for an
+   * expand, else `generation` (a one-shot augment has no conversation either).
+   */
+  sessionId?: string;
 }
 
 /**
@@ -245,6 +253,7 @@ async function submitPlanEditJob(
   // attribute to them a request they never made. The requester is therefore
   // written ⟺ a person actually asked, and `origin` is what identifies the rest.
   const origin = opts.origin ?? 'user';
+  const rootItemKey = context.rootItemKey ?? null;
   const plan = await plansService.createPlan(
     ctx.projectId,
     {
@@ -252,6 +261,14 @@ async function submitPlanEditJob(
       summary: null,
       sourceJobId: jobId,
       origin,
+      session: opts.sessionId
+        ? { sessionId: opts.sessionId }
+        : {
+            origin: origin === 'cadence' ? 'cadence' : rootItemKey ? 'expand' : 'generation',
+            // An expand is ABOUT its root item, so its session is anchored there
+            // and the Plans page can say what it was for.
+            ...(rootItemKey ? { targetKeys: [rootItemKey] } : {}),
+          },
       createdById: origin === 'user' ? ctx.userId : null,
       // WHO WROTE it (MOTIR-2996) — and unlike `createdById` above, this one
       // does NOT vary by path. Every submit this seam serves (expand / augment /
@@ -389,9 +406,10 @@ export const aiPlanEditsService = {
     prompt: string,
     ctx: ProjectContext,
     requirement?: SubmittedRequirement,
+    opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    return submitPlanEditJob({ prompt, ...(requirement ? { requirement } : {}) }, ctx);
+    return submitPlanEditJob({ prompt, ...(requirement ? { requirement } : {}) }, ctx, opts);
   },
 
   /**
@@ -428,11 +446,13 @@ export const aiPlanEditsService = {
     targetKeys: readonly string[],
     ctx: ProjectContext,
     requirement?: SubmittedRequirement,
+    opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
     return submitPlanEditJob(
       { prompt, targetKeys: [...targetKeys], ...(requirement ? { requirement } : {}) },
       ctx,
+      opts,
     );
   },
 

@@ -896,8 +896,12 @@ export const planChangeSessionsService = {
     // orphan row to clean up.
     const { jobId, planId } =
       session.targetKeys.length > 0
-        ? await aiPlanEditsService.submitContextual(intent, session.targetKeys, pctx, requirement)
-        : await aiPlanEditsService.submitAugment(intent, pctx, requirement);
+        ? await aiPlanEditsService.submitContextual(intent, session.targetKeys, pctx, requirement, {
+            sessionId: session.id,
+          })
+        : await aiPlanEditsService.submitAugment(intent, pctx, requirement, {
+            sessionId: session.id,
+          });
 
     const updated = await appendLocked(
       session,

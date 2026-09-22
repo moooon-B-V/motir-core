@@ -3162,6 +3162,9 @@ two tabs racing a first turn resolve to one session.
 day's context switch. A conversation left overnight is about yesterday's intent, and resuming it
 silently is what the story exists to stop. It is ONE named constant, so changing it is one edit.
 
+Only a `conversation`-origin session is resumed (§4): a session a door opened for a plan with no
+conversation has no turns to return to, and is reopened from the Plans page by id like any other.
+
 **Auto-resume is own-only; reopening is not.** Any member holding `ai:plan` may reopen ANY session
 of the project by id from the Plans page, as the shared thread allows today. A member without
 `ai:plan` sees the list and cannot continue a session.
@@ -3170,14 +3173,14 @@ of the project by id from the Plans page, as the shared thread allows today. A m
 
 `PlanChangeSession.origin` ∈ `conversation · mcp · generation · expand · cadence · legacy`:
 
-| value          | written by                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| `conversation` | a first turn in the planning surface or the v1 / MCP plan-session doors                          |
-| `mcp`          | `create_plan` (`lib/mcp/tools/authorPlan.ts`) — a runbook or external agent authoring directly   |
-| `generation`   | `aiGenerationService` — Generate and the onboarding / migrate generate step                      |
-| `expand`       | `aiPlanEditsService.submitExpand` reached without a conversation                                 |
-| `cadence`      | `autoPlanCadenceService` — the auto-plan watcher, which submits through `submitExpand`           |
-| `legacy`       | **the BACKFILL ONLY**, for a pre-existing plan whose producing conversation cannot be identified |
+| value          | written by                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `conversation` | a first turn in the planning surface or the v1 / MCP plan-session doors                                                             |
+| `mcp`          | `create_plan` (`lib/mcp/tools/authorPlan.ts`) — a runbook or external agent authoring directly                                      |
+| `generation`   | `aiGenerationService` — Generate and the onboarding / migrate generate step; also a one-shot augment submitted with no conversation |
+| `expand`       | `aiPlanEditsService.submitExpand` reached without a conversation                                                                    |
+| `cadence`      | `autoPlanCadenceService` — the auto-plan watcher, which submits through `submitExpand`                                              |
+| `legacy`       | **the BACKFILL ONLY**, for a pre-existing plan whose producing conversation cannot be identified                                    |
 
 `legacy` exists because honesty requires it: core stores no job kind, and the `sourceJobId` of an
 earlier submit or of a revision matches no session's `lastJobId`, so for those plans the true origin

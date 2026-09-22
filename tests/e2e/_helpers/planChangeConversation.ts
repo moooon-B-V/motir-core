@@ -43,7 +43,7 @@ export async function asConversationTurn<T>(
    *  `null` means the project-wide thread. */
   anchor: string | null,
   jobId: string,
-  append: () => Promise<T>,
+  append: (sessionId: string) => Promise<T>,
   opts: { anchorIsWorkItemId?: boolean } = {},
 ): Promise<T> {
   const { sessionId, previousLastJobId } = await withWorkspaceServiceContext(
@@ -76,7 +76,7 @@ export async function asConversationTurn<T>(
   );
 
   try {
-    return await append();
+    return await append(sessionId);
   } finally {
     // Back to the state the BROWSER finds: no turn submitted yet.
     await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>

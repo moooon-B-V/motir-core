@@ -73,9 +73,11 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.findFirst({ where: { id, projectId, workspaceId } });
   },
 
-  /** The RESUME read (AMENDMENT 17 §3): this member's OWN most recent session for
-   *  the scope, active at or after `since`. Another member's session never
-   *  qualifies — auto-resume is own-only. Served by the
+  /** The RESUME read (AMENDMENT 17 §3): this member's OWN most recent
+   *  CONVERSATION for the scope, active at or after `since`. Another member's
+   *  session never qualifies — auto-resume is own-only — and neither does a
+   *  session a door opened for a plan with no conversation (`mcp`, `expand`, …):
+   *  it has no turns to resume into. Served by the
    *  `(project_id, scope_key, created_by_id, last_activity_at)` index. */
   async findResumableForUser(
     projectId: string,
@@ -91,6 +93,7 @@ export const planChangeSessionRepository = {
         scopeKey,
         workspaceId,
         createdById: userId,
+        origin: 'conversation',
         lastActivityAt: { gte: since },
       },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
