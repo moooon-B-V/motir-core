@@ -25,12 +25,17 @@ import { canOfferNavDestination, PROJECT_NAV_ACCESS } from '@/lib/settings/proje
 //   · every row is the ONE approvals row, and opens the same overlay the tab does;
 //   · the door: `/approvals` is `browse-only` in the one nav map.
 
-const { push, shallowPush } = vi.hoisted(() => ({ push: vi.fn(), shallowPush: vi.fn() }));
+const { push, shallowPush, nav } = vi.hoisted(() => ({
+  push: vi.fn(),
+  shallowPush: vi.fn(),
+  // The room's own query, settable per test — the title door must keep it (MOTIR-6001).
+  nav: { params: new URLSearchParams('') },
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push }),
   usePathname: () => '/approvals',
-  useSearchParams: () => new URLSearchParams(''),
+  useSearchParams: () => nav.params,
 }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
 
@@ -226,6 +231,23 @@ describe('every row is the ONE approvals row, and its door is the overlay', () =
     expect(shallowPush).toHaveBeenCalledWith(
       '/approvals?approval=MOTIR-2&approvalKind=design_result',
     );
+  });
+
+  it('a row’s TITLE opens the quick view, keeping the room’s own page — and not the overlay (MOTIR-6001)', () => {
+    nav.params = new URLSearchParams('page=2');
+    try {
+      renderWithIntl(<ApprovalRecordsList records={page()} />);
+      const title = screen.getByRole('link', { name: 'Pending thing' });
+      expect(title.getAttribute('href')).toBe('/items/MOTIR-1');
+      fireEvent.click(title, { button: 0 });
+      expect(shallowPush).toHaveBeenCalledTimes(1);
+      expect(shallowPush).toHaveBeenCalledWith('/approvals?page=2&peek=MOTIR-1');
+      // A modified click is the browser's: the card in a new tab.
+      expect(fireEvent.click(title, { button: 0, ctrlKey: true })).toBe(true);
+      expect(shallowPush).toHaveBeenCalledTimes(1);
+    } finally {
+      nav.params = new URLSearchParams('');
+    }
   });
 
   it('the pager writes only the page', () => {

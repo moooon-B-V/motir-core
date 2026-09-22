@@ -148,14 +148,52 @@ describe('the Approvals list — the row', () => {
     expect(screen.getByText(/no version/)).toBeTruthy();
   });
 
-  it('has ONE link — the row door; the work item is the sentence’s subject, not a column (MOTIR-5999)', () => {
+  it('the work item is the sentence’s subject, not a column — the Details column holds the rest (MOTIR-5999)', () => {
     renderRows([designRow()]);
 
-    const links = screen.getAllByRole('link');
-    expect(links).toHaveLength(1);
-    expect(links[0]).toBe(rowDoor());
     expect(screen.getByRole('columnheader', { name: 'Details' })).toBeTruthy();
     expect(screen.queryByRole('columnheader', { name: 'Work item' })).toBeNull();
+  });
+});
+
+describe('the Approvals list — the TITLE is the quick-view door (MOTIR-6001, § 28 DECISION 3)', () => {
+  const titleDoor = () => screen.getByRole('link', { name: 'Design — the To-approve row' });
+
+  it('a plain click on the title writes `?peek=<key>`, keeping the tab — and NOT the overlay', () => {
+    renderRows([designRow()]);
+
+    const door = titleDoor();
+    expect(door.getAttribute('href')).toBe('/items/MOTIR-5147');
+    fireEvent.click(door, { button: 0 });
+
+    expect(shallowPush).toHaveBeenCalledTimes(1);
+    expect(shallowPush).toHaveBeenCalledWith('/workbench?tab=approvals&page=2&peek=MOTIR-5147');
+  });
+
+  it('a plain click on the row outside the title still opens the APPROVAL — no `?peek=`', () => {
+    renderRows([designRow()]);
+
+    fireEvent.click(rowDoor(), { button: 0 });
+
+    expect(shallowPush).toHaveBeenCalledTimes(1);
+    expect(shallowPush).toHaveBeenCalledWith(OPENED);
+    expect(shallowPush.mock.calls[0]![0]).not.toContain('peek=');
+  });
+
+  it('a ⌘-click or a middle click on the title is left to the browser — the card in a new tab', () => {
+    renderRows([designRow()]);
+
+    expect(fireEvent.click(titleDoor(), { button: 0, metaKey: true })).toBe(true);
+    expect(fireEvent.click(titleDoor(), { button: 1 })).toBe(true);
+    expect(shallowPush).not.toHaveBeenCalled();
+  });
+
+  it('the title and Review are two distinct, distinctly named stops', () => {
+    renderRows([designRow()]);
+
+    expect(titleDoor()).not.toBe(rowDoor());
+    expect(screen.getByRole('button', { name: 'Review' })).toBeTruthy();
+    expect(titleDoor().textContent).not.toMatch(/^Review/);
   });
 });
 

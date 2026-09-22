@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
+import { usePeekRowClick } from '@/app/(authed)/items/_components/IssueQuickView';
 import { useDecidedGateState } from '@/lib/approvals/decidedGates';
 import type {
   ApprovalGateKindDTO,
@@ -123,34 +124,46 @@ function sentenceKeyOf(kind: ApprovalGateKindDTO): SentenceKey {
  * THE SENTENCE (§ 28, DECISION 1) — one ICU message per kind with a `<title>` tag, so
  * the ORDER is the catalogue's (zh puts the title first) and nothing is concatenated.
  * The frame words are `shrink-0` and never cut; the title TRUNCATES inside the
- * sentence, so *… is finished* is always read. The title is plain text here — making
- * it the quick-view door is MOTIR-6001's.
+ * sentence, so *… is finished* is always read. The title is the quick-view door
+ * (MOTIR-6001).
  */
 function Sentence({
   sentenceKey,
   title,
+  identifier,
   quiet,
 }: {
   sentenceKey: SentenceKey;
   title: string;
+  /** The work item's key — the title door's `href` and the quick view it opens. */
+  identifier: string;
   /** A settled or unrenderable row — § 20's settled ink on both halves. */
   quiet: boolean;
 }) {
   const t = useTranslations('workbench.approvals.sentence');
+  const peekRowClick = usePeekRowClick();
   // The ARGUMENT is `name` and the TAG is `title`: next-intl reads both from one
   // values object, so the two cannot share a name.
   const parts: ReactNode = t.rich(sentenceKey, {
     name: title,
+    // THE TITLE IS A DOOR (Story MOTIR-5996 · MOTIR-6001; § 28, DECISION 3): the work
+    // item's QUICK VIEW, with the exact contract every title link in the product has —
+    // `usePeekRowClick`, so a modified / middle / secondary click keeps the real `href`
+    // (the card in a new tab). It sits ABOVE the stretched row door on `z-10`, so the
+    // rest of the row still opens the approval. No ring of its own: the row draws
+    // `focus-within:ring-2` around itself, and the underline says which door has it.
     title: (chunks) => (
-      <span
+      <Link
         key="title"
+        href={`/items/${identifier}`}
+        onClick={(e) => peekRowClick(e, identifier)}
         className={cn(
-          'min-w-0 truncate font-medium',
+          'relative z-10 min-w-0 truncate font-medium hover:underline focus-visible:underline focus-visible:outline-none',
           quiet ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
         )}
       >
         {chunks}
-      </span>
+      </Link>
     ),
   });
   return (
@@ -634,6 +647,7 @@ export function ApprovalRow({
         <Sentence
           sentenceKey={sentenceKey}
           title={row.workItem.title}
+          identifier={row.workItem.identifier}
           quiet={settled || !renderable}
         />
         {/* The key FOLLOWS the sentence (§ 28, DECISION 1) — `--el-text-secondary`,
