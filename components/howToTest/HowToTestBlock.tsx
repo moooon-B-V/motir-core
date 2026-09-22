@@ -3,8 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { ChevronDown, ChevronRight, CornerLeftUp, FileQuestionMark, History } from 'lucide-react';
-import { Pill } from '@/components/ui/Pill';
+import { ChevronDown, ChevronRight, CornerLeftUp, FileQuestionMark } from 'lucide-react';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import {
@@ -13,12 +12,7 @@ import {
   HowToTestForm,
   useHowToTestWrite,
 } from './HowToTestWrite';
-import type {
-  HowToTestAuthorDto,
-  HowToTestDto,
-  HowToTestRunDto,
-  HowToTestStaleDto,
-} from '@/lib/dto/howToTest';
+import type { HowToTestAuthorDto, HowToTestDto, HowToTestRunDto } from '@/lib/dto/howToTest';
 
 // HOW TO TEST — the approve-to-merge gate's EVIDENCE (Story MOTIR-4906 · Subtask
 // MOTIR-5336), built to `design/github/design-notes.md` §20 · Panels 12a–12o.
@@ -39,9 +33,14 @@ import type {
 // box per repository under the body — In the preview · Locally · What CI proved —
 // and § 25 took it out: every fact in it was already on or behind the row one line
 // above, and the steps read the same in any environment. Do not bring it back
-// here; a later card that wants one of those facts asks for it on the row. The
-// ONE thing the box carried that exists nowhere else — STALE, a relation between
-// the record and the pull request — survives as a single line under the author.
+// here; a later card that wants one of those facts asks for it on the row.
+//
+// ⚠️ NO STALE LINE (MOTIR-6065). § 25 kept one — *"Written for <sha> — <repo> is
+// now at <sha>"* — and it fired on EVERY push, because How to test is written for
+// the WORK ITEM, not for a commit: a CI fix moves the head and leaves the steps
+// exactly as true. Whether a new commit changed the steps is known only to the
+// agent that made it, so its prompt carries the duty to re-publish (the dispatch
+// prompt's step 4b and the CLI's fix prompt). Do not bring the line back.
 //
 // ⚠️ NO URL AT ALL. Each row above keeps its own link-out.
 //
@@ -79,7 +78,6 @@ function PartHead({ children }: { children?: ReactNode }) {
 }
 
 const bold = (chunks: ReactNode) => <b className="font-medium text-(--el-text)">{chunks}</b>;
-const sha = (chunks: ReactNode) => <span className="font-mono text-xs">{chunks}</span>;
 
 export function HowToTestBlock({ howToTest }: HowToTestBlockProps) {
   const t = useTranslations('github.development.howToTest');
@@ -188,13 +186,6 @@ function RecordPart({ howToTest }: HowToTestBlockProps) {
         <EditHowToTestDoor />
       </PartHead>
 
-      {/* Panel 12g — ABOVE the body, because it qualifies the steps below it: the
-          author line's second half, not a footnote. A person's record never has
-          one (13f), and the line has no empty state. */}
-      {howToTest.stale.map((entry) => (
-        <StaleLine key={`stale-${entry.repoName}`} entry={entry} />
-      ))}
-
       {record.bodyMd.trim() ? (
         <MarkdownView
           value={record.bodyMd}
@@ -232,36 +223,6 @@ function AuthorLine({ author, createdAt }: { author: HowToTestAuthorDto; created
             b: bold,
           })}
     </span>
-  );
-}
-
-/**
- * Panel 12g — STALE: ONE line per repository whose pull request has moved past
- * the commit the record was written for. It REPLACES § 20's peach callout and the
- * sub-block's pill; `stale.body` ("… The preview and CI follow the new head.")
- * named two retired facts and went with them. `--el-text-secondary`, not muted:
- * the part also renders on the approval frame's `--el-surface` port.
- */
-function StaleLine({ entry }: { entry: HowToTestStaleDto }) {
-  const t = useTranslations('github.development.howToTest');
-  return (
-    <p
-      role="status"
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--el-text-secondary)"
-    >
-      <Pill severity="warning">
-        <History className="h-3 w-3" aria-hidden />
-        {t('stale.pill')}
-      </Pill>
-      <span>
-        {t.rich('stale.title', {
-          recordSha: entry.recordSha.slice(0, 7),
-          repo: entry.repoName,
-          headSha: entry.headSha.slice(0, 7),
-          sha,
-        })}
-      </span>
-    </p>
   );
 }
 

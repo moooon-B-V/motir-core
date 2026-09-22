@@ -274,8 +274,6 @@ describe('2 · a body-only record is legal and CURRENT', () => {
 
     const dto = await howToTestService.getForWorkItem(card.id, fx.ctx);
     expect(dto.state).toBe('record');
-    // A person's record names no commit, so it can never be stale (§ 25).
-    expect(dto.stale).toEqual([]);
     expect(dto.record?.bodyMd).toBe(BODY);
   });
 });
