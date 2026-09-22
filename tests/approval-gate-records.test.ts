@@ -63,7 +63,7 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-type GateState = 'awaiting' | 'approved' | 'changes_requested' | 'superseded';
+type GateState = 'awaiting' | 'approved' | 'changes_requested' | 'superseded' | 'overturned';
 
 /** One card carrying one gate, with its routing and — when decided — its audit set. */
 async function gate(opts: {
@@ -152,6 +152,21 @@ async function seedPopulation() {
   });
   await gate({ title: 'superseded', state: 'superseded', assigneeId: memberId });
 }
+
+describe('an OVERTURN is a decision the room lists (MOTIR-5956)', () => {
+  it('lists an overturned gate among the decided rows, with its state', async () => {
+    await gate({
+      title: 'overturned-by-me',
+      state: 'overturned',
+      decidedById: memberId,
+      decidedAt: new Date(),
+    });
+    const page = await approvalGatesService.listRecords(memberCtx, { limit: 100 });
+    expect(titles(page).decided).toEqual(['overturned-by-me']);
+    expect(page.sections.decided.items[0]!.state).toBe('overturned');
+    expect(page.sections.decided.total).toBe(1);
+  });
+});
 
 describe('a reader WITHOUT `approval:view_any` — their own records only', () => {
   it('sees what is routed to them and awaiting, and what they decided — nothing else', async () => {

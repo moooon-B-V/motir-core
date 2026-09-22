@@ -344,7 +344,7 @@ export const approvalGateRepository = {
   async decide(
     id: string,
     data: {
-      state: Extract<ApprovalGateState, 'approved' | 'changes_requested'>;
+      state: Extract<ApprovalGateState, 'approved' | 'changes_requested' | 'overturned'>;
       /** WHO said yes. NULLABLE since MOTIR-5596: a decision synced out of GitHub
        *  may have been made by somebody with no Motir account at all, and the
        *  column has always been nullable for the neighbouring reason (`SetNull`
@@ -985,7 +985,8 @@ function recordsAwaitingWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateW
 function recordsDecidedWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWhereInput {
   return {
     projectId: { in: scope.projectIds },
-    state: { in: ['approved', 'changes_requested'] },
+    // An OVERTURN is a decision a person made (MOTIR-5956) — the room lists it.
+    state: { in: ['approved', 'changes_requested', 'overturned'] },
     ...(scope.fullView ? {} : { decidedById: scope.userId }),
   };
 }

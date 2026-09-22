@@ -9,6 +9,7 @@ import type {
   EarlierApprovalDTO,
 } from '@/lib/dto/approvalGate';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
+import { replanOwedOf } from '@/lib/approvalGates/decisionRecord';
 import type { AwaitingGateRow, RecordGateRow } from '@/lib/repositories/approvalGateRepository';
 
 // Prisma row → the wire DTO the decide control / Approvals tab reads (Story
@@ -25,8 +26,12 @@ import type { AwaitingGateRow, RecordGateRow } from '@/lib/repositories/approval
 // the DTO fails the type-check here rather than dropping quietly out of an API
 // response. A `...row` would make the DTO's own declaration decorative.
 
-/** Prisma row → the wire DTO. */
-export function toApprovalGateDto(row: ApprovalGate): ApprovalGateDTO {
+/**
+ * Prisma row → the wire DTO. `subjectBody` is the work item's `descriptionMd` where
+ * the caller has it in hand — the one input `replanOwed` is derived from (MOTIR-5956);
+ * a caller without it reports none, which is only ever a decided overturn's debt.
+ */
+export function toApprovalGateDto(row: ApprovalGate, subjectBody?: string | null): ApprovalGateDTO {
   return {
     id: row.id,
     workItemId: row.workItemId,
@@ -55,6 +60,7 @@ export function toApprovalGateDto(row: ApprovalGate): ApprovalGateDTO {
     chosenOption: (row.chosenOption as ChosenOptionDTO | null) ?? null,
     // Written only by the confirmation handler's deciding write (MOTIR-5954).
     confirmedRecord: (row.confirmedRecord as ConfirmedRecordDTO | null) ?? null,
+    replanOwed: subjectBody === undefined ? null : replanOwedOf(row, subjectBody),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -99,7 +105,7 @@ export function toApprovalRecordDecidedRowDto(
   row: RecordGateRow,
   subject: ApprovalGateSubjectSummaryDTO | null,
 ): ApprovalRecordDecidedRowDto {
-  if (row.state !== 'approved' && row.state !== 'changes_requested') {
+  if (row.state !== 'approved' && row.state !== 'changes_requested' && row.state !== 'overturned') {
     throw new Error(`approval gate ${row.id} is ${row.state}, not a decision`);
   }
   if (!row.decidedAt) throw new Error(`approval gate ${row.id} is ${row.state} with no decidedAt`);

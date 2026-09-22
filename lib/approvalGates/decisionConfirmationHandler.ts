@@ -23,9 +23,9 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 // `applyStatusTransition` with `decidingGateId` (§8's Workflow A) — and adds ONE
 // thing: Confirm stamps the decision's optional written record, or its absence.
 //
-// ⚠️ ITS REFUSAL IS OVERTURN, NOT `request_changes` (point 6). The overturn verb, its
-// state and its effect are MOTIR-5956's; until they land this handler offers
-// Confirm only, and `requestChanges` is refused at the door by the kind's verb set.
+// ⚠️ ITS REFUSAL IS OVERTURN, NOT `request_changes` (point 6) — a verb with its own
+// state (`overturned`), a REQUIRED note, and a terminal write of `cancelled`
+// (MOTIR-5956). `requestChanges` is refused at the door by the kind's verb set.
 
 /** Confirming is terminal: Workflow A, the project's `done` category. */
 export const CONFIRM_DECISION_TARGET = { key: 'done', category: 'done' } as const;
@@ -96,6 +96,31 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
       decidingGateId: gate.id,
     });
     return { statusWritten: resolvedStatusKey, confirmedRecord };
+  },
+
+  /**
+   * OVERTURN — "that's not what we discussed" (points 6–7). Writes the project's
+   * `cancelled` status, so the decision stops counting as open work, and NOTHING
+   * ELSE: not one other work item moves. The re-plan it owes is DERIVED from the
+   * subject's `## Supersedes` on read (`replanOwed`), and it is a planning act a
+   * person starts — never a gate effect.
+   *
+   * The door has already refused an empty note, and resolved `cancelled` BY KEY: a
+   * project with no such status gets the decision recorded and no status written.
+   * A subject that stopped parsing under the lock is stale, exactly as for Confirm.
+   */
+  async overturn(args: GateEffectArgs): Promise<GateEffect> {
+    const { gate, ctx, tx, resolvedStatusKey } = args;
+    const subject = await this.resolveSubject(args);
+    if (!subject) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
+    if (resolvedStatusKey === null) {
+      return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
+    }
+    const { workItemsService } = await import('@/lib/services/workItemsService');
+    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
+      decidingGateId: gate.id,
+    });
+    return { statusWritten: resolvedStatusKey };
   },
 
   /**

@@ -240,6 +240,22 @@ function decisionSubjectVersion(sections: string[]): string {
     .digest('hex');
 }
 
+/**
+ * THE RE-PLAN AN OVERTURN OWES (MOTIR-5956; ADR §1's MOTIR-5952 amendment, point 7)
+ * — DERIVED, never stored: an overturned `decision_confirmation` gate plus the keys
+ * its subject's `## Supersedes` names. Read from the draft when the body no longer
+ * parses, so an edit after the overturn never erases the debt. Null on every other
+ * gate.
+ */
+export function replanOwedOf(
+  gate: { kind: string; state: string },
+  descriptionMd: string | null | undefined,
+): { keys: string[] } | null {
+  if (gate.kind !== 'decision_confirmation' || gate.state !== 'overturned') return null;
+  const parse = parseDecisionRecord(descriptionMd);
+  return { keys: parse.ok ? parse.supersedes : parse.draft.supersedes };
+}
+
 /** The row-scale summary of a decision's body (MOTIR-5954) — null when it does not parse. */
 export function decisionConfirmationSummaryOf(descriptionMd: string | null): {
   decision: string;

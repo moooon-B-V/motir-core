@@ -91,6 +91,7 @@ function gate(state: ApprovalGateDTO['state'], id: string): ApprovalGateDTO {
     decisionSource: decided ? 'ui' : null,
     outcomeRef: state === 'approved' ? 'done' : null,
     confirmedRecord: null,
+    replanOwed: null,
     chosenOption: null,
     createdAt: '2026-09-08T04:00:00.000Z',
     updatedAt: '2026-09-08T04:00:00.000Z',

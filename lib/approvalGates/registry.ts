@@ -344,6 +344,15 @@ export interface GateHandler<TSubject = unknown> {
 
   /** What `request_changes` DOES, beyond recording the decision. */
   requestChanges(args: GateEffectArgs): Promise<GateEffect>;
+
+  /**
+   * What `overturn` DOES, beyond recording the decision (MOTIR-5956; ADR §1's
+   * MOTIR-5952 amendment, points 6–7) — offered ONLY by `decision_confirmation`,
+   * which is why it is optional here: the door refuses the verb on any kind that
+   * does not supply it. `resolvedStatusKey` is the project's `cancelled` status BY
+   * KEY, or null — never the category fallback, which would write `done`.
+   */
+  overturn?(args: GateEffectArgs): Promise<GateEffect>;
 }
 
 /**

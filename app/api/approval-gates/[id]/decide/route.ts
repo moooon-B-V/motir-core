@@ -47,7 +47,8 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // rather than to a human — must not reach it. ADR §6a: the row is the
 // human-in-the-loop evidence an agent-driven pipeline owes an auditor.
 //
-// JSON body: `decision` (required — `approve` | `request_changes` | `choose`),
+// JSON body: `decision` (required — `approve` | `request_changes` | `choose` |
+// `overturn`, the last only on a `decision_confirmation` gate and only with a note),
 // `optionId` (required with `choose` — the option a choice's decision picks,
 // MOTIR-5893), `stamp` (required — the `stamp` the gate read returned, MOTIR-5234)
 // and `noteMd` (optional free text — why they said yes, or what they sent back).
@@ -57,7 +58,7 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // route cannot see the kind without a read, so it checks only the SHAPE and the
 // door answers a mismatch as `APPROVAL_GATE_VERB_NOT_OFFERED` (400) under its lock.
 
-const DECISIONS: readonly GateDecision[] = ['approve', 'request_changes', 'choose'];
+const DECISIONS: readonly GateDecision[] = ['approve', 'request_changes', 'choose', 'overturn'];
 
 function parseDecision(value: unknown): GateDecision | null {
   return typeof value === 'string' && (DECISIONS as readonly string[]).includes(value)
@@ -97,7 +98,7 @@ export async function POST(
     return NextResponse.json(
       {
         code: 'BAD_REQUEST',
-        error: '`decision` must be `approve`, `request_changes` or `choose`.',
+        error: '`decision` must be `approve`, `request_changes`, `choose` or `overturn`.',
       },
       { status: 400 },
     );

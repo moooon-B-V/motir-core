@@ -266,7 +266,13 @@ function alreadyDecided(
   versionIdentifies: boolean,
 ): boolean {
   if (gate === null) return false;
-  if (gate.state !== 'approved' && gate.state !== 'changes_requested') return false;
+  if (
+    gate.state !== 'approved' &&
+    gate.state !== 'changes_requested' &&
+    gate.state !== 'overturned'
+  ) {
+    return false;
+  }
   if (gate.subjectId !== subjectId) return false;
   return versionIdentifies ? gate.subjectVersion === subjectVersion : true;
 }

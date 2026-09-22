@@ -930,7 +930,10 @@ export function ApprovalGateControl({
   // a static port and every state MOTIR-4792 shipped are untouched.
   const { reporter, status: portStatus } = usePortRenderStatus();
 
-  const decided = gate.state === 'approved' || gate.state === 'changes_requested';
+  // An OVERTURN is a decision too (MOTIR-5956) — a person refused the direction, with
+  // a note — so it takes the verb-less, decided treatment, never the awaiting arm.
+  const decided =
+    gate.state === 'approved' || gate.state === 'changes_requested' || gate.state === 'overturned';
   // ⚠️ `withdrawn` IS NOT A KIND OF `decided`, and the whole of state `G` is
   // that distinction. `superseded` is written by the PRODUCT when a newer
   // version is published (ADR §6b) — no actor, no authority, no note — so it
@@ -996,7 +999,9 @@ export function ApprovalGateControl({
     : decided
       ? gate.state === 'approved'
         ? (approvedStateLabel ?? t('state.approved'))
-        : t('state.changesRequested')
+        : gate.state === 'overturned'
+          ? t('state.overturned')
+          : t('state.changesRequested')
       : phase.kind === 'pending'
         ? t('state.recording')
         : canDecide

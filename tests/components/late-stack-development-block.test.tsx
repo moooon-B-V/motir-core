@@ -325,6 +325,7 @@ describe('the late stack — a design result with open linked pull requests (Q8)
             decisionSource: null,
             outcomeRef: null,
             confirmedRecord: null,
+            replanOwed: null,
             chosenOption: null,
             createdAt: '2026-09-14T00:00:00.000Z',
             updatedAt: '2026-09-14T00:00:00.000Z',

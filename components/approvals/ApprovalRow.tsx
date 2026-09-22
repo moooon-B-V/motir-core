@@ -338,6 +338,10 @@ function StatePill({ state, kind }: { state: ApprovalGateStateDTO; kind: Approva
       return <Pill severity="success">{t('approved')}</Pill>;
     case 'changes_requested':
       return <Pill severity="warning">{t('changesRequested')}</Pill>;
+    // A refused DIRECTION (MOTIR-5956) — its OWN pill, never *Changes requested*:
+    // nothing will be revised and re-asked. The design's peach, the warning tint.
+    case 'overturned':
+      return <Pill severity="warning">{t('overturned')}</Pill>;
     // ⚠️ COLOURLESS, and that is the design's decision rather than a fallback.
     // `superseded` is written by the PRODUCT, never by a person, so a tinted
     // pill would let the audit read a withdrawn question as somebody's answer.

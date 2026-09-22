@@ -4556,6 +4556,11 @@ enum ApprovalGateState {
   approved
   changes_requested
   superseded
+  /// A person REFUSED the direction a `decision_confirmation` gate asked them to
+  /// confirm — "that's not what we discussed" (Story MOTIR-5871 · MOTIR-5956; ADR
+  /// `approval-gates.md` §1's MOTIR-5952 amendment, point 6). TERMINAL and carries a
+  /// REQUIRED note; never overloads `changes_requested`, which is non-terminal.
+  overturned
 
   @@map("approval_gate_state")
 }

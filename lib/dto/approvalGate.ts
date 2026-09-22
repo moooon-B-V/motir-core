@@ -135,7 +135,13 @@ export interface HeldTransitionDTO {
 
 /** Where a gate's decision stands (ADR §6b). Mirrors the `ApprovalGateState`
  *  Prisma enum. */
-export type ApprovalGateStateDTO = 'awaiting' | 'approved' | 'changes_requested' | 'superseded';
+export type ApprovalGateStateDTO =
+  | 'awaiting'
+  | 'approved'
+  | 'changes_requested'
+  | 'superseded'
+  /** A person refused a `decision_confirmation` gate's direction (MOTIR-5956) — terminal. */
+  | 'overturned';
 
 /**
  * WHY a `superseded` gate was withdrawn — mirrors the `ApprovalGateSupersedeCause`
@@ -189,7 +195,7 @@ export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
  * `decision_choice`), which is why the door takes a decision rather than
  * exposing `approve()` / `requestChanges()` as separate methods.
  */
-export type GateDecision = 'approve' | 'request_changes' | 'choose';
+export type GateDecision = 'approve' | 'request_changes' | 'choose' | 'overturn';
 
 /** WHAT A CHOICE'S DECISION PICKED — see {@link ChosenOption} (MOTIR-5893). */
 export type ChosenOptionDTO = ChosenOption;
@@ -264,6 +270,14 @@ export interface ApprovalGateDTO {
    *  `decision_confirmation` gate (MOTIR-5954) — the markdown attachment's identity,
    *  or `{ kind: 'none' }`. Null everywhere else. */
   confirmedRecord: ConfirmedRecordDTO | null;
+  /**
+   * THE RE-PLAN AN OVERTURN OWES (MOTIR-5956; ADR §1's MOTIR-5952 amendment, point 7)
+   * — the work items the overturned decision's `## Supersedes` named. DERIVED, never
+   * stored: the overturned gate plus its subject's parse. Null on every gate that is
+   * not an `overturned` `decision_confirmation`. The overturn itself changed none of
+   * them: re-planning is a planning act a person starts.
+   */
+  replanOwed: { keys: string[] } | null;
 
   createdAt: string;
   updatedAt: string;
@@ -626,7 +640,7 @@ export interface ApprovalQueuePageDto {
 export interface ApprovalRecordDecidedRowDto {
   gateId: string;
   kind: ApprovalGateKindDTO;
-  state: Extract<ApprovalGateStateDTO, 'approved' | 'changes_requested'>;
+  state: Extract<ApprovalGateStateDTO, 'approved' | 'changes_requested' | 'overturned'>;
   /** ISO-8601 — when the decision was recorded. The section's sort key. */
   decidedAt: string;
   /**

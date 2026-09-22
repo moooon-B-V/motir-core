@@ -68,6 +68,7 @@ import {
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { heldMoves } from '@/lib/approvalGates/heldMoves';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { CANCELLED_STATUS_KEY } from '@/lib/approvalGates/heldMoves';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md).
@@ -91,10 +92,13 @@ export type { GateDecision };
 
 const DECISION_STATE: Record<
   GateDecision,
-  Extract<ApprovalGateState, 'approved' | 'changes_requested'>
+  Extract<ApprovalGateState, 'approved' | 'changes_requested' | 'overturned'>
 > = {
   approve: 'approved',
   request_changes: 'changes_requested',
+  // A refused DIRECTION (ADR §1's MOTIR-5952 amendment, point 6a) — its own state,
+  // terminal, never an overloaded `changes_requested`.
+  overturn: 'overturned',
   // A CHOICE is an approval of one option — no new state value (ADR §1's MOTIR-5887
   // amendment, point 7). The option it picked is on `chosenOption` / `outcomeRef`.
   choose: 'approved',
@@ -714,7 +718,7 @@ export const approvalGatesService = {
           : undefined;
 
       return {
-        gate: toApprovalGateDto(row),
+        gate: toApprovalGateDto(row, item.descriptionMd),
         canDecide,
         stamp,
         movedSince,
@@ -1381,13 +1385,23 @@ export const approvalGatesService = {
     }
 
     const handler = handlerFor(preread.gate.kind);
-    const resolvedStatusKey = handler.statusIntent
-      ? await workflowsService.resolveStatusKey(
-          preread.item.projectId,
-          ctx.workspaceId,
-          handler.statusIntent,
-        )
-      : null;
+    // ⚠️ AN OVERTURN RESOLVES `cancelled` BY KEY, NEVER BY CATEGORY (MOTIR-5956).
+    // `resolveStatusKey` falls back to the category, and `cancelled` shares hers with
+    // `done` — so a project without a `cancelled` status would have an overturn write
+    // `done`, the one status it must never write. No such status ⇒ null ⇒ the decision
+    // is recorded and no status moves (ADR §1's MOTIR-5952 amendment, point 7).
+    const resolvedStatusKey =
+      input.decision === 'overturn'
+        ? ((
+            await workflowsService.listStatusesByProject(preread.item.projectId, ctx.workspaceId)
+          ).find((status) => status.key === CANCELLED_STATUS_KEY)?.key ?? null)
+        : handler.statusIntent
+          ? await workflowsService.resolveStatusKey(
+              preread.item.projectId,
+              ctx.workspaceId,
+              handler.statusIntent,
+            )
+          : null;
 
     // ── THE TRANSACTION ───────────────────────────────────────────────────────
     return withWorkspaceContext(ctx, async (tx) => {
@@ -1583,6 +1597,15 @@ export const approvalGatesService = {
       if (input.decision === 'request_changes' && locked.kind === CONFIRMATION_KIND) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'request_changes_on_confirmation');
       }
+      if (input.decision === 'overturn' && !handler.overturn) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'overturn_on_other_kind');
+      }
+      // An overturn says what was ACTUALLY discussed, or it is not written at all
+      // (point 6b) — the note is the only record of the right direction until the
+      // re-plan happens.
+      if (input.decision === 'overturn' && !input.noteMd?.trim()) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'overturn_needs_a_note');
+      }
 
       // 4 · RETENTION — an APPROVAL PINS the version it was given on
       //      (MOTIR-4913; ADR §6c, with its MOTIR-4911 amendment).
@@ -1640,11 +1663,13 @@ export const approvalGatesService = {
       const effect =
         input.decision === 'request_changes'
           ? await handler.requestChanges(args)
-          : await handler.approve(
-              input.decision === 'choose'
-                ? { ...args, choice: { optionId: input.optionId ?? '' } }
-                : args,
-            );
+          : input.decision === 'overturn' && handler.overturn
+            ? await handler.overturn(args)
+            : await handler.approve(
+                input.decision === 'choose'
+                  ? { ...args, choice: { optionId: input.optionId ?? '' } }
+                  : args,
+              );
 
       // 6 · WRITE THE DECISION — LAST, and carrying THE WHOLE AUDIT SET
       //     (MOTIR-5046; ADR §6a).
@@ -1713,7 +1738,7 @@ export const approvalGatesService = {
       );
 
       return {
-        gate: toApprovalGateDto(decided),
+        gate: toApprovalGateDto(decided, item.descriptionMd),
         effect,
         filesKept,
         companionSubjectVersion: companionVersion,

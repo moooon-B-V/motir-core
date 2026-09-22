@@ -543,6 +543,8 @@ describe('the DTO carries the audit set, and no Prisma model crosses the boundar
       'chosenOption',
       // What a confirmed decision's record was (MOTIR-5954) — null on every other kind.
       'confirmedRecord',
+      // The re-plan an OVERTURN owes (MOTIR-5956) — derived, null on every other gate.
+      'replanOwed',
       'createdAt',
       'updatedAt',
     ];
