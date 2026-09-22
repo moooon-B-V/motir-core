@@ -179,6 +179,39 @@ export const monitorConnectionRepository = {
     return tx.monitorConnection.count({ where: { installationId } });
   },
 
+  /** A grant's bindings, reduced to what re-homing them needs: which Motir
+   *  project and which monitored project each one pairs. */
+  async listPairsForInstallation(
+    installationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; projectId: string; externalProjectId: string }>> {
+    return tx.monitorConnection.findMany({
+      where: { installationId },
+      select: { id: true, projectId: true, externalProjectId: true },
+      orderBy: { id: 'asc' },
+    });
+  },
+
+  /**
+   * RE-HOME bindings onto another grant (MOTIR-6005) — the binding row keeps its
+   * id, so its `monitor_issue` links, watermark, minimum level and sync switches
+   * all come with it. That is the whole reason this MOVES rather than re-creates:
+   * a re-created binding starts with no links, and the next poll files every
+   * live issue again as a duplicate bug.
+   */
+  async moveToInstallation(
+    ids: string[],
+    installationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await tx.monitorConnection.updateMany({
+      where: { id: { in: ids } },
+      data: { installationId },
+    });
+    return result.count;
+  },
+
   // ── INGESTION STATE (Story MOTIR-4929 · Subtask MOTIR-5576) ──────────────────
 
   /**
