@@ -30,12 +30,45 @@ export type ConfirmedRecord =
     }
   | { kind: 'none' };
 
+/** Every counting record on a decision work item right now, for the port (MOTIR-5960). */
+export interface DecisionRecordsNow {
+  /** The newest — what Confirm would stamp. */
+  record: ConfirmedRecord;
+  /** How many counting markdown files there are (the port says which of several it chose). */
+  count: number;
+  /** Their ids — so a band can tell a STAMPED record that was deleted from one still here. */
+  presentIds: string[];
+}
+
+export async function readDecisionRecords(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<DecisionRecordsNow> {
+  const files = await attachmentRepository.findMarkdownByWorkItem(workItemId, tx);
+  return {
+    record: toRecord(files[0] ?? null),
+    count: files.length,
+    presentIds: files.map((file) => file.id),
+  };
+}
+
 /** The record a decision work item carries right now — the newest counting markdown file, or none. */
 export async function resolveDecisionRecord(
   workItemId: string,
   tx: Prisma.TransactionClient,
 ): Promise<ConfirmedRecord> {
-  const attachment = await attachmentRepository.findNewestMarkdownByWorkItem(workItemId, tx);
+  return (await readDecisionRecords(workItemId, tx)).record;
+}
+
+function toRecord(
+  attachment: {
+    id: string;
+    originalFilename: string;
+    mimeType: string;
+    sizeBytes: number;
+    createdAt: Date;
+  } | null,
+): ConfirmedRecord {
   if (!attachment) return { kind: 'none' };
   return {
     kind: 'attachment',

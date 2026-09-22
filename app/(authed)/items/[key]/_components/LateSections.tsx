@@ -6,6 +6,7 @@ import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
 import { AcceptancePanel } from './AcceptancePanel';
 import { DesignResultSection } from './DesignResultSection';
 import { ChoiceSection } from './ChoiceSection';
+import { DecisionConfirmSection } from './DecisionConfirmSection';
 import { DecidedGateStatusBridge } from './DecidedGateStatusBridge';
 import {
   approveAndMergeAction,
@@ -261,12 +262,13 @@ export async function LateUpperSections({
   statusCategory?: string | null;
 }) {
   const r = await reads;
-  const [tGithub, tAcceptance, tDesignResult, tRuns, tChoice] = await Promise.all([
+  const [tGithub, tAcceptance, tDesignResult, tRuns, tChoice, tConfirm] = await Promise.all([
     getTranslations('github'),
     getTranslations('acceptance'),
     getTranslations('designResult'),
     getTranslations('runs'),
     getTranslations('approvalGate.choice'),
+    getTranslations('approvalGate.decisionConfirm'),
   ]);
   // ⚠️ A DESIGN RESULT ON A CARD WITH AN OPEN LINKED PULL REQUEST IS NOT A SECTION
   // (`design-result.md` AMENDMENT 4 Q8). Those pull requests carry the decision —
@@ -517,6 +519,25 @@ export async function LateUpperSections({
             canDecide={r.choiceGate.canDecide}
             routedToLabel={r.choiceGate.routedToLabel}
             routedToViewer={r.choiceGate.gate?.routedToId === currentUserId}
+            itemIdentifier={itemIdentifier}
+          />
+        </ContentSectionCard>
+      ) : null}
+      {r.confirmGate.body ? (
+        // THE DECISION (Story MOTIR-5871 · MOTIR-5960) — in the slot the choice takes, and
+        // the destination the decision-waiting marker scrolls to for this kind.
+        <ContentSectionCard
+          title={tConfirm('sectionTitle')}
+          decisionAnchor={['decision_confirmation']}
+        >
+          {/* A decision made in the overlay moves this page's status rail through here. */}
+          {r.confirmGate.gate ? <DecidedGateStatusBridge gateId={r.confirmGate.gate.id} /> : null}
+          <DecisionConfirmSection
+            body={r.confirmGate.body}
+            gate={r.confirmGate.gate}
+            canDecide={r.confirmGate.canDecide}
+            routedToLabel={r.confirmGate.routedToLabel}
+            routedToViewer={r.confirmGate.gate?.routedToId === currentUserId}
             itemIdentifier={itemIdentifier}
           />
         </ContentSectionCard>

@@ -163,6 +163,74 @@ describe('the raise — a complete, unblocked `human` decision is asked', () => 
     });
   });
 
+  it('the body read resolves superseded TITLES, the record count and the governing EPIC', async () => {
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Exports', descriptionMd: 'The capability.' },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Export page', parentId: epic.id },
+      fx.ctx,
+    );
+    seq += 1;
+    const item = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        parentId: epic.id,
+        title: `Decide ${seq}`,
+        type: 'decision',
+        executor: 'human',
+        descriptionMd: COMPLETE.replace('MOTIR-6 and MOTIR-7', `${story.identifier} and NOPE-404`),
+      },
+      fx.ctx,
+    );
+    await attachMarkdown(item.id, 'one.md', { createdAt: new Date('2026-09-01T00:00:00Z') });
+    const newest = await attachMarkdown(item.id, 'two.md', {
+      createdAt: new Date('2026-09-02T00:00:00Z'),
+    });
+
+    const port = await decisionConfirmationGateService.readPort(item.id, fx.ctx);
+    expect(port?.supersedesItems).toEqual([
+      { key: story.identifier, title: 'Export page' },
+      { key: 'NOPE-404', title: null },
+    ]);
+    expect(port?.recordCount).toBe(2);
+    expect(port?.presentRecordIds[0]).toBe(newest.id);
+    expect(port?.epic).toEqual({
+      key: epic.identifier,
+      title: 'Exports',
+      hasDescription: true,
+      archived: false,
+      statusCategory: 'todo',
+      canPlan: true,
+    });
+
+    // A DEFECTIVE body carries the epic too, and a decision with no epic carries none.
+    await workItemsService.updateWorkItem(item.id, { descriptionMd: '## Decision\nOnly.' }, fx.ctx);
+    const defective = await decisionConfirmationGateService.readBody(item.id, fx.ctx);
+    expect(defective).toMatchObject({ ok: false, epic: { key: epic.identifier } });
+    const loose = await createDecision(COMPLETE);
+    expect((await decisionConfirmationGateService.readPort(loose.id, fx.ctx))?.epic).toBeNull();
+    // Filed below a STORY, the epic is still found — by walking up.
+    seq += 1;
+    const deeper = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        parentId: story.id,
+        title: `Decide ${seq}`,
+        type: 'decision',
+        executor: 'human',
+        descriptionMd: COMPLETE,
+      },
+      fx.ctx,
+    );
+    expect((await decisionConfirmationGateService.readPort(deeper.id, fx.ctx))?.epic?.key).toBe(
+      epic.identifier,
+    );
+  });
+
   it('the body read is null for a work item that is not a `human` decision', async () => {
     const item = await createDecision(COMPLETE, { executor: 'coding_agent' });
     expect(await decisionConfirmationGateService.readBody(item.id, fx.ctx)).toBeNull();

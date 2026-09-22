@@ -291,6 +291,51 @@ describe('the DISCRIMINATION — a tab moving is not this gate moving', () => {
     expect(h.gateReadCount()).toBeGreaterThan(before);
   });
 
+  it('a DECISION to confirm draws the same notice, and its own Show the current version re-reads (MOTIR-5960)', async () => {
+    // The confirm arm mounts its own frame with its own alert slot, as the choice arm
+    // does — so its notice and its re-read are asserted, not assumed to follow.
+    params = new URLSearchParams('approval=MOTIR-5147&approvalKind=decision_confirmation');
+    const confirm = (over: Partial<ApprovalGateOverlayReadDTO> = {}) => {
+      const base = read(over);
+      return {
+        ...base,
+        gate: { ...base.gate, kind: 'decision_confirmation', subjectId: 'wi-1' },
+        subject: {
+          state: 'resolved',
+          kind: 'decision_confirmation',
+          confirm: {
+            decisionMd: 'Exports move to a bucket.',
+            changes: ['workflow'],
+            whatChangedMd: 'Before and after.',
+            supersedes: ['MOTIR-6'],
+            supersedesMd: 'MOTIR-6',
+            resultingDirectionMd: 'Bucket.',
+            subjectVersion: 'a'.repeat(64),
+            record: { kind: 'none' },
+            recordCount: 0,
+            presentRecordIds: [],
+            supersedesItems: [{ key: 'MOTIR-6', title: null }],
+            epic: null,
+          },
+        },
+      } as ApprovalGateOverlayReadDTO;
+    };
+    const h = harness([confirm(), confirm({ movedSince: ['subject'] })]);
+    await mount();
+
+    await h.nudge(['approvals']);
+
+    const notice = screen.getByTestId('approval-subject-moved');
+    expect(notice.textContent).toContain('changed since you opened this');
+    expect(screen.getByText('Exports move to a bucket.')).toBeTruthy();
+
+    const before = h.gateReadCount();
+    await act(async () => {
+      fireEvent.click(within(notice).getByRole('button', { name: 'Show the current version' }));
+    });
+    expect(h.gateReadCount()).toBeGreaterThan(before);
+  });
+
   it('names SEVERAL things when several moved', async () => {
     const h = harness([read(), read({ movedSince: ['subject', 'criteria'] })]);
     await mount();

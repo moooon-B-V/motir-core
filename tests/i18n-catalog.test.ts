@@ -390,6 +390,12 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // card, so *decision* IS the card's own type — the same disposition as the choice's.
     'approvalGate.statusHeld.decisionNoun.decision_confirmation':
       "the held-status sentence's decision NOUN — names the decision card's own question",
+    // MOTIR-5960: the confirm port's section title and its first eyebrow sit ON a
+    // `type: decision` card and name that card's own content (design § THE CONFIRM PORT).
+    'approvalGate.decisionConfirm.sectionTitle':
+      "item-page section title — the decision card's own decision",
+    'approvalGate.decisionConfirm.eyebrow.decision':
+      "the port's first eyebrow — the decision card's own `## Decision` section",
   },
   zh: {
     // `验证` is the verification TYPE noun and also the ordinary button verb; en
@@ -409,6 +415,10 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     'workbench.approvals.kind.decision_choice': 'Approvals row / overlay KIND for the choice gate',
     'approvalGate.statusHeld.decisionNoun.decision_choice': 'held-status decision NOUN',
     'approvalGate.statusHeld.decisionNoun.decision_confirmation': 'held-status decision NOUN',
+    'approvalGate.decisionConfirm.sectionTitle':
+      'item-page section title — the card’s own decision',
+    'approvalGate.decisionConfirm.eyebrow.decision':
+      'the port’s first eyebrow — the card’s own section',
     // zh `选择` is both the type noun and the verb *choose*; this is band 3's commit
     // verb before an option is picked, on the frame whose band 1 already names the kind.
     'approvalGate.choice.verb.chooseEmpty': 'band-3 VERB *choose*, before an option is picked',

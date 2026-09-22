@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { ChoiceGateFrame } from '@/components/approvals/ChoiceGate';
+import { DecisionConfirmGateFrame } from '@/components/approvals/DecisionConfirmGate';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from '@/app/(authed)/items/[key]/_components/DesignResultPanel';
 import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
@@ -557,13 +558,7 @@ export function ApprovalOverlay() {
     );
     const subject = read.subject;
 
-    if (
-      subject.state === 'kind_not_built' ||
-      // THE CONFIRM PORT IS NOT DRAWN YET (Story MOTIR-5871): the kind is registered and
-      // its port data resolves (MOTIR-5954), and the frame that renders it is MOTIR-5960's.
-      // Until then the honest answer is Panel 4a — never a design panel over a decision.
-      (subject.state === 'resolved' && subject.kind === 'decision_confirmation')
-    ) {
+    if (subject.state === 'kind_not_built') {
       // Panel 4a — a feature that has not shipped. Opposite in meaning to 4b,
       // which is a gate worth withdrawing, however alike they look.
       body = (
@@ -619,6 +614,7 @@ export function ApprovalOverlay() {
       const onDecide = async (
         decision: GateDecision,
         optionId?: string,
+        noteMd?: string,
       ): Promise<GateRefusal | null> => {
         // ⚠️ THE STAMP THIS READ HANDED OVER, never one fetched at press time (MOTIR-5235).
         // A stamp asked for when the reader presses always matches, so the check would pass
@@ -628,6 +624,8 @@ export function ApprovalOverlay() {
           decision,
           // A CHOICE names its option (MOTIR-5896); no other verb carries one.
           ...(optionId ? { optionId } : {}),
+          // An OVERTURN carries its required note (MOTIR-5960); no other verb here does.
+          ...(noteMd ? { noteMd } : {}),
           identifier,
           stamp: read.stamp ?? '',
         });
@@ -760,6 +758,30 @@ export function ApprovalOverlay() {
             // publish supersedes it without unlinking them), so there is no
             // per-version files-kept answer to show.
             filesKept={null}
+            alert={
+              moved.length > 0 && gate.state === 'awaiting' && !decidedState ? (
+                <SubjectMovedNotice moved={moved} onShow={() => setReread((n) => n + 1)} />
+              ) : undefined
+            }
+            onDecide={onDecide}
+            onShowCurrentVersion={() => setReread((n) => n + 1)}
+            focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
+          />
+        ) : subject.kind === 'decision_confirmation' ? (
+          // THE CONFIRM PORT (Story MOTIR-5871 · MOTIR-5960) — the decision's four sections
+          // in the SAME frame, Overturn · Confirm, and Overturn's required note.
+          <DecisionConfirmGateFrame
+            key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}
+            layout="fill"
+            gate={gate}
+            view={subject.confirm}
+            record={subject.confirm.record}
+            recordCount={subject.confirm.recordCount}
+            presentRecordIds={subject.confirm.presentRecordIds}
+            epic={subject.confirm.epic}
+            canDecide={read.canDecide && !decidedState}
+            routedToLabel={read.routedToLabel}
+            identifier={identifier}
             alert={
               moved.length > 0 && gate.state === 'awaiting' && !decidedState ? (
                 <SubjectMovedNotice moved={moved} onShow={() => setReread((n) => n + 1)} />
