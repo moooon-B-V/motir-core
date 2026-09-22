@@ -210,10 +210,11 @@ function trailTo(
     cursor = proposal.parentNodeId;
   }
   // The chain ran out inside the plan — every ancestor is a proposal. Whatever
-  // committed trail the topmost one carries goes in front of them.
-  const container = byNodeId.get(parentNodeId);
+  // committed trail the TOPMOST one carries goes in front of them. Not the
+  // container's: its trail already ends at the walked ancestors, so a root the
+  // plan modifies would be named twice (bug MOTIR-6078).
   const carried =
-    container?.parentTrail.map((c) => ({
+    top?.parentTrail.map((c) => ({
       id: c.id,
       label: workItemCrumbLabel(c.identifier, c.title),
     })) ?? [];
