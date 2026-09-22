@@ -9,6 +9,8 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import { foldersService } from '@/lib/services/foldersService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { aiDecisionBlockOf } from '@/lib/approvalGates/decisionRecord';
 import {
   toPlanTreeFolders,
   toPlanTreeSkeleton,
@@ -38,6 +40,7 @@ import {
   type SearchWorkItemsResponse,
   type SemanticSearchResponse,
   type SimilarWorkItemsResponse,
+  type AiDecisionBlock,
 } from '@/lib/dto/ai';
 import { readProject } from '@/lib/workspaces/tenantRead';
 
@@ -60,14 +63,31 @@ import { readProject } from '@/lib/workspaces/tenantRead';
 // (MOTIR-1531 — the `baseRevision` a modify/remove anchors on) and the folder a
 // filed item sits in (MOTIR-5410). Shared by every read in the skeleton family, so
 // a row can never carry one anchor on one read and miss it on another.
+// The third anchor is a `human` DECISION's confirmation (MOTIR-5958): ONE batched
+// read for the whole set, so the planner can date and order an epic's decisions
+// without a `get-item` per child.
 async function readRowAnchors(
   workItemIds: string[],
   ctx: ServiceContext,
-): Promise<{ revisionByItemId: Map<string, string>; folderIdByItemId: Map<string, string> }> {
+): Promise<{
+  revisionByItemId: Map<string, string>;
+  folderIdByItemId: Map<string, string>;
+  decisionByItemId: Map<string, AiDecisionBlock>;
+}> {
   return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
     revisionByItemId: await workItemRevisionRepository.findLatestIdsByWorkItemIds(workItemIds, tx),
     folderIdByItemId: await workItemRepository.findFolderIdsByWorkItemIds(workItemIds, tx),
+    decisionByItemId: await readDecisionBlocks(workItemIds, tx),
   }));
+}
+
+/** Every `human` decision's confirmation in a set, keyed by work-item id — one query. */
+async function readDecisionBlocks(
+  workItemIds: string[],
+  tx: Parameters<typeof approvalGateRepository.findDecisionConfirmationsByWorkItemIds>[1],
+): Promise<Map<string, AiDecisionBlock>> {
+  const rows = await approvalGateRepository.findDecisionConfirmationsByWorkItemIds(workItemIds, tx);
+  return new Map(rows.map((row) => [row.workItemId, aiDecisionBlockOf(row)]));
 }
 
 export const aiBoundaryService = {
@@ -84,7 +104,7 @@ export const aiBoundaryService = {
     // ONE batched latest-revision lookup for the whole read (MOTIR-1531) — the
     // `baseRevision` anchor each row carries; never a per-row (N+1) fetch — and,
     // in the same context, ONE batched filed-placement lookup (MOTIR-5410).
-    const { revisionByItemId, folderIdByItemId } = await readRowAnchors(
+    const { revisionByItemId, folderIdByItemId, decisionByItemId } = await readRowAnchors(
       items.map((i) => i.id),
       ctx,
     );
@@ -94,7 +114,7 @@ export const aiBoundaryService = {
     const folderList = await foldersService.listProjectFolders({ projectId }, ctx);
     return {
       project: { projectId, projectKey: project.identifier },
-      items: toPlanTreeSkeleton(items, revisionByItemId, folderIdByItemId),
+      items: toPlanTreeSkeleton(items, revisionByItemId, folderIdByItemId, decisionByItemId),
       folders: toPlanTreeFolders(folderList.folders),
       foldersTruncated: folderList.truncated,
     };
@@ -255,7 +275,14 @@ export const aiBoundaryService = {
     const links = await workItemsService.getRelationshipLinks(item.id, ctx, {
       restrictToProjectId: projectId,
     });
-    const response: GetItemResponse = { item: { ...item, ...links } };
+    // A `human` decision's confirmation (MOTIR-5958), through the SAME one-query read
+    // the skeleton rows use — so the item and its row can never disagree.
+    const decisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      readDecisionBlocks([item.id], tx),
+    );
+    const response: GetItemResponse = {
+      item: { ...item, ...links, decision: decisions.get(item.id) ?? null },
+    };
     if (opts.withComments) {
       response.comments = await commentsService.listComments(
         item.id,
@@ -293,7 +320,7 @@ export const aiBoundaryService = {
       ctx,
       depth,
     );
-    const { revisionByItemId, folderIdByItemId } = await readRowAnchors(
+    const { revisionByItemId, folderIdByItemId, decisionByItemId } = await readRowAnchors(
       nodes.map((n) => n.id),
       ctx,
     );
@@ -301,7 +328,7 @@ export const aiBoundaryService = {
       project: { projectId, projectKey: project.identifier },
       root: root.identifier,
       depth: effectiveDepth,
-      nodes: toSkeletonRows(nodes, revisionByItemId, folderIdByItemId),
+      nodes: toSkeletonRows(nodes, revisionByItemId, folderIdByItemId, decisionByItemId),
     };
   },
 
@@ -320,13 +347,13 @@ export const aiBoundaryService = {
     const closure = await workItemsService.getBlockingClosure(root.id, ctx, opts);
     const idToKey = new Map<string, string>([[root.id, root.identifier]]);
     for (const n of closure.nodes) idToKey.set(n.id, n.identifier);
-    const { revisionByItemId, folderIdByItemId } = await readRowAnchors(
+    const { revisionByItemId, folderIdByItemId, decisionByItemId } = await readRowAnchors(
       closure.nodes.map((n) => n.id),
       ctx,
     );
     return {
       root: root.identifier,
-      nodes: toSkeletonRows(closure.nodes, revisionByItemId, folderIdByItemId),
+      nodes: toSkeletonRows(closure.nodes, revisionByItemId, folderIdByItemId, decisionByItemId),
       edges: toBlockingEdges(closure.edges, idToKey),
       truncated: closure.truncated,
     };

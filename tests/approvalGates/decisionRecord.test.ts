@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  aiDecisionBlockOf,
   decisionConfirmationSummaryOf,
   parseDecisionRecord,
   supersededKeys,
@@ -205,5 +206,50 @@ describe('the keys and the row summary', () => {
       supersedesCount: 2,
     });
     expect(decisionConfirmationSummaryOf(without('Supersedes'))).toBeNull();
+  });
+});
+
+describe('the AI boundary block (MOTIR-5958)', () => {
+  const at = new Date('2026-09-21T10:00:00.000Z');
+  it('maps each latest-gate state, dating only a decision somebody made', () => {
+    expect(
+      aiDecisionBlockOf({ descriptionMd: COMPLETE, state: 'approved', decidedAt: at }),
+    ).toEqual({
+      state: 'confirmed',
+      decidedAt: '2026-09-21T10:00:00.000Z',
+      replanOwed: null,
+    });
+    expect(
+      aiDecisionBlockOf({ descriptionMd: COMPLETE, state: 'overturned', decidedAt: at }),
+    ).toEqual({
+      state: 'overturned',
+      decidedAt: '2026-09-21T10:00:00.000Z',
+      replanOwed: ['MOTIR-6', 'MOTIR-7'],
+    });
+    expect(
+      aiDecisionBlockOf({ descriptionMd: COMPLETE, state: 'awaiting', decidedAt: null }),
+    ).toEqual({
+      state: 'awaiting',
+      decidedAt: null,
+      replanOwed: null,
+    });
+  });
+
+  it('a withdrawn question, or no gate at all, reads none; a missing decidedAt stays null', () => {
+    for (const state of ['superseded', null]) {
+      expect(aiDecisionBlockOf({ descriptionMd: COMPLETE, state, decidedAt: at })).toEqual({
+        state: 'none',
+        decidedAt: null,
+        replanOwed: null,
+      });
+    }
+    expect(aiDecisionBlockOf({ descriptionMd: null, state: 'approved', decidedAt: null })).toEqual({
+      state: 'confirmed',
+      decidedAt: null,
+      replanOwed: null,
+    });
+    expect(
+      aiDecisionBlockOf({ descriptionMd: null, state: 'overturned', decidedAt: at }).replanOwed,
+    ).toEqual([]);
   });
 });

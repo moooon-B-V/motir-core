@@ -1,6 +1,7 @@
 import type { WorkItemKindDto, WorkItemListItemDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { FolderPickerNodeDto } from '@/lib/dto/folders';
 import type {
+  AiDecisionBlock,
   PlanTreeFolder,
   PlanTreeSkeletonItem,
   BlockingEdge,
@@ -40,6 +41,10 @@ export function toSkeletonRows(
   rows: SkeletonSourceRow[],
   revisionByItemId: Map<string, string>,
   folderIdByItemId: Map<string, string>,
+  // A `human` decision's confirmation (MOTIR-5958) — only such an item has an entry,
+  // so every other row projects `decision: null`. Required for the same reason
+  // `folderIdByItemId` is: a read that forgot it would report every decision undated.
+  decisionByItemId: Map<string, AiDecisionBlock>,
 ): PlanTreeSkeletonItem[] {
   const idToKey = new Map(rows.map((r) => [r.id, r.identifier]));
   return rows.map((r) => ({
@@ -51,6 +56,7 @@ export function toSkeletonRows(
     parentKey: r.parentId ? (idToKey.get(r.parentId) ?? null) : null,
     revision: revisionByItemId.get(r.id) ?? null,
     folderId: folderIdByItemId.get(r.id) ?? null,
+    decision: decisionByItemId.get(r.id) ?? null,
   }));
 }
 
@@ -60,8 +66,9 @@ export function toPlanTreeSkeleton(
   items: WorkItemSummaryDto[],
   revisionByItemId: Map<string, string>,
   folderIdByItemId: Map<string, string>,
+  decisionByItemId: Map<string, AiDecisionBlock>,
 ): PlanTreeSkeletonItem[] {
-  return toSkeletonRows(items, revisionByItemId, folderIdByItemId);
+  return toSkeletonRows(items, revisionByItemId, folderIdByItemId, decisionByItemId);
 }
 
 // Map the project's folder picker nodes to the tree read's folder list

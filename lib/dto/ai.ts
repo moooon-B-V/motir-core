@@ -13,6 +13,24 @@ import type {
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { PlanStatusDto } from '@/lib/dto/plans';
 
+/**
+ * A `human` DECISION's confirmation, as the planner reads it (Story MOTIR-5871 ·
+ * MOTIR-5958; ADR `approval-gates.md` §1's MOTIR-5952 amendment, points 9–10) — so a
+ * pass can order an epic's decisions by when they were confirmed and see which were
+ * overturned. ADDITIVE: null on every item that is not a `decision` + `human` work
+ * item, and a consumer that ignores it is unaffected.
+ *
+ * - `state` — `confirmed` (the gate was approved) · `overturned` · `awaiting` ·
+ *   `none` (no live gate: a body that does not parse, or a question withdrawn).
+ * - `decidedAt` — ISO, the deciding gate's; null unless confirmed or overturned.
+ * - `replanOwed` — the overturned decision's `## Supersedes` keys; null otherwise.
+ */
+export interface AiDecisionBlock {
+  state: 'awaiting' | 'confirmed' | 'overturned' | 'none';
+  decidedAt: string | null;
+  replanOwed: string[] | null;
+}
+
 // One node of the plan-tree breadth projection: the cheap fields the planner
 // needs to reason over the tree, keyed by work-item identifier.
 export interface PlanTreeSkeletonItem {
@@ -37,6 +55,9 @@ export interface PlanTreeSkeletonItem {
   // so a story under a filed epic reads `folderId: null` and its placement is
   // derivable from its ancestors' keys. Populated by ONE batched lookup per read.
   folderId: string | null;
+  // A `human` decision's confirmation (MOTIR-5958) — null on every other item.
+  // Populated by ONE batched read per response, never N+1.
+  decision: AiDecisionBlock | null;
 }
 
 // One folder of the project, as the tree read carries it (MOTIR-5410). `path` is
@@ -99,7 +120,8 @@ export interface WorkItemHistoryPage {
 export type AiWorkItemDto = WorkItemDto & RelationshipLinkGroups;
 
 export interface GetItemResponse {
-  item: AiWorkItemDto;
+  // `decision` — a `human` decision's confirmation (MOTIR-5958), null otherwise.
+  item: AiWorkItemDto & { decision: AiDecisionBlock | null };
   comments?: CommentsPageDTO;
   history?: WorkItemHistoryPage;
 }

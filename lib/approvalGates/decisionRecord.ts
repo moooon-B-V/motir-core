@@ -256,6 +256,38 @@ export function replanOwedOf(
   return { keys: parse.ok ? parse.supersedes : parse.draft.supersedes };
 }
 
+/**
+ * A `human` decision's confirmation as the AI boundary carries it (MOTIR-5958) — from
+ * its latest `decision_confirmation` gate, or none. `approved` reads `confirmed`;
+ * `superseded` (a withdrawn question) and no gate at all read `none`. `decidedAt` is
+ * set only on a decision somebody made, and the owed re-plan only on an overturn.
+ */
+export function aiDecisionBlockOf(row: {
+  descriptionMd: string | null;
+  state: string | null;
+  decidedAt: Date | null;
+}): {
+  state: 'awaiting' | 'confirmed' | 'overturned' | 'none';
+  decidedAt: string | null;
+  replanOwed: string[] | null;
+} {
+  const state =
+    row.state === 'approved'
+      ? 'confirmed'
+      : row.state === 'overturned' || row.state === 'awaiting'
+        ? row.state
+        : 'none';
+  const decided = state === 'confirmed' || state === 'overturned';
+  return {
+    state,
+    decidedAt: decided && row.decidedAt ? row.decidedAt.toISOString() : null,
+    replanOwed:
+      state === 'overturned'
+        ? (replanOwedOf({ kind: 'decision_confirmation', state }, row.descriptionMd)?.keys ?? [])
+        : null,
+  };
+}
+
 /** The row-scale summary of a decision's body (MOTIR-5954) — null when it does not parse. */
 export function decisionConfirmationSummaryOf(descriptionMd: string | null): {
   decision: string;

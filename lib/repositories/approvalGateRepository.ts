@@ -145,6 +145,46 @@ export const approvalGateRepository = {
    *
    * Served by `approval_gate_work_item_id_idx`.
    */
+  /**
+   * A `human` DECISION's latest confirm question, for every such work item in a set
+   * (Story MOTIR-5871 · MOTIR-5958) — the AI boundary's skeleton and item reads carry
+   * it so the planner can date and order an epic's decisions.
+   *
+   * ⚠️ ONE STATEMENT, however many decisions the set holds: the work items are
+   * filtered to `type = decision` + `executor = human` HERE, since the skeleton rows
+   * carry neither field, and each is joined LATERALLY to its latest
+   * `decision_confirmation` gate — the live question first, else the most recent. A
+   * decision with no gate at all (a defective body) is a row with a null state. The
+   * body rides along because an overturn's owed re-plan is derived from it.
+   */
+  async findDecisionConfirmationsByWorkItemIds(
+    workItemIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      workItemId: string;
+      descriptionMd: string | null;
+      state: ApprovalGateState | null;
+      decidedAt: Date | null;
+    }>
+  > {
+    if (workItemIds.length === 0) return [];
+    return tx.$queryRaw`
+      SELECT wi."id" AS "workItemId", wi."descriptionMd" AS "descriptionMd",
+             g."state" AS "state", g."decided_at" AS "decidedAt"
+      FROM "work_item" wi
+      LEFT JOIN LATERAL (
+        SELECT ag."state", ag."decided_at"
+        FROM "approval_gate" ag
+        WHERE ag."work_item_id" = wi."id" AND ag."kind" = 'decision_confirmation'
+        ORDER BY (ag."state" = 'awaiting') DESC, ag."created_at" DESC
+        LIMIT 1
+      ) g ON TRUE
+      WHERE wi."id" = ANY(${workItemIds}::text[])
+        AND wi."type"::text = 'decision'
+        AND wi."executor"::text = 'human'`;
+  },
+
   async findLatestByWorkItem(
     workItemId: string,
     kind: ApprovalGateKind,

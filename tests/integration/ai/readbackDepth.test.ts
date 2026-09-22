@@ -469,7 +469,10 @@ describe('aiBoundaryService — the graph-traversal boundary', () => {
     // The pre-existing item fields are unchanged, so a motir-ai that predates
     // the widening reads exactly what it always did and ignores the new keys —
     // which is what lets the two repositories deploy in either order.
-    const { blockedBy, blocks, relatesTo, duplicates, clones, ...before } = res.item;
+    // `decision` (MOTIR-5958) is the next additive key: null on an item that is not a
+    // `human` decision, which is every item here.
+    const { blockedBy, blocks, relatesTo, duplicates, clones, decision, ...before } = res.item;
+    expect(decision).toBeNull();
     expect(before).toEqual(
       await workItemsService.getWorkItemByIdentifier(fx.projectId, item.identifier, fx.ctx),
     );
