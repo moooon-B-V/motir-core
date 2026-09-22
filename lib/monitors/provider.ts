@@ -52,11 +52,19 @@ import type {
 export const MONITOR_GRANT_EXCHANGE_TIMEOUT_MS = 10_000;
 
 /**
- * Deadline for the verify-install PUT, in ms. The same callback is waiting on
- * it, and it happens after the exchange — so the two together must still fit
- * inside the route's budget, which is why this is the smaller number.
+ * Deadline for the verify-install PUT and the install read that follows it, in
+ * ms — the SAME bound as the grant exchange, never a tighter one (MOTIR-6008).
+ *
+ * ⚠️ IT USED TO BE THE SMALLER NUMBER, AND THAT LOST A GRANT. The reasoning was
+ * that the callback waits on both calls, so the second had to be shorter. But
+ * these two run AFTER the exchange has spent Sentry's single-use grant code, so
+ * a tight bound here does not save the person time — it throws away a
+ * credential Sentry has already issued (production, 2026-09-22: "No response
+ * within 5000ms"). The grant is now stored before these run and a failure is
+ * retried later, so a slow Sentry costs a retry rather than a reinstall; the
+ * bound only has to stop a hung host from parking the callback forever.
  */
-export const MONITOR_VERIFY_INSTALL_TIMEOUT_MS = 5_000;
+export const MONITOR_VERIFY_INSTALL_TIMEOUT_MS = MONITOR_GRANT_EXCHANGE_TIMEOUT_MS;
 
 /**
  * Deadline for a token REFRESH, in ms. Longer than the interactive bounds above

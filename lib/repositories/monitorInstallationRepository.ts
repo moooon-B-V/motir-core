@@ -163,6 +163,16 @@ export const monitorInstallationRepository = {
     return rows.map((r) => r.id);
   },
 
+  /** Replace a grant's secret-free `metadata` (the organisation slug and the
+   *  install-pending marker). */
+  async setMetadata(
+    id: string,
+    metadata: { orgSlug?: string; installPending?: true },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.monitorInstallation.update({ where: { id }, data: { metadata } });
+  },
+
   /** Remove a grant. `deleteMany` (not `delete`) so a retried disconnect after the
    *  row is gone is an idempotent no-op (count 0) rather than a `P2025` throw. Its
    *  `monitor_connection` rows cascade with it (the FK `onDelete: Cascade`), which

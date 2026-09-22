@@ -35,6 +35,9 @@ export async function recheckMonitorHealthAction(): Promise<RecheckMonitorHealth
   const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 
   try {
+    // Finish a connect whose follow-up calls failed first (MOTIR-6008), so the
+    // probe below sees the organisation it needs.
+    await monitorConnectionService.completePendingInstall(ctx.projectId, serviceCtx);
     const view = await monitorConnectionService.getView(ctx.projectId, serviceCtx);
     if (!view.installationId) return { ok: false, code: 'no_grant' };
     await monitorCredentialService.probeHealth(ctx.projectId, view.installationId, serviceCtx);

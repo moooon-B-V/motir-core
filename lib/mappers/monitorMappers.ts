@@ -13,6 +13,14 @@ export function readOrgSlug(metadata: unknown): string | null {
   return typeof slug === 'string' && slug.length > 0 ? slug : null;
 }
 
+/** Whether a grant was stored before its install was VERIFIED and its
+ *  organisation read (MOTIR-6008) — the marker `completeGrant` writes when a
+ *  follow-up call fails, and `completePendingInstall` clears. */
+export function readInstallPending(metadata: unknown): boolean {
+  if (typeof metadata !== 'object' || metadata === null) return false;
+  return (metadata as Record<string, unknown>)['installPending'] === true;
+}
+
 /** The stored poll status, narrowed to the two values the poll writes. A value
  *  it never writes reads as "never polled" rather than as a status the room
  *  has no copy for. */
