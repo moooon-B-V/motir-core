@@ -337,8 +337,17 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // reached `planned` is waiting for a PERSON, not for a crashed author, so the
     // lease never expires it (AMENDMENT 16 D9). The sweep reports the skip rather
     // than walking past a selected row silently.
+    //
+    // `rested` added by MOTIR-6066: a target the plan ADOPTED from a hand-park
+    // has no prior status to restore, so the sweep rests it at `todo` /
+    // `blocked` instead (AMENDMENT 16 D8 as amended). The id is KEPT, not
+    // bumped, for the reason this file gives for a step with an external
+    // effect: the step RELEASES LOCKS, so a new id would re-run it on a resumed
+    // run. And the replayed value is already safe at the boundary — the change
+    // only ADDS a member, so every memo written under the old shape is a valid
+    // value of the new one, and the handler returns it without reading it.
     shape:
-      '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "restored" | "unattributable"; workItemId: string }>; released: number }',
+      '{ entries: Array<{ outcome: "left_as_is" | "plan_awaiting_review" | "rested" | "restored" | "unattributable"; workItemId: string }>; released: number }',
   },
   'resolve-target-v2': {
     file: 'lib/jobs/indexFleetSteps.ts',
