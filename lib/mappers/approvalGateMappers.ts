@@ -128,6 +128,7 @@ export function toApprovalRecordDecidedRowDto(
     },
     subject,
     chosenOption: (row.chosenOption as ChosenOptionDTO | null) ?? null,
+    confirmedRecord: (row.confirmedRecord as ConfirmedRecordDTO | null) ?? null,
   };
 }
 

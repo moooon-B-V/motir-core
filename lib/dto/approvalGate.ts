@@ -711,6 +711,12 @@ export interface ApprovalRecordDecidedRowDto {
    * choice sent back with *None of these*.
    */
   chosenOption: ChosenOptionDTO | null;
+  /**
+   * WHAT A CONFIRMED DECISION'S RECORD WAS (MOTIR-5961) — off the immutable row, so the
+   * row says *with* or *without a written record* after the body changed. Null on every
+   * other kind and on an overturned decision.
+   */
+  confirmedRecord: ConfirmedRecordDTO | null;
 }
 
 /** One SECTION of the room: its rows on this page, and its total over every page. */

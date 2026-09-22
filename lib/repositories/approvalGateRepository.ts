@@ -1137,6 +1137,8 @@ const RECORD_GATE_SELECT = {
   subjectVersion: true,
   // What a CHOICE picked (MOTIR-5897) — a decided choice row names it.
   chosenOption: true,
+  // What a CONFIRMED decision's record was (MOTIR-5961) — its row says with or without.
+  confirmedRecord: true,
 } as const satisfies Prisma.ApprovalGateSelect;
 
 /** One row of the Approvals room's read, as Prisma returns it. */

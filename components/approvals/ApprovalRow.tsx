@@ -18,6 +18,7 @@ import type {
   ApprovalQueueRowDto,
   ApprovalRecordDecidedRowDto,
   ChosenOptionDTO,
+  ConfirmedRecordDTO,
   DecisionApprovalSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
@@ -145,7 +146,10 @@ function KindGlyph({ kind }: { kind: ApprovalGateKindDTO }) {
     // a choice gate is only ever raised on a `type: choice` card.
     return <Signpost className="h-4 w-4 shrink-0 text-(--el-type-choice)" aria-hidden />;
   }
-  if (kind === 'decision_approval') {
+  if (kind === 'decision_approval' || kind === 'decision_confirmation') {
+    // A decision to CONFIRM takes the same mark (MOTIR-5961; `approvals-row--decision-
+    // confirm.mock.html`) — it is raised only on a `type: decision` card; its KIND label,
+    // *Confirm decision*, is what tells the two apart in one list.
     // The decision TYPE's own mark and hue (MOTIR-5679; `design/workbench` § 27) — exactly
     // as a design row takes the design type's pencil, so the reader already knows it.
     return <Scale className="h-4 w-4 shrink-0 text-(--el-type-decision)" aria-hidden />;
@@ -217,14 +221,18 @@ function SubjectMeta({
   subject,
   decidedVersion,
   chosenOption,
+  decided,
 }: {
   subject: ApprovalGateSubjectSummaryDTO | null;
   /** Set on a DECIDED record: the version the decision was made against. */
   decidedVersion?: string | null;
   /** Set on a DECIDED CHOICE: what was picked, off the immutable row (MOTIR-5897). */
   chosenOption?: ChosenOptionDTO | null;
+  /** Set on a DECIDED record: its state and, for a confirmed decision, the record stamp. */
+  decided?: { state: ApprovalGateStateDTO; confirmedRecord: ConfirmedRecordDTO | null };
 }) {
   const t = useTranslations('workbench.approvals');
+  const tConfirm = useTranslations('approvalGate.decisionConfirm');
   // A DECIDED CHOICE names its pick from the RECORD, never from the body — which may
   // have changed, or stopped parsing, since. It is read before the subject check for
   // exactly that reason: a chosen option is still a fact about a body that is gone.
@@ -271,6 +279,29 @@ function SubjectMeta({
         {decidedVersion !== undefined
           ? t('choiceNoneChosen', { count: subject.optionCount })
           : t('choiceMeta', { count: subject.optionCount, question: subject.question })}
+      </span>
+    );
+  }
+  if (subject.kind === 'decision_confirmation') {
+    // A DECISION TO CONFIRM (MOTIR-5961; `approvals-row--decision-confirm.mock.html`): a
+    // waiting one names its changes, how much it supersedes and the decision's first line;
+    // a decided one says what happened — the record read from the STAMP.
+    const count = subject.supersedesCount;
+    const line =
+      decided?.state === 'overturned'
+        ? tConfirm('row.overturned', { count })
+        : decided?.state === 'approved'
+          ? decided.confirmedRecord?.kind === 'attachment'
+            ? tConfirm('row.confirmedWith', { count })
+            : tConfirm('row.confirmedWithout', { count })
+          : tConfirm('row.awaiting', {
+              changes: subject.changes.map((change) => tConfirm(`change.${change}`)).join(' · '),
+              count,
+              decision: subject.decision,
+            });
+    return (
+      <span className="truncate text-xs text-(--el-text-secondary)" title={subject.decision}>
+        {line}
       </span>
     );
   }
@@ -328,8 +359,13 @@ function StatePill({ state, kind }: { state: ApprovalGateStateDTO; kind: Approva
   // A CHOICE that was answered reads *Chosen*, not *Approved* — nothing was approved,
   // an option was picked (MOTIR-5897; the frame's own pill says the same).
   const tChoice = useTranslations('approvalGate.choice.state');
+  // A decision that was CONFIRMED reads *Confirmed*, not *Approved* (MOTIR-5961).
+  const tConfirm = useTranslations('approvalGate.decisionConfirm.state');
   if (state === 'approved' && kind === 'decision_choice') {
     return <Pill severity="success">{tChoice('chosen')}</Pill>;
+  }
+  if (state === 'approved' && kind === 'decision_confirmation') {
+    return <Pill severity="success">{tConfirm('confirmed')}</Pill>;
   }
   switch (state) {
     // ⚠️ THE SAME PILL RECIPES THE FRAME PICKS, so a settled row and the frame
@@ -394,6 +430,7 @@ export function ApprovalRow({
   const pullRequestSet = row.subject?.kind === 'pull_request_approval';
   const decision = row.subject?.kind === 'decision_approval';
   const choice = row.subject?.kind === 'decision_choice';
+  const confirm = row.subject?.kind === 'decision_confirmation';
   // A kind with no renderer, or a subject that is gone, still HAS the door — the
   // overlay draws both (§ 22 Panels 4a / 4b). What they lack is anything to
   // decide, so their Decide cell keeps § 20's treatment.
@@ -403,7 +440,8 @@ export function ApprovalRow({
       row.subject.kind === 'acceptance_result' ||
       pullRequestSet ||
       decision ||
-      choice);
+      choice ||
+      confirm);
   const settledState: ApprovalGateStateDTO | null =
     record.section === 'decided' ? record.row.state : announcedState;
   // A HELD row is settled with no state to show: it has left the awaiting set,
@@ -476,6 +514,7 @@ export function ApprovalRow({
             subject={row.subject}
             decidedVersion={record.row.subjectVersion}
             chosenOption={record.row.chosenOption}
+            decided={{ state: record.row.state, confirmedRecord: record.row.confirmedRecord }}
           />
         ) : (
           <SubjectMeta subject={row.subject} />
