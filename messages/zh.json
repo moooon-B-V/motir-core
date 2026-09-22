@@ -6269,10 +6269,6 @@
           "copied": "已复制",
           "copyFailed": "无法复制——请手动选择文本"
         },
-        "stale": {
-          "title": "针对 <sha>{recordSha}</sha> 编写——{repo} 现在位于 <sha>{headSha}</sha>。",
-          "pill": "已过时"
-        },
         "missing": {
           "title": "尚无运行为此工作项编写测试说明。",
           "owedByRun": "应由 {run} 编写。上方的拉取请求仍显示各自的状态。",

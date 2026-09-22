@@ -6273,10 +6273,6 @@
           "copied": "Copied",
           "copyFailed": "Couldn't copy — select the text instead"
         },
-        "stale": {
-          "title": "Written for <sha>{recordSha}</sha> — {repo} is now at <sha>{headSha}</sha>.",
-          "pill": "Stale"
-        },
         "missing": {
           "title": "No run has written how to test this item.",
           "owedByRun": "Owed by {run}. The pull requests above still carry their own status.",

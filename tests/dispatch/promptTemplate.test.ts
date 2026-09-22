@@ -1936,6 +1936,27 @@ describe('assembleDispatchPrompt — HOW TO TEST is per RUN, on the run target (
     expect(text).toContain('a refused publish does not prevent the transition');
   });
 
+  // MOTIR-6065: How to test is written for the WORK ITEM, not for a commit, and the
+  // item page no longer flags a record whose commit the pull request moved past —
+  // so the agent that makes a later commit is the one told to keep it true.
+  it('tells the agent How to test belongs to the item, and a later commit that changes a step re-publishes it', () => {
+    const text = flat(assembleDispatchPrompt(source()).prompt);
+    expect(text).toContain('How to test belongs to PROD-7, not to a commit.');
+    expect(text).toContain(
+      'If a later commit in this run changes anything it describes — a precondition, a setup, migrate or seed command, a click-path step — publish it again with the whole corrected text',
+    );
+    expect(text).toContain('A commit that changes none of them needs no new publish.');
+  });
+
+  it('a SCOPED child is not told to re-publish — it publishes nothing', () => {
+    const text = flat(
+      assembleDispatchPrompt(
+        source({ sessionBranch: 'motir/run-20260913-120000', runTargetKey: 'PROD-1' }),
+      ).prompt,
+    );
+    expect(text).not.toContain('not to a commit');
+  });
+
   it('the per-item lane requires a "## How to test" section in the pull request body it opens', () => {
     const text = flat(assembleDispatchPrompt(source({ sessionBranch: null })).prompt);
     expect(text).toContain('3. open the pull request. Its body carries a "## How to test" section');

@@ -5,7 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
-import { CORE_PR, GATEWAY_PR, coreStale, recordDto } from '../helpers/howToTestFixtures';
+import { CORE_PR, GATEWAY_PR, recordDto } from '../helpers/howToTestFixtures';
 import messages from '@/messages/en.json';
 
 // HOW TO TEST, every design state (Story MOTIR-4906 · Subtask MOTIR-5336, built
@@ -13,8 +13,9 @@ import messages from '@/messages/en.json';
 // part is the INSTRUCTIONS: the head, the author line, the author's rich-text
 // body and Earlier versions. § 25 RETIRED the per-repository sub-block (In the
 // preview · Locally · What CI proved, and 12k's "no section" box); MOTIR-5691
-// deleted it, and the one fact it carried that lives nowhere else — STALE — is a
-// single line under the author line.
+// deleted it. The one line § 25 kept from it — STALE, "Written for <sha> — <repo>
+// is now at <sha>" — went too (MOTIR-6065): How to test is written for the work
+// item, not for a commit.
 
 const t = messages.github.development.howToTest;
 const writeText = vi.fn<(text: string) => Promise<void>>();
@@ -36,6 +37,10 @@ const RETIRED_COPY = [
   'No branch to fetch',
   'The preview and CI follow the new head',
   'git fetch',
+  // The stale line (MOTIR-6065) — its pill and its sentence.
+  'Stale',
+  'Written for',
+  'is now at',
 ];
 
 function expectNoRetiredCopy(root: HTMLElement = document.body) {
@@ -53,13 +58,12 @@ function renderBlock(dto: HowToTestDto) {
   return render(<HowToTestBlock howToTest={dto} />);
 }
 
-/** A person's saved record (§ 24 Panel 13f): a body, no sections, never stale. */
+/** A person's saved record (§ 24 Panel 13f): a body, no sections. */
 function personRecord(): HowToTestDto {
   const dto = recordDto();
   return {
     ...dto,
     record: { ...dto.record!, author: { kind: 'person', userId: 'user-ada', label: 'Ada' } },
-    stale: [],
   };
 }
 
@@ -184,44 +188,11 @@ describe('the defect this deletion closes (§ 20 Panel 12k, retired by § 25)', 
   });
 });
 
-describe('stale (Panel 12g)', () => {
-  it('is ONE line per moved repository, under the author line and ABOVE the body', () => {
-    renderBlock(
-      recordDto({
-        stale: [
-          coreStale({ recordSha: '3f2a91cdeadbeef', headSha: '8b04e7dcafef00d' }),
-          coreStale({ repoName: 'moooon/motir-gateway' }),
-        ],
-      }),
-    );
-    const lines = screen.getAllByRole('status');
-    expect(lines).toHaveLength(2);
-    expect(lines[0]!.textContent).toContain(t.stale.pill);
-    expect(lines[0]!.textContent).toContain(
-      'Written for 3f2a91c — moooon/motir-core is now at 8b04e7d.',
-    );
-    expect(lines[1]!.textContent).toContain(
-      'Written for a1b2c3d — moooon/motir-gateway is now at e4f5a6b.',
-    );
-    // Read BEFORE the steps it qualifies (§ 25): the line precedes the body.
-    const firstHeading = screen.getByRole('heading', { level: 2, name: 'Precondition' });
-    expect(
-      lines[1]!.compareDocumentPosition(firstHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-  });
-
-  it('replaces the callout: no "preview and CI" sentence, and no box carrying the pill', () => {
-    renderBlock(recordDto({ stale: [coreStale()] }));
-    expectNoRetiredCopy();
-    const part = screen.getByRole('group', { name: t.title });
-    expect(within(part).queryAllByRole('group')).toHaveLength(0);
-    expect(screen.getAllByText(t.stale.pill)).toHaveLength(1);
-  });
-
-  it('an empty list draws nothing — the line has no empty state', () => {
-    renderBlock(recordDto({ stale: [] }));
+describe('no stale line (MOTIR-6065)', () => {
+  it('a record draws no stale line and no status under the author — How to test belongs to the item, not a commit', () => {
+    renderBlock(recordDto());
     expect(screen.queryByRole('status')).toBeNull();
-    expect(screen.queryByText(t.stale.pill)).toBeNull();
+    expectNoRetiredCopy();
   });
 });
 
@@ -232,7 +203,6 @@ describe('record missing (Panel 12i)', () => {
       runTarget: null,
       owedBy: { runId: 'run-318', label: 'motir run · 2026-09-13 14:05 UTC' },
       record: null,
-      stale: [],
       history: [],
     });
     const callout = screen.getByRole('status');
@@ -247,7 +217,6 @@ describe('record missing (Panel 12i)', () => {
       runTarget: null,
       owedBy: null,
       record: null,
-      stale: [],
       history: [],
     });
     expect(screen.getByRole('status').textContent).toContain(t.missing.noRun);
@@ -303,7 +272,6 @@ describe('tested via an ancestor (Panel 12m)', () => {
       runTarget: { key: 'ACME-12' },
       owedBy: null,
       record: null,
-      stale: [],
       history: [],
     });
     expect(document.body.textContent).toContain('Tested as part of ACME-12');
@@ -320,7 +288,6 @@ describe('an unknown state', () => {
       runTarget: null,
       owedBy: null,
       record: null,
-      stale: [],
       history: [],
     });
     expect(document.body.textContent).toContain('archived_somehow');
@@ -333,7 +300,6 @@ describe('the defensive arms the story gate measured (MOTIR-5337)', () => {
     runTarget: null,
     owedBy: null,
     record: null,
-    stale: [],
     history: [],
   };
 

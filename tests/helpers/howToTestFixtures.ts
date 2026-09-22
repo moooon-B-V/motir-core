@@ -1,5 +1,5 @@
 import type { LinkedPullRequestDto } from '@/lib/dto/github';
-import type { HowToTestDto, HowToTestStaleDto } from '@/lib/dto/howToTest';
+import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
 // Fixtures for the Development block (MOTIR-5336) — the design board's own
@@ -59,16 +59,6 @@ export const SECTIONED_BODY = [
   '2. Send 61 requests — the 61st answers `429`.',
 ].join('\n');
 
-/** § 25 Panel 12g — the core section, written for an earlier push than the row's head. */
-export function coreStale(over: Partial<HowToTestStaleDto> = {}): HowToTestStaleDto {
-  return {
-    repoName: 'moooon/motir-core',
-    recordSha: 'a1b2c3d000000000000000000000000000000000',
-    headSha: 'e4f5a6b000000000000000000000000000000000',
-    ...over,
-  };
-}
-
 export function recordDto(over: Partial<HowToTestDto> = {}): HowToTestDto {
   return {
     state: 'record',
@@ -81,7 +71,6 @@ export function recordDto(over: Partial<HowToTestDto> = {}): HowToTestDto {
       bodyMd: SECTIONED_BODY,
       previewPath: '/settings/api-keys',
     },
-    stale: [],
     history: [],
     ...over,
   };
