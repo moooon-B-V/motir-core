@@ -137,6 +137,32 @@ export const monitorInstallationRepository = {
     return tx.monitorInstallation.update({ where: { id }, data: health });
   },
 
+  /**
+   * The workspace's OTHER grants for the same provider AND the same organisation
+   * — the ones a fresh grant for that organisation SUPERSEDES (MOTIR-6005).
+   *
+   * A reinstall is the only way to recover a dead Sentry credential, and it comes
+   * back under a NEW provider installation id, so the upsert above makes a second
+   * row. The organisation slug (recorded on `metadata` at connect) is what says
+   * the two rows are the same organisation. Ordered oldest first, like the room.
+   */
+  async listOtherIdsForOrg(
+    args: { workspaceId: string; provider: string; orgSlug: string; excludeId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.monitorInstallation.findMany({
+      where: {
+        workspaceId: args.workspaceId,
+        provider: args.provider,
+        id: { not: args.excludeId },
+        metadata: { path: ['orgSlug'], equals: args.orgSlug },
+      },
+      select: { id: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((r) => r.id);
+  },
+
   /** Remove a grant. `deleteMany` (not `delete`) so a retried disconnect after the
    *  row is gone is an idempotent no-op (count 0) rather than a `P2025` throw. Its
    *  `monitor_connection` rows cascade with it (the FK `onDelete: Cascade`), which
