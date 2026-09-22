@@ -188,7 +188,7 @@ function FrameRow({ frame, framework }: { frame: MonitorEvidenceFrameDto; framew
     >
       <span
         className={`min-w-0 [overflow-wrap:anywhere] ${
-          framework ? 'text-(--el-text-muted)' : 'text-(--el-code-text)'
+          framework ? 'text-(--el-text-secondary)' : 'text-(--el-code-text)'
         }`}
       >
         {frameLocation(frame)}
@@ -196,7 +196,7 @@ function FrameRow({ frame, framework }: { frame: MonitorEvidenceFrameDto; framew
       {frame.function ? (
         <span
           className={`[overflow-wrap:anywhere] ${
-            framework ? 'text-(--el-text-muted)' : 'text-(--el-text-secondary)'
+            framework ? 'text-(--el-text-secondary)' : 'text-(--el-text-strong)'
           }`}
         >
           {t('frameIn', { function: frame.function })}
