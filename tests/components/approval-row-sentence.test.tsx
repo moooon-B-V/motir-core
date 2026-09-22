@@ -203,6 +203,8 @@ describe('the approve-to-merge details carry the numbers in the TITLE, never the
     expect(set.getAttribute('title')).toBe(
       'moooon/motir-core · #412, moooon/motir-ai · #88, moooon/motir-gateway · #17',
     );
+    // Lifted above the stretched row door, or the pointer never reaches the title.
+    expect(set.className).toMatch(/\brelative\b.*\bz-10\b/);
   });
 
   it('a decision document that cannot be approved moves its pull request to the title', () => {
@@ -211,8 +213,8 @@ describe('the approve-to-merge details carry the numbers in the TITLE, never the
       'en',
     );
 
-    expect(screen.getByText('No decision document').getAttribute('title')).toBe(
-      'moooon/motir-core · #440',
-    );
+    const line = screen.getByText('No decision document');
+    expect(line.getAttribute('title')).toBe('moooon/motir-core · #440');
+    expect(line.className).toMatch(/\brelative\b.*\bz-10\b/);
   });
 });

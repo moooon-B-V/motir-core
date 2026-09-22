@@ -288,6 +288,14 @@ function KindGlyph({ kind }: { kind: ApprovalGateKindDTO }) {
 }
 
 /**
+ * A detail MOVED INTO A `title` (§ 28, DECISION 2) sits ABOVE the stretched row door,
+ * as the title door does. The door is `absolute inset-0` over the whole row, so without
+ * the lift the pointer never reaches the span and its tooltip never shows: the
+ * repository and number would be one hover away from nobody.
+ */
+const HOVER_DETAIL = 'relative z-10';
+
+/**
  * The pull-request SET an approve-and-merge gate asks about (design-notes § 23, as
  * § 28 amends it): the REPOSITORIES by name — *In motir-core, motir-ai* — two in full,
  * three or more the first two and then *+n more*. ⚠️ No host numbering in the visible
@@ -304,7 +312,7 @@ function PullRequestSetLine({ subject }: { subject: PullRequestApprovalSubjectSu
       : names.join(t('separator'));
   return (
     <span
-      className="truncate text-xs text-(--el-text-secondary)"
+      className={cn('truncate text-xs text-(--el-text-secondary)', HOVER_DETAIL)}
       title={subject.members.map((member) => `${member.repo} · #${member.number}`).join(', ')}
     >
       {t('repos', { repos })}
@@ -344,7 +352,7 @@ function DecisionSubjectLine({ subject }: { subject: DecisionApprovalSubjectSumm
         ? t('none')
         : t('unreadable');
   return (
-    <span className="truncate text-xs text-(--el-text-secondary)" title={pr}>
+    <span className={cn('truncate text-xs text-(--el-text-secondary)', HOVER_DETAIL)} title={pr}>
       {line}
     </span>
   );
