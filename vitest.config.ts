@@ -2366,6 +2366,22 @@ export default defineConfig({
         'lib/jobs/definitions/monitorBugEnrich.ts',
         'lib/services/monitorBugEnrichmentService.ts',
         'lib/ai/authoredBug.ts',
+        // Story MOTIR-5975 · Subtask MOTIR-5984 — the EVIDENCE surface: the seam's
+        // filters, the three-outcome read, the as-filed predicate, the backfill
+        // job and the Errors row's evidence block. MEASURED on the parent branch
+        // before being pinned, over the story's own suites plus its gate
+        // (`monitorEvidenceStoryGate.test.ts`): evidence.ts, asFiled.ts and the
+        // backfill job 100 on all four; monitorContextRead.ts 100 / 94.7 branches;
+        // MonitorErrorEvidence.tsx 97.7 / 96.6 / 97.2 / 100. The files this story
+        // only WIDENED keep their existing pins (the provider pair, the repository,
+        // the two monitor services, the reconcile job, MonitorErrorsSection.tsx —
+        // all re-measured ≥ 95 on every axis) or stay ungated (`promptTemplate.ts`,
+        // `dispatchPromptService.ts`: the one-new-arm trap named above).
+        'lib/monitors/evidence.ts',
+        'lib/monitors/asFiled.ts',
+        'lib/services/monitorContextRead.ts',
+        'lib/jobs/definitions/monitorBugEnrichBackfill.ts',
+        'app/**/items/[key]/_components/MonitorErrorEvidence.tsx',
         // ── Story MOTIR-4906 · HOW TO TEST per RUN ─────────────────────────────
         // Its story gate (MOTIR-5337). Every file the story ADDED that compiles to
         // something, MEASURED on the parent branch before being pinned below, over
@@ -5041,6 +5057,27 @@ export default defineConfig({
           statements: 90,
         },
         'lib/ai/authoredBug.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        // Story MOTIR-5975 · Subtask MOTIR-5984 — measured values in the include note.
+        'lib/monitors/evidence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitors/asFiled.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/services/monitorContextRead.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/monitorBugEnrichBackfill.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/items/[key]/_components/MonitorErrorEvidence.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'app/**/settings/project/monitoring/_components/MonitoringRoom.tsx': {
           lines: 90,
           functions: 90,

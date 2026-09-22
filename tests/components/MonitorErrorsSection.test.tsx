@@ -617,3 +617,81 @@ describe('§15 — the EVIDENCE block inside a row', () => {
     );
   });
 });
+
+describe('§15 — the evidence block’s remaining arms', () => {
+  const base: MonitorIssueLinkDto['evidence'] = {
+    state: 'present',
+    stale: false,
+    exception: { type: 'Error', message: 'short' },
+    frames: [],
+    tags: [],
+    request: null,
+    eventId: 'abcdef0123456789',
+    eventAt: '2026-09-19T11:50:00.000Z',
+    readAt: '2026-09-19T11:52:00.000Z',
+    lastFailedAt: null,
+  };
+  const openRow = (evidence: Partial<MonitorIssueLinkDto['evidence']>) => {
+    renderRow(link({ evidence: { ...base, ...evidence } }));
+    fireEvent.click(screen.getByRole('button', { name: /Show evidence/ }));
+    return screen.getByTestId('evidence-block');
+  };
+
+  it('a long message is clamped with a fold that opens and closes it — never cut', () => {
+    const block = openRow({ exception: { type: 'Error', message: 'x'.repeat(400) } });
+    expect(screen.getByTestId('evidence-message').className).toContain('line-clamp-4');
+    fireEvent.click(within(block).getByRole('button', { name: 'Show full message' }));
+    expect(screen.getByTestId('evidence-message').className).not.toContain('line-clamp-4');
+    fireEvent.click(within(block).getByRole('button', { name: 'Show less' }));
+    expect(screen.getByTestId('evidence-message').className).toContain('line-clamp-4');
+  });
+
+  it('a type-only and a message-only exception each print what they have', () => {
+    expect(openRow({ exception: { type: 'TypeOnly', message: null } }).textContent).toContain(
+      'TypeOnly',
+    );
+    cleanup();
+    const block = openRow({ exception: { type: null, message: 'only the message' } });
+    expect(block.textContent).toContain('only the message');
+    expect(block.textContent).not.toContain('null');
+  });
+
+  it('a request with no method prints the path alone; no event id and no event time drop their parts', () => {
+    const block = openRow({ request: { method: null, path: '/p' }, eventId: null, eventAt: null });
+    expect(block.querySelector('[data-evidence-block="request"]')!.textContent).toContain('/p');
+    expect(block.textContent).not.toContain('Event ');
+    expect(screen.getByTestId('evidence-summary').textContent).not.toContain('latest event');
+  });
+
+  it('stale with no event time still names the failed check', () => {
+    const block = openRow({ stale: true, eventAt: null, lastFailedAt: '2026-09-19T11:58:00.000Z' });
+    expect(block.querySelector('[data-evidence-block="stale"]')!.textContent).toContain(
+      'The last check failed',
+    );
+  });
+
+  it('copies the WHOLE event id, says Copied, and a denied clipboard says so and leaves the id', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const block = openRow({});
+    await act(async () => {
+      fireEvent.click(within(block).getByRole('button', { name: 'Copy event ID' }));
+    });
+    expect(writeText).toHaveBeenCalledWith('abcdef0123456789');
+    expect(block.textContent).toContain('Copied');
+    expect(block.textContent).toContain('Event abcdef012345…');
+
+    writeText.mockRejectedValueOnce(new Error('denied'));
+    await act(async () => {
+      fireEvent.click(within(block).getByRole('button', { name: 'Copy event ID' }));
+    });
+    expect(block.textContent).toContain("Couldn't copy — select the ID instead.");
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+  });
+
+  it('closing the door hides the block again', () => {
+    openRow({});
+    fireEvent.click(screen.getByRole('button', { name: /Hide evidence/ }));
+    expect(screen.queryByTestId('evidence-block')).toBeNull();
+  });
+});
