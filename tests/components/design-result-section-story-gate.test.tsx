@@ -124,6 +124,12 @@ const EXPECTED: Record<string, (canDecide: boolean) => void> = {
     expect(screen.getByText(en.approvalGate.record.willRepublish)).toBeTruthy();
     expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
   },
+  // MOTIR-5956 — a decided state, never the awaiting door. (The door refuses `overturn`
+  // on a design gate, so this is the fold's totality rather than a real design row.)
+  overturned: () => {
+    expect(screen.getByText(en.approvalGate.state.overturned, { exact: true })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
+  },
   superseded: () => {
     // ⚠️ MOTIR-5667: the port now says WHY. These fixtures carry no cause, which
     // is a row that predates the column — so the sentence is the `unknown` one,

@@ -110,7 +110,13 @@ export function DesignResultSection({
   // Keyed on `gate` the port keeps showing the current row — which IS the row
   // that was just decided, since only the current design's gate can be — and
   // the server's render then swaps in its pinned answer with nothing changing.
-  const decidedOnServer = gate?.state === 'approved' || gate?.state === 'changes_requested';
+  // An OVERTURN is a decision too (MOTIR-5956). The decide door refuses the verb on a
+  // design gate, so a design never carries one — but a fold that forgot it would draw
+  // the awaiting door over a decided row, which is the defect a total fold prevents.
+  const decidedOnServer =
+    gate?.state === 'approved' ||
+    gate?.state === 'changes_requested' ||
+    gate?.state === 'overturned';
   const portEvidence = decidedOnServer ? (subject?.evidence ?? null) : evidence;
 
   if (!shown) return <DesignResultPanel evidence={evidence} isDesignCard={isDesignCard} />;
