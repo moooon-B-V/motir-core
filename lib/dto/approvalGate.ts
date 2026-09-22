@@ -645,20 +645,20 @@ export interface ApprovalQueueRowDto {
 }
 
 /**
- * One OFFSET-paged window of the Approvals tab.
+ * The To-approve tab's WHOLE awaiting set (Story MOTIR-5996 · MOTIR-5998).
  *
- * ⚠️ THE SHAPE IS `HomePageDto`'s, AND THAT IS THE DECISION. `lib/dto/home.ts`
- * records why the Workbench retired its keyset (MOTIR-4852): *"a keyset has no
- * notion of 'page 7', so a reader could not see how far a tab went, jump, or
- * step back. The Workbench is not a feed."* This tab sits in the same strip,
- * under the same `IssueListPager`, so it inherits the same vocabulary — `page`
- * 1-based and CLAMPED to the last page, `total` the size of the whole set.
+ * ⚠️ NO PAGE. It used to be `HomePageDto`'s offset window under the strip's shared
+ * `IssueListPager`; the tab now lists everything routed to its reader, because a
+ * pager on one person's short queue only hides its oldest questions. The read is
+ * bounded by `APPROVAL_QUEUE_CEILING`, and `truncated` is how that bound is SAID
+ * rather than hidden: `total` is the size of the whole set, `items` what was read.
  */
-export interface ApprovalQueuePageDto {
+export interface ApprovalQueueDto {
   items: ApprovalQueueRowDto[];
+  /** The size of the WHOLE awaiting set — the tab's count. */
   total: number;
-  page: number;
-  pageSize: number;
+  /** `total > items.length`: the ceiling cut the set, and the list must say so. */
+  truncated: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

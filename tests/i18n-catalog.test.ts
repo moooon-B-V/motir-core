@@ -372,10 +372,6 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // *Pull requests*, which fixes it as a gate kind rather than a type chip.
     'approvalGate.decision.kindLabel':
       "band-1 gate KIND in the approval frame — the decision card's own question (§27)",
-    // …and the same kind on the To-approve ROW (MOTIR-5679; `design/workbench` § 27),
-    // beside the decision type's own glyph, as *Pull requests* labels its row.
-    'workbench.approvals.rowKind.decision_approval':
-      "To-approve row KIND — the decision card's own question, beside its type glyph (§27)",
     // THE CHOICE GATE (Story MOTIR-4914 · MOTIR-5891/5896). The gate kind and the type
     // share a word ON PURPOSE: a `decision_choice` gate is only ever raised on a
     // `type: choice` card, so the gate IS the card's own question — the decision
@@ -410,7 +406,6 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     'issueViews.provenanceSourceManual': 'provenance ORIGIN chip, framed by its FieldCard label',
 
     'approvalGate.decision.kindLabel': 'band-1 gate KIND in the approval frame (§27)',
-    'workbench.approvals.rowKind.decision_approval': 'To-approve row KIND (§27)',
     'approvalGate.choice.kindLabel': 'band-1 gate KIND — the choice card’s own question',
     'workbench.approvals.kind.decision_choice': 'Approvals row / overlay KIND for the choice gate',
     'approvalGate.statusHeld.decisionNoun.decision_choice': 'held-status decision NOUN',

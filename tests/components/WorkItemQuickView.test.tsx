@@ -131,6 +131,32 @@ describe('WorkItemQuickView', () => {
     expect(screen.queryByTestId('quick-view-open-full')).toBeNull();
   });
 
+  it('renders the not-found panel when the read FAILS on the network, never a crash', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
+
+    render(<WorkItemQuickView peekKey="MOTIR-500" onClose={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText('This work item isn’t available')).toBeTruthy());
+  });
+
+  it('forwards the scrim class, so a peek STACKED over another Modal dims it (MOTIR-6000)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+
+    render(<WorkItemQuickView peekKey="MOTIR-7" onClose={() => {}} overlayClassName="z-50" />);
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-surface="overlay"]')!.className).toContain('z-50'),
+    );
+  });
+
   it('renders nothing (no dialog, no fetch) when peekKey is null', () => {
     const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchSpy);

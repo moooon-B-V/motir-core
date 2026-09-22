@@ -38,9 +38,10 @@ async function NothingWaiting() {
   );
 }
 
-export async function ApprovalsTab({ ctx, page }: { ctx: HomeActorContext; page: number }) {
+export async function ApprovalsTab({ ctx }: { ctx: HomeActorContext }) {
   const t = await getTranslations('workbench');
-  const window = await approvalGatesService.listAwaitingMe(ctx, { page });
+  // THE WHOLE SET, no page (MOTIR-5998) — bounded by the service's ceiling.
+  const queue = await approvalGatesService.listAwaitingMe(ctx);
 
   // ⚠️ THE LIST IS MOUNTED EVEN WHEN IT IS EMPTY, and the empty state is handed
   // to it (Story MOTIR-5238 · MOTIR-5245). Returning `<NothingWaiting />`
@@ -51,9 +52,9 @@ export async function ApprovalsTab({ ctx, page }: { ctx: HomeActorContext; page:
   // tab with nothing in it shows; only the branch moved.
   return (
     <ApprovalsList
-      rows={window.items}
+      rows={queue.items}
       label={t('tabs.toApprove')}
-      pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
+      ceiling={queue.truncated ? { shown: queue.items.length, total: queue.total } : null}
       empty={<NothingWaiting />}
     />
   );

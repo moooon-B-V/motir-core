@@ -197,6 +197,27 @@ changes**.
   **Queue again**.
 - **Request changes** records your note and moves nothing, as on every gate.
 
+## Where you find what is waiting on you
+
+**Workbench → To approve** lists every approval waiting on you in the active project, on one
+page, with no pager. Each row reads as a sentence about the work item it is on:
+
+- _Design for {title}_ — a design waiting for your look;
+- _Acceptance video for story {title}_ — a story's recording;
+- _{title} is finished_ — the work's pull requests passed their checks and wait for your yes;
+- _Decision document for {title}_ — an agent's decision, shipped as a document;
+- _Options for {title}_ — a choice for you to make;
+- _{title} is decided_ — a decision on an epic waiting for you to confirm it.
+
+The work item's key follows the sentence, and the column beside it holds the details — how many
+files a design has, which repositories the finished work is in, what the decision says. The
+repository and number of each pull request are in that column's tooltip, not on the row. A row
+opens the approval full screen, over the page you are on.
+
+If you ever have more approvals waiting than the list will show at once, a line under the last
+row says how many are shown out of how many, and points you to **Approvals** in the project
+rail, which lists every approval — waiting first, then decided — with the same rows.
+
 ## Who is asked, and who may answer
 
 These are two different questions and Motir answers them differently on purpose.
@@ -297,8 +318,6 @@ read the same afterwards.
 Stated plainly, because a document that only describes what works leaves you
 guessing about the rest:
 
-- **There is no Approvals tab.** Gates are decided on the work item's own page.
-  There is no single place that lists everything waiting on you.
 - **Merging from Motir is new and partial.** In a project set to ask before merging,
   a pull request whose checks all pass gets a merge gate, and approving it merges the
   pull request (or adds it to the repository's merge queue). In a project set to merge

@@ -5,6 +5,7 @@ import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { linkPr } from './_helpers/pr-link';
+import { approvalSentence } from './_helpers/approval-sentence';
 import {
   openAgentSession,
   publishDesignResult,
@@ -186,8 +187,9 @@ test.describe('an approval carried to the next green verdict', () => {
       await page.goto('/workbench?tab=approvals');
       const row = approvalRow(page, seed);
       await expect(row).toHaveCount(1, { timeout: 60_000 });
+      // The row reads as a sentence about the work item (MOTIR-5999).
       await expect(
-        row.getByText(en.workbench.approvals.kind.design_result, { exact: true }),
+        row.getByText(approvalSentence(en, 'design_result', seed.design.title), { exact: true }),
       ).toBeVisible();
       await row.getByRole('link', { name: /^Review / }).click({ position: { x: 8, y: 22 } });
       const dialog = page.getByRole('dialog', {

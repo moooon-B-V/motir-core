@@ -4,6 +4,7 @@ import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { linkPr } from './_helpers/pr-link';
+import { approvalSentence } from './_helpers/approval-sentence';
 import {
   API_REPO,
   WEB_REPO,
@@ -123,7 +124,10 @@ const rowFor = (page: Page, card: SeededCard, m: Messages = en): Locator =>
 /** The whole-row door — the `<a href="/items/<key>">` stretched behind the cells. */
 const doorOf = (row: Locator, card: SeededCard, m: Messages = en): Locator =>
   row.getByRole('link', {
-    name: fill(m.workbench.approvals.reviewRow, { key: card.identifier, title: card.title }),
+    name: fill(m.workbench.approvals.reviewRow, {
+      key: card.identifier,
+      sentence: approvalSentence(m, 'pull_request_approval', card.title),
+    }),
     exact: true,
   });
 
@@ -263,14 +267,23 @@ test.describe('read a pull-request decision full screen, from the queue', () => 
       // The kind reads as ITSELF — the row names the set, and says nothing about
       // a kind not being built.
       await expect(
-        row.getByText(en.workbench.approvals.pullRequest.kindLabel, { exact: true }),
+        row.getByText(approvalSentence(en, 'pull_request_approval', seed.merged.title), {
+          exact: true,
+        }),
       ).toBeVisible();
-      await expect(
-        row.getByText(
-          `${prName(API_REPO, PRS.en.api.number)}, ${prName(WEB_REPO, PRS.en.web.number)}`,
-          { exact: true },
-        ),
-      ).toBeVisible();
+      // The SET is named by its repositories (MOTIR-5999, design-notes § 28): no host
+      // numbering in the visible text, and every `owner/name · #n` in the cell's title.
+      const set = row.getByText(
+        fill(en.workbench.approvals.pullRequest.repos, {
+          repos: `${API_REPO.name}${en.workbench.approvals.pullRequest.separator}${WEB_REPO.name}`,
+        }),
+        { exact: true },
+      );
+      await expect(set).toBeVisible();
+      await expect(set).toHaveAttribute(
+        'title',
+        `${prName(API_REPO, PRS.en.api.number)}, ${prName(WEB_REPO, PRS.en.web.number)}`,
+      );
       await expect(row.getByText(en.workbench.approvals.notBuiltYet)).toHaveCount(0);
     });
     await beat();

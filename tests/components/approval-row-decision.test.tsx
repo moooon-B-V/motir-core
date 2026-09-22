@@ -64,12 +64,7 @@ function decisionRow(
 
 function renderRows(rows: ApprovalQueueRowDto[]) {
   return renderWithIntl(
-    <ApprovalsList
-      rows={rows}
-      label="To approve"
-      pagination={{ total: rows.length, page: 1, pageSize: 25 }}
-      empty={<p>Nothing</p>}
-    />,
+    <ApprovalsList rows={rows} label="To approve" ceiling={null} empty={<p>Nothing</p>} />,
   );
 }
 
@@ -80,9 +75,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the decision row (Panel 7a/7b)', () => {
-  it('names the document — its file-name title and path — under the kind Decision', () => {
+  it('names the document — its file-name title and path — in its details, under the sentence', () => {
     renderRows([decisionRow()]);
-    expect(screen.getByText(en.workbench.approvals.rowKind.decision_approval)).toBeTruthy();
+    // The row reads as a sentence about the work item (MOTIR-5999).
+    expect(screen.getByText('Decision document for')).toBeTruthy();
     const subject = screen.getByText('Page body · docs/decisions/page-body.md');
     // The cell's title carries the path and the blob.
     expect(subject.getAttribute('title')).toBe(

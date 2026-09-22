@@ -7,6 +7,7 @@ import { parsePage } from '@/lib/issues/issueListView';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ApprovalRecordsList } from './_components/ApprovalRecordsList';
+import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 
 // THE APPROVAL RECORDS ROOM (Story MOTIR-5299 · MOTIR-5302) — every approval record
 // the reader may see in the active project, pending first then decided, built to
@@ -63,6 +64,11 @@ export default async function ApprovalRecordsPage({
       ) : (
         <ApprovalRecordsList records={records} />
       )}
+      {/* The quick-view island a row's TITLE opens (Story MOTIR-5996 · MOTIR-6001): the
+          same `?peek=` controller /workbench, /items, /ready and the board mount, so a
+          title click here is the same interaction as everywhere else. Closing it keeps
+          every other parameter — the room's own `?page=` included. */}
+      <IssueQuickViewController />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { linkPr } from './_helpers/pr-link';
+import { approvalSentence } from './_helpers/approval-sentence';
 import {
   API_REPO,
   WEB_REPO,
@@ -270,11 +271,21 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
         const row = rows.filter({ hasText: seed.merged.identifier });
         await expect(row).toHaveCount(1);
         // Every pull request in the set, in the set's own order, and no "Not built yet".
+        //
+        // ⚠️ AMENDED by MOTIR-5999 (Story MOTIR-5996), which took the host's
+        // vocabulary out of a row's VISIBLE text: the line now names the
+        // repositories in words and keeps `owner/name · #n` in its hover title.
+        // The claim is unchanged — it is asserted on the title instead.
+        const set = en.workbench.approvals.pullRequest;
         await expect(
-          row.getByText(`${prName(API_REPO, mergedApi)}, ${prName(WEB_REPO, mergedWeb)}`, {
-            exact: true,
-          }),
-        ).toBeVisible();
+          row.getByText(
+            set.repos.replace('{repos}', [API_REPO.name, WEB_REPO.name].join(set.separator)),
+            { exact: true },
+          ),
+        ).toHaveAttribute(
+          'title',
+          `${prName(API_REPO, mergedApi)}, ${prName(WEB_REPO, mergedWeb)}`,
+        );
         await expect(row.getByText('Not built yet')).toHaveCount(0);
       },
     );
@@ -286,13 +297,20 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       // this kind it reads *Review* and opens the overlay instead. What this chapter is about
       // is the CARD, so it takes the one link that visibly leaves — the work-item cell, which
       // sits on `z-10` above the whole-row door for exactly this reason.
-      await page
-        .getByRole('table', { name: 'To approve' })
-        .getByTestId(/^approval-row-/)
-        .filter({ hasText: en.workbench.approvals.pullRequest.kindLabel })
-        .filter({ hasText: seed.merged.identifier })
-        .getByRole('link', { name: new RegExp(`^${seed.merged.identifier}\\b`) })
-        .click();
+      // ⚠️ AMENDED by MOTIR-5999 (Story MOTIR-5996): the row reads as a SENTENCE now —
+      // *{title} is finished* — and its separate work-item link is gone (the title
+      // becomes the quick-view door, MOTIR-6001). The row is asserted by its sentence,
+      // and the chapter reaches the card by its address.
+      await expect(
+        page
+          .getByRole('table', { name: 'To approve' })
+          .getByTestId(/^approval-row-/)
+          .filter({ hasText: seed.merged.identifier })
+          .getByText(approvalSentence(en, 'pull_request_approval', seed.merged.title), {
+            exact: true,
+          }),
+      ).toBeVisible();
+      await page.goto(`/items/${seed.merged.identifier}`);
       await expect(page).toHaveURL(new RegExp(`/items/${seed.merged.identifier}$`));
       const dev = developmentCard(page);
       await expect(dev).toHaveCount(1, { timeout: 60_000 });
@@ -457,11 +475,12 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
           has: page.getByRole('button', { name: zh.workbench.approvals.review, exact: true }),
         });
       await expect(
-        row.getByText(zh.workbench.approvals.pullRequest.kindLabel, { exact: true }),
+        row.getByText(approvalSentence(zh, 'pull_request_approval', seed.zh.title), {
+          exact: true,
+        }),
       ).toBeVisible({ timeout: 60_000 });
-      // The row's work-item link, for the reason the English chapter gives: the decide cell
-      // opens the overlay now, and this chapter is about the card.
-      await row.getByRole('link', { name: new RegExp(`^${seed.zh.identifier}\\b`) }).click();
+      // The card by its address, for the reason the English chapter gives (MOTIR-5999).
+      await page.goto(`/items/${seed.zh.identifier}`);
       await expect(page).toHaveURL(new RegExp(`/items/${seed.zh.identifier}$`));
       const dev = developmentCard(page, zh.github.development.title);
       await expect(dev).toHaveCount(1, { timeout: 60_000 });

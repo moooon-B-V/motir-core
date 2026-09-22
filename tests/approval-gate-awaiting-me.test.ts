@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { APPROVAL_QUEUE_CEILING, approvalGatesService } from '@/lib/services/approvalGatesService';
 import { homeService } from '@/lib/services/homeService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
@@ -267,7 +267,7 @@ describe('approvalGatesService.listAwaitingMe — access, enforced IN the query'
     // convention. A scoped and an unscoped read cannot return the same number
     // over this fixture, which is what makes the assertion mean something.
     const page = await approvalGatesService.listAwaitingMe(strangerCtx);
-    expect(page).toEqual({ items: [], total: 0, page: 1, pageSize: 25 });
+    expect(page).toEqual({ items: [], total: 0, truncated: false });
     expect(await approvalGatesService.countAwaitingMe(strangerCtx)).toBe(0);
   });
 
@@ -285,33 +285,24 @@ describe('approvalGatesService.listAwaitingMe — access, enforced IN the query'
   });
 });
 
-describe('approvalGatesService.listAwaitingMe — the pager', () => {
-  it('serves a numbered window with the whole set’s total, and DRIVES a second page', async () => {
-    for (let i = 0; i < 7; i += 1) {
+describe('approvalGatesService.listAwaitingMe — the WHOLE set, under a stated ceiling (MOTIR-5998)', () => {
+  it('reads every awaiting gate in ONE call — no page, no pageSize — past the old 25-row window', async () => {
+    for (let i = 0; i < 30; i += 1) {
       await gateOn({
         title: `Waiting ${i}`,
         assigneeId: meCtx.userId,
-        createdAt: new Date(Date.UTC(2026, 8, i + 1)),
+        createdAt: new Date(Date.UTC(2026, 8, 1, 0, i)),
       });
     }
 
-    const first = await approvalGatesService.listAwaitingMe(meCtx, { limit: 3 });
-    expect(first).toMatchObject({ total: 7, page: 1, pageSize: 3 });
-    expect(first.items).toHaveLength(3);
+    const queue = await approvalGatesService.listAwaitingMe(meCtx);
 
-    const second = await approvalGatesService.listAwaitingMe(meCtx, { page: 2, limit: 3 });
-    expect(second).toMatchObject({ total: 7, page: 2, pageSize: 3 });
-    expect(second.items).toHaveLength(3);
-
-    // The windows PARTITION the set — no repeats across the boundary.
-    const seen = new Set([...first.items, ...second.items].map((row) => row.gateId));
-    expect(seen.size).toBe(6);
-
-    const last = await approvalGatesService.listAwaitingMe(meCtx, { page: 3, limit: 3 });
-    expect(last.items).toHaveLength(1);
+    expect(queue).toEqual({ items: expect.any(Array), total: 30, truncated: false });
+    expect(queue.items).toHaveLength(30);
+    expect(new Set(queue.items.map((row) => row.gateId)).size).toBe(30);
   });
 
-  it('CLAMPS a page past the end to the last page — never an empty window, never an error', async () => {
+  it('stops at the ceiling and SAYS so — `truncated`, with the whole set’s total', async () => {
     for (let i = 0; i < 4; i += 1) {
       await gateOn({
         title: `Waiting ${i}`,
@@ -320,35 +311,44 @@ describe('approvalGatesService.listAwaitingMe — the pager', () => {
       });
     }
 
-    const clamped = await approvalGatesService.listAwaitingMe(meCtx, { page: 99, limit: 3 });
+    const cut = await approvalGatesService.listAwaitingMe(meCtx, { ceiling: 3 });
+    expect(cut.items).toHaveLength(3);
+    expect(cut).toMatchObject({ total: 4, truncated: true });
 
-    expect(clamped.page).toBe(2);
-    expect(clamped.total).toBe(4);
-    expect(clamped.items).toHaveLength(1);
+    // AT the ceiling is not past it: nothing was cut, so nothing is said.
+    const exact = await approvalGatesService.listAwaitingMe(meCtx, { ceiling: 4 });
+    expect(exact).toMatchObject({ total: 4, truncated: false });
+    expect(exact.items).toHaveLength(4);
   });
 
-  it('clamps the limit, and answers an empty tab with page 1 rather than page 0', async () => {
-    expect(await approvalGatesService.listAwaitingMe(meCtx, { limit: 5000 })).toMatchObject({
-      pageSize: 100,
-      page: 1,
+  it('the shipped ceiling sits far above any real queue', () => {
+    expect(APPROVAL_QUEUE_CEILING).toBe(500);
+  });
+
+  it('answers an empty tab with an empty set, never an error', async () => {
+    expect(await approvalGatesService.listAwaitingMe(meCtx)).toEqual({
+      items: [],
       total: 0,
+      truncated: false,
     });
-    expect(await approvalGatesService.listAwaitingMe(meCtx, { limit: 0 })).toMatchObject({
-      pageSize: 25,
-    });
+  });
+});
+
+describe('approvalGatesService.listRecords — the ROOM still pages (its window helpers moved here from the tab)', () => {
+  it('clamps the limit, and answers an empty room with page 1 rather than page 0', async () => {
+    const clamped = await approvalGatesService.listRecords(meCtx, { limit: 5000 });
+    expect(clamped.pageSize).toBe(100);
+    expect(clamped.page).toBe(1);
+    expect(clamped.total).toBe(0);
+    expect((await approvalGatesService.listRecords(meCtx, { limit: 0 })).pageSize).toBe(25);
   });
 
   it('a page of 0 — or one that truncates to 0 — is served as page 1, never as page 0', async () => {
-    // The LOW end of the clamp, where the test above covers the HIGH end. The
-    // window is 1-based and `skip` is `(page - 1) * pageSize`, so a page that
-    // reached 0 would ask Postgres for `OFFSET -pageSize` — an error, on an
-    // input a hand-typed `?page=0` produces. `Math.trunc(page ?? 1) || 1` is the
-    // guard; nothing asserted the `|| 1` arm, which is the one a simplification
-    // to `page ?? 1` would silently remove.
+    // `Math.trunc(page ?? 1) || 1` is the guard; a page that reached 0 would ask
+    // Postgres for `OFFSET -pageSize` on input a hand-typed `?page=0` produces.
     for (const page of [0, 0.4, Number.NaN]) {
-      const served = await approvalGatesService.listAwaitingMe(meCtx, { page, limit: 3 });
+      const served = await approvalGatesService.listRecords(meCtx, { page, limit: 3 });
       expect(served).toMatchObject({ page: 1, pageSize: 3 });
-      expect(served.items).toEqual([]);
     }
   });
 });
@@ -366,7 +366,7 @@ describe('approvalGatesService.countAwaitingMe', () => {
       data: { state: 'approved' },
     });
 
-    const unpaged = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const unpaged = await approvalGatesService.listAwaitingMe(meCtx);
 
     expect(await approvalGatesService.countAwaitingMe(meCtx)).toBe(unpaged.items.length);
     expect(unpaged.total).toBe(unpaged.items.length);
@@ -473,7 +473,7 @@ describe('homeService.tabCounts — the strip badge (MOTIR-4794)', () => {
     });
 
     const counts = await homeService.tabCounts(meCtx);
-    const listed = await approvalGatesService.listAwaitingMe(meCtx, { limit: 100 });
+    const listed = await approvalGatesService.listAwaitingMe(meCtx);
 
     expect(counts.approvals).toBe(3);
     // ⚠️ THE ASSERTION THAT MATTERS IS THE AGREEMENT, not the literal. A badge

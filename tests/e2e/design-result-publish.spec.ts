@@ -216,9 +216,13 @@ test.describe('an agent publishes a design result and a reviewer reads it', () =
       // reporter). Assert it is on the To-approve tab FIRST, so the absence
       // asserted after the withdrawal cannot pass on an empty queue.
       const toApproveTab = page.getByRole('link', { name: /To approve/ });
+      // ⚠️ AMENDED by MOTIR-5999 (Story MOTIR-5996): the row's separate work-item
+      // link is gone. The row reads as a SENTENCE, its key follows it, and the
+      // row's own door is named "Review <key> — <sentence>". `\b` keeps RAIL-2
+      // from matching RAIL-20.
       const queuedRow = page
         .getByRole('table', { name: 'To approve' })
-        .getByRole('link', { name: new RegExp(`^${seed.publishedKey}`) });
+        .getByRole('link', { name: new RegExp(`^Review ${seed.publishedKey}\\b`) });
       await page.goto('/workbench?tab=approvals');
       await expect(toApproveTab).toHaveAttribute('aria-current', 'page');
       await expect(queuedRow).toBeVisible();

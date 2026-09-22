@@ -587,6 +587,45 @@ describe('Watching over an OFFSET page — the band arrangements the keyset neve
   });
 });
 
+// ── A PAGER MOVE IS A LOAD (Story MOTIR-5238 · MOTIR-5242; moved here by
+// MOTIR-5996) ────────────────────────────────────────────────────────────────
+//
+// `useLiveRows` resets on a change of its reset key, and HOLDS a row the server
+// stopped returning when the key is the same. The work tabs key on
+// `${tab}:${page}`, so a pager move must start the window clean: without the
+// reset, page one's rows would be held onto page two and the reader would see a
+// list that is two pages at once.
+//
+// ⚠️ THIS TEST LIVES HERE BECAUSE THE APPROVALS TAB LOST ITS PAGER (MOTIR-5998).
+// The reset branch used to be covered through `ApprovalsList` in
+// `workbench-live.test.tsx`; that tab now passes a CONSTANT key, so the only
+// surface that can still change one is this list.
+describe('the live window RESETS on a pager move', () => {
+  it('page two holds none of page one’s rows', () => {
+    const view = renderRows([dto({ identifier: 'W-1' })], 'todo', {
+      total: 40,
+      page: 1,
+      pageSize: 25,
+    });
+    expect(screen.getByText('W-1')).toBeTruthy();
+
+    view.rerender(
+      <WorkbenchList
+        rows={toWorkbenchRowViews([dto({ identifier: 'W-26' })], WORKFLOW, MEMBERS, false)}
+        label="To do"
+        tab="todo"
+        pagination={{ total: 40, page: 2, pageSize: 25 }}
+        empty={EMPTY}
+      />,
+    );
+
+    expect(screen.getByText('W-26')).toBeTruthy();
+    // Held rather than reset, W-1 would still be on screen — a list showing two
+    // pages at once.
+    expect(screen.queryByText('W-1')).toBeNull();
+  });
+});
+
 // ── THE CI BADGE ON A WORKBENCH ROW (Story MOTIR-5469 · MOTIR-5475) ───────────
 // Design: `design/workbench/workbench--ci-badge.mock.html`, spec
 // `design/workbench/design-notes.md` § *The CI badge (MOTIR-5471)*.

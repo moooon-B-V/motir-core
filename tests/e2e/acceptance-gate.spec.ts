@@ -6,6 +6,7 @@ import { paidOrgState, resetBillingFixture, setOrgBillingState } from './_helper
 import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { linkPr } from './_helpers/pr-link';
+import { approvalSentence } from './_helpers/approval-sentence';
 import {
   API_REPO,
   WEB_REPO,
@@ -271,8 +272,11 @@ test.describe('the acceptance-video gate', () => {
       // the acceptance question is the primary, so it is the one the queue asks.
       const row = rows.filter({ hasText: seed.storyRun.story.identifier });
       await expect(row).toHaveCount(1, { timeout: 60_000 });
+      // The row reads as a sentence about the story (MOTIR-5999).
       await expect(
-        row.getByText(en.workbench.approvals.kind.acceptance_result, { exact: true }),
+        row.getByText(approvalSentence(en, 'acceptance_result', seed.storyRun.story.title), {
+          exact: true,
+        }),
       ).toBeVisible();
       // The row names the RECORDING — how many chapters it walks and the commit it was
       // recorded at — which is what `acceptanceMeta` renders (`ApprovalRow.tsx`).

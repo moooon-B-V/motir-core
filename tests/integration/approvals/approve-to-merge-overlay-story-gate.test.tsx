@@ -404,7 +404,7 @@ describe('SEAM 2 · a decision made in the overlay, seen from the tab', () => {
     const story = await twoRepoStory();
     await rawGate(story, 'pull_request_approval', story.id, setVersion);
     signIn(owner());
-    const queue = await approvalGatesService.listAwaitingMe(actorCtx(), { page: 1 });
+    const queue = await approvalGatesService.listAwaitingMe(actorCtx());
     expect(queue.items).toHaveLength(1);
     expect((await homeService.tabCounts(actorCtx())).approvals).toBe(1);
     const gateId = queue.items[0]!.gateId;
@@ -415,7 +415,7 @@ describe('SEAM 2 · a decision made in the overlay, seen from the tab', () => {
         <ApprovalsList
           rows={queue.items}
           label="To approve"
-          pagination={{ total: queue.total, page: queue.page, pageSize: queue.pageSize }}
+          ceiling={queue.truncated ? { shown: queue.items.length, total: queue.total } : null}
           empty={EMPTY}
         />
         <ApprovalOverlay />

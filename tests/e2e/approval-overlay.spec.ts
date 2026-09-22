@@ -56,10 +56,11 @@ test.describe('the approval overlay opens by its address', () => {
     await expect(dialog).toBeVisible();
     // Band 1 of the shared frame — the one visible "Design result" (§ 22).
     await expect(dialog.getByText('Design result', { exact: true })).toBeVisible();
-    await expect(dialog.getByRole('link', { name: 'Open work item' })).toHaveAttribute(
-      'href',
-      `/items/${seed.designKey}`,
-    );
+    // *Open work item* opens a NEW TAB — the approval and the page under it stay put
+    // (MOTIR-6000; design-notes § 28, DECISION 6).
+    const openWorkItem = dialog.getByRole('link', { name: 'Open work item in a new tab' });
+    await expect(openWorkItem).toHaveAttribute('href', `/items/${seed.designKey}`);
+    await expect(openWorkItem).toHaveAttribute('target', '_blank');
 
     await dialog.getByRole('button', { name: /^Close/ }).click();
     await expect(dialog).toBeHidden();

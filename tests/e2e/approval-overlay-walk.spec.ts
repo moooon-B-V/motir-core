@@ -60,7 +60,7 @@ import zh from '@/messages/zh.json';
 //
 // ⚠️ WHAT IS PUBLISHED FOR REAL: the design under test, through
 // `publish_design_result` over `/api/mcp`. The 25 filler gates that make the
-// queue two pages are written by `plantFillerGates`, whose header states that
+// queue taller than the fold are written by `plantFillerGates`, whose header states that
 // trade; nothing here decides one or asserts on its content.
 //
 // ⚠️ EVERY WAIT IS AUTHORITATIVE — the named dialog (its name is set only when
@@ -119,8 +119,9 @@ test.describe('an approval, decided full screen over the page you are on', () =>
     const published = await publishDesignResult(client, seed.designKey);
     expect(published.isError ?? false, JSON.stringify(published.content)).toBe(false);
     await client.close();
-    // Twenty-five more make the queue two pages, so "back to exactly where you
-    // were" is a claim about a paged, scrolled list and not a bare route.
+    // Twenty-five more make the list taller than the fold, so "back to exactly
+    // where you were" is a claim about a scrolled list and not a bare route. (The
+    // tab has had no pager since MOTIR-5998: all twenty-six are on one page.)
     await plantFillerGates(seed, STORY_TITLE_EXPORT, 25);
 
     const toApprove = new RegExp(en.workbench.tabs.toApprove);
@@ -132,7 +133,7 @@ test.describe('an approval, decided full screen over the page you are on', () =>
     await test.step('Twenty-six decisions are waiting, and the tab says so', async () => {
       await signIn(page, seed.reviewerEmail, seed.password);
       await page.goto('/workbench?tab=approvals');
-      await expect(rows(page)).toHaveCount(25);
+      await expect(rows(page)).toHaveCount(26);
       await expect(designRow).toHaveCount(1);
       expect(await badgeCount(page, toApprove)).toBe(26);
     });
@@ -194,8 +195,8 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       await expect(
         designRow.getByRole('button', { name: en.workbench.approvals.review, exact: true }),
       ).toHaveCount(0);
-      // A re-read ADDS and never removes: the row that slid up from page two
-      // arrives beside the held one, so the page shows twenty-six.
+      // A re-read ADDS and never removes: the held row stays beside the other
+      // twenty-five, so the list still shows twenty-six.
       await expect(rows(page)).toHaveCount(26);
     });
 
@@ -326,9 +327,11 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       await openRow(rowsIn(page, zh.workbench.tabs.toApprove).first());
       await expect(dialog).toBeVisible();
       await expect(dialog.getByRole('group', { name: zh.approvalGate.port.label })).toBeVisible();
-      await expect(
-        dialog.getByRole('link', { name: zh.approvalOverlay.openWorkItem }),
-      ).toHaveAttribute('href', `/items/${seed.designKey}`);
+      const openWorkItem = dialog.getByRole('link', {
+        name: zh.approvalOverlay.openWorkItemNewTab,
+      });
+      await expect(openWorkItem).toHaveAttribute('href', `/items/${seed.designKey}`);
+      await expect(openWorkItem).toHaveAttribute('target', '_blank');
       // Asserted through the catalogue's own strings, and negatively too.
       await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
     });

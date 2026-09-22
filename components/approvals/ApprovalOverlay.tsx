@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -14,10 +13,11 @@ import {
   X,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonVariants } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { ChoiceGateFrame } from '@/components/approvals/ChoiceGate';
+import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import { DecisionConfirmGateFrame } from '@/components/approvals/DecisionConfirmGate';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from '@/app/(authed)/items/[key]/_components/DesignResultPanel';
@@ -129,12 +129,21 @@ const EXIT_CONTROL =
  * is the reader's own text and echoing it beside a refusal reads as a
  * confirmation. Narrow (`< md`, Panel 7): no `Esc` chip, no title, and *Open work
  * item* becomes its icon with the label kept as its accessible name.
+ *
+ * ⚠️ AMENDED by § 28, DECISION 6 (Story MOTIR-5996 · MOTIR-6000) — the exit row KEEPS
+ * YOU IN PLACE. The key and title are ONE link whose plain click opens the work item's
+ * QUICK VIEW stacked above the overlay (a modified click keeps the `href`: the card in a
+ * new tab); at narrow width the key, the link's visible content, is the door. *Open
+ * work item* opens a NEW TAB, and says so in its accessible name.
  */
 function ExitRow({
   onClose,
+  onPeek,
   workItem,
 }: {
   onClose: () => void;
+  /** Open the work item's quick view ABOVE the overlay. */
+  onPeek: (identifier: string) => void;
   workItem: { identifier: string; title: string } | null;
 }) {
   const t = useTranslations('approvalOverlay');
@@ -150,7 +159,20 @@ function ExitRow({
       </button>
       {workItem ? (
         <>
-          <span className="flex min-w-0 items-center gap-2">
+          {/* THE TITLE DOOR (§ 28, DECISION 6): `usePeekRowClick`'s condition — a
+              modifier or non-primary click keeps its native meaning, the card in a
+              new tab, which is why the `href` is real. No fill and no ring of its own:
+              it is text in a bar, and a fill would read as a third exit. */}
+          <a
+            href={`/items/${workItem.identifier}`}
+            aria-haspopup="dialog"
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+              e.preventDefault();
+              onPeek(workItem.identifier);
+            }}
+            className="flex min-w-0 items-center gap-2 hover:underline focus-visible:underline focus-visible:outline-none"
+          >
             {/* `--el-text-secondary`, not muted: the row is `--el-surface`, where
                 muted fails AA (6.24:1 vs 4.17:1 — § 22's token map). */}
             <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
@@ -159,15 +181,17 @@ function ExitRow({
             <span className="hidden truncate text-sm text-(--el-text) md:inline">
               {workItem.title}
             </span>
-          </span>
-          <Link
+          </a>
+          <a
             href={`/items/${workItem.identifier}`}
-            aria-label={t('openWorkItem')}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t('openWorkItemNewTab')}
             className={`ml-auto ${EXIT_CONTROL}`}
           >
             <span className="hidden md:inline">{t('openWorkItem')}</span>
             <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden />
-          </Link>
+          </a>
         </>
       ) : null}
     </div>
@@ -366,6 +390,13 @@ export function ApprovalOverlay() {
   // The previous read stays on screen until the new one lands: re-read in place, never
   // re-open, never navigate.
   const [reread, setReread] = useState(0);
+  /**
+   * THE QUICK VIEW STACKED ABOVE THE OVERLAY (Story MOTIR-5996 · MOTIR-6000). LOCAL
+   * state, never `?peek=`: the page's quick-view controller is mounted per page, and
+   * this overlay opens on pages that have none. Keyed by the address's token, so a
+   * different approval never inherits a peek opened on this one.
+   */
+  const [peek, setPeek] = useState<{ token: string; key: string } | null>(null);
 
   // ⚠️ FOCUS RETURN, and why it is not free here — the planning overlay's reason
   // verbatim: Radix returns focus only to its own `Trigger`, and this dialog is
@@ -393,6 +424,7 @@ export function ApprovalOverlay() {
     // rather than showing a gate somebody may have decided in the meantime.
     setLoad(null);
     setDecided(null);
+    setPeek(null);
     // Open means `?approval=` is in the query, so the query is never empty here.
     shallowPush(withoutApprovalOverlay(`${pathname}?${searchParams.toString()}`));
   }, [pathname, searchParams]);
@@ -503,6 +535,10 @@ export function ApprovalOverlay() {
 
   if (!open) return null;
 
+  // The stacked quick view belongs to THIS address: a different approval, or none,
+  // shows none (§ 28, DECISION 6).
+  const peekKey = peek !== null && peek.token === token ? peek.key : null;
+
   const settled = token !== null && load?.token === token ? load : null;
   const read = settled?.outcome === 'read' ? settled.read : null;
   const unavailable =
@@ -546,15 +582,19 @@ export function ApprovalOverlay() {
   } else if (!loading && read !== null && read.gate !== null) {
     workItem = { identifier: read.workItem.identifier, title: read.workItem.title };
     srTitle = t('dialogTitle', { kind: kindLabel, key: read.workItem.identifier });
+    // A NEW TAB, like the exit row's (§ 28, DECISION 6): this used to `router.push`,
+    // which navigated the whole tab away from the approval the reader was on.
     const openWorkItem = (
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={() => router.push(`/items/${read.workItem.identifier}`)}
+      <a
+        href={`/items/${read.workItem.identifier}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={t('openWorkItemNewTab')}
+        className={buttonVariants({ variant: 'secondary', size: 'sm' })}
       >
-        {t('openWorkItem')}
-      </Button>
+        <span>{t('openWorkItem')}</span>
+        <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden />
+      </a>
     );
     const subject = read.subject;
 
@@ -872,8 +912,23 @@ export function ApprovalOverlay() {
       hideClose
     >
       {/* modal-scroll-container: measured 1136x360, tallest = a design subject of six 32rem frames in the fill form (design-notes § 22 Panel 2b), band 2 the only scroll owner and band 3 on the bottom edge, panel 360px */}
-      <ExitRow onClose={requestClose} workItem={workItem} />
+      <ExitRow
+        onClose={requestClose}
+        onPeek={(key) => token !== null && setPeek({ token, key })}
+        workItem={workItem}
+      />
       <div className="flex min-h-0 flex-1 flex-col">{body}</div>
+      {/* NESTED inside this dialog's content, so Radix stacks it as the TOP layer: its
+          `Esc` and scrim close it alone, and the approval stays open (the planning
+          overlay's precedent, MOTIR-4185). Its scrim is raised to `z-50` so it dims
+          this panel rather than painting beneath it (§ 28, DECISION 6). An edit made
+          in it settles with a refresh on close — `WorkItemQuickView`'s own contract. */}
+      <WorkItemQuickView
+        peekKey={peekKey}
+        onClose={() => setPeek(null)}
+        onEdited={() => router.refresh()}
+        overlayClassName="z-50"
+      />
     </Modal>
   );
 }
