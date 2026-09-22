@@ -271,11 +271,21 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
         const row = rows.filter({ hasText: seed.merged.identifier });
         await expect(row).toHaveCount(1);
         // Every pull request in the set, in the set's own order, and no "Not built yet".
+        //
+        // ⚠️ AMENDED by MOTIR-5999 (Story MOTIR-5996), which took the host's
+        // vocabulary out of a row's VISIBLE text: the line now names the
+        // repositories in words and keeps `owner/name · #n` in its hover title.
+        // The claim is unchanged — it is asserted on the title instead.
+        const set = en.workbench.approvals.pullRequest;
         await expect(
-          row.getByText(`${prName(API_REPO, mergedApi)}, ${prName(WEB_REPO, mergedWeb)}`, {
-            exact: true,
-          }),
-        ).toBeVisible();
+          row.getByText(
+            set.repos.replace('{repos}', [API_REPO.name, WEB_REPO.name].join(set.separator)),
+            { exact: true },
+          ),
+        ).toHaveAttribute(
+          'title',
+          `${prName(API_REPO, mergedApi)}, ${prName(WEB_REPO, mergedWeb)}`,
+        );
         await expect(row.getByText('Not built yet')).toHaveCount(0);
       },
     );
