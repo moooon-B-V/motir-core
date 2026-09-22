@@ -38,14 +38,15 @@ export const monitorBugEnrichBackfill = defineJob(
       actorId: payload.actorId,
       viaMonitorConnectionId: payload.viaMonitorConnectionId,
     };
-    const dispatch = await ctx.step.run('dispatch-bug-authoring', () =>
+    const dispatch = await ctx.step.run('backfill-dispatch-bug-authoring', () =>
       services.monitorBugEnrichment.dispatchEnrichment(trigger),
     );
     if (!dispatch.dispatched) return { dispatch };
 
     for (let poll = 0; poll < MONITOR_AUTHORING_POLLS; poll += 1) {
-      if (poll > 0) await ctx.step.sleep(`await-bug-authoring-${poll}`, MONITOR_AUTHORING_POLL_MS);
-      const applied = await ctx.step.run(`apply-authored-bug-${poll}`, () =>
+      if (poll > 0)
+        await ctx.step.sleep(`backfill-await-bug-authoring-${poll}`, MONITOR_AUTHORING_POLL_MS);
+      const applied = await ctx.step.run(`backfill-apply-authored-bug-${poll}`, () =>
         services.monitorBugEnrichment.applyAuthoredBug(trigger, dispatch.jobId),
       );
       if (applied.status !== 'pending') return { dispatch, applied };

@@ -156,6 +156,18 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ reason: "ai-unreachable" | "bug-gone" | "card-changed" | "invalid-answer" | "job-failed" | "terminal-status" | "timed-out"; status: "skipped" } | { status: "applied" } | { status: "pending" }',
   },
+  // The BACKFILL twin of the two above (MOTIR-5983): the same calls, the same
+  // shapes, its own ids — so each id is written in exactly one file.
+  'backfill-dispatch-bug-authoring': {
+    file: 'lib/jobs/definitions/monitorBugEnrichBackfill.ts',
+    shape:
+      '{ dispatched: false; reason: "ai-not-configured" | "already-dispatched" | "no-binder" | "no-monitor-link" | "not-a-bug" } | { dispatched: true; framesRead: boolean; jobId: string }',
+  },
+  '`backfill-apply-authored-bug-${poll}`': {
+    file: 'lib/jobs/definitions/monitorBugEnrichBackfill.ts',
+    shape:
+      '{ reason: "ai-unreachable" | "bug-gone" | "card-changed" | "invalid-answer" | "job-failed" | "terminal-status" | "timed-out"; status: "skipped" } | { status: "applied" } | { status: "pending" }',
+  },
   'dispatch-outward-analysis': {
     file: 'lib/jobs/definitions/outwardBugTelemetry.ts',
     shape:
