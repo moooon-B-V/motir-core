@@ -6,7 +6,11 @@ import type {
   MonitorConnectionViewDto,
   SetMonitorSyncDirectionsInput,
 } from '@/lib/dto/monitors';
-import { toMonitorConnectionDto, readOrgSlug } from '@/lib/mappers/monitorMappers';
+import {
+  readInstallPending,
+  readOrgSlug,
+  toMonitorConnectionDto,
+} from '@/lib/mappers/monitorMappers';
 import { getMonitorProvider } from '@/lib/monitors';
 import { isLowerThan, isMonitorLevel } from '@/lib/monitors/levels';
 import {
@@ -166,6 +170,49 @@ async function adoptSupersededGrants(
   }
 }
 
+/**
+ * The two calls that FINISH an install once its grant is stored (MOTIR-6008):
+ * verify it, so the provider leaves its pending state and does not reap it,
+ * then read which organisation it belongs to — the slug every org-scoped call
+ * needs and the install redirect does not carry. On success the organisation is
+ * recorded, the pending marker is cleared, and the grant supersedes any older
+ * grant for the same organisation (MOTIR-6005).
+ *
+ * Both calls stay OUTSIDE the transaction: network round trips are not held
+ * across one. A provider refusal propagates for the caller to keep the grant
+ * pending.
+ */
+async function finishInstall(
+  args: { grantId: string; provider: string; providerInstallationId: string; accessToken: string },
+  scope: { userId: string; workspaceId: string; projectId: string },
+): Promise<string | null> {
+  const provider = getMonitorProvider(args.provider);
+  await provider.verifyInstall({
+    installationId: args.providerInstallationId,
+    accessToken: args.accessToken,
+  });
+  const { orgSlug } = await provider.describeInstallation({
+    installationId: args.providerInstallationId,
+    accessToken: args.accessToken,
+  });
+
+  await withWorkspaceContext(scope, async (tx) => {
+    await monitorInstallationRepository.setMetadata(args.grantId, orgSlug ? { orgSlug } : {}, tx);
+    if (orgSlug) {
+      await adoptSupersededGrants(
+        {
+          workspaceId: scope.workspaceId,
+          provider: args.provider,
+          orgSlug,
+          grantId: args.grantId,
+        },
+        tx,
+      );
+    }
+  });
+  return orgSlug;
+}
+
 export const monitorConnectionService = {
   /**
    * Persist the GRANT a provider's authorisation just issued, and land the
@@ -205,28 +252,18 @@ export const monitorConnectionService = {
       installationId: input.providerInstallationId,
       code: input.code,
     });
-    // Verify the install so the provider leaves its pending state — an
-    // installation left unverified is one the provider may reap, which would
-    // leave Motir holding a credential for a grant that no longer exists.
-    await provider.verifyInstall({
-      installationId: input.providerInstallationId,
-      accessToken: credential.accessToken,
-    });
 
-    // WHICH ORGANISATION this is. The install redirect carries an installation id
-    // and no organisation, while every org-scoped provider method needs a slug —
-    // so the grant asks once, here, and records the answer on the row. After
-    // this, the room never has to call the provider to render a list, which
-    // matters most when the credential is degraded and a call would fail.
-    const { orgSlug } = await provider.describeInstallation({
-      installationId: input.providerInstallationId,
-      accessToken: credential.accessToken,
-    });
-
+    // ⚠️ STORE THE GRANT THE MOMENT IT EXISTS (MOTIR-6008). The exchange spent
+    // Sentry's SINGLE-USE grant code, so these tokens can never be asked for
+    // again. The verify and the organisation read used to run first, and a slow
+    // answer to either threw the credential away and left Sentry holding an
+    // install Motir had nothing for — recoverable only by a person uninstalling
+    // in Sentry. So the row is written now, marked `installPending`, and the two
+    // follow-ups below finish it.
     const installation = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: input.projectId },
-      async (tx) => {
-        const row = await monitorInstallationRepository.upsertByProviderInstallation(
+      (tx) =>
+        monitorInstallationRepository.upsertByProviderInstallation(
           {
             provider: input.provider,
             installationId: input.providerInstallationId,
@@ -234,21 +271,79 @@ export const monitorConnectionService = {
             accessTokenEncrypted: encryptToken(credential.accessToken),
             refreshTokenEncrypted: encryptToken(credential.refreshToken),
             tokenExpiresAt: credential.expiresAt,
-            ...(orgSlug ? { metadata: { orgSlug } } : {}),
+            metadata: { installPending: true },
           },
           tx,
-        );
-        if (orgSlug) {
-          await adoptSupersededGrants(
-            { workspaceId: ctx.workspaceId, provider: input.provider, orgSlug, grantId: row.id },
-            tx,
-          );
-        }
-        return row;
-      },
+        ),
     );
 
-    return { installationId: installation.id, orgSlug: readOrgSlug(installation.metadata) };
+    // A follow-up that fails is NOT a failed connect: the grant is stored and
+    // usable, and `completePendingInstall` retries the rest from the picker and
+    // from Re-check. Only the provider's own refusal is absorbed here; anything
+    // else is a defect and still throws.
+    let orgSlug: string | null = null;
+    try {
+      orgSlug = await finishInstall(
+        {
+          grantId: installation.id,
+          provider: input.provider,
+          providerInstallationId: input.providerInstallationId,
+          accessToken: credential.accessToken,
+        },
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: input.projectId },
+      );
+    } catch (err) {
+      if (!(err instanceof MonitorProviderCallError)) throw err;
+      console.warn('[monitorConnectionService] grant stored; install follow-up deferred', {
+        installationRowId: installation.id,
+        providerReason: err.providerReason,
+      });
+    }
+
+    return { installationId: installation.id, orgSlug };
+  },
+
+  /**
+   * FINISH any grant stored before its install was verified (MOTIR-6008) — the
+   * retry for a connect whose follow-up calls failed.
+   *
+   * Called where the missing piece is first needed: the project picker, which
+   * cannot list a Sentry organisation it does not know, and Re-check. Returns
+   * whether every pending grant was finished; a provider that is still slow
+   * leaves the grant stored and pending for the next try, never deleted.
+   */
+  async completePendingInstall(projectId: string, ctx: ServiceContext): Promise<boolean> {
+    await projectAccessService.assertPermission(projectId, ctx, 'integration:manage');
+
+    const pending = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) =>
+      (await monitorInstallationRepository.listSummariesForWorkspace(ctx.workspaceId, tx)).filter(
+        (grant) => readInstallPending(grant.metadata),
+      ),
+    );
+
+    let allFinished = true;
+    for (const grant of pending) {
+      try {
+        const credential = await monitorCredentialService.getAccessToken(grant.id);
+        await finishInstall(
+          {
+            grantId: grant.id,
+            provider: grant.provider,
+            providerInstallationId: grant.installationId,
+            accessToken: credential.token,
+          },
+          { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+        );
+      } catch (err) {
+        if (!(err instanceof MonitorProviderCallError)) throw err;
+        allFinished = false;
+        console.warn('[monitorConnectionService] install follow-up still failing', {
+          installationRowId: grant.id,
+          providerReason: err.providerReason,
+        });
+      }
+    }
+    return allFinished;
   },
 
   /** The room's read: the workspace's grant (if any) and this project's
@@ -279,6 +374,12 @@ export const monitorConnectionService = {
     ctx: ServiceContext,
   ): Promise<AvailableMonitorProjectDto[]> {
     await projectAccessService.assertPermission(projectId, ctx, 'integration:manage');
+
+    // A connect whose follow-ups failed left the organisation unknown, and the
+    // picker cannot list an organisation it does not know — so finish it first
+    // (MOTIR-6008). Still pending afterwards is not fatal here: the listing
+    // below then fails with the provider's own reason, which the picker renders.
+    await monitorConnectionService.completePendingInstall(projectId, ctx);
 
     const grant = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
       const grants = await monitorInstallationRepository.listSummariesForWorkspace(
