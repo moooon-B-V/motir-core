@@ -53,28 +53,31 @@ import { listenForQueuedJobs } from '@/lib/jobs/engine/notify';
 import '@/lib/jobs/registry';
 
 /**
- * ⚠️ THE E2E BOUNDARY SEAM, AND WHY IT IS INSTALLED HERE RATHER THAN IN
- * `instrumentation.ts` (Story MOTIR-3417 · MOTIR-3564).
+ * ⚠️ THE E2E BOUNDARY SEAMS, AND WHY THIS PROCESS INSTALLS THEM ITSELF
+ * (Story MOTIR-3417 · MOTIR-3564; Bug MOTIR-5837).
  *
- * Every other external boundary in the E2E lane is stubbed by a
- * `lib/test-*-mock.ts` that `instrumentation.ts` installs behind a flag.
- * `instrumentation.ts` is a NEXT.JS HOOK: it runs once per Next server boot, and
- * this process is not a Next server — it is a plain Node bundle
- * (`pnpm build:worker`). So a seam registered there is invisible here.
+ * Every external boundary in the E2E lane is stubbed by a `lib/test-*-mock.ts`
+ * behind a flag. `instrumentation.ts` installs them in the app server, and it is
+ * a NEXT.JS HOOK: it runs once per Next server boot, and this process is not a
+ * Next server — it is a plain Node bundle (`pnpm build:worker`). So a seam
+ * registered there is invisible here, and this process installs from the same
+ * table (`lib/test-mock-seams.ts`) on its own.
  *
- * That matters for exactly one boundary and it is this story's: the index
- * SUPERVISOR mints a motir-ai run credential and resolves a GitHub tarball
- * redirect, and the supervisor is a JOB. The process that makes both calls is
- * this one. A seam installed only in the app server would leave the calls
+ * It matters for every boundary a JOB crosses. The index SUPERVISOR mints a
+ * motir-ai run credential and resolves a GitHub tarball redirect (MOTIR-3564);
+ * `pull-request/auto-merge.requested` merges through GitHub, and
+ * `system.pull-request-reconcile` reads it (MOTIR-5837). The process that makes
+ * those calls is this one. A seam installed only in the app server leaves them
  * un-stubbed where they actually happen — the MOTIR-3498 shape, one layer up
  * (there it was `EMAIL_PROVIDER` set on the webServer only, and every
  * engine-routed send went to the console provider while every signal stayed
- * green).
+ * green). WHICH flags this process carries is `job-worker-process.ts`'s
+ * decision, not this function's.
  *
- * DORMANT BY DEFAULT AND REFUSED OUTSIDE THE HARNESS. `installCodeGraphBoundaryMock`
- * requires BOTH `E2E_TEST_CODE_GRAPH=1` and `E2E_PROD_HARNESS=1` — the second is
- * set by `playwright.config.ts` and by no real deployment. The import is dynamic,
- * so a production worker never even loads `undici`'s mock machinery.
+ * DORMANT BY DEFAULT. No flag set ⇒ `installE2EMockSeams` installs nothing and
+ * imports nothing, so a production worker never even loads `undici`'s mock
+ * machinery. The code-graph seam additionally refuses outside the harness
+ * (`E2E_PROD_HARNESS=1`, set by the Playwright configs and by no real deployment).
  */
 async function installE2ESeams(): Promise<void> {
   // The LONG-RUNNING PROBE (MOTIR-3767) — its own flag, and checked FIRST so it
@@ -100,12 +103,13 @@ async function installE2ESeams(): Promise<void> {
     );
   }
 
-  const { codeGraphMockEnabled } = await import('@/lib/test-code-graph-mock');
-  if (!codeGraphMockEnabled()) return;
-  const { installSharedMockAgent } = await import('@/lib/test-mock-agent');
-  const { installCodeGraphBoundaryMock } = await import('@/lib/test-code-graph-mock');
-  installCodeGraphBoundaryMock(installSharedMockAgent());
-  console.info('[worker] E2E_TEST_CODE_GRAPH active — index-writer seam mocked.');
+  // EVERY boundary seam whose flag this process carries, from the SAME table
+  // `instrumentation.ts` installs from (MOTIR-5837). Until then this block
+  // installed the code-graph seam alone, by hand — so a job that merged, read or
+  // posted to GitHub reached the real api.github.com. The shared agent also
+  // REFUSES any api.github.com call no seam intercepted (`lib/test-mock-agent`).
+  const { installE2EMockSeams } = await import('@/lib/test-mock-seams');
+  await installE2EMockSeams((line) => console.info(`[worker] ${line}`));
 }
 
 /**

@@ -41,9 +41,9 @@
 //   - E2E_TEST_CODE_GRAPH=1 → lib/test-code-graph-mock intercepts the INDEX
 //     WRITER's two boundaries: motir-ai's POST /v1/code-graph/run-credential and
 //     api.github.com's installation-token mint + `/tarball/` 302. Crossed only by
-//     the index SUPERVISOR, which is a job — so the LANE wires this on the WORKER
-//     (scripts/worker.ts), not here. See that module's header for why the app
-//     server must not get MOTIR_AI_URL.
+//     the index SUPERVISOR, which is a job — so the LANE sets this flag on the
+//     WORKER only, never on a webServer. See that module's header for why the
+//     app server must not get MOTIR_AI_URL.
 //
 //   - E2E_TEST_GITHUB_MERGE=1 → lib/test-github-merge-mock intercepts the MERGE
 //     calls to api.github.com (the repository and pull request reads, the base
@@ -61,9 +61,17 @@
 //
 // All mocks share ONE undici MockAgent (lib/test-mock-agent) installed as
 // the global dispatcher — installing two agents would silently disconnect
-// the first mock's intercepts (only the last setGlobalDispatcher wins).
+// the first mock's intercepts (only the last setGlobalDispatcher wins). That
+// agent REFUSES any api.github.com call no seam intercepted, in every process
+// that installs it, so an unfaked GitHub call fails here by name instead of
+// leaving the box (MOTIR-5837; see that module).
 //
-// Each seam above is ONE record in the `MOCKS` table inside `register()`: its
+// ⚠️ THE TABLE LIVES IN `lib/test-mock-seams.ts`, NOT HERE (MOTIR-5837). This
+// file is a Next.js hook, and the E2E lane's job WORKER is a third process that
+// never runs it — so while the table was here, a job handler reaching GitHub got
+// no intercept at all. Both processes now install from that one table.
+//
+// Each seam above is ONE record in that table (`E2E_MOCK_SEAMS`): its
 // flag, what it installs, and the line it prints at boot. The early return is
 // DERIVED from that table rather than re-listing the flags, because re-listing
 // them is what broke: `E2E_TEST_AI_JOBS` was read into a local and then left
@@ -86,25 +94,6 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-/**
- * One E2E boundary seam: the env flag that turns it on, the clause its boot
- * line completes, and the installer to run. `install` receives the shared
- * MockAgent; a seam that intercepts elsewhere (E2E_TEST_BLOB replaces the S3
- * client's transport) simply ignores it.
- */
-interface MockSeam {
-  readonly flag: string;
-  readonly message: string;
-  readonly install: (agent: SharedMockAgent) => Promise<void>;
-}
-
-/**
- * The agent `installSharedMockAgent()` hands back. Written as a type-position
- * import so no value-level `undici` import reaches the Edge bundler — the same
- * reason every import below is dynamic.
- */
-type SharedMockAgent = ReturnType<typeof import('@/lib/test-mock-agent').installSharedMockAgent>;
-
 export async function register() {
   // ── Error monitoring (Subtask 8.5.6 / MOTIR-1162) ────────────────────────
   // FIRST, and above the early return, because it is the one thing here that is
@@ -126,118 +115,12 @@ export async function register() {
 
   if (process.env['NEXT_RUNTIME'] !== 'nodejs') return;
 
-  const MOCKS: readonly MockSeam[] = [
-    {
-      flag: 'E2E_TEST_OAUTH',
-      message: 'Google + GitHub + GitLab OAuth endpoints mocked.',
-      install: async (agent) => {
-        const { installGoogleTokenMock, installGithubOAuthMock, installGitlabOAuthMock } =
-          await import('@/lib/test-oauth-mock');
-        installGoogleTokenMock(agent);
-        // GitHub identity grant (Story 7.10 · MOTIR-897): the server-side
-        // code→token exchange + /user read the OAuth callback performs — same
-        // env gate, same shared agent.
-        installGithubOAuthMock(agent);
-        // GitLab connect grant (Story 7.23 · MOTIR-1480): the server-side
-        // code→token exchange + /api/v4/user read — same env gate, same shared agent.
-        installGitlabOAuthMock(agent);
-      },
-    },
-    {
-      flag: 'E2E_TEST_BLOB',
-      message: 'in-process object store installed.',
-      install: async () => {
-        const { installBlobStoreMock } = await import('@/lib/test-blob-mock');
-        // No `agent` — this seam replaces the S3 client's transport, not undici's.
-        installBlobStoreMock();
-      },
-    },
-    {
-      flag: 'E2E_TEST_BILLING',
-      message: 'motir-ai billing seam mocked.',
-      install: async (agent) => {
-        const { installBillingBoundaryMock } = await import('@/lib/test-billing-mock');
-        installBillingBoundaryMock(agent);
-      },
-    },
-    {
-      // ⚠️ BEFORE `E2E_TEST_GITHUB_REPOS`, and the order is load-bearing: both seams
-      // answer `GET /repos/{owner}/{name}`, undici tries intercepts in registration
-      // order, and this one claims only the repositories its control file names.
-      flag: 'E2E_TEST_GITHUB_MERGE',
-      message: 'GitHub merge + merge-queue API mocked.',
-      install: async (agent) => {
-        const { installGithubMergeMock } = await import('@/lib/test-github-merge-mock');
-        installGithubMergeMock(agent);
-      },
-    },
-    {
-      flag: 'E2E_TEST_GITHUB_REPOS',
-      message: 'GitHub repo creation + collaborator API mocked.',
-      install: async (agent) => {
-        const { installGithubReposMock } = await import('@/lib/test-github-repos-mock');
-        installGithubReposMock(agent);
-      },
-    },
-    {
-      flag: 'E2E_TEST_CODE_HEALTH',
-      message: 'motir-ai code-health seam mocked.',
-      install: async (agent) => {
-        const { installCodeHealthBoundaryMock } = await import('@/lib/test-code-health-mock');
-        installCodeHealthBoundaryMock(agent);
-      },
-    },
-    {
-      flag: 'E2E_TEST_LESSONS',
-      message: 'motir-ai lesson-library seam mocked.',
-      install: async (agent) => {
-        const { installLessonsBoundaryMock } = await import('@/lib/test-lessons-mock');
-        installLessonsBoundaryMock(agent);
-      },
-    },
-    {
-      flag: 'E2E_TEST_AI_JOBS',
-      message: 'motir-ai jobs seam mocked.',
-      install: async (agent) => {
-        const { installAiJobsBoundaryMock } = await import('@/lib/test-ai-jobs-mock');
-        installAiJobsBoundaryMock(agent);
-      },
-    },
-    {
-      // ⚠️ THE ONE SEAM THIS LANE DOES NOT TURN ON HERE (MOTIR-3564). It is in
-      // the table so a reader finds every seam in one place and so a future
-      // SERVER-side caller has a door — but the boundary it stubs is crossed
-      // only by the index SUPERVISOR, which is a job and runs in the worker.
-      // The worker is a plain Node bundle and never executes this hook, so it
-      // installs the same seam itself (`scripts/worker.ts`), and
-      // `tests/e2e/_helpers/job-worker-process.ts` gives it the env.
-      //
-      // Setting `MOTIR_AI_URL` + `MOTIR_AI_SERVICE_TOKEN` on the APP server
-      // would not be redundant, it would be wrong: `lib/ai/availability.ts`
-      // reads exactly that pair process-wide, so it flips the whole lane
-      // cloud-on and four specs assert the OFF state against this server.
-      flag: 'E2E_TEST_CODE_GRAPH',
-      message: 'index-writer seam mocked (run-credential mint + tarball redirect).',
-      install: async (agent) => {
-        const { installCodeGraphBoundaryMock } = await import('@/lib/test-code-graph-mock');
-        installCodeGraphBoundaryMock(agent);
-      },
-    },
-  ];
-
-  // The gate reads the SAME table the installs below iterate, so every flag
-  // that can install something can also open the gate (MOTIR-3244).
-  const active = MOCKS.filter((seam) => process.env[seam.flag] === '1');
-  if (active.length === 0) return;
-
-  const { installSharedMockAgent } = await import('@/lib/test-mock-agent');
-  const agent = installSharedMockAgent();
-
-  for (const seam of active) {
-    await seam.install(agent);
-    // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
-    console.log(`[INSTRUMENT] ${seam.flag} active — ${seam.message}`);
-  }
+  // Every E2E seam, from the ONE table the job worker installs from too
+  // (`lib/test-mock-seams.ts`, MOTIR-5837). Dynamic, like every import below the
+  // runtime gate, so the Edge bundle never analyses the mocks.
+  const { installE2EMockSeams } = await import('@/lib/test-mock-seams');
+  // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
+  await installE2EMockSeams((line) => console.log(`[INSTRUMENT] ${line}`));
 }
 
 /**

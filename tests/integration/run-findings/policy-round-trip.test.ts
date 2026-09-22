@@ -242,19 +242,18 @@ describe('the bug an agent files lands as a REAL row, wired the way the prompt s
         title: 'the defect it found elsewhere',
         parentId: detail.item.parentId,
         descriptionMd: [
+          `**Found while:** running ${card.identifier}, branch subtask/${card.identifier}-x`,
           '## Reproduction',
           'Drive /ready with no sprint.',
           '## Evidence',
           '`pnpm vitest run tests/x.test.ts` → 1 failed',
-          `## Seen on`,
-          `${card.identifier}, branch subtask/${card.identifier}-x`,
         ].join('\n'),
       },
       caller.ctx,
     );
     // ⚠️ THE EDGE IS ALREADY THERE, and finding that out is worth more than the
     // assertion it replaced. The description NAMES the card (the prompt requires
-    // it — "WHERE IT WAS SEEN"), and `createWorkItem` auto-relates a mention, so
+    // it — the "**Found while:** running <key>" first line), and `createWorkItem` auto-relates a mention, so
     // the `relates_to` the prompt tells the agent to create in step 4 exists
     // before that step runs. The service throws `DuplicateLinkError` on a second
     // one; the MCP tool an agent actually calls CATCHES it and answers a success

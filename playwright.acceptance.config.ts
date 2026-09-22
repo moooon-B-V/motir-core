@@ -10,6 +10,7 @@ import {
   E2E_GITHUB_CLIENT_SECRET,
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
   E2E_PROVISIONING_ORG,
+  E2E_STUDIO_APP_ID,
 } from './tests/e2e/_helpers/github-const';
 
 // Dedicated ACCEPTANCE E2E lane (Story MOTIR-1627 · Subtask MOTIR-1632;
@@ -149,11 +150,19 @@ const MOTIR_GITHUB_MERGE_JOURNAL_PATH = path.resolve(
 );
 process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH'] ??= MOTIR_GITHUB_MERGE_CONTROL_PATH;
 process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] ??= MOTIR_GITHUB_MERGE_JOURNAL_PATH;
+// …and the JOB WORKER installs the same merge seam, with the App credentials the
+// merge needs (MOTIR-5837). The CI promotion dispatches an approval carried to a
+// later green verdict as `pull-request/auto-merge.requested` — a JOB — and
+// `system.pull-request-reconcile` reads the same host, so without this the
+// worker either refused (`GITHUB_APP_NOT_CONFIGURED`) or, with the credentials
+// alone, reached the REAL api.github.com. The two halves only ever travel
+// together: `githubMergeSeamEnv` in `tests/e2e/_helpers/job-worker-process.ts`.
+process.env['E2E_JOB_WORKER_GITHUB_MERGE_SEAM'] ??= '1';
 
 /** The Studio App's credentials. The private key is GENERATED per run rather than
  *  committed: `createAppJwt` really signs RS256 with it (the shipped path runs
- *  unchanged), and a PEM in the repo is a secret-scanner finding for no benefit. */
-const E2E_STUDIO_APP_ID = '424242';
+ *  unchanged), and a PEM in the repo is a secret-scanner finding for no benefit.
+ *  The id is shared with the job worker's merge-seam mirror (`github-const.ts`). */
 const { privateKey: E2E_STUDIO_APP_PRIVATE_KEY } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
   publicKeyEncoding: { type: 'spki', format: 'pem' },

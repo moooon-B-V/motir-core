@@ -2,7 +2,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
+import {
+  GITLAB_REFRESH_TRANSACTION_TIMEOUT_MS,
+  gitlabConnectionService,
+} from '@/lib/services/gitlabConnectionService';
+import { GITLAB_REFRESH_TIMEOUT_MS } from '@/lib/gitlab/gitlabOAuth';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { getGitProvider } from '@/lib/git';
 import { encryptToken, decryptToken } from '@/lib/gitlab/tokenCrypto';
@@ -209,6 +213,47 @@ describe('gitlabConnectionService.getAccessToken', () => {
     // The refresh token was ROTATED and persisted (GitLab single-use refresh).
     expect(decryptToken(row!.refreshTokenEncrypted!)).toBe('rotated-refresh');
     expect(row!.tokenExpiresAt!.getTime()).toBe((createdAt + 7200) * 1000);
+  });
+
+  // MOTIR-5988 — the lock is held across the refresh, and GitLab rotates the
+  // refresh token. A refresh slower than Prisma's default 5 s transaction timeout
+  // used to roll back the write storing the rotated set, leaving a refresh token
+  // GitLab had already invalidated. Slowed past 5 s, asserted on the re-read row.
+  it('persists the ROTATED set even when the refresh takes more than five seconds', async () => {
+    const { workspace } = await makeWorkspace('slow@example.com');
+    const installationId = `gitlab-ws-${workspace.id}`;
+    await seedConnection({
+      workspaceId: workspace.id,
+      organizationId: workspace.organizationId,
+      installationId,
+      accessToken: 'stale-access',
+      refreshToken: 'old-refresh',
+      expiresAt: new Date(Date.now() - 1000),
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string): Promise<Response> => {
+        if (!String(url).includes('/oauth/token')) throw new Error(`unexpected fetch to ${url}`);
+        await new Promise((resolve) => setTimeout(resolve, 6_000));
+        return Response.json({
+          access_token: 'slow-access',
+          refresh_token: 'slow-rotated-refresh',
+          expires_in: 7200,
+          created_at: Math.floor(Date.now() / 1000),
+        });
+      }),
+    );
+
+    const token = await gitlabConnectionService.getAccessToken(installationId);
+
+    expect(token.token).toBe('slow-access');
+    const row = await readRow(installationId);
+    expect(decryptToken(row!.accessTokenEncrypted!)).toBe('slow-access');
+    expect(decryptToken(row!.refreshTokenEncrypted!)).toBe('slow-rotated-refresh');
+  }, 30_000);
+
+  it('gives the token-mint transaction a budget that outlives the refresh AND a lock wait', () => {
+    expect(GITLAB_REFRESH_TRANSACTION_TIMEOUT_MS).toBeGreaterThan(2 * GITLAB_REFRESH_TIMEOUT_MS);
   });
 
   it('throws when the connection does not exist', async () => {
