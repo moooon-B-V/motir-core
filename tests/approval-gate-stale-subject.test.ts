@@ -161,7 +161,13 @@ describe('a press against a stamp that has MOVED is refused, and writes nothing'
 
     await expect(
       approvalGatesService.decide(
-        { gateId: gate.id, decision: 'request_changes', source: 'ui', stamp },
+        {
+          gateId: gate.id,
+          decision: 'request_changes',
+          noteMd: 'Needs changes.',
+          source: 'ui',
+          stamp,
+        },
         fx.ctx,
       ),
     ).rejects.toMatchObject({ tag: 'APPROVAL_GATE_STALE_SUBJECT', moved: ['subject'] });
@@ -212,7 +218,13 @@ describe('a press against a stamp that has MOVED is refused, and writes nothing'
     });
     await expect(
       approvalGatesService.decide(
-        { gateId: mergeGate!.id, decision: 'request_changes', source: 'ui', stamp },
+        {
+          gateId: mergeGate!.id,
+          decision: 'request_changes',
+          noteMd: 'Needs changes.',
+          source: 'ui',
+          stamp,
+        },
         fx.ctx,
       ),
     ).rejects.toMatchObject({ moved: ['pull_requests'] });

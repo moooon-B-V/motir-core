@@ -928,6 +928,10 @@ export const githubProvider: GitProvider = {
         commitSha,
         submittedAt,
         htmlUrl: typeof review['html_url'] === 'string' ? review['html_url'] : null,
+        body:
+          typeof review['body'] === 'string' && review['body'].trim()
+            ? review['body'].trim()
+            : null,
         reviewer: {
           providerUserId,
           login,

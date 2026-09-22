@@ -190,6 +190,7 @@ describe('approvalGatesService.getAwaitingForWorkItem', () => {
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
+        noteMd: 'Needs changes.',
         source: 'ui',
       },
       fx.ctx,
@@ -366,7 +367,13 @@ describe('canDecide AGREES WITH THE DOOR over the whole authority matrix (MOTIR-
         expect(read.canDecide).toBe(row.canDecide);
 
         const press = approvalGatesService.decide(
-          { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
+          {
+            stamp: DECIDED_WITHOUT_A_READER,
+            gateId: gate.id,
+            decision: verb,
+            source: 'ui',
+            noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+          },
           ctx,
         );
 

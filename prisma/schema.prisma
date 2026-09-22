@@ -7093,6 +7093,13 @@ model GithubPullRequestReview {
   /// `review.html_url`. Nullable — a payload need not carry one.
   htmlUrl     String?  @map("html_url")
 
+  /// `review.body` — what the reviewer WROTE, as given (Story MOTIR-6067 ·
+  /// MOTIR-6074; ADR `approval-gates.md` §10b). A `changes_requested` review that
+  /// decides a gate hands this over as the gate's reason, so a refusal made on
+  /// GitHub says why exactly as one pressed in Motir does. NULL when the review
+  /// carried no text — a surface then says *no reason given on GitHub*.
+  body        String?
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

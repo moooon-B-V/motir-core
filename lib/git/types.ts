@@ -225,6 +225,10 @@ export interface NormalizedReviewEvent {
     commitSha: string;
     submittedAt: Date;
     htmlUrl: string | null;
+    /** `review.body` — what the reviewer wrote, trimmed; null when there is none. A
+     *  `changes_requested` review that decides a gate hands it over as the gate's
+     *  reason (ADR `approval-gates.md` §10b, MOTIR-6074). */
+    body: string | null;
     reviewer: NormalizedReviewer;
   };
 }

@@ -331,6 +331,7 @@ describe('approvalGatesService.decide — CONCURRENCY: two presses, one decision
           stamp: DECIDED_WITHOUT_A_READER,
           gateId: gate.id,
           decision: 'request_changes',
+          noteMd: 'Needs changes.',
           source: 'ui',
         },
         fx.ctx,
@@ -373,6 +374,7 @@ describe('approvalGatesService.decide — state refusals', () => {
           stamp: DECIDED_WITHOUT_A_READER,
           gateId: gate.id,
           decision: 'request_changes',
+          noteMd: 'Needs changes.',
           source: 'ui',
         },
         fx.ctx,
@@ -387,6 +389,7 @@ describe('approvalGatesService.decide — state refusals', () => {
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
+        noteMd: 'Needs changes.',
         source: 'ui',
       },
       fx.ctx,
@@ -459,7 +462,13 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
       });
 
       const result = await approvalGatesService.decide(
-        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: gate.id,
+          decision: verb,
+          source: 'ui',
+          noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+        },
         { userId: reporter.id, workspaceId: fx.workspaceId },
       );
       expect(result.gate.state).toBe(STATE_OF[verb]);
@@ -479,7 +488,13 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
 
       await expect(
         approvalGatesService.decide(
-          { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
+          {
+            stamp: DECIDED_WITHOUT_A_READER,
+            gateId: gate.id,
+            decision: verb,
+            source: 'ui',
+            noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+          },
           { userId: reporter.id, workspaceId: fx.workspaceId },
         ),
       ).rejects.toBeInstanceOf(ApprovalGateNotAuthorisedError);
@@ -494,7 +509,13 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
       const { gate } = await designSubtaskWithGate({ assigneeId: assignee.id });
 
       const result = await approvalGatesService.decide(
-        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: gate.id,
+          decision: verb,
+          source: 'ui',
+          noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+        },
         { userId: assignee.id, workspaceId: fx.workspaceId },
       );
       expect(result.gate.state).toBe(STATE_OF[verb]);
@@ -514,7 +535,13 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
       const { gate } = await designSubtaskWithGate({ assigneeId: assignee.id });
 
       const result = await approvalGatesService.decide(
-        { stamp: DECIDED_WITHOUT_A_READER, gateId: gate.id, decision: verb, source: 'ui' },
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: gate.id,
+          decision: verb,
+          source: 'ui',
+          noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+        },
         { userId: admin.id, workspaceId: fx.workspaceId },
       );
       expect(result.gate.state).toBe(STATE_OF[verb]);
@@ -720,7 +747,13 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
       // and the rule is stated for approve and request_changes alike.
       const fresh = verb === 'approve' ? gate : (await gateRoutedToSomebodyElse()).gate;
       const result = await approvalGatesService.decide(
-        { stamp: DECIDED_WITHOUT_A_READER, gateId: fresh.id, decision: verb, source: 'ui' },
+        {
+          stamp: DECIDED_WITHOUT_A_READER,
+          gateId: fresh.id,
+          decision: verb,
+          source: 'ui',
+          noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+        },
         ctx,
       );
       expect(result.gate.state).toBe(verb === 'approve' ? 'approved' : 'changes_requested');

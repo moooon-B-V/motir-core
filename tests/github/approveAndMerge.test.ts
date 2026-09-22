@@ -421,6 +421,7 @@ describe('the door’s refusals end the press before any host is called', () => 
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: approval.id,
         decision: 'request_changes',
+        noteMd: 'Needs changes.',
         source: 'ui',
       },
       fx.ctx,
