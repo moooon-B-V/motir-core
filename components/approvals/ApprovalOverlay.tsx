@@ -731,6 +731,8 @@ export function ApprovalOverlay() {
                       : null
                   }
                   mergeAwaiting={gate.kind === 'pull_request_approval' && !decidedState}
+                  // The overlay's port is height-bounded: the recording fits it (MOTIR-6042).
+                  fit="viewport"
                 />
               ) : undefined
             }
@@ -782,7 +784,8 @@ export function ApprovalOverlay() {
             }
             port={
               <div className="flex flex-col gap-(--spacing-sm)">
-                <AcceptanceReceiptPlayer evidence={subject.evidence} />
+                {/* The port is height-bounded here, so the recording fits it (MOTIR-6042). */}
+                <AcceptanceReceiptPlayer evidence={subject.evidence} fit="viewport" />
                 <AcceptanceReceiptProvenance evidence={subject.evidence} />
               </div>
             }

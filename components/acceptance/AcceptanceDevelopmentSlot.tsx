@@ -5,6 +5,7 @@ import { Check, Clock } from 'lucide-react';
 import {
   AcceptanceReceiptPlayer,
   AcceptanceReceiptProvenance,
+  type AcceptanceReceiptFit,
 } from '@/components/acceptance/AcceptanceReceiptPlayer';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 
@@ -28,6 +29,7 @@ export function AcceptanceDevelopmentSlot({
   evidence,
   accepted,
   mergeAwaiting,
+  fit = 'width',
 }: {
   evidence: AcceptanceEvidenceDTO;
   /**
@@ -44,6 +46,8 @@ export function AcceptanceDevelopmentSlot({
   accepted: { name: string; at: string } | null;
   /** Whether the story's approve-to-merge question is currently being asked. */
   mergeAwaiting: boolean;
+  /** The player's sizing — `viewport` inside the approval overlay (MOTIR-6042). */
+  fit?: AcceptanceReceiptFit;
 }) {
   const t = useTranslations('approvalGate.acceptanceResult');
   const format = useFormatter();
@@ -80,7 +84,7 @@ export function AcceptanceDevelopmentSlot({
           </div>
         )
       ) : null}
-      <AcceptanceReceiptPlayer evidence={evidence} />
+      <AcceptanceReceiptPlayer evidence={evidence} fit={fit} />
       <AcceptanceReceiptProvenance evidence={evidence} />
     </div>
   );

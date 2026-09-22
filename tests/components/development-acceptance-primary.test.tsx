@@ -210,6 +210,18 @@ describe('panels B and C — the acceptance decided, driven by the server gate',
     expect(screen.getByText(acc.mergeHeld)).toBeTruthy();
   });
 
+  it('hands its sizing to the player — the overlay passes `viewport` so the recording fits its port (MOTIR-6042)', () => {
+    const { container } = render(
+      <AcceptanceDevelopmentSlot
+        evidence={RECEIPT}
+        accepted={null}
+        mergeAwaiting={false}
+        fit="viewport"
+      />,
+    );
+    expect(container.querySelector('video')!.className).toContain('100dvh');
+  });
+
   it('C · merge re-asked alone: the MERGE gate leads, and the slot says the video stands', () => {
     storyRun({
       acceptance: ACCEPTANCE_APPROVED,

@@ -61,6 +61,27 @@ describe('the receipt player (MOTIR-4950)', () => {
     expect(fast.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('sizes the video by WIDTH by default, and by the VIEWPORT inside the overlay (MOTIR-6042)', () => {
+    // The item page scrolls as a whole, so the default keeps the column-wide 16:9 video.
+    const page = render(<AcceptanceReceiptPlayer evidence={RECEIPT} />);
+    expect(page.container.querySelector('video')!.className).toContain('w-full');
+    expect(page.container.querySelector('video')!.className).not.toContain('100dvh');
+    page.unmount();
+
+    // The overlay's port is height-bounded: the width is capped by the viewport's height,
+    // so the whole video — and its native controls — is on screen without scrolling. The
+    // speed row and the chapters still drive THIS video.
+    const { container } = render(<AcceptanceReceiptPlayer evidence={RECEIPT} fit="viewport" />);
+    const video = container.querySelector('video')!;
+    expect(video.className).toContain('w-[min(100%,calc((100dvh-17rem)*16/9))]');
+    expect(video.className).toContain('aspect-video');
+    expect(video.parentElement!.className).toContain('bg-black');
+    fireEvent.click(screen.getByRole('button', { name: /Approve and merge/ }));
+    expect(video.currentTime).toBe(75);
+    fireEvent.click(screen.getByRole('button', { name: '1.5×' }));
+    expect(video.playbackRate).toBe(1.5);
+  });
+
   it('a BARE receipt — no video yet, no chapters, no trace, no CI run — renders without them', () => {
     // The publish path allows each of these to be absent (a clip whose blob was reclaimed,
     // a run with no chapters, a keyless publish), so the port must not assume any of them.
