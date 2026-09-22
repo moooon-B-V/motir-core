@@ -119,6 +119,24 @@ export async function withWorkspaceContext<T>(
 }
 
 /**
+ * The interactive-transaction budget a {@link withSystemContext} caller may ask for.
+ *
+ * ⚠️ OMIT IT AND THE TRANSACTION DIES AT PRISMA'S DEFAULT OF 5 SECONDS. That is
+ * right for a transaction made only of queries, and wrong for one that holds a
+ * row lock ACROSS an outbound call: the call can succeed at the far end after
+ * the transaction has expired, and the write recording its answer then rolls
+ * back. With a ROTATING refresh token that loses the only usable credential
+ * (MOTIR-5988), so such a caller passes a `timeout` derived from its call's own
+ * deadline rather than trusting the default.
+ */
+export interface SystemTransactionOptions {
+  /** Ms the whole transaction may run before Prisma expires it (default 5000). */
+  timeout?: number;
+  /** Ms to wait for a pooled connection before giving up (default 2000). */
+  maxWait?: number;
+}
+
+/**
  * Opens a Prisma transaction binding the `app.system_admin` GUC to `'true'`,
  * then invokes `fn` with the transaction client. This is the TRUSTED-WRITER /
  * cross-workspace-admin context for the job-ledger tables (job_run /
@@ -163,11 +181,12 @@ export async function withWorkspaceContext<T>(
  */
 export async function withSystemContext<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options?: SystemTransactionOptions,
 ): Promise<T> {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
     return fn(tx);
-  });
+  }, options);
 }
 
 /**

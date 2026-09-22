@@ -9,6 +9,7 @@ import {
   buildAuthorizeUrl,
   exchangeCodeForToken,
   fetchGitlabUser,
+  GITLAB_REFRESH_TIMEOUT_MS,
   refreshAccessToken,
 } from '@/lib/gitlab/gitlabOAuth';
 import { getGitProvider } from '@/lib/git';
@@ -73,6 +74,17 @@ async function removeProjectWebhooksBestEffort(
   }
 }
 
+/**
+ * How long the token-mint TRANSACTION may run, in ms — derived from the refresh
+ * call's deadline, never left at Prisma's 5-second default. The lock is held
+ * ACROSS the refresh (below), and GitLab rotates the refresh token: a transaction
+ * that expires mid-refresh rolls back the write storing the rotated set and
+ * leaves a refresh token GitLab has already invalidated (MOTIR-5988, met first on
+ * the Sentry path). Two calls' worth, because a caller blocked on the lock waits
+ * out the holder's whole refresh before it runs; the margin covers the queries.
+ */
+export const GITLAB_REFRESH_TRANSACTION_TIMEOUT_MS = 2 * GITLAB_REFRESH_TIMEOUT_MS + 10_000;
+
 export const gitlabConnectionService = {
   /**
    * Build the GitLab authorize URL for the connect grant. `state` is the caller-
@@ -135,39 +147,42 @@ export const gitlabConnectionService = {
    * transaction abort, never a corrupted/half-rotated token.
    */
   async getAccessToken(installationId: string): Promise<InstallationToken> {
-    return withSystemContext(async (tx) => {
-      await githubInstallationRepository.lockByInstallationId(installationId, tx);
-      const conn = await githubInstallationRepository.findByInstallationId(installationId, tx);
-      if (
-        !conn ||
-        conn.provider !== 'gitlab' ||
-        !conn.accessTokenEncrypted ||
-        !conn.refreshTokenEncrypted
-      ) {
-        throw new GitlabConnectionNotFoundError();
-      }
+    return withSystemContext(
+      async (tx) => {
+        await githubInstallationRepository.lockByInstallationId(installationId, tx);
+        const conn = await githubInstallationRepository.findByInstallationId(installationId, tx);
+        if (
+          !conn ||
+          conn.provider !== 'gitlab' ||
+          !conn.accessTokenEncrypted ||
+          !conn.refreshTokenEncrypted
+        ) {
+          throw new GitlabConnectionNotFoundError();
+        }
 
-      // Still-valid stored token → return it (the common path; no refresh).
-      if (conn.tokenExpiresAt && conn.tokenExpiresAt.getTime() - EXPIRY_SKEW_MS > Date.now()) {
-        return { token: decryptToken(conn.accessTokenEncrypted), expiresAt: conn.tokenExpiresAt };
-      }
+        // Still-valid stored token → return it (the common path; no refresh).
+        if (conn.tokenExpiresAt && conn.tokenExpiresAt.getTime() - EXPIRY_SKEW_MS > Date.now()) {
+          return { token: decryptToken(conn.accessTokenEncrypted), expiresAt: conn.tokenExpiresAt };
+        }
 
-      // Expired/near-expiry → refresh under the lock and persist the rotated set.
-      const refreshed = await refreshAccessToken(decryptToken(conn.refreshTokenEncrypted));
-      const updated = await githubInstallationRepository.updateTokens(
-        conn.id,
-        {
-          accessTokenEncrypted: encryptToken(refreshed.accessToken),
-          refreshTokenEncrypted: encryptToken(refreshed.refreshToken),
-          tokenExpiresAt: refreshed.expiresAt,
-        },
-        tx,
-      );
-      return {
-        token: refreshed.accessToken,
-        expiresAt: updated.tokenExpiresAt ?? refreshed.expiresAt,
-      };
-    });
+        // Expired/near-expiry → refresh under the lock and persist the rotated set.
+        const refreshed = await refreshAccessToken(decryptToken(conn.refreshTokenEncrypted));
+        const updated = await githubInstallationRepository.updateTokens(
+          conn.id,
+          {
+            accessTokenEncrypted: encryptToken(refreshed.accessToken),
+            refreshTokenEncrypted: encryptToken(refreshed.refreshToken),
+            tokenExpiresAt: refreshed.expiresAt,
+          },
+          tx,
+        );
+        return {
+          token: refreshed.accessToken,
+          expiresAt: updated.tokenExpiresAt ?? refreshed.expiresAt,
+        };
+      },
+      { timeout: GITLAB_REFRESH_TRANSACTION_TIMEOUT_MS },
+    );
   },
 
   /**

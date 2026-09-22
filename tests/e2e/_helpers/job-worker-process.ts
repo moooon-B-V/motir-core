@@ -2,7 +2,11 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { E2E_GITHUB_TOKEN_ENCRYPTION_KEY } from './github-const';
+import {
+  E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  E2E_PROVISIONING_ORG,
+  E2E_STUDIO_APP_ID,
+} from './github-const';
 
 // The Postgres job engine's WORKER, running inside the E2E lane
 // (Story MOTIR-3414 · Subtask MOTIR-3427).
@@ -53,6 +57,69 @@ function monitorFakeEnv(): Record<string, string> {
 }
 
 /**
+ * ⚠️ THE GITHUB MERGE SEAM, mirrored into the worker — and its App credentials
+ * WITH it, never without (Bug MOTIR-5837).
+ *
+ * An approval pressed BEFORE a pull request's checks pass is carried to the next
+ * green verdict, and the CI promotion dispatches that merge as
+ * `pull-request/auto-merge.requested` — a JOB, so it runs HERE, not in the
+ * server `instrumentation.ts` fakes GitHub in. `system.pull-request-reconcile`
+ * reads the same host on every pass. Before this, both failed in two layers:
+ *
+ *   * with no App env, the repository resolved to the USER-facing App and threw
+ *     `GITHUB_APP_NOT_CONFIGURED` before any call — so the carried merge
+ *     dead-lettered where no browser assertion can see it;
+ *   * with the App env mirrored ALONE, the worker minted an installation token
+ *     against the REAL api.github.com and died on its 401 — outbound traffic from
+ *     a lane whose contract is that NO REAL PULL REQUEST IS EVER MERGED.
+ *
+ * So the flag and the credentials travel TOGETHER, in this one function: the
+ * worker installs `lib/test-github-merge-mock.ts` from the shared seam table
+ * (`lib/test-mock-seams.ts`) and resolves a `motir-projects-e2e` repository to
+ * the Studio App exactly as the server does. The control and journal paths are
+ * the runner's own, so the spec steers both processes through ONE file and
+ * reads ONE journal. And the shared agent refuses any api.github.com call no seam
+ * answers (`lib/test-mock-agent.ts`), so a path this seam does not cover fails
+ * here by name instead of leaving the box.
+ *
+ * ⚠️ THE REPOS SEAM (`E2E_TEST_GITHUB_REPOS`) IS DELIBERATELY NOT MIRRORED. Its
+ * fake keeps the repositories it "created" in a PROCESS-LOCAL map, so a second
+ * copy here would be a second GitHub that disagrees with the first. With it off
+ * in this process, the merge seam answers the installation-token mint itself
+ * (its own header says so).
+ *
+ * Opt-in (`E2E_JOB_WORKER_GITHUB_MERGE_SEAM=1`, set by
+ * `playwright.acceptance.config.ts`), because only that lane's server selects the
+ * merge seam, and the two processes must agree about what GitHub is.
+ */
+export function githubMergeSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_GITHUB_MERGE_SEAM'] !== '1') return {};
+  return {
+    E2E_TEST_GITHUB_MERGE: '1',
+    ...(process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH']
+      ? { MOTIR_GITHUB_MERGE_CONTROL_PATH: process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH'] }
+      : {}),
+    ...(process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH']
+      ? { MOTIR_GITHUB_MERGE_JOURNAL_PATH: process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] }
+      : {}),
+    GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
+    GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
+    GITHUB_STUDIO_APP_PRIVATE_KEY: generateAppPrivateKey(),
+    GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  };
+}
+
+/** A fresh RSA private key (PKCS#8 PEM) for an App JWT nothing will verify. */
+function generateAppPrivateKey(): string {
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+  return privateKey;
+}
+
+/**
  * ⚠️ THE INDEX-WRITER SEAM'S ENVIRONMENT — WORKER ONLY, and the "only" is the
  * decision (Story MOTIR-3417 · MOTIR-3564).
  *
@@ -80,11 +147,7 @@ function monitorFakeEnv(): Record<string, string> {
  */
 function indexWriterSeamEnv(): Record<string, string> {
   if (process.env['E2E_JOB_WORKER_CODE_GRAPH_SEAM'] !== '1') return {};
-  const { privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-  });
+  const privateKey = generateAppPrivateKey();
   return {
     E2E_TEST_CODE_GRAPH: '1',
     MOTIR_AI_URL: 'http://motir-ai.index-e2e.local',
@@ -224,6 +287,8 @@ export async function startJobWorker(): Promise<void> {
       ...indexWriterSeamEnv(),
       // The fake error monitor — see `monitorFakeEnv`.
       ...monitorFakeEnv(),
+      // The GitHub merge seam and the App it merges as — see `githubMergeSeamEnv`.
+      ...githubMergeSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -340,6 +405,8 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       ...indexWriterSeamEnv(),
       // The fake error monitor — see `monitorFakeEnv`.
       ...monitorFakeEnv(),
+      // The GitHub merge seam and the App it merges as — see `githubMergeSeamEnv`.
+      ...githubMergeSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

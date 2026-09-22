@@ -17,12 +17,34 @@
 
 import { MockAgent, setGlobalDispatcher } from 'undici';
 
+/**
+ * ⚠️ THE HOSTS NO E2E PROCESS MAY REACH FOR REAL (Bug MOTIR-5837).
+ *
+ * Every GitHub boundary the lane crosses is faked by a seam, and the lane's
+ * contract is that NO REAL PULL REQUEST IS EVER MERGED and NO REAL REPOSITORY
+ * IS EVER CREATED. A call no seam intercepts is therefore always a hole —
+ * usually a PROCESS the seams were never installed in (the job worker, until
+ * this card: `pull-request/auto-merge.requested` minted an installation token
+ * against the real api.github.com and died on its 401).
+ *
+ * So the shared agent REFUSES these hosts rather than passing them through.
+ * An unintercepted call then throws undici's `MockNotMatchedError`, which names
+ * the method, the path and the origin — in the process that made it, on the
+ * job's own failure line — instead of becoming outbound traffic whose only
+ * symptom is a green pull request that never merges. Because the refusal lives
+ * HERE, every process that installs the agent carries it; a process added later
+ * cannot install the seams and forget the guard.
+ *
+ * `host` is undici's `URL.host`, so a default-port origin arrives bare.
+ */
+export const E2E_REFUSED_HOSTS: readonly string[] = ['api.github.com'];
+
 export function installSharedMockAgent(): MockAgent {
   const agent = new MockAgent();
   // Allow real network for everything not explicitly intercepted (Prisma's
-  // TCP to Postgres, the Inngest dev server, …). MockAgent's default is to
-  // disable net-connect; we call it explicitly to be unambiguous.
-  agent.enableNetConnect();
+  // TCP to Postgres, the Inngest dev server, …) — EXCEPT the refused hosts
+  // above, where an unmatched call must fail rather than leave the box.
+  agent.enableNetConnect((host) => !E2E_REFUSED_HOSTS.includes(host));
   setGlobalDispatcher(agent);
   return agent;
 }
