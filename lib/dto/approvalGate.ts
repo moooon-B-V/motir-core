@@ -872,6 +872,14 @@ export type ApprovalGateOverlaySubjectDTO =
        */
       members: PullRequestApprovalMemberDTO[];
       /**
+       * The approve-to-merge gate's version — its delivery SET — when a story's ACCEPTANCE
+       * leads the block (Bug MOTIR-6079): the item page's `mergeSubjectVersion`, read off
+       * the same gate. The acceptance gate is versioned by its recording's commit, so the
+       * frame names what one press merges, and lands each member's outcome on its row, only
+       * through this. Absent for every other port.
+       */
+      mergeSubjectVersion?: string | null;
+      /**
        * THE DECISION PORT (Story MOTIR-4907 · Subtask MOTIR-5678; design §27 Panel 7) —
        * present exactly when the gate is a `decision_approval`: the document read through
        * the resolver ON THE SERVER, drawn first in the block with no How to test. `document`
