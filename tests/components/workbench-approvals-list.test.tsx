@@ -100,14 +100,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the Approvals list — the row', () => {
-  it('names the SUBJECT, the work item and how long it has waited', () => {
+  it('reads as a SENTENCE about the work item, its key after it, the details beside (MOTIR-5999)', () => {
     renderRows([designRow()]);
 
-    expect(screen.getByText('Design result')).toBeTruthy();
+    // The sentence — its frame words and the title, in one accessible name.
+    expect(screen.getByText('Design for')).toBeTruthy();
+    expect(screen.getByText('Design — the To-approve row')).toBeTruthy();
+    expect(rowDoor().getAttribute('aria-label')).toBe(
+      'Review MOTIR-5147 — Design for Design — the To-approve row',
+    );
+    expect(screen.getByText('MOTIR-5147')).toBeTruthy();
+    // The details are what the kind printed after its label, unchanged.
     expect(screen.getByText(/3 files/)).toBeTruthy();
     expect(screen.getByText(/9840d00e/)).toBeTruthy();
-    expect(screen.getByText('MOTIR-5147')).toBeTruthy();
-    expect(screen.getByText('Design — the To-approve row')).toBeTruthy();
+    // The KIND label is gone from the row.
+    expect(screen.queryByText('Design result')).toBeNull();
   });
 
   it('renders rows in the order the read returned them — the read orders, the list does not re-sort', () => {
@@ -141,12 +148,14 @@ describe('the Approvals list — the row', () => {
     expect(screen.getByText(/no version/)).toBeTruthy();
   });
 
-  it('links the WORK ITEM — the one affordance that visibly leaves the queue', () => {
+  it('has ONE link — the row door; the work item is the sentence’s subject, not a column (MOTIR-5999)', () => {
     renderRows([designRow()]);
 
-    expect(screen.getByRole('link', { name: /^MOTIR-5147/ }).getAttribute('href')).toBe(
-      '/items/MOTIR-5147',
-    );
+    const links = screen.getAllByRole('link');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toBe(rowDoor());
+    expect(screen.getByRole('columnheader', { name: 'Details' })).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: 'Work item' })).toBeNull();
   });
 });
 
@@ -240,7 +249,11 @@ describe('the Approvals list — rows with no subject to show', () => {
     });
     renderRows([row]);
 
-    expect(screen.getByText('Pull-request merge')).toBeTruthy();
+    // The NEUTRAL sentence — the build has no word for this kind — still names the work
+    // item (MOTIR-5999, design-notes § 28).
+    expect(screen.getByText('Approval for')).toBeTruthy();
+    expect(screen.getByText('Design — the To-approve row')).toBeTruthy();
+    expect(screen.queryByText('Pull-request merge')).toBeNull();
     expect(screen.getByText('Not built yet')).toBeTruthy();
     expect(screen.getByText('Motir cannot show this kind yet')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
@@ -271,8 +284,10 @@ describe('the Approvals list — rows with no subject to show', () => {
 
     // The data rows, not the header: one card, one decision, one row.
     expect(screen.getAllByTestId(/^approval-row-/)).toHaveLength(1);
-    expect(screen.getByText('Pull requests')).toBeTruthy();
-    expect(screen.getByText('moooon/motir-core · #131, moooon/motir-gateway · #57')).toBeTruthy();
+    // The sentence, and the set named by its repositories — the numbers in the title.
+    expect(screen.getByText('is finished')).toBeTruthy();
+    const set = screen.getByText('In motir-core, motir-gateway');
+    expect(set.getAttribute('title')).toBe('moooon/motir-core · #131, moooon/motir-gateway · #57');
   });
 
   it('gives a MERGE gate no row treatment of its own — the per-pull-request row is gone', () => {
@@ -301,8 +316,12 @@ describe('the Approvals list — rows with no subject to show', () => {
     renderRows([row]);
 
     expect(screen.getByText('The design this asked about is gone')).toBeTruthy();
-    // Still a `design_result` — the kind IS built; the row it points at is not there.
-    expect(screen.getByText('Design result')).toBeTruthy();
+    // Still a `design_result` — the kind IS built, so it keeps its own sentence…
+    expect(screen.getByText('Design for')).toBeTruthy();
+    // …and its Decide cell says GONE, never *Not built yet* (design-notes § 28,
+    // DECISION 4: § 20's "look alike and are opposite", corrected on the record).
+    expect(screen.getByText('Gone')).toBeTruthy();
+    expect(screen.queryByText('Not built yet')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Review' })).toBeNull();
 
     fireEvent.click(rowDoor());
@@ -493,26 +512,31 @@ describe('the Approvals list — the PULL-REQUEST row (MOTIR-5485, design-notes 
   }
 
   it.each([
-    [1, 'moooon/motir-core · #140'],
-    [2, 'moooon/motir-core · #140, moooon/motir-ai · #91'],
-    [3, 'moooon/motir-core · #140, moooon/motir-ai · #91, +1 more'],
-  ])('a %i-repository set reads its subject line by the truncation rule', (count, line) => {
-    renderRows([pullRequestRow(count)]);
+    [1, 'In motir-core'],
+    [2, 'In motir-core, motir-ai'],
+    [3, 'In motir-core, motir-ai, +1 more'],
+  ])(
+    'a %i-repository set names its REPOSITORIES by the truncation rule — no numbers (MOTIR-5999)',
+    (count, line) => {
+      renderRows([pullRequestRow(count)]);
 
-    const subject = screen.getByText(line);
-    // The whole list is always in the cell's title.
-    expect(subject.getAttribute('title')).toBe(
-      MEMBERS.slice(0, count)
-        .map((m) => `${m.repo} · #${m.number}`)
-        .join(', '),
-    );
-  });
+      const subject = screen.getByText(line);
+      // The whole list is always in the cell's title.
+      expect(subject.getAttribute('title')).toBe(
+        MEMBERS.slice(0, count)
+          .map((m) => `${m.repo} · #${m.number}`)
+          .join(', '),
+      );
+    },
+  );
 
-  it("shows the kind's LIVE glyph and label, and no Not built yet pill", () => {
+  it("shows the kind's LIVE glyph and its sentence, and no Not built yet pill", () => {
     renderRows([pullRequestRow(2)]);
 
     const row = screen.getByTestId('approval-row-gate-pr-2');
-    expect(screen.getByText(en.workbench.approvals.pullRequest.kindLabel)).toBeTruthy();
+    // The approve-to-merge kind reads *{title} is finished* (MOTIR-5999).
+    expect(screen.getByText('Throttle the public API')).toBeTruthy();
+    expect(screen.getByText('is finished')).toBeTruthy();
     expect(row.querySelector('svg')!.getAttribute('class')).toContain('--el-accent-on-surface');
     expect(screen.queryByText('Not built yet')).toBeNull();
     expect(screen.queryByText('Motir cannot show this kind yet')).toBeNull();
@@ -532,9 +556,7 @@ describe('the Approvals list — the PULL-REQUEST row (MOTIR-5485, design-notes 
     expect(shallowPush).toHaveBeenCalledWith(
       expect.stringContaining('approval=ACME-12&approvalKind=pull_request_approval'),
     );
-    expect(
-      screen.queryByRole('button', { name: en.workbench.approvals.pullRequest.openWorkItem }),
-    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open work item' })).toBeNull();
 
     shallowPush.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));

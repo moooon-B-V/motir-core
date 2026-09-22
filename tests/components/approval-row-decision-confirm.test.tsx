@@ -78,8 +78,9 @@ const CONFIRMED: ApprovalRecordDecidedRowDto = {
 describe('a WAITING decision row', () => {
   it('shows the kind, the glyph’s label, the changes · supersedes · decision line, and opens the overlay', () => {
     renderWithIntl(<ApprovalRow record={{ section: 'awaiting', row: WAITING }} />);
-    // NOT *Decision* — the agent's decision-document row already reads that.
-    expect(screen.getByText('Confirm decision')).toBeTruthy();
+    // The sentence *{title} is decided* (MOTIR-5999) — the agent's decision-document row
+    // reads *Decision document for {title}*, so the two stay tellable apart in one list.
+    expect(screen.getByText('is decided')).toBeTruthy();
     expect(
       screen.getByText(
         'workflow · less requirement · supersedes 3 · Exports move to managed object storage.',

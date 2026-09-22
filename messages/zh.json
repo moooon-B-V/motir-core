@@ -7481,7 +7481,7 @@
     "approvals": {
       "columns": {
         "subject": "等待你处理",
-        "workItem": "工作项",
+        "details": "详情",
         "waited": "已等待"
       },
       "review": "查看",
@@ -7492,6 +7492,16 @@
       "subjectGone": "此项针对的设计已不存在",
       "notRenderable": "Motir 暂不支持展示此类型",
       "notBuiltYet": "尚未实现",
+      "subjectGonePill": "已移除",
+      "sentence": {
+        "design_result": "<title>{name}</title>的设计",
+        "acceptance_result": "故事 <title>{name}</title> 的验收视频",
+        "pull_request_approval": "<title>{name}</title>已完成",
+        "decision_approval": "<title>{name}</title>的决策文档",
+        "decision_choice": "<title>{name}</title>的选项",
+        "decision_confirmation": "<title>{name}</title>已作出决定",
+        "other": "<title>{name}</title>的审批"
+      },
       "kind": {
         "design_result": "设计成果",
         "decision_approval": "决策审批",
@@ -7501,24 +7511,21 @@
         "decision_choice": "选择",
         "decision_confirmation": "确认决策"
       },
-      "reviewRow": "查看 {key} {title}",
+      "reviewRow": "查看 {key} — {sentence}",
       "pullRequest": {
-        "kindLabel": "拉取请求",
         "more": "另有 {count} 个",
-        "openRow": "打开 {key} {title}",
-        "openWorkItem": "打开工作项"
+        "repos": "位于 {repos}",
+        "separator": "、",
+        "moreSeparator": "，"
       },
       "live": {
         "new": "新增",
         "decidedElsewhere": "已由他人决定"
       },
-      "rowKind": {
-        "decision_approval": "决策"
-      },
       "decisionSubject": {
-        "none": "无决策文档 · {pr}",
-        "several": "{count} 份决策文档 · {pr}",
-        "unreadable": "尚未读取决策文档 · {pr}",
+        "none": "无决策文档",
+        "several": "{count} 份决策文档",
+        "unreadable": "尚未读取决策文档",
         "title": "{path}，文件版本 {blob}"
       },
       "choiceMeta": "{count} 个选项 · {question}",
@@ -7544,7 +7551,7 @@
       "decided": "已决定"
     },
     "columns": {
-      "workItem": "工作项",
+      "details": "详情",
       "waited": "已等待",
       "decided": "决定时间",
       "askedOf": "请谁处理",

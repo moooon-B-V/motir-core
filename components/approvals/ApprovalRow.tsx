@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, type MouseEvent } from 'react';
+import { Children, useCallback, type MouseEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { CircleDashed, GitPullRequest, Pencil, Scale, Signpost, Video } from 'lucide-react';
@@ -50,20 +50,128 @@ import type {
 // `peek`, so the two cannot collide. A DECIDED row opens it too (§ 22 Panels 8a–8b
 // draw the decided states); nothing in either list decides.
 //
+// ⚠️ THE ROW READS AS A SENTENCE ABOUT THE WORK ITEM (Story MOTIR-5996 · MOTIR-5999;
+// `design/workbench/approvals-row--plain-words.mock.html`, design-notes § 28). It
+// used to lead with the gate KIND and a host meta line — *Pull requests*,
+// `motir-core · #412` — which a non-technical reader had to translate. The first cell
+// is now glyph · SENTENCE · key (*Design for {title}*, *{title} is finished*), the
+// second cell the DETAILS, and no visible text names a host's vocabulary: repository
+// numbers live in the details' `title` attribute. The KIND label is gone from the
+// row; `workbench.approvals.kind.*` stays, because the overlay's dialog name reads it.
+//
 // ⚠️ AN AWAITING ROW DECIDED IN THE OVERLAY SETTLES IN PLACE — it does not vanish
 // under the cursor. A row whose gate the overlay decided swaps its Decide cell for
 // the state pill, through the signal in `lib/approvals/decidedGates.ts` (§ 22
 // planning flag 2) — `router.refresh()` cannot reach a client island.
 
-/** The tab's column set — see design-notes § 20. The room's own-records view uses it unchanged. */
-export const APPROVALS_GRID_TEMPLATE = 'minmax(10rem,1fr) 268px 88px 132px';
+/**
+ * The tab's column set — design-notes § 20, RE-WEIGHTED by § 28 (MOTIR-5999): the
+ * sentence is the row's main content now, so the DETAILS track gave it 48px. The
+ * room's own-records view uses it unchanged.
+ */
+export const APPROVALS_GRID_TEMPLATE = 'minmax(12rem,1fr) 220px 88px 132px';
 
 /**
  * The room's FULL-VIEW column set (`design/approvals` § The grid): the tab's, with
- * the work-item track narrowed 268px → 228px and a 144px person track before the
- * Decide cell, so a decided row's version is not truncated away.
+ * the details track narrowed to 200px and a 144px person track before the Decide
+ * cell (§ 28 re-weighted it from 228px, for the same reason as the tab's).
  */
-export const APPROVALS_FULL_VIEW_GRID_TEMPLATE = 'minmax(10rem,1fr) 228px 88px 144px 132px';
+export const APPROVALS_FULL_VIEW_GRID_TEMPLATE = 'minmax(12rem,1fr) 200px 88px 144px 132px';
+
+/**
+ * WHICH SENTENCE each gate kind reads as (§ 28, DECISION 1) — TOTAL over
+ * `ApprovalGateKindDTO`, so a new kind is a compile error here rather than a row that
+ * silently falls through to a kind label nobody wrote. A kind this build cannot render
+ * takes the neutral *Approval for {title}*: the build has no word for it.
+ */
+const SENTENCE_KEY: Record<ApprovalGateKindDTO, SentenceKey> = {
+  design_result: 'design_result',
+  acceptance_result: 'acceptance_result',
+  pull_request_approval: 'pull_request_approval',
+  decision_approval: 'decision_approval',
+  decision_choice: 'decision_choice',
+  decision_confirmation: 'decision_confirmation',
+  // Superseded everywhere (MOTIR-5614): a row reached by URL is one this build does not draw.
+  pull_request_merge: 'other',
+};
+
+type SentenceKey =
+  | 'design_result'
+  | 'acceptance_result'
+  | 'pull_request_approval'
+  | 'decision_approval'
+  | 'decision_choice'
+  | 'decision_confirmation'
+  | 'other';
+
+/** The kinds whose subject this build renders — the rest take the neutral sentence. */
+const RENDERABLE_KINDS: ReadonlySet<string> = new Set([
+  'design_result',
+  'acceptance_result',
+  'pull_request_approval',
+  'decision_approval',
+  'decision_choice',
+  'decision_confirmation',
+]);
+
+/** The sentence a row reads as: its kind's, or the neutral one for a kind not drawn. */
+function sentenceKeyOf(kind: ApprovalGateKindDTO): SentenceKey {
+  return RENDERABLE_KINDS.has(kind) ? SENTENCE_KEY[kind] : 'other';
+}
+
+/**
+ * THE SENTENCE (§ 28, DECISION 1) — one ICU message per kind with a `<title>` tag, so
+ * the ORDER is the catalogue's (zh puts the title first) and nothing is concatenated.
+ * The frame words are `shrink-0` and never cut; the title TRUNCATES inside the
+ * sentence, so *… is finished* is always read. The title is plain text here — making
+ * it the quick-view door is MOTIR-6001's.
+ */
+function Sentence({
+  sentenceKey,
+  title,
+  quiet,
+}: {
+  sentenceKey: SentenceKey;
+  title: string;
+  /** A settled or unrenderable row — § 20's settled ink on both halves. */
+  quiet: boolean;
+}) {
+  const t = useTranslations('workbench.approvals.sentence');
+  // The ARGUMENT is `name` and the TAG is `title`: next-intl reads both from one
+  // values object, so the two cannot share a name.
+  const parts: ReactNode = t.rich(sentenceKey, {
+    name: title,
+    title: (chunks) => (
+      <span
+        key="title"
+        className={cn(
+          'min-w-0 truncate font-medium',
+          quiet ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
+        )}
+      >
+        {chunks}
+      </span>
+    ),
+  });
+  return (
+    <span className="flex min-w-0 items-center gap-1 text-sm">
+      {/* The frame words keep the catalogue's own spaces, so the sentence's TEXT reads
+          *Design for Pricing page* (copy, a screen reader, a text locator); the space
+          at a flex item's edge collapses visually, and `gap-1` does the spacing. */}
+      {Children.toArray(parts).map((part, index) =>
+        typeof part === 'string' ? (
+          part.trim() === '' ? null : (
+            <span key={`frame-${index}`} className="shrink-0 text-(--el-text-secondary)">
+              {part}
+            </span>
+          )
+        ) : (
+          part
+        ),
+      )}
+    </span>
+  );
+}
 
 /** What one row renders: a live question, or a decided record. */
 export type ApprovalRowRecord =
@@ -167,19 +275,26 @@ function KindGlyph({ kind }: { kind: ApprovalGateKindDTO }) {
 }
 
 /**
- * The pull-request SET an approve-and-merge gate asks about (design-notes § 23): one or
- * two named in full, three or more the first two and then *+n more*. The cell's `title`
- * carries the whole list, in the set's canonical order, so nothing is hidden from a
- * reader who asks.
+ * The pull-request SET an approve-and-merge gate asks about (design-notes § 23, as
+ * § 28 amends it): the REPOSITORIES by name — *In motir-core, motir-ai* — two in full,
+ * three or more the first two and then *+n more*. ⚠️ No host numbering in the visible
+ * text (§ 28, DECISION 2): a GitLab team calls these something else, and a reader who
+ * is not a developer should not have to translate. The cell's `title` carries every
+ * member as `owner/name · #n`, in the set's canonical order, for the reader who asks.
  */
 function PullRequestSetLine({ subject }: { subject: PullRequestApprovalSubjectSummaryDTO }) {
   const t = useTranslations('workbench.approvals.pullRequest');
-  const names = subject.members.map((member) => `${member.repo} · #${member.number}`);
-  const shown =
-    names.length > 2 ? [...names.slice(0, 2), t('more', { count: names.length - 2 })] : names;
+  const names = subject.members.map((member) => member.repo.split('/').pop() ?? member.repo);
+  const repos =
+    names.length > 2
+      ? `${names.slice(0, 2).join(t('separator'))}${t('moreSeparator')}${t('more', { count: names.length - 2 })}`
+      : names.join(t('separator'));
   return (
-    <span className="truncate text-xs text-(--el-text-secondary)" title={names.join(', ')}>
-      {shown.join(', ')}
+    <span
+      className="truncate text-xs text-(--el-text-secondary)"
+      title={subject.members.map((member) => `${member.repo} · #${member.number}`).join(', ')}
+    >
+      {t('repos', { repos })}
     </span>
   );
 }
@@ -207,13 +322,19 @@ function DecisionSubjectLine({ subject }: { subject: DecisionApprovalSubjectSumm
       </span>
     );
   }
+  // The pull request moves to the `title` (§ 28, DECISION 2) — the visible line
+  // says only why the decision cannot be approved.
   const line =
     subject.outcome === 'several'
-      ? t('several', { count: subject.documentCount, pr })
+      ? t('several', { count: subject.documentCount })
       : subject.outcome === 'none'
-        ? t('none', { pr })
-        : t('unreadable', { pr });
-  return <span className="truncate text-xs text-(--el-text-secondary)">{line}</span>;
+        ? t('none')
+        : t('unreadable');
+  return (
+    <span className="truncate text-xs text-(--el-text-secondary)" title={pr}>
+      {line}
+    </span>
+  );
 }
 
 /** What the row says about the thing being decided, per kind. */
@@ -353,6 +474,13 @@ function SubjectMeta({
   );
 }
 
+/**
+ * A Decide-cell pill NEVER WRAPS (§ 28, DECISION 4, added on review 2026-09-22):
+ * *Changes requested* fits the 132px track on one line, and a pill allowed to shrink
+ * in its `min-w-0` cell broke onto two and doubled the row.
+ */
+const DECIDE_PILL = 'whitespace-nowrap';
+
 /** The state pill a SETTLED row carries in its Decide cell. */
 function StatePill({ state, kind }: { state: ApprovalGateStateDTO; kind: ApprovalGateKindDTO }) {
   const t = useTranslations('approvalGate.state');
@@ -362,28 +490,52 @@ function StatePill({ state, kind }: { state: ApprovalGateStateDTO; kind: Approva
   // A decision that was CONFIRMED reads *Confirmed*, not *Approved* (MOTIR-5961).
   const tConfirm = useTranslations('approvalGate.decisionConfirm.state');
   if (state === 'approved' && kind === 'decision_choice') {
-    return <Pill severity="success">{tChoice('chosen')}</Pill>;
+    return (
+      <Pill severity="success" className={DECIDE_PILL}>
+        {tChoice('chosen')}
+      </Pill>
+    );
   }
   if (state === 'approved' && kind === 'decision_confirmation') {
-    return <Pill severity="success">{tConfirm('confirmed')}</Pill>;
+    return (
+      <Pill severity="success" className={DECIDE_PILL}>
+        {tConfirm('confirmed')}
+      </Pill>
+    );
   }
   switch (state) {
     // ⚠️ THE SAME PILL RECIPES THE FRAME PICKS, so a settled row and the frame
     // in the overlay above it cannot disagree about what a state looks like.
     case 'approved':
-      return <Pill severity="success">{t('approved')}</Pill>;
+      return (
+        <Pill severity="success" className={DECIDE_PILL}>
+          {t('approved')}
+        </Pill>
+      );
     case 'changes_requested':
-      return <Pill severity="warning">{t('changesRequested')}</Pill>;
+      return (
+        <Pill severity="warning" className={DECIDE_PILL}>
+          {t('changesRequested')}
+        </Pill>
+      );
     // A refused DIRECTION (MOTIR-5956) — its OWN pill, never *Changes requested*:
     // nothing will be revised and re-asked. The design's peach, the warning tint.
     case 'overturned':
-      return <Pill severity="warning">{t('overturned')}</Pill>;
+      return (
+        <Pill severity="warning" className={DECIDE_PILL}>
+          {t('overturned')}
+        </Pill>
+      );
     // ⚠️ COLOURLESS, and that is the design's decision rather than a fallback.
     // `superseded` is written by the PRODUCT, never by a person, so a tinted
     // pill would let the audit read a withdrawn question as somebody's answer.
     // `tone="archived"` is the frame's own choice for the same row.
     case 'superseded':
-      return <Pill tone="archived">{t('withdrawn')}</Pill>;
+      return (
+        <Pill tone="archived" className={DECIDE_PILL}>
+          {t('withdrawn')}
+        </Pill>
+      );
     /* v8 ignore next 2 -- UNREACHABLE: `awaiting` is the one state left, and
        `announceGateDecided` refuses it (`tests/approvals/decidedGates.test.tsx`,
        "does not treat `awaiting` as a decision"). */
@@ -416,32 +568,24 @@ export function ApprovalRow({
   arrived?: boolean;
 }) {
   const t = useTranslations('workbench.approvals');
+  const tSentence = useTranslations('workbench.approvals.sentence');
   const tGate = useTranslations('approvalGate');
   const relativeLabel = useRelativeLabel();
   const openApproval = useOpenApproval();
   const { row } = record;
   const announcedState = useDecidedGateState(row.gateId);
 
-  // AN APPROVE-AND-MERGE ROW OPENS THE OVERLAY, exactly as a design row does
-  // (Story MOTIR-5437 · Subtask MOTIR-5440; `design/workbench/design-notes.md` § 24's
-  // *The ACCESS PATH*, which § 23 promised: *Open work item* becomes *Review* once the
-  // overlay can render this kind). The frame it opens is the item page's Development
-  // block at viewport height, so the row no longer has to send the reader to the card.
-  const pullRequestSet = row.subject?.kind === 'pull_request_approval';
-  const decision = row.subject?.kind === 'decision_approval';
-  const choice = row.subject?.kind === 'decision_choice';
-  const confirm = row.subject?.kind === 'decision_confirmation';
   // A kind with no renderer, or a subject that is gone, still HAS the door — the
   // overlay draws both (§ 22 Panels 4a / 4b). What they lack is anything to
-  // decide, so their Decide cell keeps § 20's treatment.
-  const renderable =
-    row.subject !== null &&
-    (row.subject.kind === 'design_result' ||
-      row.subject.kind === 'acceptance_result' ||
-      pullRequestSet ||
-      decision ||
-      choice ||
-      confirm);
+  // decide, so their Decide cell says why in a colourless pill.
+  const gone = row.subject === null;
+  const renderable = row.subject !== null && RENDERABLE_KINDS.has(row.subject.kind);
+  const sentenceKey = gone ? SENTENCE_KEY[row.kind] : sentenceKeyOf(row.kind);
+  // The sentence as plain text — the row door's accessible name reads it (MOTIR-5999).
+  const sentenceText = tSentence.markup(sentenceKey, {
+    name: row.workItem.title,
+    title: (chunks: string) => chunks,
+  });
   const settledState: ApprovalGateStateDTO | null =
     record.section === 'decided' ? record.row.state : announcedState;
   // A HELD row is settled with no state to show: it has left the awaiting set,
@@ -482,70 +626,41 @@ export function ApprovalRow({
         <Link
           href={`/items/${row.workItem.identifier}`}
           aria-haspopup="dialog"
-          aria-label={t('reviewRow', {
-            key: row.workItem.identifier,
-            title: row.workItem.title,
-          })}
+          aria-label={t('reviewRow', { key: row.workItem.identifier, sentence: sentenceText })}
           onClick={onRowClick}
           className="absolute inset-0 z-0 focus:outline-none"
         />
         <KindGlyph kind={row.kind} />
-        <span
-          className={cn(
-            'shrink-0 text-sm font-medium',
-            // ⚠️ `--el-text-secondary`, NOT the `--el-text-muted` the design's
-            // token map names for a settled row. Muted is 4.12–4.34:1 on
-            // `--el-surface` — which is THIS row's hover fill — so the ink
-            // would drop below AA exactly while the pointer is on it. The
-            // sibling `WorkbenchList` records the identical pair for its own
-            // identifier cell. The ASSET is amended to match (§ 20's token
-            // map); the guard found this before a reader did.
-            settled || !renderable ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
-          )}
-        >
-          {pullRequestSet
-            ? t('pullRequest.kindLabel')
-            : decision
-              ? t('rowKind.decision_approval')
-              : t(`kind.${row.kind}`)}
+        <Sentence
+          sentenceKey={sentenceKey}
+          title={row.workItem.title}
+          quiet={settled || !renderable}
+        />
+        {/* The key FOLLOWS the sentence (§ 28, DECISION 1) — `--el-text-secondary`,
+            not muted: this row's hover fill is `--el-surface`, where muted is 4.17:1. */}
+        <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
+          {row.workItem.identifier}
         </span>
-        {record.section === 'decided' ? (
-          <SubjectMeta
-            subject={row.subject}
-            decidedVersion={record.row.subjectVersion}
-            chosenOption={record.row.chosenOption}
-            decided={{ state: record.row.state, confirmedRecord: record.row.confirmedRecord }}
-          />
-        ) : (
-          <SubjectMeta subject={row.subject} />
-        )}
         {/* It ARRIVED while the reader was looking (§ 26, Panel 1) — at the END
-            of the subject cell, which at `< md` is the end of the row's first
+            of the sentence cell, which at `< md` is the end of the row's first
             line and so is already reading order. */}
         {arrived ? <Pill tone="neutral">{t('live.new')}</Pill> : null}
       </div>
 
       <div role="presentation" className="flex flex-wrap items-center gap-2 pl-6 md:contents">
         <div role="cell" className="flex min-w-0 items-center">
-          <Link
-            href={`/items/${row.workItem.identifier}`}
-            className="relative z-10 flex min-w-0 items-center gap-2 hover:underline"
-          >
-            {/* `--el-text-secondary`, not muted: this row's hover fill is
-                `--el-surface`, where muted is 4.17:1 and fails AA — the same
-                pair `WorkbenchList` records for its own identifier cell. */}
-            <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
-              {row.workItem.identifier}
-            </span>
-            <span
-              className={cn(
-                'truncate text-sm',
-                settled || !renderable ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
-              )}
-            >
-              {row.workItem.title}
-            </span>
-          </Link>
+          {/* THE DETAILS (§ 28, DECISION 2) — what the kind used to print after its
+              label, now in the track the work-item cell held. */}
+          {record.section === 'decided' ? (
+            <SubjectMeta
+              subject={row.subject}
+              decidedVersion={record.row.subjectVersion}
+              chosenOption={record.row.chosenOption}
+              decided={{ state: record.row.state, confirmedRecord: record.row.confirmedRecord }}
+            />
+          ) : (
+            <SubjectMeta subject={row.subject} />
+          )}
         </div>
         <div role="cell" className="flex min-w-0 items-center">
           {/* Relative in the cell, ABSOLUTE in the title — the absolute one is
@@ -578,15 +693,29 @@ export function ApprovalRow({
                  press, and a tinted pill would let a reader take it for their
                  own answer. The row still OPENS — the overlay reads the gate by
                  (item, kind) and shows the real record. */
-              <Pill tone="neutral">{t('live.decidedElsewhere')}</Pill>
+              <Pill tone="neutral" className={DECIDE_PILL}>
+                {t('live.decidedElsewhere')}
+              </Pill>
             )
+          ) : gone ? (
+            /* A SUBJECT THAT IS GONE is not a kind that is unbuilt (§ 20: "look
+               alike and are opposite"; corrected on the record by § 28, DECISION 4).
+               The kind is known, so the row keeps its kind's sentence and says the
+               subject is gone. */
+            <Pill tone="archived" className={DECIDE_PILL}>
+              {t('subjectGonePill')}
+            </Pill>
           ) : !renderable ? (
-            <Pill tone="archived">{t('notBuiltYet')}</Pill>
+            <Pill tone="archived" className={DECIDE_PILL}>
+              {t('notBuiltYet')}
+            </Pill>
           ) : record.section === 'awaiting' && !record.row.canDecide ? (
             /* SEE but not DECIDE — the row states what it is and carries no
                decide control. The door STAYS: what is withheld is the DECISION,
                never the look, and the overlay draws the frame's state `B`. */
-            <Pill tone="awaiting">{tGate('state.awaiting')}</Pill>
+            <Pill tone="awaiting" className={DECIDE_PILL}>
+              {tGate('state.awaiting')}
+            </Pill>
           ) : (
             /* The labelled door a keyboard and a screen reader find (§ 22
                Panel 9) — the same address as the row. */

@@ -6,6 +6,8 @@ import { test, expect } from '@playwright/test';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { servePrivateObjectStore } from './_helpers/object-store';
+import { approvalSentence } from './_helpers/approval-sentence';
+import en from '@/messages/en.json';
 import {
   MOCK_HTML,
   MOCK_SOURCE_PATH,
@@ -177,12 +179,9 @@ test.describe('every decision waiting on you, in one place', () => {
       );
 
       await expect(rows(page)).toHaveCount(1);
-      await expect(rows(page).getByText('Design result')).toBeVisible();
-      await expect(
-        // Anchored on the key: since MOTIR-5225 the whole-row door is a link too,
-        // named `Review <KEY> <title>`, and an unanchored match finds both.
-        rows(page).getByRole('link', { name: new RegExp(`^${seed.designKey}`) }),
-      ).toBeVisible();
+      // The row reads as a SENTENCE about the work item, its key after it (MOTIR-5999).
+      await expect(rows(page).getByText(/^Design for /)).toBeVisible();
+      await expect(rows(page).getByText(seed.designKey, { exact: true })).toBeVisible();
 
       // ⚠️ THE BADGE AND THE ROWS, IN THE SAME PAGE STATE. Two reads a render
       // apart would pass against a surface whose count and list disagree.
@@ -311,7 +310,7 @@ test.describe('every decision waiting on you, in one place', () => {
     const client = await agentSession(seed.token, baseURL!);
     const viewerCard = await adminDb.workItem.findUniqueOrThrow({
       where: { id: seed.viewerDesignId },
-      select: { identifier: true },
+      select: { identifier: true, title: true },
     });
     expect((await publish(client, viewerCard.identifier)).isError ?? false).toBe(false);
 
@@ -320,7 +319,11 @@ test.describe('every decision waiting on you, in one place', () => {
 
     await expect(rows(page)).toHaveCount(1);
     // The row is THERE and says what it is …
-    await expect(rows(page).getByText('Design result')).toBeVisible();
+    await expect(
+      rows(page).getByText(approvalSentence(en, 'design_result', viewerCard.title), {
+        exact: true,
+      }),
+    ).toBeVisible();
     // … and offers nothing to press, here or inside.
     await expect(rows(page).getByRole('button', { name: 'Review', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);

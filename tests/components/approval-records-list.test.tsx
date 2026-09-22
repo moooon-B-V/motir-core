@@ -204,10 +204,10 @@ describe('the PERSON cell follows the read’s `fullView`, and nothing else', ()
 
   it('uses the full-view grid only in the full view', () => {
     const { unmount } = renderWithIntl(<ApprovalRecordsList records={page({ fullView: true })} />);
-    expect(screen.getByTestId('approval-row-gate-d').getAttribute('style')).toContain('228px');
+    expect(screen.getByTestId('approval-row-gate-d').getAttribute('style')).toContain('200px');
     unmount();
     renderWithIntl(<ApprovalRecordsList records={page({ fullView: false })} />);
-    expect(screen.getByTestId('approval-row-gate-d').getAttribute('style')).toContain('268px');
+    expect(screen.getByTestId('approval-row-gate-d').getAttribute('style')).toContain('220px');
   });
 });
 

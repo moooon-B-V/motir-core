@@ -120,7 +120,7 @@ export function ApprovalRecordsList({ records }: { records: ApprovalRecordsPageD
               total={sections.awaiting.total}
               gridTemplate={gridTemplate}
               columns={[
-                t('columns.workItem'),
+                t('columns.details'),
                 t('columns.waited'),
                 ...(fullView ? [t('columns.askedOf')] : []),
                 '',
@@ -155,7 +155,7 @@ export function ApprovalRecordsList({ records }: { records: ApprovalRecordsPageD
               total={sections.decided.total}
               gridTemplate={gridTemplate}
               columns={[
-                t('columns.workItem'),
+                t('columns.details'),
                 t('columns.decided'),
                 ...(fullView ? [t('columns.decidedBy')] : []),
                 '',

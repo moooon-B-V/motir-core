@@ -83,7 +83,7 @@ export function ApprovalsList({
             className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-4 pl-4"
             style={{ gridTemplateColumns: GRID_TEMPLATE, height: 40 }}
           >
-            {[t('columns.subject'), t('columns.workItem'), t('columns.waited'), ''].map((c, i) => (
+            {[t('columns.subject'), t('columns.details'), t('columns.waited'), ''].map((c, i) => (
               <div key={c || `c${i}`} role="columnheader" className="flex min-w-0 items-center">
                 <span className="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
                   {c}

@@ -7485,7 +7485,7 @@
     "approvals": {
       "columns": {
         "subject": "Waiting on",
-        "workItem": "Work item",
+        "details": "Details",
         "waited": "Waited"
       },
       "review": "Review",
@@ -7496,6 +7496,16 @@
       "subjectGone": "The design this asked about is gone",
       "notRenderable": "Motir cannot show this kind yet",
       "notBuiltYet": "Not built yet",
+      "subjectGonePill": "Gone",
+      "sentence": {
+        "design_result": "Design for <title>{name}</title>",
+        "acceptance_result": "Acceptance video for story <title>{name}</title>",
+        "pull_request_approval": "<title>{name}</title> is finished",
+        "decision_approval": "Decision document for <title>{name}</title>",
+        "decision_choice": "Options for <title>{name}</title>",
+        "decision_confirmation": "<title>{name}</title> is decided",
+        "other": "Approval for <title>{name}</title>"
+      },
       "kind": {
         "design_result": "Design result",
         "decision_approval": "Decision approval",
@@ -7505,24 +7515,21 @@
         "decision_choice": "Choice",
         "decision_confirmation": "Confirm decision"
       },
-      "reviewRow": "Review {key} {title}",
+      "reviewRow": "Review {key} — {sentence}",
       "pullRequest": {
-        "kindLabel": "Pull requests",
         "more": "+{count} more",
-        "openRow": "Open {key} {title}",
-        "openWorkItem": "Open work item"
+        "repos": "In {repos}",
+        "separator": ", ",
+        "moreSeparator": ", "
       },
       "live": {
         "new": "New",
         "decidedElsewhere": "Decided elsewhere"
       },
-      "rowKind": {
-        "decision_approval": "Decision"
-      },
       "decisionSubject": {
-        "none": "No decision document · {pr}",
-        "several": "{count} decision documents · {pr}",
-        "unreadable": "Decision document not read yet · {pr}",
+        "none": "No decision document",
+        "several": "{count} decision documents",
+        "unreadable": "Decision document not read yet",
         "title": "{path} at blob {blob}"
       },
       "choiceMeta": "{count} options · {question}",
@@ -7548,7 +7555,7 @@
       "decided": "Decided"
     },
     "columns": {
-      "workItem": "Work item",
+      "details": "Details",
       "waited": "Waited",
       "decided": "Decided",
       "askedOf": "Asked of",

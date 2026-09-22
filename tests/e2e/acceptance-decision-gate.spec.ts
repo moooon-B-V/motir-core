@@ -5,6 +5,7 @@ import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { linkPr } from './_helpers/pr-link';
+import { approvalSentence } from './_helpers/approval-sentence';
 import {
   DECISION_REPO,
   decisionHeadSha,
@@ -232,22 +233,35 @@ test.describe('an agent’s decision waits for a person', () => {
       // beside it is carried by the one press), the human card by its merge gate alone.
       await expect(rows).toHaveCount(3, { timeout: 60_000 });
       const accepted = rowFor(page, seed.accepted);
+      // The row reads as a sentence about the work item (MOTIR-5999).
       await expect(
-        accepted.getByText(en.workbench.approvals.rowKind.decision_approval, { exact: true }),
+        accepted.getByText(approvalSentence(en, 'decision_approval', seed.accepted.title), {
+          exact: true,
+        }),
       ).toBeVisible();
       await expect(accepted.getByText(`Page body · ${DOC}`, { exact: true })).toBeVisible();
+      // Why it cannot be approved, in words; the pull request moves to the title (MOTIR-5999).
+      const none = rowFor(page, seed.missing).getByText(
+        en.workbench.approvals.decisionSubject.none,
+        {
+          exact: true,
+        },
+      );
+      await expect(none).toBeVisible();
+      await expect(none).toHaveAttribute('title', prName(PRS.missing.number));
+      // The person's decision is not a decision gate: its row is the pull request's.
       await expect(
-        rowFor(page, seed.missing).getByText(
-          fill(en.workbench.approvals.decisionSubject.none, { pr: prName(PRS.missing.number) }),
+        rowFor(page, seed.human).getByText(
+          approvalSentence(en, 'decision_approval', seed.human.title),
+          { exact: true },
+        ),
+      ).toHaveCount(0);
+      await expect(
+        rowFor(page, seed.human).getByText(
+          approvalSentence(en, 'pull_request_approval', seed.human.title),
           { exact: true },
         ),
       ).toBeVisible();
-      // The person's decision is not a decision gate: its row is the pull request's.
-      await expect(
-        rowFor(page, seed.human).getByText(en.workbench.approvals.rowKind.decision_approval, {
-          exact: true,
-        }),
-      ).toHaveCount(0);
       await expect(page.getByText(en.workbench.approvals.notBuiltYet)).toHaveCount(0);
     });
     await beat();

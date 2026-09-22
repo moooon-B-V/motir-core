@@ -76,7 +76,7 @@ const DECIDED: ApprovalRecordDecidedRowDto = {
 describe('a WAITING choice row', () => {
   it('shows the kind, the option count and the question, and opens the overlay', () => {
     renderWithIntl(<ApprovalRow record={{ section: 'awaiting', row: WAITING }} />);
-    expect(screen.getByText('Choice')).toBeTruthy();
+    expect(screen.getByText('Options for')).toBeTruthy(); // the sentence (MOTIR-5999)
     expect(screen.getByText('4 options · Where do exported reports live?')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
     expect(shallowPush).toHaveBeenCalledTimes(1);
