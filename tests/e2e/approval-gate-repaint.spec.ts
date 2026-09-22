@@ -104,10 +104,16 @@ async function arriveAtTheGate(
   await page.goto(`/items/${seed.designKey}`);
   await expect(page.getByRole('heading', { name: seed.designTitle })).toBeVisible();
 
-  // The BEFORE half of every assertion below: the card is In Progress and the
+  // The BEFORE half of every assertion below: the card is In Review and the
   // question is open. Asserted rather than assumed, so a seed that drifted
   // fails here instead of making the after-state look like a no-op.
-  await expect(statusCard(page).getByText('In Progress', { exact: true })).toBeVisible();
+  //
+  // ⚠️ IN REVIEW, NOT IN PROGRESS — the PUBLISH above put it there (Bug
+  // MOTIR-6009). A design card carries no pull request, so nothing else can
+  // move it, and the publish now writes the status in the transaction that
+  // raises the gate. The seed still claims the card at `in_progress`, which is
+  // the honest starting point; this line records where publishing leaves it.
+  await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
   // Scoped to the section cards: since MOTIR-4908 (MOTIR-5878) the page HEADER carries
   // the decision-waiting marker, which also reads "Awaiting you" — the question this
   // asserts is the one the gate's own section asks.
@@ -188,7 +194,7 @@ test.describe('deciding an approval gate repaints the item page in place', () =>
     // so the decision owes it a repaint. This is the assertion the defect failed
     // and the one that goes red when either half is removed.
     await expect(statusCard(page).getByText('Done', { exact: true })).toBeVisible();
-    await expect(statusCard(page).getByText('In Progress', { exact: true })).toHaveCount(0);
+    await expect(statusCard(page).getByText('In Review', { exact: true })).toHaveCount(0);
 
     // The record band's `Files kept` line. It reads the gate's
     // SUBJECT, which is a server prop (`DesignResultSection`'s `subject`) and is
@@ -219,7 +225,7 @@ test.describe('deciding an approval gate repaints the item page in place', () =>
     // nothing, so the card stays exactly where it was. This is the half a
     // blanket refresh would also pass — it is here to say that the repaint
     // renders what the server actually holds rather than what the press implied.
-    await expect(statusCard(page).getByText('In Progress', { exact: true })).toBeVisible();
+    await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
     await expect(statusCard(page).getByText('Done', { exact: true })).toHaveCount(0);
     // Only an approval pins the bytes, so there is no `Files kept` line to draw.
     await expect(page.getByText('Files kept')).toHaveCount(0);
