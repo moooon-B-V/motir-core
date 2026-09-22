@@ -14,20 +14,56 @@ import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.5, 2] as const;
 
+/**
+ * How the video is sized (Bug MOTIR-6042).
+ *
+ * `width` — the full width of whatever holds it, 16:9. Right on the item page, where
+ * the receipt sits in a column and the PAGE scrolls: the height it takes is ordinary
+ * page content.
+ *
+ * `viewport` — the approval OVERLAY. There the port is the height left between band 1
+ * and the verbs, with its own scroll, and the overlay is the whole screen wide, so a
+ * width-sized video was ~9/16 of the SCREEN'S WIDTH tall and pushed its own controls
+ * below the fold at every common desktop size. Here the video is as wide as the port
+ * allows AND short enough that it, and the speed row under it, fit the viewport:
+ * `17rem` is the overlay's chrome (the exit row, band 1, band 3, the port's padding and
+ * the speed row), measured, with a little headroom for a story run's slot heading.
+ */
+export type AcceptanceReceiptFit = 'width' | 'viewport';
+
 /** The chaptered player: the video, the speed row, and a jump per chapter. */
-export function AcceptanceReceiptPlayer({ evidence }: { evidence: AcceptanceEvidenceDTO }) {
+export function AcceptanceReceiptPlayer({
+  evidence,
+  fit = 'width',
+}: {
+  evidence: AcceptanceEvidenceDTO;
+  fit?: AcceptanceReceiptFit;
+}) {
   const t = useTranslations('acceptance');
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   return (
     <div className="overflow-hidden rounded-(--radius-input) border border-(--el-border)">
       {evidence.videoUrl ? (
-        <video
-          ref={videoRef}
-          src={evidence.videoUrl}
-          controls
-          className="aspect-video w-full bg-black"
-        />
+        fit === 'viewport' ? (
+          // The black band stays full width, so a height-capped video reads as a
+          // letterboxed player rather than a thumbnail floating in the port.
+          <div className="bg-black">
+            <video
+              ref={videoRef}
+              src={evidence.videoUrl}
+              controls
+              className="mx-auto block aspect-video w-[min(100%,calc((100dvh-17rem)*16/9))] object-contain"
+            />
+          </div>
+        ) : (
+          <video
+            ref={videoRef}
+            src={evidence.videoUrl}
+            controls
+            className="aspect-video w-full bg-black"
+          />
+        )
       ) : null}
       <div className="flex items-center gap-1.5 px-3.5 pt-3">
         <span className="mr-0.5 text-[11px] leading-none text-(--el-text-secondary)">
