@@ -122,9 +122,15 @@ describe('the seam is ONE interface, and every network method bounds itself', ()
       expect(ms, operation).toBeGreaterThan(0);
       expect(ms, operation).toBeLessThanOrEqual(60_000);
     }
-    // The interactive bounds are tighter than the unattended one: somebody is
-    // parked on a redirect for the first two and nobody is watching the third.
-    expect(MONITOR_VERIFY_INSTALL_TIMEOUT_MS).toBeLessThan(MONITOR_GRANT_EXCHANGE_TIMEOUT_MS);
+    // The verify and the install read run AFTER the exchange has spent Sentry's
+    // single-use grant code, so they are bounded by NO LESS than the exchange
+    // (MOTIR-6008). This used to assert the opposite — "the interactive bounds
+    // are tighter" — and that tight bound is what threw a live grant away.
+    expect(MONITOR_VERIFY_INSTALL_TIMEOUT_MS).toBeGreaterThanOrEqual(
+      MONITOR_GRANT_EXCHANGE_TIMEOUT_MS,
+    );
+    // The interactive exchange stays tighter than the unattended refresh:
+    // somebody is parked on a redirect for the first and nobody watches the second.
     expect(MONITOR_GRANT_EXCHANGE_TIMEOUT_MS).toBeLessThan(MONITOR_REFRESH_TIMEOUT_MS);
   });
 
