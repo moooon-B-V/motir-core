@@ -32,6 +32,7 @@ export function WorkItemQuickView({
   peekKey,
   onClose,
   onEdited,
+  overlayClassName,
 }: {
   /** The work item's identifier (e.g. `MOTIR-12`) to peek, or null when closed. */
   peekKey: string | null;
@@ -48,6 +49,13 @@ export function WorkItemQuickView({
    * hence a callback rather than a refresh in here.
    */
   onEdited?: () => void;
+  /**
+   * The scrim's class, forwarded to `Modal`. A quick view STACKED over another open
+   * `Modal` passes `z-50` (Story MOTIR-5996 · MOTIR-6000; design-notes § 28, DECISION 6):
+   * `Modal` draws its scrim at `z-40` and its panel at `z-50`, so a second Modal's scrim
+   * would otherwise paint BENEATH the first one's panel and leave it at full ink.
+   */
+  overlayClassName?: string;
 }) {
   const t = useTranslations('issueViews');
   const [result, setResult] = useState<PeekResult | null>(null);
@@ -110,6 +118,7 @@ export function WorkItemQuickView({
       }}
       hideClose
       size="xl"
+      overlayClassName={overlayClassName}
       srTitle={t('quickViewDialogLabel', { key: peekKey })}
       className="h-[680px] max-h-[82vh] w-[90vw] p-0"
     >

@@ -243,9 +243,11 @@ describe('SEAM 1 · the route’s real answer reaches the frame', () => {
     expect(within(dialog).getByTestId('design-port').dataset.evidence).toBe(evidence.id);
     expect(within(dialog).getByText('Draw the overlay')).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Approve' })).toBeTruthy();
-    expect(within(dialog).getByRole('link', { name: 'Open work item' }).getAttribute('href')).toBe(
-      `/items/${card.identifier}`,
-    );
+    expect(
+      within(dialog)
+        .getByRole('link', { name: 'Open work item in a new tab' })
+        .getAttribute('href'),
+    ).toBe(`/items/${card.identifier}`);
   });
 });
 

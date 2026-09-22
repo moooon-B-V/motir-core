@@ -177,7 +177,7 @@ describe('the approval overlay is OPENED by its address and nothing else', () =>
     const busy = screen.getByRole('dialog').querySelector('[aria-busy="true"]');
     expect(busy?.getAttribute('aria-label')).toBe(en.approvalOverlay.loading);
     // Close alone in the exit row — no work item yet.
-    expect(screen.queryByRole('link', { name: en.approvalOverlay.openWorkItem })).toBeNull();
+    expect(screen.queryByRole('link', { name: en.approvalOverlay.openWorkItemNewTab })).toBeNull();
   });
 });
 
@@ -232,7 +232,7 @@ describe('the overlay is TOTAL over what the read can answer', () => {
     await renderOverlay();
     expect(screen.getByText(en.approvalOverlay.notAvailable.body)).toBeTruthy();
     expect(screen.queryByText('ZZZ-99')).toBeNull();
-    expect(screen.queryByRole('link', { name: en.approvalOverlay.openWorkItem })).toBeNull();
+    expect(screen.queryByRole('link', { name: en.approvalOverlay.openWorkItemNewTab })).toBeNull();
   });
 
   it('a card with no gate of that kind is "not available" too', async () => {
@@ -292,18 +292,119 @@ describe('the overlay is TOTAL over what the read can answer', () => {
     fetchApprovalGateOverlay.mockResolvedValue(readOf({ subject: { state: 'gone' } }));
     await renderOverlay();
     expect(screen.getByText(en.workbench.approvals.subjectGone)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: en.approvalOverlay.openWorkItem }));
-    expect(push).toHaveBeenCalledWith('/items/GATE-1');
+    // A NEW TAB, not a navigation of this one (MOTIR-6000; design-notes § 28, DECISION 6).
+    const [, panelLink] = screen.getAllByRole('link', {
+      name: en.approvalOverlay.openWorkItemNewTab,
+    });
+    expect(panelLink!.getAttribute('href')).toBe('/items/GATE-1');
+    expect(panelLink!.getAttribute('target')).toBe('_blank');
+    expect(panelLink!.getAttribute('rel')).toBe('noopener noreferrer');
+    fireEvent.click(panelLink!);
+    expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('the exit row’s TITLE opens the quick view ABOVE the overlay (MOTIR-6000, § 28 DECISION 6)', () => {
+  const realFetch = globalThis.fetch;
+  const peekFetch = vi.fn();
+  beforeEach(() => {
+    // The quick view reads its own item; a 404 lands on its shipped not-found panel,
+    // which is also the answer a reader who cannot see the work item gets.
+    peekFetch.mockReset().mockResolvedValue({ ok: false, status: 404 });
+    globalThis.fetch = peekFetch as unknown as typeof fetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const titleDoor = () =>
+    screen.getByRole('link', { name: /^GATE-1\s*Draw the row for a published design$/ });
+  const quickView = () => screen.queryByRole('dialog', { name: 'Quick view: GATE-1' });
+
+  it('a plain click opens the quick view STACKED over the approval — no `?peek=`, no address change', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(readOf());
+    await renderOverlay();
+
+    const door = titleDoor();
+    expect(door.getAttribute('href')).toBe('/items/GATE-1');
+    expect(door.getAttribute('aria-haspopup')).toBe('dialog');
+    await act(async () => {
+      fireEvent.click(door, { button: 0 });
+    });
+
+    expect(quickView()).toBeTruthy();
+    expect(peekFetch).toHaveBeenCalledWith(
+      '/api/work-items/peek?key=GATE-1',
+      expect.objectContaining({ signal: expect.anything() }),
+    );
+    expect(screen.getByText(en.issueViews.quickViewUnavailableTitle)).toBeTruthy();
+    // The approval is still open UNDER it — hidden from the accessibility tree while the
+    // modal peek is on top, exactly as a nested Radix dialog should — and nothing was
+    // written to the address.
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(2);
+    expect(document.body.textContent).toContain('Design result for GATE-1');
+    expect(shallowPush).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('Esc closes the quick view ONLY — the approval stays open on the same gate', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(readOf());
+    await renderOverlay();
+    await act(async () => {
+      fireEvent.click(titleDoor(), { button: 0 });
+    });
+
+    fireEvent.keyDown(quickView()!, { key: 'Escape' });
+
+    expect(quickView()).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Design result for GATE-1' })).toBeTruthy();
+    expect(shallowPush).not.toHaveBeenCalled();
+  });
+
+  it('a MODIFIED click keeps its native meaning — the card in a new tab, nothing intercepted', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(readOf());
+    await renderOverlay();
+
+    const proceeded = fireEvent.click(titleDoor(), { button: 0, metaKey: true });
+
+    expect(proceeded).toBe(true);
+    expect(quickView()).toBeNull();
+  });
+
+  it('a DIFFERENT approval never inherits the peek — it belongs to its address', async () => {
+    openAt('GATE-1', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(readOf());
+    const view = await renderOverlay();
+    await act(async () => {
+      fireEvent.click(titleDoor(), { button: 0 });
+    });
+    expect(quickView()).toBeTruthy();
+
+    // Back / forward lands on another gate's address: the peek does not follow.
+    openAt('GATE-2', 'design_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({ workItem: { id: 'wi-2', identifier: 'GATE-2', title: 'Another design' } }),
+    );
+    view.rerender(<ApprovalOverlay />);
+    await act(async () => {});
+
+    expect(quickView()).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Quick view: GATE-2' })).toBeNull();
   });
 });
 
 describe('the frame, composed at full size', () => {
-  it('carries the work item in the exit row — once — and a real link out to it', async () => {
+  it('carries the work item in the exit row — once — and a NEW-TAB link out to it', async () => {
     openAt('GATE-1', 'design_result');
     fetchApprovalGateOverlay.mockResolvedValue(readOf());
     await renderOverlay();
-    const link = screen.getByRole('link', { name: en.approvalOverlay.openWorkItem });
+    const link = screen.getByRole('link', { name: en.approvalOverlay.openWorkItemNewTab });
     expect(link.getAttribute('href')).toBe('/items/GATE-1');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
     expect(screen.getByText('Draw the row for a published design')).toBeTruthy();
     // "Design result" is band 1's, and appears exactly once on screen.
     expect(screen.getAllByText(en.approvalGate.designResult.kindLabel)).toHaveLength(1);
@@ -379,7 +480,7 @@ describe('the frame, composed at full size', () => {
     openAt('GATE-1', 'design_result');
     fetchApprovalGateOverlay.mockResolvedValue(readOf());
     await renderOverlay(zh as unknown as Record<string, unknown>);
-    expect(screen.getByRole('link', { name: zh.approvalOverlay.openWorkItem })).toBeTruthy();
+    expect(screen.getByRole('link', { name: zh.approvalOverlay.openWorkItemNewTab })).toBeTruthy();
     expect(
       screen.getByRole('dialog', { name: `GATE-1 的${zh.workbench.approvals.kind.design_result}` }),
     ).toBeTruthy();

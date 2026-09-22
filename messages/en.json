@@ -8868,6 +8868,7 @@
     "escKey": "Esc",
     "dialogTitle": "{kind} for {key}",
     "openWorkItem": "Open work item",
+    "openWorkItemNewTab": "Open work item in a new tab",
     "loading": "Loading the approval",
     "notAvailable": {
       "title": "This approval is not available",

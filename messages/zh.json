@@ -8864,6 +8864,7 @@
     "escKey": "Esc",
     "dialogTitle": "{key} 的{kind}",
     "openWorkItem": "打开工作项",
+    "openWorkItemNewTab": "在新标签页中打开工作项",
     "loading": "正在加载审批",
     "notAvailable": {
       "title": "此审批不可用",

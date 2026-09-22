@@ -326,9 +326,11 @@ test.describe('an approval, decided full screen over the page you are on', () =>
       await openRow(rowsIn(page, zh.workbench.tabs.toApprove).first());
       await expect(dialog).toBeVisible();
       await expect(dialog.getByRole('group', { name: zh.approvalGate.port.label })).toBeVisible();
-      await expect(
-        dialog.getByRole('link', { name: zh.approvalOverlay.openWorkItem }),
-      ).toHaveAttribute('href', `/items/${seed.designKey}`);
+      const openWorkItem = dialog.getByRole('link', {
+        name: zh.approvalOverlay.openWorkItemNewTab,
+      });
+      await expect(openWorkItem).toHaveAttribute('href', `/items/${seed.designKey}`);
+      await expect(openWorkItem).toHaveAttribute('target', '_blank');
       // Asserted through the catalogue's own strings, and negatively too.
       await expect(dialog.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
     });
