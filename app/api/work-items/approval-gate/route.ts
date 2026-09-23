@@ -119,7 +119,7 @@ async function readSubject(
           ctx,
         );
         if (merge.gate?.state === 'awaiting') {
-          return readDevelopmentBlock(gate, item, ctx, { merge: merge.gate });
+          return readDevelopmentBlock(gate, item, ctx, merge.gate);
         }
       }
       const { evidence, filesKept } = await designEvidenceService.getForGateSubject(
@@ -153,14 +153,8 @@ async function readSubject(
           { workItemId: gate.workItemId, kind: 'pull_request_approval' },
           ctx,
         );
-        // ⚠️ AND IT HANDS THE BLOCK THE MERGE GATE (Bug MOTIR-6079): the acceptance gate is
-        // versioned by its recording's commit, so the frame counts the press's members out
-        // of the merge gate's version, exactly as the item page's `LateSections` does.
         if (merge.gate?.state === 'awaiting') {
-          return readDevelopmentBlock(gate, item, ctx, {
-            merge: merge.gate,
-            namesMembers: true,
-          });
+          return readDevelopmentBlock(gate, item, ctx, merge.gate);
         }
       }
       const evidence = await acceptanceEvidenceService.getForGateSubject(
@@ -176,11 +170,20 @@ async function readSubject(
     // decision document FIRST — read here, on the server, through the resolver — and the
     // pull requests one press merges beneath it. The document is read beside the block,
     // never inside a transaction, because the production resolver calls the Git host.
+    //
+    // ⚠️ AND IT HANDS THE BLOCK THE CARD'S MERGE GATE, WHATEVER ITS STATE (Bug MOTIR-6080):
+    // the members and the version the press merges are that gate's, exactly as the item
+    // page's `frameGateFor` reads them for a decision-led frame. A card with no merge
+    // question hands none, and the block reads its own gate as it always did.
     case 'decision_approval': {
-      const [block, document] = await Promise.all([
-        readDevelopmentBlock(gate, item, ctx),
+      const [merge, document] = await Promise.all([
+        approvalGatesService.getForWorkItem(
+          { workItemId: gate.workItemId, kind: 'pull_request_approval' },
+          ctx,
+        ),
         decisionDocumentService.readViewForWorkItem(gate.workItemId, ctx).catch(() => null),
       ]);
+      const block = await readDevelopmentBlock(gate, item, ctx, merge.gate);
       return block.state === 'resolved' && block.kind === 'pull_request_approval'
         ? { ...block, decision: { document } }
         : block;
@@ -216,21 +219,22 @@ async function readSubject(
  * acceptance gate's while it carries one (see those arms).
  *
  * ⚠️ `members` is read against the MERGE gate: the gate handed in when it is one, else
- * the `companion.merge` a primary arm read beside it (Bug MOTIR-6079). Member facts are
+ * the `merge` gate a primary arm read beside it (Bug MOTIR-6079). Member facts are
  * recorded on the merge gate only, so a primary's own id answers none — the item page's
  * late stack reads `r.mergeGate.members` whichever gate leads its frame, and this is that.
  *
- * `companion.namesMembers` also hands back the merge gate's VERSION, for a primary whose own
- * version is not a delivery set and whose frame the item page hands the same value
- * (`LateSections`' `mergeSubjectVersion` — today the story run's acceptance only).
+ * A primary's `merge` gate also hands back its VERSION as `mergeSubjectVersion`: no
+ * primary's own version is a delivery set — a design's is its published commit, a
+ * decision's its document blob, an acceptance's its recording — so the frame counts what
+ * one press merges only through it (Bug MOTIR-6080; `LateSections`' `frameGateFor`).
  */
 async function readDevelopmentBlock(
   gate: ApprovalGateDTO,
   item: { id: string; type: string | null; targetRepos: readonly string[] },
   ctx: ServiceContext,
-  companion: { merge: ApprovalGateDTO; namesMembers?: boolean } | null = null,
+  merge: ApprovalGateDTO | null = null,
 ): Promise<ApprovalGateOverlaySubjectDTO> {
-  const membersGate = companion?.merge ?? gate;
+  const membersGate = merge ?? gate;
   // THE DEVELOPMENT BLOCK as the port (Story MOTIR-5437 · MOTIR-5439). The subject
   // is the card's DELIVERY SET (`pullRequestApprovalHandler.resolveSubject`), so a
   // set that has emptied — every pull request unlinked — is GONE, exactly as the
@@ -282,7 +286,7 @@ async function readDevelopmentBlock(
     designEvidence,
     isDesignCard: item.type === 'design',
     members,
-    ...(companion?.namesMembers ? { mergeSubjectVersion: companion.merge.subjectVersion } : {}),
+    ...(merge ? { mergeSubjectVersion: merge.subjectVersion } : {}),
     repair,
     acceptanceEvidence,
     acceptanceGate: acceptanceRead.gate,
