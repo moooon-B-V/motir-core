@@ -12,7 +12,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { requireGateCard } from './gateCard';
+import { requireArgsCard, requireGateCard } from './gateCard';
 
 // THE `acceptance_result` HANDLER — a story's acceptance receipt, decided through
 // the one gate contract (Story MOTIR-4949 · Subtask MOTIR-4950; ADR
@@ -65,7 +65,8 @@ async function nothingLeftForTheCascade(
 ): Promise<
   { terminal: true } | { terminal: false; reason: 'merge_writes_done' | 'rollup_writes_done' }
 > {
-  const { gate, item, tx } = args;
+  const { gate, tx } = args;
+  const item = requireArgsCard(args, 'acceptance_result', 'acceptanceResultHandler');
   const openOwn = await workItemDeliveryRepository.countOpenByWorkItem(
     requireGateCard(gate, 'acceptanceResultHandler'),
     tx,
@@ -151,15 +152,16 @@ export const acceptanceResultGateHandler: GateHandler<AcceptanceEvidence> = {
    * supersedes this one and keeps its bytes (`acceptance-receipt-lifecycle.md`
    * AMENDMENT 1, MOTIR-5872).
    */
-  async currentSubject({ item, tx }: GateRoutingArgs): Promise<string | null> {
-    const current = await acceptanceEvidenceRepository.findCurrentByWorkItem(item.id, tx);
+  async currentSubject(args: GateRoutingArgs): Promise<string | null> {
+    const item = requireArgsCard(args, 'acceptance_result', 'acceptanceResultHandler');
+    const current = await acceptanceEvidenceRepository.findCurrentByWorkItem(item.id, args.tx);
     if (!current || current.status === 'approved') return null;
     return current.id;
   },
 
   /** ADR §2: `assigneeId ?? reporterId` — the story's. */
-  routeTo({ item }: GateRoutingArgs): string | null {
-    return routingTargetId(item);
+  routeTo(args: GateRoutingArgs): string | null {
+    return routingTargetId(requireArgsCard(args, 'acceptance_result', 'acceptanceResultHandler'));
   },
 
   /**

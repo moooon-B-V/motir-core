@@ -57,6 +57,10 @@ const { announceGateDecided } = await import('@/lib/approvals/decidedGates');
 
 /** The kinds the enum holds — the source of truth a new member is added to. */
 const ALL_KINDS = Object.values(ApprovalGateKind);
+/** The kinds whose gate hangs off a CARD — every one but `plan_approval`, which the CHECK
+ *  `approval_gate_work_item_iff_not_plan` keeps card-less (Story MOTIR-6012 · MOTIR-6034).
+ *  Its row is covered by `tests/approvalGates/cardlessGateReads.test.ts`. */
+const CARD_KINDS = ALL_KINDS.filter((kind) => kind !== 'plan_approval');
 /** The kinds this build RENDERS — every one owes its own sentence. */
 const REGISTERED_KINDS = ALL_KINDS.filter(
   (kind) => !(UNREGISTERED_GATE_KINDS as readonly string[]).includes(kind),
@@ -149,7 +153,7 @@ describe('SEAM 1 · the To-approve read is the WHOLE set, under a ceiling it SAY
     for (let i = 0; i < 30; i += 1) {
       await gate({
         title: `Waiting ${i}`,
-        kind: ALL_KINDS[i % ALL_KINDS.length]!,
+        kind: CARD_KINDS[i % CARD_KINDS.length]!,
         assigneeId: fx.ownerId,
         createdAt: new Date(Date.UTC(2026, 8, 1, 0, i)),
       });
@@ -161,7 +165,7 @@ describe('SEAM 1 · the To-approve read is the WHOLE set, under a ceiling it SAY
     expect(queue).toMatchObject({ total: 30, truncated: false });
     expect(await approvalGatesService.countAwaitingMe(meCtx)).toBe(30);
     // Every kind is in the set — the population the seam below renders.
-    expect(new Set(queue.items.map((row) => row.kind))).toEqual(new Set(ALL_KINDS));
+    expect(new Set(queue.items.map((row) => row.kind))).toEqual(new Set(CARD_KINDS));
   });
 
   it('one more than the ceiling → exactly the ceiling, `truncated`, and the whole total', async () => {
@@ -235,19 +239,21 @@ describe('SEAM 2 · the REAL read, rendered through the REAL row, reads the sent
     'every kind the read returns reads its sentence with that work item’s title — %s',
     async (locale) => {
       const messages = locale === 'en' ? en : zh;
-      for (const kind of ALL_KINDS) {
+      for (const kind of CARD_KINDS) {
         await gate({ title: `Card for ${kind}`, kind, assigneeId: fx.ownerId });
       }
       const queue = await approvalGatesService.listAwaitingMe(meCtx);
-      expect(queue.items).toHaveLength(ALL_KINDS.length);
+      expect(queue.items).toHaveLength(CARD_KINDS.length);
 
       for (const row of queue.items) {
         const view = renderWithIntl(<ApprovalRow record={{ section: 'awaiting', row }} />, {
           locale,
           messages,
         });
-        expect(doorName()).toContain(sentence(messages as typeof en, row.kind, row.workItem.title));
-        expect(screen.getByText(row.workItem.title)).toBeTruthy();
+        expect(doorName()).toContain(
+          sentence(messages as typeof en, row.kind, row.workItem!.title),
+        );
+        expect(screen.getByText(row.workItem!.title)).toBeTruthy();
         expect(view.container.textContent).not.toMatch(HOST_VOCABULARY);
         view.unmount();
       }

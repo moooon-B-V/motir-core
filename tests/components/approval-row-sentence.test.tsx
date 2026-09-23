@@ -219,3 +219,27 @@ describe('the approve-to-merge details carry the numbers in the TITLE, never the
     expect(line.className).toMatch(/\brelative\b.*\bz-10\b/);
   });
 });
+
+// A CARD-LESS row (Story MOTIR-6012 · MOTIR-6034; ADR `approval-gates.md` §11.1, §11.5b):
+// a `plan_approval` gate names no card and opens no overlay, so this row draws nothing
+// for it — the planning-surface row is MOTIR-6037's. What is proved is that such a row
+// neither throws nor renders a door to an overlay address it does not have.
+describe('a CARD-LESS (`plan_approval`) row — nothing to draw here yet', () => {
+  it.each(['awaiting', 'decided'] as const)('a %s plan row renders nothing', (section) => {
+    const row = {
+      ...awaiting('plan_approval', { kind: 'plan_approval' }, 'en'),
+      workItem: null,
+      ...(section === 'decided'
+        ? { state: 'approved', decidedAt: new Date().toISOString(), refusalReason: null }
+        : {}),
+    };
+    const { container } = render(
+      section === 'decided'
+        ? { section, row: row as unknown as ApprovalRecordDecidedRowDto }
+        : { section, row: row as ApprovalQueueRowDto },
+      'en',
+    );
+    expect(container.textContent).toBe('');
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+});

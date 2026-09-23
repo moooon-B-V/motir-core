@@ -324,7 +324,9 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(body.subject).toEqual({ state: 'gone' });
   });
 
-  it.each(UNREGISTERED_GATE_KINDS)(
+  // `plan_approval` is unregistered too, but its gate can hang off NO card (the CHECK
+  // `approval_gate_work_item_iff_not_plan`), so it has a case of its own below.
+  it.each(UNREGISTERED_GATE_KINDS.filter((kind) => kind !== 'plan_approval'))(
     'an UNREGISTERED kind (%s) returns the gate and the not-built-yet answer — never a throw',
     async (kind) => {
       const card = await designCard();
@@ -340,6 +342,31 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
       expect(typeof body.routedToLabel).toBe('string');
     },
   );
+
+  it('`plan_approval` answers `kind_not_built` on any card — the overlay is never its surface (MOTIR-6034, §11.5b)', async () => {
+    // A plan gate belongs to NO card, so an address naming a card can never find one;
+    // `no_gate` would tell the reader the card simply has nothing to decide. A real
+    // card-less plan gate in the project must not leak into this card's frame either.
+    const card = await designCard();
+    await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: null,
+        kind: 'plan_approval',
+        subjectId: 'plan-1',
+        routedToId: fx.ownerId,
+      },
+    });
+    signIn(owner());
+
+    const res = await gateViaRoute({ key: card.identifier, kind: 'plan_approval' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.gate).toBeNull();
+    expect(body.canDecide).toBe(false);
+    expect(body.subject).toEqual({ state: 'kind_not_built' });
+  });
 
   it('the REGISTERED merge kind returns its gate and the not-built answer — its port is MOTIR-4909s (MOTIR-4793)', async () => {
     // `pull_request_merge` has a handler now, so it is no longer in

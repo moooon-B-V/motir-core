@@ -15,7 +15,7 @@ import {
 } from '@/lib/approvalGates/errors';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { requireGateCard } from './gateCard';
+import { requireArgsCard, requireGateCard } from './gateCard';
 
 // THE `decision_choice` HANDLER (Story MOTIR-4914 · Subtask MOTIR-5891; ADR
 // `docs/decisions/approval-gates.md` §1's MOTIR-5887 amendment, the handler row).
@@ -56,13 +56,14 @@ export const decisionChoiceGateHandler: GateHandler<ParsedChoice> = {
   // The subject IS the work item, so the "current subject" is the item itself —
   // but only while its body still parses as a choice. A body that stopped
   // parsing has no subject to be asked about.
-  async currentSubject({ item }: GateRoutingArgs): Promise<string | null> {
+  async currentSubject(args: GateRoutingArgs): Promise<string | null> {
+    const item = requireArgsCard(args, 'decision_choice', 'decisionChoiceHandler');
     if (item.type !== 'choice') return null;
     return parseChoiceOptions(item.descriptionMd).ok ? item.id : null;
   },
 
-  routeTo({ item }: GateRoutingArgs): string | null {
-    return routingTargetId(item);
+  routeTo(args: GateRoutingArgs): string | null {
+    return routingTargetId(requireArgsCard(args, 'decision_choice', 'decisionChoiceHandler'));
   },
 
   permission: 'work_item:edit',

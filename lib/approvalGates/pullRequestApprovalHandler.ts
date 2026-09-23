@@ -16,7 +16,7 @@ import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler'
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { designResultHoldsMerge } from '@/lib/services/mergeGates';
 import { ApprovalGatePrimaryPendingError } from '@/lib/approvalGates/errors';
-import { requireGateCard } from './gateCard';
+import { requireArgsCard, requireGateCard } from './gateCard';
 
 // THE `pull_request_approval` HANDLER — the registry's THIRD member (Story MOTIR-4909 ·
 // MOTIR-5481; ADR docs/decisions/approval-gates.md §8's amendment, decisions 2 and 6).
@@ -102,8 +102,10 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
   },
 
   /** ADR §2: `assigneeId ?? reporterId` — the routing rule every kind shares. */
-  routeTo({ item }: GateRoutingArgs): string | null {
-    return routingTargetId(item);
+  routeTo(args: GateRoutingArgs): string | null {
+    return routingTargetId(
+      requireArgsCard(args, 'pull_request_approval', 'pullRequestApprovalHandler'),
+    );
   },
 
   /**

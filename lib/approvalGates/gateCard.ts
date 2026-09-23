@@ -39,3 +39,20 @@ export function requireGateWorkItem<T>(
     throw new ApprovalGateHasNoCardError(gate.id, gate.kind ?? 'unknown', where);
   return gate.workItem;
 }
+
+/**
+ * The CARD a handler's routing / effect args carry, for a handler of a card-bearing
+ * kind (MOTIR-6034). `GateRoutingArgs.item` is nullable so a card-less kind's handler
+ * can be written against the same args (ADR §11.1); every other kind is always handed
+ * its card by the door and the raisers, and narrows here rather than inventing a
+ * fallback — a guessed card would route or write somebody else's work item.
+ */
+export function requireArgsCard<T>(
+  args: { item: T | null; gate?: { id: string } },
+  kind: string,
+  where: string,
+): T {
+  if (args.item === null)
+    throw new ApprovalGateHasNoCardError(args.gate?.id ?? '(not yet raised)', kind, where);
+  return args.item;
+}

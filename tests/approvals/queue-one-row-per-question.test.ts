@@ -133,7 +133,7 @@ describe('the To approve tab lists a design card with a pull request ONCE', () =
     });
 
     const page = await approvalGatesService.listAwaitingMe(meCtx);
-    const onThisCard = page.items.filter((row) => row.workItem.id === both.id);
+    const onThisCard = page.items.filter((row) => row.workItem?.id === both.id);
 
     expect(onThisCard.map((row) => row.gateId)).toEqual([both.gates.pull_request_approval]);
     expect(await approvalGatesService.countAwaitingMe(meCtx)).toBe(3);
@@ -149,7 +149,7 @@ describe('the To approve tab lists a design card with a pull request ONCE', () =
     const page = await approvalGatesService.listAwaitingMe(meCtx);
 
     expect(
-      page.items.filter((row) => row.workItem.id === both.id).map((row) => row.gateId),
+      page.items.filter((row) => row.workItem?.id === both.id).map((row) => row.gateId),
     ).toEqual([both.gates.pull_request_approval]);
   });
 });

@@ -185,3 +185,42 @@ describe('approval_gate RLS — write isolation', () => {
     ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
   });
 });
+
+// A CARD-LESS gate (Story MOTIR-6012 · MOTIR-6034; ADR `approval-gates.md` §11.1) is
+// isolated by the SAME policy: it keys on the row's own `workspace_id`, and a gate with
+// no work item has nothing else to be tenanted by.
+describe('approval_gate RLS — a CARD-LESS (`plan_approval`) gate is isolated by workspace', () => {
+  async function cardlessIn(workspaceId: string, projectId: string, subjectId: string) {
+    return adminDb.approvalGate.create({
+      data: { workspaceId, projectId, workItemId: null, kind: 'plan_approval', subjectId },
+    });
+  }
+
+  it("tenant A sees its own card-less gate and never B's", async () => {
+    const fx = await makeTenants();
+    const own = await cardlessIn(fx.fx.workspaceId, fx.fx.projectId, 'plan-a');
+    const foreign = await cardlessIn(fx.workspaceBId, fx.projectBId, 'plan-b');
+    const seen = await asAppRole({ userId: fx.fx.ownerId, workspaceId: fx.fx.workspaceId }, (tx) =>
+      tx.approvalGate.findMany({ where: { workItemId: null } }),
+    );
+    expect(seen.map((r) => r.id)).toEqual([own.id]);
+    expect(seen.map((r) => r.id)).not.toContain(foreign.id);
+  });
+
+  it('a card-less gate tenanted to B cannot be INSERTed while bound to A (WITH CHECK)', async () => {
+    const fx = await makeTenants();
+    await expect(
+      asAppRole({ userId: fx.fx.ownerId, workspaceId: fx.fx.workspaceId }, (tx) =>
+        tx.approvalGate.create({
+          data: {
+            workspaceId: fx.workspaceBId,
+            projectId: fx.projectBId,
+            workItemId: null,
+            kind: 'plan_approval',
+            subjectId: 'smuggled-plan',
+          },
+        }),
+      ),
+    ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
+  });
+});

@@ -9,7 +9,7 @@ import { parseDecisionRecord, type ParsedDecision } from '@/lib/approvalGates/de
 import { ApprovalGateStaleSubjectError } from '@/lib/approvalGates/errors';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { requireGateCard } from './gateCard';
+import { requireArgsCard, requireGateCard } from './gateCard';
 
 // THE `decision_confirmation` HANDLER (Story MOTIR-5871 · Subtask MOTIR-5954; ADR
 // `docs/decisions/approval-gates.md` §1's MOTIR-5952 amendment, the handler row).
@@ -57,13 +57,16 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
 
   // The subject IS the work item — but only while it is a `human` decision whose
   // body still parses. Anything else has nothing to be asked about.
-  async currentSubject({ item }: GateRoutingArgs): Promise<string | null> {
+  async currentSubject(args: GateRoutingArgs): Promise<string | null> {
+    const item = requireArgsCard(args, 'decision_confirmation', 'decisionConfirmationHandler');
     if (!asksTheConfirmQuestion(item)) return null;
     return parseDecisionRecord(item.descriptionMd).ok ? item.id : null;
   },
 
-  routeTo({ item }: GateRoutingArgs): string | null {
-    return routingTargetId(item);
+  routeTo(args: GateRoutingArgs): string | null {
+    return routingTargetId(
+      requireArgsCard(args, 'decision_confirmation', 'decisionConfirmationHandler'),
+    );
   },
 
   permission: 'work_item:edit',

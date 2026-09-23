@@ -69,7 +69,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { heldMoves } from '@/lib/approvalGates/heldMoves';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { CANCELLED_STATUS_KEY } from '@/lib/approvalGates/heldMoves';
-import { requireGateCard, requireGateWorkItem } from '@/lib/approvalGates/gateCard';
+import { requireGateCard } from '@/lib/approvalGates/gateCard';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md).
@@ -320,7 +320,7 @@ export interface WorkItemGateRead {
  * approve-to-merge kind — so the stamp covers exactly the gate the press will decide.
  */
 async function companionSubjectVersion(
-  gate: { kind: string; workItemId: string },
+  gate: { id: string; kind: string; workItemId: string | null },
   tx: Prisma.TransactionClient,
 ): Promise<string | null> {
   // A PRIMARY kind's press also decides the merge gate beside it, so its stamp covers
@@ -334,9 +334,13 @@ async function companionSubjectVersion(
   ) {
     return null;
   }
-  const merge = (await approvalGateRepository.findAwaitingByWorkItem(gate.workItemId, tx)).find(
-    (row) => row.kind === 'pull_request_approval',
-  );
+  // A PRIMARY kind always carries a card (ADR §11.1): a card-less gate returned above.
+  const merge = (
+    await approvalGateRepository.findAwaitingByWorkItem(
+      requireGateCard(gate, 'companionSubjectVersion'),
+      tx,
+    )
+  ).find((row) => row.kind === 'pull_request_approval');
   return merge?.subjectVersion ?? null;
 }
 
@@ -548,6 +552,49 @@ export async function resolveGateAuthority(
 }
 
 /**
+ * The AUTHORITY half for a gate that belongs to NO work item (Story MOTIR-6012 ·
+ * MOTIR-6034; ADR `approval-gates.md` §11.6) — the card-less arm of
+ * {@link resolveGateAuthority}, kept beside it rather than folded in so that function's
+ * arm order stays exactly the §2 routing order it documents.
+ *
+ * ⚠️ THERE IS NO RELATIONSHIP HALF TO ASK. §2's rule — assignee, reporter when there is
+ * no assignee, `approval:decide_any` — quantifies over a WORK ITEM, and a plan gate has
+ * none. Its authority is the KIND's own permission (for `plan_approval`,
+ * `ai:decide_plan`, supplied by MOTIR-6035's handler) and nothing else, recorded under
+ * `plan_permission`: none of the four other members is true of the decider, and
+ * recording `assignee` or `admin` would claim a relationship or a key that does not
+ * exist. The door has already asserted that permission as the floor, so on the decide
+ * path this always answers `plan_permission`; a render read asks it with the page's
+ * permission set.
+ */
+export async function resolveCardlessGateAuthority(
+  gate: { projectId: string; permission: PermissionKey },
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+  held?: ReadonlySet<PermissionKey>,
+): Promise<'plan_permission' | null> {
+  const permissions = held ?? (await projectAccessService.getPermissions(gate.projectId, ctx, tx));
+  return permissions.has(gate.permission) ? 'plan_permission' : null;
+}
+
+/**
+ * Whether this actor may decide a CARD-LESS gate of `kind` — {@link canDecideGate}'s
+ * card-less arm (MOTIR-6034; ADR §11.6), off a permission set the caller already read.
+ *
+ * ⚠️ AN UNREGISTERED CARD-LESS KIND IS DECIDABLE BY NOBODY. The card arm keeps the
+ * authority answer alone for an unregistered kind, because a card has a relationship
+ * to answer from; a gate with no card has only its kind's permission, and a kind this
+ * build does not register names none — the decide door refuses it
+ * (`ApprovalGateKindUnregisteredError`) before any actor question is asked.
+ */
+function canDecideCardlessGate(
+  kind: ApprovalGateKindDTO,
+  held: ReadonlySet<PermissionKey>,
+): boolean {
+  return isRegisteredGateKind(kind) && held.has(handlerFor(kind).permission);
+}
+
+/**
  * Whether this actor may decide a gate of `kind` on `item` — the RENDER read's
  * statement of the door's TWO checks, in the door's order (Bug MOTIR-5445).
  *
@@ -574,6 +621,23 @@ async function canDecideGate(
 ): Promise<boolean> {
   if (isRegisteredGateKind(kind) && !held.has(handlerFor(kind).permission)) return false;
   return (await resolveGateAuthority(item, ctx, tx, held)) !== null;
+}
+
+/** The kinds whose gate belongs to NO work item — the CHECK
+ *  `approval_gate_work_item_iff_not_plan`'s one member (ADR §11.1). */
+const CARDLESS_GATE_KINDS: ReadonlySet<ApprovalGateKindDTO> = new Set(['plan_approval']);
+
+/**
+ * WHO a queue / record row is routed to, read off the ROW (MOTIR-5191): §2's
+ * `assigneeId ?? reporterId` for a card row, and — for a CARD-LESS row, which has no
+ * card to re-derive it from (MOTIR-6034; ADR §11.6) — the `routedToId` written at
+ * creation, the same column the routing predicate selects it by.
+ */
+function recordRoutedToId(row: {
+  routedToId: string | null;
+  workItem: { assigneeId: string | null; reporterId: string | null } | null;
+}): string | null {
+  return row.workItem ? routingTargetId(row.workItem) : row.routedToId;
 }
 
 export const approvalGatesService = {
@@ -709,8 +773,9 @@ export const approvalGatesService = {
         row.state === 'awaiting'
           ? {
               subjectVersion: row.subjectVersion,
+              // Read BY this card, so the row carries it — no card-less gate is here.
               companionSubjectVersion: await companionSubjectVersion(
-                { ...row, workItemId: requireGateCard(row, 'approvalGatesService.getForWorkItem') },
+                { ...row, workItemId: item.id },
                 tx,
               ),
               descriptionMd: item.descriptionMd,
@@ -856,6 +921,12 @@ export const approvalGatesService = {
       // A CONFIRM QUESTION likewise (MOTIR-5954; §1's MOTIR-5952 amendment, point 4):
       // `decisionConfirmationGateService.reconcile` raises it with its stamp.
       if (kind === 'decision_choice' || kind === 'decision_confirmation') continue;
+      // ⚠️ A PLAN GATE IS NEVER RAISED FROM HERE (Story MOTIR-6012 · MOTIR-6034; ADR
+      // `approval-gates.md` §11.7). Its question is about a PLAN, asked when the plan
+      // reaches `planned` — never on a work item's review entry — and it belongs to no
+      // card, so this card-only loop has nothing to raise it on. The raise is
+      // MOTIR-6036's; once MOTIR-6035 registers the kind, this line keeps it out.
+      if (CARDLESS_GATE_KINDS.has(kind)) continue;
       const handler = handlerFor(kind);
       const subjectId = await handler.currentSubject({ item, ctx, tx });
       if (!subjectId) continue;
@@ -1044,9 +1115,18 @@ export const approvalGatesService = {
       // 25-row queue that named its recipients one at a time would be 25 round
       // trips to draw one list. The ids are §2's routing rule read off each row,
       // never the session: see `ApprovalQueueRowDto.routedToName`.
-      const routedToIds = rows.map((row) =>
-        routingTargetId(requireGateWorkItem(row, 'approvalGatesService.listAwaitingMe')),
-      );
+      //
+      // ⚠️ A CARD-LESS ROW (MOTIR-6034; ADR §11.6) has no card to re-derive routing
+      // from: its recipient is the `routedToId` written at creation, which is also
+      // what the predicate selected it by.
+      const routedToIds = rows.map(recordRoutedToId);
+      // ⚠️ AND ITS FLOOR IS ITS KIND'S PERMISSION, NOT `work_item:edit` (ADR §11.6) —
+      // so the set's one `canEdit` answer does not speak for it. The permission set is
+      // read once, and only when the page holds such a row.
+      const cardlessHeld =
+        scope.projectIds.length > 0 && rows.some((row) => row.workItem === null)
+          ? await projectAccessService.getPermissions(ctx.projectId, ctx, tx)
+          : new Set<PermissionKey>();
       const namesById = new Map(
         (await userRepository.findByIds([...new Set(routedToIds.filter((id) => id !== null))], tx))
           .map((user) => [user.id, routedToDisplayName(user)] as const)
@@ -1058,7 +1138,7 @@ export const approvalGatesService = {
           toApprovalQueueRowDto(
             row,
             subjects.get(row.id) ?? null,
-            canDecide,
+            row.workItem ? canDecide : canDecideCardlessGate(row.kind, cardlessHeld),
             // A routed user whose row has gone resolves to nothing here, exactly
             // as it does on the item page — the frame's fallback copy is what
             // renders, which is the case that fallback is FOR (ADR §3).
@@ -1107,13 +1187,21 @@ export const approvalGatesService = {
       if (rows.length === 0) return new Map();
       const held = await projectAccessService.getPermissions(input.projectId, ctx, tx);
       return foldPendingDecisions(
-        rows.map((row) => ({
-          ...row,
-          kind: row.kind as ApprovalGateKindDTO,
-          // Every row matched the work items asked about, so none is card-less.
-          workItemId: requireGateCard(row, 'approvalGatesService.pendingDecisionsForItems'),
-          workItem: requireGateWorkItem(row, 'approvalGatesService.pendingDecisionsForItems'),
-        })),
+        // ⚠️ NO CARD-LESS ROW CAN BE HERE, and the filter says so in the type rather
+        // than throwing: the read is `workItemId IN (…)`, which a NULL never matches,
+        // and a marker is drawn ON a card — a plan gate has none to mark (ADR §11.1).
+        rows.flatMap((row) =>
+          row.workItemId !== null && row.workItem !== null
+            ? [
+                {
+                  ...row,
+                  kind: row.kind as ApprovalGateKindDTO,
+                  workItemId: row.workItemId,
+                  workItem: row.workItem,
+                },
+              ]
+            : [],
+        ),
         ctx.userId,
         (kind) => !isRegisteredGateKind(kind) || held.has(handlerFor(kind).permission),
       );
@@ -1232,13 +1320,9 @@ export const approvalGatesService = {
       const usersById = new Map<string | null, Parameters<typeof routedToDisplayName>[0]>(
         (
           await userRepository.findByIds(
-            [
-              ...new Set(
-                awaitingRows.map((row) =>
-                  routingTargetId(requireGateWorkItem(row, 'approvalGatesService.approvalsRoom')),
-                ),
-              ),
-            ].filter((id): id is string => id !== null),
+            [...new Set(awaitingRows.map(recordRoutedToId))].filter(
+              (id): id is string => id !== null,
+            ),
             tx,
           )
         ).map((user) => [user.id, user] as const),
@@ -1249,22 +1333,19 @@ export const approvalGatesService = {
           toApprovalQueueRowDto(
             row,
             subjects.get(row.id) ?? null,
-            await canDecideGate(
-              {
-                ...requireGateWorkItem(row, 'approvalGatesService.approvalsRoom'),
-                projectId: ctx.projectId,
-              },
-              row.kind,
-              ctx,
-              tx,
-              held,
-            ),
+            // A card-less row (MOTIR-6034; ADR §11.6) is decided on its kind's
+            // permission alone — there is no card for the relationship half to read.
+            row.workItem
+              ? await canDecideGate(
+                  { ...row.workItem, projectId: ctx.projectId },
+                  row.kind,
+                  ctx,
+                  tx,
+                  held,
+                )
+              : canDecideCardlessGate(row.kind, held),
             // A routed user whose row has gone resolves to nothing, as on the item page.
-            routedToDisplayName(
-              usersById.get(
-                routingTargetId(requireGateWorkItem(row, 'approvalGatesService.approvalsRoom')),
-              ) ?? null,
-            ),
+            routedToDisplayName(usersById.get(recordRoutedToId(row)) ?? null),
           ),
         ),
       );
@@ -1404,14 +1485,18 @@ export const approvalGatesService = {
     //     `workItemsService` warns about at `applyStatusTransition`. It is a
     //     project's status VOCABULARY, i.e. reference data, so reading it early
     //     is both cheaper and correct.
+    //
+    // ⚠️ A CARD-LESS GATE HAS NO ITEM TO LOAD (Story MOTIR-6012 · MOTIR-6034; ADR
+    // `approval-gates.md` §11.1). A `plan_approval` gate belongs to no work item, so
+    // the pre-read resolves its project from the gate's OWN `projectId` column rather
+    // than through a card; a card gate still resolves it through its card, and a card
+    // gate whose card is gone is still the not-found it always was.
     const preread = await withWorkspaceContext(ctx, async (tx) => {
       const gate = await approvalGateRepository.findById(input.gateId, tx);
       if (!gate) return null;
-      const item = await workItemRepository.findById(
-        requireGateCard(gate, 'approvalGatesService.decide'),
-        tx,
-      );
-      return item ? { gate, item } : null;
+      if (gate.workItemId === null) return { gate, projectId: gate.projectId };
+      const item = await workItemRepository.findById(gate.workItemId, tx);
+      return item ? { gate, projectId: item.projectId } : null;
     });
     // Missing, or hidden by the workspace RLS policy. Indistinguishable on
     // purpose — a 404 that cannot confirm a foreign gate exists.
@@ -1439,12 +1524,12 @@ export const approvalGatesService = {
     // is recorded and no status moves (ADR §1's MOTIR-5952 amendment, point 7).
     const resolvedStatusKey =
       input.decision === 'overturn'
-        ? ((
-            await workflowsService.listStatusesByProject(preread.item.projectId, ctx.workspaceId)
-          ).find((status) => status.key === CANCELLED_STATUS_KEY)?.key ?? null)
+        ? ((await workflowsService.listStatusesByProject(preread.projectId, ctx.workspaceId)).find(
+            (status) => status.key === CANCELLED_STATUS_KEY,
+          )?.key ?? null)
         : handler.statusIntent
           ? await workflowsService.resolveStatusKey(
-              preread.item.projectId,
+              preread.projectId,
               ctx.workspaceId,
               handler.statusIntent,
             )
@@ -1456,7 +1541,11 @@ export const approvalGatesService = {
       const locked = await approvalGateRepository.lockById(input.gateId, tx);
       if (!locked) throw new ApprovalGateNotFoundError(input.gateId);
 
-      const item = await workItemRepository.findById(locked.workItemId, tx);
+      // A card-less gate (ADR §11.1) has no item: it is answered from its own columns.
+      const item =
+        locked.workItemId === null
+          ? null
+          : await workItemRepository.findById(locked.workItemId, tx);
       // Tenant gate FIRST, exactly as `applyStatusTransition` does it: a
       // cross-workspace row is indistinguishable from a never-existed one, and
       // must not leak through a state or permission error.
@@ -1480,10 +1569,20 @@ export const approvalGatesService = {
       // `tests/approval-gate-coverage-floor.test.ts` § 'decide — the POST-LOCK
       // tenant gate', which builds exactly that row with the admin client and
       // asserts the refusal plus that nothing was written.
-      /* v8 ignore next 3 */
-      if (!item || item.workspaceId !== ctx.workspaceId) {
+      //
+      // A CARD-LESS gate (MOTIR-6034) is tenant-gated on its OWN `workspaceId`, which
+      // the same RLS policy already bound — the same defence in depth, one read fewer.
+      /* v8 ignore next 7 */
+      if (
+        locked.workItemId === null
+          ? locked.workspaceId !== ctx.workspaceId
+          : !item || item.workspaceId !== ctx.workspaceId
+      ) {
         throw new ApprovalGateNotFoundError(input.gateId);
       }
+      // The project the decision is asserted against: the card's, or — for a gate with
+      // no card — the gate's own `projectId` column (ADR §11.1).
+      const projectId = item?.projectId ?? locked.projectId;
 
       // 2 · THE ACTOR GATE, in two halves that are NOT interchangeable.
       //
@@ -1495,7 +1594,7 @@ export const approvalGatesService = {
       //     typed refusal; an actor who cannot browse gets a not-found, so
       //     neither leaks the other.* `tx` is threaded so the gate shares this
       //     transaction's snapshot AND its bound workspace GUC.
-      await projectAccessService.assertPermission(item.projectId, ctx, handler.permission, tx);
+      await projectAccessService.assertPermission(projectId, ctx, handler.permission, tx);
 
       // (b) THE RELATIONSHIP — ADR §2's 2026-09-11 amendment (Yue): **the
       //     assignee, or the reporter WHEN THE ITEM HAS NO ASSIGNEE, or anyone
@@ -1536,9 +1635,20 @@ export const approvalGatesService = {
       //     against the HOST instead (`getRepositoryPermission`, decision 2), by
       //     the evaluator, before this door was called. §2 is unchanged for every
       //     Motir surface: `resolveGateAuthority` never returns `github_review`.
+      //
+      //     ⚠️ A CARD-LESS GATE HAS NO RELATIONSHIP HALF (ADR §11.6). §2's rule is
+      //     about a WORK ITEM's assignee and reporter, and a plan gate has none, so
+      //     its authority is the kind's permission alone — the floor just asserted —
+      //     recorded as `plan_permission` (`resolveCardlessGateAuthority`).
       const authority: ApprovalGateAuthorityDTO | null = options.synced
         ? 'github_review'
-        : await resolveGateAuthority(item, ctx, tx);
+        : item
+          ? await resolveGateAuthority(item, ctx, tx)
+          : await resolveCardlessGateAuthority(
+              { projectId, permission: handler.permission },
+              ctx,
+              tx,
+            );
       if (!authority) throw new ApprovalGateNotAuthorisedError(input.gateId);
 
       // THE SYNCED ACTOR, resolved UNDER THE LOCK so the membership it reads is the
@@ -1618,7 +1728,8 @@ export const approvalGatesService = {
         const moved = stampMoved(input.stamp, {
           subjectVersion: locked.subjectVersion,
           companionSubjectVersion: companionVersion,
-          descriptionMd: item.descriptionMd,
+          // A card-less gate has no card body (ADR §11.3) — its stamp carries null.
+          descriptionMd: item?.descriptionMd ?? null,
         });
         if (moved.length > 0) {
           throw new ApprovalGateStaleSubjectError(
@@ -1697,7 +1808,8 @@ export const approvalGatesService = {
       // `design_evidence`, so the two paths take the same two locks in the same
       // ORDER and a race resolves by waiting rather than by deadlocking.
       let filesKept: boolean | null = null;
-      if (DECISION_STATE[input.decision] === 'approved') {
+      // A card-less gate carries no design result to keep (ADR §11.1), so it pins nothing.
+      if (DECISION_STATE[input.decision] === 'approved' && locked.workItemId !== null) {
         const pinnedId = await designEvidenceService.pinCurrentForWorkItem(locked.workItemId, tx);
         // Only a kind whose subject IS a design result has files to keep.
         filesKept = locked.kind === 'design_result' ? pinnedId === locked.subjectId : null;
@@ -1797,7 +1909,7 @@ export const approvalGatesService = {
       );
 
       return {
-        gate: toApprovalGateDto(decided, item.descriptionMd),
+        gate: toApprovalGateDto(decided, item?.descriptionMd ?? null),
         effect,
         filesKept,
         companionSubjectVersion: companionVersion,

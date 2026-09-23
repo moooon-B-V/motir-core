@@ -600,6 +600,14 @@ export function ApprovalRow({
   const { row } = record;
   const announcedState = useDecidedGateState(row.gateId);
 
+  // ⚠️ A CARD-LESS ROW DRAWS NOTHING HERE YET (Story MOTIR-6012 · MOTIR-6034). A
+  // `plan_approval` gate belongs to no work item (ADR `approval-gates.md` §11.1): it has
+  // no key to name and no overlay address to open (§11.5b) — its row returns the reader
+  // to the PLANNING SURFACE, which is MOTIR-6037's to draw. No such gate is raised until
+  // MOTIR-6036, so this arm is a type's honesty rather than a row anybody sees.
+  if (row.workItem === null) return null;
+  const card = row.workItem;
+
   // A kind with no renderer, or a subject that is gone, still HAS the door — the
   // overlay draws both (§ 22 Panels 4a / 4b). What they lack is anything to
   // decide, so their Decide cell says why in a colourless pill.
@@ -608,7 +616,7 @@ export function ApprovalRow({
   const sentenceKey = gone ? SENTENCE_KEY[row.kind] : sentenceKeyOf(row.kind);
   // The sentence as plain text — the row door's accessible name reads it (MOTIR-5999).
   const sentenceText = tSentence.markup(sentenceKey, {
-    name: row.workItem.title,
+    name: card.title,
     title: (chunks: string) => chunks,
   });
   const settledState: ApprovalGateStateDTO | null =
@@ -625,7 +633,7 @@ export function ApprovalRow({
     // dispatches a primary click, so it takes this same path.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();
-    openApproval(row);
+    openApproval({ workItem: card, kind: row.kind });
   }
 
   return (
@@ -649,23 +657,23 @@ export function ApprovalRow({
             them apart — the same reason `WorkbenchList`'s row link is labelled
             with the item. */}
         <Link
-          href={`/items/${row.workItem.identifier}`}
+          href={`/items/${card.identifier}`}
           aria-haspopup="dialog"
-          aria-label={t('reviewRow', { key: row.workItem.identifier, sentence: sentenceText })}
+          aria-label={t('reviewRow', { key: card.identifier, sentence: sentenceText })}
           onClick={onRowClick}
           className="absolute inset-0 z-0 focus:outline-none"
         />
         <KindGlyph kind={row.kind} />
         <Sentence
           sentenceKey={sentenceKey}
-          title={row.workItem.title}
-          identifier={row.workItem.identifier}
+          title={card.title}
+          identifier={card.identifier}
           quiet={settled || !renderable}
         />
         {/* The key FOLLOWS the sentence (§ 28, DECISION 1) — `--el-text-secondary`,
             not muted: this row's hover fill is `--el-surface`, where muted is 4.17:1. */}
         <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
-          {row.workItem.identifier}
+          {card.identifier}
         </span>
         {/* It ARRIVED while the reader was looking (§ 26, Panel 1) — at the END
             of the sentence cell, which at `< md` is the end of the row's first
@@ -763,7 +771,7 @@ export function ApprovalRow({
               size="sm"
               aria-haspopup="dialog"
               className="relative z-10"
-              onClick={() => openApproval(row)}
+              onClick={() => openApproval({ workItem: card, kind: row.kind })}
             >
               {t('review')}
             </Button>

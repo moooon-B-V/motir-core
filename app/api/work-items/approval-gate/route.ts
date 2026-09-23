@@ -102,6 +102,14 @@ async function readSubject(
   item: { id: string; type: string | null; targetRepos: readonly string[] },
   ctx: ServiceContext,
 ): Promise<ApprovalGateOverlaySubjectDTO> {
+  // ⚠️ A PLAN GATE IS NEVER PORTED HERE, registered or not (Story MOTIR-6012 ·
+  // MOTIR-6034; ADR `approval-gates.md` §11.5b). It belongs to no card, so an address
+  // naming a card can never find one — and `no_gate` would tell the reader this card
+  // simply has nothing to decide. The overlay has no frame for the kind at all, so it
+  // answers `kind_not_built` before the gate is looked at, and keeps answering it once
+  // MOTIR-6035 registers the handler; forwarding such a link to the planning surface
+  // is MOTIR-6037's.
+  if (kind === 'plan_approval') return { state: 'kind_not_built' };
   if (!gate) return { state: 'no_gate' };
   if (!isRegisteredGateKind(kind)) return { state: 'kind_not_built' };
   switch (kind) {

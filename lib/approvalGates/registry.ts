@@ -189,8 +189,15 @@ export interface GateEffect {
  * make the creation-time call impossible again.
  */
 export interface GateRoutingArgs {
-  /** The work item the gate hangs off, read in the creating transaction. */
-  item: WorkItem;
+  /**
+   * The work item the gate hangs off, read in the creating transaction — or NULL for a
+   * kind whose gate belongs to NO work item (Story MOTIR-6012 · MOTIR-6034; ADR
+   * `approval-gates.md` §11.1). Only `plan_approval` is card-less (the CHECK
+   * `approval_gate_work_item_iff_not_plan`), and what its gate is about is its
+   * `subjectId`, the plan. A handler for a card-bearing kind narrows through
+   * `requireArgsCard` (`lib/approvalGates/gateCard.ts`): it is never handed a null.
+   */
+  item: WorkItem | null;
   ctx: ServiceContext;
   /** The CREATING path's transaction — routing is resolved inside the same
    *  transaction that inserts the row, so the answer and the row commit together

@@ -645,7 +645,13 @@ export interface ApprovalQueueRowDto {
   routedToName: string | null;
   /** ISO-8601 — when the question was asked. The row renders how long ago. */
   waitingSince: string;
-  workItem: ApprovalQueueWorkItemRefDto;
+  /**
+   * The card the gate hangs off — NULL for a gate that belongs to NO work item, a
+   * `plan_approval` (Story MOTIR-6012 · MOTIR-6034; ADR `approval-gates.md` §11.1).
+   * What such a row is about is its `subject`; it opens the planning surface, never
+   * the overlay (§11.5b), and drawing it is MOTIR-6037's.
+   */
+  workItem: ApprovalQueueWorkItemRefDto | null;
   /**
    * What is being decided — or NULL when the gate's subject no longer resolves.
    *
@@ -719,7 +725,8 @@ export interface ApprovalRecordDecidedRowDto {
   subjectVersion: string | null;
   /** ISO-8601 — when the question was asked. */
   waitingSince: string;
-  workItem: ApprovalQueueWorkItemRefDto;
+  /** The card — NULL on a card-less (`plan_approval`) record (ADR §11.1, MOTIR-6034). */
+  workItem: ApprovalQueueWorkItemRefDto | null;
   /** What was decided, or NULL when the gate's subject no longer resolves. */
   subject: ApprovalGateSubjectSummaryDTO | null;
   /**
