@@ -151,7 +151,7 @@ const inputSchema = {
     .optional()
     .describe(
       'Optional difficulty — how hard the work is to REASON about, not how big it ' +
-        'is: "low", "medium" or "high". Leaf items (task / bug / subtask) only; a ' +
+        'is: "trivial", "low", "medium" or "high". Leaf items (task / bug / subtask) only; a ' +
         'non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND). ' +
         'Omit (or null) to leave it unset.',
     ),

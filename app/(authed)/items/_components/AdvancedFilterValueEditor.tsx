@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import {
   Component as ComponentIcon,
   Folder as FolderIcon,
+  Signal,
   SignalHigh,
   SignalLow,
   SignalMedium,
@@ -350,9 +351,10 @@ function LabelValueEditor({
 
 /** The difficulty scale's glyph — lucide's signal bars, one per step. */
 const DIFFICULTY_GLYPH: Record<WorkItemDifficultyDto, ComponentType<{ className?: string }>> = {
-  low: SignalLow,
-  medium: SignalMedium,
-  high: SignalHigh,
+  trivial: SignalLow,
+  low: SignalMedium,
+  medium: SignalHigh,
+  high: Signal,
 };
 
 export function AdvancedFilterValueEditor({

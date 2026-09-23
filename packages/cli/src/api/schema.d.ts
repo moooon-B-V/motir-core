@@ -1358,7 +1358,7 @@ export interface components {
                 primary: boolean;
             }[];
             executor: ("coding_agent" | "human") | null;
-            difficulty: ("low" | "medium" | "high") | null;
+            difficulty: ("trivial" | "low" | "medium" | "high") | null;
             planningSource: ("native" | "mcp" | "manual" | "api") | null;
             planningHarness: string | null;
             planningModel: string | null;
@@ -1628,7 +1628,7 @@ export interface components {
             };
             type: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
             executor: ("coding_agent" | "human") | null;
-            difficulty: ("low" | "medium" | "high") | null;
+            difficulty: ("trivial" | "low" | "medium" | "high") | null;
             assigneeId: string | null;
             assignee: {
                 id: string;
@@ -2513,7 +2513,7 @@ export interface operations {
                     priority?: "lowest" | "low" | "medium" | "high" | "highest";
                     type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
                     executor?: ("coding_agent" | "human") | null;
-                    difficulty?: ("low" | "medium" | "high") | null;
+                    difficulty?: ("trivial" | "low" | "medium" | "high") | null;
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
@@ -2966,7 +2966,7 @@ export interface operations {
                     priority?: "lowest" | "low" | "medium" | "high" | "highest";
                     type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
                     executor?: ("coding_agent" | "human") | null;
-                    difficulty?: ("low" | "medium" | "high") | null;
+                    difficulty?: ("trivial" | "low" | "medium" | "high") | null;
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;

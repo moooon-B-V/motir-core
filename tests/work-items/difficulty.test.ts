@@ -15,7 +15,7 @@ import { DifficultyNotAllowedOnKindError, WorkItemError } from '@/lib/workItems/
 
 describe('WORK_ITEM_DIFFICULTIES', () => {
   it('lists the scale easiest first', () => {
-    expect(WORK_ITEM_DIFFICULTIES).toEqual(['low', 'medium', 'high']);
+    expect(WORK_ITEM_DIFFICULTIES).toEqual(['trivial', 'low', 'medium', 'high']);
   });
 
   it('narrows only a member string', () => {

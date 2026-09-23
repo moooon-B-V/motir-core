@@ -3099,12 +3099,13 @@ enum Executor {
 }
 
 /// How HARD a leaf is to REASON about (Story MOTIR-6016 · MOTIR-6096) — a
-/// CLOSED three-step scale, `low` · `medium` · `high`, carried only on
+/// CLOSED four-step scale, `trivial` · `low` · `medium` · `high`, carried only on
 /// executable leaves (task / subtask / bug) and nullable (unset). Closed rather
 /// than free text because a model router reads it: extensible only by an
 /// explicit enum addition + migration, and `lib/issues/difficulty.ts`'s
 /// `WORK_ITEM_DIFFICULTIES` is asserted total against it at compile time.
 enum WorkItemDifficulty {
+  trivial
   low
   medium
   high

@@ -822,9 +822,9 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           'Optional executor ("coding_agent" or "human") — leaf items only; overrides the type default when supplied. Omit (or null) to take the type default (or leave it unset when no type is given).',
       },
       difficulty: {
-        anyOf: [{ type: 'string', enum: ['low', 'medium', 'high'] }, { type: 'null' }],
+        anyOf: [{ type: 'string', enum: ['trivial', 'low', 'medium', 'high'] }, { type: 'null' }],
         description:
-          'Optional difficulty — how hard the work is to REASON about, not how big it is: "low", "medium" or "high". Leaf items (task / bug / subtask) only; a non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND). Omit (or null) to leave it unset.',
+          'Optional difficulty — how hard the work is to REASON about, not how big it is: "trivial", "low", "medium" or "high". Leaf items (task / bug / subtask) only; a non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND). Omit (or null) to leave it unset.',
       },
       targetRepo: {
         type: ['string', 'null'],
@@ -2554,9 +2554,9 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           'Who executes the work ("coding_agent" or "human") — leaf items only; null clears it.',
       },
       difficulty: {
-        anyOf: [{ type: 'string', enum: ['low', 'medium', 'high'] }, { type: 'null' }],
+        anyOf: [{ type: 'string', enum: ['trivial', 'low', 'medium', 'high'] }, { type: 'null' }],
         description:
-          'How hard the work is to REASON about, not how big it is: "low", "medium" or "high" — leaf items only; null clears it. A non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND), and so is changing the kind of a leaf that carries one to a container without clearing it in the same call.',
+          'How hard the work is to REASON about, not how big it is: "trivial", "low", "medium" or "high" — leaf items only; null clears it. A non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND), and so is changing the kind of a leaf that carries one to a container without clearing it in the same call.',
       },
       estimateMinutes: {
         anyOf: [{ type: 'integer', minimum: 0 }, { type: 'null' }],

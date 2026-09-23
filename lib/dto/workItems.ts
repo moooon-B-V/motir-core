@@ -72,7 +72,7 @@ export type ExecutorDto = 'coding_agent' | 'human';
  * `WorkItemDifficulty` Prisma enum, whose members `lib/issues/difficulty.ts`
  * lists in order and asserts total. Leaf-only, exactly as `type` is.
  */
-export type WorkItemDifficultyDto = 'low' | 'medium' | 'high';
+export type WorkItemDifficultyDto = 'trivial' | 'low' | 'medium' | 'high';
 
 /**
  * The full work-item shape for the detail view. Carries both content axes

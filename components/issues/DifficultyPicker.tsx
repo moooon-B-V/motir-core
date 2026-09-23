@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { SignalHigh, SignalLow, SignalMedium, X } from 'lucide-react';
+import { Signal, SignalHigh, SignalLow, SignalMedium, X } from 'lucide-react';
 import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
@@ -15,9 +15,10 @@ import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 // member, so clearing is its own deliberate press.
 
 const DIFFICULTY_GLYPH: Record<WorkItemDifficultyDto, typeof SignalLow> = {
-  low: SignalLow,
-  medium: SignalMedium,
-  high: SignalHigh,
+  trivial: SignalLow,
+  low: SignalMedium,
+  medium: SignalHigh,
+  high: Signal,
 };
 
 export function DifficultyIndicator({ difficulty }: { difficulty: WorkItemDifficultyDto }) {

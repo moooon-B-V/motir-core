@@ -545,7 +545,7 @@
  *   at `412bc953b` (MOTIR-5428 took `1.36.0`), so this claims `1.37.0`. If a sibling has taken it since,
  *   RENUMBER this entry — it names the ADVISORY VARIANT.
  *
- * - `1.38.0` — MOTIR-6098 adds a leaf's `difficulty` (`low` / `medium` / `high`,
+ * - `1.38.0` — MOTIR-6098 adds a leaf's `difficulty` (`trivial` / `low` / `medium` / `high`,
  *   nullable) to the work-item resource every single-item read and write returns,
  *   and to the `createWorkItem` / `updateWorkItem` request bodies (`null` on a
  *   PATCH clears it), plus `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422) when a body

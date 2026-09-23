@@ -22,6 +22,7 @@ import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
  * and filter facet renders.
  */
 export const WORK_ITEM_DIFFICULTIES = [
+  'trivial',
   'low',
   'medium',
   'high',

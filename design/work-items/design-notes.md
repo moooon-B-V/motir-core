@@ -8664,14 +8664,14 @@ No sibling asset draws a choice row, so nothing here is redrawn and nothing else
 
 The value is a plain label with a **quiet signal glyph** (lucide `signal-low` / `signal-medium` / `signal-high`) in `--el-text-faint`, `aria-hidden`. There is **no pill and no hue**, on purpose: Priority shares the words _Medium_ and _High_ and owns a coloured pill, so a coloured difficulty would read as a second priority. The glyph's bar count carries the scale for a reader who scans.
 
-| state                    | item page (`FieldCard`)                                                                       | quick view (`EditableRailField`)                                |
-| ------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| unset                    | the dashed **Set difficulty** affordance — the same one an untyped leaf's **Set a type** uses | **None** in `--el-text-secondary`, as Type and Executor show it |
-| low · medium · high      | glyph + label in `--el-text`                                                                  | glyph + label in the rail's `--el-text-secondary`               |
-| editing                  | the card's chevron turns; a three-option **`Segmented`** plus a **Clear** text button         | the same `Segmented` + **Clear**, inline in the rail            |
-| cleared                  | back to **Set difficulty**                                                                    | back to **None**, with the rail's shipped _Saved_ tick          |
-| read-only viewer         | `FieldCard editable={false}` — the value, no chevron                                          | the value, no chevron, no picker                                |
-| container (epic / story) | **absent** — no card, no empty slot, no disabled control                                      | **absent**, by the same `isTypeableKind` guard Work type uses   |
+| state                         | item page (`FieldCard`)                                                                       | quick view (`EditableRailField`)                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| unset                         | the dashed **Set difficulty** affordance — the same one an untyped leaf's **Set a type** uses | **None** in `--el-text-secondary`, as Type and Executor show it |
+| trivial · low · medium · high | glyph + label in `--el-text`                                                                  | glyph + label in the rail's `--el-text-secondary`               |
+| editing                       | the card's chevron turns; a three-option **`Segmented`** plus a **Clear** text button         | the same `Segmented` + **Clear**, inline in the rail            |
+| cleared                       | back to **Set difficulty**                                                                    | back to **None**, with the rail's shipped _Saved_ tick          |
+| read-only viewer              | `FieldCard editable={false}` — the value, no chevron                                          | the value, no chevron, no picker                                |
+| container (epic / story)      | **absent** — no card, no empty slot, no disabled control                                      | **absent**, by the same `isTypeableKind` guard Work type uses   |
 
 **Why a `Segmented` and not a `Combobox`.** Three ordered values fit one row, and `Segmented` is already how the Executor control is edited (`components/issues/ExecutorPicker.tsx`), so the two neighbouring fields edit the same way. The `Segmented` has no empty member, so **Clear** sits beside it rather than inside it — a person clears on purpose, and there is no fourth "None" segment to press by accident.
 

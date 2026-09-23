@@ -537,6 +537,7 @@
       "human": "人工"
     },
     "difficulty": {
+      "trivial": "极简",
       "low": "低",
       "medium": "中",
       "high": "高"

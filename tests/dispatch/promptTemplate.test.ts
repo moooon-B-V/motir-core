@@ -2402,14 +2402,17 @@ describe('assembleDispatchPrompt — the ERROR EVIDENCE section (MOTIR-5975 · M
 // Story MOTIR-6016 · MOTIR-6099 — a leaf's DIFFICULTY is ONE fact line when it
 // is set, and the prompt says nothing about it when it is not.
 describe('the difficulty line', () => {
-  it.each(['low', 'medium', 'high'] as const)('states %s in exactly one line', (difficulty) => {
-    const { prompt } = assembleDispatchPrompt(source({ difficulty }));
-    const lines = prompt.match(/^- Difficulty: .*$/gm) ?? [];
-    expect(lines).toHaveLength(1);
-    expect(prompt).toMatch(new RegExp(`^- Difficulty: ${difficulty}\\b`, 'm'));
-    // Named as reasoning, not size, so `high` is not read as "big".
-    expect(lines[0]).toContain('not its size');
-  });
+  it.each(['trivial', 'low', 'medium', 'high'] as const)(
+    'states %s in exactly one line',
+    (difficulty) => {
+      const { prompt } = assembleDispatchPrompt(source({ difficulty }));
+      const lines = prompt.match(/^- Difficulty: .*$/gm) ?? [];
+      expect(lines).toHaveLength(1);
+      expect(prompt).toMatch(new RegExp(`^- Difficulty: ${difficulty}\\b`, 'm'));
+      // Named as reasoning, not size, so `high` is not read as "big".
+      expect(lines[0]).toContain('not its size');
+    },
+  );
 
   it('says nothing about difficulty when it is unset — no line, no word', () => {
     const { prompt } = assembleDispatchPrompt(source({ difficulty: null }));

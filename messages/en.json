@@ -537,6 +537,7 @@
       "human": "Human"
     },
     "difficulty": {
+      "trivial": "Trivial",
       "low": "Low",
       "medium": "Medium",
       "high": "High"

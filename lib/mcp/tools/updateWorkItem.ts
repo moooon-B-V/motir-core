@@ -78,8 +78,8 @@ const inputSchema = {
     .nullable()
     .optional()
     .describe(
-      'How hard the work is to REASON about, not how big it is: "low", "medium" or ' +
-        '"high" — leaf items only; null clears it. A non-null value on an epic or story is ' +
+      'How hard the work is to REASON about, not how big it is: "trivial", "low", ' +
+        '"medium" or "high" — leaf items only; null clears it. A non-null value on an epic or story is ' +
         'refused (DIFFICULTY_NOT_ALLOWED_ON_KIND), and so is changing the kind of a leaf ' +
         'that carries one to a container without clearing it in the same call.',
     ),
