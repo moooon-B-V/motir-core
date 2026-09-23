@@ -656,9 +656,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     //
     // Re-pinned for MOTIR-5588: the over-gate sizing advisory's points arm moved
     // from 13+ to 8+ story points. Summary UNCHANGED — it names no threshold.
+    //
+    // Re-pinned for MOTIR-5424's new advisory FAMILY, `path-reference`
+    // (`likely-missing-path-edge` — a criterion naming a not-yet-existing file
+    // another open card also names, with no edge between them). Summary
+    // UNCHANGED, for the reason the coverage re-pin gave: the advisory channel,
+    // never a gate, so the verdict line stays true.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '06549ce0bbd1',
+    descriptionFingerprint: '4b94fe567bb4',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
