@@ -543,6 +543,72 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(body.subject.members[0]).toMatchObject({ subjectVersion: setVersion });
   });
 
+  it('a DESIGN-led port reads its members against the MERGE gate and hands back that gate’s version (MOTIR-6080)', async () => {
+    // The design gate is versioned by its PUBLISHED COMMIT — not a delivery set — so a frame
+    // counting members out of it counts none, the acceptance arm's defect one kind over.
+    const card = await designCard();
+    await publish(card);
+    await deliver(card, { name: 'core', number: 31 });
+    const merge = await rawGate(card, 'pull_request_approval', card.id);
+    const setVersion = `acme/core#31@${'b'.repeat(40)}`;
+    await adminDb.approvalGate.update({
+      where: { id: merge.id },
+      data: { subjectVersion: setVersion },
+    });
+    signIn(owner());
+
+    const body = await (await gateViaRoute({ key: card.identifier, kind: 'design_result' })).json();
+
+    expect(body.gate).toMatchObject({ kind: 'design_result', state: 'awaiting' });
+    expect(body.subject.kind).toBe('pull_request_approval');
+    expect(body.subject.mergeSubjectVersion).toBe(setVersion);
+    expect(body.subject.members).toHaveLength(1);
+    expect(body.subject.members[0]).toMatchObject({ subjectVersion: setVersion });
+  });
+
+  it('a DECISION-led port reads its members against the MERGE gate and hands back that gate’s version (MOTIR-6080)', async () => {
+    // A decision gate is versioned `owner/name:path@blob` — the document, not the set — and
+    // its id owns no member facts. The item page reads both off the merge gate; so does this.
+    const story = await twoRepoStory();
+    await rawGate(story, 'decision_approval', story.id);
+    const merge = await rawGate(story, 'pull_request_approval', story.id);
+    const setVersion = `acme/web#7@${'c'.repeat(40)}`;
+    await adminDb.approvalGate.update({
+      where: { id: merge.id },
+      data: { subjectVersion: setVersion },
+    });
+    const { decisionDocumentService } = await import('@/lib/services/decisionDocumentService');
+    const read = vi.spyOn(decisionDocumentService, 'readViewForWorkItem').mockResolvedValue(null);
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: story.identifier, kind: 'decision_approval' })
+    ).json();
+
+    expect(body.gate).toMatchObject({ kind: 'decision_approval' });
+    expect(body.subject.kind).toBe('pull_request_approval');
+    expect(body.subject.mergeSubjectVersion).toBe(setVersion);
+    expect(body.subject.members).toHaveLength(1);
+    expect(body.subject.members[0]).toMatchObject({ subjectVersion: setVersion });
+    read.mockRestore();
+  });
+
+  it('a DECISION gate with no merge question reads no merge version — the frame keeps its own', async () => {
+    const story = await twoRepoStory();
+    await rawGate(story, 'decision_approval', story.id);
+    const { decisionDocumentService } = await import('@/lib/services/decisionDocumentService');
+    const read = vi.spyOn(decisionDocumentService, 'readViewForWorkItem').mockResolvedValue(null);
+    signIn(owner());
+
+    const body = await (
+      await gateViaRoute({ key: story.identifier, kind: 'decision_approval' })
+    ).json();
+
+    expect(body.subject.kind).toBe('pull_request_approval');
+    expect(body.subject.mergeSubjectVersion).toBeUndefined();
+    read.mockRestore();
+  });
+
   it('an ACCEPTANCE gate with NO awaiting merge question keeps its own port — the recording alone', async () => {
     // A SINGLE-CARD run: the story delivers nothing of its own, so there is nothing for
     // the press to merge and the port is the receipt (point 3).

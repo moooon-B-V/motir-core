@@ -790,9 +790,10 @@ export function ApprovalOverlay() {
               canDecide: read.canDecide && !decidedState,
               routedToLabel: read.routedToLabel,
               members: subject.members,
-              // A STORY RUN'S ACCEPTANCE is versioned by its recording, so the members the
-              // press merges come from the merge gate's version (Bug MOTIR-6079) — the value
-              // the item page hands the same frame. Absent for every other port.
+              // A PRIMARY's own version is not a delivery set — an acceptance's recording, a
+              // design's commit, a decision's blob — so the members the press merges come from
+              // the merge gate's version (Bugs MOTIR-6079, MOTIR-6080), the value the item page
+              // hands the same frame. Absent for the approve-to-merge gate's own port.
               mergeSubjectVersion: subject.mergeSubjectVersion,
               earlierApproval: read.earlierApproval,
             }}
