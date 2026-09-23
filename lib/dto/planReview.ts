@@ -110,6 +110,10 @@ const PATCH_KEY_RAIL_ROW = {
   type: 'type',
   storyPoints: 'storyPoints',
   estimateMinutes: 'estimateMinutes',
+  // A leaf's DIFFICULTY (MOTIR-6133) — the patch carries it and approve applies
+  // it, but the review vocabulary has no `difficulty` change field yet: that row
+  // is MOTIR-6137's (story MOTIR-6095), which replaces this `null` with it.
+  difficulty: null,
   targetRepo: 'targetRepo',
   // The SET forms (bug MOTIR-4904) join the same row: `Repositories` is one rail
   // row about one axis, and `targetRepo` / `targetRepos` / `targetRepositories`

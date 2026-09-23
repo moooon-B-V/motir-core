@@ -51,6 +51,19 @@ describe('mergeModifyPatch — per key class', () => {
     }
   });
 
+  it('DIFFICULTY (MOTIR-6133) merges as a scalar, exactly like storyPoints — later wins, `null` clears', () => {
+    expect(
+      mergeModifyPatch({ difficulty: 'medium', storyPoints: 3 }, { difficulty: 'high' }),
+    ).toEqual({ difficulty: 'high', storyPoints: 3 });
+    expect(mergeModifyPatch({ difficulty: 'medium' }, { title: 'T' })).toEqual({
+      difficulty: 'medium',
+      title: 'T',
+    });
+    expect(mergeModifyPatch({ difficulty: 'medium' }, { difficulty: null })).toEqual({
+      difficulty: null,
+    });
+  });
+
   it('treats a missing patch on either side as empty', () => {
     expect(mergeModifyPatch(null, { title: 'T' })).toEqual({ title: 'T' });
     expect(mergeModifyPatch({ title: 'T' }, undefined)).toEqual({ title: 'T' });

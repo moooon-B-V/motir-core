@@ -37,6 +37,8 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   type: null,
   storyPoints: null,
   estimateMinutes: null,
+  // MOTIR-6133 — no rail row until MOTIR-6137 gives it one.
+  difficulty: null,
   targetRepo: null,
   // The SET spellings of the same axis (bug MOTIR-4904) — they move the SAME
   // `targetRepo` rail row, so the denominator below is unchanged by their

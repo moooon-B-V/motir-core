@@ -33,6 +33,7 @@ import {
 } from '@/lib/issues/parentRules';
 import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
+import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
 import {
   FOLDER_REF_PREFIX,
@@ -78,6 +79,9 @@ export interface ProposalNode {
     /** The SUBJECT coordinate (MOTIR-5065) — shape- and kind-checked here; its
      *  MEMBERSHIP is deliberately not this repository's to know. */
     subject?: string | null;
+    /** A leaf's DIFFICULTY (MOTIR-6133) — refused on a container kind
+     *  (`difficulty_on_container`). Membership is the proposal doors'. */
+    difficulty?: string | null;
   } | null;
   /**
    * `modify` only — the gate reads the edge refs, and (MOTIR-3859) the
@@ -87,6 +91,9 @@ export interface ProposalNode {
    */
   patch: {
     parentRef?: string | null;
+    /** A re-judged DIFFICULTY (MOTIR-6133) — refused when the TARGET's live
+     *  kind is a container (`difficulty_on_container`). */
+    difficulty?: string | null;
     blockedByAdd?: string[] | null;
     blockedByRemove?: string[] | null;
   } | null;
@@ -293,6 +300,43 @@ function assertProposedSubjectValid(item: ProposalNode): void {
       `Proposal ${item.id} proposes subject "${String(subject)}", which is not a well-formed subject. ${describeSubjectShape()}`,
     );
   }
+}
+
+/**
+ * A DIFFICULTY on a container, refused at APPROVE (Story MOTIR-6095 · MOTIR-6133;
+ * AMENDMENT 19). The proposal doors refuse it at append, deepen and correct
+ * through `lib/plans/validateProposedDifficulty.ts`; this is the one path they
+ * cannot see — a `modify` whose COMMITTED target was re-kinded to an `epic` /
+ * `story` after the append — and, by the module header's own argument, the
+ * backstop for any `add` edited between generation and approve. The predicate
+ * is the shared module's, so the approve and the doors cannot disagree.
+ *
+ * A `modify` whose target resolves to nothing is left to `materialize`, as
+ * step 4 of the gate leaves it. `null` (a clear) is never refused.
+ */
+function assertDifficultyOnLeaf(
+  item: ProposalNode,
+  liveById: ValidatePlanProposalsInput['liveById'],
+): void {
+  if (item.op === 'add') {
+    const difficulty = item.proposedFields?.difficulty;
+    const kind = proposedKindOf(item);
+    if (!isDifficultyRefusedOnKind(difficulty, kind)) return;
+    throw new PlanGrammarError(
+      'difficulty_on_container',
+      item.id,
+      `${describeSubject(item, liveById)} proposes a \`${kind}\` with difficulty "${String(difficulty)}". A container cannot carry a difficulty — set it on its leaves, or clear it.`,
+    );
+  }
+  if (item.op !== 'modify' || !item.workItemId) return;
+  const difficulty = item.patch?.difficulty;
+  const target = liveById.get(item.workItemId);
+  if (!target || !isDifficultyRefusedOnKind(difficulty, target.kind)) return;
+  throw new PlanGrammarError(
+    'difficulty_on_container',
+    item.id,
+    `${describeSubject(item, liveById)} sets difficulty "${String(difficulty)}" on a \`${target.kind}\`, which is a container and cannot carry one. The target is a container now; the plan's author must drop \`patch.difficulty\` or set it to null.`,
+  );
 }
 
 /**
@@ -1303,6 +1347,12 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
       );
     }
   }
+
+  // 3b-bis. A DIFFICULTY on a container (MOTIR-6133) — on an `add`'s proposed
+  //     kind, and on a `modify`'s LIVE target kind, which is the case the doors
+  //     cannot see (a target re-kinded after the append). A property of the
+  //     proposal plus the one row it names, so it sits with the grammar.
+  for (const item of items) assertDifficultyOnLeaf(item, liveById);
 
   // 3c. The RE-PARENT a `modify` may now propose (MOTIR-3859) — tenancy, cycle,
   //     depth, the kind matrix, and the terminal-parent refusal, in that order.

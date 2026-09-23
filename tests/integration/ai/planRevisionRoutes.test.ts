@@ -356,6 +356,9 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     priority: 'high',
     storyPoints: 3,
     estimateMinutes: 45,
+    // A leaf's DIFFICULTY (MOTIR-6133) — `kind: 'task'` above is a leaf, so the
+    // container refusal does not fire and the transport is what is asserted.
+    difficulty: 'high',
     explanationMd: 'The corrected WHY — the key this route never read.',
     executor: 'human',
     // The card's proposed STEPS (MOTIR-4616). Present here because the

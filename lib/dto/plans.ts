@@ -5,7 +5,11 @@
 // objects). The 7.4.5 plan-detail + 7.4.13 plans-list UIs bind to these.
 
 import type { JobStatus } from '@/lib/ai/types';
-import type { ExecutorDto, WorkItemPlanningSourceDto } from '@/lib/dto/workItems';
+import type {
+  ExecutorDto,
+  WorkItemDifficultyDto,
+  WorkItemPlanningSourceDto,
+} from '@/lib/dto/workItems';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
@@ -153,6 +157,18 @@ export interface PlanItemProposedFields {
    */
   storyPoints?: number | null;
   estimateMinutes?: number | null;
+  /**
+   * A leaf's DIFFICULTY (Story MOTIR-6095 · MOTIR-6133; `agent-authored-plans.md`
+   * AMENDMENT 19) — how hard the work is to reason about, the column MOTIR-6016
+   * shipped. It rides the `storyPoints` route on every op and every door (this
+   * bag, the `modify` patch, the deepen and the correction), NOT `subject`'s
+   * narrower add-only route: `subject` is pass provenance settled at the lay,
+   * while difficulty is a property of the WORK, which a re-plan must be able to
+   * change. A non-null value on a container kind is refused at append, deepen,
+   * correct and approve (`lib/plans/validateProposedDifficulty.ts`). Absent →
+   * materialize writes `null`.
+   */
+  difficulty?: WorkItemDifficultyDto | null;
   /**
    * AI-drafted explanation (Story 7.4 · MOTIR-850) — the "why this matters" prose
    * the `generate_tree` planner drafts when the project opts in
@@ -419,6 +435,15 @@ export interface PlanItemPatch {
   storyPoints?: number | null;
   estimateMinutes?: number | null;
   /**
+   * Re-judge the target's DIFFICULTY (Story MOTIR-6095 · MOTIR-6133) — the
+   * `modify` mirror of {@link PlanItemProposedFields.difficulty}, on the same
+   * `storyPoints` route. Sparse: absent leaves it alone, an explicit `null`
+   * CLEARS it. A non-null value is refused when the TARGET is a container (at
+   * the append, the correction, and at approve as `difficulty_on_container`).
+   * Applied by `applyModify` with a `difficulty` revision diff cell.
+   */
+  difficulty?: WorkItemDifficultyDto | null;
+  /**
    * RE-PIN the target's repo (MOTIR-1884) — the `modify` mirror of the `add`
    * path's {@link PlanItemProposedFields.targetRepo}, so a re-plan that moves work
    * from one repo of the set to another can say so instead of leaving the item
@@ -542,6 +567,7 @@ export const PLAN_ITEM_PATCH_KEYS = [
   'type',
   'storyPoints',
   'estimateMinutes',
+  'difficulty',
   'targetRepo',
   'targetRepos',
   'targetRepositories',
@@ -767,6 +793,11 @@ export interface UpdateProposalInput {
    *  estimate, the same sparse-merge semantics the rest of this input uses. */
   storyPoints?: number | null;
   estimateMinutes?: number | null;
+  /** A leaf's DIFFICULTY (MOTIR-6133) — deepenable and correctable like
+   *  `storyPoints`, sparse the same way (`null` clears). Re-validated on the
+   *  MERGED result, so a deepen that turns a proposal carrying one into a
+   *  `story` without clearing it is refused. */
+  difficulty?: WorkItemDifficultyDto | null;
   /** AI-drafted explanation (Story 7.4 · MOTIR-850) — deepenable on the
    *  proposal-edit / generation deepen path exactly like `descriptionMd`; an
    *  explicit `null` clears it. Sparse-merged into the `add`'s `proposedFields`
@@ -940,6 +971,7 @@ export const UPDATE_PROPOSAL_KEYS = [
   'priority',
   'storyPoints',
   'estimateMinutes',
+  'difficulty',
   'explanationMd',
   'executor',
   'todos',

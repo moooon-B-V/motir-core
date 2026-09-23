@@ -75,6 +75,21 @@ function interfaceKeys(file: string, name: string): Set<string> {
   return keys;
 }
 
+/**
+ * Proposed fields whose REVIEW half is a named sibling card of the SAME story,
+ * still open — each with the card that owes it. Story MOTIR-6095 splits the
+ * carrier (MOTIR-6133: the proposal holds a `difficulty` and approve writes it)
+ * from the review renderer (MOTIR-6137: the review DTO / service / peek carry
+ * it), and both land on one parent branch before it reaches `main`.
+ *
+ * ⚠️ NOT A RELAXATION THAT CAN OUTLIVE ITS CARD: the `still OWED` test below
+ * FAILS as soon as the review model carries a key listed here, so the card that
+ * adds it must delete its entry in the same change.
+ */
+const REVIEW_HALF_OWED_BY: Readonly<Record<string, string>> = {
+  difficulty: 'MOTIR-6137 — the plan review renders a leaf’s difficulty (story MOTIR-6095)',
+};
+
 describe('PlanReviewItemDto ⟷ PlanItemProposedFields parity', () => {
   const proposed = interfaceKeys('lib/dto/plans.ts', 'PlanItemProposedFields');
   const review = interfaceKeys('lib/dto/planReview.ts', 'PlanReviewItemDto');
@@ -84,8 +99,14 @@ describe('PlanReviewItemDto ⟷ PlanItemProposedFields parity', () => {
   // reviewer, which is the whole point: if a field is worth materializing onto
   // the created work item, it is worth showing before it is created.
   it('every proposed field a reviewer decides on is carried by the review model', () => {
-    const missing = [...proposed].filter((k) => !review.has(k));
+    const missing = [...proposed].filter((k) => !review.has(k) && !(k in REVIEW_HALF_OWED_BY));
     expect({ missing }).toEqual({ missing: [] });
+  });
+
+  it('an owed review half is still OWED — delete its entry once the review model carries it', () => {
+    const fulfilled = Object.keys(REVIEW_HALF_OWED_BY).filter((k) => review.has(k));
+    const stale = Object.keys(REVIEW_HALF_OWED_BY).filter((k) => !proposed.has(k));
+    expect({ fulfilled, stale }).toEqual({ fulfilled: [], stale: [] });
   });
 
   it('parses BOTH declarations — a guard that read nothing would pass vacuously', () => {
@@ -293,7 +314,9 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     // Total in both directions, so a field added to `PlanItemProposedFields`
     // cannot reach the review model without somebody answering this question —
     // and a disposition for a field that no longer exists cannot linger.
-    const undispositioned = [...proposed].filter((k) => !(k in OP_AXIS));
+    const undispositioned = [...proposed].filter(
+      (k) => !(k in OP_AXIS) && !(k in REVIEW_HALF_OWED_BY),
+    );
     const stale = Object.keys(OP_AXIS).filter((k) => !proposed.has(k));
     expect({ undispositioned, stale }).toEqual({ undispositioned: [], stale: [] });
   });
@@ -531,6 +554,13 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     type: { row: 'type' },
     storyPoints: { row: 'storyPoints' },
     estimateMinutes: { row: 'estimateMinutes' },
+    // A leaf's DIFFICULTY (MOTIR-6133) reaches the patch and `applyModify` in
+    // that card; the review row is MOTIR-6137's (the review renderer), which
+    // adds the `difficulty` change field and flips this to `{ row: … }`.
+    difficulty: {
+      noRow:
+        'MOTIR-6133 lands the patch key and its approve write; the review row is MOTIR-6137 (same story, MOTIR-6095)',
+    },
     // The two this bug was filed about.
     targetRepo: { row: 'targetRepo' },
     // The SET spellings of the SAME axis (bug MOTIR-4904) land on the same row.
