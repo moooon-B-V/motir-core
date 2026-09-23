@@ -6,6 +6,7 @@ import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   isCoverageAdvisory,
+  isPathReferenceAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
@@ -92,6 +93,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
+  const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
 
   const lines: string[] = [];
   if (references.length > 0) {
@@ -276,6 +278,27 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         'not name it is reported here too, and a criterion over every child ("Each story …") never is.',
     );
   }
+  // The PATH-REFERENCE family (MOTIR-5424) — gate 4 read on a PATH rather than a
+  // key. MOTIR-5231 cited a mock its design sibling was creating, with no edge,
+  // and every key-based check on this surface was silent about it.
+  if (pathReferences.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards have an acceptance criterion naming a FILE that ` +
+        'does not exist yet on the default branch, and ANOTHER open card names the same file ' +
+        'with no blocked_by between the two — one of them creates it and the other cites it:',
+      ...pathReferences.map(
+        (a) =>
+          `  ${a.item} criterion ${a.criterionIndex} names ${a.path} (not yet in ${a.repo}), ` +
+          `also named by ${a.referenced} (${a.referencedStatus}) (${a.severity})`,
+      ),
+      'Wire blocked_by from the card that CITES the file to the card that CREATES it. Where the ' +
+        'repository checks that a cited path resolves, the missing edge is a red check, not a ' +
+        'stale reference. A card naming only the file it alone will create is never reported, ' +
+        'and neither is a file whose top-level directory is absent from the repository too — ' +
+        "that is another repository's file, not a forward reference.",
+    );
+  }
   return lines;
 }
 
@@ -396,7 +419,13 @@ export function registerValidateWorkItem(
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +
         '`adoptedChildren`; the remedy is to widen the adopted work item on the record or file the ' +
-        'sibling that covers the difference. Advisories ' +
+        'sibling that covers the difference. A `path-reference` advisory (`kind: ' +
+        '"path-reference"`, `likely-missing-path-edge`) names a card whose acceptance criterion ' +
+        'names a FILE PATH that does not exist yet on the default branch of its repository (its ' +
+        'top-level directory does) while ANOTHER not-done work item also names that path, with no ' +
+        'blocked_by between the two or their ancestors — with the `path`, the `criterionIndex`, ' +
+        'the `repo`, and the other item as `referenced` / `referencedStatus`; the remedy is to ' +
+        'wire blocked_by from the citing card to the creating one. Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +

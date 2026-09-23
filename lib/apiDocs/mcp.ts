@@ -660,9 +660,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-5399's FIFTH shape severity (`body-edit-above-field-move`,
     // the first read off a card's revision trail). Summary UNCHANGED, as the
     // MOTIR-3178 paragraph predicted a new member would be.
+    //
+    // Re-pinned for MOTIR-5424's new advisory FAMILY, `path-reference`
+    // (`likely-missing-path-edge` — a criterion naming a not-yet-existing file
+    // another open card also names, with no edge between them). Summary
+    // UNCHANGED, for the reason the coverage re-pin gave: the advisory channel,
+    // never a gate, so the verdict line stays true.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: 'df3eba7b2552',
+    descriptionFingerprint: 'e8903590eb60',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
