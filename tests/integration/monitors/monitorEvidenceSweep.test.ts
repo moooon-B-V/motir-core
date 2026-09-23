@@ -93,10 +93,15 @@ async function seed(): Promise<{ fx: WorkItemFixture; connectionId: string }> {
     { externalProjectId: 'fake-web', externalProjectSlug: 'web' },
     fx.ctx,
   );
+  // Anchor the issues' clock on THIS binding. The poll lists only issues seen
+  // after `lastSeenWatermark ?? createdAt`, so a module-load clock turns every
+  // `issue(id, 1)` into a pre-binding issue once the file has run a minute.
+  const connection = await adminDb.monitorConnection.findUniqueOrThrow({ where: { id: dto.id } });
+  BASE = connection.createdAt.getTime();
   return { fx, connectionId: dto.id };
 }
 
-const BASE = Date.now();
+let BASE = Date.now();
 
 function issue(
   externalId: string,

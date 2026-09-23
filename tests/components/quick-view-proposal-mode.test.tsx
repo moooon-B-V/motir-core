@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { PlanProposalPeekDto } from '@/lib/dto/planReview';
 import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
@@ -394,5 +395,77 @@ describe('the peek of a remove carrying a REASON (MOTIR-6055)', () => {
     cleanup();
     renderProposal({ ...MODIFY, removeReason: 'not a remove' });
     expect(screen.queryByTestId('remove-reason')).toBeNull();
+  });
+});
+
+// MOTIR-6119 — the n = 0 foot line names what the plan DOES change, from the
+// envelope's own `changedFields`, instead of a fixed "description and explanation".
+describe('a modify that moves no rail row names the fields it DOES move (MOTIR-6119)', () => {
+  const foot = () => screen.getByTestId('quick-view-proposal-foot').textContent ?? '';
+  const renderAt = (
+    proposal: PlanProposalPeekDto,
+    outcome: 'accepted' | 'declined' | null,
+    locale: 'en' | 'zh' = 'en',
+  ) =>
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={DATA_WITH_WHY}
+        proposal={proposal}
+        proposalOutcome={outcome}
+      />,
+      locale === 'zh' ? { locale: 'zh', messages: zhMessages as Record<string, unknown> } : {},
+    );
+
+  it.each([
+    [null, 'This plan changes none of these fields — only title and description.'],
+    ['accepted', 'This plan changed none of these fields — only title and description.'],
+    ['declined', 'This plan would have changed none of these fields — only title and description.'],
+  ] as const)(
+    'title + description, %s: names both and NOT the explanation (en)',
+    (outcome, line) => {
+      renderAt({ ...MODIFY, changedFields: ['title', 'description'] }, outcome);
+      expect(foot()).toBe(line);
+      expect(foot()).not.toMatch(/explanation/i);
+    },
+  );
+
+  it.each([
+    [null, '此计划不变更这些字段，只变更标题和描述。'],
+    ['accepted', '此计划未变更这些字段，只变更了标题和描述。'],
+    ['declined', '此计划本不会变更这些字段，只会变更标题和描述。'],
+  ] as const)(
+    'title + description, %s: names both and NOT the explanation (zh)',
+    (outcome, line) => {
+      renderAt({ ...MODIFY, changedFields: ['title', 'description'] }, outcome, 'zh');
+      expect(foot()).toBe(line);
+      expect(foot()).not.toContain('说明');
+    },
+  );
+
+  it('an explanation-only modify names only the explanation, in every tense', () => {
+    const p = { ...MODIFY, changedFields: ['explanation' as const] };
+    for (const [outcome, line] of [
+      [null, 'This plan changes none of these fields — only explanation.'],
+      ['accepted', 'This plan changed none of these fields — only explanation.'],
+      ['declined', 'This plan would have changed none of these fields — only explanation.'],
+    ] as const) {
+      renderAt(p, outcome);
+      expect(foot(), String(outcome)).toBe(line);
+      expect(foot()).not.toMatch(/description|title/i);
+      cleanup();
+    }
+  });
+
+  it('a modify that changes nothing at all says so without naming a field', () => {
+    for (const [outcome, line] of [
+      [null, 'This plan changes none of these fields.'],
+      ['accepted', 'This plan changed none of these fields.'],
+      ['declined', 'This plan would have changed none of these fields.'],
+    ] as const) {
+      renderAt({ ...MODIFY, changedFields: [] }, outcome);
+      expect(foot(), String(outcome)).toBe(line);
+      cleanup();
+    }
   });
 });

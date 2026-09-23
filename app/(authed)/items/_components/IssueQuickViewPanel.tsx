@@ -15,7 +15,7 @@ import {
   SearchX,
   User,
 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ArchivedNotice } from '@/components/issues/ArchivedNotice';
 import { DevelopmentSection, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
@@ -331,6 +331,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // PROPOSAL MODE — resolved before the early returns so the hook order is
   // stable across states (the loading / notfound arms carry no proposal).
   const tPlan = useTranslations('planReview');
+  const format = useFormatter();
   // The shipped to-do section's own copy — the title and the count are the SAME
   // strings the created card will show, which is the point of composing that
   // section rather than writing a preview of it (MOTIR-4622).
@@ -547,6 +548,16 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const railChangeCount = proposal
     ? proposal.settableRailFields.filter((f) => changed.has(f)).length
     : 0;
+  // What a `modify` moves that is NOT a settable rail row — its title, bodies,
+  // dependencies — read from the same `changedFields` set, so the n = 0 line
+  // names what the plan DOES change rather than a fixed pair (MOTIR-6119).
+  const offRailChanged = proposal
+    ? proposal.changedFields.filter((f) => !proposal.settableRailFields.includes(f))
+    : [];
+  const offRailFieldsText = format.list(
+    offRailChanged.map((f) => tPlan(`field_${f}` as 'field_title').toLocaleLowerCase(locale)),
+    { type: 'conjunction' },
+  );
   // Naming the DENOMINATOR is what makes the silence readable: an unmarked row
   // means EITHER *the plan is not changing this* OR *no plan can change this*,
   // and a marker cannot separate those without a second marker on every row.
@@ -578,11 +589,16 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             ? tPlan('railRemoveDeclined', { key: data.identifier })
             : tPlan('railRemoveArchives', { key: data.identifier })
         : railChangeCount === 0
-          ? proposalOutcome === 'accepted'
-            ? tPlan('railChangeNoneApplied')
-            : proposalOutcome === 'declined'
-              ? tPlan('railChangeNoneDeclined')
-              : tPlan('railChangeNone')
+          ? tPlan(
+              `${offRailChanged.length === 0 ? 'railChangeNothing' : 'railChangeNone'}${
+                proposalOutcome === 'accepted'
+                  ? 'Applied'
+                  : proposalOutcome === 'declined'
+                    ? 'Declined'
+                    : ''
+              }` as 'railChangeNone',
+              { fields: offRailFieldsText },
+            )
           : tPlan(
               proposalOutcome === 'accepted'
                 ? 'railChangeCountApplied'
