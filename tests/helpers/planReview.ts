@@ -81,6 +81,9 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     // every existing case keeps describing a plan nobody has revised.
     revised: false,
     targetMissing: false,
+    // No reason by default (MOTIR-6055) — every `remove` written before the
+    // column existed, and every `add` / `modify`, which never carry one.
+    removeReason: null,
     ...over,
   };
 }

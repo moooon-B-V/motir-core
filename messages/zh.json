@@ -262,6 +262,7 @@
     "listEmptyBody": "此计划生成结束但没有提出任何内容。拒绝即可结束它——你的待办事项不会有任何改变。",
     "allProposedLevel": "此层级尚无已提交的工作项——这里的每一项都来自本计划",
     "proposedCrumb": "新",
+    "removeReason": "原因",
     "showChangesPast": "显示已变更内容",
     "actionError": "出了点问题，请重试。",
     "approvedOutcome": "已将 {n} 个工作项加入待办列表",

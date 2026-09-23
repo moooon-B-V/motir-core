@@ -220,6 +220,14 @@ export interface PlanProposalPeekDto {
    * `add` has no target at all — its steps exist nowhere else.
    */
   todos: PlanReviewTodoDto[] | null;
+  /**
+   * WHY a `remove` is proposed (MOTIR-6055 · Part XIX §19.5): the SAME string as
+   * {@link PlanReviewItemDto.removeReason}, carried here because the envelope is
+   * what reaches the peek, which draws it as a band under the header row.
+   * Absent reads as `null` — no band — which is also what an envelope built
+   * before this field existed means.
+   */
+  removeReason?: string | null;
 }
 
 /** One field's OLD → NEW change in a `modify` proposal (the diff overlay). */
@@ -254,7 +262,19 @@ export interface PlanItemChangeDto {
  */
 export type PlanPlacementSideDto =
   | { kind: 'root' }
-  | { kind: 'workItem'; id: string; identifier: string | null }
+  | {
+      kind: 'workItem';
+      id: string;
+      identifier: string | null;
+      /**
+       * The TITLE of the `add` a `planItem:<id>` side names, while that add is
+       * not yet materialized (MOTIR-6055 · `design-notes.md` Part XIX §19.3).
+       * The surface draws it as `New · <title>` — the proposed crumb's own
+       * grammar — and never the temp-ref. Absent for a committed parent, and for
+       * an approved add, whose created key is `identifier`.
+       */
+      proposedTitle?: string;
+    }
   | { kind: 'folder'; folderId: string; folderPath: string[] | null; folderMissing: boolean };
 
 /** One folder on a proposal's {@link PlanReviewItemDto.folderTrail} (MOTIR-5798). */
@@ -722,6 +742,14 @@ export interface PlanReviewItemDto {
    * reaches the peek; neither is derived from the other.
    */
   todos: PlanReviewTodoDto[] | null;
+  /**
+   * WHY the planner proposes this `remove` — `PlanItem.reason`, written by the
+   * planner FOR the reviewer and shown verbatim (MOTIR-6055 · `design-notes.md`
+   * Part XIX §19.5; AMENDMENT 18 §3). `null` on an `add` / `modify`, and on every
+   * `remove` written before the column existed, and `null` draws NOTHING: no
+   * empty row, no dash, no band.
+   */
+  removeReason: string | null;
 }
 
 /**

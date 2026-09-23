@@ -67,6 +67,7 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     staleReasons: [],
     revised: false,
     targetMissing: false,
+    removeReason: null,
     todos: null,
     proposal: {
       op: 'add',

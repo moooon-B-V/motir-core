@@ -773,8 +773,24 @@ export const planReviewService = {
      *  neither read returned (archived, hard-deleted), the id itself rather than
      *  nothing, so the cell degrades to something checkable instead of claiming
      *  the card moved to the root. */
+    // A `planItem:<id>` parent is an `add` in this plan (AMENDMENT 18 §1). It
+    // is named by the key approve CREATED once it is materialized, and until
+    // then it has no key at all — the surface names it `New · <title>` from
+    // `proposedTitle` (Part XIX §19.3). Never the temp-ref: that is an internal
+    // token, and a placeholder key would assert a work item that does not exist.
+    const addById = new Map(plan.items.filter((i) => i.op === 'add').map((i) => [i.id, i]));
+    const proposedAddOf = (id: string) =>
+      id.startsWith(TEMP_REF_PREFIX) ? addById.get(resolveRef(id)) : undefined;
+    const proposedTitleOf = (add: PlanItemDto): string =>
+      add.proposedFields?.title ?? 'Untitled item';
     const nameParent = (id: string | null): string | null => {
       if (id === null) return null;
+      const add = proposedAddOf(id);
+      if (add) {
+        return add.workItemId
+          ? (targetById.get(add.workItemId)?.identifier ?? null)
+          : proposedTitleOf(add);
+      }
       const row = targetById.get(id) ?? ancestorById.get(id);
       return row?.identifier ?? id;
     };
@@ -822,6 +838,15 @@ export const planReviewService = {
       proposed: (ref) => {
         if (ref === null) return { kind: 'root' };
         if (isFolderRef(ref)) return folderSide(folderRefId(ref));
+        const add = proposedAddOf(ref);
+        if (add && !add.workItemId) {
+          return {
+            kind: 'workItem',
+            id: ref,
+            identifier: null,
+            proposedTitle: proposedTitleOf(add),
+          };
+        }
         return { kind: 'workItem', id: ref, identifier: nameParent(ref) };
       },
     };
@@ -1056,6 +1081,8 @@ export const planReviewService = {
       const target = item.workItemId ? targetById.get(item.workItemId) : undefined;
       const stale = staleByItem.get(item.id);
       const reasons: StaleReason[] = stale?.reasons ?? [];
+      // A `remove`'s WHY (AMENDMENT 18 §3), verbatim; nothing else carries one.
+      const removeReason = item.op === 'remove' ? (item.reason ?? null) : null;
       const proposed = item.proposedFields as PlanItemProposedFields | null;
 
       const targetMissing = item.op !== 'add' && !target;
@@ -1316,7 +1343,9 @@ export const planReviewService = {
           changedFields: changes.map((c) => c.field as PlanItemChangeField),
           settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
           todos: item.op === 'add' ? resolvedTodos : null,
+          removeReason,
         },
+        removeReason,
       };
     });
 

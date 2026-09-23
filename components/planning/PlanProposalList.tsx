@@ -14,6 +14,7 @@ import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanItemOpDto } from '@/lib/dto/plans';
 import {
+  changeToText,
   FolderPathLabel,
   folderPathText,
   isFolderPlacementChange,
@@ -223,12 +224,31 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
                     →
                   </span>
                 ) : null}
-                <span className="font-semibold text-(--el-text-strong)">{change.to ?? '—'}</span>
+                <span className="font-semibold text-(--el-text-strong)">
+                  {changeToText(change, t('proposedCrumb')) ?? '—'}
+                </span>
               </>
             )}
           </dd>
         </div>
       ))}
+    </dl>
+  );
+}
+
+/** A `remove`'s REASON (MOTIR-6055 · Part XIX §19.5), in the SAME label/value
+ *  grid the change lines use, WRAPPING — the list is the body that says exactly
+ *  what is being approved. Verbatim: the planner wrote it for the reviewer. */
+function ReasonRow({ reason }: { reason: string }) {
+  const t = useTranslations('planReview');
+  return (
+    <dl data-testid="remove-reason" className="mt-1.5 grid gap-0.5 text-xs">
+      <div className="grid grid-cols-[6rem_1fr] items-baseline gap-2">
+        <dt className="truncate font-medium tracking-wide text-(--el-text-secondary) uppercase">
+          {t('removeReason')}
+        </dt>
+        <dd className="min-w-0 text-(--el-text)">{reason}</dd>
+      </div>
     </dl>
   );
 }
@@ -340,6 +360,9 @@ function ProposalRow({
           ) : null}
         </div>
         <ChangeLines changes={item.changes} />
+        {item.op === 'remove' && item.removeReason ? (
+          <ReasonRow reason={item.removeReason} />
+        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {/* MOVED in the plan's latest revision (Part XII §E). The SHIPPED `Pill`
