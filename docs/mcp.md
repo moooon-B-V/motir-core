@@ -289,8 +289,9 @@ Two consequences worth stating:
 - **`add_plan_items`' `modify` patch is the deliberate exception.** That object
   is declared `.passthrough()` so a field the service already understands can
   never be turned away by this schema; unknown keys inside a `patch` still reach
-  the service unchanged. Everything else — including `proposedFields` — is
-  strict.
+  the service unchanged. The keys it DOES name — `difficulty` among them
+  (MOTIR-6136) — are typed, so `patch.difficulty: "extreme"` is refused at the
+  schema. Everything else — including `proposedFields` — is strict.
 
 Shared input conventions:
 
@@ -2710,8 +2711,9 @@ plus `items[]`, one entry per proposal:
 
 - **`op`** — `add` · `modify` · `remove`.
 - **`proposedFields`** (`add`) — the new node's values: `title`, `kind`, `type`,
-  `priority`, `executor`, `storyPoints`, `estimateMinutes`, `descriptionMd`,
-  `explanationMd`.
+  `priority`, `executor`, `storyPoints`, `estimateMinutes`, `difficulty`,
+  `descriptionMd`, `explanationMd`. The one-line render shows a leaf's size and
+  difficulty together, e.g. `(3 pts · 40m · high)`.
 - **`patch`** (`modify`) — only the CHANGED fields.
 - **`workItemId`** — the target of a `modify` / `remove`; **`null` for an
   un-materialized `add`**.
@@ -2809,8 +2811,17 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
 - **`op`** — `add` · `modify` · `remove`.
 - **`proposedFields`** (`add`, required) — `title` (required), `kind`,
   `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`,
-  `storyPoints`, `estimateMinutes`, `targetRepo`, `targetRepos`,
+  `storyPoints`, `estimateMinutes`, `difficulty`, `targetRepo`, `targetRepos`,
   `targetRepositories`, `targetRepoRole`, `todos`.
+- **`proposedFields.difficulty`** (leaf kinds only, MOTIR-6136) — how hard the
+  card is to **REASON about**, not how big it is (that is `storyPoints` /
+  `estimateMinutes`): `trivial` · `low` · `medium` · `high`, easiest first. The
+  members are the schema enum, so any other value is refused at the schema
+  naming the field. A value on an `epic` or `story` is refused with the typed
+  `INVALID_PROPOSAL` naming `difficulty` — never silently dropped — and the check
+  runs on the MERGED kind wherever a proposal is edited. A `modify`'s `patch`
+  takes `difficulty` too, judged against the target's kind; `null` there clears
+  it. Approving the plan writes it onto the created or modified work item.
 - **`proposedFields.targetRepos` / `targetRepositories`** — the repository SET a
   card ships in, ORDERED, element 0 the PRIMARY (bug MOTIR-4904). The same axis
   and the same three spellings `create_work_item` takes, validated at approve
@@ -2971,15 +2982,21 @@ applies each `modify` in sequence. Three things upstream do:
 forbids the strategy Motir's own generator uses, so this tool is the other half —
 **write the tree's SHAPE first, then fill each card in.**
 
-| Input                                                                                                                        | Type   | Required | Notes                                                       |
-| ---------------------------------------------------------------------------------------------------------------------------- | ------ | -------- | ----------------------------------------------------------- |
-| `planId`                                                                                                                     | string | yes      | The id `create_plan` returned.                              |
-| `planItemId`                                                                                                                 | string | yes      | One of the ids `add_plan_items` returned in `planItemIds`.  |
-| `title`, `kind`, `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`, `storyPoints`, `estimateMinutes`, `todos` | —      | no       | The sparse patch. Everything except `title` accepts `null`. |
+| Input                                                                                                                                      | Type   | Required | Notes                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------ | -------- | ----------------------------------------------------------- |
+| `planId`                                                                                                                                   | string | yes      | The id `create_plan` returned.                              |
+| `planItemId`                                                                                                                               | string | yes      | One of the ids `add_plan_items` returned in `planItemIds`.  |
+| `title`, `kind`, `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`, `storyPoints`, `estimateMinutes`, `difficulty`, `todos` | —      | no       | The sparse patch. Everything except `title` accepts `null`. |
 
 **The patch is SPARSE, and absent is not the same as `null`.** A field you omit is
 left exactly as it was; an explicit `null` clears it. So a deepen turn sends only
 what it is deciding, and nothing it has not thought about yet is destroyed.
+
+**`difficulty`** (MOTIR-6136) is `trivial` · `low` · `medium` · `high` — how hard
+the card is to REASON about, not how big it is. It is leaf-only and judged on the
+MERGED kind: a deepen that sets one on an `epic` / `story`, or re-kinds a leaf that
+carries one into a container, is refused with `INVALID_PROPOSAL` naming
+`difficulty`. `null` clears it.
 
 **`todos` is the one member that is sparse at the KEY and whole at the VALUE.**
 It is the card's ordered steps (the shape and the caps are under
@@ -3054,14 +3071,14 @@ remedy was to author a whole second plan and ask a person to decline the first.
 | ------------------------------------ | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `planId`                             | string         | yes      | The id `create_plan` returned.                                                                                                                                       |
 | `planItemId`                         | string         | yes      | The proposal to correct.                                                                                                                                             |
-| every field `update_plan_item` takes | —              | no       | Same sparse semantics.                                                                                                                                               |
+| every field `update_plan_item` takes | —              | no       | Same sparse semantics — `difficulty` included, leaf-only on the merged kind (`INVALID_PROPOSAL` on a container).                                                     |
 | `parentRef`                          | string \| null | no       | `add` only. Re-parent it — a key, an id, `planItem:<id>`, or `folder:<folderId>` to file it into a folder; `null` makes it top-level. Re-validated as at the append. |
 | `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it.                                                                                                    |
 | `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                                                                                                                          |
 | `targetRepos`                        | string[]       | no       | `add` only. **REPLACES** the repository SET by NAME; `[]` unpins.                                                                                                    |
 | `targetRepositories`                 | string[]       | no       | `add` only. The same set as repository ROW IDS.                                                                                                                      |
 | `targetRepoRole`                     | string \| null | no       | `add` only. Re-pin the ROLE — the portable half; `null` unpins.                                                                                                      |
-| `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch.                                                                                                                   |
+| `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch — `patch.difficulty` included, judged against the target's kind.                                                   |
 
 **It reaches the five things the deepen cannot, and that is the whole point.** The
 field that is wrong is very often `patch.blockedByAdd` on a `modify` — the op no

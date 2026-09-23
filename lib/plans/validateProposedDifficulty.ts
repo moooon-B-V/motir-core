@@ -20,7 +20,7 @@
 // deepen or a correction can change `kind` after the append.
 //
 // PURE: no DB, no Prisma client, no `tx`. Every refusal is an
-// `InvalidProposalError` (`INVALID_PROPOSAL` → 422 `PROPOSALS_INVALID`), the
+// `InvalidProposalError` (a 422 with code `INVALID_PROPOSAL` on every door), the
 // family every other proposal-content refusal uses (the `todos` precedent,
 // AMENDMENT 14) — deliberately NOT the work-item family's
 // `DIFFICULTY_NOT_ALLOWED_ON_KIND`, which describes a row that does not exist yet.

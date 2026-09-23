@@ -202,6 +202,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                     'Agile sizing. Validated at the boundary exactly as the create path validates it.',
                 },
                 estimateMinutes: { type: 'integer', description: 'Estimated minutes of work.' },
+                difficulty: {
+                  type: 'string',
+                  enum: ['trivial', 'low', 'medium', 'high'],
+                  description:
+                    'How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Omit it to leave the proposal without one.',
+                },
                 targetRepo: {
                   type: 'string',
                   description:
@@ -326,6 +332,14 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 estimateMinutes: {
                   anyOf: [{ type: 'integer' }, { type: 'null' }],
                   description: 'Re-scope the time estimate. An explicit `null` clears it.',
+                },
+                difficulty: {
+                  anyOf: [
+                    { type: 'string', enum: ['trivial', 'low', 'medium', 'high'] },
+                    { type: 'null' },
+                  ],
+                  description:
+                    'Re-judge the target’s difficulty. How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the target’s MERGED kind. An explicit `null` clears it.',
                 },
                 targetRepo: {
                   type: ['string', 'null'],
@@ -2159,6 +2173,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         anyOf: [{ type: 'integer' }, { type: 'null' }],
         description: 'Estimated minutes of work; `null` clears it.',
       },
+      difficulty: {
+        anyOf: [{ type: 'string', enum: ['trivial', 'low', 'medium', 'high'] }, { type: 'null' }],
+        description:
+          'How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the MERGED kind. Send `null` to clear it; omit to leave it as it is.',
+      },
       todos: {
         anyOf: [
           {
@@ -2278,6 +2297,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       estimateMinutes: {
         anyOf: [{ type: 'integer' }, { type: 'null' }],
         description: 'Estimated minutes of work; `null` clears it.',
+      },
+      difficulty: {
+        anyOf: [{ type: 'string', enum: ['trivial', 'low', 'medium', 'high'] }, { type: 'null' }],
+        description:
+          'How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the MERGED kind. Send `null` to clear it; omit to leave it as it is.',
       },
       todos: {
         anyOf: [
@@ -2418,6 +2442,14 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               estimateMinutes: {
                 anyOf: [{ type: 'integer' }, { type: 'null' }],
                 description: 'Re-scope the time estimate. An explicit `null` clears it.',
+              },
+              difficulty: {
+                anyOf: [
+                  { type: 'string', enum: ['trivial', 'low', 'medium', 'high'] },
+                  { type: 'null' },
+                ],
+                description:
+                  'Re-judge the target’s difficulty. How hard the work is to REASON about, not how big it is (that is `storyPoints` / `estimateMinutes`): "trivial", "low", "medium", "high", easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped. Judged on the target’s MERGED kind. An explicit `null` clears it.',
               },
               targetRepo: {
                 type: ['string', 'null'],
