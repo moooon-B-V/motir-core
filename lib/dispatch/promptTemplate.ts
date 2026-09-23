@@ -1,5 +1,5 @@
 import type { DispatchWorkflowMode } from '@/lib/dto/dispatch';
-import { isManualReadyItem } from '@/lib/dto/ready';
+import { isAgentDecisionItem, isManualReadyItem } from '@/lib/dto/ready';
 import {
   isOrderingAdvisory,
   isReferenceAdvisory,
@@ -523,6 +523,10 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '4. Open a pull request carrying that file and link it to this work item, as',
     '   every lane does. The pull request is REQUIRED — it is how the decision reaches',
     '   the person who accepts it.',
+    '   It is a pull request of its OWN, off main, and this work item is the ONLY one',
+    '   linked to it. Never integrate the file into a session branch, and never link',
+    "   a session branch's pull request to this work item: approving the decision",
+    '   authorises the merge of every pull request linked to it.',
     '5. The decision is NOT final when your run ends. A person reads the document in',
     '   Motir and approves it; only then does the pull request merge. Stop at the',
     '   pull request.',
@@ -2276,7 +2280,28 @@ function gitWorkflow(src: DispatchPromptSource, sessionBranch: string | null): s
       ? multiRepoSessionLineageWorkflow(src, repos, sessionBranch)
       : sessionLineageWorkflow(src, sessionBranch);
   }
-  return repos ? multiRepoPerItemPrWorkflow(src, repos) : perItemPrWorkflow(src);
+  const own = repos ? multiRepoPerItemPrWorkflow(src, repos) : perItemPrWorkflow(src);
+  // A decision card taken OFF the lineage it was offered (MOTIR-6094) is told
+  // why, and told the branch it must not touch — without the note, the agent
+  // sees a run integrating everything else and reads its own prompt as a slip.
+  return isAgentDecisionItem(src) && src.sessionBranch !== null
+    ? [...decisionOffLineageNote(src.sessionBranch), '', ...own]
+    : own;
+}
+
+/**
+ * Why a DECISION card ships on its own pull request while the run it belongs to
+ * integrates into a session branch (MOTIR-6094). See {@link isAgentDecisionItem}.
+ */
+function decisionOffLineageNote(sessionBranch: string): string[] {
+  return [
+    `This run integrates its other work items into ${sessionBranch}, but a DECISION`,
+    'work item never joins it. Approving a decision also authorises the merge of the',
+    'pull request linked to it, and the session pull request carries every other work',
+    'item of the run, so one approval would merge code nobody reviewed. Do NOT branch',
+    `from ${sessionBranch}, do NOT integrate into it, do NOT call mark_integrated, and`,
+    'do NOT link its pull request to this work item.',
+  ];
 }
 
 /** The ERROR EVIDENCE section with its trailing separator, or nothing at all. */
@@ -2293,7 +2318,12 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   const manual = isManualReadyItem({ type: src.type, executor: src.executor });
   // The lineage the prompt instructs. A manual item is forced to `per_item_pr`
   // with no branch — it renders no GIT WORKFLOW at all (see the interface doc).
-  const sessionBranch = manual ? null : src.sessionBranch;
+  // So is an agent's DECISION card, which renders the per-item workflow: its
+  // approval is a merge, so it must never be linked to a session pull request
+  // (MOTIR-6094, {@link isAgentDecisionItem}). Decided HERE, not by the CLI,
+  // because a lineage can be inherited from a blocker as well as seeded, and
+  // every lane that dispatches reads this answer.
+  const sessionBranch = manual || isAgentDecisionItem(src) ? null : src.sessionBranch;
   const workflowMode: DispatchWorkflowMode =
     sessionBranch !== null ? 'session_lineage' : 'per_item_pr';
 

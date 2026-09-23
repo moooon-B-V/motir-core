@@ -284,6 +284,67 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
       expect(prompt).toContain('Its body carries a "## How to test" section');
     });
 
+    it('an agent’s decision card is told its pull request is its OWN, linked to it alone', () => {
+      expect(agentPrompt()).toContain(
+        'It is a pull request of its OWN, off main, and this work item is the ONLY one',
+      );
+      expect(agentPrompt()).toContain(
+        "a session branch's pull request to this work item: approving the decision",
+      );
+    });
+
+    // ── MOTIR-6094: a decision is NEVER dispatched onto a session branch
+    //
+    // Approving a decision authorises the merge of the pull request linked to it
+    // (§8's FIFTH AMENDMENT, clause 5). On a session branch that is the SESSION
+    // pull request, which carries every other card of the run, so the assembler
+    // forces the card off the lineage exactly as it forces a manual one — whether
+    // the lineage was SEEDED by the run or INHERITED from a blocker.
+    describe('a decision offered a session lineage ships on its own pull request (MOTIR-6094)', () => {
+      const offered = () =>
+        assembleDispatchPrompt(
+          source({ type: 'decision', executor: 'coding_agent', sessionBranch: 'motir/auto-1' }),
+        );
+
+      it('is per_item_pr and reports no session branch, so no lane integrates it', () => {
+        expect(offered().workflowMode).toBe('per_item_pr');
+        expect(offered().sessionBranch).toBeNull();
+      });
+
+      it('branches off main, links ITS OWN pull request under its own key, and never touches the session', () => {
+        const { prompt } = offered();
+        expect(prompt).toContain('-b docs/PROD-7-add-the-ready-set-filter-bar origin/main');
+        expect(prompt).toContain(
+          '6. LINK it: call the link_pull_request tool with key PROD-7 and the',
+        );
+        expect(prompt).toContain('plus headRef docs/PROD-7-add-the-ready-set-filter-bar');
+        expect(prompt).not.toContain('origin/motir/auto-1');
+        expect(prompt).not.toContain('call the mark_integrated tool');
+        expect(prompt).not.toContain('gh pr list --head motir/auto-1');
+      });
+
+      it('is told WHY, naming the branch it must not touch', () => {
+        const { prompt } = offered();
+        expect(prompt).toContain(
+          'This run integrates its other work items into motir/auto-1, but a DECISION',
+        );
+        expect(prompt).toContain(
+          'from motir/auto-1, do NOT integrate into it, do NOT call mark_integrated, and',
+        );
+      });
+
+      it('a decision with NO lineage gets no note — the per-item prompt is unchanged', () => {
+        expect(agentPrompt()).not.toContain('but a DECISION');
+      });
+
+      it('a CODE card offered the same lineage still joins it', () => {
+        const code = assembleDispatchPrompt(source({ sessionBranch: 'motir/auto-1' }));
+        expect(code.workflowMode).toBe('session_lineage');
+        expect(code.sessionBranch).toBe('motir/auto-1');
+        expect(code.prompt).not.toContain('but a DECISION');
+      });
+    });
+
     it('a HUMAN decision card never reaches the lane — it gets the manual steps and none of the rules', () => {
       const { prompt } = assembleDispatchPrompt(source({ type: 'decision', executor: 'human' }));
       expect(prompt).toContain('Never paste a secret into the work item.');
