@@ -1,0 +1,122 @@
+diff --git a/dist/index.js b/dist/index.js
+index 11072f724e74ff9e0b4c3bfec04a6fafa1b0a7bd..c1008da616eae860f84b82cade3f8056873831ab 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -728,6 +728,10 @@ function createServerResponseAdapter(signal, fn) {
+   return new Promise((resolve) => {
+     let controller;
+     let shouldClose = false;
++    // MOTIR-5857: once the consumer cancels the body (the client went away) or the
++    // body is closed, a further enqueue throws "Controller is already closed" out of
++    // a handler nobody awaits. Track it and drop late writes instead.
++    let streamClosed = false;
+     let wroteHead = false;
+     let statusCode = 200;
+     let headers;
+@@ -763,11 +767,19 @@ function createServerResponseAdapter(signal, fn) {
+       if (!wroteHead) {
+         writeHead(statusCode, headers);
+       }
++      if (streamClosed) {
++        return false;
++      }
+       if (!controller) {
+         bufferedData.push(data);
+         return true;
+       }
+-      controller.enqueue(data);
++      try {
++        controller.enqueue(data);
++      } catch (e) {
++        streamClosed = true;
++        return false;
++      }
+       return true;
+     };
+     const eventEmitter = new events.EventEmitter();
+@@ -782,6 +794,10 @@ function createServerResponseAdapter(signal, fn) {
+           shouldClose = true;
+           return fakeServerResponse;
+         }
++        if (streamClosed) {
++          return fakeServerResponse;
++        }
++        streamClosed = true;
+         try {
+           controller.close();
+         } catch (e) {
+@@ -819,8 +835,13 @@ function createServerResponseAdapter(signal, fn) {
+               controller.enqueue(chunk);
+             }
+             if (shouldClose) {
++              streamClosed = true;
+               controller.close();
+             }
++          },
++          cancel() {
++            streamClosed = true;
++            eventEmitter.emit("close");
+           }
+         }),
+         {
+diff --git a/dist/index.mjs b/dist/index.mjs
+index c1110409315d81bd1d440dc5910ba720c17f3722..55bf2be8233fe0bb909451023a545dd54fff5a0b 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -722,6 +722,10 @@ function createServerResponseAdapter(signal, fn) {
+   return new Promise((resolve) => {
+     let controller;
+     let shouldClose = false;
++    // MOTIR-5857: once the consumer cancels the body (the client went away) or the
++    // body is closed, a further enqueue throws "Controller is already closed" out of
++    // a handler nobody awaits. Track it and drop late writes instead.
++    let streamClosed = false;
+     let wroteHead = false;
+     let statusCode = 200;
+     let headers;
+@@ -757,11 +761,19 @@ function createServerResponseAdapter(signal, fn) {
+       if (!wroteHead) {
+         writeHead(statusCode, headers);
+       }
++      if (streamClosed) {
++        return false;
++      }
+       if (!controller) {
+         bufferedData.push(data);
+         return true;
+       }
+-      controller.enqueue(data);
++      try {
++        controller.enqueue(data);
++      } catch (e) {
++        streamClosed = true;
++        return false;
++      }
+       return true;
+     };
+     const eventEmitter = new EventEmitter();
+@@ -776,6 +788,10 @@ function createServerResponseAdapter(signal, fn) {
+           shouldClose = true;
+           return fakeServerResponse;
+         }
++        if (streamClosed) {
++          return fakeServerResponse;
++        }
++        streamClosed = true;
+         try {
+           controller.close();
+         } catch (e) {
+@@ -813,8 +829,13 @@ function createServerResponseAdapter(signal, fn) {
+               controller.enqueue(chunk);
+             }
+             if (shouldClose) {
++              streamClosed = true;
+               controller.close();
+             }
++          },
++          cancel() {
++            streamClosed = true;
++            eventEmitter.emit("close");
+           }
+         }),
+         {
