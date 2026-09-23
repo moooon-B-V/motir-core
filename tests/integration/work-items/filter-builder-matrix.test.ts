@@ -121,6 +121,7 @@ async function seedMatrix(): Promise<Seeded> {
       estimateMinutes: 60,
       descriptionMd: 'Stack trace points at the token refresh path.',
       type: 'code',
+      difficulty: 'high',
       ciState: 'failing',
     },
   });
@@ -136,6 +137,7 @@ async function seedMatrix(): Promise<Seeded> {
       storyPoints: 2,
       estimateMinutes: null,
       type: 'manual',
+      difficulty: 'low',
       ciState: 'running',
     },
   });
@@ -165,6 +167,7 @@ async function seedMatrix(): Promise<Seeded> {
       dueDate: dueDate(10),
       storyPoints: null,
       estimateMinutes: null,
+      difficulty: 'medium',
     },
   });
 
@@ -381,6 +384,13 @@ const CASES: MatrixCase[] = [
   builtin('type', 'is_none_of', ['code'], ['b', 'c', 'd']),
   builtin('type', 'is_empty', null, ['c', 'd']),
   builtin('type', 'is_not_empty', null, ['a', 'b']),
+  // difficulty (enum, nullable — leaf-only, Story MOTIR-6016: a=high, b=low,
+  // d=medium, c is a story and holds none). `is_none_of` INCLUDES the null row,
+  // exactly as `type` and `ciState` above.
+  builtin('difficulty', 'is_any_of', ['high'], ['a']),
+  builtin('difficulty', 'is_none_of', ['high'], ['b', 'c', 'd']),
+  builtin('difficulty', 'is_empty', null, ['c']),
+  builtin('difficulty', 'is_not_empty', null, ['a', 'b', 'd']),
   // assignee (enum, nullable — empty pair + the unassigned sentinel rules)
   builtin('assignee', 'is_any_of', [], ['a'], (s) => [s.memberId]),
   builtin('assignee', 'is_none_of', [], ['b', 'c', 'd'], (s) => [s.memberId]),

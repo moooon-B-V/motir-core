@@ -1368,6 +1368,7 @@
     "advancedFieldChecks": "检查",
     "advancedFieldPriority": "优先级",
     "advancedFieldType": "工作类型",
+    "advancedFieldDifficulty": "难度",
     "advancedFieldReporter": "创建人",
     "advancedFieldSprint": "Sprint",
     "advancedFieldText": "文本",

@@ -5,6 +5,9 @@ import { useTranslations } from 'next-intl';
 import {
   Component as ComponentIcon,
   Folder as FolderIcon,
+  SignalHigh,
+  SignalLow,
+  SignalMedium,
   TriangleAlert,
   UserX,
 } from 'lucide-react';
@@ -12,6 +15,8 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { MultiSelectPicker, type MultiSelectOption } from '@/components/ui/MultiSelectPicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
+import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { CI_STATE_META } from '@/components/github/ciStateMeta';
@@ -343,6 +348,13 @@ function LabelValueEditor({
   );
 }
 
+/** The difficulty scale's glyph — lucide's signal bars, one per step. */
+const DIFFICULTY_GLYPH: Record<WorkItemDifficultyDto, ComponentType<{ className?: string }>> = {
+  low: SignalLow,
+  medium: SignalMedium,
+  high: SignalHigh,
+};
+
 export function AdvancedFilterValueEditor({
   def,
   editorKind,
@@ -368,6 +380,7 @@ export function AdvancedFilterValueEditor({
   // The badge's own strings, so the builder and the row cannot disagree.
   const tGithub = useTranslations('github');
   const tWorkType = useTranslations('labels.workItemType');
+  const tDifficulty = useTranslations('labels.difficulty');
   const tFolders = useTranslations('folders');
   const [query, setQuery] = useState('');
 
@@ -418,6 +431,15 @@ export function AdvancedFilterValueEditor({
           id: wt,
           label: tWorkType(wt),
         }));
+      case 'difficulty-select':
+        // A leaf's DIFFICULTY (Story MOTIR-6016), easiest first, each with the
+        // quiet signal glyph the item page draws — never a hue, because Priority
+        // owns the same words in a coloured pill (the approved design).
+        return WORK_ITEM_DIFFICULTIES.map((d) => ({
+          id: d,
+          label: tDifficulty(d),
+          glyph: DIFFICULTY_GLYPH[d],
+        }));
       case 'member-select': {
         const options = members.map((m) => ({
           id: m.userId,
@@ -466,6 +488,7 @@ export function AdvancedFilterValueEditor({
     tStatus,
     tPriority,
     tWorkType,
+    tDifficulty,
     tGithub,
   ]);
 
@@ -496,6 +519,7 @@ export function AdvancedFilterValueEditor({
     case 'ci-state-select':
     case 'priority-select':
     case 'type-select':
+    case 'difficulty-select':
     case 'member-select':
     case 'sprint-select':
     case 'component-select':
