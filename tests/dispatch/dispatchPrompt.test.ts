@@ -746,3 +746,39 @@ describe('dispatch_prompt tool — access + shape', () => {
     expect(struct(res).prompt).toContain('You are executing Task');
   });
 });
+
+// Story MOTIR-6016 · MOTIR-6099 — the service passes the item's OWN difficulty
+// into the prompt it assembles.
+describe('the difficulty line, from a real card', () => {
+  it('a leaf seeded medium gets the medium line; one with none gets no mention', async () => {
+    const fx = await makeWorkItemFixture();
+    const medium = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Subtle',
+        type: 'code',
+        difficulty: 'medium',
+      },
+      fx.ctx,
+    );
+    const plain = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Plain', type: 'code' },
+      fx.ctx,
+    );
+
+    const withLine = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      medium.identifier,
+      fx.ctx,
+    );
+    expect(withLine.prompt).toMatch(/^- Difficulty: medium\b/m);
+
+    const without = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      plain.identifier,
+      fx.ctx,
+    );
+    expect(without.prompt).not.toMatch(/difficulty/i);
+  });
+});

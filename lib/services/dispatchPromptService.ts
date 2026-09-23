@@ -285,6 +285,7 @@ export const dispatchPromptService = {
       kind: item.kind,
       type: item.type,
       executor: item.executor,
+      difficulty: item.difficulty,
       priority: item.priority,
       storyPoints: item.storyPoints,
       estimateMinutes: item.estimateMinutes,
