@@ -3,7 +3,11 @@ import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
-import { InvalidProposalError, PlanGrammarError, PlanRefGraphError } from '@/lib/plans/errors';
+import {
+  PlanGrammarError,
+  PlanProposalReferencedError,
+  PlanRefGraphError,
+} from '@/lib/plans/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -262,21 +266,6 @@ describe('the re-parent is refused AT THE APPEND — one assertion per rule', ()
     expect(await parentIdOf(card)).toBe(story);
   });
 
-  it('A `planItem:` TEMP-REF: a proposal is not a legal parent for a card that already exists', async () => {
-    const fx = await makeWorkItemFixture();
-    const story = await seedItem(fx, 'The story', 'story');
-    const card = await seedItem(fx, 'The card', 'subtask', story);
-
-    const planId = await openPlan(fx);
-    const err = await rejection(() =>
-      appendReparent(fx, planId, card, `${TEMP_REF_PREFIX}whatever`),
-    );
-
-    expect(err).toBeInstanceOf(InvalidProposalError);
-    expect(err.message).toContain('ALREADY');
-    expect(await proposalCount(planId)).toBe(0);
-  });
-
   it('A REF THAT NAMES NOTHING is a dangling ref, reported as one', async () => {
     const fx = await makeWorkItemFixture();
     const story = await seedItem(fx, 'The story', 'story');
@@ -360,5 +349,229 @@ describe('the approve re-takes the verdict — the world can move while the plan
     expect(err).toBeInstanceOf(PlanGrammarError);
     expect((err as PlanGrammarError).reason).toBe('parent_terminal');
     expect(await parentIdOf(card)).toBe(home);
+  });
+});
+
+describe('a `modify` RE-PARENTS a card under a PROPOSED `add` — AMENDMENT 18 §1 (MOTIR-6050)', () => {
+  // AMENDMENT 11 D2 refused a `planItem:` parent because every guard was a
+  // question about a live row. The plan's projection now answers them, and
+  // `materialize` already creates every `add` before it applies any `modify`.
+
+  /** Append ONE `add` and return its plan-item id. */
+  async function appendAdd(
+    fx: WorkItemFixture,
+    planId: string,
+    kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask',
+    parentRef: string | null,
+    title = `A proposed ${kind}`,
+  ): Promise<string> {
+    const plan = await plansService.addProposals(
+      planId,
+      [{ op: 'add', proposedFields: { title, kind }, ...(parentRef ? { parentRef } : {}) }],
+      fx.ctx,
+    );
+    return plan.items.at(-1)!.id;
+  }
+
+  const ref = (planItemId: string): string => `${TEMP_REF_PREFIX}${planItemId}`;
+
+  it('accepts the move at the append and STORES the temp-ref', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const home = await seedItem(fx, 'Where it is', 'story', epic);
+    const card = await seedItem(fx, 'The card', 'subtask', home);
+
+    const planId = await openPlan(fx);
+    const story = await appendAdd(fx, planId, 'story', epic);
+    await appendReparent(fx, planId, card, ref(story));
+
+    const row = await adminDb.planItem.findFirstOrThrow({ where: { planId, op: 'modify' } });
+    expect((row.patch as { parentRef: string }).parentRef).toBe(ref(story));
+  });
+
+  it('APPROVE creates the story first, then lands the card under it, with the parent change on its revision', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const home = await seedItem(fx, 'Where it is', 'story', epic);
+    const card = await seedItem(fx, 'The card', 'subtask', home);
+
+    const planId = await openPlan(fx);
+    await appendAdd(fx, planId, 'story', epic, 'The new story');
+    const story = (await adminDb.planItem.findFirstOrThrow({ where: { planId, op: 'add' } })).id;
+    await appendReparent(fx, planId, card, ref(story));
+
+    // `validate_plan`'s verdict is `checkApprovability`: the plan is approvable.
+    expect(await plansService.checkApprovability(planId, fx.ctx)).toEqual([]);
+
+    await plansService.markPlanned(planId, fx.ctx);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { projectId: fx.projectId, title: 'The new story' },
+    });
+    expect(created.parentId).toBe(epic);
+    expect(await parentIdOf(card)).toBe(created.id);
+    const revisions = await contentRevisions(card);
+    expect((revisions.at(-1)!.diff as Record<string, unknown>).parentId).toEqual({
+      from: home,
+      to: created.id,
+    });
+  });
+
+  it('KIND-ILLEGAL: a story may not hang under a proposed subtask', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const holder = await seedItem(fx, 'Holder', 'story', epic);
+    const card = await seedItem(fx, 'The story being moved', 'story', epic);
+
+    const planId = await openPlan(fx);
+    const sub = await appendAdd(fx, planId, 'subtask', holder);
+    const err = await rejection(() => appendReparent(fx, planId, card, ref(sub)));
+
+    expect(err).toBeInstanceOf(PlanGrammarError);
+    expect((err as PlanGrammarError).reason).toBe('illegal_parent');
+    expect(await proposalCount(planId)).toBe(1);
+  });
+
+  it('THE DEPTH LIMIT: counted over the proposed chain, then the committed one', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const storyLive = await seedItem(fx, 'A live story', 'story', epic);
+    const card = await seedItem(fx, 'The card', 'subtask', storyLive);
+
+    const planId = await openPlan(fx);
+    // epic(1) → story(2) → proposed task(3) → proposed bug(4) → the card at 5.
+    const task = await appendAdd(fx, planId, 'task', storyLive);
+    const bug = await appendAdd(fx, planId, 'bug', ref(task));
+    const err = await rejection(() => appendReparent(fx, planId, card, ref(bug)));
+
+    expect(err).toBeInstanceOf(PlanGrammarError);
+    expect((err as PlanGrammarError).reason).toBe('parent_depth_limit');
+    expect(err.message).toContain('depth 5');
+  });
+
+  it("A CYCLE a proposal can create: an `add` under the card's own child, then the card moved under it", async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const card = await seedItem(fx, 'The story being moved', 'story', epic);
+    const child = await seedItem(fx, 'Its own task', 'task', card);
+
+    const planId = await openPlan(fx);
+    const below = await appendAdd(fx, planId, 'subtask', child);
+    const err = await rejection(() => appendReparent(fx, planId, card, ref(below)));
+
+    expect(err).toBeInstanceOf(PlanRefGraphError);
+    expect((err as PlanRefGraphError).reason).toBe('cycle');
+    expect(await proposalCount(planId)).toBe(1);
+  });
+
+  it('A TERMINAL anchor: the proposal would be created under a finished work item', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const home = await seedItem(fx, 'Where it is', 'story', epic);
+    const card = await seedItem(fx, 'The card', 'subtask', home);
+    const finished = await seedItem(fx, 'A finished story', 'story', epic);
+    await markDone(fx, finished);
+
+    const planId = await openPlan(fx);
+    const task = await appendAdd(fx, planId, 'task', finished);
+    const err = await rejection(() => appendReparent(fx, planId, card, ref(task)));
+
+    expect(err).toBeInstanceOf(PlanGrammarError);
+    expect((err as PlanGrammarError).reason).toBe('parent_terminal');
+  });
+
+  it('an `add` on ANOTHER plan names nothing on this one', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const home = await seedItem(fx, 'Where it is', 'story', epic);
+    const card = await seedItem(fx, 'The card', 'subtask', home);
+
+    const otherPlan = await openPlan(fx);
+    const elsewhere = await appendAdd(fx, otherPlan, 'story', epic);
+    const planId = await openPlan(fx);
+    const err = await rejection(() => appendReparent(fx, planId, card, ref(elsewhere)));
+
+    expect(err.name).toMatch(/UnresolvedPlanRefError|PlanRefGraphError/);
+    expect(await proposalCount(planId)).toBe(0);
+  });
+
+  it('a `modify` proposal is not a parent — only an `add` is', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const home = await seedItem(fx, 'Where it is', 'story', epic);
+    const card = await seedItem(fx, 'The card', 'subtask', home);
+    const other = await seedItem(fx, 'Another story', 'story', epic);
+
+    const planId = await openPlan(fx);
+    const plan = await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: other, patch: { title: 'Renamed' } }],
+      fx.ctx,
+    );
+    const modifyId = plan.items[0]!.id;
+    const err = await rejection(() => appendReparent(fx, planId, card, ref(modifyId)));
+
+    expect(err.name).toMatch(/UnresolvedPlanRefError|PlanRefGraphError/);
+    expect(await proposalCount(planId)).toBe(1);
+  });
+
+  it('a CORRECTION that replaces a patch with such a ref runs the same gate', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const home = await seedItem(fx, 'Where it is', 'story', epic);
+    const card = await seedItem(fx, 'The story being moved', 'story', epic);
+    const leaf = await seedItem(fx, 'A leaf', 'subtask', home);
+
+    const planId = await openPlan(fx);
+    const sub = await appendAdd(fx, planId, 'subtask', home);
+    const story = await appendAdd(fx, planId, 'story', epic);
+    const plan = await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: card, patch: { title: 'Renamed' } }],
+      fx.ctx,
+    );
+    const modifyId = plan.items.at(-1)!.id;
+
+    // Legal: the leaf-less story moved under nothing illegal — correct a
+    // DIFFERENT modify of the leaf under the proposed story.
+    const leafPlan = await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: leaf, patch: { title: 'Leaf renamed' } }],
+      fx.ctx,
+    );
+    const leafModify = leafPlan.items.at(-1)!.id;
+    await plansService.correctProposal(
+      planId,
+      leafModify,
+      { patch: { parentRef: ref(story) } },
+      fx.ctx,
+    );
+
+    // Illegal: the story under the proposed SUBTASK.
+    const err = await rejection(() =>
+      plansService.correctProposal(planId, modifyId, { patch: { parentRef: ref(sub) } }, fx.ctx),
+    );
+    expect(err).toBeInstanceOf(PlanGrammarError);
+    expect((err as PlanGrammarError).reason).toBe('illegal_parent');
+    const stored = await adminDb.planItem.findUniqueOrThrow({ where: { id: modifyId } });
+    expect(stored.patch).toEqual({ title: 'Renamed' });
+  });
+
+  it('WITHDRAWING the `add` a move points at is refused, naming the `modify`', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedItem(fx, 'The epic', 'epic');
+    const home = await seedItem(fx, 'Where it is', 'story', epic);
+    const card = await seedItem(fx, 'The card', 'subtask', home);
+
+    const planId = await openPlan(fx);
+    const story = await appendAdd(fx, planId, 'story', epic);
+    await appendReparent(fx, planId, card, ref(story));
+    const modifyId = (await adminDb.planItem.findFirstOrThrow({ where: { planId, op: 'modify' } }))
+      .id;
+
+    const err = await rejection(() => plansService.withdrawProposal(planId, story, fx.ctx));
+    expect(err).toBeInstanceOf(PlanProposalReferencedError);
+    expect((err as PlanProposalReferencedError).referrers).toEqual([modifyId]);
   });
 });

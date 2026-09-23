@@ -1212,9 +1212,14 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
     await client.close();
   });
 
-  it('REFUSES a `planItem:` temp-ref in `patch.parentRef`, and appends nothing', async () => {
+  it('ACCEPTS a `planItem:` temp-ref in `patch.parentRef` and stores it (AMENDMENT 18 §1, MOTIR-6050)', async () => {
     const fx = await makeWorkItemFixture();
-    const home = await createTestWorkItem(fx, { kind: 'story', title: 'Where it is' });
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'The epic' });
+    const home = await createTestWorkItem(fx, {
+      kind: 'story',
+      title: 'Where it is',
+      parentId: epic.id,
+    });
     const card = await createTestWorkItem(fx, {
       kind: 'subtask',
       title: 'The card',
@@ -1225,11 +1230,17 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
 
     const first = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
-      proposals: [{ op: 'add', proposedFields: { title: 'A proposed story', kind: 'story' } }],
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'A proposed story', kind: 'story' },
+          parentRef: epic.identifier,
+        },
+      ],
     });
     const proposedStoryId = ids(first)[0]!;
 
-    const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+    const moved = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
       proposals: [
         {
@@ -1239,11 +1250,10 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
         },
       ],
     });
-    expect(refused.isError).toBe(true);
-    // The refusal has to SAY what to do instead, because the caller is a machine
-    // that can act on an instruction and cannot act on a rejection.
-    expect(JSON.stringify(refused.content)).toContain('ALREADY');
-    expect(await adminDb.planItem.count({ where: { planId } })).toBe(1);
+    expect(moved.isError).toBeFalsy();
+    const patch = (await adminDb.planItem.findUniqueOrThrow({ where: { id: ids(moved)[0]! } }))
+      .patch as { parentRef: string };
+    expect(patch.parentRef).toBe(`planItem:${proposedStoryId}`);
     await client.close();
   });
 

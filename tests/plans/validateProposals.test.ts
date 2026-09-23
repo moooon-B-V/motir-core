@@ -88,6 +88,8 @@ function validate(
      *  Absent means the plan is the whole graph, which is the right default for
      *  every case that proposes no edge. */
     existingBlockedByEdges?: Array<{ blockedId: string; blockerId: string }>;
+    /** The folders a `folder:` placement names (MOTIR-5414). */
+    folderById?: Map<string, { id: string; projectId: string; name: string }>;
   } = {},
 ): void {
   validatePlanProposals({
@@ -97,6 +99,7 @@ function validate(
     planProjectId: opts.planProjectId ?? PLAN_PROJECT,
     ancestorIdsById: opts.ancestorIdsById ?? new Map(),
     existingBlockedByEdges: opts.existingBlockedByEdges ?? [],
+    folderById: opts.folderById ?? new Map(),
   });
 }
 
@@ -704,16 +707,158 @@ describe('validatePlanProposals — a `modify` RE-PARENTS its target (MOTIR-3859
     ).toThrow(PlanGrammarError);
   });
 
-  it('refuses a `planItem:` temp-ref parent — a proposal is not a live row', () => {
-    try {
-      validate([add('p1'), modify('m1', { patch: { parentRef: `${TEMP_REF_PREFIX}p1` } })], {
-        liveById: liveMap(live({ id: REAL_TARGET, kind: 'subtask' })),
-      });
-      expect.unreachable('a temp-ref parent is refused');
-    } catch (err) {
-      expect(err).toBeInstanceOf(PlanGrammarError);
-      expect((err as PlanGrammarError).reason).toBe('illegal_parent');
-    }
+  describe('under a PROPOSED `add` — AMENDMENT 18 §1 (MOTIR-6050)', () => {
+    // AMENDMENT 11 D2 refused this outright. The same five guards now read the
+    // PROJECTED parent: the `add`'s kind, its proposed ancestors, and the
+    // committed ANCHOR its chain is created under.
+    const ANCHOR = 'wi_anchor';
+    const under = (addId: string): ProposalNode =>
+      modify('m1', { patch: { parentRef: `${TEMP_REF_PREFIX}${addId}` } });
+
+    it('accepts a subtask moved under a proposed story that hangs under a live epic', () => {
+      expect(() =>
+        validate(
+          [add('s1', { proposedFields: { kind: 'story' }, parentRef: ANCHOR }), under('s1')],
+          {
+            liveById: liveMap(
+              live({ id: REAL_TARGET, kind: 'subtask' }),
+              live({ id: ANCHOR, kind: 'epic' }),
+            ),
+          },
+        ),
+      ).not.toThrow();
+    });
+
+    it("refuses a kind the proposed `add` may not parent, read off the add's own kind", () => {
+      try {
+        validate(
+          [add('s1', { proposedFields: { kind: 'subtask' }, parentRef: ANCHOR }), under('s1')],
+          {
+            liveById: liveMap(
+              live({ id: REAL_TARGET, kind: 'story' }),
+              live({ id: ANCHOR, kind: 'story' }),
+            ),
+          },
+        );
+        expect.unreachable('a story may not hang under a proposed subtask');
+      } catch (err) {
+        expect(err).toBeInstanceOf(PlanGrammarError);
+        expect((err as PlanGrammarError).reason).toBe('illegal_parent');
+        expect((err as PlanGrammarError).planItemId).toBe('m1');
+      }
+    });
+
+    it('defaults a kindless proposed parent to `task`, the way materialize does', () => {
+      // A task may hold a subtask but not a story.
+      expect(() =>
+        validate([add('s1', { proposedFields: null }), under('s1')], {
+          liveById: liveMap(live({ id: REAL_TARGET, kind: 'subtask' })),
+        }),
+      ).not.toThrow();
+      expect(() =>
+        validate([add('s1', { proposedFields: null }), under('s1')], {
+          liveById: liveMap(live({ id: REAL_TARGET, kind: 'story' })),
+        }),
+      ).toThrow(PlanGrammarError);
+    });
+
+    it('counts depth over the PROPOSED ancestors and then the committed chain', () => {
+      // epic(anchor, depth 1) → story s1 (proposed, 2) → task t1 (proposed, 3)
+      // → the moved subtask at 4: legal.
+      const legal = [
+        add('s1', { proposedFields: { kind: 'story' }, parentRef: ANCHOR }),
+        add('t1', { proposedFields: { kind: 'task' }, parentRef: `${TEMP_REF_PREFIX}s1` }),
+        under('t1'),
+      ];
+      const lv = liveMap(
+        live({ id: REAL_TARGET, kind: 'subtask' }),
+        live({ id: ANCHOR, kind: 'epic' }),
+      );
+      expect(() => validate(legal, { liveById: lv })).not.toThrow();
+
+      // The same chain one level lower — the anchor now has a live ancestor —
+      // lands the row at depth 5.
+      try {
+        validate(legal, { liveById: lv, ancestorIdsById: new Map([[ANCHOR, ['wi_root']]]) });
+        expect.unreachable('the move exceeds the depth limit');
+      } catch (err) {
+        expect(err).toBeInstanceOf(PlanGrammarError);
+        expect((err as PlanGrammarError).reason).toBe('parent_depth_limit');
+        expect((err as Error).message).toContain('depth 5');
+      }
+    });
+
+    it("refuses a CYCLE a proposal can create — an `add` under the moving card's own child", () => {
+      // X (the target) → C (its live child). The plan adds A under C, then moves
+      // X under A: walking up from A reaches C and then X.
+      const CHILD = 'wi_child';
+      try {
+        validate(
+          [add('a1', { proposedFields: { kind: 'subtask' }, parentRef: CHILD }), under('a1')],
+          {
+            liveById: liveMap(
+              live({ id: REAL_TARGET, kind: 'story' }),
+              live({ id: CHILD, kind: 'task' }),
+            ),
+            ancestorIdsById: new Map([[CHILD, [REAL_TARGET]]]),
+          },
+        );
+        expect.unreachable('the move would create a cycle');
+      } catch (err) {
+        expect(err).toBeInstanceOf(PlanRefGraphError);
+        expect((err as PlanRefGraphError).reason).toBe('cycle');
+        expect((err as Error).message).toContain('BELOW');
+      }
+    });
+
+    it('refuses when the committed ANCHOR the proposal is created under is terminal', () => {
+      try {
+        validate(
+          [add('s1', { proposedFields: { kind: 'story' }, parentRef: ANCHOR }), under('s1')],
+          {
+            liveById: liveMap(
+              live({ id: REAL_TARGET, kind: 'subtask' }),
+              live({ id: ANCHOR, kind: 'epic', status: 'done' }),
+            ),
+          },
+        );
+        expect.unreachable('a finished anchor may not gain a new open subtree');
+      } catch (err) {
+        expect(err).toBeInstanceOf(PlanGrammarError);
+        expect((err as PlanGrammarError).reason).toBe('parent_terminal');
+        expect((err as Error).message).toContain('"done"');
+      }
+    });
+
+    it('accepts a proposed parent FILED in a folder — a filed card is a root', () => {
+      expect(() =>
+        validate(
+          [add('s1', { proposedFields: { kind: 'story' }, parentRef: 'folder:f1' }), under('s1')],
+          {
+            liveById: liveMap(live({ id: REAL_TARGET, kind: 'task' })),
+            folderById: new Map([['f1', { id: 'f1', projectId: PLAN_PROJECT, name: 'Inbox' }]]),
+          },
+        ),
+      ).not.toThrow();
+    });
+
+    it('refuses a temp-ref naming a `modify` or `remove` — only an `add` is a parent', () => {
+      try {
+        validate(
+          [modify('m0', { workItemId: 'wi_other', patch: { blockedByAdd: [] } }), under('m0')],
+          {
+            liveById: liveMap(
+              live({ id: REAL_TARGET, kind: 'subtask' }),
+              live({ id: 'wi_other', kind: 'story' }),
+            ),
+          },
+        );
+        expect.unreachable('a modify is not a parent');
+      } catch (err) {
+        expect(err).toBeInstanceOf(PlanRefGraphError);
+        expect((err as PlanRefGraphError).reason).toBe('dangling');
+      }
+    });
   });
 
   it('reports a parent that RESOLVES TO NOTHING as a dangling ref, not as a grammar violation', () => {

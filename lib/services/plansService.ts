@@ -67,6 +67,7 @@ import {
   collectReferencedFolderIds,
   collectReferencedWorkItemIds,
   DEFAULT_PROPOSED_KIND,
+  proposedParentAnchorIds,
   validatePlanProposals,
   type LiveFolderState,
   type LiveWorkItemState,
@@ -400,14 +401,11 @@ function validateProposal(p: ProposalInput): void {
       p.patch.targetRepositories,
       p.patch.targetRepositoryRef,
     );
-    // A `modify` may RE-PARENT the target (MOTIR-3859) — and the ONE form of
-    // that key which is refused at the boundary rather than validated is an
-    // intra-plan temp-ref. It is checked HERE, in the pure per-proposal pass,
-    // for the same reason the repo role is: the answer needs no read at all, and
-    // an author writing a plan is the right person to hear it. The FIVE checks
-    // that DO need the tree run in `assertReparentLegal`, which the append and
-    // the approve share. See `PlanItemPatch.parentRef` for why a proposal is not
-    // a legal parent for an existing card.
+    // A `modify` may RE-PARENT the target (MOTIR-3859) — onto a live row, a
+    // folder, or (AMENDMENT 18 §1, MOTIR-6050) a proposed `add` on this plan.
+    // Only a BLANK ref is refused here, in the pure per-proposal pass; the five
+    // checks that need the tree — against the projection for a proposed parent
+    // — run in `assertReparentLegal`, which the append and the approve share.
     if (typeof p.patch.parentRef === 'string') {
       const ref = p.patch.parentRef.trim();
       if (ref.length === 0) {
@@ -415,16 +413,6 @@ function validateProposal(p: ProposalInput): void {
           `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`patch.parentRef\` is blank. ` +
             'Send a work-item key / id to re-parent under it, an explicit `null` to move it to the ' +
             'project root, or omit the key to leave the parent alone.',
-        );
-      }
-      if (isTempRef(ref)) {
-        throw new InvalidProposalError(
-          `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`patch.parentRef\` names a ` +
-            'proposal in this plan. A `modify` may only re-parent onto a work item that ALREADY ' +
-            'EXISTS — every check a re-parent owes (the kind-parent matrix, same-project tenancy, ' +
-            'the no-cycle walk, the depth cap, the terminal-parent refusal) is a question about a ' +
-            'live row, and a proposal has none until approve. To land a card under one this plan ' +
-            'is adding, `add` it with that `parentRef` instead.',
         );
       }
     }
@@ -936,18 +924,29 @@ async function assertCorrectionKeepsPlanApprovable(
   });
 }
 
-/** Every real work-item id a `modify` in `nodes` proposes as a NEW parent. */
+/**
+ * Every real work-item id whose ancestor chain the re-parent gate reads: each
+ * live row a `modify` proposes as a NEW parent, and — for a `modify` moving
+ * under a proposed `add` (AMENDMENT 18 §1, MOTIR-6050) — the committed ANCHOR
+ * that `add`'s chain is created under.
+ */
 function proposedParentIds(nodes: readonly ProposalNode[]): string[] {
   return [
-    ...new Set(
-      nodes
+    ...new Set([
+      ...nodes
         .filter((n) => n.op === 'modify')
         .map((n) => n.patch?.parentRef)
         .filter(
           (ref): ref is string => typeof ref === 'string' && !isTempRef(ref) && !isFolderRef(ref),
         ),
-    ),
+      ...proposedParentAnchorIds(nodes),
+    ]),
   ];
+}
+
+/** True when some `modify` in `nodes` carries a `patch.parentRef` the gate must judge. */
+function anyReparent(nodes: readonly ProposalNode[]): boolean {
+  return nodes.some((n) => n.op === 'modify' && typeof n.patch?.parentRef === 'string');
 }
 
 /**
@@ -2958,6 +2957,7 @@ async function assertReparentsLegalAtAppend(
     );
     const ancestorIdsById = await resolveReparentAncestors(nodes, ctx, tx);
     const folderById = await resolveFolderById(nodes, ctx, tx);
+    const addsById = new Map(nodes.filter((n) => n.op === 'add').map((n) => [n.id, n]));
     for (const node of nodes) {
       // The ref must RESOLVE before the gate can judge it — the same
       // precondition `validatePlanProposals` gives `assertReparentLegal` through
@@ -2978,6 +2978,7 @@ async function assertReparentsLegalAtAppend(
         terminalStatusKeys,
         planProjectId,
         folderById,
+        addsById,
       );
     }
   });
@@ -3698,7 +3699,7 @@ export const plansService = {
             ...existing.map(toProposalNode),
             ...proposals.map(toIncomingProposalNode),
           ];
-          if (proposedParentIds(withIncoming).length > 0) {
+          if (anyReparent(withIncoming)) {
             await assertReparentsLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
           }
 
@@ -4700,6 +4701,18 @@ export const plansService = {
         assertProposalSetSelfConsistent([correctedNode]);
         if (collectReferencedFolderIds([correctedNode]).length > 0) {
           await assertFolderPlacementsLegalAtAppend([correctedNode], ctx, plan.projectId, tx);
+        }
+        // The append's RE-PARENT gate on the corrected shape, for the same reason
+        // as the folder gate above — including a move under a proposed `add`
+        // (AMENDMENT 18 §1, MOTIR-6050), judged against the plan's OTHER
+        // proposals, which is the set the corrected one will sit among.
+        if (anyReparent([correctedNode])) {
+          await assertReparentsLegalAtAppend(
+            [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
+            ctx,
+            plan.projectId,
+            tx,
+          );
         }
 
         await planItemRepository.update(planItemId, data, tx);
