@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   assertProposalSetSelfConsistent,
   collectReferencedWorkItemIds,
+  projectedParentChain,
+  proposedParentAnchorIds,
   validatePlanProposals,
   type LiveWorkItemState,
   type ProposalNode,
@@ -1186,5 +1188,57 @@ describe('validatePlanProposals — the blocked_by edge graph', () => {
         liveById: threeLive,
       }),
     ).toThrow(/MOTIR-wi_a "The wi_a card"[\s\S]*never a `<PREFIX>-<n>` key/);
+  });
+});
+
+// MOTIR-6057 — the chain walk a move under a PROPOSED parent is judged against
+// (AMENDMENT 18 §1). Pure, so its defensive arms are pinned here directly: the
+// append and the gate's own ref checks refuse these shapes before the walk is
+// reached, which is exactly why no integration path can.
+describe('projectedParentChain / proposedParentAnchorIds', () => {
+  const t = (id: string) => `${TEMP_REF_PREFIX}${id}`;
+
+  it('climbs the proposed adds to the first COMMITTED row — the anchor', () => {
+    const adds = new Map([
+      ['s', add('s', { parentRef: t('e'), proposedFields: { kind: 'story' } })],
+      ['e', add('e', { parentRef: 'wi_root', proposedFields: { kind: 'epic' } })],
+    ]);
+    const { proposedAncestors, anchorId } = projectedParentChain(t('s'), adds);
+    expect(proposedAncestors.map((n) => n.id)).toEqual(['e']);
+    expect(anchorId).toBe('wi_root');
+  });
+
+  it('stops with NO anchor when a proposed ancestor does not resolve', () => {
+    const adds = new Map([['s', add('s', { parentRef: t('gone') })]]);
+    expect(projectedParentChain(t('s'), adds)).toEqual({ proposedAncestors: [], anchorId: null });
+  });
+
+  it('has NO anchor at the project root or in a folder', () => {
+    const atRoot = new Map([['s', add('s', { parentRef: null })]]);
+    expect(projectedParentChain(t('s'), atRoot).anchorId).toBeNull();
+    const filed = new Map([['s', add('s', { parentRef: 'folder:f1' })]]);
+    expect(projectedParentChain(t('s'), filed).anchorId).toBeNull();
+  });
+
+  it('collects the anchors of every move under a proposal — and only of those', () => {
+    const items = [
+      add('s', { parentRef: 'wi_epic', proposedFields: { kind: 'story' } }),
+      add('f', { parentRef: 'folder:f1', proposedFields: { kind: 'story' } }),
+      modify('m1', { patch: { parentRef: t('s') } }),
+      modify('m2', { workItemId: 'wi_other', patch: { parentRef: t('f') } }),
+      modify('m3', { workItemId: 'wi_third', patch: { parentRef: 'wi_live' } }),
+      modify('m4', { workItemId: 'wi_fourth', patch: { title: 'Renamed' } }),
+    ];
+    expect(proposedParentAnchorIds(items)).toEqual(['wi_epic']);
+  });
+
+  it('refuses a move under a temp-ref that names no add, as a DANGLING ref, when run alone', () => {
+    try {
+      validate([modify('m', { patch: { parentRef: t('nowhere') } })]);
+      expect.unreachable('a move under nothing is refused');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanRefGraphError);
+      expect((err as PlanRefGraphError).reason).toBe('dangling');
+    }
   });
 });
