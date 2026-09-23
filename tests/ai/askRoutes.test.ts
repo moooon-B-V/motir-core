@@ -31,6 +31,16 @@ const activeCtx = { current: null as ProjectContext | null };
 
 vi.mock('@/lib/auth', () => ({ getSession: async () => session.current }));
 vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.current }));
+// The AI ceiling, passed through unless a case sets a refusal to return.
+const rateLimited = { current: null as Response | null };
+vi.mock('@/lib/rateLimit/aiGuard', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/rateLimit/aiGuard')>();
+  return {
+    ...real,
+    enforceAiRateLimit: async (...args: Parameters<typeof real.enforceAiRateLimit>) =>
+      rateLimited.current ?? real.enforceAiRateLimit(...args),
+  };
+});
 
 const submitJobMock = vi.fn(async () => ({ jobId: 'job-ask-1' }));
 const getJobMock = vi.fn();
@@ -114,6 +124,7 @@ beforeEach(async () => {
   submitJobMock.mockClear();
   submitJobMock.mockResolvedValue({ jobId: 'job-ask-1' });
   getJobMock.mockReset();
+  rateLimited.current = null;
   fx = await makeWorkItemFixture();
   session.current = { user: { id: fx.ownerId, email: 'owner@example.com', name: 'Owner' } };
   activeCtx.current = {
@@ -580,5 +591,49 @@ describe('the shipped plan-change path is untouched', () => {
     expect(thread.turns.filter((t) => t.role === 'user').every((t) => t.intent === null)).toBe(
       true,
     );
+  });
+});
+
+// MOTIR-6023 / MOTIR-6026 — the ask door addresses the conversation it is GIVEN.
+describe('POST /api/ai/ask — a NAMED session', () => {
+  it('lands a new turn on the session the body names, not a newer one', async () => {
+    const older = await openTestSession(activeCtx.current!);
+    await adminDb.planChangeSession.update({
+      where: { id: older.id },
+      data: { lastActivityAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
+    });
+
+    const res = await ask(askReq({ body: 'what is blocked?', sessionId: older.id }));
+
+    expect(res.status).toBe(200);
+    const turns = await adminDb.planChangeTurn.findMany({ where: { sessionId: older.id } });
+    expect(turns.map((t) => t.body)).toContain('what is blocked?');
+  });
+
+  it('re-runs a turn on the session the body names', async () => {
+    const res1 = await ask(askReq({ body: 'why is billing late?' }));
+    const { session: held } = (await res1.json()) as { session: { id: string } };
+    const turn = await adminDb.planChangeTurn.findFirstOrThrow({
+      where: { sessionId: held.id, role: 'user' },
+    });
+
+    const res = await ask(askReq({ turnId: turn.id, sessionId: held.id }));
+
+    expect(res.status).toBe(200);
+    expect(
+      await adminDb.planChangeTurn.count({ where: { sessionId: held.id, role: 'user' } }),
+    ).toBe(1);
+  });
+
+  it('a settle with no conversation to continue is 404, not a new session', async () => {
+    const res = await settle(settleReq({ jobId: 'job-nowhere' }));
+    expect(res.status).toBe(404);
+    expect(await adminDb.planChangeSession.count()).toBe(0);
+  });
+
+  it('the AI ceiling refuses before any turn is written', async () => {
+    rateLimited.current = new Response(JSON.stringify({ code: 'RATE_LIMITED' }), { status: 429 });
+    expect((await ask(askReq({ body: 'why?' }))).status).toBe(429);
+    expect(await adminDb.planChangeTurn.count()).toBe(0);
   });
 });

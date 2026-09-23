@@ -329,3 +329,28 @@ describe('browse is the permission', () => {
     expect(page.sessions.map((s) => s.firstTurn)).toEqual(['owner’s']);
   });
 });
+
+describe('the repository reads the overlay leans on (MOTIR-6024)', () => {
+  it('the latest conversation of a scope with nothing excluded, and a starter-less session', async () => {
+    const id = await freshSession('only one');
+    const orphan = await adminDb.planChangeSession.create({
+      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, origin: 'legacy' },
+    });
+
+    const [latest, starter, none] = await adminDb.$transaction(async (tx) => [
+      await planChangeSessionRepository.findLatestConversationInScope(
+        fx.projectId,
+        '',
+        fx.workspaceId,
+        null,
+        tx,
+      ),
+      await planChangeSessionRepository.findStarter(id, fx.workspaceId, tx),
+      await planChangeSessionRepository.findStarter(orphan.id, fx.workspaceId, tx),
+    ]);
+
+    expect(latest?.id).toBe(id);
+    expect(starter?.id).toBe(fx.ownerId);
+    expect(none).toBeNull();
+  });
+});
