@@ -1227,7 +1227,7 @@ describe('projectedParentChain / proposedParentAnchorIds', () => {
       modify('m1', { patch: { parentRef: t('s') } }),
       modify('m2', { workItemId: 'wi_other', patch: { parentRef: t('f') } }),
       modify('m3', { workItemId: 'wi_third', patch: { parentRef: 'wi_live' } }),
-      modify('m4', { workItemId: 'wi_fourth', patch: { title: 'Renamed' } }),
+      modify('m4', { workItemId: 'wi_fourth', patch: { blockedByAdd: ['wi_blocker'] } }),
     ];
     expect(proposedParentAnchorIds(items)).toEqual(['wi_epic']);
   });
