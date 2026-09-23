@@ -7,6 +7,7 @@ import {
   workItemKeySchema,
 } from '@/lib/api/v1/workItems/schema';
 import type { ReadyItemDto } from '@/lib/dto/ready';
+import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import type {
   ExecutorDto,
   WorkItemDependencyEdgesDto,
@@ -131,6 +132,8 @@ export const readyItemSchema = z.object({
   status: z.object({ key: z.string(), category: z.string() }),
   type: z.enum(READY_TYPES).nullable(),
   executor: z.enum(READY_EXECUTORS).nullable(),
+  /** How hard the leaf is to reason about (Story MOTIR-6016); `null` when unset. */
+  difficulty: z.enum(WORK_ITEM_DIFFICULTIES).nullable(),
   /**
    * The assignee's id — KEPT alongside `assignee` rather than replaced by it.
    *
@@ -175,6 +178,7 @@ export function presentReadyItem(
     status: { key: item.status.key, category: item.status.category },
     type: item.type,
     executor: item.executor,
+    difficulty: item.difficulty,
     assigneeId: item.assignee?.id ?? null,
     // From the SAME `item.assignee` the id comes from — the service already
     // read it, so this is a mapper widening and not a second query. `avatarUrl`

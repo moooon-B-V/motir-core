@@ -100,6 +100,7 @@ describe('toReadyItemDto', () => {
       inheritedSessionBranch: null,
       type: null,
       executor: null,
+      difficulty: null,
       // Not a manual row → no inline body (lean list payload).
       descriptionMd: null,
     });

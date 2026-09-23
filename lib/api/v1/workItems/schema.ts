@@ -1,12 +1,14 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod/v4';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
+import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import type {
   ExecutorDto,
   IssueDetailDto,
   WorkItemImplementationSourceDto,
   WorkItemKindDto,
   WorkItemDependencyEdgesDto,
+  WorkItemDifficultyDto,
   WorkItemPlanningSourceDto,
   WorkItemPriorityDto,
   WorkItemSummaryDto,
@@ -120,6 +122,13 @@ const _typesTotal: AssertTotal<WorkItemTypeDto, (typeof WORK_ITEM_TYPES)[number]
 
 const EXECUTORS = ['coding_agent', 'human'] as const satisfies readonly ExecutorDto[];
 const _executorsTotal: AssertTotal<ExecutorDto, (typeof EXECUTORS)[number]> = true;
+// The difficulty scale (Story MOTIR-6016) is IMPORTED rather than re-declared:
+// `lib/issues/difficulty.ts` is already the one list, asserted total against the
+// Prisma enum, and this guard pins that the wire covers every DTO member.
+const _difficultiesTotal: AssertTotal<
+  WorkItemDifficultyDto,
+  (typeof WORK_ITEM_DIFFICULTIES)[number]
+> = true;
 
 /**
  * EXPORTED (MOTIR-2986) so the MCP plan payload's `authorSource` enum is THIS
@@ -154,6 +163,7 @@ void [
   _prioritiesTotal,
   _typesTotal,
   _executorsTotal,
+  _difficultiesTotal,
   _planningTotal,
   _implementationTotal,
 ];
@@ -162,6 +172,7 @@ const kindSchema = z.enum(WORK_ITEM_KINDS);
 const prioritySchema = z.enum(WORK_ITEM_PRIORITIES);
 const typeSchema = z.enum(WORK_ITEM_TYPES);
 const executorSchema = z.enum(EXECUTORS);
+const difficultySchema = z.enum(WORK_ITEM_DIFFICULTIES);
 const planningSourceSchema = z.enum(PLANNING_SOURCES);
 const implementationSourceSchema = z.enum(IMPLEMENTATION_SOURCES);
 
@@ -547,6 +558,9 @@ export const workItemDetailSchema = workItemFieldsSchema.extend({
     }),
   ),
   executor: executorSchema.nullable(),
+  // How hard the leaf is to reason about (Story MOTIR-6016). `null` when unset,
+  // and always `null` on an epic or story.
+  difficulty: difficultySchema.nullable(),
   planningSource: planningSourceSchema.nullable(),
   planningHarness: z.string().nullable(),
   planningModel: z.string().nullable(),
@@ -788,6 +802,7 @@ export function presentWorkItemDetail(
     targetRepos: item.targetRepos,
     targetRepositories: item.targetRepositories ?? [],
     executor: item.executor,
+    difficulty: item.difficulty,
     planningSource: item.planningSource,
     planningHarness: item.planningHarness,
     planningModel: item.planningModel,
@@ -951,6 +966,9 @@ export const createWorkItemBodySchema = z
     priority: prioritySchema.optional(),
     type: typeSchema.nullish(),
     executor: executorSchema.nullish(),
+    // Leaf-only, as `type` is: a non-null value on an epic or story is refused
+    // by the service as `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422).
+    difficulty: difficultySchema.nullish(),
     storyPoints: storyPointsSchema.optional(),
     estimateMinutes: estimateMinutesSchema.optional(),
     targetRepo: z.string().nullish(),
@@ -997,6 +1015,9 @@ export const updateWorkItemBodySchema = z
     priority: prioritySchema.optional(),
     type: typeSchema.nullish(),
     executor: executorSchema.nullish(),
+    // Leaf-only, as `type` is: a non-null value on an epic or story is refused
+    // by the service as `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422).
+    difficulty: difficultySchema.nullish(),
     storyPoints: storyPointsSchema.optional(),
     estimateMinutes: estimateMinutesSchema.optional(),
     targetRepo: z.string().nullish(),

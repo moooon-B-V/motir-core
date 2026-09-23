@@ -77,6 +77,7 @@ const WORK_ITEM_DETAIL = {
     },
   ],
   executor: 'coding_agent',
+  difficulty: null,
   planningSource: 'mcp',
   planningHarness: null,
   planningModel: null,
@@ -121,6 +122,7 @@ const READY_SET = {
       status: { key: 'todo', category: 'todo' },
       type: 'code',
       executor: 'coding_agent',
+      difficulty: null,
       assigneeId: 'user_1',
       // The minimal ACTOR object every v1 collection row embeds (ADR
       // Amendment 8 Q1, MOTIR-2279). `assigneeId` is kept beside it and carries

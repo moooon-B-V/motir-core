@@ -264,6 +264,7 @@ export function v1ReadyRow(key: string, over: Record<string, unknown> = {}) {
     status: { key: 'todo', category: 'todo' },
     type: 'code',
     executor: 'coding_agent',
+    difficulty: null,
     assigneeId: null,
     assignee: null,
     descriptionExcerpt: null,
@@ -365,6 +366,7 @@ export function v1Detail(key: string, over: Record<string, unknown> = {}) {
     // seam working, not a schema that is too strict.
     targetRepositories: [],
     executor: 'coding_agent',
+    difficulty: null,
     planningSource: null,
     planningHarness: null,
     planningModel: null,

@@ -39,6 +39,7 @@ function item(over: Partial<ReadyItemDto> & { key: string; kind: WorkItemKindDto
     inheritedSessionBranch: null,
     type: null,
     executor: null,
+    difficulty: null,
     descriptionMd: null,
     ...over,
   };

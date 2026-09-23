@@ -539,6 +539,9 @@ describe('contract discipline — additive only', () => {
         'contextRefs',
         'descriptionExcerpt',
         'descriptionMd',
+        // The leaf's difficulty (MOTIR-6098) rides the ready ROW, so the
+        // dispatch superset inherits it — an additive field, like the qualifier.
+        'difficulty',
         'executor',
         'id',
         // Amendment 17 (MOTIR-2400) put the readiness qualifier on the ready

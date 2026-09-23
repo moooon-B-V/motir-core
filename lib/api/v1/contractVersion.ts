@@ -525,5 +525,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.35.0` over
  *   MOTIR-5719's `1.34.0` on the same parent branch. If the numbering has moved,
  *   RENUMBER both entries.
+ *
+ * - `1.36.0` — MOTIR-6098 adds a leaf's `difficulty` (`low` / `medium` / `high`,
+ *   nullable) to the work-item resource every single-item read and write returns,
+ *   and to the `createWorkItem` / `updateWorkItem` request bodies (`null` on a
+ *   PATCH clears it), plus `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422) when a body
+ *   would leave a non-null difficulty on an epic or story.
+ *
+ *   Additive: one new nullable response field and one new optional request field
+ *   on existing operations (§8's allowed list), and a new code for a new
+ *   condition. No declared field changes meaning. Gated on the same keys.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.35.0` at `d1ab5cf4c`, so this claims `1.36.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.35.0';
+export const V1_CONTRACT_VERSION = '1.36.0';

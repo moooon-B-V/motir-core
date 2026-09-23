@@ -766,17 +766,20 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   create_work_item: {
     // Re-pinned for MOTIR-5413: `folderId` files the new item into a folder.
+    // Re-pinned for MOTIR-6098: a leaf's `difficulty` joins the leaf fields.
     summary:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor and repo in one call.',
-    descriptionFingerprint: '94e776963f84',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty and repo in one call.',
+    descriptionFingerprint: 'caa65846168d',
   },
   update_work_item: {
     // Re-pinned for MOTIR-5585: the description now names PROJECT-repository
     // validation (MOTIR-4955) instead of the retired connected-repo rule; the
     // summary never named the rule, so it still holds.
+    // Re-pinned for MOTIR-6098: the description names `difficulty` among the
+    // patchable fields; the summary names no field list, so it still holds.
     summary:
       "Edit any subset of an item's fields, including the explanation body create cannot set.",
-    descriptionFingerprint: 'a0b37665094b',
+    descriptionFingerprint: 'e344328ca728',
   },
   transition_status: {
     summary:
@@ -871,8 +874,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '9d6435ea6cb1',
   },
   change_kind: {
+    // Re-pinned for MOTIR-6098: a leaf-only difficulty, like a type, must be
+    // cleared before a move to a container; the summary still holds.
     summary: "Reclassify a leaf's kind when it is mis-filed — subtask to task, and back.",
-    descriptionFingerprint: '7d5af7a4655e',
+    descriptionFingerprint: '57fec557359d',
   },
   archive_work_item: {
     summary: 'Soft-remove an item: it leaves the ready set and search, and stays fully restorable.',

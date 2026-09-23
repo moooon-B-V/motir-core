@@ -184,6 +184,7 @@ class FakeServer {
               status: { key: i.status, category: 'todo' },
               type: i.type,
               executor: i.executor,
+              difficulty: null,
               inheritedSessionBranch: this.inherited(i),
             }),
           );

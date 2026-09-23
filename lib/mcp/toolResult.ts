@@ -11,6 +11,7 @@ import {
   ParentCycleError,
   ReporterNotInWorkspaceError,
   TypeNotAllowedOnKindError,
+  DifficultyNotAllowedOnKindError,
   UnknownStatusError,
   ContainerRepoSetNotWritableError,
   UnknownProjectRepoRefError,
@@ -277,6 +278,10 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof ReporterNotInWorkspaceError ||
     err instanceof AssigneeNotInWorkspaceError ||
     err instanceof TypeNotAllowedOnKindError ||
+    // The difficulty twin (Story MOTIR-6016): a non-null difficulty on an epic or
+    // story — or a re-kind onto one that keeps a difficulty. Its own code, so the
+    // agent is told which field to clear rather than that TYPE is not allowed.
+    err instanceof DifficultyNotAllowedOnKindError ||
     // Target-repo validation (MOTIR-1804; project-scoped in MOTIR-1783): a
     // `targetRepo` naming a repo outside the item's PROJECT repository set on
     // create_work_item / update_work_item — a workspace-connected repo the

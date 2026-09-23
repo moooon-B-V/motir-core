@@ -30,7 +30,8 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 // CURRENT parent, and must legally parent EVERY existing child — else
 // `IllegalParentTypeError`), and the leaf-only `type`/`executor` are reconciled
 // against the new kind (converting a typed leaf into a container kind without
-// first clearing its type is rejected with `TypeNotAllowedOnKindError`); the DB
+// first clearing its type is rejected with `TypeNotAllowedOnKindError`, and one
+// that still carries a difficulty with `DifficultyNotAllowedOnKindError`); the DB
 // trigger backstops kind/depth/cycle and the 6.4 edit gate + revision row all
 // run in the service UNCHANGED. This tool only resolves the `<KEY>-<n>` key.
 //
@@ -46,7 +47,7 @@ const inputSchema = {
     .describe(
       'The new work item kind. Must keep the kind-parent matrix legal for both the ' +
         "item's current parent AND all of its children. (This is the hierarchy KIND, " +
-        'NOT the work type — use update_work_item to change type/executor.)',
+        'NOT the work type — use update_work_item to change type/executor/difficulty.)',
     ),
 };
 
@@ -89,9 +90,10 @@ export function registerChangeKind(server: McpServer, resolveContext: McpContext
         'Reclassify a work item (by identifier, e.g. "ACME-7"): change its KIND between story, ' +
         'task, bug, and subtask. The item keeps its identifier, history, comments, and links. ' +
         'The new kind must stay legal under the current parent and over all existing children, ' +
-        'and a container kind cannot keep a leaf-only work type — same rules and access checks ' +
-        'as the UI. This changes the hierarchy KIND, not the work type (use update_work_item for ' +
-        'type/executor). Epic is not an available target.',
+        'and a container kind cannot keep a leaf-only work type or difficulty — same rules and ' +
+        'access checks as the UI (clear them first with update_work_item). This changes the ' +
+        'hierarchy KIND, not the work type (use update_work_item for type/executor/difficulty). ' +
+        'Epic is not an available target.',
       inputSchema,
     },
     async (args, extra) => runChangeKind(args, resolveContext(extra)),
