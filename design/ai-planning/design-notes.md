@@ -4429,6 +4429,15 @@ Four decisions inside that table, each of which could have gone the other way:
   say is **who did it** — this plan. That is the whole reason (a) is wrong for this cell, in one
   sentence.
 
+> **⚠️ AMENDMENT (MOTIR-6119) — the `modify`, n = 0 row NAMES the fields it moves.** The three cells
+> above ended in a fixed _"only the description and the explanation"_, which is false for a plan that
+> renames a card (the title moved) or edits only the explanation. The line now reads the SAME
+> `changedFields` set the main column's markers read, minus the settable rail rows: `railChangeNone*`
+> ends _"— only {fields}."_ (`{fields}` is the changed main-column fields' `planReview.field_*` labels,
+> as a locale-aware list — _title and description_ / _标题和描述_), and a `modify` that moves no field
+> at all reads the new `railChangeNothing*` keys — _"This plan changes none of these fields."_ — in the
+> same three tenses. Both catalogs, as ever.
+
 ### 16.6 The DECIDED axis, cell by cell
 
 The axis is an enum and the enum is the checklist. Every cell is DRAWN or is named here with its
