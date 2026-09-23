@@ -11,6 +11,7 @@ import type {
 import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { replanOwedOf } from '@/lib/approvalGates/decisionRecord';
 import type { AwaitingGateRow, RecordGateRow } from '@/lib/repositories/approvalGateRepository';
+import { requireGateWorkItem } from '@/lib/approvalGates/gateCard';
 
 // Prisma row → the wire DTO the decide control / Approvals tab reads (Story
 // MOTIR-4778 · Subtask MOTIR-4788, widened by MOTIR-4912 with the ADR §6a AUDIT
@@ -118,14 +119,7 @@ export function toApprovalRecordDecidedRowDto(
     decisionSource: row.decisionSource,
     subjectVersion: row.subjectVersion,
     waitingSince: row.createdAt.toISOString(),
-    workItem: {
-      id: row.workItem.id,
-      key: row.workItem.key,
-      identifier: row.workItem.identifier,
-      title: row.workItem.title,
-      kind: row.workItem.kind,
-      type: row.workItem.type,
-    },
+    workItem: pickRowCard(requireGateWorkItem(row, 'toApprovalRecordDecidedRowDto')),
     subject,
     chosenOption: (row.chosenOption as ChosenOptionDTO | null) ?? null,
     confirmedRecord: (row.confirmedRecord as ConfirmedRecordDTO | null) ?? null,
@@ -146,14 +140,28 @@ export function toApprovalQueueRowDto(
     canDecide,
     routedToName,
     waitingSince: row.createdAt.toISOString(),
-    workItem: {
-      id: row.workItem.id,
-      key: row.workItem.key,
-      identifier: row.workItem.identifier,
-      title: row.workItem.title,
-      kind: row.workItem.kind,
-      type: row.workItem.type,
-    },
+    workItem: pickRowCard(requireGateWorkItem(row, 'toApprovalQueueRowDto')),
     subject,
+  };
+}
+
+/** The six card fields the queue and record rows carry. */
+function pickRowCard<
+  T extends {
+    id: string;
+    key: number;
+    identifier: string;
+    title: string;
+    kind: unknown;
+    type: unknown;
+  },
+>(card: T) {
+  return {
+    id: card.id,
+    key: card.key,
+    identifier: card.identifier,
+    title: card.title,
+    kind: card.kind as T['kind'],
+    type: card.type as T['type'],
   };
 }

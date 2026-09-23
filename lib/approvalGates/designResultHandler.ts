@@ -9,6 +9,7 @@ import { routingTargetId } from '@/lib/approvalGates/routing';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { requireGateCard } from './gateCard';
 
 // THE `design_result` HANDLER — the registry's first and, in this build, only
 // member (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
@@ -174,7 +175,7 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
    */
   async approve({ gate, ctx, tx, resolvedStatusKey }: GateEffectArgs): Promise<GateEffect> {
     const openPullRequests = await workItemDeliveryRepository.countOpenByWorkItem(
-      gate.workItemId,
+      requireGateCard(gate, 'designResultHandler'),
       tx,
     );
     if (openPullRequests > 0) {
@@ -193,9 +194,15 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
     // decision AFTER the effect — so without it the approval-gate guard would
     // refuse the very move this approval exists to make (ADR §6d AMENDMENT,
     // rule 5). It exempts THIS gate only.
-    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
-      decidingGateId: gate.id,
-    });
+    await workItemsService.applyStatusTransition(
+      requireGateCard(gate, 'designResultHandler'),
+      resolvedStatusKey,
+      ctx,
+      tx,
+      {
+        decidingGateId: gate.id,
+      },
+    );
     return { statusWritten: resolvedStatusKey };
   },
 

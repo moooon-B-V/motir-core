@@ -7543,7 +7543,8 @@
         "pull_request_merge": "Pull-request merge",
         "acceptance_result": "Acceptance video",
         "decision_choice": "Choice",
-        "decision_confirmation": "Confirm decision"
+        "decision_confirmation": "Confirm decision",
+        "plan_approval": "Plan"
       },
       "reviewRow": "Review {key} — {sentence}",
       "pullRequest": {

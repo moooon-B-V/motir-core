@@ -357,8 +357,8 @@ describe('the repository reads take `tx` and hold under RLS', () => {
       await approvalGateRepository.findRecordsAwaiting(scope, { skip: 0, take: 50 }, tx),
       await approvalGateRepository.findRecordsDecided(scope, { skip: 0, take: 50 }, tx),
     ]);
-    expect(awaiting.map((r) => r.workItem.title)).toEqual(['awaiting-me']);
-    expect(decided.map((r) => r.workItem.title)).toEqual(['changes-by-me', 'approved-by-me']);
+    expect(awaiting.map((r) => r.workItem!.title)).toEqual(['awaiting-me']);
+    expect(decided.map((r) => r.workItem!.title)).toEqual(['changes-by-me', 'approved-by-me']);
   });
 
   it('as `motir_app` bound to ANOTHER workspace, a full-view read of this project returns nothing', async () => {

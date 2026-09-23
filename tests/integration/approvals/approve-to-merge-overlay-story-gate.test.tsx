@@ -328,7 +328,10 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, at BOTH ends, enumerated FROM 
   // fails here rather than drawing an empty port for somebody.
   expect(APPROVAL_GATE_KINDS.length).toBeGreaterThan(UNREGISTERED_GATE_KINDS.length);
 
-  for (const kind of APPROVAL_GATE_KINDS) {
+  // `plan_approval` is EXCLUDED: its gate belongs to NO work item (the CHECK
+  // `approval_gate_work_item_iff_not_plan` refuses the card this loop gives it), and
+  // the overlay address is not extended to it (ADR `approval-gates.md` §11.5b).
+  for (const kind of APPROVAL_GATE_KINDS.filter((k) => k !== 'plan_approval')) {
     const expected =
       kind === 'design_result'
         ? 'design port'

@@ -115,7 +115,7 @@ async function readSubject(
       // this port is the one place the queue's reader meets those pull requests.
       if (gate.state === 'awaiting') {
         const merge = await approvalGatesService.getForWorkItem(
-          { workItemId: gate.workItemId, kind: 'pull_request_approval' },
+          { workItemId: item.id, kind: 'pull_request_approval' },
           ctx,
         );
         if (merge.gate?.state === 'awaiting') {
@@ -123,7 +123,7 @@ async function readSubject(
         }
       }
       const { evidence, filesKept } = await designEvidenceService.getForGateSubject(
-        { workItemId: gate.workItemId, subjectId: gate.subjectId },
+        { workItemId: item.id, subjectId: gate.subjectId },
         ctx,
       );
       return evidence
@@ -150,7 +150,7 @@ async function readSubject(
       // one press answers both, so the reader must see what that press merges.
       if (gate.state === 'awaiting') {
         const merge = await approvalGatesService.getForWorkItem(
-          { workItemId: gate.workItemId, kind: 'pull_request_approval' },
+          { workItemId: item.id, kind: 'pull_request_approval' },
           ctx,
         );
         if (merge.gate?.state === 'awaiting') {
@@ -158,7 +158,7 @@ async function readSubject(
         }
       }
       const evidence = await acceptanceEvidenceService.getForGateSubject(
-        { workItemId: gate.workItemId, subjectId: gate.subjectId },
+        { workItemId: item.id, subjectId: gate.subjectId },
         ctx,
       );
       return evidence
@@ -178,10 +178,10 @@ async function readSubject(
     case 'decision_approval': {
       const [merge, document] = await Promise.all([
         approvalGatesService.getForWorkItem(
-          { workItemId: gate.workItemId, kind: 'pull_request_approval' },
+          { workItemId: item.id, kind: 'pull_request_approval' },
           ctx,
         ),
-        decisionDocumentService.readViewForWorkItem(gate.workItemId, ctx).catch(() => null),
+        decisionDocumentService.readViewForWorkItem(item.id, ctx).catch(() => null),
       ]);
       const block = await readDevelopmentBlock(gate, item, ctx, merge.gate);
       return block.state === 'resolved' && block.kind === 'pull_request_approval'
@@ -192,14 +192,14 @@ async function readSubject(
     // item's own body — which IS the subject. A body that no longer parses has nothing
     // left to pick from, so the port answers `gone`, exactly as a vanished design does.
     case 'decision_choice': {
-      const choice = await choiceGateService.readPort(gate.workItemId, ctx);
+      const choice = await choiceGateService.readPort(item.id, ctx);
       return choice ? { state: 'resolved', kind: 'decision_choice', choice } : { state: 'gone' };
     }
     // THE CONFIRM PORT (Story MOTIR-5871 · MOTIR-5954): the decision's four sections,
     // parsed from the work item's own body — which IS the subject — with the record it
     // would stamp. A body that no longer parses is `gone`, as a choice's is.
     case 'decision_confirmation': {
-      const confirm = await decisionConfirmationGateService.readPort(gate.workItemId, ctx);
+      const confirm = await decisionConfirmationGateService.readPort(item.id, ctx);
       return confirm
         ? { state: 'resolved', kind: 'decision_confirmation', confirm }
         : { state: 'gone' };
@@ -250,30 +250,27 @@ async function readDevelopmentBlock(
     acceptanceEvidence,
     acceptanceRead,
   ] = await Promise.all([
-    workItemsService.listLinkedPullRequests(gate.workItemId, ctx),
-    workItemsService.getDeliveryView(gate.workItemId, item.targetRepos, ctx),
-    howToTestService.getForWorkItem(gate.workItemId, ctx),
-    designEvidenceService.getCurrentForWorkItem(gate.workItemId, ctx),
+    workItemsService.listLinkedPullRequests(item.id, ctx),
+    workItemsService.getDeliveryView(item.id, item.targetRepos, ctx),
+    howToTestService.getForWorkItem(item.id, ctx),
+    designEvidenceService.getCurrentForWorkItem(item.id, ctx),
     // ⚠️ READ FOR AN AWAITING GATE TOO (MOTIR-5802 · MOTIR-5806). The RE-ASKED gate is
     // awaiting, and its members are what carry the row's verb — *Queue again* /
     // *Retry merge*, whose press decides that very gate. The item page's late stack
     // reads both for the same reason, and `approval-gate-route.test.ts` COMPARES them.
     membersGate.state === 'approved' || membersGate.state === 'awaiting'
       ? pullRequestMergeService.listApprovalMembers(
-          { workItemId: gate.workItemId, approvalGateId: membersGate.id },
+          { workItemId: item.id, approvalGateId: membersGate.id },
           ctx,
         )
       : Promise.resolve([]),
     // ⚠️ `motir fix` BELONGS IN THE OVERLAY TOO (MOTIR-5806; § 28 panel 7). The page
     // has offered it since MOTIR-5721; the overlay is where most approvals are
     // actually decided, and a person deciding there saw only the approve.
-    workItemRepairService.getRepairView(gate.workItemId, ctx),
+    workItemRepairService.getRepairView(item.id, ctx),
     // A story run's receipt and its gate (MOTIR-5790) — the subject when acceptance leads.
-    acceptanceEvidenceService.getCurrentForStory(gate.workItemId, ctx),
-    approvalGatesService.getForWorkItem(
-      { workItemId: gate.workItemId, kind: 'acceptance_result' },
-      ctx,
-    ),
+    acceptanceEvidenceService.getCurrentForStory(item.id, ctx),
+    approvalGatesService.getForWorkItem({ workItemId: item.id, kind: 'acceptance_result' }, ctx),
   ]);
   if (deliveryView.deliveries.length === 0) return { state: 'gone' };
   return {

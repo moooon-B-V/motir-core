@@ -7539,7 +7539,8 @@
         "pull_request_merge": "合并请求合并",
         "acceptance_result": "验收视频",
         "decision_choice": "选择",
-        "decision_confirmation": "确认决策"
+        "decision_confirmation": "确认决策",
+        "plan_approval": "计划"
       },
       "reviewRow": "查看 {key} — {sentence}",
       "pullRequest": {

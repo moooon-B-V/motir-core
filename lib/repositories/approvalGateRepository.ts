@@ -294,7 +294,10 @@ export const approvalGateRepository = {
       orderBy: { decidedAt: 'desc' },
     });
     const head = new Map<string, ApprovalGate>();
-    for (const row of rows) if (!head.has(row.workItemId)) head.set(row.workItemId, row);
+    // Every row matched `workItemId IN (…)`, so none is card-less; the guard narrows the type.
+    for (const row of rows) {
+      if (row.workItemId !== null && !head.has(row.workItemId)) head.set(row.workItemId, row);
+    }
     return head;
   },
 

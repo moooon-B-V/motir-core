@@ -238,7 +238,7 @@ async function decide(gateId: string, decision = 'approve') {
   // surface does, through the frame's own read, as the signed-in person.
   const row = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gateId } });
   const { stamp } = await approvalGatesService.getForWorkItem(
-    { workItemId: row.workItemId, kind: row.kind },
+    { workItemId: row.workItemId!, kind: row.kind },
     signedIn.current!,
   );
   const res = await decideRoute(

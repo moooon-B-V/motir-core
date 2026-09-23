@@ -15,6 +15,7 @@ import {
 } from '@/lib/approvalGates/errors';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { requireGateCard } from './gateCard';
 
 // THE `decision_choice` HANDLER (Story MOTIR-4914 · Subtask MOTIR-5891; ADR
 // `docs/decisions/approval-gates.md` §1's MOTIR-5887 amendment, the handler row).
@@ -99,9 +100,15 @@ export const decisionChoiceGateHandler: GateHandler<ParsedChoice> = {
     // place the service is needed, so it is resolved there — the precedent is
     // `plansService`'s lazy imports.
     const { workItemsService } = await import('@/lib/services/workItemsService');
-    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
-      decidingGateId: gate.id,
-    });
+    await workItemsService.applyStatusTransition(
+      requireGateCard(gate, 'decisionChoiceHandler'),
+      resolvedStatusKey,
+      ctx,
+      tx,
+      {
+        decidingGateId: gate.id,
+      },
+    );
     return { statusWritten: resolvedStatusKey, chosenOption };
   },
 

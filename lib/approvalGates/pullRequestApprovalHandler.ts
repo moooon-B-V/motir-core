@@ -16,6 +16,7 @@ import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler'
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { designResultHoldsMerge } from '@/lib/services/mergeGates';
 import { ApprovalGatePrimaryPendingError } from '@/lib/approvalGates/errors';
+import { requireGateCard } from './gateCard';
 
 // THE `pull_request_approval` HANDLER — the registry's THIRD member (Story MOTIR-4909 ·
 // MOTIR-5481; ADR docs/decisions/approval-gates.md §8's amendment, decisions 2 and 6).
@@ -151,22 +152,37 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
     // sent back, or approved for a result since superseded all hold (`designHoldsMerge`).
     // The design's own press decides the design first and this gate after, so it never
     // meets the refusal; Request changes is never refused.
-    if (await designResultHoldsMerge(gate.workItemId, tx)) {
-      throw new ApprovalGatePrimaryPendingError(gate.workItemId, 'design');
+    if (await designResultHoldsMerge(requireGateCard(gate, 'pullRequestApprovalHandler'), tx)) {
+      throw new ApprovalGatePrimaryPendingError(
+        requireGateCard(gate, 'pullRequestApprovalHandler'),
+        'design',
+      );
     }
     // ⚠️ …AND THE DECISION, the other primary (Story MOTIR-4907 · MOTIR-5677;
     // `approval-gates.md` §8's FIFTH AMENDMENT, clause 5), refused with the same tag so
     // the two primaries cannot drift into two differently-worded rules (MOTIR-5785).
-    const item = await workItemRepository.findById(gate.workItemId, tx);
+    const item = await workItemRepository.findById(
+      requireGateCard(gate, 'pullRequestApprovalHandler'),
+      tx,
+    );
     if (item && (await decisionHoldsMerge(item, tx))) {
-      throw new ApprovalGatePrimaryPendingError(gate.workItemId, 'decision');
+      throw new ApprovalGatePrimaryPendingError(
+        requireGateCard(gate, 'pullRequestApprovalHandler'),
+        'decision',
+      );
     }
     if (resolvedStatusKey !== PULL_REQUEST_APPROVAL_TARGET.key) {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
-    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
-      decidingGateId: gate.id,
-    });
+    await workItemsService.applyStatusTransition(
+      requireGateCard(gate, 'pullRequestApprovalHandler'),
+      resolvedStatusKey,
+      ctx,
+      tx,
+      {
+        decidingGateId: gate.id,
+      },
+    );
     return { statusWritten: resolvedStatusKey };
   },
 

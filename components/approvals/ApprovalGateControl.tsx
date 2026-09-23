@@ -709,6 +709,11 @@ export function useRefusalCopy(
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
       headline = t('syncedActorMismatch.title');
       break;
+    // A card path met a card-less gate (MOTIR-6032) — a defect, never a refusal a
+    // person can act on, so it reads as the unexpected refusal does.
+    case 'APPROVAL_GATE_HAS_NO_CARD':
+      headline = t('unexpected.title');
+      break;
     case 'MERGE_CHECKS_NOT_GREEN':
       headline = t('mergeChecksNotGreen.title');
       break;
@@ -881,6 +886,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'decidedImmutable';
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
       return 'syncedActorMismatch';
+    case 'APPROVAL_GATE_HAS_NO_CARD':
+      return 'unexpected';
     case 'MERGE_CHECKS_NOT_GREEN':
       return 'mergeChecksNotGreen';
     case 'MERGE_CONFLICT':

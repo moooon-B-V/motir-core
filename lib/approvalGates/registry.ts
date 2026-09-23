@@ -94,6 +94,7 @@ export type RegisteredGateKind =
  * | kind                    | owner                                              |
  * | ----------------------- | -------------------------------------------------- |
  * | `pull_request_merge`    | nobody — RETIRED (MOTIR-5616)                      |
+ * | `plan_approval`         | MOTIR-6035 — NOT BUILT YET (Story MOTIR-6012)      |
  *
  * ⚠️ THE ONE HOLE LEFT IS NOT A NOT-YET. `decision_approval` was the other, a kind
  * NOT BUILT YET with a card that would build it — and MOTIR-5676 built it.
@@ -114,6 +115,9 @@ export type UnregisteredGateKind = Exclude<ApprovalGateKind, RegisteredGateKind>
  */
 export const UNREGISTERED_GATE_KINDS = [
   'pull_request_merge',
+  // NOT YET, not a hole: the PLAN-APPROVAL kind (ADR `approval-gates.md` §11). Its
+  // schema ships first (MOTIR-6032) and MOTIR-6035 promotes it with its handler.
+  'plan_approval',
 ] as const satisfies readonly UnregisteredGateKind[];
 
 // TOTALITY, asserted at the type level. `Exclude` gives us the complement of the

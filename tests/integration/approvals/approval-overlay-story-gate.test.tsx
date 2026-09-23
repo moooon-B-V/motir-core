@@ -354,7 +354,10 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, enumerated FROM the constant',
   // changes by itself — it fails a test rather than changing behaviour silently.
   expect(UNREGISTERED_GATE_KINDS.length).toBeGreaterThan(0);
 
-  for (const kind of UNREGISTERED_GATE_KINDS) {
+  // `plan_approval` is EXCLUDED, and not by oversight: its gate belongs to NO work item
+  // (the CHECK `approval_gate_work_item_iff_not_plan` refuses the card this loop gives
+  // it) and the overlay address is not extended to it (ADR `approval-gates.md` §11.5b).
+  for (const kind of UNREGISTERED_GATE_KINDS.filter((k) => k !== 'plan_approval')) {
     it(`${kind}: the route answers and the overlay draws "not built yet", with no frame`, async () => {
       const card = await designCard();
       await withWorkspaceContext(fx.ctx, (tx) =>

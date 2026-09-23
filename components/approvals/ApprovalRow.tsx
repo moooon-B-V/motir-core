@@ -95,6 +95,9 @@ const SENTENCE_KEY: Record<ApprovalGateKindDTO, SentenceKey> = {
   decision_confirmation: 'decision_confirmation',
   // Superseded everywhere (MOTIR-5614): a row reached by URL is one this build does not draw.
   pull_request_merge: 'other',
+  // Not raised by this build yet (MOTIR-6032 ships the kind UNREGISTERED); its row is
+  // MOTIR-6037's to draw, from MOTIR-6033's design.
+  plan_approval: 'other',
 };
 
 type SentenceKey =

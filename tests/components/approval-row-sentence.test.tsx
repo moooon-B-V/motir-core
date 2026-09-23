@@ -32,7 +32,8 @@ const TITLE = { en: 'Billing export runs nightly', zh: '账单导出每晚运行
 const HOST_VOCABULARY = /pull request|\bPR\b|merge request|#\d+|拉取请求|合并请求/i;
 
 const SUBJECTS: Record<
-  Exclude<ApprovalGateKindDTO, 'pull_request_merge'>,
+  // `plan_approval` has no subject summary yet — its row is MOTIR-6037's (Story MOTIR-6012).
+  Exclude<ApprovalGateKindDTO, 'pull_request_merge' | 'plan_approval'>,
   ApprovalGateSubjectSummaryDTO
 > = {
   design_result: {

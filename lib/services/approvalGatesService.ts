@@ -69,6 +69,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { heldMoves } from '@/lib/approvalGates/heldMoves';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { CANCELLED_STATUS_KEY } from '@/lib/approvalGates/heldMoves';
+import { requireGateCard, requireGateWorkItem } from '@/lib/approvalGates/gateCard';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md).
@@ -708,7 +709,10 @@ export const approvalGatesService = {
         row.state === 'awaiting'
           ? {
               subjectVersion: row.subjectVersion,
-              companionSubjectVersion: await companionSubjectVersion(row, tx),
+              companionSubjectVersion: await companionSubjectVersion(
+                { ...row, workItemId: requireGateCard(row, 'approvalGatesService.getForWorkItem') },
+                tx,
+              ),
               descriptionMd: item.descriptionMd,
             }
           : null;
@@ -1040,7 +1044,9 @@ export const approvalGatesService = {
       // 25-row queue that named its recipients one at a time would be 25 round
       // trips to draw one list. The ids are §2's routing rule read off each row,
       // never the session: see `ApprovalQueueRowDto.routedToName`.
-      const routedToIds = rows.map((row) => routingTargetId(row.workItem));
+      const routedToIds = rows.map((row) =>
+        routingTargetId(requireGateWorkItem(row, 'approvalGatesService.listAwaitingMe')),
+      );
       const namesById = new Map(
         (await userRepository.findByIds([...new Set(routedToIds.filter((id) => id !== null))], tx))
           .map((user) => [user.id, routedToDisplayName(user)] as const)
@@ -1101,7 +1107,13 @@ export const approvalGatesService = {
       if (rows.length === 0) return new Map();
       const held = await projectAccessService.getPermissions(input.projectId, ctx, tx);
       return foldPendingDecisions(
-        rows.map((row) => ({ ...row, kind: row.kind as ApprovalGateKindDTO })),
+        rows.map((row) => ({
+          ...row,
+          kind: row.kind as ApprovalGateKindDTO,
+          // Every row matched the work items asked about, so none is card-less.
+          workItemId: requireGateCard(row, 'approvalGatesService.pendingDecisionsForItems'),
+          workItem: requireGateWorkItem(row, 'approvalGatesService.pendingDecisionsForItems'),
+        })),
         ctx.userId,
         (kind) => !isRegisteredGateKind(kind) || held.has(handlerFor(kind).permission),
       );
@@ -1220,9 +1232,13 @@ export const approvalGatesService = {
       const usersById = new Map<string | null, Parameters<typeof routedToDisplayName>[0]>(
         (
           await userRepository.findByIds(
-            [...new Set(awaitingRows.map((row) => routingTargetId(row.workItem)))].filter(
-              (id): id is string => id !== null,
-            ),
+            [
+              ...new Set(
+                awaitingRows.map((row) =>
+                  routingTargetId(requireGateWorkItem(row, 'approvalGatesService.approvalsRoom')),
+                ),
+              ),
+            ].filter((id): id is string => id !== null),
             tx,
           )
         ).map((user) => [user.id, user] as const),
@@ -1234,14 +1250,21 @@ export const approvalGatesService = {
             row,
             subjects.get(row.id) ?? null,
             await canDecideGate(
-              { ...row.workItem, projectId: ctx.projectId },
+              {
+                ...requireGateWorkItem(row, 'approvalGatesService.approvalsRoom'),
+                projectId: ctx.projectId,
+              },
               row.kind,
               ctx,
               tx,
               held,
             ),
             // A routed user whose row has gone resolves to nothing, as on the item page.
-            routedToDisplayName(usersById.get(routingTargetId(row.workItem)) ?? null),
+            routedToDisplayName(
+              usersById.get(
+                routingTargetId(requireGateWorkItem(row, 'approvalGatesService.approvalsRoom')),
+              ) ?? null,
+            ),
           ),
         ),
       );
@@ -1384,7 +1407,10 @@ export const approvalGatesService = {
     const preread = await withWorkspaceContext(ctx, async (tx) => {
       const gate = await approvalGateRepository.findById(input.gateId, tx);
       if (!gate) return null;
-      const item = await workItemRepository.findById(gate.workItemId, tx);
+      const item = await workItemRepository.findById(
+        requireGateCard(gate, 'approvalGatesService.decide'),
+        tx,
+      );
       return item ? { gate, item } : null;
     });
     // Missing, or hidden by the workspace RLS policy. Indistinguishable on

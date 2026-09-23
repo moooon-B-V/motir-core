@@ -44,6 +44,10 @@ export const APPROVAL_GATE_KINDS = [
   'acceptance_result',
   'decision_choice',
   'decision_confirmation',
+  // A WIRE SPELLING, never an address this build opens: a plan gate is decided on the
+  // planning surface, and the overlay address is NOT extended to it (ADR
+  // `approval-gates.md` §11.5b). Listed so the tuple stays total over the enum.
+  'plan_approval',
 ] as const satisfies readonly ApprovalGateKindDTO[];
 
 // Exhaustiveness: a member added to `ApprovalGateKindDTO` and not to the tuple

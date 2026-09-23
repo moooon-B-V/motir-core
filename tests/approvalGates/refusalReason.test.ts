@@ -131,8 +131,8 @@ describe('what the rule does NOT touch', () => {
     const gate = await awaitingGate('pull_request_approval');
     // Where a card waiting on this gate stands: its approval writes `approved`, which the
     // workflow reaches from review, never from To do.
-    await workItemsService.updateStatus(gate.workItemId, 'in_progress', fx.ctx);
-    await workItemsService.updateStatus(gate.workItemId, 'in_review', fx.ctx);
+    await workItemsService.updateStatus(gate.workItemId!, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(gate.workItemId!, 'in_review', fx.ctx);
     const decided = await approvalGatesService.decide(
       { gateId: gate.id, decision: 'approve', source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
       fx.ctx,

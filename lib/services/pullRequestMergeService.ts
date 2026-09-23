@@ -62,6 +62,7 @@ import {
   type DecideGateResult,
 } from './approvalGatesService';
 import { settleAfterPrimaryApproval } from './ciPromotion';
+import { requireGateCard } from '@/lib/approvalGates/gateCard';
 
 // THE MERGE ENTRY POINT (Story MOTIR-4882 · MOTIR-5517 · MOTIR-5613; `approval-gates.md`
 // §8's SECOND AMENDMENT, decisions 4 and 6) — the one path by which an approved card's
@@ -146,7 +147,10 @@ async function checkMember(
   return withWorkspaceContext(ctx, async (tx) => {
     const gate = await approvalGateRepository.findById(approvalGateId, tx);
     if (!gate || gate.kind !== APPROVAL_KIND) throw new ApprovalGateNotFoundError(approvalGateId);
-    const item = await workItemRepository.findById(gate.workItemId, tx);
+    const item = await workItemRepository.findById(
+      requireGateCard(gate, 'pullRequestMergeService'),
+      tx,
+    );
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new ApprovalGateNotFoundError(approvalGateId);
     }
@@ -181,7 +185,7 @@ async function checkMember(
     // The member must still be one of THIS card's deliveries — a pull request unlinked
     // after the approval is no longer covered by it.
     const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(
-      gate.workItemId,
+      requireGateCard(gate, 'pullRequestMergeService'),
       tx,
     );
     const delivery = deliveries.find(
@@ -206,7 +210,7 @@ async function checkMember(
       approvalDecidedAt: gate.decidedAt,
       target: {
         pullRequestId: pr.id,
-        workItemId: gate.workItemId,
+        workItemId: requireGateCard(gate, 'pullRequestMergeService'),
         provider: pr.repo.provider as GitProviderId,
         installationId: pr.repo.installation.installationId,
         owner: pr.repo.owner,
@@ -523,7 +527,10 @@ export const pullRequestMergeService = {
         throw new ApprovalGateNotFoundError(input.approvalGateId);
       }
       const delivered = (
-        await workItemDeliveryRepository.listByWorkItemWithChecks(approval.workItemId, tx)
+        await workItemDeliveryRepository.listByWorkItemWithChecks(
+          requireGateCard(approval, 'pullRequestMergeService'),
+          tx,
+        )
       ).find((row) => row.pullRequest.id === input.pullRequestId);
       if (!delivered) return null;
       // The member is matched by `owner/name#number`, so a pull request whose head has moved
@@ -554,7 +561,7 @@ export const pullRequestMergeService = {
       const headNow = liveRowsAtLatestSha([...delivered.pullRequest.checkRuns])[0]?.commitSha;
       return {
         member,
-        workItemId: approval.workItemId,
+        workItemId: requireGateCard(approval, 'pullRequestMergeService'),
         approvalDecidedAt: approval.decidedAt,
         standingRefusal:
           refusal &&
@@ -768,9 +775,15 @@ async function refuseAtPressOnConflict(gateId: string, ctx: ServiceContext): Pro
     // A PRIMARY question still awaiting (a design, a decision, an acceptance) refuses this
     // press by name in the decide door (MOTIR-5785) — and that refusal promises the host
     // was never called, so nothing here asks it either.
-    const awaiting = await approvalGateRepository.findAwaitingByWorkItem(gate.workItemId, tx);
+    const awaiting = await approvalGateRepository.findAwaitingByWorkItem(
+      requireGateCard(gate, 'pullRequestMergeService'),
+      tx,
+    );
     if (awaiting.some((row) => isPrimaryKind(row.kind))) return null;
-    return workItemDeliveryRepository.listByWorkItemWithChecks(gate.workItemId, tx);
+    return workItemDeliveryRepository.listByWorkItemWithChecks(
+      requireGateCard(gate, 'pullRequestMergeService'),
+      tx,
+    );
   });
   if (!target) return;
 
@@ -890,9 +903,12 @@ async function approvePrimaryAndMerge(
   const approval = await approvalGatesService.decide({ ...input, decision: 'approve' }, ctx);
 
   const merge = await withWorkspaceContext(ctx, async (tx) =>
-    (await approvalGateRepository.findAwaitingByWorkItem(approval.gate.workItemId, tx)).find(
-      (row) => row.kind === APPROVAL_KIND,
-    ),
+    (
+      await approvalGateRepository.findAwaitingByWorkItem(
+        requireGateCard(approval.gate, 'pullRequestMergeService'),
+        tx,
+      )
+    ).find((row) => row.kind === APPROVAL_KIND),
   );
   if (!merge) {
     // ⚠️ NO COMPANION — THE MERGE IS HELD, AND IT MAY ALREADY BE OWED (Bug MOTIR-5762;
@@ -901,7 +917,10 @@ async function approvePrimaryAndMerge(
     // raised, so a primary approved over a set that is ALREADY green would wait for a
     // verdict that never comes: settle the card now, the same way a green verdict would. A
     // request for changes never reaches here.
-    await settleAfterPrimaryApproval(approval.gate.workItemId, ctx);
+    await settleAfterPrimaryApproval(
+      requireGateCard(approval.gate, 'pullRequestMergeService'),
+      ctx,
+    );
     return { approval, members: [] };
   }
   // ⚠️ ONLY THE MERGE GATE THE READER WAS SHOWN (Story MOTIR-5232 · MOTIR-5234). The

@@ -88,6 +88,7 @@ export type GateRefusal =
   | { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }
   | { tag: 'APPROVAL_GATE_DECIDED_IMMUTABLE' }
   | { tag: 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH' }
+  | { tag: 'APPROVAL_GATE_HAS_NO_CARD' }
   // ── THE MERGE REFUSALS (MOTIR-5512; `approval-gates.md` §4, second amendment
   // decision 8) — the host said no to the merge an approval performs.
   | { tag: 'MERGE_CHECKS_NOT_GREEN' }
@@ -195,6 +196,7 @@ export function toGateRefusal(
     case 'APPROVAL_GATE_ALREADY_AWAITING':
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
+    case 'APPROVAL_GATE_HAS_NO_CARD':
       return { tag: code };
     // Only the conflict carries where it was found and which members (MOTIR-5915) — the
     // tags above keep their bare shape.

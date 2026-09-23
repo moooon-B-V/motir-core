@@ -4542,6 +4542,12 @@ enum ApprovalGateKind {
   /// `approval-gates.md` §1, the MOTIR-5952 amendment). No pull request — both
   /// verbs are TERMINAL (Workflow A): Confirm writes `done`, Overturn `cancelled`.
   decision_confirmation
+  /// A person APPROVES — or DECLINES — a PLAN the planner wrote for them (Story
+  /// MOTIR-6012; ADR `approval-gates.md` §11). The FIRST kind whose gate belongs
+  /// to NO work item: `workItemId` is NULL on this kind and on no other
+  /// (`approval_gate_work_item_iff_not_plan`), and `subjectId` is the `Plan.id`.
+  /// UNREGISTERED until its handler lands (MOTIR-6035).
+  plan_approval
 
   @@map("approval_gate_kind")
 }
@@ -4561,6 +4567,11 @@ enum ApprovalGateState {
   /// `approval-gates.md` §1's MOTIR-5952 amendment, point 6). TERMINAL and carries a
   /// REQUIRED note; never overloads `changes_requested`, which is non-terminal.
   overturned
+  /// A person ENDED the plan a `plan_approval` gate asked about (Story MOTIR-6012;
+  /// ADR `approval-gates.md` §11.4). TERMINAL, its note OPTIONAL. Never
+  /// `changes_requested` (non-terminal) and never `overturned` (a refused
+  /// direction with a re-plan owed).
+  declined
 
   @@map("approval_gate_state")
 }
@@ -4609,6 +4620,12 @@ enum ApprovalGateSupersedeCause {
   /// A person re-opened a decided design gate (AMENDMENT 6 Q3's door back).
   /// Written ONLY by MOTIR-5659's backfill: this row predates the column.
   unknown
+  /// The plan a `plan_approval` gate asked about went `stale` — a work item it
+  /// changes reached a terminal status elsewhere (ADR `approval-gates.md` §11.7).
+  plan_stale
+  /// The plan's LAST proposal was withdrawn, so the plan was discarded (ADR
+  /// `approval-gates.md` §11.7).
+  plan_discarded
 
   @@map("approval_gate_supersede_cause")
 }
@@ -4643,6 +4660,10 @@ enum ApprovalGateAuthority {
   /// press or the MCP: it is written only by the synced decision, whose actor
   /// arrives as an internal option. §2 is unchanged for every Motir surface.
   github_review
+  /// Authority conferred by the permission `ai:decide_plan` ALONE — the
+  /// `plan_approval` kind has no work item, so §2's relationship rungs are not true
+  /// of its decider (ADR `approval-gates.md` §11.6).
+  plan_permission
 
   @@map("approval_gate_authority")
 }
@@ -4695,7 +4716,10 @@ model ApprovalGate {
   workspaceId String            @map("workspace_id")
   projectId   String            @map("project_id")
   /// The card the gate hangs off — the join every read and every surface uses.
-  workItemId  String            @map("work_item_id")
+  /// NULL ⟺ `kind = plan_approval` (ADR `approval-gates.md` §11.1, enforced by the
+  /// CHECK `approval_gate_work_item_iff_not_plan`): a plan gate belongs to no card,
+  /// and what it is about is its `subjectId`, the `Plan.id`.
+  workItemId  String?           @map("work_item_id")
   /// Which vocabulary of verbs applies (ADR §1).
   kind        ApprovalGateKind
   /// What is being decided — resolved by the registry handler for `kind`.
@@ -4798,7 +4822,7 @@ model ApprovalGate {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workItem  WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   /// Both relations to `User` carry a NAME because there are two of them now and
   /// an unnamed pair is ambiguous. A relation name does not change a constraint
   /// name — the FK is derived from table + column — so `decidedBy`'s existing
@@ -4831,6 +4855,13 @@ model ApprovalGate {
   @@index([projectId, decidedById, decidedAt])
   /// The per-card read: every gate on one work item.
   @@index([workItemId])
+  /// THE CARD-LESS LOOKUP (ADR `approval-gates.md` §11.2) — a `plan_approval` gate
+  /// has no `work_item_id`, so "is there a live gate for this plan?" is keyed on the
+  /// kind and the subject. ⚠️ Its column list is deliberately NOT `(subject_id,
+  /// kind)`, the list of the raw-SQL partial unique index
+  /// `approval_gate_one_awaiting_per_cardless_subject`: the differ pairs indexes by
+  /// column list and would report a permanent rename (CLAUDE.md's partial-index rule).
+  @@index([kind, subjectId, state])
   @@map("approval_gate")
 }
 
@@ -7128,7 +7159,7 @@ model GithubPullRequestReview {
   /// decides a gate hands this over as the gate's reason, so a refusal made on
   /// GitHub says why exactly as one pressed in Motir does. NULL when the review
   /// carried no text — a surface then says *no reason given on GitHub*.
-  body        String?
+  body String?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

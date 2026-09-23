@@ -54,7 +54,9 @@ export type ApprovalGateKindDTO =
   | 'pull_request_merge'
   | 'acceptance_result'
   | 'decision_choice'
-  | 'decision_confirmation';
+  | 'decision_confirmation'
+  /** A PLAN, on a gate that belongs to NO work item (ADR §11, MOTIR-6032). */
+  | 'plan_approval';
 
 /**
  * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
@@ -141,7 +143,9 @@ export type ApprovalGateStateDTO =
   | 'changes_requested'
   | 'superseded'
   /** A person refused a `decision_confirmation` gate's direction (MOTIR-5956) — terminal. */
-  | 'overturned';
+  | 'overturned'
+  /** A person ended the plan a `plan_approval` gate asked about (ADR §11.4) — terminal. */
+  | 'declined';
 
 /**
  * WHY a `superseded` gate was withdrawn — mirrors the `ApprovalGateSupersedeCause`
@@ -158,7 +162,11 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'conflict'
   | 'set_changed'
   | 'pulled_back'
-  | 'unknown';
+  | 'unknown'
+  /** The plan went `stale` (ADR §11.7). */
+  | 'plan_stale'
+  /** The plan's last proposal was withdrawn, so it was discarded (ADR §11.7). */
+  | 'plan_discarded';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
@@ -169,7 +177,14 @@ export type ApprovalGateSupersedeCauseDTO =
  *  decision 4): it is authority conferred by the HOST's review permission, and it
  *  is written only by the synced decision. `resolveGateAuthority` never returns
  *  it, so no Motir surface can produce one. */
-export type ApprovalGateAuthorityDTO = 'assignee' | 'reporter' | 'admin' | 'github_review';
+export type ApprovalGateAuthorityDTO =
+  | 'assignee'
+  | 'reporter'
+  | 'admin'
+  | 'github_review'
+  /** `ai:decide_plan` alone — the `plan_approval` kind has no work item, so no §2
+   *  relationship rung is true of its decider (ADR §11.6). */
+  | 'plan_permission';
 
 /** Through which surface the decision arrived (ADR §6a, with `github` added by
  *  §6b's amendment). Mirrors the `ApprovalGateDecisionSource` Prisma enum. A
@@ -208,8 +223,10 @@ export type ChosenOptionDTO = ChosenOption;
  */
 export interface ApprovalGateDTO {
   id: string;
-  /** The card the gate hangs off. */
-  workItemId: string;
+  /** The card the gate hangs off — NULL on a `plan_approval` gate, and on no other
+   *  kind (ADR `approval-gates.md` §11.1): a plan gate belongs to no work item, and
+   *  what it is about is its `subjectId`, the plan. */
+  workItemId: string | null;
   kind: ApprovalGateKindDTO;
   /** The row being decided — resolved by the registry handler for `kind`. */
   subjectId: string;
