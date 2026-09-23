@@ -2,7 +2,11 @@ import { withOrgContext } from '@/lib/organizations/context';
 import { isOrgAdminRole } from '@/lib/organizations/roles';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 import { isWorkspaceManager } from '@/lib/projects/roles';
-import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  type TransactionBudget,
+  withUserContext,
+  withWorkspaceContext,
+} from '@/lib/workspaces/context';
 import { NotAMemberError, WorkspaceForbiddenError } from '@/lib/workspaces/errors';
 import { UserNotFoundError } from '@/lib/users/errors';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
@@ -42,6 +46,35 @@ import type {
 // logs users out nor emails them (Atlassian), and GitHub removes only outside
 // collaborators — a tier Motir does not have. The flip writes one column and
 // stops; enforcement happens at the person's NEXT request (MOTIR-3648).
+
+/**
+ * The budget the 2FA GATE's one read runs under (MOTIR-5866) — raised from
+ * Prisma's 5000 ms default because of what the transaction WAITS for, never
+ * because of what it does.
+ *
+ * It does almost nothing: `withUserContext` binds one GUC and
+ * `twoFactorPolicyRepository.findRequirement` issues ONE indexed read. It holds
+ * no row lock and makes no network call. Production still expired it once
+ * (2026-09-20, `GET /api/notifications/unread-count`): *5000 ms, however
+ * 17684 ms passed*, with the read not yet issued — a stall in the database or
+ * the process, which no transaction this small can cause or avoid.
+ *
+ * ⚠️ THE DEFAULT NEVER SHORTENED THAT WAIT. Prisma does not cancel the statement
+ * in flight when the timer fires: it queues the rollback behind it. So the
+ * request waited the full 17.7 s and THEN answered 500 — the expiry only threw
+ * away the answer the wait had already paid for. The 5 s default exists to bound
+ * how long a transaction holds LOCKS, and this one holds none. On a gate that
+ * every signed-in page load and every cookie-authenticated API call passes
+ * through (MOTIR-3648 / MOTIR-3653), the wrong answer after a stall is a 500 on
+ * whichever request was unlucky.
+ *
+ * 30 s is more than half again the observed wait and the same ceiling the other
+ * wait-shaped budget uses (`CI_FEEDBACK_TX_TIMEOUT_MS`, MOTIR-5865). It widens
+ * nothing but the ceiling: a read that is not waiting finishes exactly as fast as
+ * before. `maxWaitMs` stays Prisma's default — this is about a transaction that
+ * STARTED and then waited, not about waiting for a connection to start one.
+ */
+const TWO_FACTOR_GATE_TX: TransactionBudget = { timeoutMs: 30_000, maxWaitMs: 2_000 };
 
 export const twoFactorPolicyService = {
   /**
@@ -237,8 +270,10 @@ export const twoFactorPolicyService = {
    * measurement corrected.
    */
   async resolveRequirement(userId: string): Promise<TwoFactorRequirementDTO> {
-    const row = await withUserContext(userId, (tx) =>
-      twoFactorPolicyRepository.findRequirement(userId, tx),
+    const row = await withUserContext(
+      userId,
+      (tx) => twoFactorPolicyRepository.findRequirement(userId, tx),
+      TWO_FACTOR_GATE_TX,
     );
     if (!row) throw new UserNotFoundError(userId);
     return toTwoFactorRequirementDTO(row);
