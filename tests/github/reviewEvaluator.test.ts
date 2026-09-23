@@ -150,6 +150,7 @@ async function recordReview(
     login?: string;
     commitSha?: string;
     at?: string;
+    body?: string | null;
   } = {},
 ) {
   reviewSeq += 1;
@@ -168,6 +169,7 @@ async function recordReview(
           o.at ?? `2026-09-16T09:${String(reviewSeq % 60).padStart(2, '0')}:00Z`,
         ),
         htmlUrl: null,
+        body: o.body ?? null,
       },
       tx,
     ),
@@ -234,6 +236,42 @@ describe('the SET decides, not one member (MOTIR-5597)', () => {
     // A gate's state is not a work item's status (§6b).
     expect(await statusOf(item.id)).toBe('in_review');
     expect(mergeSpy).not.toHaveBeenCalled();
+  });
+
+  it('a refusal SAYS WHY — the deciding review’s BODY is the gate’s reason (MOTIR-6074, ADR §10b)', async () => {
+    const { gate, members } = await scenario({ withGate: true });
+    await recordReview(members.api, {
+      state: 'changes_requested',
+      login: 'objector',
+      githubUserId: '777',
+      body: 'The retry loop never backs off — add a ceiling.',
+    });
+
+    const [outcome] = await evaluateForPullRequest(members.api.pullRequestId, fx.workspaceId);
+    expect(outcome!.outcome).toBe('decided_changes_requested');
+
+    const row = await gateRow(gate!.id);
+    expect(row.noteMd).toBe('The retry loop never backs off — add a ceiling.');
+    // A reader tells it from a Motir press by the source the row already carries.
+    expect(row.decisionSource).toBe('github');
+  });
+
+  it('a review with NO text records a NULL reason and is never refused for it (ADR §10b)', async () => {
+    const { gate, members } = await scenario({ withGate: true });
+    await recordReview(members.web, {
+      state: 'changes_requested',
+      login: 'terse',
+      githubUserId: '778',
+      body: null,
+    });
+
+    const [outcome] = await evaluateForPullRequest(members.web.pullRequestId, fx.workspaceId);
+    // Decided, not refused: the door keys its required-reason rule on a PRESSED source.
+    expect(outcome!.outcome).toBe('decided_changes_requested');
+    const row = await gateRow(gate!.id);
+    expect(row.state).toBe('changes_requested');
+    expect(row.noteMd).toBeNull();
+    expect(row.decisionSource).toBe('github');
   });
 
   it('counts nothing from a stale commit or a reader, and merges nothing', async () => {

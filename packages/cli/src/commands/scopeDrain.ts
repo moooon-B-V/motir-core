@@ -1,7 +1,9 @@
 import { info } from '../output.js';
 import { GitError, type CommandRunner } from '../git.js';
 import {
+  DECISION_RELEASED_STATUS_KEYS,
   classifyReadyItem,
+  isAgentDecisionItem,
   landedWork,
   type AutoSummary,
   type DispatchRecord,
@@ -113,6 +115,14 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
   const repos = new RepoSessions(branch, run);
   /** Cards that have LANDED — what an in-scope blocker is satisfied by. */
   const satisfied = new Set<string>();
+  /**
+   * DECISIONS whose gate nobody has approved yet (MOTIR-6094) — what holds the
+   * cards that wait on them. Seeded from the ones an EARLIER run already shipped,
+   * which are no longer members and so are invisible to `unsatisfiedBlockers`,
+   * and grown by every decision this drain ships. Nothing in this run can
+   * approve one, so nothing below ever removes a key.
+   */
+  const heldDecisions = await readHeldDecisions(client, members, edges);
 
   let interrupted = false;
   const onSigint = (): void => {
@@ -142,7 +152,12 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
       // not the same as being allowed to build it out of order. Its blockers
       // failed, were skipped, or were never reached; either way the honest
       // answer is to leave it and say so.
-      const open = unsatisfiedBlockers(key, edges, satisfied, inScope);
+      const open = [
+        ...new Set([
+          ...unsatisfiedBlockers(key, edges, satisfied, inScope),
+          ...(edges[key] ?? []).filter((dep) => heldDecisions.has(dep)),
+        ]),
+      ];
       if (open.length > 0) {
         skipped.push({
           key: item.key,
@@ -157,7 +172,13 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
           skipReason: 'blocked_in_scope',
           data: { blockedBy: open },
         });
-        info(`${item.key}: skipped — waiting on ${open.join(', ')}, which did not land.`);
+        const decisions = open.filter((dep) => heldDecisions.has(dep));
+        info(
+          decisions.length === open.length
+            ? `${item.key}: held — waiting on decision ${decisions.join(', ')} to be approved. ` +
+                'Its approval, not this run, releases it; run the scope again after it.'
+            : `${item.key}: skipped — waiting on ${open.join(', ')}, which did not land.`,
+        );
         continue;
       }
 
@@ -184,12 +205,20 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
         continue;
       }
 
+      // ⚠️ A DECISION NEVER JOINS THE SESSION (MOTIR-6094). Its approval is also
+      // the merge of whatever pull request it is linked to, so it ships on a pull
+      // request of its OWN, off `main`: no seed, no session branch ensured for it,
+      // and therefore no session pull request opened or linked on its account.
+      // The server's prompt makes the same call on its side, which is what covers
+      // a lineage the card INHERITS from a blocker rather than being seeded.
+      const decision = isAgentDecisionItem(item);
+
       // ⚠️ SEED FIRST, THEN RESOLVE (MOTIR-2398), exactly as `auto` does: the
       // checkout cannot be resolved before this read, because `targetRepo` lives
       // on the PROMPT and not on the row; and the seed cannot follow it, because
       // `repos.ensure` creates the branch the seed names.
       let dispatch = await client.dispatchPrompt(item.key, {
-        sessionBranch: branch,
+        ...(decision ? {} : { sessionBranch: branch }),
         findingsPolicy: findingsPolicyOf(opts),
       });
       const targets = resolveDispatchTargets(
@@ -203,9 +232,9 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
           : [resolveDispatchTarget(session.link.dir, session.link.config, dispatch.targetRepo)];
       const target = resolved[0]!;
 
-      let repo: RepoSession[] | null;
+      let repo: RepoSession[] | null = null;
       try {
-        repo = repos.ensure(resolved);
+        if (!decision) repo = repos.ensure(resolved);
       } catch (err) {
         // A git failure in a REAL checkout is a run-ending problem, and it
         // happens before anything is spawned — the card is untouched. Stop, but
@@ -215,7 +244,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
         stopReason = 'halted';
         break;
       }
-      if (!repo) {
+      if (!repo && !decision) {
         // No checkout to branch in, so the seeded prompt names a branch that
         // does not exist here. Re-read WITHOUT the seed.
         dispatch = await client.dispatchPrompt(item.key, {
@@ -250,7 +279,13 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
 
       const record = outcome.record;
       records.push(record);
-      if (record.outcome === 'integrated' || record.outcome === 'implemented') {
+      if (decision) {
+        // ⚠️ SHIPPED IS NOT SATISFIED, for a decision. Its dependents wait on a
+        // PERSON approving it, exactly as the runbook's parent run holds a design
+        // child's — and they are named as held rather than built on a decision
+        // nobody has accepted yet.
+        if (landedWork(record)) heldDecisions.add(item.key);
+      } else if (record.outcome === 'integrated' || record.outcome === 'implemented') {
         satisfied.add(item.key);
       }
 
@@ -376,4 +411,55 @@ export async function readScopeEdges(
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
   return edges;
+}
+
+/**
+ * The DECISIONS, outside the claimed set, that a member waits on and whose gate
+ * nobody has approved yet (MOTIR-6094) — read ONCE, before the drain, like the
+ * edges.
+ *
+ * ⚠️ WHY A READ IS NEEDED AT ALL. A decision this run ships is held by the loop
+ * itself. One an EARLIER run shipped is not: it sits at `implemented` or
+ * `in_review` waiting on its gate, so the claim did not take it, it is not a
+ * member, and `unsatisfiedBlockers` — IN-SCOPE ONLY by design — cannot see it.
+ * The claim's own validator cannot either: a blocker inside the container's
+ * subtree never gates it. So without this read, the re-run a person makes AFTER
+ * shipping the decision and BEFORE approving it would build every dependent on a
+ * decision nobody has accepted.
+ *
+ * ⚠️ ONE `get_work_item` PER NON-MEMBER BLOCKER, because the child rows the
+ * edges came from carry a status but no type. None of these is a READY read,
+ * so the drain's defining invariant is untouched. A read that fails is named
+ * and does not hold: the claim already cleared every out-of-scope blocker, and a
+ * network error is not evidence that a card is a decision.
+ */
+export async function readHeldDecisions(
+  client: MotirClient,
+  members: readonly DispatchItem[],
+  edges: ScopeEdges,
+): Promise<Set<string>> {
+  const memberKeys = new Set(members.map((m) => m.key));
+  const outside = new Set<string>();
+  for (const key of memberKeys) {
+    for (const dep of edges[key] ?? []) if (!memberKeys.has(dep)) outside.add(dep);
+  }
+
+  const held = new Set<string>();
+  for (const key of outside) {
+    try {
+      const { item } = await client.getWorkItem(key);
+      if (
+        isAgentDecisionItem(item) &&
+        !DECISION_RELEASED_STATUS_KEYS.has(item.status.toLowerCase())
+      ) {
+        held.add(key);
+      }
+    } catch (err) {
+      info(
+        `Could not read ${key} to check whether it is an unapproved decision: ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  return held;
 }

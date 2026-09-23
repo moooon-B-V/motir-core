@@ -1627,6 +1627,18 @@ export const approvalGatesService = {
       if (input.decision === 'overturn' && !input.noteMd?.trim()) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'overturn_needs_a_note');
       }
+      // A REFUSAL SAYS WHY (ADR §10a, MOTIR-6074) — the reason is what whoever picks the
+      // work up next acts on, and a refusal without one is a dead end. Keyed on the SOURCE,
+      // never on the caller: every surface a person presses from owes it, and `github` is
+      // the one source nobody pressed — the review already happened on the host, so the
+      // sync records its body (or NULL) instead of being refused (§10b).
+      if (
+        input.decision === 'request_changes' &&
+        input.source !== 'github' &&
+        !input.noteMd?.trim()
+      ) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'request_changes_needs_a_note');
+      }
 
       // 4 · RETENTION — an APPROVAL PINS the version it was given on
       //      (MOTIR-4913; ADR §6c, with its MOTIR-4911 amendment).

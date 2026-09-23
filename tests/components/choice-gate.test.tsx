@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import en from '@/messages/en.json';
 import { ChoiceGateFrame } from '@/components/approvals/ChoiceGate';
 import { parseChoiceOptions } from '@/lib/approvalGates/choiceOptions';
 import type { ApprovalGateDTO, DecisionChoicePortDTO } from '@/lib/dto/approvalGate';
@@ -169,10 +170,26 @@ describe('band 3 — select, then commit', () => {
     await waitFor(() => expect(onDecide).toHaveBeenCalledWith('choose', 'our-own-postgres'));
   });
 
-  it('None of these sends request_changes without confirming', async () => {
+  it('None of these ASKS WHY, refuses an empty press in place, and sends the reason (MOTIR-6075)', async () => {
     const onDecide = renderFrame();
     fireEvent.click(screen.getByRole('button', { name: 'None of these — revise the options' }));
-    await waitFor(() => expect(onDecide).toHaveBeenCalledWith('request_changes'));
+    // The confirm band opens with the reason field — nothing is sent on the press.
+    expect(onDecide).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.reason.choice.proceed }));
+    expect(screen.getByText(en.approvalGate.reason.choice.required)).toBeTruthy();
+    expect(onDecide).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(en.approvalGate.reason.choice.label), {
+      target: { value: 'We need our own bucket.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: en.approvalGate.reason.choice.proceed }));
+    await waitFor(() =>
+      expect(onDecide).toHaveBeenCalledWith(
+        'request_changes',
+        undefined,
+        'We need our own bucket.',
+      ),
+    );
   });
 });
 

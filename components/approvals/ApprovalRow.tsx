@@ -12,6 +12,7 @@ import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { usePeekRowClick } from '@/app/(authed)/items/_components/IssueQuickView';
 import { useDecidedGateState } from '@/lib/approvals/decidedGates';
+import { RefusalReasonCell, showsRefusalReason } from './RefusalReason';
 import type {
   ApprovalGateKindDTO,
   ApprovalGateStateDTO,
@@ -673,7 +674,19 @@ export function ApprovalRow({
         <div role="cell" className="flex min-w-0 items-center">
           {/* THE DETAILS (§ 28, DECISION 2) — what the kind used to print after its
               label, now in the track the work-item cell held. */}
-          {record.section === 'decided' ? (
+          {record.section === 'decided' &&
+          showsRefusalReason(
+            record.row.state,
+            record.row.refusalReason,
+            record.row.decisionSource,
+          ) ? (
+            // A REFUSAL SAYS WHY (MOTIR-6075; design `approvals-row--refusal-reason`): the
+            // reason's FIRST line replaces the details, the version moves into the title.
+            <RefusalReasonCell
+              reason={record.row.refusalReason}
+              version={record.row.subjectVersion}
+            />
+          ) : record.section === 'decided' ? (
             <SubjectMeta
               subject={row.subject}
               decidedVersion={record.row.subjectVersion}

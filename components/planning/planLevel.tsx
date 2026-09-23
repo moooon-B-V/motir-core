@@ -183,6 +183,9 @@ export function mergePlanLevel(
   for (const dep of committed.deps) {
     if (dep.variant === 'cross') anchorIds.add(dep.from);
   }
+  // The builder's anchors, before `drawOffLevel` adds the ones minted here —
+  // the set the stranded-anchor sweep at the bottom is allowed to remove from.
+  const committedAnchorIds = new Set(anchorIds);
   const onLevel = new Set<string>([
     ...committed.nodes.map((n) => n.id).filter((id) => !anchorIds.has(id)),
     ...atLevel.map((i) => i.nodeId),
@@ -330,21 +333,41 @@ export function mergePlanLevel(
     }
   }
 
+  // ⚠️ AN ANCHOR WHOSE EVERY EDGE THE PLAN DELETES IS DROPPED WITH THEM (bug
+  // MOTIR-5389) — the node half of the removal filter above, which reached
+  // `deps` and never `nodes`. A ghost anchor exists only to be the far end of a
+  // `cross` arrow; with none left it draws the legend's bad-plan warning about an
+  // edge that is going away, pointing at nothing, on the plan that repairs it.
+  // After approve the roadmap read carries neither the edge nor the stub, so the
+  // level approve leaves behind has no anchor. Read against the FINAL `deps`, so
+  // an anchor another committed child still hangs off — or that a proposal's own
+  // off-level edge reused above instead of minting a second — stays, once. Only
+  // the builder's anchors are candidates: a committed CHILD is on the level
+  // because it is a child, never because an edge points at it.
+  const referenced = new Set(deps.map((d) => d.from));
+  const stranded = (id: string) => committedAnchorIds.has(id) && !referenced.has(id);
+
   // The committed children, in the order the read gave them, with a `modify` /
   // `remove` re-skinned in place.
-  const nodes: ProjectCanvasNode[] = committed.nodes.map((node) => {
-    const drillable = node.drillable || gainsChildren.has(node.id);
-    const proposal = pending.get(node.id);
-    if (!proposal) return drillable === node.drillable ? node : { ...node, drillable };
-    pending.delete(node.id);
-    return {
-      ...node,
-      drillable,
-      content: (
-        <PlanItemNode item={proposal} outcome={outcome} crossBlocked={crossBlocked.has(node.id)} />
-      ),
-    };
-  });
+  const nodes: ProjectCanvasNode[] = committed.nodes
+    .filter((n) => !stranded(n.id))
+    .map((node) => {
+      const drillable = node.drillable || gainsChildren.has(node.id);
+      const proposal = pending.get(node.id);
+      if (!proposal) return drillable === node.drillable ? node : { ...node, drillable };
+      pending.delete(node.id);
+      return {
+        ...node,
+        drillable,
+        content: (
+          <PlanItemNode
+            item={proposal}
+            outcome={outcome}
+            crossBlocked={crossBlocked.has(node.id)}
+          />
+        ),
+      };
+    });
 
   // Whatever is left is proposed and has no committed node yet: every `add`, plus
   // a `modify` / `remove` whose target is not at this level (a drifted plan).

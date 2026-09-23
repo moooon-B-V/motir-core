@@ -8858,6 +8858,39 @@
         "confirmedWithout": "Confirmed without a written record · supersedes {count}",
         "overturned": "Overturned · re-plan owed for {count, plural, =1 {# work item} other {# work items}}"
       }
+    },
+    "reason": {
+      "title": "Requesting changes will:",
+      "label": "What needs to change?",
+      "helper": "Required. Whoever picks this up next works from it.",
+      "required": "Say what needs to change — a request for changes needs a reason.",
+      "proceed": "Yes, request changes",
+      "consequence": {
+        "versionBack": "Record that this version was sent back, with your reason.",
+        "stays": "Leave {key} where it is — nothing moves yet.",
+        "commitsBack": "Record that these commits were sent back, with your reason.",
+        "mergeNothing": "Merge nothing — the pull requests stay open.",
+        "decisionBack": "Record that this decision was sent back, with your reason.",
+        "docStays": "Merge nothing — the decision document stays in its pull request."
+      },
+      "choice": {
+        "title": "Answering none of these will:",
+        "record": "Record that none of the options fits, with your reason.",
+        "waits": "Keep {key} waiting for revised options.",
+        "label": "Why does none of these fit?",
+        "helper": "Required. It is what the options are revised against.",
+        "required": "Say why none of these fits — it needs a reason.",
+        "proceed": "Yes, none of these"
+      },
+      "record": {
+        "showAll": "Show all",
+        "showLess": "Show less",
+        "noneOnGithub": "No reason given on GitHub."
+      },
+      "row": {
+        "noneOnGithub": "No reason given on GitHub",
+        "on": "on {version}"
+      }
     }
   },
   "approvalOverlay": {

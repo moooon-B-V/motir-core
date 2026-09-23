@@ -223,6 +223,7 @@ describe('re-asking', () => {
       {
         gateId: gate!.id,
         decision: 'request_changes',
+        noteMd: 'Needs changes.',
         source: 'ui',
         stamp: DECIDED_WITHOUT_A_READER,
       },

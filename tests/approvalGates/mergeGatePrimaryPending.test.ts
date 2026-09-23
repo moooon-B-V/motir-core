@@ -193,7 +193,13 @@ const approveMergeGate = (s: Scenario, gateId: string) =>
 /** The design decided on its OWN, through the plain door — never the one press. */
 const decideDesign = (s: Scenario, gateId: string, decision: 'approve' | 'request_changes') =>
   approvalGatesService.decide(
-    { gateId, decision, source: 'ui', noteMd: null, stamp: DECIDED_WITHOUT_A_READER },
+    {
+      gateId,
+      decision,
+      source: 'ui',
+      noteMd: decision === 'request_changes' ? 'Needs changes.' : null,
+      stamp: DECIDED_WITHOUT_A_READER,
+    },
     s.ctx,
   );
 

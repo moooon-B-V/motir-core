@@ -8854,6 +8854,39 @@
         "confirmedWithout": "已确认（无书面记录）· 取代 {count} 项",
         "overturned": "已推翻 · {count} 个工作项待重新规划"
       }
+    },
+    "reason": {
+      "title": "要求修改将会：",
+      "label": "需要修改什么？",
+      "helper": "必填。接手这项工作的人会据此修改。",
+      "required": "请说明需要修改什么 — 要求修改需要附上原因。",
+      "proceed": "确认，要求修改",
+      "consequence": {
+        "versionBack": "记录这个版本被退回，并附上你的原因。",
+        "stays": "{key} 保持原状 — 暂时不会有任何变动。",
+        "commitsBack": "记录这些提交被退回，并附上你的原因。",
+        "mergeNothing": "不合并任何内容 — 拉取请求保持打开。",
+        "decisionBack": "记录这项决定被退回，并附上你的原因。",
+        "docStays": "不合并任何内容 — 决定文档留在它的拉取请求中。"
+      },
+      "choice": {
+        "title": "选择「都不合适」将会：",
+        "record": "记录没有一个选项合适，并附上你的原因。",
+        "waits": "{key} 继续等待修改后的选项。",
+        "label": "为什么都不合适？",
+        "helper": "必填。选项会据此修改。",
+        "required": "请说明为什么都不合适 — 需要附上原因。",
+        "proceed": "确认，都不合适"
+      },
+      "record": {
+        "showAll": "显示全部",
+        "showLess": "收起",
+        "noneOnGithub": "GitHub 上未给出原因。"
+      },
+      "row": {
+        "noneOnGithub": "GitHub 上未给出原因",
+        "on": "版本 {version}"
+      }
     }
   },
   "approvalOverlay": {

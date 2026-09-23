@@ -327,7 +327,10 @@ export type VerbNotOfferedReason =
   /** `overturn` sent to a kind that confirms no decision (MOTIR-5956). */
   | 'overturn_on_other_kind'
   /** `overturn` with no note — what was actually discussed is REQUIRED (point 6b). */
-  | 'overturn_needs_a_note';
+  | 'overturn_needs_a_note'
+  /** `request_changes` pressed with no reason — a refusal SAYS WHY (ADR §10a, MOTIR-6074).
+   *  Every kind that offers the verb, *None of these* on a choice included. */
+  | 'request_changes_needs_a_note';
 
 /**
  * A decision whose VERB this gate does not offer (Story MOTIR-4914 · Subtask
@@ -343,6 +346,8 @@ export type VerbNotOfferedReason =
  *   · `overturn_on_other_kind` — `overturn` sent to any other kind (MOTIR-5956);
  *   · `overturn_needs_a_note` — `overturn` with an empty note (MOTIR-5956): a
  *     request-shape refusal like the others, and nothing is written.
+ *   · `request_changes_needs_a_note` — `request_changes` PRESSED with an empty
+ *     reason (MOTIR-6074, ADR §10a). Never raised for `source: github`.
  *
  * ⚠️ NOT THE STALE REFUSAL, even for `unknown_option`. The stamp check runs first,
  * so by the time an option is looked up the options are exactly the ones the
