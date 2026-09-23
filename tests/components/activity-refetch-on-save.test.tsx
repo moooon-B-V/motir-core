@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import { HistorySection } from '@/app/(authed)/items/[key]/_components/HistorySection';
 import type { ActivityEntryDto, ActivityHistoryPageDto } from '@/lib/dto/activity';
-import { bumpActivity } from '@/lib/hooks/useActivityRevision';
+import { renderToString } from 'react-dom/server';
+import { bumpActivity, useActivityRevision } from '@/lib/hooks/useActivityRevision';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 
 // Story MOTIR-6016 · MOTIR-6101 — a field saved on the item page shows in the
@@ -80,5 +81,15 @@ describe('the History feed after a save on the page', () => {
     );
     act(() => bumpActivity('wi-other'));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('useActivityRevision on the server', () => {
+  it('renders 0 whatever the client store holds, so hydration cannot mismatch', () => {
+    bumpActivity('wi-ssr');
+    function Probe() {
+      return <span>{useActivityRevision('wi-ssr')}</span>;
+    }
+    expect(renderToString(<Probe />)).toBe('<span>0</span>');
   });
 });
