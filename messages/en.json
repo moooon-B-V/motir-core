@@ -8371,6 +8371,7 @@
       "approved": "Approved",
       "changesRequested": "Changes requested",
       "overturned": "Overturned",
+      "declined": "Declined",
       "withdrawn": "Withdrawn"
     },
     "verb": {
@@ -8425,6 +8426,8 @@
         "conflict": "A pull request conflicts with its base branch, so this question was withdrawn.",
         "set_changed": "The pull requests changed, so this question was withdrawn.",
         "pulled_back": "The work was pulled back out of review, so this question was withdrawn.",
+        "plan_stale": "Work this plan changes was finished elsewhere, so the plan went stale and this question was withdrawn.",
+        "plan_discarded": "The plan's last proposal was withdrawn, so the plan was discarded and this question went with it.",
         "unknown": "This question was withdrawn. The reason was not recorded."
       },
       "causeByKind": {

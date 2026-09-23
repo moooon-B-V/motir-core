@@ -8367,6 +8367,7 @@
       "approved": "已批准",
       "changesRequested": "已要求修改",
       "overturned": "已推翻",
+      "declined": "已拒绝",
       "withdrawn": "已撤回"
     },
     "verb": {
@@ -8421,6 +8422,8 @@
         "conflict": "有拉取请求与其目标分支冲突，因此该问题已撤回。",
         "set_changed": "Pull Request 集合发生变化，因此该问题已撤回。",
         "pulled_back": "工作已撤回评审，因此该问题已撤回。",
+        "plan_stale": "该计划要修改的工作已在别处完成，计划已过期，因此该问题已撤回。",
+        "plan_discarded": "该计划的最后一个提议已撤回，计划已被放弃，该问题随之撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
       },
       "causeByKind": {

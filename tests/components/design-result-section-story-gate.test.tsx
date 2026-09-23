@@ -130,6 +130,14 @@ const EXPECTED: Record<string, (canDecide: boolean) => void> = {
     expect(screen.getByText(en.approvalGate.state.overturned, { exact: true })).toBeTruthy();
     expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
   },
+  // MOTIR-6032 (Story MOTIR-6012; ADR `approval-gates.md` §11.4) — a DESIGN GATE IS NEVER
+  // `declined`: the decide door offers `decline` on a `plan_approval` gate alone. So no
+  // real design row reaches this, and the case is the fold's totality: were it ever
+  // drawn, it is a decided state with its own label — never the awaiting door.
+  declined: () => {
+    expect(screen.getByText(en.approvalGate.state.declined, { exact: true })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: REVIEW })).toBeNull();
+  },
   superseded: () => {
     // ⚠️ MOTIR-5667: the port now says WHY. These fixtures carry no cause, which
     // is a row that predates the column — so the sentence is the `unknown` one,

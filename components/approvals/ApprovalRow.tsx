@@ -551,6 +551,15 @@ function StatePill({ state, kind }: { state: ApprovalGateStateDTO; kind: Approva
           {t('overturned')}
         </Pill>
       );
+    // A plan ENDED by a person (Story MOTIR-6012 · MOTIR-6032; ADR §11.4) — its own
+    // pill, never *Changes requested* (nothing will be revised) nor *Overturned* (no
+    // re-plan is owed). A person's decision, so the frame's decided warning tint.
+    case 'declined':
+      return (
+        <Pill severity="warning" className={DECIDE_PILL}>
+          {t('declined')}
+        </Pill>
+      );
     // ⚠️ COLOURLESS, and that is the design's decision rather than a fallback.
     // `superseded` is written by the PRODUCT, never by a person, so a tinted
     // pill would let the audit read a withdrawn question as somebody's answer.

@@ -280,14 +280,70 @@ describe('the gates in plansService', () => {
     return rest.slice(0, end);
   }
 
+  /** A module-level `async function name(` body in `source`, up to its closing brace. */
+  function functionBody(source: string, name: string): string {
+    const start = source.indexOf(`\nasync function ${name}(`);
+    expect(start, `no \`async function ${name}(\``).toBeGreaterThan(-1);
+    const rest = source.slice(start + 1);
+    const end = rest.indexOf('\n}\n');
+    expect(end, `could not find the end of ${name}`).toBeGreaterThan(-1);
+    return rest.slice(0, end);
+  }
+
   it('AC2 — approvePlan and declinePlan assert ai:decide_plan and NOT ai:view_plan', () => {
-    for (const name of ['approvePlan', 'declinePlan']) {
-      const body = methodBody(name);
-      expect(body, `${name} does not assert ${DECIDE_KEY}`).toContain(`'${DECIDE_KEY}'`);
+    // ⚠️ THE GATE MOVED ONE HOP, IT DID NOT GO (Story MOTIR-6012 · MOTIR-6035/6038; ADR
+    // `approval-gates.md` §11.5/§11.8). `approvePlan` and `declinePlan` are now
+    // dispatchers: an ASKED plan is decided through `planDecisionService` (the door),
+    // an UNASKED one through `approveUnaskedPlan` / `declineUnaskedPlan`. So the key is
+    // read out of every body a dispatcher can reach — each path must assert it, and
+    // none may fall back to the author key.
+    const DECIDE = `assertPermission(plan.projectId, ctx, '${DECIDE_KEY}')`;
+    const AUTHOR = `assertPermission(plan.projectId, ctx, '${AUTHOR_KEY}')`;
+
+    // The dispatchers route to exactly those two paths, and gate nothing themselves.
+    expect(methodBody('approvePlan')).toContain('decideAskedPlanWithoutAReader(');
+    expect(methodBody('approvePlan')).toContain('approveUnaskedPlan(');
+    expect(methodBody('declinePlan')).toContain('decideAskedPlanWithoutAReader(');
+    expect(methodBody('declinePlan')).toContain('declineUnaskedPlan(');
+
+    // The UNASKED paths: decline asserts in its own body; approve in its
+    // pre-transaction phase `prepareApprove`, which is also the phase the gate's
+    // handler runs (`prepareApprovePlan`).
+    expect(methodBody('approveUnaskedPlan')).toContain('prepareApprove(');
+    expect(methodBody('prepareApprovePlan')).toContain('prepareApprove(');
+    const unasked: Array<[string, string]> = [
+      ['prepareApprove', functionBody(SOURCE, 'prepareApprove')],
+      ['declineUnaskedPlan', methodBody('declineUnaskedPlan')],
+    ];
+    // The ASKED path: the door's read of the plan asserts the key before any refusal.
+    const DECISION_SOURCE = readFileSync(
+      join(ROOT, 'lib', 'services', 'planDecisionService.ts'),
+      'utf8',
+    );
+    for (const verb of ['approve', 'decline']) {
+      const start = DECISION_SOURCE.indexOf(`\n  async ${verb}(`);
+      expect(start, `no planDecisionService.${verb}`).toBeGreaterThan(-1);
+      const rest = DECISION_SOURCE.slice(start + 1);
       expect(
-        body.includes(`assertPermission(plan.projectId, ctx, '${AUTHOR_KEY}')`),
-        `${name} still asserts ${AUTHOR_KEY}`,
-      ).toBe(false);
+        rest.slice(0, rest.indexOf('\n  },\n')),
+        `planDecisionService.${verb} does not read through planAndGate`,
+      ).toContain('planAndGate(');
+    }
+    const asked: Array<[string, string]> = [
+      [
+        'planDecisionService.planAndGate',
+        functionBody(DECISION_SOURCE, 'planAndGate').replace(
+          'found.plan.projectId',
+          'plan.projectId',
+        ),
+      ],
+    ];
+    for (const [name, body] of [...unasked, ...asked]) {
+      expect(body, `${name} does not assert ${DECIDE_KEY}`).toContain(DECIDE);
+      expect(body.includes(AUTHOR), `${name} still asserts ${AUTHOR_KEY}`).toBe(false);
+    }
+    for (const name of ['approvePlan', 'declinePlan']) {
+      expect(methodBody(name).includes(AUTHOR), `${name} still asserts ${AUTHOR_KEY}`).toBe(false);
     }
   });
 
