@@ -1753,3 +1753,109 @@ describe('mergePlanLevel — a proposal blocked by a card OFF this level (bug MO
     expect(flagged(deleted.nodes.find((n) => n.id === 'wi-a'))).toBe(false);
   });
 });
+
+// ── bug MOTIR-5389 — the ANCHOR of an edge the plan deletes ──────────────────
+//
+// MOTIR-5387 took the "blocked elsewhere" chip off a card when the plan deletes
+// its only `cross` edge. The ghost anchor at the other end of that edge is a
+// node in `committed.nodes`, and the node map passed it through untouched — so
+// the level drew a red "elsewhere in the plan" anchor with no arrow attached,
+// where the roadmap after approve draws no anchor at all.
+describe('mergePlanLevel — the anchor of a `cross` edge the plan DELETES (bug MOTIR-5389)', () => {
+  const ROADMAP_STUB = {
+    id: 'wi-x',
+    identifier: 'MOTIR-9',
+    title: 'The blocker under another story',
+    parentTitle: null,
+    isDone: false,
+  };
+
+  function child(id: string, identifier: string): RoadmapLevelData['items'][number] {
+    return {
+      id,
+      parentId: 'wi-s',
+      identifier,
+      title: `Committed ${identifier}`,
+      kind: 'subtask',
+      status: 'todo',
+      hasChildren: false,
+    };
+  }
+
+  /** `wi-a` (and optionally `wi-b`) blocked by `wi-x`, which sits under another story. */
+  function level(blocked: string[] = ['wi-a']): PlanCanvasLevel {
+    return buildWorkItemLevel({
+      items: [child('wi-a', 'MOTIR-1'), child('wi-b', 'MOTIR-2')],
+      edges: blocked.map((id) => ({ blockedId: id, blockerId: 'wi-x' })),
+      offLevelBlockers: [ROADMAP_STUB],
+    });
+  }
+
+  function unblock(nodeId: string, identifier: string): PlanReviewItemDto {
+    return item({
+      planItemId: `pi_${nodeId}`,
+      nodeId,
+      op: 'modify',
+      identifier,
+      parentNodeId: 'wi-s',
+      blockedByRemovedNodeIds: ['wi-x'],
+    });
+  }
+
+  it('drops the anchor when the plan deletes the ONLY edge out of it — the level approve leaves behind', () => {
+    const built = level();
+    // The fixture really does start with an anchor and its edge.
+    expect(built.nodes.map((n) => n.id)).toEqual(['wi-a', 'wi-b', 'wi-x']);
+    expect(built.deps).toEqual([{ from: 'wi-x', to: 'wi-a', variant: 'cross' }]);
+
+    const merged = mergePlanLevel(built, [unblock('wi-a', 'MOTIR-1')], 'wi-s');
+
+    expect(merged.deps).toEqual([]);
+    expect(merged.nodes.map((n) => n.id)).toEqual(['wi-a', 'wi-b']);
+  });
+
+  it('keeps the anchor, once, while a SECOND committed child is still blocked by it', () => {
+    const merged = mergePlanLevel(level(['wi-a', 'wi-b']), [unblock('wi-a', 'MOTIR-1')], 'wi-s');
+
+    expect(merged.deps).toEqual([{ from: 'wi-x', to: 'wi-b', variant: 'cross' }]);
+    expect(merged.nodes.filter((n) => n.id === 'wi-x')).toHaveLength(1);
+  });
+
+  it('keeps the anchor, once, while a PROPOSAL at the level carries its own off-level edge to it (MOTIR-5387)', () => {
+    const merged = mergePlanLevel(
+      level(),
+      [
+        unblock('wi-a', 'MOTIR-1'),
+        item({
+          planItemId: 'pi_new',
+          nodeId: 'pi_new',
+          op: 'add',
+          title: 'The new card',
+          parentNodeId: 'wi-s',
+          blockedByNodeIds: ['wi-x'],
+          blockerStubs: [
+            {
+              nodeId: 'wi-x',
+              identifier: 'MOTIR-9',
+              title: 'The blocker under another story',
+              isDone: false,
+              parentNodeId: 'wi-other',
+            },
+          ],
+        }),
+      ],
+      'wi-s',
+    );
+
+    expect(merged.deps).toEqual([{ from: 'wi-x', to: 'pi_new', variant: 'cross' }]);
+    expect(merged.nodes.filter((n) => n.id === 'wi-x')).toHaveLength(1);
+  });
+
+  it('never removes a committed node that is not an anchor, referenced by a dep or not', () => {
+    // `wi-b` has no edge at all, before or after; `wi-a` loses its only one.
+    const merged = mergePlanLevel(level(), [unblock('wi-a', 'MOTIR-1')], 'wi-s');
+
+    expect(merged.nodes.some((n) => n.id === 'wi-a')).toBe(true);
+    expect(merged.nodes.some((n) => n.id === 'wi-b')).toBe(true);
+  });
+});
