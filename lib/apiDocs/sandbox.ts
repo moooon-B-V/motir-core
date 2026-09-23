@@ -188,6 +188,23 @@ export function sandboxRunCommand(row: SandboxProfileRow): string {
  * The `\${…}` escapes are template-literal escapes, not shell ones: what this
  * constant HOLDS is the literal text `${localWorkspaceFolder}`, which is a Dev
  * Containers substitution the editor resolves and nothing before it may.
+ *
+ * ⚠️ THE `motir-auth` VOLUME IS MOUNTED HERE TOO (MOTIR-6120), from the SAME two
+ * constants `sandboxRunCommand` reads. MOTIR-4970 moved the sign-in into that
+ * volume so a container could be thrown away, and it did so for the `docker run`
+ * literal only: a dev container is REBUILT to pick up a new image, and a rebuild
+ * deletes the writable layer the sign-in was landing in. A test asserts every
+ * non-credential mount of the run command is also mounted here, so the next
+ * property added to one route fails until the other carries it.
+ *
+ * CHOSEN, and said so on purpose: there is NO volume for the agent's own config
+ * home (`~/.motir-sandbox/agent-config`), so a Rebuild Container signs the
+ * reader out of Claude Code, though not out of Motir. That directory also holds
+ * what the image itself bakes and `motir-sandbox-agent-config` regenerates (the
+ * codegraph wiring, `env.sh`, the `.setup-done` sentinel), so a volume over it
+ * would shadow the NEW image's copy with the old one on the very rebuild meant
+ * to refresh it. The page says to sign in to the agent again after a rebuild
+ * rather than promise otherwise.
  */
 export const SANDBOX_DEVCONTAINER_JSON = `{
   "name": "Motir sandbox (Claude Code)",
@@ -195,6 +212,7 @@ export const SANDBOX_DEVCONTAINER_JSON = `{
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=\${localWorkspaceFolder},target=/workspace,type=bind",
   "mounts": [
+    "source=${SANDBOX_AUTH_VOLUME},target=${SANDBOX_CONFIG_DIR},type=volume",
     "source=\${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
   ],
   "remoteUser": "node",
@@ -286,7 +304,7 @@ export const SANDBOX_INTRO: readonly SandboxStep[] = [
           ],
           [
             'Your agent’s own sign-in, on this machine',
-            'Sign in to your coding agent once, here, before you start — or have its API key in your environment. Its credential mount is **read-only**, so the container can use a sign-in and can never perform one.',
+            'Sign in to your coding agent once, here, before you start — or have its API key in your environment. Its credential mount is **read-only**, so the container can use a sign-in and cannot renew one. **Claude Code on macOS is the exception you will meet:** it keeps its token in the login Keychain, so there is no file to mount, and you sign in to `claude` **inside** the container instead — the image gives it a writable config directory, and that is where the sign-in lands.',
           ],
         ],
       },
@@ -398,7 +416,12 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
       },
       {
         kind: 'prose',
-        text: 'Swap `:claude` and the `mounts` entry for your row from step 1. A dev container is not torn down when you close the window, so the sign-in in step 4 persists here without any extra flag — and for exactly that reason it also keeps the image it was first created from. **Dev Containers reuses a local image just as `docker run` does**, so step 2’s `docker pull` is still yours to run, in a terminal on your machine, before you reopen; an existing container then needs the palette’s **Dev Containers: Rebuild Container** to pick the new image up. Pin the immutable `:<profile>-<version>` tag here instead if you would rather this folder stay on a known image.',
+        text: 'Swap `:claude` and the credential `mounts` entry for your row from step 1; the `motir-auth` volume stays as it is for every profile, because it is what keeps your Motir sign-in through a rebuild. **Dev Containers reuses a local image just as `docker run` does**, so step 2’s `docker pull` is still yours to run, in a terminal on your machine, and an existing container then needs the palette’s **Dev Containers: Rebuild Container** to pick the new image up — see the warning below. Pin the immutable `:<profile>-<version>` tag here instead if you would rather this folder stay on a known image.',
+      },
+      {
+        kind: 'callout',
+        tone: 'warning',
+        text: '**A dev container keeps the image it was created from — nothing refreshes it.** `--pull=always` belongs to the `docker run` route only. To move to the current image: run `docker pull` first, then **Dev Containers: Rebuild Container**. A rebuild deletes the container, so your Motir sign-in survives it (it lives on the `motir-auth` volume) but a Claude Code sign-in made inside the container does not — run `claude` and sign in again.',
       },
       {
         kind: 'prose',

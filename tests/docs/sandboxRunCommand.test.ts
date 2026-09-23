@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   SANDBOX_AUTH_VOLUME,
   SANDBOX_CONFIG_DIR,
+  SANDBOX_DEVCONTAINER_JSON,
   SANDBOX_IMAGE,
+  SANDBOX_INTRO,
+  SANDBOX_STEPS,
   sandboxProfileRows,
   sandboxPullCommand,
   sandboxRunCommand,
@@ -141,4 +144,75 @@ describe('sandboxPullCommand — kept, and still the same tag', () => {
       expect(sandboxRunCommand(row)).toContain(`${SANDBOX_IMAGE}:${row.id}`);
     },
   );
+});
+
+// THE TWO ROUTES DELIVER THE SAME PROPERTIES (MOTIR-6120).
+//
+// MOTIR-4970 made `sandboxRunCommand` disposable and put the sign-in on a named
+// volume, and nothing asserted that the dev-container literal — the guide's
+// other route — did the same. It did not: a Rebuild Container, the only way to
+// update one, deleted the sign-in. Every property the run command carries that is
+// not a per-profile credential bind must be carried here too, so the next one
+// added to the run command turns this red until the devcontainer follows.
+describe('SANDBOX_DEVCONTAINER_JSON — parity with the run command', () => {
+  const devcontainer = JSON.parse(SANDBOX_DEVCONTAINER_JSON) as { mounts: string[] };
+
+  // What a `-v` flag mounts, as `source:target`, minus the `:ro` credential binds
+  // and the workspace bind (which a dev container spells as `workspaceMount`).
+  function nonCredentialVolumes(command: string): string[] {
+    return command
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('-v '))
+      .map((line) => line.replace(/^-v /, '').replace(/ \\$/, '').replace(/"/g, ''))
+      .filter((spec) => !spec.endsWith(':ro') && !spec.endsWith(':/workspace'));
+  }
+
+  it.each(rows.map((row) => [row.id, row] as const))(
+    '%s: mounts every non-credential volume the run command does',
+    (_id, row) => {
+      const volumes = nonCredentialVolumes(sandboxRunCommand(row));
+      // Vacuity guard: the auth volume is one, so an empty list means the filter broke.
+      expect(volumes).toContain(`${SANDBOX_AUTH_VOLUME}:${SANDBOX_CONFIG_DIR}`);
+      for (const volume of volumes) {
+        const [source, target] = volume.split(':');
+        expect(devcontainer.mounts, `${row.id}: ${volume}`).toContain(
+          `source=${source},target=${target},type=volume`,
+        );
+      }
+    },
+  );
+});
+
+describe('the VS Code route tells the reader how to stay current', () => {
+  const vscode = SANDBOX_STEPS.find((step) => step.id === 'or-from-vs-code');
+
+  it('carries Rebuild Container in a warning callout that names docker pull first', () => {
+    const callout = vscode?.blocks.find(
+      (block) =>
+        block.kind === 'callout' &&
+        block.tone === 'warning' &&
+        /Rebuild Container/.test(block.text),
+    );
+    expect(callout, 'a warning callout naming Rebuild Container').toBeDefined();
+    const text = (callout as { text: string }).text;
+    expect(text.indexOf('docker pull')).toBeGreaterThan(-1);
+    expect(text.indexOf('docker pull')).toBeLessThan(text.indexOf('Rebuild Container'));
+  });
+});
+
+describe('the sign-in precondition is true for Claude Code on macOS', () => {
+  const row = SANDBOX_INTRO.find((step) => step.id === 'before-you-start')
+    ?.blocks.flatMap((block) => (block.kind === 'table' ? block.rows : []))
+    .find((cells) => cells[0]?.includes('own sign-in'));
+
+  it('no longer says the container can never perform a sign-in', () => {
+    expect(row).toBeDefined();
+    expect(row?.[1]).not.toMatch(/can never perform/i);
+  });
+
+  it('tells a macOS Claude Code reader to sign in inside the container', () => {
+    expect(row?.[1]).toMatch(/macOS/);
+    expect(row?.[1]).toMatch(/inside/);
+  });
 });
