@@ -33,6 +33,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     estimateMinutes: null,
     type: null,
     executor: null,
+    difficulty: null,
     storyPoints: null,
     position: 'a0',
     sprintId: null,

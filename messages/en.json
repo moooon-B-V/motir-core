@@ -536,6 +536,11 @@
       "coding_agent": "Agent",
       "human": "Human"
     },
+    "difficulty": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
     "priority": {
       "highest": "Highest",
       "high": "High",
@@ -1531,6 +1536,7 @@
       "storyPoints": "Story points",
       "type": "Work type",
       "executor": "Executor",
+      "difficulty": "Difficulty",
       "targetRepo": "Target repo",
       "descriptionMd": "Description",
       "explanationMd": "Explanation",

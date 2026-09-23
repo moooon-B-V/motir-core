@@ -2185,6 +2185,18 @@ model WorkItem {
   // see docs/decisions/work-item-type-taxonomy.md (the 2.7.2 ADR).
   type                  WorkItemType?
   executor              Executor?
+  // How HARD the work is to REASON about (Story MOTIR-6016 · MOTIR-6096) — the
+  // ambiguity, blast radius, concurrency / security sensitivity or novelty it
+  // demands, which `storyPoints` / `estimateMinutes` (SIZE) do not capture: a
+  // 1-point change to a lock ordering can be `high`. Three things about it:
+  //   - LEAF-ONLY, enforced by the service exactly as `type` / `executor` are
+  //     (`workItemsService` refuses a difficulty on an epic/story with
+  //     `DIFFICULTY_NOT_ALLOWED_ON_KIND`), keyed on the same `isTypeableKind`.
+  //   - NULLABLE with NO backfill: existing leaves have none, and nothing
+  //     guesses one.
+  //   - A CLOSED enum, unlike `subject` below: this is a fixed scale a model
+  //     router reads, not a vocabulary that grows with a rule-pack file.
+  difficulty            WorkItemDifficulty?
   // Work-item PROVENANCE (Story MOTIR-1685, docs/decisions/work-item-provenance.md)
   // — how the item was PLANNED and how it was IMPLEMENTED, each a
   // `source · harness · model` triple. Denormalized latest-authoritative columns
@@ -3084,6 +3096,20 @@ enum Executor {
   human
 
   @@map("executor")
+}
+
+/// How HARD a leaf is to REASON about (Story MOTIR-6016 · MOTIR-6096) — a
+/// CLOSED three-step scale, `low` · `medium` · `high`, carried only on
+/// executable leaves (task / subtask / bug) and nullable (unset). Closed rather
+/// than free text because a model router reads it: extensible only by an
+/// explicit enum addition + migration, and `lib/issues/difficulty.ts`'s
+/// `WORK_ITEM_DIFFICULTIES` is asserted total against it at compile time.
+enum WorkItemDifficulty {
+  low
+  medium
+  high
+
+  @@map("work_item_difficulty")
 }
 
 /// A per-project, customizable issue status (Story 2.2). Every project owns an

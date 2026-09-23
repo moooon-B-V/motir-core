@@ -488,6 +488,7 @@ const workItemDto = {
   estimateMinutes: 55,
   type: 'code' as const,
   executor: 'coding_agent' as const,
+  difficulty: null,
   storyPoints: 5,
   position: 'a2',
   sprintId: null,

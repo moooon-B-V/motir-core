@@ -124,6 +124,7 @@ function makeItem(status: string): WorkItemDto {
     estimateMinutes: null,
     type: 'design',
     executor: 'human',
+    difficulty: null,
     storyPoints: null,
     position: 'a0',
     sprintId: null,

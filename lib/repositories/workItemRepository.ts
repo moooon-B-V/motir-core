@@ -216,6 +216,7 @@ export const HOME_WORK_ITEM_SELECT = {
   assigneeId: true,
   reporterId: true,
   executor: true,
+  difficulty: true,
   storyPoints: true,
   estimateMinutes: true,
   updatedAt: true,
