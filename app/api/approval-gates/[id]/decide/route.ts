@@ -1,17 +1,10 @@
 import { NextResponse } from 'next/server';
-import {
-  ApprovalGateError,
-  ApprovalGateMergeRefusedError,
-  ApprovalGatePrimaryPendingError,
-  ApprovalGateStaleSubjectError,
-  ApprovalGateVerbNotOfferedError,
-} from '@/lib/approvalGates/errors';
-import { APPROVAL_GATE_STATUS } from '@/lib/approvalGates/httpStatus';
+import { gateDecisionRefusalResponse } from '@/lib/approvalGates/decisionRefusalResponse';
 import type { GateDecision } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
-import { PlanNotInExpectedStatusError, PlanRevisionInFlightError } from '@/lib/plans/errors';
+import { PlanNotInExpectedStatusError } from '@/lib/plans/errors';
 
 // POST /api/approval-gates/[id]/decide (Story MOTIR-4778 · Subtask MOTIR-4790)
 // — record a DECISION on one approval gate, whatever its kind.
@@ -167,39 +160,15 @@ export async function POST(
     // A PLAN gate's two inherited refusals (MOTIR-6035; ADR §11.5c): a revision HOLDS
     // the plan — the gate is still awaiting, and says until when — or the plan is no
     // longer `planned`. Both are 409s, as the plan routes answer them.
-    if (err instanceof PlanRevisionInFlightError) {
-      return NextResponse.json(
-        {
-          code: err.code,
-          error: err.message,
-          heldBy: err.heldBy,
-          expiresAt: err.expiresAt.toISOString(),
-        },
-        { status: 409 },
-      );
-    }
     if (err instanceof PlanNotInExpectedStatusError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
-    if (err instanceof ApprovalGateError) {
-      return NextResponse.json(
-        // A stale refusal also says WHAT moved, so a caller can re-read the right thing.
-        err instanceof ApprovalGateStaleSubjectError
-          ? { code: err.code, error: err.message, moved: err.moved }
-          : // …and a primary-pending refusal says WHICH question to answer first (MOTIR-5785).
-            err instanceof ApprovalGatePrimaryPendingError
-            ? { code: err.code, error: err.message, primary: err.primary }
-            : // …and a verb the gate does not offer says which of the three (MOTIR-5893).
-              err instanceof ApprovalGateVerbNotOfferedError
-              ? { code: err.code, error: err.message, reason: err.reason }
-              : // …and a conflict found at the press says WHICH members and that nothing was
-                // written (MOTIR-5915).
-                err instanceof ApprovalGateMergeRefusedError && err.atPress
-                ? { code: err.code, error: err.message, atPress: true, conflicts: err.conflicts }
-                : { code: err.code, error: err.message },
-        { status: APPROVAL_GATE_STATUS[err.tag] },
-      );
-    }
+    // Every other door refusal — and the held plan — in the ONE mapping the plan
+    // routes share (MOTIR-6038): a stale refusal says WHAT moved, a primary-pending one
+    // WHICH question, a verb-not-offered one WHICH refusal, a conflict at the press
+    // WHICH members.
+    const refusal = gateDecisionRefusalResponse(err);
+    if (refusal) return refusal;
     throw err;
   }
 }

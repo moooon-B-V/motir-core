@@ -242,7 +242,7 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
 
     fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
 
-    await waitFor(() => expect(mocks.approvePlanRequest).toHaveBeenCalledWith('plan_1'));
+    await waitFor(() => expect(mocks.approvePlanRequest).toHaveBeenCalledWith('plan_1', null));
     // BOTH mechanisms — the island's own refetch for the review it owns, and the
     // refresh for the establish step only the server can render.
     await waitFor(() => expect(mocks.fetchPlanReview).toHaveBeenCalled());
@@ -337,7 +337,7 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
 
     fireEvent.click(screen.getByRole('button', { name: /Decline/i }));
 
-    await waitFor(() => expect(mocks.declinePlanRequest).toHaveBeenCalledWith('plan_1'));
+    await waitFor(() => expect(mocks.declinePlanRequest).toHaveBeenCalledWith('plan_1', null));
     await waitFor(() => expect(mocks.fetchPlanReview).toHaveBeenCalled());
     expect(mocks.refresh).not.toHaveBeenCalled();
   });

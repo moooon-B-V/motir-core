@@ -111,4 +111,16 @@ export const planGateService = {
     await planRepository.lockById(planId, tx);
     return approvalGateRepository.supersedeAwaitingCardlessBySubject(KIND, planId, cause, tx);
   },
+
+  /**
+   * The plan's `awaiting` gate, or null when nobody is being asked about it (MOTIR-6038;
+   * ADR §11.8). READ-ONLY and lock-free: a caller that must act on the answer reads it
+   * under the plan lock it already holds (`approvePlan` / `declinePlan`'s plain bodies,
+   * which refuse while a question is asked), so a raise — which takes the same lock —
+   * cannot land between the read and the write.
+   */
+  async awaitingFor(planId: string, tx: Prisma.TransactionClient): Promise<ApprovalGate | null> {
+    const [gate] = await approvalGateRepository.findAwaitingCardlessBySubject(KIND, planId, tx);
+    return gate ?? null;
+  },
 };

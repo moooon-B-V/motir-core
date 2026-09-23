@@ -101,6 +101,7 @@ import {
   PlanItemFieldRejectedError,
   PlanNotInExpectedStatusError,
   PlanPersistenceError,
+  PlanGateAwaitingError,
   PlanRevisionInFlightError,
   PlanRefGraphError,
   PlanTargetImmutableError,
@@ -170,6 +171,8 @@ import { buildScope } from '@/lib/planChange/scope';
 import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import { planGateService } from '@/lib/services/planGateService';
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
+import type { DecidePlanInput } from '@/lib/services/planDecisionService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
@@ -5003,55 +5006,10 @@ export const plansService = {
     return toPlanWithItemsDto(row, items);
   },
 
-  /**
-   * Approve THE PLAN A CARD PRODUCED — the bounded entrance an unattended run
-   * drives (MOTIR-3021 / MOTIR-3023,
-   * `docs/decisions/run-findings-protocol.md` Q2).
-   *
-   * ⚠️ IT IS ADDRESSED BY THE CARD, NOT BY A PLAN ID, and that is not
-   * convenience — it is what makes the bound structural. The caller is a loop
-   * whose AGENT submitted the plan in a sandbox — `submit_plan_session` anchored
-   * at `targetKeys: [<KEY>]` (MOTIR-4083; before that, `motir plan --detach
-   * <KEY>`); the plan id came back in that agent's tool result, which the loop
-   * never sees. So a plan-addressed entrance would have forced either a
-   * second read to discover the id or a scrape of the agent's output, and the
-   * anchoring check would have been a check on caller-supplied data. Addressed
-   * by the card, there is no way to NAME a plan that is not the card's.
-   *
-   * ⚠️ ANCHORING IS DERIVED, and every hop is a shipped one:
-   *
-   *   the card's key → `buildScope([key])` → the plan-change session for that
-   *   anchor set → its `lastJobId` → the plan that job produced.
-   *
-   * A thread anchored at `targetKeys: [<KEY>]` — which is what the prompt tells
-   * the agent to submit on — sits at exactly that scope, so this resolves the
-   * plan that card's refusal caused and nothing else.
-   *
-   * ⚠️ NO CONVERSATION MEANS NO. A cadence plan, an onboarding generation and a
-   * plan submitted from the project-wide panel all have no session at this
-   * scope — and every one of them is a plan a person is expected to decide on.
-   * Treating "no anchor" as "no restriction" would invert the bound at exactly
-   * the plans it most protects.
-   *
-   * ⚠️ IT ADDS A BOUND, NEVER A SECOND APPROVAL. Everything that decides whether
-   * a proposal may become a row — the confirmation gate, the `ai:view_plan`
-   * assertion, the one-shot status guard, the re-validation — happens in
-   * {@link plansService.approvePlan}, which this delegates to unchanged.
-   */
-  async approvePlanForWorkItem(
-    projectId: string,
-    workItemKey: string,
-    ctx: ServiceContext,
-  ): Promise<PlanWithItemsDto> {
-    // The AUTHOR key, kept exactly where it was: this method asserted
-    // `ai:view_plan` before the walk was extracted, and `approvePlan` then
-    // asserts `ai:decide_plan` on top. Moving it out of the shared walk is what
-    // lets the READ beside it be browse-gated without either caller inheriting
-    // the other's key by accident.
-    await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
-    const planId = await plansService.resolvePlanIdForWorkItem(projectId, workItemKey, ctx);
-    return plansService.approvePlan(planId, ctx);
-  },
+  // `approvePlanForWorkItem` — the v1 plan-approval route's entrance — moved to
+  // `planDecisionService.approveForWorkItem` (MOTIR-6038): it decides the plan's gate
+  // through the door now, and the anchoring walk it shares with `readPlanForWorkItem`
+  // stays here as `resolvePlanIdForWorkItem`.
 
   /**
    * READ the plan a card produced, WITHOUT deciding it (MOTIR-4085).
@@ -5345,6 +5303,30 @@ export const plansService = {
     ctx: ServiceContext,
     opts: { provisionalProjectName?: string | null } = {},
   ): Promise<PlanWithItemsDto> {
+    // ⚠️ NOT AN ENTRANCE (MOTIR-6038; ADR §11.8). No route, action, hook or tool calls
+    // this — every surface decides through `planDecisionService`, with the stamp its
+    // reader was shown, and `tests/approvalGates/planDecisionEntrances.test.ts` fails the
+    // build on a new production caller. It remains a server-side composer for a caller
+    // that rendered nothing: while the plan's question is asked it decides the gate
+    // THROUGH THE DOOR, without a reader, so it never writes `approved` around the gate.
+    if (await hasAwaitingPlanGate(planId, ctx)) {
+      return decideAskedPlanWithoutAReader(planId, 'approve', ctx, opts);
+    }
+    return plansService.approveUnaskedPlan(planId, ctx, opts);
+  },
+
+  /**
+   * APPROVE'S PLAIN BODY, for a plan nobody is being asked about (MOTIR-6038) — refused
+   * under the plan lock with `PlanGateAwaitingError` while an `awaiting` gate exists, so
+   * it can never decide a plan around its question. Reachable only through
+   * {@link approvePlan}; the entrances never approve an unasked plan (§11.8: a `planned`
+   * plan with no gate is *not decidable yet*).
+   */
+  async approveUnaskedPlan(
+    planId: string,
+    ctx: ServiceContext,
+    opts: { provisionalProjectName?: string | null } = {},
+  ): Promise<PlanWithItemsDto> {
     // THREE PHASES, one per side of the transaction (Story MOTIR-6012 · MOTIR-6035; ADR
     // `approval-gates.md` §11.5): what must be read BEFORE it opens, the body that
     // materializes inside it, and what may only happen AFTER it commits. They are named
@@ -5353,7 +5335,7 @@ export const plansService = {
     const prep = await prepareApprove(planId, ctx);
     const done = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: prep.plan.projectId },
-      (tx) => approveWithin(tx, planId, ctx, prep, opts),
+      (tx) => approveWithin(tx, planId, ctx, prep, { ...opts, viaGate: false }),
       // The raised budget, argued at {@link APPROVE_TX_BUDGET}. Second of the
       // two fixes, not the first: the edge pass above was batched before this
       // number was touched (MOTIR-3396).
@@ -5393,7 +5375,8 @@ export const plansService = {
     prep: ApprovePlanPreparation,
     opts: { provisionalProjectName?: string | null } = {},
   ): Promise<{ plan: PlanWithItemsDto; afterCommit: () => Promise<void> }> {
-    const done = await approveWithin(tx, planId, ctx, prep, opts);
+    // The handler's seam: THE door's effect, so the asked-question refusal is waived.
+    const done = await approveWithin(tx, planId, ctx, prep, { ...opts, viaGate: true });
     return {
       plan: toPlanWithItemsDto(done.row, done.items),
       afterCommit: () => afterApproveCommit(prep.plan, ctx, done),
@@ -5611,6 +5594,22 @@ export const plansService = {
   },
 
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
+    // ⚠️ NOT AN ENTRANCE (MOTIR-6038) — see {@link approvePlan}. An asked plan is
+    // declined through the door; an unasked one through the plain body below.
+    if (await hasAwaitingPlanGate(planId, ctx)) {
+      return decideAskedPlanWithoutAReader(planId, 'decline', ctx, {});
+    }
+    return plansService.declineUnaskedPlan(planId, ctx);
+  },
+
+  /**
+   * DECLINE A PLAN NOBODY IS BEING ASKED ABOUT — the one plain decision an entrance
+   * makes (ADR §11.8 item 5): a `generating` plan's discard, or a `stale` plan whose
+   * question was superseded. There is no gate to decide, so none is recorded; the plan's
+   * row and trail record the ending as they always have. Refused under the plan lock
+   * with `PlanGateAwaitingError` if a question is asked by the time it runs.
+   */
+  async declineUnaskedPlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
@@ -5623,7 +5622,7 @@ export const plansService = {
 
     const { row, count } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-      (tx) => declineWithin(tx, planId, ctx),
+      (tx) => declineWithin(tx, planId, ctx, { viaGate: false }),
     );
     // Declining is as terminal for the lock as approving: the output will never
     // exist, so continuing to hold the targets blocks a colleague for nothing
@@ -5645,7 +5644,7 @@ export const plansService = {
     planId: string,
     ctx: ServiceContext,
   ): Promise<{ plan: PlanDto; afterCommit: () => Promise<void> }> {
-    const { row, count } = await declineWithin(tx, planId, ctx);
+    const { row, count } = await declineWithin(tx, planId, ctx, { viaGate: true });
     return { plan: toPlanDto(row, count), afterCommit: () => releasePlanTargetLocks(row, ctx) };
   },
 };
@@ -5660,6 +5659,52 @@ export { toPlanItemDto };
 // transaction; the plan gate's handler composes them around the decide door's. The
 // bodies are the ones `approvePlan` has always run, moved rather than rewritten.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Whether the plan's question is asked right now — an `awaiting` plan gate (§11.8). A
+ *  lock-free courtesy read: the plain bodies re-check it under the plan lock. */
+async function hasAwaitingPlanGate(planId: string, ctx: ServiceContext): Promise<boolean> {
+  const gate = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    planGateService.awaitingFor(planId, tx),
+  );
+  return gate !== null;
+}
+
+/**
+ * {@link plansService.approvePlan} / `declinePlan` on an ASKED plan: the door decides it,
+ * with no reader (nobody rendered a stamp for this server-side composer), and the gate's
+ * state refusals keep the methods' documented contract — a plan somebody already decided
+ * is `PlanNotInExpectedStatusError`, carrying the status it is in.
+ */
+async function decideAskedPlanWithoutAReader(
+  planId: string,
+  decision: 'approve',
+  ctx: ServiceContext,
+  opts: { provisionalProjectName?: string | null },
+): Promise<PlanWithItemsDto>;
+async function decideAskedPlanWithoutAReader(
+  planId: string,
+  decision: 'decline',
+  ctx: ServiceContext,
+  opts: { provisionalProjectName?: string | null },
+): Promise<PlanDto>;
+async function decideAskedPlanWithoutAReader(
+  planId: string,
+  decision: 'approve' | 'decline',
+  ctx: ServiceContext,
+  opts: { provisionalProjectName?: string | null },
+): Promise<PlanWithItemsDto | PlanDto> {
+  // Lazy: `planDecisionService` imports this module (the handler's cycle, broken the
+  // same way).
+  const { planDecisionService } = await import('@/lib/services/planDecisionService');
+  const input: DecidePlanInput = { planId, stamp: DECIDED_WITHOUT_A_READER, source: 'api' };
+  try {
+    return decision === 'approve'
+      ? await planDecisionService.approve(input, ctx, opts)
+      : await planDecisionService.decline(input, ctx);
+  } catch (err) {
+    throw await planDecisionService.asPlanStatusRefusal(err, planId, ctx);
+  }
+}
 
 /** Approve's PRE-TRANSACTION phase: the plan, the permission, the first gate pass and
  *  every read that opens its own context (so cannot run inside the transaction). */
@@ -5859,13 +5904,35 @@ async function prepareApprove(planId: string, ctx: ServiceContext) {
 /** What {@link prepareApprove} read — handed to the in-transaction body. */
 export type ApprovePlanPreparation = Awaited<ReturnType<typeof prepareApprove>>;
 
+/**
+ * WHO is running a decision body (MOTIR-6038). `viaGate: true` is the plan gate's
+ * handler, inside the decide door's transaction — the ONE writer §11.8 allows while a
+ * plan's question is asked. Every other caller is a PLAIN writer and is refused while
+ * an `awaiting` gate exists.
+ */
+interface PlanDecisionBodyOptions {
+  viaGate: boolean;
+}
+
+/** Refuse a plain decision of a plan whose question is asked — read under the plan
+ *  lock the caller already holds, so it races nothing (ADR §11.8's converse). */
+async function assertNoAwaitingGateUnlessDeciding(
+  planId: string,
+  opts: PlanDecisionBodyOptions,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (opts.viaGate) return;
+  const awaiting = await planGateService.awaitingFor(planId, tx);
+  if (awaiting) throw new PlanGateAwaitingError(planId, awaiting.id);
+}
+
 /** Approve's IN-TRANSACTION body, on the caller's `tx`. */
 async function approveWithin(
   tx: Prisma.TransactionClient,
   planId: string,
   ctx: ServiceContext,
   prep: ApprovePlanPreparation,
-  opts: { provisionalProjectName?: string | null },
+  opts: PlanDecisionBodyOptions & { provisionalProjectName?: string | null },
 ) {
   const { plan, terminalStatusKeys, repoPins, snapshotPins, repoSets, snapshotRepoSets, repoRefs } =
     prep;
@@ -5876,6 +5943,10 @@ async function approveWithin(
   if (fresh.status !== 'planned') {
     throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
   }
+  // ⚠️ WHILE A QUESTION IS ASKED, ONLY THE DOOR DECIDES (MOTIR-6038; ADR §11.8's
+  // converse) — under the plan lock, which the raise takes too, so no gate can land
+  // between this read and the `approved` write.
+  await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
   // ⚠️ AND REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
   // under the lock, before a single row is materialized. Approve is
   // one-shot, so the only safe answer to "a revision is halfway through
@@ -6166,7 +6237,12 @@ async function markStaleOnImmutableTarget(
 
 /** Decline's IN-TRANSACTION body (MOTIR-6035) — `declinePlan` and the plan gate's
  *  handler both run it; see `declinePlan` for every rule it keeps. */
-async function declineWithin(tx: Prisma.TransactionClient, planId: string, ctx: ServiceContext) {
+async function declineWithin(
+  tx: Prisma.TransactionClient,
+  planId: string,
+  ctx: ServiceContext,
+  opts: PlanDecisionBodyOptions,
+) {
   const locked = await planRepository.lockById(planId, tx);
   if (!locked) throw new PlanNotFoundError(planId);
   const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
@@ -6178,6 +6254,9 @@ async function declineWithin(tx: Prisma.TransactionClient, planId: string, ctx: 
     // (MOTIR-3025).
     throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned, stale or generating');
   }
+  // The PLAIN decline is for a plan nobody is being asked about (§11.8 item 5 — a
+  // `generating` or `stale` plan); an asked one is declined through the door.
+  await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
   // A DECLINE is refused under the lease too, and for a reason of its own:
   // `declined` is a closed decision, so a revision that finishes writing
   // into a declined plan leaves proposals on a plan nobody will ever read.

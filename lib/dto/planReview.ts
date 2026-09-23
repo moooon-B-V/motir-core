@@ -20,6 +20,7 @@
 // no longer on the canvas once that item materialized; a real work-item ref
 // stays as-is.
 
+import type { ApprovalGateStateDTO, PlanGateHeldDTO } from '@/lib/dto/approvalGate';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ExecutorDto } from '@/lib/dto/workItems';
 import type {
@@ -821,6 +822,19 @@ export interface PlanRevisionStateDto {
   startedAt: string;
 }
 
+/** A plan's gate as the planning surface reads it (MOTIR-6038) — see
+ *  {@link PlanReviewDto.gate}. */
+export interface PlanReviewGateDto {
+  id: string;
+  state: ApprovalGateStateDTO;
+  /** The stamp a press hands back — null unless the gate is `awaiting`. */
+  stamp: string | null;
+  /** Why an `awaiting` gate refuses both verbs right now (a revision in flight). */
+  held: PlanGateHeldDTO | null;
+  /** Whether THIS reader holds the plan's decide permission (`ai:decide_plan`). */
+  canDecide: boolean;
+}
+
 export interface PlanReviewDto {
   id: string;
   projectId: string;
@@ -890,6 +904,20 @@ export interface PlanReviewDto {
    * held button needs to say.
    */
   revision: PlanRevisionStateDto | null;
+
+  /**
+   * THE PLAN'S QUESTION — its latest `plan_approval` gate, as the render read returns it
+   * (Story MOTIR-6012 · MOTIR-6038; ADR `approval-gates.md` §11.3, §11.5c, §11.8). Null
+   * when the plan has none: a `generating` plan, an empty close, or a `planned` plan
+   * from before the raise shipped — which every entrance refuses as *not decidable yet*.
+   *
+   * ⚠️ `stamp` IS WHAT A PRESS HANDS BACK. Approve and Decline send it with the press
+   * (`approvePlanRequest` / `declinePlanRequest`), and the decide door refuses a stamp
+   * taken before the proposals moved (a revision, a correction) as stale. It is null
+   * unless the gate is `awaiting`. OPTIONAL on the type only so hand-built review
+   * fixtures that predate it stay valid; `getPlanReview` always sets it.
+   */
+  gate?: PlanReviewGateDto | null;
 
   items: PlanReviewItemDto[];
   /** Roll-up: any item is stale (the plan-level "N may be out of date"). */

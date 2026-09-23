@@ -54,7 +54,26 @@ export async function readPendingProposal(
 export function planDecisionErrorCode(err: unknown, fallback = 'APPROVE_ERROR'): string {
   if (!(err instanceof PlanRequestError)) return fallback;
   if (err.code === 'PLAN_TARGET_IMMUTABLE') return 'immutable';
-  if (err.code === 'PLAN_NOT_IN_EXPECTED_STATUS' || err.status === 404) return 'decided';
+  // A second press of a decided plan answers the same on every surface, whichever
+  // refusal carried it: the door's (the plan's gate is decided or withdrawn) or the
+  // plan's own status.
+  if (
+    err.code === 'PLAN_NOT_IN_EXPECTED_STATUS' ||
+    err.code === 'APPROVAL_GATE_ALREADY_DECIDED' ||
+    err.code === 'APPROVAL_GATE_SUPERSEDED' ||
+    err.status === 404
+  ) {
+    return 'decided';
+  }
+  // The decide door's other refusals of a plan (MOTIR-6038): HELD while a revision is
+  // in flight, STALE when the reader's stamp predates the proposals they are deciding
+  // (or a question was raised under a plain press), and NOT DECIDABLE YET for a
+  // `planned` plan nobody has been asked about.
+  if (err.code === 'PLAN_REVISION_IN_FLIGHT') return 'held';
+  if (err.code === 'APPROVAL_GATE_STALE_SUBJECT' || err.code === 'PLAN_GATE_AWAITING') {
+    return 'stale';
+  }
+  if (err.code === 'PLAN_NOT_DECIDABLE_YET') return 'notDecidable';
   return fallback;
 }
 

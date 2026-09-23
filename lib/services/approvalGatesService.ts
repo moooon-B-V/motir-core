@@ -200,6 +200,13 @@ export interface DecideGateOptions {
      *  cannot map the reviewer to a member. */
     reviewerLogin: string;
   };
+
+  /**
+   * What the KIND's effect needs from the composing service and nothing else reads
+   * (MOTIR-6038 — a plan approve's onboarding rename placeholder), handed through
+   * untouched as `GateEffectArgs.effectOptions`. ⚠️ INTERNAL, like the two above.
+   */
+  effectOptions?: Readonly<Record<string, unknown>>;
 }
 
 export interface DecideGateResult {
@@ -1614,7 +1621,12 @@ export const approvalGatesService = {
     // its repository pins here, exactly as `approvePlan` does before its own
     // transaction). Only for a gate the pre-read found `awaiting`: a decided or
     // withdrawn gate is refused under the lock, and there is nothing to prepare for.
-    const outside = { subjectId: preread.gate.subjectId, decision: input.decision, ctx };
+    const outside = {
+      subjectId: preread.gate.subjectId,
+      decision: input.decision,
+      ctx,
+      effectOptions: options.effectOptions,
+    };
     const prepared =
       handler.beforeTransaction && preread.gate.state === 'awaiting'
         ? await handler.beforeTransaction(outside)
@@ -1851,6 +1863,7 @@ export const approvalGatesService = {
         tx,
         resolvedStatusKey,
         prepared,
+        effectOptions: options.effectOptions,
       };
       // §6a's first row — the subject's version AS DECIDED, answered by the KIND and read
       // under the lock BEFORE the effect runs. ⚠️ BEFORE, not after (MOTIR-6035): a plan's

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getTranslations } from 'next-intl/server';
 
-import { plansService } from '@/lib/services/plansService';
+import { planDecisionService } from '@/lib/services/planDecisionService';
+import { planDecisionRefusalResponse } from '@/lib/approvalGates/decisionRefusalResponse';
+import { readPlanDecisionPress } from '@/lib/plans/decisionPress';
 import {
   PlanApproveTimedOutError,
   PlanGrammarError,
@@ -33,10 +35,23 @@ import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 // to the same id (one logged revision), removes archive. The service is the atomic
 // one-shot guard: a second concurrent approve observes `approved` and 409s.
 //
+// ⚠️ IT DECIDES THE PLAN'S GATE (Story MOTIR-6012 · MOTIR-6038; ADR `approval-gates.md`
+// §11.8). `planDecisionService.approve` resolves the plan's `awaiting` `plan_approval`
+// gate and decides it through the ONE decide door, with the stamp the reader was shown
+// — the plan page, the planning rail (and its close guard's *Confirm & add*), the
+// `/ready` nudge and the onboarding approve all press through here. The door's refusals
+// answer in the decide route's words and statuses (`planDecisionRefusalResponse`):
+// already decided / withdrawn / stale / held by a revision → 409, a `planned` plan
+// nobody has been asked about yet → 409 `PLAN_NOT_DECIDABLE_YET`, an asked plan pressed
+// without its stamp → 400.
+//
+// JSON body (optional — an empty body is a press with no stamp): `stamp` (the
+// `PlanReviewDto.gate.stamp` the reader was shown), `noteMd` (optional).
+//
 // HTTP only (CLAUDE.md 4-layer): resolve the workspace, call ONE service method,
-// map typed errors. `approvePlan` asserts `canEdit` (→ 403/404).
+// map typed errors. The service asserts `ai:decide_plan` (→ 403/404).
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const gate = await requireCompliantWorkspaceContext();
@@ -44,21 +59,27 @@ export async function POST(
   const { ctx } = gate;
 
   const { id } = await params;
+  const press = await readPlanDecisionPress(req);
   // The provisional name an AI-onboarding draft is minted with (MOTIR-1486,
   // `startNewAiProjectAction`). Passed so approve can name the draft from the
   // plan's `productName` (MOTIR-1551) ONLY while the name is still this
   // placeholder — resolved here (i18n stays out of the service layer).
   const t = await getTranslations('shell');
   try {
-    const plan = await plansService.approvePlan(id, ctx, {
-      provisionalProjectName: t('project.untitled'),
-    });
+    const plan = await planDecisionService.approve(
+      { planId: id, stamp: press.stamp, noteMd: press.noteMd, source: 'api' },
+      ctx,
+      { provisionalProjectName: t('project.untitled') },
+    );
     return NextResponse.json(plan);
   } catch (err) {
     // MOTIR-2291 — the shared project gate's two refusals (404 for a non-browser,
     // 403 naming the key). Without this arm they fall through to a 500.
     const gate = aiPlanGateErrorResponse(err);
     if (gate) return gate;
+    // The decide door's refusals, and the entrance's own three (MOTIR-6038).
+    const refusal = planDecisionRefusalResponse(err);
+    if (refusal) return refusal;
     if (err instanceof PlanNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

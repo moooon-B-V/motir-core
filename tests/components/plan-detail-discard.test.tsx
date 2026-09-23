@@ -233,7 +233,7 @@ describe('discarding a GENERATING plan (MOTIR-3240)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Discard this plan' }));
     fireEvent.click(screen.getByRole('button', { name: 'Discard plan' }));
 
-    await waitFor(() => expect(mocks.declinePlanRequest).toHaveBeenCalledWith('plan_1'));
+    await waitFor(() => expect(mocks.declinePlanRequest).toHaveBeenCalledWith('plan_1', null));
     // The reason-specific line, not the generic declined one — rendering all
     // three endings identically is the defect MOTIR-3189 fixed one layer down.
     await waitFor(() => expect(screen.getByText(/Plan discarded before it finished/)).toBeTruthy());
@@ -280,7 +280,7 @@ describe('discarding a GENERATING plan (MOTIR-3240)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
 
-    await waitFor(() => expect(mocks.declinePlanRequest).toHaveBeenCalledWith('plan_1'));
+    await waitFor(() => expect(mocks.declinePlanRequest).toHaveBeenCalledWith('plan_1', null));
     expect(screen.queryByText('Discard this plan?')).toBeNull();
   });
 });

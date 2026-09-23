@@ -33,6 +33,7 @@ import {
   approvePlanRequest,
   declinePlanRequest,
   fetchPlanReview,
+  PlanRequestError,
 } from '@/lib/planning/planReviewClient';
 import {
   planDecisionErrorCode,
@@ -1161,18 +1162,38 @@ export function usePlanChangeConversation({
   );
 
   /**
-   * PERSIST the proposal — `POST /api/plans/[id]/approve` → `approvePlan` →
-   * `materialize`, the path that actually writes, behind the 7.12.5 persist gate.
-   * It is the SAME operation `/plans/[id]` performs, on the same Plan: two
-   * entrances, one gate, no second write path. The thread STAYS.
+   * After a refused decision, re-read the review when the refusal is a fact about the
+   * PLAN (MOTIR-6038): a stale stamp means the proposals moved under the reader, so the
+   * next press must carry the stamp of what they are now shown. Best-effort — a failed
+   * re-read leaves the review in hand, and the press is refused stale again.
+   */
+  const rereadAfterRefusal = useCallback(async (planId: string, err: unknown) => {
+    if (!(err instanceof PlanRequestError) || err.code !== 'APPROVAL_GATE_STALE_SUBJECT') return;
+    try {
+      const fresh = await fetchPlanReview(planId);
+      if (!mountedRef.current) return;
+      setState((s) => (s.planId === planId ? { ...s, review: fresh } : s));
+    } catch {
+      /* keep the review in hand */
+    }
+  }, []);
+
+  /**
+   * PERSIST the proposal — `POST /api/plans/[id]/approve`, which decides the plan's
+   * gate through the one decide door (MOTIR-6038) and `materialize`s it, behind the
+   * 7.12.5 persist gate. It is the SAME operation `/plans/[id]` performs, on the same
+   * Plan: two entrances, one door, no second write path. The press carries the stamp
+   * of the review the reader was shown. The thread STAYS.
    */
   const approve = useCallback(async () => {
-    const { planId } = stateRef.current;
+    const { planId, review } = stateRef.current;
     if (!planId) return;
     setState((s) => ({ ...s, phase: 'deciding', errorCode: null }));
 
     try {
-      const approved = summarizePlanApproval(await approvePlanRequest(planId));
+      const approved = summarizePlanApproval(
+        await approvePlanRequest(planId, review?.gate?.stamp ?? null),
+      );
       // ⚠️ RE-READ THE DECIDED PLAN (bug MOTIR-3206). The review in hand was read
       // while the plan was `planned`, so every `add` in it is keyed by its
       // PlanItem id and carries no identifier. Keeping the overlay past the
@@ -1212,8 +1233,9 @@ export function usePlanChangeConversation({
     } catch (err) {
       if (!mountedRef.current) return;
       setState((s) => ({ ...s, phase: 'review', errorCode: planDecisionErrorCode(err) }));
+      await rereadAfterRefusal(planId, err);
     }
-  }, []);
+  }, [rereadAfterRefusal]);
 
   /**
    * DISCARD the proposal — `POST /api/plans/[id]/decline`, which drops the
@@ -1222,10 +1244,10 @@ export function usePlanChangeConversation({
    * The conversation stays open either way.
    */
   const discard = useCallback(async () => {
-    const { planId } = stateRef.current;
+    const { planId, review } = stateRef.current;
     setState((s) => ({ ...s, phase: 'deciding', errorCode: null }));
     try {
-      if (planId) await declinePlanRequest(planId);
+      if (planId) await declinePlanRequest(planId, review?.gate?.stamp ?? null);
       if (!mountedRef.current) return;
       setState((s) => ({
         ...s,
@@ -1249,8 +1271,9 @@ export function usePlanChangeConversation({
         phase: 'review',
         errorCode: planDecisionErrorCode(err, 'discard'),
       }));
+      if (planId) await rereadAfterRefusal(planId, err);
     }
-  }, []);
+  }, [rereadAfterRefusal]);
 
   const dismissError = useCallback(() => {
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));

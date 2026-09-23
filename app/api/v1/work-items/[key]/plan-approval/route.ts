@@ -12,6 +12,8 @@ import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import { NoPlanForWorkItemError, PlanNotInExpectedStatusError } from '@/lib/plans/errors';
 import { planReviewService } from '@/lib/services/planReviewService';
 import { plansService } from '@/lib/services/plansService';
+import { planDecisionService } from '@/lib/services/planDecisionService';
+import { planDecisionRefusalResponse } from '@/lib/approvalGates/decisionRefusalResponse';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -55,9 +57,12 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // even if somebody widened that grant to the full author key.
 //
 // ── ONE service call, and the bound is inside it ───────────────────────────
-// `plansService.approvePlanForWorkItem` resolves the plan and delegates to the
-// shipped `approvePlan` — no second approval path, no re-derived validation, and
-// the confirmation gate untouched. HTTP only up here (CLAUDE.md 4-layer).
+// `planDecisionService.approveForWorkItem` resolves the plan and DECIDES ITS GATE
+// through the one decide door (MOTIR-6038; ADR `approval-gates.md` §11.8) — no
+// second approval path, no re-derived validation, and the confirmation gate
+// untouched. The loop never rendered a gate, so the service derives the stamp
+// server-side from the render read; the decision is recorded `source: 'api'`.
+// HTTP only up here (CLAUDE.md 4-layer).
 
 // The key the SERVICE itself asserts (`approvePlan` →
 // `projectAccessService.assertPermission(…, 'ai:decide_plan')`) — the key that
@@ -85,7 +90,7 @@ export const POST = withV1Route<{ key: string }>({ permission: 'ai:decide_plan' 
 
   let plan;
   try {
-    plan = await plansService.approvePlanForWorkItem(projectId, identifier, ctx.service);
+    plan = await planDecisionService.approveForWorkItem(projectId, identifier, ctx.service);
   } catch (err) {
     // ⚠️ THE REFUSAL TEACHES, and this one has to (MOTIR-3025). An agent submits
     // its re-plan with `--detach` and exits within milliseconds, so a loop that
@@ -102,6 +107,13 @@ export const POST = withV1Route<{ key: string }>({ permission: 'ai:decide_plan' 
         { status: 409 },
       );
     }
+    // The DOOR's refusals (MOTIR-6038) — already decided, withdrawn, held while a
+    // revision is in flight, stale, not decidable yet — in the one refusal language
+    // every gate surface speaks. Each is a 409 but a malformed decision (400); none
+    // carries `PLAN_NOT_IN_EXPECTED_STATUS`, so the CLI stops on them with the
+    // server's sentence rather than waiting.
+    const refusal = planDecisionRefusalResponse(err);
+    if (refusal) return refusal;
     throw err;
   }
 

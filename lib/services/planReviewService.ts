@@ -15,6 +15,7 @@ import {
 } from '@/lib/planChange/revisionLease';
 
 import { plansService } from '@/lib/services/plansService';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
@@ -40,6 +41,7 @@ import type {
   PlanParentCrumbDto,
   PlanPlacementSideDto,
   PlanReviewDto,
+  PlanReviewGateDto,
   PlanReviewItemDto,
   PlanReviewTodoDto,
 } from '@/lib/dto/planReview';
@@ -583,6 +585,9 @@ export const planReviewService = {
     // that must hold Approve and the timeline that tells the reviewer WHY read
     // one fact from one place, and nothing needed a column.
     const lease = revisionLeaseOf(revisions, new Date());
+    // THE PLAN'S QUESTION (MOTIR-6038) — its gate and the stamp a press hands back, read
+    // on every poll so a reader's stamp follows the version they are looking at.
+    const gate = await readPlanGate(planId, ctx);
     const revisionStartedAt = lastRevisionStartAt(revisions);
     // WHICH proposals the latest revision touched. Every trail row written at or
     // after that start names its `planItemId`, so the set falls out of rows this
@@ -1492,6 +1497,7 @@ export const planReviewService = {
             startedAt: (revisionStartedAt ?? new Date()).toISOString(),
           }
         : null,
+      gate,
       history,
       items,
       stale: staleCount > 0,
@@ -1501,3 +1507,20 @@ export const planReviewService = {
     };
   },
 };
+
+/** The plan's question as the planning surface reads it — the gate's render read,
+ *  narrowed to what a press needs (MOTIR-6038). */
+async function readPlanGate(
+  planId: string,
+  ctx: ServiceContext,
+): Promise<PlanReviewGateDto | null> {
+  const read = await approvalGatesService.getForPlan({ planId }, ctx);
+  if (!read.gate) return null;
+  return {
+    id: read.gate.id,
+    state: read.gate.state,
+    stamp: read.stamp,
+    held: read.gate.held ?? null,
+    canDecide: read.canDecide,
+  };
+}

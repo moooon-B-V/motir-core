@@ -73,13 +73,28 @@ export async function fetchPlanReview(
   return (await res.json()) as PlanReviewDto;
 }
 
-/** Approve (materialize) the plan. Throws `PlanRequestError` (409 = already
- *  decided by a concurrent reviewer). */
-export async function approvePlanRequest(planId: string): Promise<PlanWithItemsDto> {
-  const res = await fetch(`/api/plans/${encodeURIComponent(planId)}/approve`, {
+/**
+ * The press body (MOTIR-6038): the `stamp` the reader was shown — the review read's
+ * `PlanReviewDto.gate.stamp` — handed back so the decide door can refuse a press made
+ * against a version that has since moved. Null when the reader was shown no question
+ * (a `generating` plan's discard); the server decides whether one was owed.
+ */
+function decisionInit(stamp: string | null | undefined): RequestInit {
+  return {
     method: 'POST',
-    headers: { Accept: 'application/json' },
-  });
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stamp: stamp ?? null }),
+  };
+}
+
+/** Approve (materialize) the plan — decides its gate through the decide door with the
+ *  stamp the reader was shown (MOTIR-6038). Throws `PlanRequestError` (409 = already
+ *  decided, withdrawn, stale, held by a revision, or not decidable yet). */
+export async function approvePlanRequest(
+  planId: string,
+  stamp?: string | null,
+): Promise<PlanWithItemsDto> {
+  const res = await fetch(`/api/plans/${encodeURIComponent(planId)}/approve`, decisionInit(stamp));
   if (!res.ok) {
     const { code, planItemId, message } = await readErrorDetail(res);
     throw new PlanRequestError(res.status, code, { planItemId, message });
@@ -87,12 +102,10 @@ export async function approvePlanRequest(planId: string): Promise<PlanWithItemsD
   return (await res.json()) as PlanWithItemsDto;
 }
 
-/** Decline (drop) the plan. Throws `PlanRequestError` on a non-2xx. */
-export async function declinePlanRequest(planId: string): Promise<PlanDto> {
-  const res = await fetch(`/api/plans/${encodeURIComponent(planId)}/decline`, {
-    method: 'POST',
-    headers: { Accept: 'application/json' },
-  });
+/** Decline the plan — through its gate when it is asked, a plain discard of a
+ *  `generating` / `stale` plan otherwise (MOTIR-6038). Throws `PlanRequestError`. */
+export async function declinePlanRequest(planId: string, stamp?: string | null): Promise<PlanDto> {
+  const res = await fetch(`/api/plans/${encodeURIComponent(planId)}/decline`, decisionInit(stamp));
   if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
   return (await res.json()) as PlanDto;
 }

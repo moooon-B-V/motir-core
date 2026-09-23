@@ -132,7 +132,10 @@ export function ExpansionNudgeBanner() {
     if (!planId) return;
     setPhase('approving');
     try {
-      const approved = summarizePlanApproval(await approvePlanRequest(planId));
+      // The stamp of the proposals this banner rendered (MOTIR-6038).
+      const approved = summarizePlanApproval(
+        await approvePlanRequest(planId, review?.gate?.stamp ?? null),
+      );
       if (!mountedRef.current) return;
       setPlanId(null);
       setReview(null);
@@ -143,7 +146,7 @@ export function ExpansionNudgeBanner() {
       setErrorCode(planDecisionErrorCode(err));
       setPhase('error');
     }
-  }, [planId, t]);
+  }, [planId, review, t]);
 
   /** Waving the proposal away DECIDES its plan — nothing is written to the tree,
    *  and no run is left pending. The banner closes either way: a decline that
@@ -152,14 +155,15 @@ export function ExpansionNudgeBanner() {
     setVisible(false);
     if (!planId) return;
     const pending = planId;
+    const stamp = review?.gate?.stamp ?? null;
     setPlanId(null);
     setReview(null);
     try {
-      await declinePlanRequest(pending);
+      await declinePlanRequest(pending, stamp);
     } catch {
       /* the plan stays pending; the user can decide it from /plans */
     }
-  }, [planId]);
+  }, [planId, review]);
 
   useEffect(() => {
     return () => {

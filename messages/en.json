@@ -6588,6 +6588,9 @@
         "immutable": "Some of those work items are already finished, so they can't be changed. The rest is still on the canvas.",
         "session": "This conversation couldn't be loaded. Try again — nothing in your plan has changed.",
         "decided": "This proposal was already decided — nothing was left to confirm, and nothing was written twice.",
+        "held": "Motir is still rewriting this plan, so it can’t be approved or declined yet. Nothing was changed — try again once the new version lands.",
+        "stale": "This plan changed since you read it. Nothing was written — the canvas now shows the current version; review it and decide again.",
+        "notDecidable": "This plan can’t be decided yet — nobody has been asked to approve it. Nothing was changed.",
         "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
         "askSilent": "Nothing came back. Try asking that a different way."
       },

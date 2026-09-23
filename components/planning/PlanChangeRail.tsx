@@ -667,6 +667,14 @@ function errorKey(code: string): string {
       return 'error.decided';
     case 'discard':
       return 'error.discard';
+    // The decide door's refusals of a plan (MOTIR-6038): a revision holds it, the
+    // reader's version moved, or nobody has been asked about it yet.
+    case 'held':
+      return 'error.held';
+    case 'stale':
+      return 'error.stale';
+    case 'notDecidable':
+      return 'error.notDecidable';
     case 'SESSION_UNAVAILABLE':
       return 'error.session';
     // The ask job ran and produced nothing at all. NOT the honest "I could not

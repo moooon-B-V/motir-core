@@ -266,6 +266,10 @@ export function PlanDetail({
         // are the same event and there is no reading on which one of them is a
         // failure and the other is not.
         if (err instanceof PlanRequestError && err.status === 409) {
+          // …except the HELD refusal (MOTIR-6038), which the rail already has its own
+          // sentence for: a revision took the lease between the render and the press,
+          // and the reader is told why rather than shown a plan that looks decidable.
+          if (err.code === 'PLAN_REVISION_IN_FLIGHT') setErrorCode(err.code);
           await refetch().catch(() => {});
           if (refreshServerSurfaces) router.refresh();
         } else if (isFolderMissingRefusal(err)) {
@@ -295,9 +299,16 @@ export function PlanDetail({
 
   // Approving REVEALS the establish step, which only the server can render — so
   // this is the one action that also refreshes (MOTIR-1947).
+  // Every press hands back the stamp of the review it was made on (MOTIR-6038), so the
+  // decide door refuses a press against proposals that moved since this render.
+  const stamp = review.gate?.stamp ?? null;
   const approve = useCallback(
-    () => runAction(approvePlanRequest, { refreshServerSurfaces: true }),
-    [runAction],
+    () => runAction((id) => approvePlanRequest(id, stamp), { refreshServerSurfaces: true }),
+    [runAction, stamp],
+  );
+  const decline = useCallback(
+    () => runAction((id) => declinePlanRequest(id, stamp)),
+    [runAction, stamp],
   );
 
   const onApprove = useCallback(() => {
@@ -318,10 +329,10 @@ export function PlanDetail({
       setDiscardOpen(true);
       return;
     }
-    void runAction(declinePlanRequest);
-  }, [review.status, runAction]);
+    void decline();
+  }, [review.status, decline]);
 
-  const discard = useCallback(() => void runAction(declinePlanRequest), [runAction]);
+  const discard = useCallback(() => void decline(), [decline]);
 
   // ⚠️ THE TERMINAL-EMPTY HAND-OFF IS GONE FROM THIS SURFACE (MOTIR-4124), and
   // what replaced it is the RAIL. A `return` before the workspace was mounted

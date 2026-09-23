@@ -21,6 +21,7 @@ import { WORK_LOOP_OPERATIONS } from '@/lib/api/v1/workLoop/operations';
 import { planSchema, workItemPlanSchema, type V1Plan } from '@/lib/api/v1/workLoop/schema';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { plansService } from '@/lib/services/plansService';
+import { planDecisionService } from '@/lib/services/planDecisionService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import {
   createV1ProjectCaller,
@@ -383,7 +384,7 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
     // would tell an unattended run to sit patiently through an outage.
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { key } = await refusedCardWithPlan(caller);
-    vi.spyOn(plansService, 'approvePlanForWorkItem').mockRejectedValueOnce(
+    vi.spyOn(planDecisionService, 'approveForWorkItem').mockRejectedValueOnce(
       new Error('the database went away'),
     );
 

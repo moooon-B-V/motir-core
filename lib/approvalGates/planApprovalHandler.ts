@@ -132,6 +132,13 @@ function assertPlanned(plan: Plan): void {
   }
 }
 
+/** The onboarding rename's placeholder, when the entrance passed one through the door
+ *  (MOTIR-6038 — `planDecisionService.approve`'s `provisionalProjectName`). */
+function provisionalProjectNameOf(args: GateEffectArgs): string | null {
+  const name = args.effectOptions?.provisionalProjectName;
+  return typeof name === 'string' && name.length > 0 ? name : null;
+}
+
 /** What approve and decline report to the door — a plan's status moved, no card's. */
 function planDecisionEffect(afterCommit: () => Promise<void>): GateEffect {
   return {
@@ -217,7 +224,9 @@ export const planApprovalGateHandler: GateHandler<Plan> = {
     assertPlanned(plan);
     const { afterCommit } = await (
       await lazyPlansService()
-    ).approvePlanWithin(tx, plan.id, ctx, args.prepared as ApprovePlanPreparation);
+    ).approvePlanWithin(tx, plan.id, ctx, args.prepared as ApprovePlanPreparation, {
+      provisionalProjectName: provisionalProjectNameOf(args),
+    });
     return planDecisionEffect(afterCommit);
   },
 

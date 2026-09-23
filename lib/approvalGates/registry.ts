@@ -259,6 +259,14 @@ export interface GateEffectArgs extends GateRoutingArgs {
    * that seam, and for a gate the pre-read already found decided.
    */
   prepared?: unknown;
+  /**
+   * What a composing SERVICE handed the door for the kind's effect alone, opaque to the
+   * door (MOTIR-6038 — a plan's approve takes the onboarding placeholder name its rename
+   * compares against, resolved by the route because i18n stays out of the service
+   * layer). Never read from a request body: only `DecideGateOptions.effectOptions`
+   * carries it, and no route, server action or MCP tool accepts that.
+   */
+  effectOptions?: Readonly<Record<string, unknown>>;
 }
 
 /** What {@link GateHandler.beforeTransaction} and {@link GateHandler.afterRollback} are
@@ -270,6 +278,8 @@ export interface GateOutsideTransactionArgs {
   ctx: ServiceContext;
   /** `afterRollback` only: what `beforeTransaction` returned. */
   prepared?: unknown;
+  /** See {@link GateEffectArgs.effectOptions}. */
+  effectOptions?: Readonly<Record<string, unknown>>;
 }
 
 /**
