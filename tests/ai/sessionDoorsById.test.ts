@@ -142,7 +142,7 @@ describe('ITEM-ANCHORED planning', () => {
       pctx(viewer.id),
     );
 
-    expect(read).toEqual({ session: null, planId: null });
+    expect(read).toEqual({ session: null, planId: null, earlier: null });
     expect(await adminDb.planChangeSession.count()).toBe(0);
   });
 });
