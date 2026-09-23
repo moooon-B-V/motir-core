@@ -398,7 +398,9 @@ item they return:
   { "kind": "shape", "item": "ACME-7", "severity": "likely-ordering-violation", "phrase": "once it lands", "criterionIndex": 5 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-over-gate-sizing", "threshold": "both", "storyPoints": 13, "estimateMinutes": 600 },
-  { "kind": "shape", "item": "ACME-7", "severity": "likely-self-blocking-design", "designCriterionIndex": 1, "surfaceCriterionIndex": 4 }
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-self-blocking-design", "designCriterionIndex": 1, "surfaceCriterionIndex": 4 },
+  { "kind": "shape", "item": "ACME-7", "severity": "body-edit-above-field-move", "bodyEdit": { "at": "2026-09-04T21:53:11.847Z", "fields": ["descriptionMd", "explanationMd"] }, "fieldMove": { "at": "2026-09-04T21:25:39.100Z", "fields": ["title", "type", "executor"] } },
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-blocker-count-mismatch", "claim": "four siblings this card is blocked_by", "claimedCount": 4, "blockerCount": 2 }
 ]
 ```
 
@@ -413,15 +415,17 @@ acceptance criterion is what the card is closed against, so naming a not-done
 item there is consuming it — and the graph, which is the only part a ready set
 can read, does not say so.
 
-A **`shape`** entry has no far end at all: the card contradicts itself. Four
+A **`shape`** entry has no far end at all: the card contradicts itself. Six
 severities, each with its own remedy:
 
-| severity                      | what it found                                                                                                                | remedy                                                               |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `likely-ordering-violation`   | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                         | CUT the card at that criterion                                       |
-| `likely-repo-straddle`        | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                              | SPLIT the card per repo (one repo, one PR)                           |
-| `likely-over-gate-sizing`     | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)  | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
-| `likely-self-blocking-design` | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws | LIFT the design criterion onto its own `type: design` card           |
+| severity                        | what it found                                                                                                                                                               | remedy                                                               |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `likely-ordering-violation`     | criterion `criterionIndex` carries the merge-word `phrase` — a PARTIAL tell: an evidence-phrased post-deploy criterion carries none, so no entry is not a pass (MOTIR-5426) | CUT the card at that criterion                                       |
+| `likely-repo-straddle`          | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                                                             | SPLIT the card per repo (one repo, one PR)                           |
+| `likely-over-gate-sizing`       | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)                                                 | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
+| `likely-self-blocking-design`   | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws                                                | LIFT the design criterion onto its own `type: design` card           |
+| `likely-blocker-count-mismatch` | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count                                                          | update the stale prose or wire the genuinely missing edge            |
+| `body-edit-above-field-move`    | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did                                             | RE-READ the body against those fields — a prompt, never a stop       |
 
 **`likely-over-gate-sizing`'s two arms do not carry the same authority.**
 `storyPoints >= 8` IS the gate's rule — its literal split signal, read off the
@@ -461,6 +465,24 @@ describing what its own mock shows stays quiet. Read literally the planning-time
 design gate is SATISFIED on such a card, because the `type: design` subtask a UI
 card must be linked to is the card itself; that degenerate reading is what this
 member exists to say out loud.
+
+**`body-edit-above-field-move` is the one member read off the card's HISTORY
+rather than its row, and the one named as a fact rather than a `likely-…` defect**
+(MOTIR-5399). It reads the card's 20 newest revisions — the KEYS each moved, never
+their text — skips every write that moved neither a body (`descriptionMd`,
+`explanationMd`) nor a watched field (`title`, `type`, `executor`, `targetRepo`,
+`targetRepos`, `kind`, `storyPoints`, `estimateMinutes`), and fires when the newest
+remaining write moved a body and no watched field while the one beneath it is an
+`updated` write that moved a watched field. `bodyEdit` and `fieldMove` are
+`{ at, fields }` — the instant and the relevant fields of each write — so a reader
+can act without opening the history. A `created` write beneath never counts
+(`create_work_item` takes no `explanationMd`, so nearly every card is finished by a
+body-only write), and neither does a second body edit — the edit must sit
+DIRECTLY above the move. **It cannot tell a body rewritten to MATCH the move from
+one that put the old framing back**; both leave the same trail, which is why it
+carries no criterion index and a dispatched run proceeds on it. MOTIR-4513 is the
+specimen: replayed at its 21:53 revert it fires, and after the 22:27 corrective
+body pass it is silent.
 
 `likely-repo-straddle` carries `reason`: `"contradiction"` when the card CARRIES
 repositories and the criterion's path is in none of them, or `"unpinnable"` when
@@ -2378,16 +2400,25 @@ A `reference` entry is `{ item, referenced, referencedStatus, severity }`, where
 
 A `shape` entry (`kind: "shape"`) reports a defect the card asserts about
 ITSELF, with no second work item involved: `likely-ordering-violation` (a
-criterion that turns on the card's own merge — cut there), `likely-repo-straddle`
+criterion carrying a merge-word — cut there; a partial tell whose absence clears
+nothing, since a criterion phrased as EVIDENCE — "against real runs", "quoted
+here" — carries none), `likely-repo-straddle`
 (a criterion naming a path outside the card's `targetRepo` — split per repo), or
 `likely-over-gate-sizing` (a childless `coding_agent` card at `storyPoints >= 13`
 or `estimateMinutes > 70` — split by size), or `likely-self-blocking-design` (a
 childless card one of whose criteria produces a design asset while another builds
 the rendered surface it draws — LIFT the design criterion onto its own
-`type: design` card). The first two carry the `criterionIndex` they cut at; the
-third carries `threshold`, `storyPoints` and `estimateMinutes`; the fourth
-carries `designCriterionIndex` and `surfaceCriterionIndex`. Only two of the four
-carry `criterionIndex`, so narrow on `severity` before reading one.
+`type: design` card), `likely-blocker-count-mismatch` (an explicit counted
+claim about the card's own blocker siblings that disagrees with its `blocked_by`
+edges), or `body-edit-above-field-move` (the card's newest body write moved none
+of the fields a body describes while the write beneath it did — RE-READ the body
+against that move; read off the card's revision trail, and a prompt rather than a
+defect claim). The first two carry the `criterionIndex` they cut at; the third
+carries `threshold`, `storyPoints` and `estimateMinutes`; the fourth carries
+`designCriterionIndex` and `surfaceCriterionIndex`; the blocker-count member
+carries the exact `claim`, its `claimedCount` and the graph's current
+`blockerCount`; the body-edit member carries `bodyEdit` and `fieldMove`. Only two
+of the six carry `criterionIndex`, so narrow on `severity` before reading one.
 
 A `subsumption` entry (`kind: "subsumption"`) reports that a path this card's
 body names is being changed SOMEWHERE ELSE — the one advisory family whose far
@@ -3325,22 +3356,31 @@ when you are ready. These three tools are that conversation over MCP — the sam
 substrate the Motir web app's planning rail talks through, so a terminal client
 and a browser are two views of one thread.
 
-**One thread per scope, addressed by scope.** A thread's identity is
-`(project, anchor set)`, so every one of these tools takes `projectKey` plus an
-optional `targetKeys` and never a session id:
+**Many conversations per scope, addressed by session id** (story MOTIR-6011,
+`docs/decisions/agent-authored-plans.md` AMENDMENT 17). A project — or an anchor
+set of work items — can hold several planning conversations over time. Every
+one of these tools takes `projectKey` plus an optional `targetKeys`, and an
+optional **`sessionId`**: the `id` any of the three returned. Pass it on every
+later call to stay on that exact conversation.
 
-| Input        | Type     | Required | Notes                                                                                                                                                                                |
-| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `projectKey` | string   | yes      | The project key, e.g. `"ACME"` (case-insensitive).                                                                                                                                   |
-| `targetKeys` | string[] | no       | Work-item identifiers to ANCHOR the conversation at (max 20, case-insensitive). Omit for the **project-wide** thread. The SET is the identity — order and duplicates are irrelevant. |
-| `body`       | string   | yes\*    | `append_plan_turn` only — what you want changed about the plan.                                                                                                                      |
+| Input        | Type     | Required | Notes                                                                                                                                                                                                               |
+| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `projectKey` | string   | yes      | The project key, e.g. `"ACME"` (case-insensitive).                                                                                                                                                                  |
+| `targetKeys` | string[] | no       | Work-item identifiers to ANCHOR the conversation at (max 20, case-insensitive). Omit for the **project-wide** scope. Order and duplicates are irrelevant.                                                           |
+| `sessionId`  | string   | no       | The conversation to address — the `id` a previous call returned. A session of another project is refused as `NOT_FOUND` (`PLAN_SESSION_NOT_FOUND`). Omit it and your own recent conversation for the scope is used. |
+| `body`       | string   | yes\*    | `append_plan_turn` only — what you want changed about the plan.                                                                                                                                                     |
 
-Re-opening a scope **RESUMES** its conversation (same row, every turn already on
-it); a different anchor set is a different conversation. Anchors are resolved
-and permission-checked before they become a scope, so an item you cannot see is
-a `NOT_FOUND`, never a silent anchor.
+**Without a `sessionId`**, each tool behaves as it did before the id existed, for
+a caller with one conversation: it uses **your own** conversation for the scope
+if you were active in it within the last **2 hours** (AMENDMENT 17 §3), and
+otherwise `open_plan_session` / a first `append_plan_turn` starts a new one. So
+an agent that never passes an id keeps working — it simply cannot reach back to
+an older conversation. Anchors are resolved and permission-checked before they
+become a scope, so an item you cannot see is a `NOT_FOUND`, never a silent
+anchor.
 
-- **`open_plan_session`** — open or resume the thread and read it.
+- **`open_plan_session`** — open or resume a conversation and read it: the one
+  `sessionId` names, else your recent one for the scope, else a new one.
   **Output** — `structuredContent`: the session DTO
   `{ id, projectId, targetKeys, turnCount, lastJobId, lastSubmittedAt, createdAt, updatedAt, turns }`,
   where `turns` is the FULL ordered thread (`user` turns are what was typed,

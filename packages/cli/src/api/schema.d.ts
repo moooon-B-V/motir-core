@@ -1705,6 +1705,27 @@ export interface components {
                 severity: string;
                 designCriterionIndex: number;
                 surfaceCriterionIndex: number;
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                bodyEdit: {
+                    at: string;
+                    fields: string[];
+                };
+                fieldMove: {
+                    at: string;
+                    fields: string[];
+                };
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                claim: string;
+                claimedCount: number;
+                blockerCount: number;
             } | ({
                 /** @constant */
                 kind: "subsumption";
@@ -9548,6 +9569,8 @@ export interface operations {
             content: {
                 "application/json": {
                     targetKeys?: string[];
+                    /** @description The `id` of the planning session to address, as a previous call returned it. Omit to use your resumable session for the scope (or start one with a turn). */
+                    sessionId?: string;
                 };
             };
         };
@@ -9702,6 +9725,8 @@ export interface operations {
             content: {
                 "application/json": {
                     targetKeys?: string[];
+                    /** @description The `id` of the planning session to address, as a previous call returned it. Omit to use your resumable session for the scope (or start one with a turn). */
+                    sessionId?: string;
                     body: string;
                 };
             };
@@ -9876,6 +9901,8 @@ export interface operations {
             content: {
                 "application/json": {
                     targetKeys?: string[];
+                    /** @description The `id` of the planning session to address, as a previous call returned it. Omit to use your resumable session for the scope (or start one with a turn). */
+                    sessionId?: string;
                 };
             };
         };

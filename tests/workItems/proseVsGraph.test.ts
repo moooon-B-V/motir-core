@@ -9,6 +9,7 @@ import {
   bodyFilePaths,
   bodyReferenceSeverities,
   criterionRepoPaths,
+  firstBlockerCountClaim,
   firstPostMergeCriterion,
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
@@ -27,6 +28,44 @@ import {
 // reference from `advisory` to `likely-missing-edge`. No DB, no IO.
 
 const token = (label: string, id: string) => `[${label}](motir:${id})`;
+
+describe('firstBlockerCountClaim — counted own-blocker prose', () => {
+  it('reads the measured plural-sibling grammar and preserves the checked claim', () => {
+    expect(
+      firstBlockerCountClaim(
+        'Context: all **four** member packs, as merged by the siblings this card is `blocked_by`.',
+      ),
+    ).toEqual({
+      claim: 'all four member packs, as merged by the siblings this card is blocked_by',
+      claimedCount: 4,
+    });
+    expect(
+      firstBlockerCountClaim('The three siblings it is blocked_by provide the fixtures.'),
+    ).toEqual({ claim: 'three siblings it is blocked_by', claimedCount: 3 });
+    expect(firstBlockerCountClaim('Both siblings this card is blocked_by are done first.')).toEqual(
+      {
+        claim: 'Both siblings this card is blocked_by',
+        claimedCount: 2,
+      },
+    );
+  });
+
+  it('does not consume quoted records, singular siblings, vague quantifiers, or remote numbers', () => {
+    expect(
+      firstBlockerCountClaim('The record says “four siblings this card is blocked_by”.'),
+    ).toBeNull();
+    expect(firstBlockerCountClaim('MOTIR-4160 is the sibling this card is blocked_by.')).toBeNull();
+    expect(
+      firstBlockerCountClaim('MOTIR-4160 records the siblings this card is blocked_by.'),
+    ).toBeNull();
+    expect(firstBlockerCountClaim('Every sibling this card is blocked_by is named.')).toBeNull();
+    expect(
+      firstBlockerCountClaim(
+        'Five actions are complete before many deliberately separating context words place the siblings this card is blocked_by here.',
+      ),
+    ).toBeNull();
+  });
+});
 
 describe('acceptanceCriteriaSpan — the section heuristic', () => {
   it('spans from the AC heading to the next heading of the SAME level', () => {
@@ -146,59 +185,35 @@ describe('bodyReferenceSeverities — the named set N, with tiers', () => {
 // THE ORDERING CHECK (MOTIR-2175) — gate 14's third axis, mechanized.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Gate 14's ORDERING sentence, transcribed VERBATIM from
- * `motir-meta/prompts/plan-rules.md` (*"An ACCEPTANCE CRITERION must be
- * satisfiable INSIDE the card's own scope boundary"*, THIRD AXIS bullet).
- *
- * ⚠️ This is the DRIFT GUARD's fixture, and its whole value is being a copy of
- * the prose rather than a restatement of the code. `plan-rules.md` lives in
- * another repo, so it cannot be read at test time — transcribing it here means
- * a phrase added to the rule and not to the constant fails THIS test, loudly,
- * instead of leaving a silent gap in the check. If you edit the rule, edit this
- * string in the same pass.
- */
-const GATE_14_ORDERING_SENTENCE =
-  '**Its tell is purely lexical and costs no judgement: the words "merged to `main`", ' +
-  '"once this lands", "after release", "on `main`", "the published X" — and EVERY criterion ' +
-  'at or below the first line carrying one belongs to a different card,**';
-
-/** The quoted phrases, pulled out of the prose exactly as it writes them. */
-const gate14Phrases = [...GATE_14_ORDERING_SENTENCE.matchAll(/"([^"]+)"/g)].map((m) =>
-  (m[1] as string).replace(/`/g, '').replace(/ X$/, ''),
-);
-
 /** A body carrying `criteria` as its acceptance-criteria list. */
 const withCriteria = (...criteria: string[]) =>
   ['Narrative body.', '', '## Acceptance criteria', '', ...criteria.map((c) => `- ${c}`)].join(
     '\n',
   );
 
-describe('POST_MERGE_CRITERION_PHRASES — the drift guard', () => {
-  it('COVERS every phrase gate 14 names, verbatim', () => {
-    // Sanity: the transcription really did yield the five quoted phrases, so a
-    // regex that silently matched nothing cannot make this test vacuous.
-    expect(gate14Phrases).toEqual([
+// ⚠️ The PROSE drift guard that stood here is RETIRED, deliberately (MOTIR-5426).
+// It transcribed gate 14's ORDERING sentence — *"Its tell is purely lexical and
+// costs no judgement: the words …"* — and asserted the constant covered every
+// phrase quoted in it. That sentence is no longer in the rule: gate 14(c) now
+// asks a QUESTION and calls the phrases "examples of a yes rather than the
+// test", so the guard had been pinning a fossil, green, since the rule moved.
+// There is no longer a list in the rule to mirror, so the pin moves to the two
+// things that ARE true: the set's value, and the blind spot it was measured to
+// have.
+describe('POST_MERGE_CRITERION_PHRASES — a fixed example set, pinned by value', () => {
+  it('is exactly these six — extending it is a decision MOTIR-5426 measured against', () => {
+    // A seventh phrase fails here on purpose. Before changing this, read the
+    // MOTIR-5426 block in `lib/workItems/proseVsGraph.ts`: the set reaches about
+    // one post-deploy criterion in nine, and wider lexical predicates were
+    // measured and fire hardest on the cards that DISCLAIM post-deploy state.
+    expect([...POST_MERGE_CRITERION_PHRASES]).toEqual([
       'merged to main',
       'once this lands',
+      'once it lands',
       'after release',
       'on main',
       'the published',
     ]);
-    for (const phrase of gate14Phrases) {
-      expect(POST_MERGE_CRITERION_PHRASES).toContain(phrase);
-    }
-  });
-
-  it('adds `once it lands` — the conjugation MOTIR-2162 actually shipped', () => {
-    // The ONE member gate 14's prose does not spell out. It is the same tell in
-    // the third person, and it is the exact wording of the criterion that got
-    // through (MOTIR-2164), so the list is a deliberate superset of the prose,
-    // never a subset. Any OTHER divergence is drift and fails the test above.
-    expect(POST_MERGE_CRITERION_PHRASES).toContain('once it lands');
-    expect(new Set(POST_MERGE_CRITERION_PHRASES)).toEqual(
-      new Set([...gate14Phrases, 'once it lands']),
-    );
   });
 
   it('every phrase FIRES when it sits in a criterion — the list is wired, not decorative', () => {
@@ -208,6 +223,25 @@ describe('POST_MERGE_CRITERION_PHRASES — the drift guard', () => {
       );
       expect(found, `phrase "${phrase}" did not fire`).toEqual({ phrase, criterionIndex: 2 });
     }
+  });
+
+  it('MOTIR-4945 BLIND SPOT: an EVIDENCE-phrased post-deploy criterion is NOT caught — pinned as behaviour', () => {
+    // Criterion 2 of MOTIR-4945 as sealed, verbatim: it needs the merge, a deploy
+    // and two scheduler firings, and names none of them. It sealed `valid: true`
+    // with no advisory, and a run caught it. This test does not ask the detector
+    // to catch it — MOTIR-5426 found no lexical predicate that can without
+    // firing on the careful cards — it records that `null` here is a KNOWN
+    // miss, so nobody reads an empty advisory as a verdict.
+    expect(
+      firstPostMergeCriterion(
+        withCriteria(
+          'The field is recorded on the assembled output, proven by a test.',
+          'Demonstrated on BOTH arms against real runs: one rebuild (a repository with no ' +
+            'snapshot) and one sync (the same repository, pushed again afterwards) — with ' +
+            'the two `job_run` rows quoted here showing different modes.',
+        ),
+      ),
+    ).toBeNull();
   });
 });
 

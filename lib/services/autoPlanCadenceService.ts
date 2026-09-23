@@ -121,7 +121,7 @@ function errorMessage(err: unknown): string {
  *
  * Only an UNDECIDED, CLOSED plan can be stale: a `generating` one has no
  * `plannedAt` to measure drift against and is seconds old. Mirrors the Plans
- * list's `staleCountFor` (`app/(authed)/plans/planRowView.ts`), including its
+ * list's former `staleCountFor` (the retired `planRowView.ts`, MOTIR-6025), including its
  * graceful degradation — a staleness read that fails costs the indicator its
  * drift line, it does not fail the settings page that is only asking whether
  * cadence is paused.

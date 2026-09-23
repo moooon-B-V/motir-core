@@ -2,13 +2,14 @@ import { Prisma } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
+import type { PlanChangeScope } from '@/lib/planChange/scope';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
-import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { addressOf, openTestSession } from '../helpers/planSession';
 import { truncateAuthTables } from '../helpers/db';
 
 // The story-level COVERAGE GATE's residual for the conversation's persistence
@@ -49,6 +50,16 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
+
+// The session each case works on (MOTIR-6028). Every write names its session by
+// id now that the scope-keyed wrappers are gone; `openCurrent` opens (or resumes)
+// it the way the public `open` doors do and remembers its address.
+let current: { sessionId: string } = { sessionId: '' };
+async function openCurrent(pctx: ProjectContext, scope?: PlanChangeScope) {
+  const session = await openTestSession(pctx, scope);
+  current = addressOf(session);
+  return session;
+}
 const { PlanChangeTurnConflictError, PlanChangeSessionNotFoundError } =
   await import('@/lib/planChange/errors');
 
@@ -64,6 +75,7 @@ function ctx(f: WorkItemFixture): ProjectContext {
 }
 
 beforeEach(async () => {
+  current = { sessionId: '' };
   await truncateAuthTables();
   vi.restoreAllMocks();
   fx = await makeWorkItemFixture();
@@ -76,14 +88,14 @@ afterAll(async () => {
 
 describe('planChange repositories — the DEFAULT (no-transaction) client', () => {
   it('reads a session by project and by id without a surrounding transaction', async () => {
-    const opened = await planChangeSessionsService.getOrCreateForProject(ctx(fx));
+    const opened = await openCurrent(ctx(fx));
 
     // Every service path hands the repository a `tx`; these are the `tx ?? dbRead`
     // arms — the shape any future read-only caller (a route, a report) would use.
     const byProject = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndScope(
+      planChangeSessionRepository.findByIdInProject(
+        current.sessionId,
         fx.projectId,
-        PROJECT_SCOPE_KEY,
         fx.workspaceId,
         tx,
       ),
@@ -101,8 +113,8 @@ describe('planChange repositories — the DEFAULT (no-transaction) client', () =
     // caller reaches a thread by its OWN id with — `findById` and the turn list —
     // carry the same scope and are asserted here.
     const c = ctx(fx);
-    const opened = await planChangeSessionsService.getOrCreateForProject(c);
-    await planChangeSessionsService.appendTurn('a turn', c);
+    const opened = await openCurrent(c);
+    await planChangeSessionsService.appendTurn('a turn', c, current);
     const other = await makeWorkItemFixture({ name: 'Rival', identifier: 'RIVL' });
 
     expect(
@@ -142,14 +154,14 @@ describe('planChange repositories — the DEFAULT (no-transaction) client', () =
 
   it('reads the thread in seq order on the default client', async () => {
     const c = ctx(fx);
-    await planChangeSessionsService.getOrCreateForProject(c);
-    await planChangeSessionsService.appendTurn('first', c);
-    await planChangeSessionsService.appendTurn('second', c);
+    await openCurrent(c);
+    await planChangeSessionsService.appendTurn('first', c, current);
+    await planChangeSessionsService.appendTurn('second', c, current);
 
     const session = (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndScope(
+      planChangeSessionRepository.findByIdInProject(
+        current.sessionId,
         fx.projectId,
-        PROJECT_SCOPE_KEY,
         fx.workspaceId,
         tx,
       ),
@@ -169,7 +181,7 @@ describe('planChangeSessionsService — error classification is not a catch-all'
     // "someone else claimed your turn". Only a genuine unique violation is a
     // turn conflict.
     const c = ctx(fx);
-    await planChangeSessionsService.getOrCreateForProject(c);
+    await openCurrent(c);
 
     const boom = new Prisma.PrismaClientKnownRequestError('deadlock detected', {
       code: 'P2034',
@@ -177,7 +189,9 @@ describe('planChangeSessionsService — error classification is not a catch-all'
     });
     vi.spyOn(planChangeTurnRepository, 'create').mockRejectedValue(boom);
 
-    const err = await planChangeSessionsService.appendTurn('a turn', c).catch((e: unknown) => e);
+    const err = await planChangeSessionsService
+      .appendTurn('a turn', c, current)
+      .catch((e: unknown) => e);
     expect(err).toBe(boom);
     expect(err).not.toBeInstanceOf(PlanChangeTurnConflictError);
   });
@@ -188,10 +202,10 @@ describe('planChangeSessionsService — error classification is not a catch-all'
     // transaction took the lock. `lockById` returns null and the append must
     // raise the domain error, not dereference a missing row.
     const c = ctx(fx);
-    await planChangeSessionsService.getOrCreateForProject(c);
+    await openCurrent(c);
     vi.spyOn(planChangeSessionRepository, 'lockById').mockResolvedValueOnce(null);
 
-    await expect(planChangeSessionsService.appendTurn('a turn', c)).rejects.toBeInstanceOf(
+    await expect(planChangeSessionsService.appendTurn('a turn', c, current)).rejects.toBeInstanceOf(
       PlanChangeSessionNotFoundError,
     );
   });
@@ -201,10 +215,10 @@ describe('planChangeSessionsService — error classification is not a catch-all'
     // re-read (which is what `seq` is derived from) found nothing. Allocating
     // from an absent `turnCount` would be the lost-update bug the lock prevents.
     const c = ctx(fx);
-    await planChangeSessionsService.getOrCreateForProject(c);
+    await openCurrent(c);
     vi.spyOn(planChangeSessionRepository, 'findById').mockResolvedValueOnce(null);
 
-    await expect(planChangeSessionsService.appendTurn('a turn', c)).rejects.toBeInstanceOf(
+    await expect(planChangeSessionsService.appendTurn('a turn', c, current)).rejects.toBeInstanceOf(
       PlanChangeSessionNotFoundError,
     );
   });
@@ -219,63 +233,39 @@ describe('planChangeSessionsService — error classification is not a catch-all'
     });
     vi.spyOn(planChangeSessionRepository, 'create').mockRejectedValueOnce(boom);
 
-    await expect(planChangeSessionsService.getOrCreateForProject(c)).rejects.toBe(boom);
+    await expect(openCurrent(c)).rejects.toBe(boom);
   });
 
-  it('RECOVERS the winner’s thread when the create loses the unique race', async () => {
-    // The shipped "concurrent open" case is answered by the pre-read, so the
-    // catch never executes. Force the real race: the pre-read finds nothing, and
-    // the create then hits the `project_id` unique because a sibling opener
-    // committed in between.
+  it('serializes one member’s opens of a scope under the scope lock — the second finds the first’s row', async () => {
+    // MOTIR-6021 replaced the dropped unique's P2002 "read the winner" branch with
+    // `lockScopeForUser` + a re-read INSIDE the lock, so two concurrent opens by
+    // one member queue rather than fork.
     const c = ctx(fx);
-    const winner = await withWorkspaceContext(
-      { userId: c.userId, workspaceId: c.workspaceId, projectId: c.projectId },
-      (tx) =>
-        planChangeSessionRepository.create(
-          { workspaceId: c.workspaceId, projectId: c.projectId, createdById: c.userId },
-          tx,
-        ),
-    );
+    const [a, b] = await Promise.all([openCurrent(c), openCurrent(c)]);
 
-    const findByProjectAndScope = planChangeSessionRepository.findByProjectAndScope.bind(
-      planChangeSessionRepository,
-    );
-    const spy = vi.spyOn(planChangeSessionRepository, 'findByProjectAndScope');
-    // Only the FIRST read (the pre-read) sees an empty project; the recovery
-    // read inside the catch runs for real and must return the winner.
-    spy.mockResolvedValueOnce(null);
-    spy.mockImplementation(findByProjectAndScope);
-
-    const resolved = await planChangeSessionsService.getOrCreateForProject(c);
-
-    expect(resolved.id).toBe(winner.id);
-    // Idempotent by outcome: still exactly ONE thread for the project.
+    expect(a.id).toBe(b.id);
     const rows = await adminDb.planChangeSession.findMany({ where: { projectId: c.projectId } });
     expect(rows).toHaveLength(1);
   });
 
-  it('rethrows the unique violation when the winner cannot be re-read', async () => {
-    // The `if (winner)` guard's other arm: a P2002 that is NOT the open race
-    // (or a row the caller may not see) must not be swallowed into a silent
-    // success — there is no thread to return, so the error escapes.
+  it('lets a create failure escape — no conflict is swallowed into a silent success', async () => {
     const c = ctx(fx);
     const conflict = new Prisma.PrismaClientKnownRequestError('unique violation', {
       code: 'P2002',
       clientVersion: 'test',
     });
-    vi.spyOn(planChangeSessionRepository, 'findByProjectAndScope').mockResolvedValue(null);
     vi.spyOn(planChangeSessionRepository, 'create').mockRejectedValueOnce(conflict);
 
-    await expect(planChangeSessionsService.getOrCreateForProject(c)).rejects.toBe(conflict);
+    await expect(openCurrent(c)).rejects.toBe(conflict);
   });
 });
 
 describe('planChangeMappers — no Prisma row crosses the boundary', () => {
   it('maps a SUBMITTED thread’s dates to ISO strings and keeps the tenant id off the wire', async () => {
     const c = ctx(fx);
-    await planChangeSessionsService.getOrCreateForProject(c);
-    await planChangeSessionsService.appendTurn('Split the billing epic', c);
-    const { session } = await planChangeSessionsService.submit(c);
+    await openCurrent(c);
+    await planChangeSessionsService.appendTurn('Split the billing epic', c, current);
+    const { session } = await planChangeSessionsService.submit(c, current);
 
     // `lastSubmittedAt` is the only nullable Date on the session — the shipped
     // suite asserts the null arm (a never-submitted thread); this is the set arm.
@@ -308,6 +298,8 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       targetKeys: [],
       lastJobId: null,
       lastSubmittedAt: null,
+      lastActivityAt: now,
+      origin: 'conversation' as const,
       createdAt: now,
       updatedAt: now,
     };

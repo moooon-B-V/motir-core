@@ -85,13 +85,29 @@ const targetKeysField = z
   .describe(
     'Optional work-item identifiers (e.g. ["ACME-7", "ACME-9"], case-insensitive) ' +
       'to ANCHOR the conversation at. Omit for the project-wide planning thread. The ' +
-      "anchor SET is the thread's identity — order and duplicates do not matter, and " +
-      'the same set always resumes the same conversation.',
+      'anchor SET describes what the conversation is about — order and duplicates do ' +
+      'not matter.',
+  );
+
+/** The session to address (MOTIR-6028; AMENDMENT 17 §2). A scope holds many
+ *  planning sessions over time, so the id is how an agent keeps talking to ONE. */
+const sessionIdField = z
+  .string()
+  .trim()
+  .min(1)
+  .optional()
+  .describe(
+    'OPTIONAL. The `id` of the planning session to address — the `id` that ' +
+      '`open_plan_session`, `append_plan_turn` and `submit_plan_session` return. ' +
+      'Pass it on every later call to keep talking to the SAME conversation. Omit it to ' +
+      'use your own recent session for this scope (active in the last 2 hours), or to ' +
+      'start a new one.',
   );
 
 const scopeInputSchema = {
   projectKey: projectKeyField,
   targetKeys: targetKeysField,
+  sessionId: sessionIdField,
 };
 
 /**
@@ -168,12 +184,14 @@ const requirementField = z
 const submitInputSchema = {
   projectKey: projectKeyField,
   targetKeys: targetKeysField,
+  sessionId: sessionIdField,
   requirement: requirementField,
 };
 
 const appendInputSchema = {
   projectKey: projectKeyField,
   targetKeys: targetKeysField,
+  sessionId: sessionIdField,
   body: z
     .string()
     .trim()
@@ -184,6 +202,7 @@ const appendInputSchema = {
 interface ScopeArgs {
   projectKey: string;
   targetKeys?: string[];
+  sessionId?: string;
 }
 
 interface AppendArgs extends ScopeArgs {
@@ -269,6 +288,7 @@ function turnLine(turn: PlanChangeSessionDto['turns'][number]): string {
 function summarizeSession(session: PlanChangeSessionDto, headline: string): string {
   const lines = [
     `${headline} (${scopeLabel(session)}) — ${session.turnCount} turn(s).`,
+    `Session id: ${session.id} — pass it as \`sessionId\` to keep talking to this conversation.`,
     session.lastSubmittedAt
       ? `Last submitted ${session.lastSubmittedAt}${session.lastJobId ? ` as job ${session.lastJobId}` : ''}.`
       : 'Never submitted — nothing has been sent to the planner yet.',
@@ -288,6 +308,7 @@ function summarizeSession(session: PlanChangeSessionDto, headline: string): stri
 function summarizeSubmit(result: PlanChangeSubmitResultDto): string {
   return [
     `Submitted this conversation's accumulated intent (${scopeLabel(result.session)}).`,
+    `Session id: ${result.session.id}.`,
     `Job: ${result.jobId} · Plan: ${result.planId}`,
     '',
     'The job runs in the background — nothing is waiting on it. It produces a plan of ' +
@@ -297,13 +318,14 @@ function summarizeSubmit(result: PlanChangeSubmitResultDto): string {
   ].join('\n');
 }
 
-/** The adapter: resolve the scope, then get-or-resume that thread. */
+/** The adapter: resolve the scope, then the named session — else the caller's
+ *  resumable one, else a new one (MOTIR-6028). */
 export async function runOpenPlanSession(
   args: ScopeArgs,
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const { pctx, scope } = await resolveTarget(args, ctx);
-  const session = await planChangeSessionsService.getOrCreateForScope(pctx, scope);
+  const session = await planChangeSessionsService.openPublic(pctx, scope, args.sessionId);
   const headline =
     session.turnCount > 0 ? 'Resumed planning conversation' : 'Opened planning conversation';
   return toolOk(
@@ -327,8 +349,12 @@ export async function runAppendPlanTurn(
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const { pctx, scope } = await resolveTarget(args, ctx);
-  await planChangeSessionsService.getOrCreateForScope(pctx, scope);
-  const session = await planChangeSessionsService.appendTurn(args.body, pctx, scope.scopeKey);
+  const session = await planChangeSessionsService.appendPublic(
+    pctx,
+    scope,
+    args.body,
+    args.sessionId,
+  );
   return toolOk(
     summarizeSession(session, 'Turn added — NOT submitted'),
     derived(planSessionPayload, presentMcpPlanSession(session)),
@@ -349,7 +375,12 @@ export async function runSubmitPlanSession(
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const { pctx, scope } = await resolveTarget(args, ctx);
-  const result = await planChangeSessionsService.submit(pctx, scope.scopeKey, args.requirement);
+  const result = await planChangeSessionsService.submitPublic(
+    pctx,
+    scope,
+    args.requirement,
+    args.sessionId,
+  );
   return toolOk(summarizeSubmit(result), derived(planSubmitPayload, presentMcpPlanSubmit(result)));
 }
 
@@ -362,10 +393,11 @@ export function registerPlanSession(server: McpServer, resolveContext: McpContex
         'Open — or RESUME — the planning conversation for a project, and read its thread. ' +
         'Changing a plan in Motir is a multi-turn CONVERSATION: you add turns with ' +
         `\`${APPEND_PLAN_TURN_TOOL_NAME}\`, then send the accumulated intent with ` +
-        `\`${SUBMIT_PLAN_SESSION_TOOL_NAME}\`. There is ONE thread per project per anchor ` +
-        'set, so calling this again returns the SAME conversation (with every turn already ' +
-        'on it) rather than starting a second one — including the one the Motir web app ' +
-        'shows. Pass `targetKeys` to anchor the conversation at specific work items ' +
+        `\`${SUBMIT_PLAN_SESSION_TOOL_NAME}\`. A project (or an anchor set) can hold MANY ` +
+        'conversations over time, so the result carries the session `id`: pass it as ' +
+        '`sessionId` on every later call to keep talking to the SAME conversation. Without ' +
+        'one, this returns your own recent conversation for the scope (active in the last ' +
+        '2 hours) or starts a new one. Pass `targetKeys` to anchor the conversation at specific work items ' +
         '("re-plan these two"); omit it for the project-wide thread. ' +
         'Opening submits nothing and costs nothing.',
       inputSchema: scopeInputSchema,
@@ -391,9 +423,9 @@ export function registerPlanSession(server: McpServer, resolveContext: McpContex
         'that separation is the point — a later turn REFINES the earlier ones rather than ' +
         'replacing them, so "add auth to the billing epic" then "keep them under 3 points" ' +
         'go out as ONE coherent change. Nothing is generated, no credits are spent, and no ' +
-        'work item changes until you submit and the resulting plan is approved. Addresses ' +
-        'the thread by scope (`projectKey` + optional `targetKeys`), so it always extends ' +
-        'the same conversation the Motir web app is showing.',
+        'work item changes until you submit and the resulting plan is approved. Pass ' +
+        '`sessionId` (the `id` a previous call returned) to add to that exact conversation; ' +
+        'without it the turn goes to your recent conversation for the scope, or starts a new one.',
       inputSchema: appendInputSchema,
     },
     async (args, extra) => {

@@ -1524,16 +1524,21 @@ export type WorkItemProseAdvisorySeverityDto = 'advisory' | 'likely-missing-edge
 
 /**
  * The severity of a SHAPE advisory (MOTIR-2175) — a defect the card asserts
- * about ITSELF, with no second work item involved. Four members: gate 14's
+ * about ITSELF, with no second work item involved. Six members: gate 14's
  * ORDERING axis, gate 1's repo column (MOTIR-2177), the ESTIMATION GATE's two
  * sizing ceilings (MOTIR-3110), and the DESIGN gate's degenerate reading — a
- * card that is its own design blocker (MOTIR-3178).
+ * card that is its own design blocker (MOTIR-3178), and an explicit counted
+ * claim about the card's blocker siblings that disagrees with its edges
+ * (MOTIR-5428). A sixth, the BODY EDIT sitting above a FIELD MOVE (MOTIR-5399),
+ * is the one member read off the card's revision trail rather than its row —
+ * and the one named as a fact rather than a `likely-…` defect, because the
+ * trail cannot tell a revert from a correction.
  *
  * ⚠️ Only the first two carry the single `criterionIndex` their remedy cuts at.
  * The sizing member is a defect in two of the card's own COLUMNS and has no
  * criterion to point at; the self-blocking-design member has TWO, because its
  * remedy LIFTS one criterion out rather than cutting the list at a line. That is
- * why {@link WorkItemProseShapeAdvisoryBaseDto} carries only what all four share
+ * why {@link WorkItemProseShapeAdvisoryBaseDto} carries only what all five share
  * and the single criterion index sits one level down — see
  * {@link WorkItemProseCriterionShapeAdvisoryBaseDto}.
  */
@@ -1541,7 +1546,9 @@ export type WorkItemProseShapeSeverityDto =
   | 'likely-ordering-violation'
   | 'likely-repo-straddle'
   | 'likely-over-gate-sizing'
-  | 'likely-self-blocking-design';
+  | 'likely-self-blocking-design'
+  | 'body-edit-above-field-move'
+  | 'likely-blocker-count-mismatch';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -1796,6 +1803,64 @@ export interface WorkItemProseSelfBlockingDesignAdvisoryDto extends WorkItemPros
   surfaceCriterionIndex: number;
 }
 
+/** One end of a {@link WorkItemProseBodyAboveFieldMoveAdvisoryDto}: one revision of the card. */
+export interface WorkItemRevisionEndDto {
+  /** When the revision was written (ISO-8601). */
+  at: string;
+  /**
+   * The fields it moved that the check reads — the body columns on the edit, the
+   * watched fields on the move — never the bookkeeping that shared the row.
+   */
+  fields: string[];
+}
+
+/**
+ * A BODY EDIT sitting directly above a FIELD MOVE in the card's own history
+ * (MOTIR-5399): the newest write that moved a body (`descriptionMd` /
+ * `explanationMd`) moved none of the fields a body describes, and the write
+ * beneath it — skipping rows that moved neither — DID move one (`title`, `type`,
+ * `executor`, `targetRepo` / `targetRepos`, `kind`, `storyPoints`,
+ * `estimateMinutes`).
+ *
+ * The body was therefore written, or rewritten, AFTER the fields last moved, by a
+ * write that did not touch them. MOTIR-4513 is the specimen: re-typed `decision →
+ * content`, then a body-only edit put the decision framing back, and `readiness`,
+ * `validate_work_item` and every other advisory reported the card healthy until
+ * the dispatched run stopped on it (planning bug MOTIR-4577).
+ *
+ * ⚠️ **A PROMPT TO RE-READ, NOT A DEFECT CLAIM — which is why the severity is not
+ * `likely-…`.** Re-typing a card and then rewriting its body to MATCH is the
+ * ordinary correction, and it leaves exactly this trail. Telling the two apart
+ * needs the prose, which is the comparison this check exists to avoid; so the
+ * finding names both writes with their instants and fields, and the reader reads
+ * the body against the move.
+ *
+ * ⚠️ **No criterion index**, like {@link WorkItemProseSizingAdvisoryDto}: the
+ * finding is about two WRITES, not a line of the card, so there is nothing to cut
+ * at, and a dispatched run PROCEEDS on it (`run.md` guard #4's no-index arm).
+ *
+ * ⚠️ **Never a gate.** Its false-positive class is the ordinary correction above,
+ * and a gate would hold that card out of the ready set with no override.
+ */
+export interface WorkItemProseBodyAboveFieldMoveAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'body-edit-above-field-move';
+  /** The newer write — it moved a body and no watched field. */
+  bodyEdit: WorkItemRevisionEndDto;
+  /** The write directly beneath it — it moved at least one watched field. */
+  fieldMove: WorkItemRevisionEndDto;
+}
+
+/** A counted claim about this card's own blockers that disagrees with its edges. */
+export interface WorkItemProseBlockerCountAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-blocker-count-mismatch';
+  /** The exact normalized prose fragment whose number was checked. */
+  claim: string;
+  /** The number stated by the card. */
+  claimedCount: number;
+  /** The number of `blocked_by` edges currently held by the card. */
+  blockerCount: number;
+}
+
 /**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
  * once `kind === 'shape'` has narrowed the outer union.
@@ -1808,7 +1873,9 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseOrderingAdvisoryDto
   | WorkItemProseRepoStraddleAdvisoryDto
   | WorkItemProseSizingAdvisoryDto
-  | WorkItemProseSelfBlockingDesignAdvisoryDto;
+  | WorkItemProseSelfBlockingDesignAdvisoryDto
+  | WorkItemProseBodyAboveFieldMoveAdvisoryDto
+  | WorkItemProseBlockerCountAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). Named rather than inlined
@@ -2113,4 +2180,24 @@ export function isSelfBlockingDesignAdvisory(
   a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseSelfBlockingDesignAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'likely-self-blocking-design';
+}
+
+/**
+ * Narrow an advisory to the BODY-EDIT-ABOVE-FIELD-MOVE shape (MOTIR-5399).
+ *
+ * The third shape member with no `criterionIndex`, so — like
+ * {@link isSizingAdvisory} — a renderer that reached for the index on the whole
+ * `shape` family stops compiling rather than printing `undefined`.
+ */
+export function isBodyAboveFieldMoveAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseBodyAboveFieldMoveAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'body-edit-above-field-move';
+}
+
+/** Narrow an advisory to the counted-own-blockers shape (MOTIR-5428). */
+export function isBlockerCountAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseBlockerCountAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-blocker-count-mismatch';
 }

@@ -1,4 +1,4 @@
-import { PLAN_STATUS_DTO_VALUES } from '@/lib/dto/plans';
+import { PLAN_SESSION_STATE_VALUES } from '@/lib/dto/planSessions';
 import { plansService } from '@/lib/services/plansService';
 
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
@@ -14,6 +14,14 @@ import type { Page } from '@playwright/test';
 // ACCEPTANCE — the PLANS LIST, refined (Story MOTIR-3232 · Subtask MOTIR-3243).
 // The story's verification recipe, steps 1–6, driven through the real stack, and
 // recorded as the receipt Yue watches to accept the list half of the story.
+//
+// ⚠️ `/plans` LISTS CONVERSATIONS SINCE MOTIR-6025 (Story MOTIR-6011). Every plan
+// this file seeds rides `createPlan`, which opens one session per plan, so each
+// row is still one plan — but the strip is a PLAN-STATE filter with an `All`
+// default, its labels are the session list's (`Writing`, `Waiting for
+// approval`), the parameter is `?planState=`, and a row names its STARTER rather
+// than its decider. The legs below were moved onto that surface; what each one
+// proves is unchanged.
 //
 // ⚠️ IT SITS BESIDE `plans-review.spec.ts`, and does not extend it — a decision
 // the card asks to be stated rather than assumed. That spec is Story 7.21's
@@ -119,9 +127,14 @@ test.afterAll(async () => {
 // not an ARIA tablist (the rows are a URL-addressable filter, not a tabpanel),
 // so `getByRole('tab')` would find zero and read as "the strip is gone".
 
-const tabStrip = (page: Page) => page.getByRole('group', { name: 'Filter plans by status' });
+const tabStrip = (page: Page) =>
+  page.getByRole('group', { name: 'Filter conversations by plan state' });
 const tab = (page: Page, name: string) => tabStrip(page).getByRole('button', { name });
-const planRows = (page: Page) => page.getByRole('list', { name: 'Plans' }).getByRole('listitem');
+const planRows = (page: Page) =>
+  page.getByRole('list', { name: 'Planning conversations' }).getByRole('listitem');
+/** The whole ROW a plan's chip sits in — the chip is the plan's own link. */
+const rowCardFor = (page: Page, planId: string) =>
+  planRows(page).filter({ has: page.locator(`a[href="/plans/${planId}"]`) });
 const rowFor = (page: Page, planId: string) => page.locator(`a[href="/plans/${planId}"]`);
 /** The plan review rail — a named `complementary` landmark, so scoping through it
  *  resolves in the accessibility tree (MOTIR-5116). */
@@ -182,7 +195,7 @@ async function loadWholeHistory(page: Page, oldestPlanId: string): Promise<void>
     .toBe(1);
 }
 
-test('Plans: the tabs, ten at a time, both people on a decided plan, the list view, and a stuck plan discarded', async ({
+test('Plans: the filter, ten at a time, who started a decided plan, the list view, and a stuck plan discarded', async ({
   page,
   chapter,
   beat,
@@ -199,29 +212,27 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
   await signIn(page, seed.email, PLANS_SURFACE_PASSWORD);
 
   // ── 1 — the surface opens on a TAB, and the header holds no second door ────
-  await chapter('Plans opens on the plans waiting for you', async () => {
+  await chapter('Plans opens on every conversation', async () => {
     const plansNav = page
       .getByRole('navigation', { name: 'Primary' })
       .getByRole('link', { name: 'Plans' });
     await plansNav.click();
     await page.waitForURL('**/plans');
 
-    // ⚠️ ONE TAB PER `PlanStatusDto`, DERIVED — never a literal count. The strip
-    // maps `PLAN_STATUS_DTO_VALUES`, so MOTIR-3560's fifth member (`stale`) made
-    // a hardcoded `4` wrong the moment it landed, and this spec went red on
-    // `main` rather than on the pull request that added it. Deriving the number
-    // from the same constant the component maps is what stops a sixth status
-    // costing another red lane (drive-by fix, MOTIR-3622).
+    // ⚠️ ONE OPTION PER PLAN STATE PLUS `All`, DERIVED — never a literal count
+    // (MOTIR-3622's lesson: a hardcoded number goes red the day the vocabulary
+    // grows). The strip maps `PLAN_SESSION_STATE_VALUES`.
     await expect(tabStrip(page)).toBeVisible();
-    await expect(tabStrip(page).getByRole('button')).toHaveCount(PLAN_STATUS_DTO_VALUES.length);
-    await expect(tab(page, 'Planned')).toHaveAttribute('aria-pressed', 'true');
-    for (const other of ['Generating', 'Stale', 'Approved', 'Declined']) {
+    await expect(tabStrip(page).getByRole('button')).toHaveCount(
+      PLAN_SESSION_STATE_VALUES.length + 1,
+    );
+    await expect(tab(page, 'All')).toHaveAttribute('aria-pressed', 'true');
+    for (const other of ['Writing', 'Waiting for approval', 'Stale', 'Approved', 'Declined']) {
       await expect(tab(page, other)).toHaveAttribute('aria-pressed', 'false');
     }
 
-    // …and the DEFAULT writes no parameter. `/plans` and `?status=planned` must
-    // not be two addresses for one view, so every link written before this story
-    // still resolves byte-identically.
+    // …and the DEFAULT writes no parameter, so every link to `/plans` resolves
+    // byte-identically.
     expect(new URL(page.url()).search).toBe('');
     await beat();
 
@@ -243,7 +254,7 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
   // ── 2 — TEN A PAGE, and the next ten arrive because you scrolled ──────────
   await chapter('Approved holds a long history — it arrives ten at a time', async () => {
     await tab(page, 'Approved').click();
-    await page.waitForURL('**/plans?status=approved');
+    await page.waitForURL('**/plans?planState=approved');
 
     // The first cursor page, and only it. The read's own default is ten; the
     // page never states a number of its own — and the tab says how many there
@@ -284,33 +295,30 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
   });
 
   // ── 3 — a decided plan names BOTH people, and says which is which ─────────
-  await chapter('A decided plan says who asked and who approved', async () => {
+  await chapter('A decided plan says who started it, and where it stands', async () => {
     // Back to the top, where the newest plan is — the list is still scrolled to
     // the end of its history from the chapter before, and the top rows are not
     // mounted while it is.
     await scrollMainToTop(page);
-    const decided = rowFor(page, seed.decidedPlanId);
+    const decided = rowCardFor(page, seed.decidedPlanId);
     await expect(decided).toBeVisible();
 
-    // BOTH, by name — not "two names are present". The roles are legible because
-    // they sit in different entries: the decider rides the WHEN entry behind the
-    // verb that already labels it, the requester rides the attribution entry
-    // behind their face.
-    await expect(decided).toContainText(`approved`);
-    await expect(decided).toContainText(`by ${seed.ownerName}`);
+    // The session list names who STARTED the conversation (MOTIR-6025) — for a
+    // plan the generator wrote on someone's behalf, the requester — and the
+    // chip carries the plan's state. The DECIDER is the plan page's to name.
     await expect(decided).toContainText(seed.requesterName);
-    await expect(decided).toContainText('Approved');
+    await expect(decided).toContainText('Generated plan');
+    await expect(rowFor(page, seed.decidedPlanId)).toHaveAccessibleName('Open the plan — Approved');
     await beat();
 
-    // …and the UNDECIDED row still shows the requester. Before this story a
-    // decided row named nobody at all, and the fix has a symmetrical failure
-    // mode — showing the decider by DROPPING the requester — which only an
-    // assertion on both states can catch.
-    await tab(page, 'Planned').click();
-    await page.waitForURL('**/plans');
-    const waiting = rowFor(page, seed.detailPlanId);
+    // …and the UNDECIDED row names its starter too, with its own state.
+    await tab(page, 'Waiting for approval').click();
+    await page.waitForURL('**/plans?planState=planned');
+    const waiting = rowCardFor(page, seed.detailPlanId);
     await expect(waiting).toContainText(seed.requesterName);
-    await expect(waiting).not.toContainText('by ' + seed.ownerName);
+    await expect(rowFor(page, seed.detailPlanId)).toHaveAccessibleName(
+      'Open the plan — Waiting for approval',
+    );
     await beat();
   });
 
@@ -359,8 +367,8 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
 
   // ── 5 — nothing is stranded mid-generation ────────────────────────────────
   await chapter('A plan stuck half-written can be ended, and says so', async () => {
-    await page.goto('/plans?status=generating');
-    await expect(tab(page, 'Generating')).toHaveAttribute('aria-pressed', 'true');
+    await page.goto('/plans?planState=generating');
+    await expect(tab(page, 'Writing')).toHaveAttribute('aria-pressed', 'true');
     await rowFor(page, seed.generatingPlanId).click();
     await page.waitForURL(`**/plans/${seed.generatingPlanId}`);
 
@@ -398,15 +406,15 @@ test('Plans: the tabs, ten at a time, both people on a decided plan, the list vi
     );
     await beat();
 
-    // And it left the tab it was stuck in, which is the reader-visible half of
-    // the same fact.
-    await page.goto('/plans?status=declined');
+    // And it left the filter it was stuck in, which is the reader-visible half
+    // of the same fact.
+    await page.goto('/plans?planState=declined');
     await expect(rowFor(page, seed.generatingPlanId)).toBeVisible();
     await beat();
   });
 });
 
-test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan decided under you', async ({
+test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a plan decided under you', async ({
   page,
 }) => {
   await page.setViewportSize(SHORT_VIEWPORT);
@@ -414,7 +422,7 @@ test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan 
   await signIn(page, seed.email, PLANS_SURFACE_PASSWORD);
 
   // ── EMPTY: a tab with no plans is NOT an empty project ────────────────────
-  await page.goto('/plans?status=declined');
+  await page.goto('/plans?planState=declined');
   // The strip STAYS. A reader whose tab is empty is one press from the plans,
   // and hiding the strip would strand them; the project-level empty state hides
   // it precisely because there is then nothing to press.
@@ -422,14 +430,14 @@ test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan 
   // BY ROLE — the tab-empty state is an `EmptyState`, whose title is an `<h2>`;
   // an unscoped `getByText` also matches the hidden streamed copy of the subtree
   // and loses strict mode (MOTIR-4822; `CLAUDE.md`, the loading-boundary rule).
-  await expect(page.getByRole('heading', { name: 'Nothing declined' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No conversations in this state' })).toBeVisible();
   // Read THROUGH the heading's own card — the description is a `<p>` with no
   // role to ask for, so scoping is what buys it the same immunity.
   await expect(
     page
-      .getByRole('heading', { name: 'Nothing declined' })
+      .getByRole('heading', { name: 'No conversations in this state' })
       .locator('..')
-      .getByText("This project's other plans are in the remaining tabs."),
+      .getByText("This project's other conversations are under All."),
   ).toBeVisible();
   // …and it does NOT repeat the first-run call to action: "generate your first
   // plan" is false on its face in a project holding twenty-odd of them.
@@ -450,7 +458,7 @@ test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan 
   // comfortably shorter than 22 rows, so `useRowWindow` genuinely windows. That
   // it windows is not assumed: the DOM holds ~13 rows here while 22 are loaded,
   // which is exactly why `loadWholeHistory` cannot count them.
-  await page.goto('/plans?status=approved');
+  await page.goto('/plans?planState=approved');
   await expect(planRows(page)).toHaveCount(10);
 
   await loadWholeHistory(page, seed.oldestApprovedPlanId);
@@ -458,22 +466,22 @@ test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan 
   // Deep — the window's bounds are now far from zero, which is the whole
   // precondition. Then a tab with two rows.
   await scrollMainToBottom(page);
-  await tab(page, 'Generating').click();
-  await page.waitForURL('**/plans?status=generating');
+  await tab(page, 'Writing').click();
+  await page.waitForURL('**/plans?planState=generating');
   await expect(planRows(page)).toHaveCount(3);
 
   // …and BACK the other way, because the bounds go stale in both directions: a
   // window sized for three rows, then ten.
   await tab(page, 'Approved').click();
-  await page.waitForURL('**/plans?status=approved');
+  await page.waitForURL('**/plans?planState=approved');
   await expect(planRows(page)).toHaveCount(10);
 
   // One more shrink, from the freshly re-mounted long tab to the shortest tab
   // there is — the empty one, where the list is not rendered at all.
   await tab(page, 'Declined').click();
-  await page.waitForURL('**/plans?status=declined');
+  await page.waitForURL('**/plans?planState=declined');
   // BY ROLE, for the same reason as the first Declined-tab assertion (MOTIR-4822).
-  await expect(page.getByRole('heading', { name: 'Nothing declined' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No conversations in this state' })).toBeVisible();
 
   // ── ERROR: the plan was decided while the reader was looking at it ─────────
   //

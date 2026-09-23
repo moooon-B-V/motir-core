@@ -2024,16 +2024,25 @@ export class MotirClient {
    * Open — or RESUME — the planning conversation for a scope, and read its
    * thread (MOTIR-1832).
    *
-   * Addressed by SCOPE (`projectKey` + optional `targetKeys`), never by a
-   * session id: re-opening the same anchor set returns the SAME row the web
-   * panel is looking at, so the CLI cannot fork a second conversation about the
-   * same items. Opening submits nothing and costs nothing.
+   * Addressed by SCOPE (`projectKey` + optional `targetKeys`) and, once the
+   * caller holds one, by the session's ID (MOTIR-6028): a scope holds many
+   * conversations over time, so the returned `id` is what later calls pass to
+   * stay on THIS one. Without an id the server resumes the caller's recent
+   * conversation for the scope, or starts one. Opening submits nothing and
+   * costs nothing.
    */
-  async openPlanSession(args: { projectKey: string; targetKeys?: string[] }): Promise<PlanSession> {
+  async openPlanSession(args: {
+    projectKey: string;
+    targetKeys?: string[];
+    sessionId?: string;
+  }): Promise<PlanSession> {
     return toPlanSession(
       await this.v1.request('openPlanSession', {
         path: { projectKey: args.projectKey },
-        body: { ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}) },
+        body: {
+          ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}),
+          ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+        },
       }),
     );
   }
@@ -2047,11 +2056,16 @@ export class MotirClient {
     projectKey: string;
     targetKeys?: string[];
     body: string;
+    sessionId?: string;
   }): Promise<PlanSession> {
     return toPlanSession(
       await this.v1.request('appendPlanTurn', {
         path: { projectKey: args.projectKey },
-        body: { body: args.body, ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}) },
+        body: {
+          body: args.body,
+          ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}),
+          ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+        },
       }),
     );
   }
@@ -2068,13 +2082,17 @@ export class MotirClient {
   async submitPlanSession(args: {
     projectKey: string;
     targetKeys?: string[];
+    sessionId?: string;
   }): Promise<PlanSubmitResult> {
     // A 202. The handle comes back the moment the job is ACCEPTED; nothing here
     // waits for the planner, which is what keeps `--detach` honest and the
     // watched path a poll the command owns rather than a hang inside the client.
     const handle = await this.v1.request('submitPlanSession', {
       path: { projectKey: args.projectKey },
-      body: { ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}) },
+      body: {
+        ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}),
+        ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+      },
     });
     return { jobId: handle.jobId, planId: handle.planId };
   }

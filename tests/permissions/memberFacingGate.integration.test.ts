@@ -14,7 +14,6 @@ import { importService } from '@/lib/services/importService';
 import { triageService } from '@/lib/services/triageService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { plansService } from '@/lib/services/plansService';
-import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { encodeFilterParam } from '@/lib/filters/ast';
 import { JOB_SCOPE_QUERY_PARAM } from '@/lib/ai/motirAiClient';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -24,6 +23,7 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import type { ProjectContext } from '@/lib/projects';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { openTestSession } from '../helpers/planSession';
 
 // THE STORY TEST GATE for MOTIR-2291 (Subtask MOTIR-2367) — the SEAM half,
 // against real Postgres.
@@ -243,13 +243,8 @@ describe('every member-facing key answers through ONE resolution, the same way',
 
   it('ai:plan — member passes, viewer refused with the key named', async () => {
     const s = await buildScenario('aiplan');
-    await expect(
-      planChangeSessionsService.getOrCreateForProject(pctx(s, s.memberCtx)),
-    ).resolves.toBeTruthy();
-    await expectKeyRefusal(
-      planChangeSessionsService.getOrCreateForProject(pctx(s, s.viewerCtx)),
-      'ai:plan',
-    );
+    await expect(openTestSession(pctx(s, s.memberCtx))).resolves.toBeTruthy();
+    await expectKeyRefusal(openTestSession(pctx(s, s.viewerCtx)), 'ai:plan');
   });
 
   it('ai:view_plan — the key that governs a plan AUTHOR write, refused for a viewer', async () => {

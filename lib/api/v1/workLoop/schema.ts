@@ -8,7 +8,12 @@ import type { V1Collection } from '@/lib/api/v1/pagination';
 import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
-import { isSelfBlockingDesignAdvisory, isSizingAdvisory } from '@/lib/dto/workItems';
+import {
+  isBodyAboveFieldMoveAdvisory,
+  isBlockerCountAdvisory,
+  isSelfBlockingDesignAdvisory,
+  isSizingAdvisory,
+} from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { DispatchRunCloseOutPromptDto } from '@/lib/dto/dispatchRuns';
 import type { CurrentTestInstructionsDTO } from '@/lib/dto/testInstructions';
@@ -57,7 +62,7 @@ export const dispatchWorkflowModeSchema = z.enum(['per_item_pr', 'session_lineag
  * this field is documented as exactly that. Two families ship today
  * (`advisory` / `likely-missing-edge` on a reference; `likely-ordering-violation`
  * / `likely-repo-straddle` / `likely-over-gate-sizing` / `likely-self-blocking-design`
- * on a shape) and the advisory channel is designed to grow — MOTIR-2175,
+ * / `body-edit-above-field-move` on a shape) and the advisory channel is designed to grow — MOTIR-2175,
  * MOTIR-2177, MOTIR-3110 and MOTIR-3178 each added a severity to a shipped
  * surface.
  *
@@ -173,8 +178,8 @@ const sizingShapeAdvisorySchema = z.object({
  * is a third variant beside {@link criterionShapeAdvisorySchema} rather than a
  * fourth severity inside it. It carries no `criterionIndex` at all — its remedy
  * LIFTS the design criterion onto its own card rather than cutting the list at a
- * line — and the three shape variants are disjoint on their REQUIRED fields
- * (`criterionIndex` / `threshold` / this pair), so the plain union below resolves
+ * line — and the shape variants are disjoint on their REQUIRED fields
+ * (`criterionIndex` / `threshold` / this pair / the counted claim), so the plain union below resolves
  * each unambiguously whichever order it tries them in.
  *
  * ⚠️ Additive under §8, on the same terms as the sizing and subsumption variants:
@@ -190,6 +195,48 @@ const selfBlockingDesignShapeAdvisorySchema = z.object({
   designCriterionIndex: z.number().int(),
   /** 1-based index of the criterion that builds the surface that drawing decides. */
   surfaceCriterionIndex: z.number().int(),
+});
+
+/** One end of a BODY-EDIT-ABOVE-FIELD-MOVE advisory: one revision of the card. */
+const revisionEndSchema = z.object({
+  /** When the revision was written, ISO-8601. */
+  at: z.string(),
+  /** The fields it moved that the check reads — body columns, or watched fields. */
+  fields: z.array(z.string()),
+});
+
+/**
+ * A BODY-EDIT-ABOVE-FIELD-MOVE SHAPE advisory — the card's newest body write
+ * moved none of the fields a body describes, and the write directly beneath it
+ * did (MOTIR-5399). A prompt to RE-READ the body against that move, never a defect
+ * claim: a body rewritten to match the move leaves the same trail as one that put
+ * the old framing back, and only the prose tells them apart.
+ *
+ * ⚠️ `kind: 'shape'` with neither `criterionIndex`, `threshold` nor the design
+ * pair — its REQUIRED fields are `bodyEdit` + `fieldMove`, so the four shape
+ * variants stay disjoint and the plain union resolves each unambiguously.
+ *
+ * ⚠️ Additive under §8, on the same terms as the sizing and self-blocking
+ * variants: a new member of a union whose `severity` was already open-ended.
+ * `V1_CONTRACT_VERSION` moves with it (Amendment 8's obligation).
+ */
+const bodyAboveFieldMoveShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  /** The newer write — it moved a body and no watched field. */
+  bodyEdit: revisionEndSchema,
+  /** The write directly beneath it — it moved at least one watched field. */
+  fieldMove: revisionEndSchema,
+});
+
+const blockerCountShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  claim: z.string(),
+  claimedCount: z.number().int().nonnegative(),
+  blockerCount: z.number().int().nonnegative(),
 });
 
 /**
@@ -263,6 +310,8 @@ export const dispatchAdvisorySchema = z.union([
   criterionShapeAdvisorySchema,
   sizingShapeAdvisorySchema,
   selfBlockingDesignShapeAdvisorySchema,
+  bodyAboveFieldMoveShapeAdvisorySchema,
+  blockerCountShapeAdvisorySchema,
   subsumptionAdvisorySchema,
   referenceAdvisorySchema,
 ]);
@@ -353,6 +402,16 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
     advisories: dto.advisories.map((advisory) => {
+      if (isBlockerCountAdvisory(advisory)) {
+        return {
+          kind: 'shape' as const,
+          item: advisory.item,
+          severity: advisory.severity,
+          claim: advisory.claim,
+          claimedCount: advisory.claimedCount,
+          blockerCount: advisory.blockerCount,
+        };
+      }
       // The SELF-BLOCKING-DESIGN member (MOTIR-3178) — narrowed out here for the
       // same reason the SIZING member below is: it carries no `criterionIndex`,
       // and the generic `shape` branch further down reads one.
@@ -363,6 +422,17 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
           severity: advisory.severity,
           designCriterionIndex: advisory.designCriterionIndex,
           surfaceCriterionIndex: advisory.surfaceCriterionIndex,
+        };
+      }
+      // The BODY-EDIT-ABOVE-FIELD-MOVE member (MOTIR-5399) — the third `shape`
+      // variant with no `criterionIndex`, narrowed out for the same reason.
+      if (isBodyAboveFieldMoveAdvisory(advisory)) {
+        return {
+          kind: 'shape' as const,
+          item: advisory.item,
+          severity: advisory.severity,
+          bodyEdit: { at: advisory.bodyEdit.at, fields: [...advisory.bodyEdit.fields] },
+          fieldMove: { at: advisory.fieldMove.at, fields: [...advisory.fieldMove.fields] },
         };
       }
       // The SIZING member next, because it is the other `shape` variant with no
@@ -1538,19 +1608,33 @@ export type V1PlanSession = z.infer<typeof planSessionSchema>;
  * list, so two spellings of one thread would look different at the edge before
  * the service normalised them.
  *
- * Omitted or empty means the PROJECT-WIDE thread. There is deliberately no
- * session id here or anywhere else on this resource: a thread's identity is
- * `(project, anchor set)`, and handing a client an id is exactly how a second
- * conversation about one anchor set gets forked.
+ * Omitted or empty means the PROJECT-WIDE thread.
+ *
+ * `sessionId` (MOTIR-6028; AMENDMENT 17 §2) names ONE conversation — the `id`
+ * a previous call on this resource returned. A scope now holds many sessions
+ * over time, so the id is how a client keeps talking to the same one. OPTIONAL:
+ * without it the caller's resumable session for the scope is used (or, on the
+ * first turn, a new one starts), which is what every client built before the id
+ * existed already does.
  */
+const planSessionIdField = z
+  .string()
+  .min(1)
+  .optional()
+  .describe(
+    'The `id` of the planning session to address, as a previous call returned it. ' +
+      'Omit to use your resumable session for the scope (or start one with a turn).',
+  );
+
 export const planSessionScopeBodySchema = z
-  .object({ targetKeys: z.array(z.string().min(1)).optional() })
+  .object({ targetKeys: z.array(z.string().min(1)).optional(), sessionId: planSessionIdField })
   .strict();
 
 /** `POST …/plan-session/turns` — the scope, plus what to say. */
 export const planTurnBodySchema = z
   .object({
     targetKeys: z.array(z.string().min(1)).optional(),
+    sessionId: planSessionIdField,
     /** What you want changed about the plan. */
     body: z.string().min(1),
   })

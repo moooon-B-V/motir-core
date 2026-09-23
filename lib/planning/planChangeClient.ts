@@ -1,5 +1,9 @@
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
-import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
+import type {
+  EarlierSessionDto,
+  PlanChangeSessionDto,
+  ResumableSessionDto,
+} from '@/lib/dto/planChange';
 
 // Client reads/writes for the plan-change CONVERSATION seam (Story 7.30 ·
 // MOTIR-1728's routes), consumed by the conversational rail (MOTIR-1730). No
@@ -41,6 +45,8 @@ export interface ContextualPlanResponse extends PlanChangeSubmitResponse {
 export interface ContextualSessionResumeResponse {
   session: PlanChangeSessionDto | null;
   planId?: string | null;
+  /** The scope's earlier conversation when nothing resumed (MOTIR-6024). */
+  earlier?: EarlierSessionDto | null;
 }
 
 const JSON_HEADERS = { Accept: 'application/json', 'Content-Type': 'application/json' } as const;
@@ -65,11 +71,43 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
   return (await res.json()) as T;
 }
 
-/** Open the active project's conversation, or RESUME the existing one. Idempotent
- *  (one thread per project) — the rail calls it on mount, and the response carries
- *  the full ordered thread, so a reopened workspace continues where it stopped. */
-export async function openPlanChangeSession(signal?: AbortSignal): Promise<PlanChangeSessionDto> {
-  return post<PlanChangeSessionDto>('/api/ai/plan-change/session', undefined, signal);
+async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
+  return (await res.json()) as T;
+}
+
+/** The caller's own RESUMABLE project-wide conversation — their session active
+ *  within the resume window — or `null` (MOTIR-6023; AMENDMENT 17 §3). A READ:
+ *  mounting the rail creates nothing; the first turn does ({@link startPlanChangeSession}). */
+export async function findResumableSession(signal?: AbortSignal): Promise<ResumableSessionDto> {
+  const body = await get<Partial<ResumableSessionDto> | null>(
+    '/api/ai/plan-change/session',
+    signal,
+  );
+  // Read defensively (an E2E stub may answer the older bare shape or nothing).
+  return { session: body?.session ?? null, earlier: body?.earlier ?? null };
+}
+
+/** One conversation BY ID — a reopened session (the Plans page's row). */
+export async function getPlanChangeSession(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<PlanChangeSessionDto> {
+  return get<PlanChangeSessionDto>(
+    `/api/ai/plan-change/session?id=${encodeURIComponent(sessionId)}`,
+    signal,
+  );
+}
+
+/** START a project-wide conversation with its FIRST TURN — or land that turn on
+ *  the caller's resumable one, which the server decides under a lock (§1, §3). */
+export async function startPlanChangeSession(
+  body: string,
+  signal?: AbortSignal,
+  isAnswer = false,
+): Promise<PlanChangeSessionDto> {
+  return post<PlanChangeSessionDto>('/api/ai/plan-change/session', { body, isAnswer }, signal);
 }
 
 /** Append ONE turn. Appending ACCUMULATES; it does not submit.
@@ -88,13 +126,14 @@ export async function openPlanChangeSession(signal?: AbortSignal): Promise<PlanC
  * wire it back into the composer.
  */
 export async function appendPlanChangeTurn(
+  sessionId: string,
   body: string,
   signal?: AbortSignal,
   isAnswer = false,
 ): Promise<PlanChangeSessionDto> {
   return post<PlanChangeSessionDto>(
     '/api/ai/plan-change/session/turns',
-    { body, isAnswer },
+    { sessionId, body, isAnswer },
     signal,
   );
 }
@@ -104,21 +143,31 @@ export async function appendPlanChangeTurn(
  *  for one job: the server keys the append on the job id, so a replay returns the
  *  same thread rather than a duplicate bubble. */
 export async function recordPlannerTurn(
+  sessionId: string,
   jobId: string,
   anchor: { anchorId: string; targetKeys: readonly string[] } | null,
   signal?: AbortSignal,
 ): Promise<PlanChangeSessionDto> {
   return post<PlanChangeSessionDto>(
     '/api/ai/plan-change/session/planner-turn',
-    anchor ? { jobId, anchorId: anchor.anchorId, targetKeys: [...anchor.targetKeys] } : { jobId },
+    anchor
+      ? { sessionId, jobId, anchorId: anchor.anchorId, targetKeys: [...anchor.targetKeys] }
+      : { sessionId, jobId },
     signal,
   );
 }
 
 /** Submit the conversation's ACCUMULATED intent — every user turn in order, not
  *  just the newest one. Returns the shipped `augment` job to stream + approve. */
-export async function submitPlanChange(signal?: AbortSignal): Promise<PlanChangeSubmitResponse> {
-  return post<PlanChangeSubmitResponse>('/api/ai/plan-change/session/submit', undefined, signal);
+export async function submitPlanChange(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<PlanChangeSubmitResponse> {
+  return post<PlanChangeSubmitResponse>(
+    '/api/ai/plan-change/session/submit',
+    { sessionId },
+    signal,
+  );
 }
 
 // ─── The BOUNDARY MAILBOX — reaching a run that is already going ─────────────
@@ -155,6 +204,7 @@ export interface MailboxDeliveryResponse {
  * a replay of the last one.
  */
 export async function attachMidRunTurn(
+  sessionId: string,
   jobId: string,
   body: string,
   idempotencyKey: string,
@@ -162,7 +212,7 @@ export async function attachMidRunTurn(
 ): Promise<MailboxDeliveryResponse> {
   return post<MailboxDeliveryResponse>(
     '/api/ai/plan-change/session/mailbox',
-    { jobId, body, idempotencyKey },
+    { sessionId, jobId, body, idempotencyKey },
     signal,
   );
 }
@@ -178,11 +228,12 @@ export async function attachMidRunTurn(
  * something is queued, so an ordinary run makes no requests at all.
  */
 export async function peekMailbox(
+  sessionId: string,
   jobId: string,
   signal?: AbortSignal,
 ): Promise<MailboxDeliveryResponse> {
   const res = await fetch(
-    `/api/ai/plan-change/session/mailbox?jobId=${encodeURIComponent(jobId)}`,
+    `/api/ai/plan-change/session/mailbox?jobId=${encodeURIComponent(jobId)}&sessionId=${encodeURIComponent(sessionId)}`,
     { headers: JSON_HEADERS, signal },
   );
   if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
@@ -203,13 +254,14 @@ export async function peekMailbox(
  * and the surface has to keep saying "stopping" until the stream actually ends.
  */
 export async function stopPlanChangeRun(
+  sessionId: string,
   jobId: string,
   idempotencyKey: string,
   signal?: AbortSignal,
 ): Promise<MailboxDeliveryResponse> {
   return post<MailboxDeliveryResponse>(
     '/api/ai/plan-change/session/mailbox/stop',
-    { jobId, idempotencyKey },
+    { sessionId, jobId, idempotencyKey },
     signal,
   );
 }
@@ -269,8 +321,15 @@ export async function submitAskTurn(
    *  it is what sends the turn straight to the plan-change submit instead of
    *  through a classifier that has nothing useful to decide. */
   isAnswer = false,
+  /** The conversation the rail holds (MOTIR-6023). Absent on a first turn,
+   *  which starts the session. */
+  sessionId: string | null = null,
 ): Promise<AskSubmitResponse | AskRedirectResponse> {
-  return post<AskSubmitResponse | AskRedirectResponse>('/api/ai/ask', { body, isAnswer }, signal);
+  return post<AskSubmitResponse | AskRedirectResponse>(
+    '/api/ai/ask',
+    { body, isAnswer, ...(sessionId ? { sessionId } : {}) },
+    signal,
+  );
 }
 
 /**
@@ -284,12 +343,16 @@ export async function submitAskTurn(
  */
 export async function rerunAskTurn(
   turnId: string,
-  options: { flip?: boolean } = {},
+  options: { flip?: boolean; sessionId?: string | null } = {},
   signal?: AbortSignal,
 ): Promise<AskSubmitResponse | AskRedirectResponse> {
   return post<AskSubmitResponse | AskRedirectResponse>(
     '/api/ai/ask',
-    options.flip ? { turnId, flip: true } : { turnId },
+    {
+      turnId,
+      ...(options.flip ? { flip: true } : {}),
+      ...(options.sessionId ? { sessionId: options.sessionId } : {}),
+    },
     signal,
   );
 }
@@ -300,8 +363,13 @@ export async function rerunAskTurn(
 export async function settleAskJob(
   jobId: string,
   signal?: AbortSignal,
+  sessionId: string | null = null,
 ): Promise<AskSettleResponse> {
-  return post<AskSettleResponse>('/api/ai/ask/settle', { jobId }, signal);
+  return post<AskSettleResponse>(
+    '/api/ai/ask/settle',
+    { jobId, ...(sessionId ? { sessionId } : {}) },
+    signal,
+  );
 }
 
 // ─── The ITEM-ANCHORED half — the MOTIR-909 contextual-planning endpoints ─────
@@ -328,11 +396,17 @@ function extra(targetKeys: readonly string[]): { targetKeys?: string[] } {
 }
 
 /** The additional anchors as the GET's repeated `?targetKey=` params. */
-function anchorQuery(targetKeys: readonly string[]): string {
-  if (targetKeys.length === 0) return '';
+function anchorQuery(targetKeys: readonly string[], sessionId: string | null = null): string {
+  if (targetKeys.length === 0 && !sessionId) return '';
   const params = new URLSearchParams();
   for (const key of targetKeys) params.append('targetKey', key);
+  if (sessionId) params.set('sessionId', sessionId);
   return `?${params.toString()}`;
+}
+
+/** The session the anchored caller holds, spread into a body (MOTIR-6023). */
+function withSession(sessionId: string | null): { sessionId?: string } {
+  return sessionId ? { sessionId } : {};
 }
 
 /** RESUME the item's thread on mount. A null `session` means the item was never
@@ -346,14 +420,20 @@ export async function resumeContextualSession(
   anchorId: string,
   targetKeys: readonly string[] = [],
   signal?: AbortSignal,
+  /** A NAMED conversation to reopen; absent, the caller's resumable one. */
+  sessionId: string | null = null,
 ): Promise<ContextualSessionResumeResponse> {
-  const res = await fetch(`${anchorPath(anchorId)}${anchorQuery(targetKeys)}`, {
+  const res = await fetch(`${anchorPath(anchorId)}${anchorQuery(targetKeys, sessionId)}`, {
     headers: { Accept: 'application/json' },
     signal,
   });
   if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
   const body = (await res.json()) as ContextualSessionResumeResponse;
-  return { session: body.session ?? null, planId: body.planId ?? null };
+  return {
+    session: body.session ?? null,
+    planId: body.planId ?? null,
+    earlier: body.earlier ?? null,
+  };
 }
 
 /** Append the turn to the item's thread AND submit the accumulated intent — one
@@ -364,10 +444,11 @@ export async function submitContextualPlan(
   targetKeys: readonly string[] = [],
   signal?: AbortSignal,
   isAnswer = false,
+  sessionId: string | null = null,
 ): Promise<ContextualPlanResponse> {
   return post<ContextualPlanResponse>(
     anchorPath(anchorId),
-    { prompt, isAnswer, ...extra(targetKeys) },
+    { prompt, isAnswer, ...extra(targetKeys), ...withSession(sessionId) },
     signal,
   );
 }
@@ -378,10 +459,11 @@ export async function resubmitContextualPlan(
   anchorId: string,
   targetKeys: readonly string[] = [],
   signal?: AbortSignal,
+  sessionId: string | null = null,
 ): Promise<ContextualPlanResponse> {
   return post<ContextualPlanResponse>(
     anchorPath(anchorId),
-    { resubmit: true, ...extra(targetKeys) },
+    { resubmit: true, ...extra(targetKeys), ...withSession(sessionId) },
     signal,
   );
 }

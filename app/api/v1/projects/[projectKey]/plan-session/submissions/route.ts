@@ -35,7 +35,13 @@ export const POST = withV1Route<{ projectKey: string }>({ permission: 'ai:plan' 
     ctx.service,
   );
 
-  const result = await planChangeSessionsService.submit(pctx, scope.scopeKey);
+  // The named session, else the caller's resumable one (MOTIR-6028).
+  const result = await planChangeSessionsService.submitPublic(
+    pctx,
+    scope,
+    undefined,
+    body.sessionId,
+  );
 
   return NextResponse.json(presentPlanJobHandle(result), { status: 202 });
 });

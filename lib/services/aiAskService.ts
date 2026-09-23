@@ -5,7 +5,12 @@ import type { JobStreamEvent } from '@/lib/ai/types';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { readAskOutcome } from '@/lib/planning/askResult';
-import { EmptyPlanChangeTurnError, PlanChangeTurnNotFoundError } from '@/lib/planChange/errors';
+import {
+  EmptyPlanChangeTurnError,
+  PlanChangeSessionNotFoundError,
+  PlanChangeTurnNotFoundError,
+} from '@/lib/planChange/errors';
+import { PROJECT_SCOPE, PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
 
@@ -130,6 +135,23 @@ function turnByJobId(session: PlanChangeSessionDto, jobId: string): PlanChangeTu
   return session.turns.find((t) => t.role === 'user' && t.jobId === jobId) ?? null;
 }
 
+/**
+ * The session a CONTINUING ask write works on (MOTIR-6023; AMENDMENT 17 §2):
+ * the one the client holds, else the caller's own resumable project-wide
+ * session. A re-run or a settle continues a conversation, so with neither there
+ * is nothing to continue.
+ */
+async function requireAskSession(
+  ctx: ProjectContext,
+  sessionId: string | undefined,
+): Promise<PlanChangeSessionDto> {
+  const session = sessionId
+    ? await planChangeSessionsService.getById(ctx, sessionId)
+    : await planChangeSessionsService.findResumable(ctx, PROJECT_SCOPE_KEY);
+  if (!session) throw new PlanChangeSessionNotFoundError(ctx.projectId);
+  return session;
+}
+
 export const aiAskService = {
   /**
    * The composer's door: append what the person typed, then run it.
@@ -143,7 +165,7 @@ export const aiAskService = {
   async submitTurn(
     body: string,
     ctx: ProjectContext,
-    opts: { isAnswer?: boolean } = {},
+    opts: { isAnswer?: boolean; sessionId?: string } = {},
   ): Promise<AskSubmitResult | AskRedirectResult> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
@@ -156,12 +178,36 @@ export const aiAskService = {
       'ai:plan',
     );
 
-    // OPEN OR RESUME the thread first — the door is self-sufficient. The rail
-    // opens the thread on mount today, but a door that only works after another
-    // call has run is a door with an undocumented precondition, and the
-    // get-or-create is idempotent (the `(project_id, scope_key)` unique makes a
-    // lost create-race read the winner's row).
-    const current = await planChangeSessionsService.getOrCreateForProject(ctx);
+    // WHICH conversation (MOTIR-6023; AMENDMENT 17 §2–§3): the session the
+    // client holds, else the caller's own resumable project-wide session. With
+    // neither, THIS turn starts one — the door stays self-sufficient, and a
+    // session exists from its first turn, never from a look.
+    const current = opts.sessionId
+      ? await planChangeSessionsService.getById(ctx, opts.sessionId)
+      : await planChangeSessionsService.findResumable(ctx, PROJECT_SCOPE_KEY);
+    if (!current) {
+      const started = await planChangeSessionsService.startWithFirstTurn(
+        ctx,
+        PROJECT_SCOPE,
+        trimmed,
+        {
+          isAnswer: opts.isAnswer === true,
+        },
+      );
+      const first = started.turns.at(-1);
+      if (!first) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
+      // A fresh session has no pending question, so this is the ask branch.
+      const { jobId } = await submitAsk(trimmed, ctx);
+      const session = await planChangeSessionsService.recordTurnIntent(
+        first.id,
+        'ask',
+        ctx,
+        { jobId },
+        { sessionId: started.id },
+      );
+      return { jobId, turnId: first.id, session };
+    }
+    const address = { sessionId: current.id };
 
     // ── ⭐ AN ANSWER TO A PENDING QUESTION SKIPS THE CLASSIFIER ──────────────
     //
@@ -186,7 +232,7 @@ export const aiAskService = {
     // back door §5 exists to close.
     const answersAQuestion = opts.isAnswer === true && pendingQuestion(current.turns) !== null;
     if (answersAQuestion) {
-      await planChangeSessionsService.appendTurn(trimmed, ctx, undefined, {
+      await planChangeSessionsService.appendTurn(trimmed, ctx, address, {
         // What actually RAN. The field records the effective disposition, and
         // what runs on this branch is the plan-change submit, not an ask.
         intent: 'plan_change',
@@ -194,7 +240,7 @@ export const aiAskService = {
       });
       // The SHIPPED submit, untouched: it accumulates every user turn in order,
       // which is how answering RESUMES the run rather than restarting it.
-      const submitted = await planChangeSessionsService.submit(ctx);
+      const submitted = await planChangeSessionsService.submit(ctx, address);
       return {
         outcome: 'redirected',
         jobId: submitted.jobId,
@@ -203,7 +249,7 @@ export const aiAskService = {
       };
     }
 
-    const appended = await planChangeSessionsService.appendTurn(trimmed, ctx, undefined, {
+    const appended = await planChangeSessionsService.appendTurn(trimmed, ctx, address, {
       intent: 'ask',
       // Recorded even here: a turn sent from the answer bar when nothing was
       // pending is still a fact about the affordance, and the transcript keeps
@@ -214,9 +260,13 @@ export const aiAskService = {
     if (!turn) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
 
     const { jobId } = await submitAsk(trimmed, ctx);
-    const session = await planChangeSessionsService.recordTurnIntent(turn.id, 'ask', ctx, {
-      jobId,
-    });
+    const session = await planChangeSessionsService.recordTurnIntent(
+      turn.id,
+      'ask',
+      ctx,
+      { jobId },
+      address,
+    );
     return { jobId, turnId: turn.id, session };
   },
 
@@ -236,7 +286,7 @@ export const aiAskService = {
   async resubmit(
     turnId: string,
     ctx: ProjectContext,
-    opts: { flip?: boolean } = {},
+    opts: { flip?: boolean; sessionId?: string } = {},
   ): Promise<AskSubmitResult | AskRedirectResult> {
     await projectAccessService.assertPermission(
       ctx.projectId,
@@ -244,7 +294,8 @@ export const aiAskService = {
       'ai:plan',
     );
 
-    const current = await planChangeSessionsService.getOrCreateForProject(ctx);
+    const current = await requireAskSession(ctx, opts.sessionId);
+    const address = { sessionId: current.id };
     const turn = turnById(current, turnId);
     if (!turn || turn.role !== 'user') throw new PlanChangeTurnNotFoundError(turnId);
 
@@ -254,10 +305,14 @@ export const aiAskService = {
     if (next === 'plan_change') {
       // Hand it to the SHIPPED plan-change submit. Untouched: it accumulates the
       // thread's user turns exactly as it always has.
-      await planChangeSessionsService.recordTurnIntent(turnId, 'plan_change', ctx, {
-        corrected: opts.flip === true,
-      });
-      const submitted = await planChangeSessionsService.submit(ctx);
+      await planChangeSessionsService.recordTurnIntent(
+        turnId,
+        'plan_change',
+        ctx,
+        { corrected: opts.flip === true },
+        address,
+      );
+      const submitted = await planChangeSessionsService.submit(ctx, address);
       return {
         outcome: 'redirected',
         jobId: submitted.jobId,
@@ -267,10 +322,13 @@ export const aiAskService = {
     }
 
     const { jobId } = await submitAsk(turn.body, ctx);
-    const session = await planChangeSessionsService.recordTurnIntent(turnId, 'ask', ctx, {
-      corrected: opts.flip === true,
-      jobId,
-    });
+    const session = await planChangeSessionsService.recordTurnIntent(
+      turnId,
+      'ask',
+      ctx,
+      { corrected: opts.flip === true, jobId },
+      address,
+    );
     return { jobId, turnId, session };
   },
 
@@ -281,8 +339,13 @@ export const aiAskService = {
    * arm is guarded by the turn's current intent, so a second settle of the same
    * job neither duplicates a bubble nor dispatches a second plan-edit job.
    */
-  async settle(jobId: string, ctx: ProjectContext): Promise<AskSettleResult> {
-    const session = await planChangeSessionsService.getOrCreateForProject(ctx);
+  async settle(
+    jobId: string,
+    ctx: ProjectContext,
+    opts: { sessionId?: string } = {},
+  ): Promise<AskSettleResult> {
+    const session = await requireAskSession(ctx, opts.sessionId);
+    const address = { sessionId: session.id };
     const turn = turnByJobId(session, jobId);
     // A job id this thread never submitted is not an error — the client may be
     // replaying a stale settle after a newer turn — so it yields the thread as it
@@ -297,8 +360,8 @@ export const aiAskService = {
       // Already redirected by an earlier settle of this same job — do not submit
       // a second plan-edit job for one turn.
       if (turn.intent === 'plan_change') return { outcome: 'silent', session };
-      await planChangeSessionsService.recordTurnIntent(turn.id, 'plan_change', ctx, {});
-      const submitted = await planChangeSessionsService.submit(ctx);
+      await planChangeSessionsService.recordTurnIntent(turn.id, 'plan_change', ctx, {}, address);
+      const submitted = await planChangeSessionsService.submit(ctx, address);
       return {
         outcome: 'redirected',
         jobId: submitted.jobId,
@@ -312,6 +375,7 @@ export const aiAskService = {
     const updated = await planChangeSessionsService.appendAnswerTurn(
       { jobId, body: outcome.answer, citations: outcome.citations },
       ctx,
+      address,
     );
     return { outcome: 'answered', session: updated };
   },

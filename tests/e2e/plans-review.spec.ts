@@ -61,30 +61,25 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await plansNav.click();
   await page.waitForURL('**/plans');
 
-  const list = page.getByRole('list', { name: 'Plans' });
+  // `/plans` lists planning CONVERSATIONS since MOTIR-6025, every one under the
+  // default `All` filter; each seeded plan rode `createPlan`, so each is its own
+  // conversation, and a row's chip is its plan's link, named for its state.
+  const list = page.getByRole('list', { name: 'Planning conversations' });
   await expect(list).toBeVisible();
 
-  // The stale `planned` plan's row shows its status + the "N may be out of date"
-  // indicator; the approved plan's row shows its Approved status.
-  //
-  // ⚠️ TWO, and each for a reason the proposal ITSELF named (MOTIR-3777): one
-  // add's declared blocker was archived, another's parent was. The third add —
-  // beside the first under the SAME parent, which gained an unrelated child after
-  // `plannedAt` — is NOT counted, and used to be. The count on this row is
-  // `staleCountFor`'s, a SECOND reader of the same verdict as the rail's summary
-  // below, so it is asserted in both places.
+  // ⚠️ The row no longer carries the "N may be out of date" advisory — the
+  // session row names the conversation, not the plan's drift. The count is
+  // asserted where it lives, on the rail's summary below (MOTIR-3777's TWO).
   const staleRow = page.locator(`a[href="/plans/${seed.stalePlan.id}"]`);
-  await expect(staleRow).toContainText('Planned');
-  await expect(staleRow).toContainText('2 may be out of date');
+  await expect(staleRow).toHaveAccessibleName('Open the plan — Waiting for approval');
 
-  // ⚠️ THE APPROVED PLAN IS IN ITS OWN TAB (MOTIR-3241). `/plans` is no longer one
-  // reverse-chronological stream of every plan: it is a tab per lifecycle state,
-  // `Planned` — the plans awaiting a decision — selected by default and writing a
-  // CLEAN url. So a decided plan is one press away rather than three rows down.
-  // The assertion is unchanged in meaning; only where it is made moved.
-  await page.goto('/plans?status=approved');
-  const approvedRow = page.locator(`a[href="/plans/${seed.approvedPlan.id}"]`);
-  await expect(approvedRow).toContainText('Approved');
+  // …and the approved plan's conversation sits in the same list, with its own
+  // state. The `Approved` filter holds it too.
+  await expect(page.locator(`a[href="/plans/${seed.approvedPlan.id}"]`)).toHaveAccessibleName(
+    'Open the plan — Approved',
+  );
+  await page.goto('/plans?planState=approved');
+  await expect(page.locator(`a[href="/plans/${seed.approvedPlan.id}"]`)).toBeVisible();
 
   // ── 2. Enter the stale plan → the detail ──────────────────────────────────
   await page.goto('/plans');
@@ -257,12 +252,10 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // It never became anything, so it has no key to show and none is invented.
   await expect(declinedCard).toContainText('New');
 
-  // The list also reflects the declined status on its pill — and its REAL item
-  // count, which read `0 items` for as long as the rows were deleted.
-  await page.goto('/plans?status=declined');
+  // The list also reflects the declined status on its chip.
+  await page.goto('/plans?planState=declined');
   const declinedRow = page.locator(`a[href="/plans/${seed.declinePlan.id}"]`);
-  await expect(declinedRow).toContainText('Declined');
-  await expect(declinedRow).toContainText('1 item');
+  await expect(declinedRow).toHaveAccessibleName('Open the plan — Declined');
 
   // Declining a bundle of proposed adds leaves the tree untouched — the proposed
   // item was never materialized, so it's absent from the ready set.
@@ -277,9 +270,9 @@ test('Plans: empty state shows the generate-your-first-plan CTA', async ({ page 
   await signIn(page, empty.email, PLANS_SEED_PASSWORD);
 
   await page.goto('/plans');
-  await expect(page.getByRole('heading', { name: 'No plans yet' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No planning conversations yet' })).toBeVisible();
   await expect(
-    page.getByText(/Generate your first plan to see proposed work here\./),
+    page.getByRole('main').getByText(/Start a conversation with Motir AI\./),
   ).toBeVisible();
 });
 

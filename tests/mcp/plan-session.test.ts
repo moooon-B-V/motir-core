@@ -45,6 +45,7 @@ import {
 } from '../fixtures/settledRequirement';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addressOf, openTestSession } from '../helpers/planSession';
 
 // The plan-change CONVERSATION over MCP (Story 7.9 · MOTIR-1832) — the
 // mechanism `motir plan` talks through, and the thing that makes terminal
@@ -381,8 +382,8 @@ describe('append_plan_turn — accumulation, and the SAME thread the web panel s
     const client = await connectClient(fx.ctx);
 
     // Web panel first (exactly what the cookie routes call), then MCP.
-    const fromPanel = await planChangeSessionsService.getOrCreateForProject(pctx);
-    await planChangeSessionsService.appendTurn('Typed in the browser.', pctx);
+    const fromPanel = await openTestSession(pctx);
+    await planChangeSessionsService.appendTurn('Typed in the browser.', pctx, addressOf(fromPanel));
     const fromCli = session(
       await call(client, APPEND_PLAN_TURN_TOOL_NAME, {
         projectKey: 'PROD',
@@ -399,7 +400,7 @@ describe('append_plan_turn — accumulation, and the SAME thread the web panel s
 
     // …and the browser sees the CLI's — one `(project_id, scope_key)` row, not
     // two surfaces with two conversations.
-    const backInPanel = await planChangeSessionsService.getOrCreateForProject(pctx);
+    const backInPanel = await openTestSession(pctx);
     expect(backInPanel.id).toBe(fromPanel.id);
     expect(backInPanel.turns.map((t) => t.body)).toEqual([
       'Typed in the browser.',
@@ -862,7 +863,7 @@ describe('plan-session tools — grant narrowing', () => {
     }
 
     // The gate fired BEFORE the service: no second turn, no job, no plan.
-    const after = await planChangeSessionsService.getOrCreateForProject(projectCtx(fx));
+    const after = await openTestSession(projectCtx(fx));
     expect(after.turnCount).toBe(1);
     expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
     const planCount = await adminDb.plan.count();
@@ -883,5 +884,100 @@ describe('plan-session tools — grant narrowing', () => {
     });
     expect(appended.isError).toBeFalsy();
     await planner.close();
+  });
+});
+
+describe('the conversation addressed BY ID (MOTIR-6028)', () => {
+  const THREE_HOURS = 3 * 60 * 60 * 1000;
+
+  /** An OLDER conversation gone quiet past the 2-hour window, and the NEWER one
+   *  the next open starts — two sessions of one (project-wide) scope. */
+  async function twoConversations(client: Client) {
+    const older = session(
+      await call(client, APPEND_PLAN_TURN_TOOL_NAME, { projectKey: 'PROD', body: 'older' }),
+    );
+    await adminDb.planChangeSession.update({
+      where: { id: older.id },
+      data: { lastActivityAt: new Date(Date.now() - THREE_HOURS) },
+    });
+    const newer = session(await call(client, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' }));
+    expect(newer.id).not.toBe(older.id);
+    return { older, newer };
+  }
+
+  it('open returns the session id, in structuredContent and in the text', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+
+    const opened = await call(client, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' });
+
+    expect(opened.isError).toBeFalsy();
+    expect(session(opened).id).toBeTruthy();
+    expect(text(opened)).toContain(session(opened).id);
+    await client.close();
+  });
+
+  it('append and submit given an id land on THAT session, even with a newer one in the scope', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const { older, newer } = await twoConversations(client);
+
+    const appended = session(
+      await call(client, APPEND_PLAN_TURN_TOOL_NAME, {
+        projectKey: 'PROD',
+        sessionId: older.id,
+        body: 'and more',
+      }),
+    );
+    expect(appended.id).toBe(older.id);
+    expect(appended.turns.map((t) => t.body)).toEqual(['older', 'and more']);
+
+    const submitted = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      sessionId: older.id,
+    });
+    expect(submitted.isError).toBeFalsy();
+    const rows = await adminDb.planChangeSession.findMany({
+      where: { id: { in: [older.id, newer.id] } },
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(older.id)!.lastJobId).toBe('job_plan_1');
+    expect(byId.get(newer.id)!.lastJobId).toBeNull();
+    expect(byId.get(newer.id)!.turnCount).toBe(0);
+    await client.close();
+  });
+
+  it('WITHOUT an id: the first turn starts a conversation and the next call resumes it', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+
+    const first = session(
+      await call(client, APPEND_PLAN_TURN_TOOL_NAME, { projectKey: 'PROD', body: 'start' }),
+    );
+    const reopened = session(
+      await call(client, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' }),
+    );
+    expect(reopened.id).toBe(first.id);
+    expect(await adminDb.planChangeSession.count()).toBe(1);
+    await client.close();
+  });
+
+  it('refuses a session id from another project with the typed not-found, on every tool', async () => {
+    const theirs = await makeWorkItemFixture({ name: 'Elsewhere', identifier: 'ELSE' });
+    const foreign = await openTestSession(projectCtx(theirs));
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+
+    for (const [name, extra] of [
+      [OPEN_PLAN_SESSION_TOOL_NAME, {}],
+      [APPEND_PLAN_TURN_TOOL_NAME, { body: 'stray' }],
+      [SUBMIT_PLAN_SESSION_TOOL_NAME, {}],
+    ] as const) {
+      const res = await call(client, name, { projectKey: 'PROD', sessionId: foreign.id, ...extra });
+      expect(res.isError, `${name} must refuse`).toBe(true);
+      expect(text(res)).toContain('PLAN_SESSION_NOT_FOUND');
+    }
+    expect(submitJob).not.toHaveBeenCalled();
+    await client.close();
   });
 });

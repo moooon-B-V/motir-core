@@ -189,7 +189,8 @@ describe('the overlay address — the parameter NAMES are the design contract', 
   // it*. They are duplicated here ON PURPOSE: this is the assertion that fails
   // when either home is renamed without the other, which is the whole reason the
   // design records them rather than whichever file was written first.
-  const DESIGN_NAMES = ['plan', 'planFrom', 'planItem', 'planRepo'];
+  // `planSession` joined with MOTIR-6024 (MOTIR-6019's design, §19.8).
+  const DESIGN_NAMES = ['plan', 'planFrom', 'planItem', 'planRepo', 'planSession'];
 
   it('emits exactly the names the design records, and no others', () => {
     expect(Object.values(OVERLAY_PARAM_NAMES).sort()).toEqual([...DESIGN_NAMES].sort());

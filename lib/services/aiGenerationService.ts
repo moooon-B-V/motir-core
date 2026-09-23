@@ -307,6 +307,9 @@ export const aiGenerationService = {
         title: input.title ?? null,
         summary: input.summary ?? null,
         sourceJobId: jobId,
+        // Its own session, of origin `generation` (AMENDMENT 17 §4–§5; MOTIR-6022):
+        // a generation has no conversation, and every plan belongs to one.
+        session: { origin: 'generation' },
         // WHO ASKED (MOTIR-2986). This seam is reached ONLY from a request path
         // — somebody clicked Generate — so the acting user IS the requester and
         // recording them is honest. Passed explicitly rather than defaulted in

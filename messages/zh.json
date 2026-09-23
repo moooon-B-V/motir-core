@@ -1533,12 +1533,15 @@
       "type": "工作类型",
       "executor": "执行者",
       "targetRepo": "目标仓库",
+      "targetRepos": "仓库",
+      "folderId": "文件夹",
       "descriptionMd": "描述",
       "explanationMd": "说明",
       "explanationSource": "说明来源",
       "archivedAt": "归档",
       "labels": "{count, plural, other {标签}}",
-      "components": "{count, plural, other {组件}}"
+      "components": "{count, plural, other {组件}}",
+      "todos": "{count, plural, other {步骤}}"
     },
     "linkKinds": {
       "blocks": "阻塞",
@@ -6428,14 +6431,9 @@
   },
   "aiPlanning": {
     "heading": "计划",
-    "subtitle": "Motir AI 为 {project} 提出的所有计划",
     "noProjectTitle": "未选择项目",
     "noProjectDescription": "切换到某个项目以查看其计划。",
-    "emptyTitle": "还没有计划",
-    "emptyDescription": "Motir AI 会根据你的方向文档进行规划。生成你的第一个计划，提出的工作就会显示在这里。",
-    "untitledPlan": "未命名计划",
     "itemCount": "{count, plural, other {# 个工作项}}",
-    "mayBeOutOfDate": "{count} 项可能已过期",
     "createdAt": "创建于 {when}",
     "plannedAt": "规划于 {when}",
     "approvedAt": "批准于 {when}",
@@ -6448,17 +6446,6 @@
       "stale": "已过期",
       "approved": "已批准",
       "declined": "已拒绝"
-    },
-    "listAria": "计划",
-    "statusFilterAria": "按状态筛选计划",
-    "tabEmpty": {
-      "generatingTitle": "暂无正在生成的计划",
-      "plannedTitle": "暂无待你决定的计划",
-      "staleTitle": "没有过期的计划",
-      "approvedTitle": "暂无已批准的计划",
-      "declinedTitle": "暂无已拒绝的计划",
-      "description": "该项目的其他计划在其余标签页中。",
-      "staleDescription": "当计划要改动的工作已经完成时，计划就会过期。目前没有这样的计划。"
     },
     "loadingMore": "加载中…",
     "generation": {
@@ -6490,7 +6477,41 @@
     },
     "viaHarness": "由 {harness} 撰写",
     "viaMotir": "由 Motir AI 撰写",
-    "autoPlanned": "自动规划"
+    "sessions": {
+      "subtitle": "{project} 中的所有规划对话，按最近活动排序",
+      "emptyTitle": "还没有规划对话",
+      "emptyDescription": "与 Motir AI 开始一段对话。每段对话都会列在这里——无论是否已有计划——打开即可继续。",
+      "listAria": "规划对话",
+      "filterAria": "按计划状态筛选对话",
+      "filter": {
+        "all": "全部"
+      },
+      "planState": {
+        "none": "尚无计划",
+        "generating": "撰写中",
+        "planned": "等待批准",
+        "stale": "已过时",
+        "approved": "已批准",
+        "declined": "已拒绝"
+      },
+      "origin": {
+        "mcp": "智能体计划",
+        "generation": "生成的计划",
+        "expand": "展开的计划",
+        "cadence": "自动规划",
+        "legacy": "早期计划"
+      },
+      "anchorProject": "整个项目",
+      "anchorMore": "{first} +{count}",
+      "lastActive": "{when}活跃",
+      "earlierPlans": "{count, plural, other {另有 # 个较早计划}}",
+      "openPlanAria": "打开计划——{state}",
+      "untitled": "未命名对话",
+      "filteredEmptyTitle": "此状态下没有对话",
+      "filteredEmptyDescription": "本项目的其他对话在“全部”下。",
+      "loadMoreError": "无法加载更多对话。",
+      "loadMoreRetry": "重试"
+    }
   },
   "planningWorkspace": {
     "noProjectTitle": "未选择项目",
@@ -6718,7 +6739,17 @@
       "sourceItems": "{count} 个工作项",
       "sourceItemsCapped": "{count}+ 个工作项"
     },
-    "returnAck": "设置已完成。我们从刚才的地方继续。"
+    "returnAck": "设置已完成。我们从刚才的地方继续。",
+    "session": {
+      "earlierAnchored": "你之前关于 <anchor>{label}</anchor> 的对话在<link>计划页面</link>上。",
+      "earlierProject": "你之前关于 {project} 的对话在<link>计划页面</link>上。",
+      "earlierOther": "{name} 发起的关于 <anchor>{label}</anchor> 的较早对话在<link>计划页面</link>上。",
+      "anchorMore": "<key>{first}</key> 等 {count} 项",
+      "reopened": "从计划页面重新打开 · 发起人 {name} · 最近活动 {when}",
+      "reopenedYours": "从计划页面重新打开 · 由你发起 · 最近活动 {when}",
+      "readOnly": "你可以阅读此对话。继续对话需要使用 Motir AI 规划的权限。",
+      "someone": "某人"
+    }
   },
   "codeHealth": {
     "title": "代码健康度",

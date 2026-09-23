@@ -1,30 +1,25 @@
 'use server';
 
 import { getActiveProject } from '@/lib/projects';
-import { plansService } from '@/lib/services/plansService';
+import { planSessionsService } from '@/lib/services/planSessionsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import type { PlanSessionStateDto } from '@/lib/dto/planSessions';
 
-import type { PlanStatusDto } from '@/lib/dto/plans';
+import { buildSessionRowViews } from './sessionRowView';
+import type { SessionRowView } from './_components/types';
 
-import { buildPlanRowViews } from './planRowView';
-import type { PlanRowView } from './_components/types';
-
-// Server Action backing the Plans list's cursor-driven "load more on scroll"
-// (Subtask 7.21.1 / MOTIR-1338). The page server-renders the FIRST page; this
-// streams each subsequent cursor page as the virtualized list nears its end, so
-// neither the initial payload nor the DOM grows with the plan history (finding
-// #57 — never a "load all" read). It builds the SAME row view-models the page
-// does (`buildPlanRowViews`), so a streamed page renders identically.
+// Server Action backing the Plans list's load-more-on-scroll (MOTIR-1338; the
+// session list since MOTIR-6025). The page server-renders the FIRST page; this
+// streams each later cursor page as the sentinel nears the viewport, building the
+// SAME row view-models the page does, so a streamed page renders identically.
 //
-// Transport-only (CLAUDE.md: a Server Action is the route-layer equivalent): it
-// resolves the active-project context, re-gates browse access (which can change
-// mid-scroll), and calls ONE service read. No `db.*`, no `$transaction`. This is
-// the established Server-Component/Action path — the client list never touches
-// the service layer directly.
-export async function loadMorePlansAction(
+// Transport-only (a Server Action is the route-layer equivalent): resolve the
+// active project, RE-GATE browse access — it can change mid-scroll — and call
+// ONE service read. The client list never touches the service layer.
+export async function loadMoreSessionsAction(
   cursor: string,
-  status: PlanStatusDto,
-): Promise<{ views: PlanRowView[]; nextCursor: string | null }> {
+  planState: PlanSessionStateDto | null,
+): Promise<{ views: SessionRowView[]; nextCursor: string | null }> {
   const ctx = await getActiveProject();
   // Signed out mid-scroll, or the project vanished → nothing more to stream.
   if (!ctx) return { views: [], nextCursor: null };
@@ -33,11 +28,11 @@ export async function loadMorePlansAction(
   const caps = await projectAccessService.getCapabilities(ctx.projectId, wsCtx);
   if (!caps.canBrowse) return { views: [], nextCursor: null };
 
-  // The STATUS travels with the cursor (MOTIR-3241). A cursor is only meaningful
-  // within the predicate that produced it, so a streamed page must come from the
-  // same tab that asked for it — passing the cursor alone would page the whole
-  // project from a position computed inside one status.
-  const page = await plansService.listPlans(ctx.projectId, wsCtx, { cursor, status });
-  const views = await buildPlanRowViews(page.plans, wsCtx);
-  return { views, nextCursor: page.nextCursor };
+  // The FILTER travels with the cursor: a cursor is only meaningful within the
+  // predicate that produced it.
+  const page = await planSessionsService.listSessions(ctx.projectId, wsCtx, {
+    cursor,
+    planState,
+  });
+  return { views: await buildSessionRowViews(page.sessions), nextCursor: page.nextCursor };
 }

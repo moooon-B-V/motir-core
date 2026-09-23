@@ -395,6 +395,12 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // entrances answering one condition two ways is what "no second approval
   // implementation" is meant to prevent.
   PLAN_NOT_IN_EXPECTED_STATUS: 409,
+  // MOTIR-6105 — a `planned` plan holding NO proposals (the legacy row MOTIR-4124
+  // left unmigrated). 409, the status the in-app approve answers for the same
+  // `PlanHasNoProposalsError`: the request is fine, the plan's STATE is what
+  // cannot be approved, and the answer the reviewer is owed is Decline. Unmapped,
+  // the wrapper logged a correct refusal as an unhandled fault and answered 500.
+  PLAN_HAS_NO_PROPOSALS: 409,
   // ⚠️ 422 HERE, where the BROWSER route answers 400 — and the difference is
   // the published vocabulary, not a disagreement about the condition. v1's
   // statuses are a closed set (`lib/api/v1/openapi/statuses.ts`, ADR §4's table
@@ -439,6 +445,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // a scope in another tenant never reaches the service, because the project
   // read answers 404 first.
   PLAN_CHANGE_SESSION_NOT_FOUND: 404,
+  // MOTIR-6028: a `sessionId` that names no session of THIS project — 404, the
+  // same no-existence-leak answer as a missing thread.
+  PLAN_SESSION_NOT_FOUND: 404,
   // ⚠️ 409, not 422. Two writers appended to one thread and lost the race for a
   // `seq`; the body was perfectly valid when it was sent. 422 would tell the
   // caller to fix its body, which is the wrong instruction — the right one is to

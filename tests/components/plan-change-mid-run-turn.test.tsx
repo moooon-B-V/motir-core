@@ -32,7 +32,12 @@ const streamContextual = vi.fn();
 const readPending = vi.fn();
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  openPlanChangeSession: (...a: unknown[]) => openSession(...a),
+  // The resume read answers `{ session, earlier }` (MOTIR-6024); these cases
+  // mock the SESSION, so the factory wraps it.
+  findResumableSession: async (...a: unknown[]) => ({
+    session: await (openSession as (...args: unknown[]) => unknown)(...a),
+    earlier: null,
+  }),
   resumeContextualSession: (...a: unknown[]) => resumeContextual(...a),
   recordPlannerTurn: (...a: unknown[]) => recordPlannerTurn(...a),
   submitContextualPlan: (...a: unknown[]) => submitContextualPlan(...a),
@@ -153,6 +158,7 @@ describe('THE BRANCH — one control, two destinations, chosen by the phase', ()
 
     expect(attachMidRunTurn).toHaveBeenCalledTimes(1);
     expect(attachMidRunTurn).toHaveBeenCalledWith(
+      's1',
       'job-1',
       'Also drop the narration card.',
       expect.any(String),

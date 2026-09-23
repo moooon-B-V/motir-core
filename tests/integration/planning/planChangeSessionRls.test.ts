@@ -319,3 +319,66 @@ describe('plan_change_session RLS — writes', () => {
     expect(planChangeTurnCount).toBe(2);
   });
 });
+
+// MOTIR-6026 — the session LIST and the by-id read (Story MOTIR-6011), under the
+// app role. A scope now holds many sessions and every door addresses one by id,
+// so the two reads that take an id or a project from the caller are the ones a
+// forgotten workspace argument would leak through. Asserted at the DB, with the
+// tenant's GUC pinned and the OTHER tenant's ids passed in.
+describe('plan_change_session RLS — the session list and the by-id read (MOTIR-6026)', () => {
+  it('the Plans list query never returns another workspace’s session', async () => {
+    const { planChangeSessionRepository } =
+      await import('@/lib/repositories/planChangeSessionRepository');
+    const rows = await asAppRole({ userId: a.ownerId, workspaceId: a.workspaceId }, (tx) =>
+      planChangeSessionRepository.listPageByProject(
+        { projectId: b.projectId, workspaceId: b.workspaceId, limit: 10, after: null, state: null },
+        tx,
+      ),
+    );
+    expect(rows).toEqual([]);
+
+    const own = await asAppRole({ userId: a.ownerId, workspaceId: a.workspaceId }, (tx) =>
+      planChangeSessionRepository.listPageByProject(
+        { projectId: a.projectId, workspaceId: a.workspaceId, limit: 10, after: null, state: null },
+        tx,
+      ),
+    );
+    expect(own.map((r) => r.id)).toEqual([sessionA.id]);
+  });
+
+  it('the by-id read never resolves another workspace’s session', async () => {
+    const { planChangeSessionRepository } =
+      await import('@/lib/repositories/planChangeSessionRepository');
+    const theirs = await asAppRole({ userId: a.ownerId, workspaceId: a.workspaceId }, (tx) =>
+      planChangeSessionRepository.findByIdInProject(sessionB.id, b.projectId, b.workspaceId, tx),
+    );
+    expect(theirs).toBeNull();
+  });
+
+  it('through the SERVICES: another tenant’s id is not found, and its project is not listable', async () => {
+    const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
+    const { planSessionsService } = await import('@/lib/services/planSessionsService');
+    const { PlanSessionNotFoundError } = await import('@/lib/planChange/errors');
+    const pctxA = {
+      userId: a.ownerId,
+      workspaceId: a.workspaceId,
+      projectId: a.projectId,
+      project: a.project,
+    };
+
+    await expect(planChangeSessionsService.getById(pctxA, sessionB.id)).rejects.toBeInstanceOf(
+      PlanSessionNotFoundError,
+    );
+    await expect(
+      planSessionsService.listSessions(b.projectId, {
+        userId: a.ownerId,
+        workspaceId: a.workspaceId,
+      }),
+    ).rejects.toThrow();
+    const mine = await planSessionsService.listSessions(a.projectId, {
+      userId: a.ownerId,
+      workspaceId: a.workspaceId,
+    });
+    expect(mine.sessions.map((s) => s.id)).toEqual([sessionA.id]);
+  });
+});

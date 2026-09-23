@@ -772,7 +772,7 @@ describe('Auto-plan cadence — a STALE plan is UNDECIDED, and still pauses (MOT
 
   it('and the indicator still COUNTS its drift — the SIBLING guard the widening reaches', async () => {
     // ⚠️ THE SWEEP HIT. `staleCountFor` here is the mirror of
-    // `app/(authed)/plans/planRowView.ts`'s function of the same name, and its
+    // the (since retired, MOTIR-6025) `planRowView.ts`'s function of the same name, and its
     // own doc comment says so — but the mirror widened to `planned | stale`
     // with AMENDMENT 9 D3 and this copy did not. The divergence was
     // unreachable while the predicate above could never hand this consumer a

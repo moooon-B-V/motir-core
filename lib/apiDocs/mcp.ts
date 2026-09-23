@@ -657,14 +657,28 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-5588: the over-gate sizing advisory's points arm moved
     // from 13+ to 8+ story points. Summary UNCHANGED — it names no threshold.
     //
+    // Re-pinned for MOTIR-5399's FIFTH shape severity (`body-edit-above-field-move`,
+    // the first read off a card's revision trail). Summary UNCHANGED, as the
+    // MOTIR-3178 paragraph predicted a new member would be.
+    //
+    // Re-pinned for MOTIR-5428's counted-own-blockers shape severity. Summary
+    // UNCHANGED: like the preceding additions, it grows only the advisory
+    // channel and never changes the finishability verdict this line describes.
+    //
     // Re-pinned for MOTIR-5424's new advisory FAMILY, `path-reference`
     // (`likely-missing-path-edge` — a criterion naming a not-yet-existing file
     // another open card also names, with no edge between them). Summary
     // UNCHANGED, for the reason the coverage re-pin gave: the advisory channel,
     // never a gate, so the verdict line stays true.
+    //
+    // Re-pinned for MOTIR-5426: the `likely-ordering-violation` line was
+    // corrected in place to say it is a PARTIAL merge-word tell whose absence
+    // clears nothing (measured at about one post-deploy criterion in nine).
+    // Summary UNCHANGED: the correction is on the advisory channel, and this line
+    // describes the verdict.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '4b94fe567bb4',
+    descriptionFingerprint: '26751030f342',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -772,8 +786,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '3c8e94ce5a31',
   },
   open_plan_session: {
-    summary: "Open — or resume — a project's planning conversation, and read its thread.",
-    descriptionFingerprint: 'aa4e7ce9b277',
+    // Re-worded for MOTIR-6028: a scope holds MANY conversations now, and the
+    // result's session `id` is how every later call names the one it means.
+    summary:
+      'Open a planning conversation — by its id, your recent one, or a new one — and read its thread.',
+    descriptionFingerprint: '70c34d46bda7',
   },
   create_work_item: {
     // Re-pinned for MOTIR-5413: `folderId` files the new item into a folder.
@@ -850,9 +867,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: 'ee60a5541cc4',
   },
   append_plan_turn: {
+    // Re-worded for MOTIR-6028: the turn lands on the conversation its
+    // `sessionId` names.
     summary:
-      "Add one turn to a project's planning conversation — what you want changed about the plan.",
-    descriptionFingerprint: 'b1ad0d0eb3f9',
+      'Add one turn to a planning conversation, named by its session id — what you want changed about the plan.',
+    descriptionFingerprint: '6cb04a966e25',
   },
   submit_plan_session: {
     // Re-pinned by MOTIR-4165 with the summary UNTOUCHED, which is the

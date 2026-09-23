@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { useFormatter, useTranslations } from 'next-intl';
 import {
   BookOpenText,
   Ban,
@@ -9,7 +10,9 @@ import {
   CircleQuestionMark,
   Clock,
   CornerDownRight,
+  History,
   ListTree,
+  Lock,
   MessageCircleQuestionMark,
   MessageSquareText,
   PenLine,
@@ -32,7 +35,11 @@ import {
   pendingQuestion,
   type QuestionDisposition,
 } from '@/lib/planning/planChangeThread';
-import type { PlanChangeTurnDto, PlanChangeTurnRoleDto } from '@/lib/dto/planChange';
+import type {
+  EarlierSessionDto,
+  PlanChangeTurnDto,
+  PlanChangeTurnRoleDto,
+} from '@/lib/dto/planChange';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type {
   PlanChangeConversationState,
@@ -161,6 +168,8 @@ export function PlanChangeRail({
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tc = useTranslations('planningWorkspace.conversation');
+  const ts = useTranslations('planningWorkspace.session');
+  const format = useFormatter();
   const [draft, setDraft] = useState('');
 
   const busy = state.phase === 'streaming' || state.phase === 'deciding';
@@ -284,6 +293,31 @@ export function PlanChangeRail({
             <Check className="mt-px size-3.5 flex-none" aria-hidden />
             <span>{t('returnAck')}</span>
           </p>
+        ) : null}
+
+        {/* WHICH conversation this is (MOTIR-6024; design §19.8). A NAMED one
+            reopened from the Plans page says where it came from; a FRESH start
+            with an earlier conversation for this scope points to it — until this
+            conversation has a turn, when the rail is about it instead. */}
+        {state.reopened ? (
+          <p
+            data-testid="planning-reopened-session"
+            className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+          >
+            <History className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>
+              {state.reopened.mine
+                ? ts('reopenedYours', {
+                    when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                  })
+                : ts('reopened', {
+                    name: state.reopened.startedBy?.name ?? ts('someone'),
+                    when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                  })}
+            </span>
+          </p>
+        ) : !state.session && state.earlier ? (
+          <EarlierNotice earlier={state.earlier} projectName={projectName} />
         ) : null}
 
         {/* The opener — the canvas already shows the plan, so "empty" is never a
@@ -553,55 +587,67 @@ export function PlanChangeRail({
       {/* The composer carries the `@` TARGET picker + the tray (MOTIR-1491) — the
           message field and the target set are one control, because the targets
           scope the turn the field sends. */}
-      <PlanChangeComposer
-        draft={draft}
-        onDraftChange={setDraft}
-        targets={targets}
-        onAddTarget={onAddTarget}
-        onRemoveTarget={onRemoveTarget}
-        onSubmit={onSend}
-        placeholder={composerPlaceholder}
-        autoFocus={askingForReason}
-        // ⚠️ NO LONGER `busy` (MOTIR-4274). The composer stays LIVE while a run
-        // works — that is the whole point of the mailbox, and it is a BEHAVIOUR
-        // change rather than a styling one: `busy` put a real `disabled`
-        // attribute on the `@` trigger, the input AND Send, so a user could not
-        // type at all. What a mid-run send DOES is the hook's branch; what it
-        // may do is here.
-        //
-        // `deciding` still locks it, and correctly: an approve or a discard is a
-        // write against the plan, and a turn sent mid-decision would race it.
-        // `loading` too — there is no thread to append to yet.
-        disabled={state.phase === 'loading' || state.phase === 'deciding'}
-        // The pending question travels to the composer, not to a header pill:
-        // measured at the rail's real 22rem the header row is already full, and
-        // the bar belongs beside the control whose behaviour actually changed.
-        awaitingQuestion={question?.question ?? null}
-        // THE RUNNING BAR — present exactly while a run is in flight, and gone
-        // the moment it is not. `onStop` is what makes it offerable: a caller
-        // that does not supply one gets the shipped composer unchanged.
-        running={
-          state.phase === 'streaming' && onStop
-            ? {
-                // The live act's OWN line, so the bar and the rail's newest row
-                // say the same thing — a note repeats the planner's words, a
-                // lookup names its family (MOTIR-4069).
-                line: state.progress ? actLine(state.progress, tc) : tc('progress.submitted'),
-                stopping: state.stopping,
-                onStop,
-              }
-            : null
-        }
-        onSeeQuestion={() => {
-          // The pending question is the ONE element carrying this id (only one
-          // question can be pending), so a lookup is exact — and focusing it,
-          // not merely scrolling, is what makes "See it" work for a keyboard or
-          // screen-reader user rather than only for a sighted mouse.
-          const el = document.getElementById(PENDING_QUESTION_ID);
-          el?.scrollIntoView({ block: 'center' });
-          el?.focus();
-        }}
-      />
+      {state.readOnly ? (
+        // A member without `ai:plan` reads a reopened conversation and cannot
+        // continue it — the composer is REPLACED by the reason (design §19.8,
+        // panel 6), in the composer's own slot.
+        <div className="border-t border-(--el-border) px-3 py-3" data-testid="planning-read-only">
+          <p className="flex items-start gap-2 text-xs leading-relaxed text-(--el-text-secondary)">
+            <Lock className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>{ts('readOnly')}</span>
+          </p>
+        </div>
+      ) : (
+        <PlanChangeComposer
+          draft={draft}
+          onDraftChange={setDraft}
+          targets={targets}
+          onAddTarget={onAddTarget}
+          onRemoveTarget={onRemoveTarget}
+          onSubmit={onSend}
+          placeholder={composerPlaceholder}
+          autoFocus={askingForReason}
+          // ⚠️ NO LONGER `busy` (MOTIR-4274). The composer stays LIVE while a run
+          // works — that is the whole point of the mailbox, and it is a BEHAVIOUR
+          // change rather than a styling one: `busy` put a real `disabled`
+          // attribute on the `@` trigger, the input AND Send, so a user could not
+          // type at all. What a mid-run send DOES is the hook's branch; what it
+          // may do is here.
+          //
+          // `deciding` still locks it, and correctly: an approve or a discard is a
+          // write against the plan, and a turn sent mid-decision would race it.
+          // `loading` too — there is no thread to append to yet.
+          disabled={state.phase === 'loading' || state.phase === 'deciding'}
+          // The pending question travels to the composer, not to a header pill:
+          // measured at the rail's real 22rem the header row is already full, and
+          // the bar belongs beside the control whose behaviour actually changed.
+          awaitingQuestion={question?.question ?? null}
+          // THE RUNNING BAR — present exactly while a run is in flight, and gone
+          // the moment it is not. `onStop` is what makes it offerable: a caller
+          // that does not supply one gets the shipped composer unchanged.
+          running={
+            state.phase === 'streaming' && onStop
+              ? {
+                  // The live act's OWN line, so the bar and the rail's newest row
+                  // say the same thing — a note repeats the planner's words, a
+                  // lookup names its family (MOTIR-4069).
+                  line: state.progress ? actLine(state.progress, tc) : tc('progress.submitted'),
+                  stopping: state.stopping,
+                  onStop,
+                }
+              : null
+          }
+          onSeeQuestion={() => {
+            // The pending question is the ONE element carrying this id (only one
+            // question can be pending), so a lookup is exact — and focusing it,
+            // not merely scrolling, is what makes "See it" work for a keyboard or
+            // screen-reader user rather than only for a sighted mouse.
+            const el = document.getElementById(PENDING_QUESTION_ID);
+            el?.scrollIntoView({ block: 'center' });
+            el?.focus();
+          }}
+        />
+      )}
     </aside>
   );
 }
@@ -990,5 +1036,60 @@ function Bubble({
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * The FRESH-START pointer (MOTIR-6024; design §19.8, panel 3): nothing resumed,
+ * and this scope has an earlier conversation. One line above the opener, on
+ * the information notice tint, linking to that conversation's row on the Plans
+ * page. Not dismissible and not persisted — it goes once this conversation has
+ * a turn.
+ */
+function EarlierNotice({
+  earlier,
+  projectName,
+}: {
+  earlier: EarlierSessionDto;
+  projectName: string;
+}) {
+  const ts = useTranslations('planningWorkspace.session');
+  const [first, ...rest] = earlier.targetKeys;
+  const link = (chunks: React.ReactNode) => (
+    <Link
+      href={`/plans?session=${encodeURIComponent(earlier.id)}`}
+      className="font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+    >
+      {chunks}
+    </Link>
+  );
+  const mono = (chunks: React.ReactNode) => <span className="font-mono">{chunks}</span>;
+  // The anchor's own words: the first key in mono, "and N more" for the rest,
+  // or the project's name when the conversation was project-wide.
+  const anchorNode: React.ReactNode = first
+    ? rest.length > 0
+      ? ts.rich('anchorMore', { first, count: rest.length, key: mono })
+      : mono(first)
+    : projectName;
+  const label = first ?? projectName;
+  const anchor = () => anchorNode;
+  const body = !earlier.mine
+    ? ts.rich('earlierOther', {
+        label,
+        anchor,
+        name: earlier.startedBy?.name ?? ts('someone'),
+        link,
+      })
+    : first
+      ? ts.rich('earlierAnchored', { label, anchor, link })
+      : ts.rich('earlierProject', { project: projectName, link });
+  return (
+    <p
+      data-testid="planning-earlier-session"
+      className="flex items-start gap-2 rounded-(--radius-control) bg-(--el-notice-info-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+    >
+      <History className="mt-px size-3.5 flex-none" aria-hidden />
+      <span>{body}</span>
+    </p>
   );
 }

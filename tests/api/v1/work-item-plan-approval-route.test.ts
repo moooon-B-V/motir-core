@@ -27,6 +27,7 @@ import {
   withTokenFor,
   type V1ProjectCaller,
 } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // POST /api/v1/work-items/{key}/plan-approval (MOTIR-3021 / MOTIR-3023) — the
@@ -277,6 +278,28 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
 
     expect(res.status).toBe(409);
     expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('declined');
+  });
+
+  it('answers 409 for a `planned` plan holding NO proposals — the refusal, not a 500', async () => {
+    // MOTIR-6105. The service refuses this correctly (`PlanHasNoProposalsError`,
+    // MOTIR-4146), but the code had no row in `DOMAIN_ERROR_STATUS`, so the v1
+    // wrapper logged it as an unhandled fault and answered 500. The in-app route
+    // answers 409 for the same refusal, and so must this entrance.
+    //
+    // The LEGACY shape, built the way `emptyPlanIsNotApprovable.test.ts` builds
+    // it: closed with a proposal (the close discards an empty set since
+    // MOTIR-4124), then the proposal deleted underneath it.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key, planId } = await refusedCardWithPlan(caller);
+    await adminDb.planItem.deleteMany({ where: { planId } });
+
+    const res = await approve(caller, key);
+
+    expect(res.status).toBe(409);
+    expect(res.status).toBe(DOMAIN_ERROR_STATUS['PLAN_HAS_NO_PROPOSALS']);
+    expect(((await res.json()) as { code: string }).code).toBe('PLAN_HAS_NO_PROPOSALS');
+    // And nothing was decided: the plan waits for the Decline it is owed.
+    expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('planned');
   });
 
   // ── B4, and the scope ─────────────────────────────────────────────────────

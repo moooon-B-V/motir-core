@@ -70,6 +70,9 @@ async function drill(page: Page, card: Locator, folderId: string) {
 test('plan review draws folders: arrival on the folder, the root, a folder, and its crumb', async ({
   page,
 }) => {
+  // MOTIR-5816: pin the viewport where the plan-detail rail leaves the canvas
+  // narrow enough for a three-crumb trail to meet its top-right controls.
+  await page.setViewportSize({ width: 1280, height: 720 });
   const seed = await seedFolderRoadmap('plans-review-folders@example.com');
   const plan = await seedFolderPlan(seed);
   await signIn(page, seed.email, seed.password);
@@ -114,11 +117,9 @@ test('plan review draws folders: arrival on the folder, the root, a folder, and 
   await drill(page, folderCard(canvas, seed.importsId), seed.importsId);
   await expect(canvas.getByText(seed.deepBugTitle, { exact: true })).toBeVisible();
   const backToArchive = folderLoad(page, seed.archiveId);
-  // ⚠️ ACTIVATED FROM THE KEYBOARD, not by pointer: on this canvas's width the
-  // top-right search box sits OVER a three-crumb bar and swallows the click — a
-  // layout defect of the canvas chrome, not of folders (bug MOTIR-5816). The crumb
-  // is the same control either way; this asserts that it navigates.
-  await crumbs(canvas).getByRole('button', { name: 'Folder: Archive' }).press('Enter');
+  // Pointer activation is the regression: before MOTIR-5816 the search input
+  // painted over this visible crumb and intercepted the click.
+  await crumbs(canvas).getByRole('button', { name: 'Folder: Archive' }).click();
   await backToArchive;
   await expect(canvas.getByText(plan.filedTitle, { exact: true })).toBeVisible();
   await expect(canvas.getByText(seed.deepBugTitle, { exact: true })).toHaveCount(0);

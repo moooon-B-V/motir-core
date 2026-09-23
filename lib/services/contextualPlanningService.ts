@@ -5,10 +5,14 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { plansService } from '@/lib/services/plansService';
+import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { buildScope, MAX_SCOPE_TARGETS, type PlanChangeScope } from '@/lib/planChange/scope';
-import { TooManyPlanChangeTargetsError } from '@/lib/planChange/errors';
+import {
+  PlanChangeSessionNotFoundError,
+  TooManyPlanChangeTargetsError,
+} from '@/lib/planChange/errors';
 import type {
   ContextualPlanResultDto,
   ContextualSessionResumeDto,
@@ -65,6 +69,13 @@ export interface ContextualPlanRequest {
    *  thread carries it: the anchored entrance renders the same rail, so a question
    *  answered on an item's thread must read as answered there too. */
   isAnswer?: boolean;
+  /**
+   * The SESSION the client holds (MOTIR-6023; AMENDMENT 17 §2). When given,
+   * every write lands on exactly that session. When absent, the caller's own
+   * RESUMABLE session for the anchor scope is used, and a first turn with none
+   * STARTS one (§1, §3) — nothing is created by a read.
+   */
+  sessionId?: string;
 }
 
 /**
@@ -110,6 +121,23 @@ async function resolveScope(
   return buildScope(identifiers);
 }
 
+/** The caller's own resumable session for the scope, or null (AMENDMENT 17 §3). */
+async function resumableId(pctx: ProjectContext, scope: PlanChangeScope): Promise<string | null> {
+  return (await planChangeSessionsService.findResumable(pctx, scope.scopeKey))?.id ?? null;
+}
+
+/** A write that CONTINUES a conversation needs one: the addressed session, else
+ *  the caller's resumable one — and with neither there is nothing to continue. */
+async function requireAddressed(
+  sessionId: string | undefined,
+  pctx: ProjectContext,
+  scope: PlanChangeScope,
+): Promise<string> {
+  const id = sessionId ?? (await resumableId(pctx, scope));
+  if (!id) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+  return id;
+}
+
 export const contextualPlanningService = {
   /**
    * Open (or RESUME) the planning conversation anchored at the target set, append
@@ -129,15 +157,33 @@ export const contextualPlanningService = {
   ): Promise<ContextualPlanResult> {
     const scope = await resolveScope(req, pctx);
 
-    // Get-or-create is idempotent per scope; appendTurn validates non-empty and
-    // allocates `seq` under the session row's lock; submit sends the ACCUMULATED
-    // intent with the anchor set attached (the thread's own `targetKeys` are what
-    // make the submit contextual — this service does not pass them twice).
-    await planChangeSessionsService.getOrCreateForScope(pctx, scope);
-    await planChangeSessionsService.appendTurn(req.prompt, pctx, scope.scopeKey, {
-      isAnswer: req.isAnswer === true,
+    // The ADDRESSED session, else the caller's resumable one; with neither, this
+    // first turn STARTS the session (AMENDMENT 17 §1, §3). The submit then sends
+    // the ACCUMULATED intent — the session's own `targetKeys` make it contextual.
+    const target = req.sessionId ?? (await resumableId(pctx, scope));
+    // A CONTINUING conversation re-takes its targets, as opening one always did
+    // (MOTIR-2786): an earlier plan's decision may have handed them back, and a
+    // turn that plans them again must hold them again. Idempotent for the holder.
+    if (target) await planTargetLockService.acquireForScope(target, scope.targetKeys, pctx);
+    const sessionId = target
+      ? (
+          await planChangeSessionsService.appendTurn(
+            req.prompt,
+            pctx,
+            { sessionId: target },
+            {
+              isAnswer: req.isAnswer === true,
+            },
+          )
+        ).id
+      : (
+          await planChangeSessionsService.startWithFirstTurn(pctx, scope, req.prompt, {
+            isAnswer: req.isAnswer === true,
+          })
+        ).id;
+    const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, {
+      sessionId,
     });
-    const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, scope.scopeKey);
 
     return { jobId, planId, sessionId: session.id, session };
   },
@@ -156,24 +202,35 @@ export const contextualPlanningService = {
    * submission opened, when that plan is still undecided. Resume is the one path
    * where the rail cannot have the id already: a submit hands back `{ jobId,
    * planId }`, but a user who closed the workspace mid-proposal returns holding
-   * neither. Resolved from the thread's own `lastJobId`, so a thread that never
-   * submitted (and one whose plan was approved / declined) reports `null` and the
-   * rail simply has nothing to confirm.
+   * neither. Resolved through `Plan.sessionId` (AMENDMENT 17 §5): a session that
+   * never submitted, and one whose latest plan is decided, reports `null` and the
+   * rail simply has nothing to confirm. Which session: the ADDRESSED one, else the
+   * caller's own resumable session for the scope (§3).
    */
   async getSessionForWorkItem(
     req: Omit<ContextualPlanRequest, 'prompt'>,
     pctx: ProjectContext,
   ): Promise<ContextualSessionResumeDto> {
     const scope = await resolveScope({ ...req, prompt: '' }, pctx);
-    const session = await planChangeSessionsService.findForScope(pctx, scope);
-    if (!session?.lastJobId) return { session, planId: null };
+    // A READ: the addressed session, else the caller's resumable one — never a
+    // write, so a browse-only member looking at an item creates nothing.
+    const session = req.sessionId
+      ? await planChangeSessionsService.getById(pctx, req.sessionId)
+      : await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
+    if (!session) {
+      // Nothing resumed — say where the scope's earlier conversation is, when
+      // there is one (MOTIR-6024's notice). Never for a NAMED session.
+      if (req.sessionId) return { session, planId: null };
+      const { earlier } = await planChangeSessionsService.findResumableWithEarlier(
+        pctx,
+        scope.scopeKey,
+      );
+      return { session, planId: null, earlier };
+    }
 
+    // The session's still-undecided plan, through the COLUMN (AMENDMENT 17 §5).
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
-    const planId = await plansService.findPendingPlanIdForJob(
-      pctx.projectId,
-      session.lastJobId,
-      ctx,
-    );
+    const planId = await plansService.findPendingPlanIdForSession(pctx.projectId, session.id, ctx);
     return { session, planId };
   },
 
@@ -193,7 +250,10 @@ export const contextualPlanningService = {
     pctx: ProjectContext,
   ): Promise<ContextualPlanResult> {
     const scope = await resolveScope({ ...req, prompt: '' }, pctx);
-    const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, scope.scopeKey);
+    const sessionId = await requireAddressed(req.sessionId, pctx, scope);
+    const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, {
+      sessionId,
+    });
     return { jobId, planId, sessionId: session.id, session };
   },
 
@@ -213,7 +273,8 @@ export const contextualPlanningService = {
     pctx: ProjectContext,
   ): Promise<PlanChangeSessionDto> {
     const scope = await resolveScope({ ...req, prompt: '' }, pctx);
-    return planChangeSessionsService.recordPlannerTurn(req.jobId, pctx, scope.scopeKey);
+    const sessionId = await requireAddressed(req.sessionId, pctx, scope);
+    return planChangeSessionsService.recordPlannerTurn(req.jobId, pctx, { sessionId });
   },
 
   /**

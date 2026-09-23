@@ -250,7 +250,13 @@ describe('approve — an MCP plan with NO source job releases its own targets', 
       });
       const plan = await plansService.createPlan(
         fx.projectId,
-        { title: 'The conversation\u2019s plan', sourceJobId: 'job-1' },
+        // The plan names its session (AMENDMENT 17 §5, MOTIR-6022) — the column
+        // replaced the `sourceJobId == lastJobId` link this case used to seed.
+        {
+          title: 'The conversation\u2019s plan',
+          sourceJobId: 'job-1',
+          session: { sessionId: session.id },
+        },
         fx.ctx,
       );
       await plansService.addProposals(

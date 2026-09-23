@@ -280,8 +280,8 @@ function bodyIsGated(svc: string, body: string, seen: Set<string>): boolean {
   }
   // Hop 1b — to a SIBLING method on the same service object (MOTIR-2443). The
   // walk hops across services and into module-local functions and could not see
-  // the shortest hop of all: `getOrCreateForProject` delegating to
-  // `this.getOrCreateForScope`, which asserts. `serviceCalls` cannot match it —
+  // the shortest hop of all: a method delegating to a sibling through `this.`
+  // (`planChangeSessionsService.submitPublic` → `this.submit`, which asserts). `serviceCalls` cannot match it —
   // `this` is not a `…Service` identifier — so the receiver is matched on its own.
   for (const [, method] of [...body.matchAll(/\bthis\.([a-zA-Z_][\w]*)\s*\(/g)]) {
     if (methodIsGated(`${svc}.${method}`, seen)) return true;
@@ -524,11 +524,12 @@ describe('the guard can actually fail (a guard never seen red is not evidence)',
   it('follows a `this.` hop to a sibling method, and still says no when the sibling gates nothing', () => {
     // The other half of MOTIR-2443. `serviceCalls` matches `someService.method(`
     // only, so a method delegating to a sibling on the SAME object was a dead
-    // end — `planChangeSessionsService.getOrCreateForProject` reads as ungated
-    // however plainly `getOrCreateForScope` asserts. Driven through the REAL
+    // end — `planChangeSessionsService.submitPublic` reads as ungated however
+    // plainly `this.submit` asserts. (The original instance, `getOrCreateForProject`,
+    // was deleted by MOTIR-6028; this is the same shape in shipped code.) Driven through the REAL
     // walk rather than a synthetic string, because the hop is a property of
     // `bodyIsGated`'s recursion, not of one regex.
-    expect(methodIsGated('planChangeSessionsService.getOrCreateForProject')).toBe(true);
+    expect(methodIsGated('planChangeSessionsService.submitPublic')).toBe(true);
     // The negative control: a delegating method whose target gates nothing.
     expect(methodIsGated('dashboardsService.listDashboards')).toBe(false);
   });

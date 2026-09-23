@@ -51,7 +51,12 @@ const {
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  openPlanChangeSession: open,
+  // The resume read answers `{ session, earlier }` (MOTIR-6024); these cases
+  // mock the SESSION, so the factory wraps it.
+  findResumableSession: async (...a: unknown[]) => ({
+    session: await (open as (...args: unknown[]) => unknown)(...a),
+    earlier: null,
+  }),
   appendPlanChangeTurn: append,
   submitPlanChange: submit,
   // The anchored half (MOTIR-910) is exercised by exactly one case here — the
@@ -99,6 +104,8 @@ function session(bodies: string[]): PlanChangeSessionDto {
     turnCount: bodies.length,
     lastJobId: null,
     lastSubmittedAt: null,
+    lastActivityAt: '2026-01-01T00:00:00.000Z',
+    origin: 'conversation',
     createdAt: '2026-07-27T09:00:00.000Z',
     updatedAt: '2026-07-27T10:00:00.000Z',
     turns: bodies.map((body, seq) => ({
@@ -130,6 +137,7 @@ const MATERIALIZED: PlanWithItemsDto = {
   title: null,
   summary: null,
   sourceJobId: 'job-1',
+  sessionId: null,
   // A rail-driven run is `user`-origin; the auto-plan watcher's is `cadence`
   // (MOTIR-916) — same Plan, same review, same confirm, per this card's
   // invariant that the trigger is irrelevant.
@@ -885,7 +893,7 @@ describe('usePlanChangeConversation — the quiet arms', () => {
       await hook.result.current.retry();
     });
 
-    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything());
+    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything(), null);
   });
 
   it('a plan-run stream failure while a proposal is pending returns to REVIEW', async () => {
