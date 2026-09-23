@@ -9,7 +9,7 @@ import {
 } from '@/lib/approvalGates/registry';
 import {
   ApprovalGateHasNoCardError,
-  ApprovalGateKindUnregisteredError,
+  ApprovalGateStaleSubjectError,
 } from '@/lib/approvalGates/errors';
 import { requireArgsCard } from '@/lib/approvalGates/gateCard';
 import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
@@ -113,10 +113,13 @@ describe('the QUEUE — `listAwaitingMe` / `countAwaitingMe` list a card-less ro
       kind: 'plan_approval',
       state: 'awaiting',
       workItem: null,
-      // Unregistered: the kind IS the whole summary (`summarizeGateSubjects`).
-      subject: { kind: 'plan_approval' },
-      // No card-less kind is decidable before its handler exists.
-      canDecide: false,
+      // MOTIR-6035 registered the kind: its summary is read from the PLAN, and `plan-1`
+      // names no plan, so the subject no longer resolves (it was `{ kind }` while the
+      // kind was unregistered).
+      subject: null,
+      // …and the owner holds `ai:decide_plan`, the kind's one check (it was `false`
+      // while no handler named a permission).
+      canDecide: true,
     });
     // Named from the `routedToId` written at creation — there is no card to ask.
     const owner = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ownerId } });
@@ -167,10 +170,11 @@ describe('the RECORD ROOM — `listRecords` carries a card-less row in both sect
     const page = await approvalGatesService.listRecords(meCtx, { limit: 50 });
     expect(page.sections.awaiting.total).toBe(2);
     const awaitingPlan = page.sections.awaiting.items.find((row) => row.kind === 'plan_approval');
+    // Registered by MOTIR-6035: no plan behind `plan-waiting`, and the owner may decide.
     expect(awaitingPlan).toMatchObject({
       workItem: null,
-      subject: { kind: 'plan_approval' },
-      canDecide: false,
+      subject: null,
+      canDecide: true,
     });
     expect(
       page.sections.awaiting.items.find((row) => row.kind === 'design_result')?.workItem?.id,
@@ -182,7 +186,7 @@ describe('the RECORD ROOM — `listRecords` carries a card-less row in both sect
       state: 'approved',
       workItem: null,
       subjectVersion: 'plan.v1.abc',
-      subject: { kind: 'plan_approval' },
+      subject: null,
     });
   });
 });
@@ -199,8 +203,11 @@ describe('the MARKER — `pendingDecisionsFor` is keyed on cards, and a card-les
   });
 });
 
-describe('the DECIDE DOOR on a card-less gate — before its handler exists', () => {
-  it('reaches the UNREGISTERED refusal rather than failing to resolve a card', async () => {
+// MOTIR-6034 proved the door reached the UNREGISTERED refusal here; MOTIR-6035 registered
+// the kind, so a gate whose plan does not exist now reaches the handler, which answers the
+// stale-subject refusal — still never a failure to resolve a card.
+describe('the DECIDE DOOR on a card-less gate whose plan is gone', () => {
+  it('reaches the handler’s stale-subject refusal rather than failing to resolve a card', async () => {
     const plan = await planGate('plan-1');
     const err = await approvalGatesService
       .decide(
@@ -208,7 +215,7 @@ describe('the DECIDE DOOR on a card-less gate — before its handler exists', ()
         fx.ctx,
       )
       .catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(ApprovalGateKindUnregisteredError);
+    expect(err).toBeInstanceOf(ApprovalGateStaleSubjectError);
     expect(err).not.toBeInstanceOf(ApprovalGateHasNoCardError);
     expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: plan.id } })).state).toBe(
       'awaiting',
@@ -218,6 +225,8 @@ describe('the DECIDE DOOR on a card-less gate — before its handler exists', ()
 
 describe('the DECIDE DOOR on a card-less gate — the arms a registered kind reaches (§11.6)', () => {
   const handlers = APPROVAL_GATE_HANDLERS as Record<string, GateHandler>;
+  // The REAL handler since MOTIR-6035 — swapped out per case and put back, never deleted.
+  const realHandler = handlers.plan_approval!;
   const effects = { approve: vi.fn(), currentSubject: vi.fn() };
 
   beforeEach(() => {
@@ -244,7 +253,7 @@ describe('the DECIDE DOOR on a card-less gate — the arms a registered kind rea
   });
 
   afterEach(() => {
-    delete handlers.plan_approval;
+    handlers.plan_approval = realHandler;
   });
 
   it('decides under `plan_permission`, hands the effect NO card, and pins nothing', async () => {

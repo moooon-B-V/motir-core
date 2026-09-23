@@ -22,6 +22,7 @@ import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { PlanAuthorSourceDto, PlanOriginDto } from '@/lib/dto/plans';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 
 // Wire DTOs for the approval-gate record (Story MOTIR-4778 · Subtask
@@ -209,8 +210,11 @@ export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
  * A kind may later carry a verb SET rather than this pair (ADR §1's amendment,
  * `decision_choice`), which is why the door takes a decision rather than
  * exposing `approve()` / `requestChanges()` as separate methods.
+ *
+ * `decline` (MOTIR-6035; ADR §11.4) is offered ONLY by `plan_approval`: it ends the
+ * plan, writes the terminal state `declined`, and its note is OPTIONAL.
  */
-export type GateDecision = 'approve' | 'request_changes' | 'choose' | 'overturn';
+export type GateDecision = 'approve' | 'request_changes' | 'choose' | 'overturn' | 'decline';
 
 /** WHAT A CHOICE'S DECISION PICKED — see {@link ChosenOption} (MOTIR-5893). */
 export type ChosenOptionDTO = ChosenOption;
@@ -295,6 +299,13 @@ export interface ApprovalGateDTO {
    * them: re-planning is a planning act a person starts.
    */
   replanOwed: { keys: string[] } | null;
+  /**
+   * WHY THIS GATE CANNOT BE DECIDED RIGHT NOW although it is `awaiting` (MOTIR-6035;
+   * ADR §11.5c) — set by the plan gate's render read (`approvalGatesService.getForPlan`)
+   * and absent from every other read. DERIVED from the plan's revision lease, never
+   * stored: when the lease ends, the same gate is decidable against the new version.
+   */
+  held?: PlanGateHeldDTO | null;
 
   createdAt: string;
   updatedAt: string;
@@ -569,7 +580,54 @@ export interface UnregisteredSubjectSummaryDTO {
     | 'pull_request_approval'
     | 'decision_choice'
     | 'decision_confirmation'
+    | 'plan_approval'
   >;
+}
+
+/**
+ * A PLAN GATE IS HELD while the planner rewrites the plan (MOTIR-6035; ADR §11.5c):
+ * the gate stays `awaiting` and both verbs are refused with `PlanRevisionInFlightError`
+ * until the revision lease ends. `heldBy` is the revising agent's harness, or null.
+ */
+export interface PlanGateHeldDTO {
+  reason: 'revision_in_flight';
+  heldBy: string | null;
+  /** ISO-8601 — when the lease lapses if the revision writes nothing more. */
+  expiresAt: string;
+}
+
+/**
+ * WHICH PLAN is waiting, at row scale (Story MOTIR-6012 · MOTIR-6035; design
+ * `design/ai-planning/design-notes.md` Part XX §20.3's field table). A plan gate has no
+ * card (`workItem` is null on its row), so everything the row draws is here.
+ */
+export interface PlanApprovalSubjectSummaryDTO {
+  kind: 'plan_approval';
+  /** The plan — the gate's `subjectId`; the row's `href` is `/plans/<planId>`. */
+  planId: string;
+  /** The plan's conversation (the `planSession` address), or null when it has none. */
+  sessionId: string | null;
+  /** Whether that conversation has any turns: the row opens the planning overlay when
+   *  it does, and the plan page (`/plans/<id>`) when it does not (§11.5b). */
+  sessionHasTurns: boolean;
+  /** `Plan.title`, as written, or null. */
+  title: string | null;
+  /** The project's name — the leading line's last fallback. */
+  projectName: string;
+  /** What the plan re-plans: the session's `targetKeys` in stored order, each with the
+   *  target's title (null when the key no longer resolves in the project). */
+  targets: { key: string; title: string | null }[];
+  /** How many proposals the plan holds. */
+  proposalCount: number;
+  /** Who WROTE the plan — the details cell's author (`written by …` / `planned
+   *  automatically`). Never the requester: the gate is routed to them. */
+  author: {
+    source: PlanAuthorSourceDto | null;
+    harness: string | null;
+    origin: PlanOriginDto;
+  };
+  /** Being rewritten — the row's `Being rewritten` pill (§11.5c), or null. */
+  held: PlanGateHeldDTO | null;
 }
 
 /**
@@ -589,6 +647,7 @@ export type ApprovalGateSubjectSummaryDTO =
   | AcceptanceResultSubjectSummaryDTO
   | DecisionChoiceSubjectSummaryDTO
   | DecisionConfirmationSubjectSummaryDTO
+  | PlanApprovalSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */

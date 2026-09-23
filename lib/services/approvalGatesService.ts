@@ -70,6 +70,9 @@ import { heldMoves } from '@/lib/approvalGates/heldMoves';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { CANCELLED_STATUS_KEY } from '@/lib/approvalGates/heldMoves';
 import { requireGateCard } from '@/lib/approvalGates/gateCard';
+import { planGateStampInputs, planSubjectVersion } from '@/lib/approvalGates/planApprovalDigest';
+import { readPlanGateHeld } from '@/lib/approvalGates/planApprovalHandler';
+import { planRepository } from '@/lib/repositories/planRepository';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md).
@@ -93,7 +96,7 @@ export type { GateDecision };
 
 const DECISION_STATE: Record<
   GateDecision,
-  Extract<ApprovalGateState, 'approved' | 'changes_requested' | 'overturned'>
+  Extract<ApprovalGateState, 'approved' | 'changes_requested' | 'overturned' | 'declined'>
 > = {
   approve: 'approved',
   request_changes: 'changes_requested',
@@ -103,6 +106,9 @@ const DECISION_STATE: Record<
   // A CHOICE is an approval of one option — no new state value (ADR §1's MOTIR-5887
   // amendment, point 7). The option it picked is on `chosenOption` / `outcomeRef`.
   choose: 'approved',
+  // A plan a person ENDED (ADR §11.4, MOTIR-6035) — its own terminal state, never
+  // `changes_requested` (which keeps a question open) nor `overturned`.
+  decline: 'declined',
 };
 
 /** The one kind whose verbs are its OPTIONS rather than `approve` (point 5). */
@@ -110,6 +116,9 @@ const CHOICE_KIND = 'decision_choice';
 /** The one kind whose refusal is OVERTURN rather than `request_changes` (ADR §1's
  *  MOTIR-5952 amendment, point 6). */
 const CONFIRMATION_KIND = 'decision_confirmation';
+/** The one kind that offers no `request_changes` because a plan is changed by TALKING
+ *  to the planner (ADR §11.4, MOTIR-6035). */
+const PLAN_KIND = 'plan_approval';
 
 export interface DecideGateInput {
   gateId: string;
@@ -815,6 +824,71 @@ export const approvalGatesService = {
           isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
           held,
         ),
+      };
+    });
+  },
+
+  /**
+   * THE PLAN GATE a plan's surface renders, WHATEVER STATE IT IS IN (Story MOTIR-6012 ·
+   * MOTIR-6035; ADR `approval-gates.md` §11.3, §11.5b, §11.5c) — {@link getForWorkItem}
+   * for the one kind whose gate has no card: the gate, whether this reader may decide
+   * it, the STAMP to press with, what has moved since a stamp handed back, and whether
+   * a revision HOLDS it.
+   *
+   * ⚠️ THE STAMP IS THE LIVE DIGEST, from the SAME function the decide door stamps with
+   * (`planSubjectVersion`, beside `stamp.ts`). A revision rewrites the plan in place and
+   * never supersedes its gate, so a stamp taken here before a revision is refused stale.
+   *
+   * ⚠️ `canDecide` is the door's own two checks for a card-less gate: the kind's
+   * permission (`ai:decide_plan`) — which IS its authority (§11.6). It says nothing about
+   * `held`: a held gate is decidable by this reader once the lease ends. A render read:
+   * no lock, one transaction, nothing carried into a decision.
+   */
+  async getForPlan(
+    input: { planId: string; since?: string | null },
+    ctx: ServiceContext,
+  ): Promise<WorkItemGateRead> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const none: WorkItemGateRead = {
+        gate: null,
+        canDecide: false,
+        routedToLabel: null,
+        earlierApproval: null,
+        settingsDoor: null,
+        stamp: null,
+        movedSince: [],
+      };
+      const plan = await planRepository.findById(input.planId, ctx.workspaceId, tx);
+      if (!plan) return none;
+      const row = await approvalGateRepository.findLatestCardlessBySubject(PLAN_KIND, plan.id, tx);
+      if (!row) return none;
+
+      const held = await projectAccessService.getPermissions(plan.projectId, ctx, tx);
+      const canDecide = canDecideCardlessGate(PLAN_KIND, held);
+      const routedTo = row.routedToId ? await userRepository.findById(row.routedToId, tx) : null;
+
+      const stampInputs =
+        row.state === 'awaiting'
+          ? planGateStampInputs(await planSubjectVersion(plan.id, tx))
+          : null;
+      const stamp = stampInputs ? computeGateStamp(stampInputs) : null;
+      const movedSince =
+        input.since && stampInputs
+          ? movedAsReaderSees(stampMoved(input.since, stampInputs), PLAN_KIND)
+          : [];
+
+      return {
+        gate: {
+          ...toApprovalGateDto(row),
+          // Only a question still being asked can be held (§11.5c).
+          held: row.state === 'awaiting' ? await readPlanGateHeld(plan.id, tx) : null,
+        },
+        canDecide,
+        stamp,
+        movedSince,
+        routedToLabel: routedToDisplayName(routedTo),
+        earlierApproval: null,
+        settingsDoor: null,
       };
     });
   },
@@ -1535,8 +1609,46 @@ export const approvalGatesService = {
             )
           : null;
 
+    // THE KIND'S PRE-TRANSACTION WORK (MOTIR-6035) — reads that open their own context
+    // and best-effort writes that must not ride the decision (a plan's approve resolves
+    // its repository pins here, exactly as `approvePlan` does before its own
+    // transaction). Only for a gate the pre-read found `awaiting`: a decided or
+    // withdrawn gate is refused under the lock, and there is nothing to prepare for.
+    const outside = { subjectId: preread.gate.subjectId, decision: input.decision, ctx };
+    const prepared =
+      handler.beforeTransaction && preread.gate.state === 'awaiting'
+        ? await handler.beforeTransaction(outside)
+        : undefined;
+
     // ── THE TRANSACTION ───────────────────────────────────────────────────────
-    return withWorkspaceContext(ctx, async (tx) => {
+    let decidedResult: DecideGateResult;
+    try {
+      decidedResult = await withWorkspaceContext(
+        ctx,
+        (tx) => decideUnderLock(tx),
+        handler.transactionBudget,
+      );
+    } catch (err) {
+      // What a kind repairs AFTER the rollback, outside any transaction (a plan's lazy
+      // `stale` backstop), and the error to throw in its place.
+      if (handler.afterRollback) throw await handler.afterRollback(err, { ...outside, prepared });
+      throw err;
+    }
+    // AFTER THE COMMIT — the effect's post-commit work (MOTIR-6035: a plan's events and
+    // its target-lock release), never inside the transaction and never for a decision
+    // that rolled back. Stripped from the result so it never crosses the wire.
+    const { afterCommit, ...effect } = decidedResult.effect;
+    if (afterCommit) await afterCommit();
+    return { ...decidedResult, effect };
+
+    async function decideUnderLock(tx: Prisma.TransactionClient): Promise<DecideGateResult> {
+      // 0 · THE SUBJECT'S LOCK FIRST, for a kind whose subject's writers already hold it
+      //     when they reach the gate (ADR §11.5 — a plan: markPlanned, the drift writers,
+      //     the last-withdrawal discard). The generic gate-then-effect order would
+      //     deadlock against them. `subjectId` is immutable, so the pre-read's is safe.
+      if (handler.lockSubjectBeforeGate) {
+        await handler.lockSubjectBeforeGate(preread!.gate.subjectId, tx);
+      }
       // 1 · LOCK AND RE-READ. Everything below reads THIS row, not the pre-read.
       const locked = await approvalGateRepository.lockById(input.gateId, tx);
       if (!locked) throw new ApprovalGateNotFoundError(input.gateId);
@@ -1724,9 +1836,35 @@ export const approvalGatesService = {
       // `approvePrimaryAndMerge` decides the companion only while its version is still
       // the one checked here.
       const companionVersion = await companionSubjectVersion(locked, tx);
+      // What the kind's verb and version seams are handed — built here, under the lock,
+      // because a kind whose version moves in place is asked for it by the stamp check.
+      const args = {
+        gate: {
+          id: locked.id,
+          workspaceId: locked.workspaceId,
+          projectId: locked.projectId,
+          workItemId: locked.workItemId,
+          subjectId: locked.subjectId,
+        },
+        item,
+        ctx,
+        tx,
+        resolvedStatusKey,
+        prepared,
+      };
+      // §6a's first row — the subject's version AS DECIDED, answered by the KIND and read
+      // under the lock BEFORE the effect runs. ⚠️ BEFORE, not after (MOTIR-6035): a plan's
+      // approve writes the materialized ids back onto its proposals, which moves the
+      // digest, so a version read after the effect would record what the approval MADE
+      // rather than what was approved. No earlier kind's effect moves its own subject, so
+      // for them the two readings agree.
+      const decidedVersion = await handler.subjectVersion(args);
       if (input.stamp !== DECIDED_WITHOUT_A_READER) {
         const moved = stampMoved(input.stamp, {
-          subjectVersion: locked.subjectVersion,
+          // ⚠️ A SUBJECT REVISED IN PLACE (a plan, ADR §11.3/§11.5c) stamps the version
+          // AS IT IS NOW — its gate is never superseded by a revision, so the row's own
+          // `subjectVersion` would never move and a stale reader would never be refused.
+          subjectVersion: handler.stampsLiveVersion ? decidedVersion : locked.subjectVersion,
           companionSubjectVersion: companionVersion,
           // A card-less gate has no card body (ADR §11.3) — its stamp carries null.
           descriptionMd: item?.descriptionMd ?? null,
@@ -1754,6 +1892,15 @@ export const approvalGatesService = {
       }
       if (input.decision === 'request_changes' && locked.kind === CONFIRMATION_KIND) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'request_changes_on_confirmation');
+      }
+      // A plan is changed by TALKING to the planner, never by a gate verb (ADR §11.4).
+      if (input.decision === 'request_changes' && locked.kind === PLAN_KIND) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'request_changes_on_plan');
+      }
+      // …and DECLINE is offered by the one kind that supplies it (ADR §11.4). Its note
+      // is OPTIONAL, deliberately — see `planApprovalHandler.ts`'s header.
+      if (input.decision === 'decline' && !handler.decline) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'decline_on_other_kind');
       }
       if (input.decision === 'overturn' && !handler.overturn) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'overturn_on_other_kind');
@@ -1818,29 +1965,18 @@ export const approvalGatesService = {
       // 5 · THE KIND'S EFFECT, dispatched through the registry — in the SAME
       // transaction, which is what makes "approving unblocks the cards
       // `blocked_by` this one" true in the same request rather than eventually.
-      const args = {
-        gate: {
-          id: locked.id,
-          workspaceId: locked.workspaceId,
-          projectId: locked.projectId,
-          workItemId: locked.workItemId,
-          subjectId: locked.subjectId,
-        },
-        item,
-        ctx,
-        tx,
-        resolvedStatusKey,
-      };
       const effect =
         input.decision === 'request_changes'
           ? await handler.requestChanges(args)
           : input.decision === 'overturn' && handler.overturn
             ? await handler.overturn(args)
-            : await handler.approve(
-                input.decision === 'choose'
-                  ? { ...args, choice: { optionId: input.optionId ?? '' } }
-                  : args,
-              );
+            : input.decision === 'decline' && handler.decline
+              ? await handler.decline(args)
+              : await handler.approve(
+                  input.decision === 'choose'
+                    ? { ...args, choice: { optionId: input.optionId ?? '' } }
+                    : args,
+                );
 
       // 6 · WRITE THE DECISION — LAST, and carrying THE WHOLE AUDIT SET
       //     (MOTIR-5046; ADR §6a).
@@ -1877,8 +2013,9 @@ export const approvalGatesService = {
           decidedAt: options.decidedAt ?? new Date(),
           noteMd: input.noteMd?.trim() ? input.noteMd : null,
           // §6a's first row, answered by the KIND — never by this door. Read
-          // under the lock, so it is the version the subject had at the decision.
-          subjectVersion: await handler.subjectVersion(args),
+          // under the lock and before the effect (above), so it is the version the
+          // subject had at the decision.
+          subjectVersion: decidedVersion,
           // What survives `decidedById`'s `SetNull`. Read in this transaction, so
           // it is the name and email as at the decision rather than as at the
           // audit.
@@ -1914,6 +2051,6 @@ export const approvalGatesService = {
         filesKept,
         companionSubjectVersion: companionVersion,
       };
-    });
+    }
   },
 };

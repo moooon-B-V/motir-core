@@ -324,9 +324,10 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(body.subject).toEqual({ state: 'gone' });
   });
 
-  // `plan_approval` is unregistered too, but its gate can hang off NO card (the CHECK
-  // `approval_gate_work_item_iff_not_plan`), so it has a case of its own below.
-  it.each(UNREGISTERED_GATE_KINDS.filter((kind) => kind !== 'plan_approval'))(
+  // `plan_approval` WAS listed here as unregistered-but-card-less and filtered out; MOTIR-6035
+  // registered it, so the constant no longer holds it and the filter went with it. Its
+  // card-less case below is unchanged.
+  it.each(UNREGISTERED_GATE_KINDS)(
     'an UNREGISTERED kind (%s) returns the gate and the not-built-yet answer — never a throw',
     async (kind) => {
       const card = await designCard();

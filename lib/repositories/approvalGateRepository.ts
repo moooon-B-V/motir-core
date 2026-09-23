@@ -123,6 +123,25 @@ export const approvalGateRepository = {
    * returned as a list to keep the card form's shape. `workItemId: null` is part of
    * the key: a card gate that happens to share a subject id is a different question.
    */
+  /**
+   * The CARD-LESS gate a plan's surface renders, WHATEVER STATE IT IS IN (Story
+   * MOTIR-6012 · MOTIR-6035) — {@link findLatestByWorkItem}'s rule keyed on the SUBJECT:
+   * the oldest `awaiting` row wins (the live question), else the most recent decision
+   * or withdrawal. Null when the plan was never asked about.
+   */
+  async findLatestCardlessBySubject(
+    kind: ApprovalGateKind,
+    subjectId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ApprovalGate | null> {
+    const client = tx ?? dbRead;
+    const rows = await client.approvalGate.findMany({
+      where: { workItemId: null, kind, subjectId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.find((row) => row.state === 'awaiting') ?? rows[rows.length - 1] ?? null;
+  },
+
   async findAwaitingCardlessBySubject(
     kind: ApprovalGateKind,
     subjectId: string,
@@ -462,7 +481,10 @@ export const approvalGateRepository = {
   async decide(
     id: string,
     data: {
-      state: Extract<ApprovalGateState, 'approved' | 'changes_requested' | 'overturned'>;
+      state: Extract<
+        ApprovalGateState,
+        'approved' | 'changes_requested' | 'overturned' | 'declined'
+      >;
       /** WHO said yes. NULLABLE since MOTIR-5596: a decision synced out of GitHub
        *  may have been made by somebody with no Motir account at all, and the
        *  column has always been nullable for the neighbouring reason (`SetNull`

@@ -11,6 +11,7 @@ import type { GateDecision } from '@/lib/services/approvalGatesService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
+import { PlanNotInExpectedStatusError, PlanRevisionInFlightError } from '@/lib/plans/errors';
 
 // POST /api/approval-gates/[id]/decide (Story MOTIR-4778 · Subtask MOTIR-4790)
 // — record a DECISION on one approval gate, whatever its kind.
@@ -48,7 +49,8 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // human-in-the-loop evidence an agent-driven pipeline owes an auditor.
 //
 // JSON body: `decision` (required — `approve` | `request_changes` | `choose` |
-// `overturn`, the last only on a `decision_confirmation` gate and only with a note),
+// `overturn` | `decline`; `overturn` only on a `decision_confirmation` gate and only
+// with a note, `decline` only on a `plan_approval` gate, whose note is optional),
 // `optionId` (required with `choose` — the option a choice's decision picks,
 // MOTIR-5893), `stamp` (required — the `stamp` the gate read returned, MOTIR-5234)
 // and `noteMd` (free text — why they said yes, or what they sent back: optional on
@@ -60,7 +62,15 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // route cannot see the kind without a read, so it checks only the SHAPE and the
 // door answers a mismatch as `APPROVAL_GATE_VERB_NOT_OFFERED` (400) under its lock.
 
-const DECISIONS: readonly GateDecision[] = ['approve', 'request_changes', 'choose', 'overturn'];
+const DECISIONS: readonly GateDecision[] = [
+  'approve',
+  'request_changes',
+  'choose',
+  'overturn',
+  // A plan's DECLINE (MOTIR-6035; ADR §11.4) — offered by `plan_approval` alone, note
+  // optional; the door refuses it on every other kind (`decline_on_other_kind`).
+  'decline',
+];
 
 function parseDecision(value: unknown): GateDecision | null {
   return typeof value === 'string' && (DECISIONS as readonly string[]).includes(value)
@@ -100,7 +110,8 @@ export async function POST(
     return NextResponse.json(
       {
         code: 'BAD_REQUEST',
-        error: '`decision` must be `approve`, `request_changes`, `choose` or `overturn`.',
+        error:
+          '`decision` must be `approve`, `request_changes`, `choose`, `overturn` or `decline`.',
       },
       { status: 400 },
     );
@@ -153,6 +164,23 @@ export async function POST(
     // the other.
     const gateError = workItemGateErrorResponse(err);
     if (gateError) return gateError;
+    // A PLAN gate's two inherited refusals (MOTIR-6035; ADR §11.5c): a revision HOLDS
+    // the plan — the gate is still awaiting, and says until when — or the plan is no
+    // longer `planned`. Both are 409s, as the plan routes answer them.
+    if (err instanceof PlanRevisionInFlightError) {
+      return NextResponse.json(
+        {
+          code: err.code,
+          error: err.message,
+          heldBy: err.heldBy,
+          expiresAt: err.expiresAt.toISOString(),
+        },
+        { status: 409 },
+      );
+    }
+    if (err instanceof PlanNotInExpectedStatusError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+    }
     if (err instanceof ApprovalGateError) {
       return NextResponse.json(
         // A stale refusal also says WHAT moved, so a caller can re-read the right thing.

@@ -333,7 +333,13 @@ export type VerbNotOfferedReason =
   | 'overturn_needs_a_note'
   /** `request_changes` pressed with no reason — a refusal SAYS WHY (ADR §10a, MOTIR-6074).
    *  Every kind that offers the verb, *None of these* on a choice included. */
-  | 'request_changes_needs_a_note';
+  | 'request_changes_needs_a_note'
+  /** `request_changes` sent to a `plan_approval` gate (ADR §11.4, MOTIR-6035): a plan is
+   *  changed by TALKING to the planner, never by a gate verb. */
+  | 'request_changes_on_plan'
+  /** `decline` sent to any kind but `plan_approval`, the one kind that offers it
+   *  (ADR §11.4, MOTIR-6035). */
+  | 'decline_on_other_kind';
 
 /**
  * A decision whose VERB this gate does not offer (Story MOTIR-4914 · Subtask
@@ -351,6 +357,9 @@ export type VerbNotOfferedReason =
  *     request-shape refusal like the others, and nothing is written.
  *   · `request_changes_needs_a_note` — `request_changes` PRESSED with an empty
  *     reason (MOTIR-6074, ADR §10a). Never raised for `source: github`.
+ *   · `request_changes_on_plan` — `request_changes` sent to a `plan_approval` gate
+ *     (MOTIR-6035, ADR §11.4): a plan is changed by a conversation, not a verb;
+ *   · `decline_on_other_kind` — `decline` sent to any kind but `plan_approval`.
  *
  * ⚠️ NOT THE STALE REFUSAL, even for `unknown_option`. The stamp check runs first,
  * so by the time an option is looked up the options are exactly the ones the

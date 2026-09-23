@@ -334,6 +334,31 @@ export const planRepository = {
    * exist; the caller re-reads the current row under the lock to re-validate
    * the status.
    */
+  /**
+   * What the plan gate's To-approve ROW draws, for a page of plans in ONE round trip
+   * (Story MOTIR-6012 · MOTIR-6035; design Part XX §20.3's field table): the title, the
+   * author triple, the conversation and its targets, the project's name and the
+   * proposal count. A plan that no longer exists is simply absent.
+   */
+  async findManyForGateSummary(ids: readonly string[], tx: Prisma.TransactionClient) {
+    if (ids.length === 0) return [];
+    return tx.plan.findMany({
+      where: { id: { in: [...ids] } },
+      select: {
+        id: true,
+        projectId: true,
+        title: true,
+        origin: true,
+        authorSource: true,
+        authorHarness: true,
+        sessionId: true,
+        session: { select: { turnCount: true, targetKeys: true } },
+        project: { select: { name: true } },
+        _count: { select: { items: true } },
+      },
+    });
+  },
+
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "plan" WHERE "id" = ${id} FOR UPDATE

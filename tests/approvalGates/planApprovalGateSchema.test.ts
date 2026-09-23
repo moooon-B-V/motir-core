@@ -2,10 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { handlerFor, UNREGISTERED_GATE_KINDS } from '@/lib/approvalGates/registry';
-import {
-  ApprovalGateHasNoCardError,
-  ApprovalGateKindUnregisteredError,
-} from '@/lib/approvalGates/errors';
+import { ApprovalGateHasNoCardError } from '@/lib/approvalGates/errors';
 import { requireGateCard, requireGateWorkItem } from '@/lib/approvalGates/gateCard';
 import { APPROVAL_GATE_STATUS } from '@/lib/approvalGates/httpStatus';
 import { toGateRefusal } from '@/lib/approvalGates/refusals';
@@ -210,10 +207,12 @@ describe('RLS isolates a card-less row by workspace', () => {
   });
 });
 
-describe('the kind is UNREGISTERED — MOTIR-6035 promotes it', () => {
-  it('`plan_approval` is a named hole, and `handlerFor` refuses it by name', () => {
-    expect(UNREGISTERED_GATE_KINDS).toContain('plan_approval');
-    expect(() => handlerFor('plan_approval')).toThrow(ApprovalGateKindUnregisteredError);
+// MOTIR-6032 asserted here that the kind was an UNREGISTERED named hole; MOTIR-6035
+// promoted it, so the assertion now states the registration it was waiting for.
+describe('the kind is REGISTERED — MOTIR-6035 promoted it', () => {
+  it('`plan_approval` is no longer a hole, and `handlerFor` returns its handler', () => {
+    expect(UNREGISTERED_GATE_KINDS).not.toContain('plan_approval');
+    expect(handlerFor('plan_approval').permission).toBe('ai:decide_plan');
   });
 });
 

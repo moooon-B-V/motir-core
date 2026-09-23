@@ -227,7 +227,24 @@ describe('the approve-to-merge details carry the numbers in the TITLE, never the
 describe('a CARD-LESS (`plan_approval`) row — nothing to draw here yet', () => {
   it.each(['awaiting', 'decided'] as const)('a %s plan row renders nothing', (section) => {
     const row = {
-      ...awaiting('plan_approval', { kind: 'plan_approval' }, 'en'),
+      // The REGISTERED plan summary (MOTIR-6035) — the row still draws nothing for it
+      // until MOTIR-6037 gives it its own branch.
+      ...awaiting(
+        'plan_approval',
+        {
+          kind: 'plan_approval',
+          planId: 'plan-1',
+          sessionId: null,
+          sessionHasTurns: false,
+          title: 'A plan',
+          projectName: 'Project',
+          targets: [],
+          proposalCount: 2,
+          author: { source: 'mcp', harness: 'Claude Code', origin: 'user' },
+          held: null,
+        },
+        'en',
+      ),
       workItem: null,
       ...(section === 'decided'
         ? { state: 'approved', decidedAt: new Date().toISOString(), refusalReason: null }

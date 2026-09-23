@@ -61,8 +61,12 @@ const ALL_KINDS = Object.values(ApprovalGateKind);
  *  `approval_gate_work_item_iff_not_plan` keeps card-less (Story MOTIR-6012 · MOTIR-6034).
  *  Its row is covered by `tests/approvalGates/cardlessGateReads.test.ts`. */
 const CARD_KINDS = ALL_KINDS.filter((kind) => kind !== 'plan_approval');
-/** The kinds this build RENDERS — every one owes its own sentence. */
-const REGISTERED_KINDS = ALL_KINDS.filter(
+/** The kinds this build RENDERS with ONE `workbench.approvals.sentence.*` key — every
+ *  one owes its own sentence. `plan_approval` (registered by MOTIR-6035) is excluded on
+ *  purpose: its leading line has FOUR forms (design `design/ai-planning/design-notes.md`
+ *  §20.3), so its row takes its own branch reading `approvalGate.planApproval.row.*`,
+ *  which MOTIR-6037 builds with that copy. */
+const REGISTERED_KINDS = CARD_KINDS.filter(
   (kind) => !(UNREGISTERED_GATE_KINDS as readonly string[]).includes(kind),
 );
 

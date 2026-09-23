@@ -68,6 +68,9 @@ const COVERED: readonly ApprovalGateKind[] = [
   'pull_request_approval',
 ];
 const REFUSES_BY_OVERTURN: readonly ApprovalGateKind[] = ['decision_confirmation'];
+/** The PLAN gate's refusal is Decline, whose reason is OPTIONAL by design (ADR §11.4 —
+ *  a stated departure from §10a), and it offers no `request_changes` at all (MOTIR-6035). */
+const REFUSES_BY_DECLINE: readonly ApprovalGateKind[] = ['plan_approval'];
 
 /** A bare `awaiting` gate, and the stamp its reader would have been shown. */
 async function awaitingGate(kind: ApprovalGateKind) {
@@ -113,7 +116,7 @@ describe('the rule is TOTAL over the registry — a new kind that offers the ver
     // kind inherits it — but this spec is where that inheritance is PROVEN per kind, and
     // a kind added to the registry without a row here fails on this line first.
     const registered = Object.keys(APPROVAL_GATE_HANDLERS).sort();
-    expect(registered).toEqual([...COVERED, ...REFUSES_BY_OVERTURN].sort());
+    expect(registered).toEqual([...COVERED, ...REFUSES_BY_OVERTURN, ...REFUSES_BY_DECLINE].sort());
   });
 
   it('the typed refusal maps to a 4xx', () => {
@@ -211,5 +214,105 @@ describe('a refusal WITH a reason reaches the row, and the read carries it back 
     const res = await viaRoute(gate.id, { decision: 'overturn', noteMd: '', stamp });
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({ reason: 'overturn_needs_a_note' });
+  });
+});
+
+describe('the PLAN gate at the REST route (MOTIR-6035; ADR §11.4) — Decline, and no Request changes', () => {
+  /** A `planned` plan with one proposal, and the awaiting gate MOTIR-6036 will raise. */
+  async function plannedPlanGate() {
+    const { plansService } = await import('@/lib/services/plansService');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Proposed', kind: 'task' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    const gate = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: null,
+        kind: 'plan_approval',
+        subjectId: plan.id,
+        routedToId: fx.ownerId,
+      },
+    });
+    const read = await approvalGatesService.getForPlan({ planId: plan.id }, fx.ctx);
+    return { plan, gate, stamp: read.stamp! };
+  }
+
+  it('`request_changes` is refused 400 with reason `request_changes_on_plan`, even WITH a note', async () => {
+    const { gate, stamp } = await plannedPlanGate();
+    const res = await viaRoute(gate.id, {
+      decision: 'request_changes',
+      noteMd: 'Split it differently.',
+      stamp,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      code: 'APPROVAL_GATE_VERB_NOT_OFFERED',
+      reason: 'request_changes_on_plan',
+    });
+    expect(await gateRow(gate.id)).toMatchObject({ state: 'awaiting', noteMd: null });
+  });
+
+  it('`decline` with NO reason is accepted: the gate is `declined` and the plan `declined` / `reviewed`', async () => {
+    const { plan, gate, stamp } = await plannedPlanGate();
+    const res = await viaRoute(gate.id, { decision: 'decline', stamp });
+    expect(res.status).toBe(200);
+    // The post-commit hook never crosses the wire.
+    expect(res.body.effect).toEqual({
+      statusWritten: null,
+      statusDeferredReason: 'plan_decision_writes_no_work_item',
+    });
+    expect(await gateRow(gate.id)).toMatchObject({
+      state: 'declined',
+      noteMd: null,
+      decisionSource: 'api',
+      decidedUnderAuthority: 'plan_permission',
+    });
+    expect(await adminDb.plan.findUniqueOrThrow({ where: { id: plan.id } })).toMatchObject({
+      status: 'declined',
+      decisionReason: 'reviewed',
+    });
+  });
+
+  it('`decline` on a card kind is refused 400 with reason `decline_on_other_kind`', async () => {
+    const { gate, stamp } = await awaitingGate('design_result');
+    const res = await viaRoute(gate.id, { decision: 'decline', stamp });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ reason: 'decline_on_other_kind' });
+    expect((await gateRow(gate.id)).state).toBe('awaiting');
+  });
+
+  it('a HELD plan answers 409 with who holds it and until when; the gate still awaits', async () => {
+    const { plansService } = await import('@/lib/services/plansService');
+    const { plan, gate, stamp } = await plannedPlanGate();
+    await plansService.acquireRevisionLease(plan.id, fx.ctx, {
+      source: 'mcp',
+      harness: 'Claude Code',
+      model: null,
+    });
+    const res = await viaRoute(gate.id, { decision: 'approve', stamp });
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'PLAN_REVISION_IN_FLIGHT', heldBy: 'Claude Code' });
+    expect(typeof res.body.expiresAt).toBe('string');
+    expect((await gateRow(gate.id)).state).toBe('awaiting');
+  });
+
+  it('a plan no longer `planned` answers 409 PLAN_NOT_IN_EXPECTED_STATUS', async () => {
+    const { plan, gate, stamp } = await plannedPlanGate();
+    await adminDb.plan.update({ where: { id: plan.id }, data: { status: 'stale' } });
+    const res = await viaRoute(gate.id, { decision: 'decline', stamp });
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'PLAN_NOT_IN_EXPECTED_STATUS' });
+  });
+
+  it('an unknown verb names `decline` among the five', async () => {
+    const { gate, stamp } = await plannedPlanGate();
+    const res = await viaRoute(gate.id, { decision: 'reject', stamp });
+    expect(res.status).toBe(400);
+    expect(String(res.body.error)).toContain('`decline`');
   });
 });

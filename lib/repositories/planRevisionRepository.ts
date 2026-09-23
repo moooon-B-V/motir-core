@@ -66,6 +66,32 @@ export const planRevisionRepository = {
   },
 
   /**
+   * The LEASE-BEARING columns of MANY plans' trails in one round trip, oldest first
+   * within each plan (Story MOTIR-6012 · MOTIR-6035) — the To-approve page's read of
+   * which plan gates are HELD (`revisionLeaseOf`), one query per page rather than one
+   * per plan. Only the columns the lease reads.
+   */
+  async listLeaseRowsByPlans(
+    planIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Pick<PlanRevision, 'planId' | 'changeKind' | 'changedAt' | 'actorHarness' | 'actorModel'>[]
+  > {
+    if (planIds.length === 0) return [];
+    return tx.planRevision.findMany({
+      where: { planId: { in: [...planIds] } },
+      orderBy: [{ planId: 'asc' }, { changedAt: 'asc' }],
+      select: {
+        planId: true,
+        changeKind: true,
+        changedAt: true,
+        actorHarness: true,
+        actorModel: true,
+      },
+    });
+  },
+
+  /**
    * How many rows of ONE verb a plan's trail holds (MOTIR-4076) — the read the
    * planner-bug VOLUME bound counts on. Required `tx` for the reason `listByPlan`
    * gives, and one more: this read GUARDS a write, so the caller holds the plan's
