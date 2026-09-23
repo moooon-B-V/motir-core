@@ -110,6 +110,7 @@ function proposedPayload(item: PlanReviewItemDto, projectIdentifier: string): Qu
     explanationMd: item.explanationMd,
     type: item.type as QuickViewData['type'],
     executor: item.executor as QuickViewData['executor'],
+    difficulty: null, // a proposal carries no difficulty yet (the planner story, MOTIR-6095)
     priority: (item.priority ?? 'medium') as QuickViewData['priority'],
     storyPoints: item.storyPoints,
     estimateMinutes: item.estimateMinutes,

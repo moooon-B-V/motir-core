@@ -44,6 +44,7 @@ import { EstimationConfigProvider } from '@/components/issues/EstimationConfigPr
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
 import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
+import { DifficultyIndicator, DifficultyPicker } from '@/components/issues/DifficultyPicker';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
@@ -1070,6 +1071,30 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     />
                     <span className="truncate">{tl(`executor.${view.executor}`)}</span>
                   </>
+                ) : (
+                  <span className="text-(--el-text-secondary)">{t('none')}</span>
+                )}
+              </EditableRailField>
+              {/* Difficulty (Story MOTIR-6016 · MOTIR-6101) — below Executor in the
+                  same leaf-only branch, per core-fields--difficulty.mock.html: a
+                  label with a faint signal glyph, None when unset, and the same
+                  Segmented + Clear editor the item page uses. Not gated on a type. */}
+              <EditableRailField
+                label={t('difficulty')}
+                fieldKey="difficulty"
+                edit={edit}
+                control={
+                  <DifficultyPicker
+                    value={view.difficulty}
+                    onChange={(difficulty) => {
+                      edit.close();
+                      void edit.commit('difficulty', { difficulty }, { difficulty });
+                    }}
+                  />
+                }
+              >
+                {view.difficulty ? (
+                  <DifficultyIndicator difficulty={view.difficulty} />
                 ) : (
                   <span className="text-(--el-text-secondary)">{t('none')}</span>
                 )}

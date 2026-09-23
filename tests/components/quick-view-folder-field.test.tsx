@@ -86,6 +86,7 @@ function data(over: Partial<QuickViewData> = {}): QuickViewData {
     explanationMd: null,
     type: null,
     executor: null,
+    difficulty: null,
     assigneeName: null,
     reporterName: 'Alice Chen',
     priority: 'medium',

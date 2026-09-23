@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { History } from 'lucide-react';
 import { ErrorState } from '@/components/ui/ErrorState';
 import type { ActivityEntryDto, ActivityHistoryPageDto } from '@/lib/dto/activity';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { useCommentsSort } from '@/lib/hooks/useCommentsSort';
+import { useActivityRevision } from '@/lib/hooks/useActivityRevision';
 import { ContentSectionCard } from './ContentSectionCard';
 import { ActivityEntryRow, ActivitySkeleton } from './ActivityEntryRow';
 
@@ -56,6 +57,26 @@ export function HistorySection({
     if (!res.ok) throw new Error(`History read failed (${res.status})`);
     return (await res.json()) as ActivityHistoryPageDto;
   }
+
+  // A field saved on this page recorded a revision (MOTIR-6101): re-read the
+  // first page silently — no skeleton, the window just gains the new entry.
+  const revision = useActivityRevision(workItemId);
+  const seenRevision = useRef(revision);
+  useEffect(() => {
+    if (revision === seenRevision.current) return;
+    seenRevision.current = revision;
+    void fetchPage()
+      .then((page) => {
+        setEntries(page.entries);
+        setTotalCount(page.totalCount);
+        setNextCursor(page.nextCursor);
+        setFailed(false);
+      })
+      .catch(() => {
+        // A failed refresh keeps the window it had; the next save retries.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchPage reads only workItemId
+  }, [revision]);
 
   function retryInitial() {
     setFailed(false);

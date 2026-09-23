@@ -51,6 +51,7 @@ const DATA: QuickViewData = {
   explanationMd: null,
   type: null,
   executor: null,
+  difficulty: null,
   assigneeName: 'Marco Ortiz',
   reporterName: 'Alice Chen',
   priority: 'medium',
