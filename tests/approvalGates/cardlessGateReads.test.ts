@@ -189,6 +189,26 @@ describe('the RECORD ROOM — `listRecords` carries a card-less row in both sect
       subject: null,
     });
   });
+
+  it('lists a DECLINED plan gate among the decisions, with its optional reason (MOTIR-6037)', async () => {
+    await planGate('plan-declined', {
+      state: 'declined',
+      decidedAt: new Date(),
+      decidedById: fx.ownerId,
+      decidedByLabel: 'Owner',
+      decidedUnderAuthority: 'plan_permission',
+      subjectVersion: 'plan.v1.def',
+      noteMd: 'Not this quarter',
+    });
+    const page = await approvalGatesService.listRecords(meCtx, { limit: 50 });
+    expect(page.sections.decided.total).toBe(1);
+    expect(page.sections.decided.items[0]).toMatchObject({
+      kind: 'plan_approval',
+      state: 'declined',
+      workItem: null,
+      refusalReason: 'Not this quarter',
+    });
+  });
 });
 
 describe('the MARKER — `pendingDecisionsFor` is keyed on cards, and a card-less gate is not one', () => {

@@ -1012,8 +1012,8 @@ export const approvalGateRepository = {
   },
 
   /**
-   * THE APPROVALS ROOM's DECIDED half (MOTIR-5301) — one project's `approved` and
-   * `changes_requested` gates as a window, most recently decided first:
+   * THE APPROVALS ROOM's DECIDED half (MOTIR-5301) — one project's decided gates
+   * (`approved`, `changes_requested`, `overturned`, a plan's `declined`) as a window, most recently decided first:
    * `decidedAt desc, id desc` (the notes' § The ORDER).
    *
    * ⚠️ `superseded` IS NOT A DECISION AND IS NOT HERE, IN EITHER VIEW. ADR §6b writes
@@ -1204,8 +1204,9 @@ function recordsAwaitingWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateW
 function recordsDecidedWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWhereInput {
   return {
     projectId: { in: scope.projectIds },
-    // An OVERTURN is a decision a person made (MOTIR-5956) — the room lists it.
-    state: { in: ['approved', 'changes_requested', 'overturned'] },
+    // An OVERTURN is a decision a person made (MOTIR-5956) — the room lists it. So is a
+    // plan a person DECLINED (MOTIR-6037; design Part XX §20.3, Panel 3).
+    state: { in: ['approved', 'changes_requested', 'overturned', 'declined'] },
     ...(scope.fullView ? {} : { decidedById: scope.userId }),
   };
 }

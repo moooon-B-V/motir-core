@@ -62,10 +62,10 @@ const ALL_KINDS = Object.values(ApprovalGateKind);
  *  Its row is covered by `tests/approvalGates/cardlessGateReads.test.ts`. */
 const CARD_KINDS = ALL_KINDS.filter((kind) => kind !== 'plan_approval');
 /** The kinds this build RENDERS with ONE `workbench.approvals.sentence.*` key — every
- *  one owes its own sentence. `plan_approval` (registered by MOTIR-6035) is excluded on
- *  purpose: its leading line has FOUR forms (design `design/ai-planning/design-notes.md`
- *  §20.3), so its row takes its own branch reading `approvalGate.planApproval.row.*`,
- *  which MOTIR-6037 builds with that copy. */
+ *  one owes its own sentence. `plan_approval` (registered by MOTIR-6035) is not among
+ *  them: its leading line has FOUR forms (design `design/ai-planning/design-notes.md`
+ *  §20.3), so its row takes its own branch reading `approvalGate.planApproval.row.*`
+ *  (MOTIR-6037) — asserted by its own case in SEAM 3 below. */
 const REGISTERED_KINDS = CARD_KINDS.filter(
   (kind) => !(UNREGISTERED_GATE_KINDS as readonly string[]).includes(kind),
 );
@@ -283,6 +283,16 @@ describe('SEAM 3 · every gate kind has a sentence, in both locales', () => {
     },
   );
 
+  it('`plan_approval` has its OWN leading-line forms in en and zh (MOTIR-6037, §20.3)', () => {
+    for (const messages of [en, zh]) {
+      const row = messages.approvalGate.planApproval.row;
+      expect(row.targeted).toMatch(/<title>\{name\}<\/title>/);
+      expect(row.untargeted).toMatch(/<title>\{name\}<\/title>/);
+      expect(row.untitled).toMatch(/<title>\{project\}<\/title>/);
+      expect(row.reviewRow).toContain('{sentence}');
+    }
+  });
+
   it('an unregistered kind falls to the NEUTRAL sentence, which exists in both locales', () => {
     expect(en.workbench.approvals.sentence.other).toMatch(/<title>\{name\}<\/title>/);
     expect(zh.workbench.approvals.sentence.other).toMatch(/<title>\{name\}<\/title>/);
@@ -295,6 +305,31 @@ function queueRow(
   kind: ApprovalGateKind,
   over: Partial<ApprovalQueueRowDto> = {},
 ): ApprovalQueueRowDto {
+  // A PLAN row is CARD-LESS (MOTIR-6037): what it names is its target, from its subject.
+  if (kind === 'plan_approval') {
+    return {
+      gateId: `gate-${kind}`,
+      kind,
+      state: 'awaiting',
+      canDecide: true,
+      routedToName: 'Yue',
+      waitingSince: new Date(Date.now() - 3_600_000).toISOString(),
+      workItem: null,
+      subject: {
+        kind: 'plan_approval',
+        planId: 'plan-1',
+        sessionId: 'session-1',
+        sessionHasTurns: true,
+        title: 'Split invoicing',
+        projectName: 'Acme',
+        targets: [{ key: 'ACME-1', title: 'Billing export runs nightly' }],
+        proposalCount: 3,
+        author: { source: 'native', harness: null, origin: 'user' },
+        held: null,
+      },
+      ...over,
+    } as ApprovalQueueRowDto;
+  }
   return {
     gateId: `gate-${kind}`,
     kind,
@@ -438,8 +473,14 @@ function renderState(kind: ApprovalGateKind, state: State, locale: 'en' | 'zh') 
 }
 
 describe('SEAM 4 · no row, in any state, in either locale, speaks a git host’s vocabulary', () => {
+  // A PLAN row has no `not-renderable` or `gone` face: it is card-less, so a row whose
+  // subject is gone (or of another kind) has nothing to name and renders nothing.
   const cases = (['en', 'zh'] as const).flatMap((locale) =>
-    ALL_KINDS.flatMap((kind) => STATES.map((state) => [locale, kind, state] as const)),
+    ALL_KINDS.flatMap((kind) =>
+      STATES.filter(
+        (state) => kind !== 'plan_approval' || (state !== 'not-renderable' && state !== 'gone'),
+      ).map((state) => [locale, kind, state] as const),
+    ),
   );
 
   it.each(cases)('%s · %s · %s', (locale, kind, state) => {

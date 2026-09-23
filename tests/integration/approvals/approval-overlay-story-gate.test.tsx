@@ -439,6 +439,16 @@ describe('GUARD · ONE close seam', () => {
   it('has no second way to leave the address — no replace, no history walk', () => {
     expect(code).not.toMatch(/shallowReplace|router\.(back|replace)\(|history\.(back|go)\(/);
   });
+
+  // The ONE exception, and it is not a close: a stale `?approval=` link to a PLAN gate is
+  // FORWARDED to the planning surface (§11.5b, MOTIR-6037). It lives in its own module,
+  // runs only for `plan_approval`, and is a replace so Back does not bounce again.
+  it('forwards a plan gate from its own module, and only for `plan_approval`', () => {
+    expect(code).toMatch(/usePlanGateForward\(kind === 'plan_approval' \? itemKey : null\)/);
+    const forward = codeOf('components/approvals/usePlanGateForward.ts');
+    expect(forward).toContain('withPlanningOverlay(');
+    expect(forward).not.toMatch(/shallowPush\(/);
+  });
 });
 
 describe('GUARD · ONE decide path — no second approve control', () => {

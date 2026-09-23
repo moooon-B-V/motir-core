@@ -341,7 +341,10 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     // REVIEW: the proposal is on the CANVAS, not in a corner dock, and nothing is
     // saved until it is approved.
     await expect(confirmBar(page)).toContainText('1 added, 1 changed');
-    await expect(confirmBar(page)).toContainText('Nothing is saved until you approve.');
+    await expect(confirmBar(page)).toContainText(
+      // An ASKED plan's bar reads the gate's consequence line (MOTIR-6037).
+      'Approving adds these to your backlog. Declining ends the plan and changes nothing.',
+    );
     await expect(canvas(page).getByText(ADDED_TITLE, { exact: true })).toBeVisible();
     await expect(page.locator('[data-diff-state="add"]')).toHaveCount(1);
     // The existing item the proposal renames wears the CHANGE frame in place.
@@ -371,7 +374,7 @@ test('plan change is a conversation — open, describe, refine, approve', async 
       (r) =>
         r.url().includes(`/api/plans/${refinedPlanId}/approve`) && r.request().method() === 'POST',
     );
-    await confirmBar(page).getByRole('button', { name: 'Approve changes' }).click();
+    await confirmBar(page).getByRole('button', { name: 'Approve', exact: true }).click();
     expect((await approved).status()).toBe(200);
 
     // The rail says what landed and KEEPS the thread — a plan change is rarely

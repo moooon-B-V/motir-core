@@ -909,3 +909,82 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
     expect(result.current.state.decided).toBe('accepted');
   });
 });
+
+describe('usePlanChangeConversation — an ASKED plan (Story MOTIR-6012 · MOTIR-6037)', () => {
+  const GATED = planReview(
+    [planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', kind: 'story', title: 'Recurring' })],
+    {
+      gate: {
+        id: 'gate-6037',
+        state: 'awaiting',
+        stamp: 'stamp-6037',
+        held: null,
+        canDecide: true,
+        routedToName: null,
+      },
+    },
+  );
+
+  it('a decline carries its OPTIONAL reason, and the stamp the reader was shown', async () => {
+    fetchReview.mockResolvedValue(GATED);
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    await act(async () => {
+      await result.current.discard('Not this quarter');
+    });
+
+    expect(decline).toHaveBeenCalledWith('plan-1', 'stamp-6037', 'Not this quarter');
+    expect(result.current.state.decided).toBe('declined');
+  });
+
+  it('the decision SETTLES the To-approve row underneath, through the decided-gates store', async () => {
+    const { useDecidedGateState } = await import('@/lib/approvals/decidedGates');
+    // The store lives for the page, so each case decides a gate of its own.
+    fetchReview.mockResolvedValue({ ...GATED, gate: { ...GATED.gate!, id: 'gate-6037-a' } });
+    const { result } = await mounted();
+    const row = renderHook(() => useDecidedGateState('gate-6037-a'));
+    expect(row.result.current).toBeNull();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(row.result.current).toBe('approved');
+  });
+
+  it('a declined asked plan settles its row as declined', async () => {
+    const { useDecidedGateState } = await import('@/lib/approvals/decidedGates');
+    const declined = { ...GATED, gate: { ...GATED.gate!, id: 'gate-6037-d' } };
+    fetchReview.mockResolvedValue(declined);
+    const { result } = await mounted();
+    const row = renderHook(() => useDecidedGateState('gate-6037-d'));
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await result.current.discard();
+    });
+
+    expect(row.result.current).toBe('declined');
+  });
+
+  it('an UNASKED plan announces nothing — there is no row to settle', async () => {
+    const { useDecidedGateState } = await import('@/lib/approvals/decidedGates');
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await result.current.approve();
+    });
+    const row = renderHook(() => useDecidedGateState('gate-never'));
+    expect(row.result.current).toBeNull();
+  });
+});

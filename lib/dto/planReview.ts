@@ -861,6 +861,24 @@ export interface PlanReviewGateDto {
   held: PlanGateHeldDTO | null;
   /** Whether THIS reader holds the plan's decide permission (`ai:decide_plan`). */
   canDecide: boolean;
+  /** WHO the gate was routed to — the see-but-not-decide line's *Waiting on {name}*
+   *  (MOTIR-6037; design Part XX §20.5). Null when nobody resolves. OPTIONAL on the
+   *  type for the same fixture reason as {@link PlanReviewDto.gate}. */
+  routedToName?: string | null;
+}
+
+/**
+ * THE PLAN'S CONVERSATION, as the decision surfaces read it (Story MOTIR-6012 ·
+ * MOTIR-6037; design Part XX §20.2, §20.5): whether the plan has a planning session with
+ * turns to return to, and what it targeted. A plan with none opens on its own page,
+ * which says why; one with a conversation is reopened on the planning surface.
+ */
+export interface PlanConversationDto {
+  sessionId: string;
+  /** The session has at least one turn — an agent-authored MCP plan's may have none. */
+  hasTurns: boolean;
+  /** The session's `targetKeys`, in stored order. */
+  targetKeys: string[];
 }
 
 export interface PlanReviewDto {
@@ -946,6 +964,13 @@ export interface PlanReviewDto {
    * fixtures that predate it stay valid; `getPlanReview` always sets it.
    */
   gate?: PlanReviewGateDto | null;
+
+  /**
+   * THE PLAN'S CONVERSATION (MOTIR-6037) — null when the plan has no planning session.
+   * OPTIONAL on the type only so hand-built review fixtures stay valid;
+   * `getPlanReview` always sets it.
+   */
+  conversation?: PlanConversationDto | null;
 
   items: PlanReviewItemDto[];
   /** Roll-up: any item is stale (the plan-level "N may be out of date"). */

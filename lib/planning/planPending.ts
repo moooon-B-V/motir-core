@@ -37,3 +37,30 @@ export function isProposalPending(
 export function pendingProposalCount(index: Pick<PlanChangeDiffIndex, 'counts'>): number {
   return index.counts.added + index.counts.changed + index.counts.removed;
 }
+
+/**
+ * Does closing now LOSE the proposal — may the close-with-pending guard open at all
+ * (Story MOTIR-6012 · MOTIR-6037; `design/ai-planning/design-notes.md` Part XX §20.6,
+ * §20.11 flag 1)?
+ *
+ * ⚠️ NOT for a GATED plan and NOT for one being WRITTEN. The guard's body — *"Nothing is
+ * saved until you confirm. Closing now discards them."* — and its *Discard* are false
+ * once every `planned` plan waits in To approve: closing leaves an asked plan exactly
+ * where it is, and the hand-off told the reader they may leave. And a run is a server
+ * job that carries on after the overlay closes (`submitPlanChange` starts an `augment`
+ * job whose proposals append server-side; the overlay's `AbortController`s cancel only
+ * client reads), so a plan being written loses nothing either.
+ *
+ * What is left is a pending proposal NOBODY HAS BEEN ASKED ABOUT — a `planned` plan with
+ * no gate yet — and there the guard still opens, and its *Confirm & add* decides through
+ * the decide door like every other entrance.
+ */
+export function closeLosesProposal(
+  state: Pick<PlanChangeConversationState, 'review' | 'decided' | 'phase'>,
+  index: Pick<PlanChangeDiffIndex, 'isEmpty'>,
+): boolean {
+  if (!isProposalPending(state, index)) return false;
+  if (state.phase === 'streaming') return false;
+  if (state.review?.status === 'generating') return false;
+  return state.review?.gate?.state !== 'awaiting';
+}

@@ -36,6 +36,18 @@ describe('toApprovalRecordDecidedRowDto · refusalReason', () => {
     expect(dto.refusalReason).toBe('the note');
   });
 
+  // A DECLINED plan (MOTIR-6037; ADR §11.4) quotes its note too — its reason is optional.
+  it('carries the note on a declined plan row, and null when none was given', () => {
+    const plan = { ...base, kind: 'plan_approval', workItem: null, state: 'declined' };
+    expect(
+      toApprovalRecordDecidedRowDto(plan as unknown as RecordGateRow, null).refusalReason,
+    ).toBe('the note');
+    expect(
+      toApprovalRecordDecidedRowDto({ ...plan, noteMd: null } as unknown as RecordGateRow, null)
+        .refusalReason,
+    ).toBeNull();
+  });
+
   it.each(['approved', 'overturned'] as const)('is null on a %s row', (state) => {
     const dto = toApprovalRecordDecidedRowDto({ ...base, state } as unknown as RecordGateRow, null);
     expect(dto.refusalReason).toBeNull();

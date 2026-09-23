@@ -98,14 +98,20 @@ export function toEarlierApprovalDto(row: ApprovalGate): EarlierApprovalDTO | nu
  */
 /**
  * ONE decided gate → the Approvals room's decided row (MOTIR-5301). The read
- * selects only `approved` / `changes_requested`, so a row in any other state here
+ * selects only the DECISIONS — `approved` / `changes_requested` / `overturned` / a plan's
+ * `declined` (MOTIR-6037) — so a row in any other state here
  * is a predicate defect upstream, and this throws rather than drawing it.
  */
 export function toApprovalRecordDecidedRowDto(
   row: RecordGateRow,
   subject: ApprovalGateSubjectSummaryDTO | null,
 ): ApprovalRecordDecidedRowDto {
-  if (row.state !== 'approved' && row.state !== 'changes_requested' && row.state !== 'overturned') {
+  if (
+    row.state !== 'approved' &&
+    row.state !== 'changes_requested' &&
+    row.state !== 'overturned' &&
+    row.state !== 'declined'
+  ) {
     throw new Error(`approval gate ${row.id} is ${row.state}, not a decision`);
   }
   if (!row.decidedAt) throw new Error(`approval gate ${row.id} is ${row.state} with no decidedAt`);
@@ -122,7 +128,9 @@ export function toApprovalRecordDecidedRowDto(
     subject,
     chosenOption: (row.chosenOption as ChosenOptionDTO | null) ?? null,
     confirmedRecord: (row.confirmedRecord as ConfirmedRecordDTO | null) ?? null,
-    refusalReason: row.state === 'changes_requested' ? row.noteMd : null,
+    // A decline's note is its reason too (MOTIR-6037; optional, ADR §11.4).
+    refusalReason:
+      row.state === 'changes_requested' || row.state === 'declined' ? row.noteMd : null,
   };
 }
 

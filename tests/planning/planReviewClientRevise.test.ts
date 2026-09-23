@@ -73,3 +73,21 @@ describe('revisePlanRequest', () => {
     expect((err as PlanRequestError).status).toBe(502);
   });
 });
+
+describe('declinePlanRequest — the decline’s OPTIONAL reason (Story MOTIR-6012 · MOTIR-6037)', () => {
+  it('sends the reason beside the stamp when the reader gave one', async () => {
+    const { declinePlanRequest } = await import('@/lib/planning/planReviewClient');
+    respond({ id: 'plan_1', status: 'declined' });
+    await declinePlanRequest('plan_1', 'stamp_1', 'Not this quarter');
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('/api/plans/plan_1/decline');
+    expect(JSON.parse(init.body)).toEqual({ stamp: 'stamp_1', noteMd: 'Not this quarter' });
+  });
+
+  it('sends only the stamp when there is no reason', async () => {
+    const { declinePlanRequest } = await import('@/lib/planning/planReviewClient');
+    respond({ id: 'plan_1', status: 'declined' });
+    await declinePlanRequest('plan_1', 'stamp_1');
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toEqual({ stamp: 'stamp_1' });
+  });
+});

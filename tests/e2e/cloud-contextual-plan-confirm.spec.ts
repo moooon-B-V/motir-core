@@ -361,7 +361,7 @@ async function approveProposal(page: Page, planId: string): Promise<void> {
   const approved = page.waitForResponse(
     (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
   );
-  await confirmBar(page).getByRole('button', { name: 'Approve changes' }).click();
+  await confirmBar(page).getByRole('button', { name: 'Approve', exact: true }).click();
   expect((await approved).status()).toBe(200);
 }
 
@@ -487,7 +487,10 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     await expect(railReview(page)).toContainText('Nothing saved yet');
     await expect(rail(page).getByRole('alert')).toHaveCount(0);
     await expect(confirmBar(page)).toContainText('2 added');
-    await expect(confirmBar(page)).toContainText('Nothing is saved until you approve.');
+    await expect(confirmBar(page)).toContainText(
+      // An ASKED plan's bar reads the gate's consequence line (MOTIR-6037).
+      'Approving adds these to your backlog. Declining ends the plan and changes nothing.',
+    );
 
     // The turn is a PERSISTED row, appended by the real route — not a stub echo.
     await expect(rail(page).getByText('turn 1')).toBeVisible();
@@ -719,7 +722,13 @@ test('Discard declines the plan and leaves the tree untouched', async ({
   const declined = page.waitForResponse(
     (r) => r.url().includes(`/api/plans/${planId}/decline`) && r.request().method() === 'POST',
   );
-  await confirmBar(page).getByRole('button', { name: 'Discard' }).click();
+  // An ASKED plan's Discard is the gate's Decline, which confirms once in an inline
+  // band with an OPTIONAL reason (MOTIR-6037; design Part XX §20.4).
+  await confirmBar(page).getByRole('button', { name: 'Decline', exact: true }).click();
+  await page
+    .getByTestId('plan-decline-confirm')
+    .getByRole('button', { name: 'Yes, decline' })
+    .click();
   expect((await declined).status()).toBe(200);
 
   // The gate is gone, the conversation stays, and the tree is exactly as it was.

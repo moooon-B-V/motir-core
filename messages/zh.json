@@ -7558,7 +7558,7 @@
         "acceptance_result": "验收视频",
         "decision_choice": "选择",
         "decision_confirmation": "确认决策",
-        "plan_approval": "计划"
+        "plan_approval": "计划审批"
       },
       "reviewRow": "查看 {key} — {sentence}",
       "pullRequest": {
@@ -8422,8 +8422,8 @@
         "conflict": "有拉取请求与其目标分支冲突，因此该问题已撤回。",
         "set_changed": "Pull Request 集合发生变化，因此该问题已撤回。",
         "pulled_back": "工作已撤回评审，因此该问题已撤回。",
-        "plan_stale": "该计划要修改的工作已在别处完成，计划已过期，因此该问题已撤回。",
-        "plan_discarded": "该计划的最后一个提议已撤回，计划已被放弃，该问题随之撤回。",
+        "plan_stale": "此计划要改动的工作已经完成，计划因此过期，该问题已撤回。",
+        "plan_discarded": "计划中的所有建议都已撤回，计划随之结束，该问题也一并撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
       },
       "causeByKind": {
@@ -8942,6 +8942,59 @@
       "row": {
         "noneOnGithub": "GitHub 上未给出原因",
         "on": "版本 {version}"
+      }
+    },
+    "planApproval": {
+      "row": {
+        "targeted": "<title>{name}</title>的计划",
+        "untargeted": "计划 — <title>{name}</title>",
+        "untitled": "<title>{project}</title>的计划",
+        "moreTargets": "+{count}",
+        "details": "{count} 个建议工作项 · {author}",
+        "author": {
+          "motir": "由 Motir AI 撰写",
+          "harness": "由 {harness} 撰写",
+          "cadence": "自动规划"
+        },
+        "rewriting": "正在改写",
+        "rewritingTitle": "Motir AI 正在编写此计划的新版本。完成后即可批准或拒绝。",
+        "reviewRow": "审阅计划 — {sentence}",
+        "declinedNoReason": "未说明原因即拒绝 · 版本 <mono>{version}</mono>"
+      },
+      "surface": {
+        "approve": "批准",
+        "decline": "拒绝",
+        "consequence": "批准后，这些内容会加入你的待办列表。拒绝会结束此计划，不做任何改动。",
+        "reopened": "从“待审批”重新打开 · 发起人 {name} · 最近活动 {when}",
+        "reopenedYours": "从“待审批”重新打开 · 由你发起 · 最近活动 {when}",
+        "held": "Motir AI 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“待审批”中。",
+        "heldBy": "{harness} 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“待审批”中。",
+        "stale": {
+          "title": "你阅读期间，此计划已被修改。",
+          "next": "没有批准或拒绝任何内容。画布现在显示的是新版本——请查看后重新决定。"
+        },
+        "seeOnly": "等待 {name} 批准或拒绝此计划。",
+        "seeOnlyWhy": "决定计划需要“决定计划”的权限。",
+        "declined": "你拒绝了此计划。待办列表没有任何改动，它也已离开“待审批”。"
+      },
+      "declineConfirm": {
+        "title": "拒绝此计划将会：",
+        "end": "结束它——之后无法再批准。",
+        "untouched": "你的待办列表保持原样。",
+        "leaves": "将它移出“待审批”。",
+        "label": "为什么拒绝它？",
+        "helper": "选填。会与这项决定一起保存。",
+        "proceed": "确认拒绝"
+      },
+      "noConversation": {
+        "agent": "{harness} 在对话之外编写了此计划，因此它在自己的页面上打开。",
+        "cadence": "这是 Motir 在你的就绪工作用完时自动规划的，因此背后没有对话。",
+        "earlier": "此计划是在 Motir 开始保存规划对话之前编写的。",
+        "next": "可以在这里批准或拒绝它——也可以在下方请 Motir 修改它。"
+      },
+      "handoff": {
+        "writing": "信息已经足够——我现在开始编写计划。你不必在这里等待：随时可以关闭，计划完成后会在<link>待审批</link>中等你。",
+        "rewriting": "我正在编写此计划的新版本。你可以关闭这里——它会一直留在<link>待审批</link>中，等我完成后你就可以决定。"
       }
     }
   },

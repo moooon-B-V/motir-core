@@ -762,7 +762,12 @@ export interface ApprovalQueueDto {
 export interface ApprovalRecordDecidedRowDto {
   gateId: string;
   kind: ApprovalGateKindDTO;
-  state: Extract<ApprovalGateStateDTO, 'approved' | 'changes_requested' | 'overturned'>;
+  /** `declined` joined with MOTIR-6037: a plan a person ENDED is a decision the room
+   *  lists (design `design/ai-planning/design-notes.md` Part XX §20.3, Panel 3). */
+  state: Extract<
+    ApprovalGateStateDTO,
+    'approved' | 'changes_requested' | 'overturned' | 'declined'
+  >;
   /** ISO-8601 — when the decision was recorded. The section's sort key. */
   decidedAt: string;
   /**
@@ -802,7 +807,8 @@ export interface ApprovalRecordDecidedRowDto {
   confirmedRecord: ConfirmedRecordDTO | null;
   /**
    * WHAT A REFUSAL ASKED FOR (Story MOTIR-6067 · MOTIR-6075; ADR `approval-gates.md` §10a–b)
-   * — the gate's `noteMd`, on a `changes_requested` row ONLY. Null on every other state:
+   * — the gate's `noteMd`, on a `changes_requested` row, and on a `declined` plan row
+   * (MOTIR-6037; its reason is OPTIONAL, ADR §11.4). Null on every other state:
    * an approval's note (a synced approval's review list) and an overturn's note are not a
    * refusal's reason, and the row does not quote them. With `decisionSource` it says where
    * the reason came from — a GitHub review with no body is null here.

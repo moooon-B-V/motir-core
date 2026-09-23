@@ -270,6 +270,12 @@ export function PlanDetail({
           // sentence for: a revision took the lease between the render and the press,
           // and the reader is told why rather than shown a plan that looks decidable.
           if (err.code === 'PLAN_REVISION_IN_FLIGHT') setErrorCode(err.code);
+          // …and the STALE refusal of an asked plan (MOTIR-6037; design Part XX §20.5):
+          // nothing was decided, and the reader is told the plan moved under them, in
+          // the design's words, above the re-read verbs.
+          if (err.code === 'APPROVAL_GATE_STALE_SUBJECT' || err.code === 'PLAN_GATE_AWAITING') {
+            setErrorCode('APPROVAL_GATE_STALE_SUBJECT');
+          }
           await refetch().catch(() => {});
           if (refreshServerSurfaces) router.refresh();
         } else if (isFolderMissingRefusal(err)) {
@@ -306,8 +312,12 @@ export function PlanDetail({
     () => runAction((id) => approvePlanRequest(id, stamp), { refreshServerSurfaces: true }),
     [runAction, stamp],
   );
+  // An asked plan's decline carries its OPTIONAL reason (ADR §11.4; MOTIR-6037's band).
   const decline = useCallback(
-    () => runAction((id) => declinePlanRequest(id, stamp)),
+    (noteMd: string | null = null) =>
+      runAction((id) =>
+        noteMd ? declinePlanRequest(id, stamp, noteMd) : declinePlanRequest(id, stamp),
+      ),
     [runAction, stamp],
   );
 
@@ -324,13 +334,16 @@ export function PlanDetail({
   // so it confirms — the same shape the stale-approve confirm already uses, and
   // for the sharper reason. A `planned` plan has been read and declining it is
   // the ordinary decision; that path is unchanged.
-  const onDecline = useCallback(() => {
-    if (review.status === 'generating') {
-      setDiscardOpen(true);
-      return;
-    }
-    void decline();
-  }, [review.status, decline]);
+  const onDecline = useCallback(
+    (noteMd: string | null = null) => {
+      if (review.status === 'generating') {
+        setDiscardOpen(true);
+        return;
+      }
+      void decline(noteMd);
+    },
+    [review.status, decline],
+  );
 
   const discard = useCallback(() => void decline(), [decline]);
 

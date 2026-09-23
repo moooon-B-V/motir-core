@@ -138,6 +138,11 @@ test('an agent edits a proposal, and the change arrives on the plan’s own time
       (r) => r.url().includes(`/plans/${authored.planId}`) && r.request().method() !== 'GET',
     );
     await decline.click();
+    // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
+    await page
+      .getByTestId('plan-decline-confirm')
+      .getByRole('button', { name: 'Yes, decline' })
+      .click();
     expect((await decided).status()).toBeLessThan(400);
 
     const history = timeline(page);

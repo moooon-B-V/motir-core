@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EarlierSessionDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import { announceGateDecided } from '@/lib/approvals/decidedGates';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import {
   findResumableSession,
@@ -431,6 +432,50 @@ function resolveAnchor(
   }
   const primary = primaryPlanningTarget(targets);
   return primary ? { anchorId: primary.id, targetKeys: extraPlanningTargetKeys(targets) } : null;
+}
+
+/**
+ * Tell the page an ASKED plan's gate was decided here (MOTIR-6037), so its To-approve row
+ * settles in place under the overlay rather than reading *Decided elsewhere* on the next
+ * refresh (`lib/approvals/decidedGates.ts`). Only a plan the reader was shown AS a
+ * question — an `awaiting` gate on the review in hand — announces anything.
+ *
+ * The row reads only the STATE; the gate's audit columns are the server's, and this
+ * surface never received them, so they travel as unknown (null) rather than guessed.
+ */
+function announcePlanGateDecided(
+  review: PlanReviewDto | null,
+  planId: string,
+  state: 'approved' | 'declined',
+): void {
+  const gate = review?.gate;
+  if (!gate || gate.state !== 'awaiting') return;
+  const now = new Date().toISOString();
+  announceGateDecided({
+    gate: {
+      id: gate.id,
+      workItemId: null,
+      kind: 'plan_approval',
+      subjectId: planId,
+      state,
+      decidedById: null,
+      decidedAt: now,
+      noteMd: null,
+      supersededCause: null,
+      subjectVersion: null,
+      decidedByLabel: null,
+      routedToId: null,
+      decidedUnderAuthority: null,
+      decisionSource: null,
+      outcomeRef: null,
+      chosenOption: null,
+      confirmedRecord: null,
+      replanOwed: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+    filesKept: null,
+  });
 }
 
 export function usePlanChangeConversation({
@@ -1229,6 +1274,10 @@ export function usePlanChangeConversation({
         progress: null,
         errorCode: null,
       }));
+      // THE ROW SETTLES IN PLACE (MOTIR-6037; design Part XX §20.2, § 20's rule). The
+      // To-approve list under this overlay is a client island `router.refresh()` cannot
+      // reach, so an asked plan's decision travels through the decided-gates store.
+      announcePlanGateDecided(review, planId, 'approved');
       approvedCbRef.current?.(approved);
     } catch (err) {
       if (!mountedRef.current) return;
@@ -1243,37 +1292,47 @@ export function usePlanChangeConversation({
    * run is decided rather than left orphaned at `planned`) and never to the tree.
    * The conversation stays open either way.
    */
-  const discard = useCallback(async () => {
-    const { planId, review } = stateRef.current;
-    setState((s) => ({ ...s, phase: 'deciding', errorCode: null }));
-    try {
-      if (planId) await declinePlanRequest(planId, review?.gate?.stamp ?? null);
-      if (!mountedRef.current) return;
-      setState((s) => ({
-        ...s,
-        phase: 'idle',
-        // The review STAYS (MOTIR-3162). This is the case where nothing survived
-        // at all: a discarded plan left the workspace with no trace, so somebody
-        // who had just spent ten minutes shaping a tree and decided against it
-        // had nothing to look back at before starting the next turn.
-        decided: 'declined',
-        jobId: null,
-        planId: null,
-        progress: null,
-        errorCode: null,
-      }));
-    } catch (err) {
-      if (!mountedRef.current) return;
-      // The proposal is still pending — say so and leave it decidable, rather
-      // than clearing a canvas the server still considers awaiting a decision.
-      setState((s) => ({
-        ...s,
-        phase: 'review',
-        errorCode: planDecisionErrorCode(err, 'discard'),
-      }));
-      if (planId) await rereadAfterRefusal(planId, err);
-    }
-  }, [rereadAfterRefusal]);
+  const discard = useCallback(
+    async (noteMd?: string | null) => {
+      const { planId, review } = stateRef.current;
+      setState((s) => ({ ...s, phase: 'deciding', errorCode: null }));
+      try {
+        // The reason is OPTIONAL on a plan's decline (ADR §11.4; MOTIR-6037's confirm band).
+        const stamp = review?.gate?.stamp ?? null;
+        if (planId) {
+          await (noteMd
+            ? declinePlanRequest(planId, stamp, noteMd)
+            : declinePlanRequest(planId, stamp));
+        }
+        if (planId) announcePlanGateDecided(review, planId, 'declined');
+        if (!mountedRef.current) return;
+        setState((s) => ({
+          ...s,
+          phase: 'idle',
+          // The review STAYS (MOTIR-3162). This is the case where nothing survived
+          // at all: a discarded plan left the workspace with no trace, so somebody
+          // who had just spent ten minutes shaping a tree and decided against it
+          // had nothing to look back at before starting the next turn.
+          decided: 'declined',
+          jobId: null,
+          planId: null,
+          progress: null,
+          errorCode: null,
+        }));
+      } catch (err) {
+        if (!mountedRef.current) return;
+        // The proposal is still pending — say so and leave it decidable, rather
+        // than clearing a canvas the server still considers awaiting a decision.
+        setState((s) => ({
+          ...s,
+          phase: 'review',
+          errorCode: planDecisionErrorCode(err, 'discard'),
+        }));
+        if (planId) await rereadAfterRefusal(planId, err);
+      }
+    },
+    [rereadAfterRefusal],
+  );
 
   const dismissError = useCallback(() => {
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));

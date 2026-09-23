@@ -79,11 +79,12 @@ export async function fetchPlanReview(
  * against a version that has since moved. Null when the reader was shown no question
  * (a `generating` plan's discard); the server decides whether one was owed.
  */
-function decisionInit(stamp: string | null | undefined): RequestInit {
+function decisionInit(stamp: string | null | undefined, noteMd?: string | null): RequestInit {
   return {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stamp: stamp ?? null }),
+    // `noteMd` rides only when given — the decline's OPTIONAL reason (ADR §11.4, MOTIR-6037).
+    body: JSON.stringify(noteMd ? { stamp: stamp ?? null, noteMd } : { stamp: stamp ?? null }),
   };
 }
 
@@ -104,8 +105,15 @@ export async function approvePlanRequest(
 
 /** Decline the plan — through its gate when it is asked, a plain discard of a
  *  `generating` / `stale` plan otherwise (MOTIR-6038). Throws `PlanRequestError`. */
-export async function declinePlanRequest(planId: string, stamp?: string | null): Promise<PlanDto> {
-  const res = await fetch(`/api/plans/${encodeURIComponent(planId)}/decline`, decisionInit(stamp));
+export async function declinePlanRequest(
+  planId: string,
+  stamp?: string | null,
+  noteMd?: string | null,
+): Promise<PlanDto> {
+  const res = await fetch(
+    `/api/plans/${encodeURIComponent(planId)}/decline`,
+    decisionInit(stamp, noteMd),
+  );
   if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
   return (await res.json()) as PlanDto;
 }

@@ -470,3 +470,41 @@ describe('THE PLAIN BODIES refuse an asked plan under the plan lock (§11.8’s 
     expect((await planRow(unasked.planId)).status).toBe('declined');
   });
 });
+
+describe('the render read carries the decision surfaces’ facts (Story MOTIR-6012 · MOTIR-6037)', () => {
+  it('names who the question waits on, for the see-but-not-decide line', async () => {
+    const { planId } = await askedPlan(['Only']);
+    const owner = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ownerId } });
+    const review = await planReviewService.getPlanReview(planId, fx.ctx);
+    expect(review.gate?.routedToName).toBe(owner.name?.trim() || owner.email);
+  });
+
+  it('says whether the plan has a conversation to return to, and what it targeted', async () => {
+    const { planId } = await askedPlan(['Only']);
+    // No session at all — the plan opens on its own page.
+    await adminDb.plan.update({ where: { id: planId }, data: { sessionId: null } });
+    expect((await planReviewService.getPlanReview(planId, fx.ctx)).conversation).toBeNull();
+
+    const thread = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        createdById: fx.ownerId,
+        targetKeys: ['ACME-12', 'ACME-31'],
+        scopeKey: 'ACME-12,ACME-31',
+      },
+    });
+    await adminDb.plan.update({ where: { id: planId }, data: { sessionId: thread.id } });
+    // A session with no turns is still no conversation to return to…
+    expect((await planReviewService.getPlanReview(planId, fx.ctx)).conversation).toEqual({
+      sessionId: thread.id,
+      hasTurns: false,
+      targetKeys: ['ACME-12', 'ACME-31'],
+    });
+    // …and one with a turn is.
+    await adminDb.planChangeSession.update({ where: { id: thread.id }, data: { turnCount: 2 } });
+    expect((await planReviewService.getPlanReview(planId, fx.ctx)).conversation?.hasTurns).toBe(
+      true,
+    );
+  });
+});
