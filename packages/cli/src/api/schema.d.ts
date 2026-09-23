@@ -1705,6 +1705,14 @@ export interface components {
                 severity: string;
                 designCriterionIndex: number;
                 surfaceCriterionIndex: number;
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                claim: string;
+                claimedCount: number;
+                blockerCount: number;
             } | ({
                 /** @constant */
                 kind: "subsumption";

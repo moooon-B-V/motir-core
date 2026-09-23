@@ -7867,6 +7867,7 @@ async function computeSubtreeProseAdvisories(
       hasDesignBlocker: [...(blockedByMember.get(member.id) ?? [])].some(
         (blockerId) => blockerTypes.get(blockerId) === 'design',
       ),
+      blockerCount: blockedByMember.get(member.id)?.size ?? 0,
     };
   });
 

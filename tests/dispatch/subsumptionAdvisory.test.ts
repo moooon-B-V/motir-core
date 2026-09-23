@@ -441,6 +441,7 @@ describe('the batch path — validate_work_item scans a whole subtree in ONE que
         // SELF-BLOCKING-DESIGN check free to fire, so this helper never
         // suppresses a family it is not about.
         hasDesignBlocker: false,
+        blockerCount: 0,
       })),
       fx.ctx,
     );

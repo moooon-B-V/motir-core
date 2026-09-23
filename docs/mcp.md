@@ -398,7 +398,8 @@ item they return:
   { "kind": "shape", "item": "ACME-7", "severity": "likely-ordering-violation", "phrase": "once it lands", "criterionIndex": 5 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-over-gate-sizing", "threshold": "both", "storyPoints": 13, "estimateMinutes": 600 },
-  { "kind": "shape", "item": "ACME-7", "severity": "likely-self-blocking-design", "designCriterionIndex": 1, "surfaceCriterionIndex": 4 }
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-self-blocking-design", "designCriterionIndex": 1, "surfaceCriterionIndex": 4 },
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-blocker-count-mismatch", "claim": "four siblings this card is blocked_by", "claimedCount": 4, "blockerCount": 2 }
 ]
 ```
 
@@ -413,15 +414,16 @@ acceptance criterion is what the card is closed against, so naming a not-done
 item there is consuming it — and the graph, which is the only part a ready set
 can read, does not say so.
 
-A **`shape`** entry has no far end at all: the card contradicts itself. Four
+A **`shape`** entry has no far end at all: the card contradicts itself. Five
 severities, each with its own remedy:
 
-| severity                      | what it found                                                                                                                | remedy                                                               |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `likely-ordering-violation`   | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                         | CUT the card at that criterion                                       |
-| `likely-repo-straddle`        | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                              | SPLIT the card per repo (one repo, one PR)                           |
-| `likely-over-gate-sizing`     | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)  | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
-| `likely-self-blocking-design` | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws | LIFT the design criterion onto its own `type: design` card           |
+| severity                        | what it found                                                                                                                | remedy                                                               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `likely-ordering-violation`     | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                         | CUT the card at that criterion                                       |
+| `likely-repo-straddle`          | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                              | SPLIT the card per repo (one repo, one PR)                           |
+| `likely-over-gate-sizing`       | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)  | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
+| `likely-self-blocking-design`   | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws | LIFT the design criterion onto its own `type: design` card           |
+| `likely-blocker-count-mismatch` | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count           | update the stale prose or wire the genuinely missing edge            |
 
 **`likely-over-gate-sizing`'s two arms do not carry the same authority.**
 `storyPoints >= 8` IS the gate's rule — its literal split signal, read off the
@@ -2386,7 +2388,9 @@ childless card one of whose criteria produces a design asset while another build
 the rendered surface it draws — LIFT the design criterion onto its own
 `type: design` card). The first two carry the `criterionIndex` they cut at; the
 third carries `threshold`, `storyPoints` and `estimateMinutes`; the fourth
-carries `designCriterionIndex` and `surfaceCriterionIndex`. Only two of the four
+carries `designCriterionIndex` and `surfaceCriterionIndex`. A fifth,
+`likely-blocker-count-mismatch`, carries the exact `claim`, its `claimedCount`,
+and the graph's current `blockerCount`. Only two of the five
 carry `criterionIndex`, so narrow on `severity` before reading one.
 
 A `subsumption` entry (`kind: "subsumption"`) reports that a path this card's
