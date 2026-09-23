@@ -2701,6 +2701,58 @@ export const workItemRepository = {
   },
 
   /**
+   * The live work items of ONE project whose body CONTAINS any of `needles` —
+   * the PATH-REFERENCE advisory's second-namer read (MOTIR-5424): *which other
+   * work item also names this not-yet-existing file?*
+   *
+   * A substring match, deliberately over-inclusive — `contains` does not know
+   * where a path starts or ends, so `lib/a.ts` also matches a body naming
+   * `xlib/a.ts`. The caller re-reads each returned body with the same path
+   * extraction it scanned the asking card with and keeps only an exact match, so
+   * the over-match costs a row, never a finding. Status is NOT filtered here: the
+   * project's terminal set is a workflow read the service already holds, and a
+   * status list in this query would be a second copy of it.
+   *
+   * Archived and triage-inbox rows are excluded, matching every tree read. An
+   * empty needle list short-circuits rather than issuing a degenerate `OR []`,
+   * which Prisma reads as match-nothing on some versions and match-everything on
+   * none — not a question worth asking. Read-only path → `dbRead`.
+   */
+  async findLiveBodiesContainingAny(
+    projectId: string,
+    workspaceId: string,
+    needles: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      identifier: string;
+      status: string;
+      descriptionMd: string | null;
+      targetRepos: string[];
+    }>
+  > {
+    if (needles.length === 0) return [];
+    const client = tx ?? dbRead;
+    return client.workItem.findMany({
+      where: {
+        projectId,
+        workspaceId,
+        archivedAt: null,
+        triagedAt: null,
+        OR: needles.map((needle) => ({ descriptionMd: { contains: needle } })),
+      },
+      select: {
+        id: true,
+        identifier: true,
+        status: true,
+        descriptionMd: true,
+        targetRepos: true,
+      },
+    });
+  },
+
+  /**
    * The `descriptionMd` of MANY work items in ONE query — the body text the
    * prose-vs-graph advisory (MOTIR-1969) scans for `motir:` reference tokens.
    * Deliberately its OWN narrow read rather than a column bolted onto the

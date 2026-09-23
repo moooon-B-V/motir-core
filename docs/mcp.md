@@ -2438,6 +2438,29 @@ when it predates that container. That is the moment the check exists for: an
 author re-parenting an existing card under a story sees the criterion that card
 does not own before sealing the plan, not after approve.
 
+A `path-reference` entry (`kind: "path-reference"`, severity
+`likely-missing-path-edge`) is the reference family's PATH arm: the key-based
+reference check sees a sibling only when a body names it by `MOTIR-<n>`, and a
+criterion that cites a sibling's deliverable by FILE PATH — a design mock, a test
+helper — is the same missing edge with nothing for that check to key on. It
+fires for a card when one of its acceptance criteria names a repository file
+path that (a) does NOT exist on the default branch of the card's own repository,
+(b) sits under a top-level directory that DOES exist there, and (c) is also named
+anywhere in the body of ANOTHER not-done work item in the project that shares a
+repository with the card — with no `blocked_by` between the two, directly or
+between any of their ancestors, and neither an ancestor of the other. It carries
+the `path`, the `criterionIndex`, the `repo`, and the other item as `referenced`
+/ `referencedStatus`, one entry per other item; the remedy is to wire
+`blocked_by` from the card that CITES the file to the card that CREATES it.
+Clause (c) is the discriminator: a path that does not exist yet is usually named
+by exactly one work item, the card that will create it, and that card is never
+reported. Clause (b) keeps out a file from somewhere else — a third party's
+source cited as evidence, a repo-qualified spelling, a URL — because a forward
+reference lands in a directory the repository already has. Existence is asked of
+the repository host through the connected GitHub App; an unconnected repository,
+a card pinning no repository, or a host that does not answer produces no entry
+rather than a guess. It rides this tool only, and only without `planId`.
+
 `valid`, `blockers`, and an item's readiness are **identical** whether or not
 advisories are emitted, at EVERY severity — a card legitimately names cards it
 does not depend on (out-of-scope sections, context refs, contrast references, a

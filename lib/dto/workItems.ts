@@ -1992,11 +1992,63 @@ export interface WorkItemCoverageAdvisoryDto {
 }
 
 /**
- * ONE advisory on `validate_work_item`'s verdict: every prose family the dispatch
- * surfaces also carry, plus the container-only COVERAGE family (MOTIR-5362).
- * Narrow positively — {@link isCoverageAdvisory} / {@link isProseAdvisory}.
+ * A criterion naming a FILE another open work item also names, where the file
+ * does not exist yet and no `blocked_by` orders the two (MOTIR-5424) — the
+ * reference family's PATH arm. The key-based {@link WorkItemProseReferenceAdvisoryDto}
+ * sees a sibling only when a body names it by `MOTIR-<n>`; a criterion citing
+ * the sibling's deliverable by path (`design/<area>/<surface>.mock.html`) is the
+ * same missing edge with nothing for that scan to key on (MOTIR-4856).
+ *
+ * ⚠️ **Its own discriminant, not a severity on the reference variant.** That
+ * variant's wire shape is published untagged and carries no `path`, and a
+ * renderer reading it as "names <referenced>" would print a finding about a KEY
+ * the body never wrote. The remedy is the reference family's — wire the edge —
+ * which is why the name says so.
+ *
+ * ⚠️ **It rides `validate_work_item` ONLY**, like the coverage family: it reads
+ * every open work item in the project and asks the repository host whether a
+ * path exists, which is a validation question and too heavy for the dispatch
+ * surfaces' per-claim payload. So it never reaches {@link WorkItemProseAdvisoryDto}.
+ *
+ * ⚠️ **Never a gate.** Two cards naming one not-yet-existing file are usually
+ * creator and consumer, not always — both may be consumers of a third card that
+ * names it only by key.
  */
-export type WorkItemValidityAdvisoryDto = WorkItemProseAdvisoryDto | WorkItemCoverageAdvisoryDto;
+export interface WorkItemPathReferenceAdvisoryDto {
+  /** The union discriminant — see {@link WorkItemValidityAdvisoryDto}. */
+  kind: 'path-reference';
+  /** The card whose acceptance criterion names the path. */
+  item: string;
+  severity: 'likely-missing-path-edge';
+  /** The repository-relative path, as the criterion wrote it. */
+  path: string;
+  /** 1-based index of the criterion naming it, numbered as the shape checks number them. */
+  criterionIndex: number;
+  /** The repository whose default branch the path does NOT resolve on (its top-level directory does). */
+  repo: string;
+  /** The OTHER not-done work item naming the same path — one advisory per such item. */
+  referenced: string;
+  /** That item's raw workflow status key. */
+  referencedStatus: string;
+}
+
+/**
+ * ONE advisory on `validate_work_item`'s verdict: every prose family the dispatch
+ * surfaces also carry, plus the two validate-only families — CONTAINER-COVERAGE
+ * (MOTIR-5362) and PATH-REFERENCE (MOTIR-5424). Narrow positively —
+ * {@link isCoverageAdvisory} / {@link isPathReferenceAdvisory} / {@link isProseAdvisory}.
+ */
+export type WorkItemValidityAdvisoryDto =
+  | WorkItemProseAdvisoryDto
+  | WorkItemCoverageAdvisoryDto
+  | WorkItemPathReferenceAdvisoryDto;
+
+/** Narrow an advisory to the PATH-REFERENCE family (MOTIR-5424). */
+export function isPathReferenceAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemPathReferenceAdvisoryDto {
+  return a.kind === 'path-reference';
+}
 
 /** Narrow an advisory to the CONTAINER-COVERAGE family (MOTIR-5362). */
 export function isCoverageAdvisory(
