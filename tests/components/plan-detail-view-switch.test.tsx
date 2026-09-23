@@ -154,6 +154,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         explanationSource: null,
         storyPoints: null,
         estimateMinutes: null,
+        difficulty: null,
         targetRepo: null,
         targetRepos: [],
         targetRepositories: null,

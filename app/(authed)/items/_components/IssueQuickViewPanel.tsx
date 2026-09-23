@@ -1114,6 +1114,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               <EditableRailField
                 label={t('difficulty')}
                 fieldKey="difficulty"
+                marker={markFor('difficulty')}
                 edit={edit}
                 control={
                   <DifficultyPicker

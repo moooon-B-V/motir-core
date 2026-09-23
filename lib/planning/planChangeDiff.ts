@@ -322,6 +322,9 @@ export const FIELD_KEY: Record<string, string> = {
   links: 'links',
   estimateMinutes: 'estimate',
   storyPoints: 'points',
+  // A leaf's DIFFICULTY (MOTIR-6137, design Part XX §20.8) — the change frame's
+  // chip reads `difficulty`.
+  difficulty: 'difficulty',
   parent: 'parent',
   // Where the card SHIPS (MOTIR-3868) — the twin of `parent` above. This map is
   // the QUIETEST of the three: it DROPS what it does not recognise, so a field

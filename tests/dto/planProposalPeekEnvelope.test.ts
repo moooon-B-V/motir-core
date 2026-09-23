@@ -37,7 +37,7 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   type: null,
   storyPoints: null,
   estimateMinutes: null,
-  // MOTIR-6133 — no rail row until MOTIR-6137 gives it one.
+  // MOTIR-6133 carries it; MOTIR-6137 gives it the seventh rail row.
   difficulty: null,
   targetRepo: null,
   // The SET spellings of the same axis (bug MOTIR-4904) — they move the SAME
@@ -53,9 +53,19 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
 };
 
 describe('the proposal envelope’s SETTABLE rail-field set (MOTIR-4183)', () => {
-  it('is the SIX rail rows a patch can move — and names them, so a silent change fails here', () => {
+  it('is the SEVEN rail rows a patch can move — and names them, so a silent change fails here', () => {
+    // `difficulty` is the seventh (story MOTIR-6095 · MOTIR-6137, design Part XX
+    // §20.5): the peek's count line reads "… 1 of the 7 fields it can set".
     expect([...PLAN_ITEM_SETTABLE_RAIL_FIELDS].sort()).toEqual(
-      ['estimateMinutes', 'parent', 'priority', 'storyPoints', 'targetRepo', 'type'].sort(),
+      [
+        'difficulty',
+        'estimateMinutes',
+        'parent',
+        'priority',
+        'storyPoints',
+        'targetRepo',
+        'type',
+      ].sort(),
     );
   });
 

@@ -213,6 +213,7 @@ type PatchedFieldKey = Extract<
   | 'type'
   | 'storyPoints'
   | 'estimateMinutes'
+  | 'difficulty'
   | 'targetRepo'
   | 'targetRepos'
   | 'targetRepoRole'
@@ -266,6 +267,19 @@ function buildChanges(
       field: 'estimateMinutes',
       from: target?.estimateMinutes == null ? null : String(target.estimateMinutes),
       to: patch.estimateMinutes === null ? null : String(patch.estimateMinutes),
+    });
+  }
+  // A leaf's DIFFICULTY (story MOTIR-6095 · MOTIR-6137, design Part XX §20.5) —
+  // the sizing group's third member, so it follows `estimateMinutes`. The cells
+  // carry the WIRE words (`low`, `high`); every surface renders them as the item
+  // page's labels (`labels.difficulty.*`), so the reviewer reads `Low → High` in
+  // their own locale. Presence-triggered like its siblings: an explicit `null`
+  // CLEARS it and reads `Medium → —`.
+  if (patch.difficulty !== undefined && patch.difficulty !== (target?.difficulty ?? null)) {
+    changes.push({
+      field: 'difficulty',
+      from: target?.difficulty ?? null,
+      to: patch.difficulty ?? null,
     });
   }
   if (
@@ -1242,6 +1256,15 @@ export const planReviewService = {
           item,
           proposed?.estimateMinutes ?? null,
           target?.estimateMinutes ?? null,
+        ),
+        // A leaf's DIFFICULTY (story MOTIR-6095 · MOTIR-6137) — patch-or-target on
+        // every op, as `storyPoints` is: the peek's rail and the card's top row
+        // read the value approve will WRITE. A container never carries one.
+        difficulty: proposedValue(
+          'difficulty',
+          item,
+          proposed?.difficulty ?? null,
+          target?.difficulty ?? null,
         ),
         targetRepo: proposedValue(
           'targetRepo',

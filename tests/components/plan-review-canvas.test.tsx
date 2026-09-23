@@ -189,6 +189,7 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
     explanationSource: null,
     storyPoints: null,
     estimateMinutes: null,
+    difficulty: null,
     targetRepo: null,
     targetRepos: [],
     targetRepositories: null,
