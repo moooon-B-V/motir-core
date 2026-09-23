@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { AGENT_PLAN_SEED_PASSWORD } from './_helpers/agent-authored-plan-seed';
 import {
@@ -34,7 +34,12 @@ import {
 // here); its half is the motir-ai integration gate, MOTIR-6063.
 
 const planRow = (page: Page, planId: string) => page.locator(`a[href="/plans/${planId}"]`);
-const canvasOf = (page: Page) => page.getByRole('main').getByTestId('roadmap-canvas');
+/** The live page body — every locator is scoped, never page-rooted (MOTIR-5037). */
+const main = (page: Page) => page.getByRole('main');
+const canvasOf = (page: Page) => main(page).getByTestId('roadmap-canvas');
+const statusPill = (page: Page) => main(page).getByTestId('plan-status-pill');
+/** The proposal peek is a modal, portalled outside `main`. */
+const peekOf = (page: Page) => page.getByRole('dialog').getByTestId('proposal-peek');
 const nodeOf = (canvas: Locator, nodeId: string) => canvas.locator(`[data-node-id="${nodeId}"]`);
 
 /** A proposal's door in the list body — named `Open <KEY> · <title>`. */
@@ -51,7 +56,7 @@ const viewButton = (page: Page, name: 'List' | 'Canvas') =>
 
 async function toList(page: Page) {
   await viewButton(page, 'List').click();
-  await expect(page.getByTestId('plan-proposal-list')).toBeVisible();
+  await expect(main(page).getByTestId('plan-proposal-list')).toBeVisible();
 }
 
 async function openSeed(page: Page, baseURL: string | undefined): Promise<SurgicalPlanSeed> {
@@ -82,7 +87,7 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
     await beat();
     await planRow(page, seed.planId).click();
     await page.waitForURL(`**/plans/${seed.planId}**`);
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+    await expect(statusPill(page)).toContainText('Ready to review');
     // No internal temp-ref reaches the page — anywhere.
     await expect(page.getByText(/planItem:/)).toHaveCount(0);
     await beat();
@@ -132,7 +137,7 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
   await chapter('The peeks: why the card goes, and both edits marked', async () => {
     await toList(page);
     await openButton(page, seed.y, seed.y.title).click();
-    const peek = page.getByTestId('proposal-peek');
+    const peek = peekOf(page);
     await expect(peek).toBeVisible();
     await expect(peek.getByTestId('remove-reason')).toContainText(REMOVE_REASON);
     await beat();
@@ -140,9 +145,9 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
     await expect(peek).toHaveCount(0);
 
     await openButton(page, seed.z, Z_RENAMED).click();
-    await expect(page.getByTestId('proposal-peek')).toBeVisible();
-    await expect(page.getByTestId('proposal-peek')).toContainText(Z_RENAMED);
-    await expect(page.getByTestId('proposal-peek')).toContainText('A retry waits twice as long');
+    await expect(peekOf(page)).toBeVisible();
+    await expect(peekOf(page)).toContainText(Z_RENAMED);
+    await expect(peekOf(page)).toContainText('A retry waits twice as long');
     await beat();
     await page.keyboard.press('Escape');
   });
@@ -154,10 +159,10 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
     );
     await page.getByRole('button', { name: /Approve/ }).click();
     expect((await approved).status()).toBe(200);
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
+    await expect(statusPill(page)).toContainText('Approved');
 
     // The decided list names the CREATED story by its key now.
-    const story = await db.workItem.findFirstOrThrow({
+    const story = await adminDb.workItem.findFirstOrThrow({
       where: { projectId: seed.projectId, title: PROPOSED_STORY },
     });
     await toList(page);
@@ -168,7 +173,7 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
   await chapter(
     'The moved card sits under the new story; the update and the removal applied',
     async () => {
-      const story = await db.workItem.findFirstOrThrow({
+      const story = await adminDb.workItem.findFirstOrThrow({
         where: { projectId: seed.projectId, title: PROPOSED_STORY },
       });
       await page.goto(`/items/${seed.x.identifier}`);
@@ -181,7 +186,7 @@ test('a plan that moves, updates and removes cards outside its tree reads plainl
 
       await page.goto(`/items/${seed.z.identifier}`);
       await expect(page.getByRole('heading', { level: 1 }).first()).toContainText(Z_RENAMED);
-      await expect(page.getByText(Z_BODY.split('- ')[1]!)).toBeVisible();
+      await expect(main(page).getByText(Z_BODY.split('- ')[1]!)).toBeVisible();
       await beat();
 
       await page.goto(`/items/${seed.y.identifier}`);
@@ -196,10 +201,10 @@ test('a remove with no reason draws no reason line', async ({ page, baseURL, acc
   const seed = await openSeed(page, baseURL);
   await page.goto(`/plans/${seed.bareRemovePlanId}?view=list`);
   await expect(openButton(page, seed.w, seed.w.title)).toBeVisible();
-  await expect(page.getByTestId('remove-reason')).toHaveCount(0);
+  await expect(main(page).getByTestId('remove-reason')).toHaveCount(0);
   await page.goto(`/plans/${seed.bareRemovePlanId}?view=canvas`);
   await expect(nodeOf(canvasOf(page), seed.w.id)).toBeVisible();
-  await expect(page.getByTestId('remove-reason')).toHaveCount(0);
+  await expect(main(page).getByTestId('remove-reason')).toHaveCount(0);
 });
 
 test('approve refuses a move whose proposed parent became illegal, and creates nothing', async ({
@@ -219,10 +224,10 @@ test('approve refuses a move whose proposed parent became illegal, and creates n
   expect((await refused).status()).toBe(400);
   // The rail's refusal line (the route announcer is also an `alert`, and empty).
   await expect(page.getByRole('alert').filter({ hasText: /\S/ })).toBeVisible();
-  await expect(page.getByTestId('plan-status-pill')).not.toContainText('Approved');
-  expect(await db.workItem.count({ where: { projectId: seed.projectId, title: 'Dunning' } })).toBe(
-    0,
-  );
-  const card = await db.workItem.findUniqueOrThrow({ where: { id: seed.illegalCard.id } });
+  await expect(statusPill(page)).not.toContainText('Approved');
+  expect(
+    await adminDb.workItem.count({ where: { projectId: seed.projectId, title: 'Dunning' } }),
+  ).toBe(0);
+  const card = await adminDb.workItem.findUniqueOrThrow({ where: { id: seed.illegalCard.id } });
   expect(card.parentId).toBe(seed.fStory.id);
 });

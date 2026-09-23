@@ -12,7 +12,7 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { db } from '@/lib/db';
+import { adminDb } from './db-reset';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ADD_PLAN_ITEMS_TOOL_NAME, CREATE_PLAN_TOOL_NAME } from '@/lib/mcp/tools/authorPlan';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
@@ -153,7 +153,7 @@ export async function seedSurgicalPlan(email: string, baseURL: string): Promise<
       true,
     );
     // A task may not hang under a task: the proposed story becomes one.
-    await db.planItem.update({
+    await adminDb.planItem.update({
       where: { id: story! },
       data: { proposedFields: { title: 'Dunning', kind: 'task' } },
     });
