@@ -109,6 +109,10 @@ import { GET_PLAN_TOOL_NAME } from './getPlan';
 // names both alternatives — and the whole append transaction is contained, so no
 // OTHER ORM failure can take the route this one took.
 //
+// AMENDMENT 18 §2 (MOTIR-6051) narrowed it: a second `modify` of one card now
+// MERGES into the one row, which keeps all three of MOTIR-3194's reasons true
+// (one row, one old side, one base). Only a pairing with a `remove` refuses.
+//
 // ── NEITHER TOOL IS BILLABLE ───────────────────────────────────────────────
 // `MCP_BILLABLE_TOOLS` (`lib/mcp/rateLimitGate.ts`) holds exactly the tools that
 // make motir-ai run a model job. These spend no provider tokens and start no
@@ -1173,10 +1177,9 @@ function stampProvenance(
  * The adapter: append the batch, optionally close the plan, return the ids the
  * caller needs for the next layer.
  *
- * `planItemIds` is computed the way `aiGenerationService.appendProposals`
- * computes it, and for the same reason it is sound: `addProposals` returns every
- * item in append order under the plan's ROW LOCK, so two concurrent appends to
- * one plan serialize and neither can interleave into the other's slice.
+ * `planItemIds` is the service's own `appendedItemIds` — one id per proposal,
+ * in input order, the SURVIVING row's for a merged `modify` (AMENDMENT 18 §2) —
+ * taken under the plan's ROW LOCK, so two concurrent appends serialize.
  */
 /**
  * `<PREFIX>-<n>` — the identifier EVERY OTHER MCP tool takes (`get_work_item`,
@@ -1441,9 +1444,11 @@ export async function runAddPlanItems(
   const appended = await plansService.addProposals(args.planId, resolved, ctx, {
     revision: args.revision,
   });
-  const planItemIds = appended.items
-    .slice(appended.items.length - resolved.length)
-    .map((i) => i.id);
+  // The id each proposal ENDED AS, in input order — returned by the service
+  // rather than sliced off the end of `items`, because a second `modify` of one
+  // card now MERGES into the row the plan already holds (AMENDMENT 18 §2), so a
+  // batch no longer adds exactly one row per proposal.
+  const planItemIds = appended.appendedItemIds;
 
   // `final` composes exactly as the internal seam composes it: append, then
   // close. `markPlanned` re-locks and re-reads, so a racing append is refused
@@ -1714,16 +1719,18 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'from a proposal to a work item, and approval does not happen on this surface — do ' +
         'not report proposed work as created. Costs nothing and starts no job. ' +
         'ONE PROPOSAL PER EXISTING TARGET: a plan holds at most one `modify` or ' +
-        '`remove` for any given `workItemId`, so a second one is refused with ' +
-        '`DUPLICATE_PLAN_TARGET` naming the item. The rule is deliberate — a ' +
-        'proposal stores only the NEW values and the review surface reads each ' +
-        'diff’s OLD side live from the target, so two patches on one card would ' +
-        'render as two diffs from the same committed state and the reviewer would ' +
-        'approve something neither of them says. When you need a second change to ' +
-        'a card you have already patched, fold it into that one `modify`; and when ' +
-        'what you are recording is a dependency edge between two work items that ' +
-        'ALREADY exist, use `link_work_items` instead — an edge between ' +
-        'committed items needs no proposal at all.',
+        '`remove` for any given `workItemId`. A second `modify` of a card this plan ' +
+        'already modifies — in a later call or in the same batch — MERGES into that ' +
+        'one proposal: each patch key takes the later value (an explicit `null` still ' +
+        'clears), `blockedByAdd` / `blockedByRemove` are unioned (a ref in both ' +
+        'cancels), the first proposal’s `baseRevision` is kept, and `planItemIds` ' +
+        'returns the SURVIVING proposal’s id at that position. A `modify` and a ' +
+        '`remove` of one card, or two `remove`s, are still refused with ' +
+        '`DUPLICATE_PLAN_TARGET` naming the item — withdraw the first ' +
+        '(`withdraw_plan_proposal`) to change your mind. And when what you are ' +
+        'recording is a dependency edge between two work items that ALREADY exist, ' +
+        'use `link_work_items` instead — an edge between committed items needs no ' +
+        'proposal at all.',
       inputSchema: addPlanItemsInputSchema,
     },
     async (args, extra) => {

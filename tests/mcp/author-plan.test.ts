@@ -1007,7 +1007,29 @@ describe('the four registries and the gates', () => {
 // boundary is where the defect lived. A typed error the tool layer forgets to map
 // reaches an agent exactly as the untyped one did.
 describe('add_plan_items — one proposal per existing target (MOTIR-3194)', () => {
-  it('refuses a second `modify` in the AGENT’s words — the item, the rule, and both ways out', async () => {
+  it('MERGES a second `modify` and returns the surviving id (AMENDMENT 18 §2, MOTIR-6051)', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'The survivor' });
+
+    const first = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { title: 'Re-scoped' } }],
+    });
+    const second = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { priority: 'high' } }],
+    });
+    expect(second.isError, text(second)).toBeFalsy();
+    expect(ids(second)).toEqual(ids(first));
+    const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: ids(first)[0]! } });
+    expect(row.patch).toEqual({ title: 'Re-scoped', priority: 'high' });
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(1);
+    await client.close();
+  });
+
+  it('refuses a `remove` of a card the plan modifies, in the AGENT’s words — the item, the rule, and the ways out', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
@@ -1021,7 +1043,7 @@ describe('add_plan_items — one proposal per existing target (MOTIR-3194)', () 
 
     const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
-      proposals: [{ op: 'modify', workItemId: target.id, patch: { blockedByAdd: [target.id] } }],
+      proposals: [{ op: 'remove', workItemId: target.id }],
     });
 
     expect(refused.isError).toBe(true);
