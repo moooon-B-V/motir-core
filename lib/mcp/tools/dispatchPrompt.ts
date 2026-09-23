@@ -9,10 +9,12 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
+import { describeBodyAboveFieldMove } from '@/lib/workItems/bodyAboveFieldMove';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
@@ -97,6 +99,7 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
   const subsumed = dto.advisories.filter(isSubsumptionAdvisory);
   const oversized = dto.advisories.filter(isSizingAdvisory);
   const selfBlocking = dto.advisories.filter(isSelfBlockingDesignAdvisory);
+  const bodyAbove = dto.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = dto.advisories.filter(isBlockerCountAdvisory);
   const lines: string[] = [];
   for (const a of blockerCounts) {
@@ -147,6 +150,13 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
         `${d.surfaceCriterionIndex} builds the surface that drawing decides. Design before code, ` +
         'within every story: lift the design criterion onto its own card rather than drawing and ' +
         'building in one pull request.',
+    );
+  }
+  // THE BODY-EDIT-ABOVE-FIELD-MOVE finding (MOTIR-5399).
+  for (const b of bodyAbove) {
+    lines.push(
+      `Advisory (NOT a blocker — ${dto.key} still dispatches): ${describeBodyAboveFieldMove(b)}. ` +
+        'Re-read the body against those fields before building on it.',
     );
   }
   // The SUBSUMPTION advisory (MOTIR-2903).

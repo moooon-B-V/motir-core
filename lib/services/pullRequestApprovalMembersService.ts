@@ -8,6 +8,7 @@ import { deliveryMemberVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { unlandedOutcomeOutranksApproval } from '@/lib/approvalGates/gateSet';
 import { classOfMergeRefusal, classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
 import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import type { PullRequestApprovalMemberDTO, PullRequestQueueExitDTO } from '@/lib/dto/approvalGate';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -74,11 +75,17 @@ async function approvedMembers(
     );
     const pr = row?.pullRequest;
     const outcome = pr?.mergeOutcomeRef ?? null;
-    const exit = pr ? (exits.get(pr.id) ?? null) : null;
+    // ⚠️ AN EXIT IS ABOUT THE COMMITS IT LEFT AT (Bug MOTIR-6116). The repository hands
+    // back the pull request's LATEST exit whatever its head, so an exit recorded before a
+    // push — the conflict a fix push resolved — would otherwise be read onto the fresh
+    // gate raised over the new head, and draw *cannot land* over commits that can.
+    const latestExit = pr ? (exits.get(pr.id) ?? null) : null;
+    const exit = latestExit !== null && latestExit.headSha === member.headSha ? latestExit : null;
+    const headNow = pr ? liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha : undefined;
     // An exit nobody has put back is Queue again's to offer, not Retry's (MOTIR-5634) — and
-    // only while the pull request is still at the head the approval named, which is what
-    // makes reusing the approval honest.
-    const standingExit = exit !== null && exit.requeuedAt === null;
+    // only while the pull request is still at the head it left at, which is what makes
+    // reusing the approval honest. The rule is `deliverySet.ts`'s, as every reader's is.
+    const standingExit = queueExitStandsAtHead(exit, headNow);
     // ⚠️ NO VERB ACTS ON A SPENT APPROVAL (MOTIR-5802; `approval-gates.md` §4 FOURTH
     // AMENDMENT, points 1 and 4). An un-landed outcome standing at the approved head —
     // of ANY disposition, NEUTRAL included — means the yes that sent these commits has
@@ -91,7 +98,6 @@ async function approvedMembers(
     // standing has, one source over (MOTIR-5833).
     const refusalRow = pr ? (refusals.get(pr.id) ?? null) : null;
     const refusalClass = refusalRow ? classOfMergeRefusal(refusalRow.code) : null;
-    const headNow = pr ? liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha : undefined;
     const standingRefusal =
       refusalRow !== null &&
       refusalClass !== null &&
@@ -102,7 +108,7 @@ async function approvedMembers(
     const spentOnThisOutcome =
       !awaitingReask &&
       ((standingExit &&
-        unlandedOutcomeOutranksApproval({ at: exit.exitedAt }, approval.decidedAt ?? null)) ||
+        unlandedOutcomeOutranksApproval({ at: exit!.exitedAt }, approval.decidedAt ?? null)) ||
         (standingRefusal &&
           unlandedOutcomeOutranksApproval(
             { at: refusalRow.refusedAt },
@@ -112,7 +118,7 @@ async function approvedMembers(
     // the same commits cannot land however many times anyone says yes, so a button that
     // acts on them is a button guaranteed to fail. `motir fix` is the way forward.
     const cantLand =
-      (standingExit && classOfQueueExit(exit.rawReason) === 'cant_land') ||
+      (standingExit && classOfQueueExit(exit!.rawReason) === 'cant_land') ||
       (standingRefusal && refusalClass === 'cant_land');
     // A member the row's verb can act on is one carrying a standing outcome at the head
     // the gate names — an exit put back by *Queue again*, a refusal retried by *Retry

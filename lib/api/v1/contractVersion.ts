@@ -531,7 +531,21 @@
  *   number of `blocked_by` edges. Additive: one new member of an advisory union
  *   whose severity is explicitly open-ended; no existing shape changes.
  *
- * - `1.37.0` — MOTIR-6098 adds a leaf's `difficulty` (`low` / `medium` / `high`,
+ * - `1.37.0` — MOTIR-5399 adds a fourth `shape` variant to the dispatch prompt's
+ *   `advisories[]`: `body-edit-above-field-move`, carrying `bodyEdit` and
+ *   `fieldMove` (`{ at, fields }` each) — the card's newest body write sitting
+ *   directly above a write that moved a field the body describes. A prompt to
+ *   re-read, never a gate.
+ *
+ *   Additive: a new member of a union whose `severity` is documented open-ended
+ *   (§8's allowed list); no declared field changes type or meaning. Read-only, on
+ *   the same `work_item:edit` claim path; the grant is NOT widened.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.36.0`
+ *   at `412bc953b` (MOTIR-5428 took `1.36.0`), so this claims `1.37.0`. If a sibling has taken it since,
+ *   RENUMBER this entry — it names the ADVISORY VARIANT.
+ *
+ * - `1.38.0` — MOTIR-6098 adds a leaf's `difficulty` (`low` / `medium` / `high`,
  *   nullable) to the work-item resource every single-item read and write returns,
  *   and to the `createWorkItem` / `updateWorkItem` request bodies (`null` on a
  *   PATCH clears it), plus `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422) when a body
@@ -542,8 +556,9 @@
  *   condition. No declared field changes meaning. Gated on the same keys.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.36.0` at `412bc953b` (MOTIR-5428 took `1.36.0` while this branch was
- *   open — renumbered from it), so this claims `1.37.0`. If a sibling has taken
- *   it since, RENUMBER this entry — it names the FIELD.
+ *   was `1.37.0` on `origin/main` (MOTIR-5428 took `1.36.0` and MOTIR-5399 took
+ *   `1.37.0` while this branch was open — renumbered twice), so this claims
+ *   `1.38.0`. If a sibling has taken it since, RENUMBER this entry — it names
+ *   the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.37.0';
+export const V1_CONTRACT_VERSION = '1.38.0';

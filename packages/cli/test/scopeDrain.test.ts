@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   drainScope,
-  readHeldDecisions,
+  readGateReleased,
+  readHeldGates,
   readScopeEdges,
   type ScopeDrainInput,
 } from '../src/commands/scopeDrain.js';
@@ -99,6 +100,12 @@ interface Fake {
   links: string[];
   /** Every status move the drain asked for, `<KEY>:<status>` (MOTIR-4969). */
   transitions: string[];
+  /**
+   * Every read that can be a GATE read, in order — `get:<KEY>` and
+   * `designs:<dependent KEY>` — with a `dispatch:<KEY>` marker at each prompt read,
+   * so a test can tell the pipeline's own reads from the drain's (MOTIR-6117).
+   */
+  reads: string[];
   stderr: string;
   root: string;
 }
@@ -111,6 +118,14 @@ let statusOf: Map<string, string>;
 let claimRefuses: Set<string>;
 /** A `type` a test pins for one key's `get_work_item` read; every other key reads `code`. */
 let typeOf: Map<string, string>;
+/** The design VERDICT per design-card key; every other design reads `not_approved` (MOTIR-6117). */
+let verdictOf: Map<string, string>;
+/**
+ * A person approving a gate WHILE the drain runs (MOTIR-6117): dispatching the
+ * key approves the gate it maps to — a decision's status turns `approved`, a
+ * design's verdict turns `approved`.
+ */
+let approveOnDispatch: Map<string, string>;
 /** Per-key repository SET, for the multi-repository card (MOTIR-3135). */
 let repoSets: Record<string, NonNullable<DispatchPrompt['targetRepos']>>;
 /** Per-key primary repository, so a card can be routed at a missing checkout. */
@@ -146,6 +161,12 @@ function client(): MotirClient {
       opts: { sessionBranch?: string | null } = {},
     ): Promise<DispatchPrompt> => {
       fake.dispatched.push(key);
+      fake.reads.push(`dispatch:${key}`);
+      const approves = approveOnDispatch.get(key);
+      if (approves) {
+        statusOf.set(approves, 'approved');
+        verdictOf.set(approves, 'approved');
+      }
       fake.promptSeeds.push(opts.sessionBranch !== undefined);
       const set = repoSets[key];
       return {
@@ -174,14 +195,25 @@ function client(): MotirClient {
       fake.transitions.push(`${args.key}:${args.status}`);
       return {};
     },
-    getWorkItem: async (key: string) => ({
-      item: {
-        identifier: key,
-        status: replanned.has(key) ? 'planning' : (statusOf.get(key) ?? 'in_review'),
-        type: typeOf.get(key) ?? 'code',
-        executor: 'coding_agent',
-      },
-    }),
+    getWorkItem: async (key: string) => {
+      fake.reads.push(`get:${key}`);
+      return {
+        item: {
+          identifier: key,
+          status: replanned.has(key) ? 'planning' : (statusOf.get(key) ?? 'in_review'),
+          type: typeOf.get(key) ?? 'code',
+          executor: 'coding_agent',
+        },
+      };
+    },
+    // One verdict per design this fake knows of — the server answers for every
+    // blocker of the dependent named, and the drain picks its gate out by key.
+    listWorkItemDesigns: async (dependent: string) => {
+      fake.reads.push(`designs:${dependent}`);
+      return {
+        designs: [...verdictOf].map(([designCardKey, verdict]) => ({ designCardKey, verdict })),
+      };
+    },
   };
   return c as unknown as MotirClient;
 }
@@ -207,10 +239,13 @@ async function drive(
     max?: number | null;
     agentResults?: (key: string) => Omit<AgentRunResult, 'model'> & { model?: string | null };
     run?: CommandRunner;
+    /** Wrap the scripted client, to fail one read on purpose. */
+    client?: (c: MotirClient) => MotirClient;
   } = {},
 ): Promise<AutoSummary> {
+  const s = session();
   return drainScope({
-    session: session(),
+    session: over.client ? { ...s, client: over.client(s.client) } : s,
     opts: over.opts ?? {},
     members,
     edges,
@@ -239,6 +274,7 @@ beforeEach(() => {
     promptSeeds: [],
     links: [],
     transitions: [],
+    reads: [],
     stderr: '',
     root,
   };
@@ -246,6 +282,8 @@ beforeEach(() => {
   statusOf = new Map();
   claimRefuses = new Set();
   typeOf = new Map();
+  verdictOf = new Map();
+  approveOnDispatch = new Map();
   repoSets = {};
   repoOf = {};
   vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
@@ -982,7 +1020,234 @@ describe('a decision child never joins the session, and its dependents are held'
   });
 });
 
-describe('readHeldDecisions', () => {
+// ── MOTIR-6117 — a DESIGN child holds its dependents, and a gate approved while
+// the drain runs releases them in the SAME run ────────────────────────────────
+//
+// A landed design used to count as a SATISFIED blocker: its dependents were
+// dispatched into the run-time design gate, whose stop proposes a replacement
+// design nobody asked for. And every hold, decision or design, was read once, so
+// an approval that landed mid-drain released nothing until somebody re-ran.
+
+describe('a design child holds its dependents until its gate is approved', () => {
+  const design = (key: string): DispatchItem => member(key, { type: 'design' });
+
+  it('never dispatches a dependent of a design that landed, and names the design', async () => {
+    const summary = await drive([design('PROD-2'), member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+    expect(fake.dispatched).toEqual(['PROD-2']);
+    expect(summary.skipped).toEqual([
+      { key: 'PROD-3', title: 'Item PROD-3', reason: 'blocked_in_scope', blockedBy: ['PROD-2'] },
+    ]);
+    expect(fake.stderr).toContain('PROD-3: held — waiting on design PROD-2 to be approved.');
+    // Its verdict was re-read through the dependent before the run gave up on it.
+    expect(fake.reads).toContain('designs:PROD-3');
+    expect(fake.stderr).toContain(
+      'PROD-3: still held — design PROD-2 not approved when this run ended. ' +
+        'Its approval, not this run, releases it; run the scope again after it.',
+    );
+  });
+
+  it('a design that FAILED is a blocker that did not land, not one awaiting approval', async () => {
+    await drive(
+      [design('PROD-2'), member('PROD-3')],
+      { 'PROD-3': ['PROD-2'] },
+      {
+        opts: { keepGoing: true },
+        agentResults: (key) =>
+          key === 'PROD-2' ? { exitCode: 1, signal: null } : { exitCode: 0, signal: null },
+      },
+    );
+
+    expect(fake.stderr).toContain('PROD-3: skipped — waiting on PROD-2, which did not land.');
+    expect(fake.reads.filter((r) => r.startsWith('designs:'))).toEqual([]);
+  });
+
+  it('on a RE-RUN, a design an earlier run shipped holds by its VERDICT, not its status', async () => {
+    // `done` with no approved result (withdrawn, never published) is not a design
+    // to build against — the verdict says so, the status does not.
+    typeOf.set('PROD-2', 'design');
+    statusOf.set('PROD-2', 'done');
+    verdictOf.set('PROD-2', 'not_approved');
+
+    const summary = await drive([member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+    expect(fake.dispatched).toEqual([]);
+    expect(summary.skipped[0]).toMatchObject({ key: 'PROD-3', blockedBy: ['PROD-2'] });
+  });
+
+  it('an earlier design whose verdict is approved releases its dependents', async () => {
+    typeOf.set('PROD-2', 'design');
+    statusOf.set('PROD-2', 'done');
+    verdictOf.set('PROD-2', 'approved');
+
+    await drive([member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+    expect(fake.dispatched).toEqual(['PROD-3']);
+  });
+});
+
+describe('a gate approved DURING the drain releases what it held in the same run', () => {
+  it('a DECISION the drain shipped, approved while it worked the rest, releases its dependent', async () => {
+    // PROD-2 lands and holds PROD-3; the person approves PROD-2 while the drain
+    // is on PROD-4, which is independent. The pass ends with PROD-3 held, the
+    // re-read finds PROD-2 approved, and PROD-3 is built before the run ends.
+    approveOnDispatch.set('PROD-4', 'PROD-2');
+
+    const summary = await drive(
+      [member('PROD-2', { type: 'decision' }), member('PROD-3'), member('PROD-4')],
+      { 'PROD-3': ['PROD-2'] },
+    );
+
+    expect(fake.dispatched).toEqual(['PROD-2', 'PROD-4', 'PROD-3']);
+    expect(summary.skipped).toEqual([]);
+    expect(summary.stopReason).toBe('drained');
+    expect(fake.stderr).toContain('decision PROD-2 approved during this run');
+    expect(fake.stderr).not.toContain('run the scope again');
+  });
+
+  it('a DESIGN awaiting at start and approved at the final re-read releases its dependent', async () => {
+    typeOf.set('PROD-2', 'design');
+    verdictOf.set('PROD-2', 'not_approved');
+    approveOnDispatch.set('PROD-4', 'PROD-2');
+
+    const summary = await drive([member('PROD-3'), member('PROD-4')], { 'PROD-3': ['PROD-2'] });
+
+    // Held at start (PROD-3 is first in rank and skipped), released at the end.
+    expect(fake.dispatched).toEqual(['PROD-4', 'PROD-3']);
+    expect(summary.skipped).toEqual([]);
+    // One verdict read to seed the hold, one at the re-read — through the dependent.
+    expect(fake.reads.filter((r) => r.startsWith('designs:'))).toEqual([
+      'designs:PROD-3',
+      'designs:PROD-3',
+    ]);
+  });
+
+  it('a released gate frees the chain behind it too, in blocked_by order', async () => {
+    // PROD-5 waits on PROD-3, which waits on the gate: PROD-5 was skipped as
+    // "did not land", and the extra pass reaches it after PROD-3 lands.
+    approveOnDispatch.set('PROD-4', 'PROD-2');
+
+    await drive(
+      [
+        member('PROD-2', { type: 'decision' }),
+        member('PROD-3'),
+        member('PROD-5'),
+        member('PROD-4'),
+      ],
+      { 'PROD-3': ['PROD-2'], 'PROD-5': ['PROD-3'] },
+    );
+
+    expect(fake.dispatched).toEqual(['PROD-2', 'PROD-4', 'PROD-3', 'PROD-5']);
+  });
+
+  it('TERMINATES: a gate that never approves costs exactly ONE extra verdict read per held gate', async () => {
+    // Two held gates — an in-scope decision and an out-of-scope design — and an
+    // independent card, so the pass has something else to do.
+    typeOf.set('PROD-5', 'design');
+    verdictOf.set('PROD-5', 'not_approved');
+
+    const summary = await drive(
+      [
+        member('PROD-2', { type: 'decision' }),
+        member('PROD-3'),
+        member('PROD-6'),
+        member('PROD-4'),
+      ],
+      { 'PROD-3': ['PROD-2'], 'PROD-6': ['PROD-5'] },
+    );
+
+    expect(fake.dispatched).toEqual(['PROD-2', 'PROD-4']);
+    // PROD-6's only blocker is outside the scope, so it ranks ahead of PROD-3.
+    expect(summary.skipped.map((s) => s.key)).toEqual(['PROD-6', 'PROD-3']);
+    // The design's hold was SEEDED by one verdict read before any dispatch.
+    expect(fake.reads.indexOf('designs:PROD-6')).toBeLessThan(
+      fake.reads.indexOf('dispatch:PROD-2'),
+    );
+    // After the last card's own pipeline reads (PROD-4's), the drain made
+    // exactly ONE read per held gate — then stopped, because nothing released.
+    const lastCard = fake.reads.lastIndexOf('dispatch:PROD-4');
+    const reReads = fake.reads.slice(lastCard + 1).filter((r) => r !== 'get:PROD-4');
+    expect(reReads.sort()).toEqual(['designs:PROD-6', 'get:PROD-2']);
+    // Each still-held card is named once more, with the re-run advice.
+    expect(fake.stderr).toContain('PROD-3: still held — decision PROD-2 not approved');
+    expect(fake.stderr).toContain('PROD-6: still held — design PROD-5 not approved');
+  });
+
+  it('re-passes only what changed: an unchanged hold stays silent, a narrowed one is re-named', async () => {
+    // Two gates; only PROD-2 is approved mid-drain. PROD-3 (on PROD-2 alone) is
+    // released; PROD-6 (on PROD-5 alone) is re-visited and says nothing new;
+    // PROD-7 (on both) is re-visited and now waits on PROD-5 only.
+    typeOf.set('PROD-5', 'decision');
+    approveOnDispatch.set('PROD-4', 'PROD-2');
+
+    const summary = await drive(
+      [
+        member('PROD-2', { type: 'decision' }),
+        member('PROD-3'),
+        member('PROD-6'),
+        member('PROD-7'),
+        member('PROD-4'),
+      ],
+      { 'PROD-3': ['PROD-2'], 'PROD-6': ['PROD-5'], 'PROD-7': ['PROD-2', 'PROD-5'] },
+    );
+
+    expect(fake.dispatched).toEqual(['PROD-2', 'PROD-4', 'PROD-3']);
+    expect(summary.skipped).toEqual([
+      { key: 'PROD-6', title: 'Item PROD-6', reason: 'blocked_in_scope', blockedBy: ['PROD-5'] },
+      { key: 'PROD-7', title: 'Item PROD-7', reason: 'blocked_in_scope', blockedBy: ['PROD-5'] },
+    ]);
+    expect(fake.stderr.match(/PROD-6: held/g)).toHaveLength(1);
+    expect(fake.stderr).toContain(
+      'PROD-7: held — waiting on decision PROD-2, decision PROD-5 to be approved.',
+    );
+    expect(fake.stderr).toContain('PROD-7: held — waiting on decision PROD-5 to be approved.');
+  });
+
+  it('a gate whose RE-read fails stays held, and the failure is named', async () => {
+    typeOf.set('PROD-2', 'design');
+    let reads = 0;
+
+    const summary = await drive(
+      [member('PROD-3'), member('PROD-4')],
+      { 'PROD-3': ['PROD-2'] },
+      {
+        // The seed read answers; the re-read at the end of the pass does not.
+        client: (c) =>
+          ({
+            ...c,
+            listWorkItemDesigns: async (key: string) => {
+              if (++reads > 1) throw new Error('verdict read down');
+              return c.listWorkItemDesigns(key);
+            },
+          }) as MotirClient,
+      },
+    );
+
+    expect(fake.dispatched).toEqual(['PROD-4']);
+    expect(summary.skipped[0]).toMatchObject({ key: 'PROD-3', blockedBy: ['PROD-2'] });
+    expect(fake.stderr).toContain("Could not re-read design PROD-2's gate; it stays held");
+  });
+
+  it('a stopped run re-reads nothing, but still names what it left held', async () => {
+    // PROD-3 is held on an earlier run's decision; PROD-4 lands; --max stops the
+    // run at PROD-5, before the pass completes — so there is no re-read.
+    typeOf.set('PROD-2', 'decision');
+
+    const summary = await drive(
+      [member('PROD-3'), member('PROD-4'), member('PROD-5')],
+      { 'PROD-3': ['PROD-2'] },
+      { max: 1 },
+    );
+
+    expect(summary.stopReason).toBe('max');
+    expect(fake.dispatched).toEqual(['PROD-4']);
+    // The seed read, and nothing more.
+    expect(fake.reads.filter((r) => r === 'get:PROD-2')).toHaveLength(1);
+    expect(fake.stderr).toContain('PROD-3: still held — decision PROD-2 not approved');
+  });
+});
+
+describe('readHeldGates', () => {
   it('reads each NON-member blocker once, and a failed read is named, not held', async () => {
     const reads: string[] = [];
     const client = {
@@ -1000,14 +1265,14 @@ describe('readHeldDecisions', () => {
       },
     } as unknown as MotirClient;
 
-    const held = await readHeldDecisions(client, [member('PROD-3'), member('PROD-4')], {
+    const held = await readHeldGates(client, [member('PROD-3'), member('PROD-4')], {
       'PROD-3': ['PROD-2', 'PROD-4', 'PROD-9'],
       'PROD-4': ['PROD-2'],
     });
 
     // PROD-4 is a member — the loop itself tracks it — so it is never read.
     expect(reads).toEqual(['PROD-2', 'PROD-9']);
-    expect([...held]).toEqual(['PROD-2']);
+    expect([...held]).toEqual([['PROD-2', 'decision']]);
     expect(fake.stderr).toContain('Could not read PROD-9');
   });
 
@@ -1018,8 +1283,61 @@ describe('readHeldDecisions', () => {
       }),
     } as unknown as MotirClient;
 
-    const held = await readHeldDecisions(client, [member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+    const held = await readHeldGates(client, [member('PROD-3')], { 'PROD-3': ['PROD-2'] });
 
     expect(held.size).toBe(0);
+  });
+
+  it('a design whose VERDICT cannot be read HOLDS — it is known to be a design, only its approval is not', async () => {
+    const client = {
+      getWorkItem: async (key: string) => ({
+        item: { identifier: key, status: 'in_review', type: 'design', executor: 'human' },
+      }),
+      listWorkItemDesigns: async () => {
+        // Not an Error: a thrown value of any shape is named, and still holds.
+        throw 'boom';
+      },
+    } as unknown as MotirClient;
+
+    const held = await readHeldGates(client, [member('PROD-3')], { 'PROD-3': ['PROD-2'] });
+
+    expect([...held]).toEqual([['PROD-2', 'design']]);
+    expect(fake.stderr).toContain("Could not read design PROD-2's verdict");
+  });
+});
+
+describe('readGateReleased', () => {
+  it('reads a design through its DEPENDENT, and only its own verdict counts', async () => {
+    const asked: string[] = [];
+    const client = {
+      listWorkItemDesigns: async (key: string) => {
+        asked.push(key);
+        return {
+          designs: [
+            { designCardKey: 'PROD-7', verdict: 'approved' },
+            { designCardKey: 'PROD-2', verdict: 'not_approved' },
+          ],
+        };
+      },
+    } as unknown as MotirClient;
+
+    expect(await readGateReleased(client, 'PROD-2', 'design', 'PROD-3')).toBe(false);
+    expect(await readGateReleased(client, 'PROD-7', 'design', 'PROD-3')).toBe(true);
+    expect(asked).toEqual(['PROD-3', 'PROD-3']);
+  });
+
+  it.each([
+    ['approved', true],
+    ['done', true],
+    ['in_review', false],
+    ['cancelled', false],
+  ])('a decision at %s is released: %s', async (status, released) => {
+    const client = {
+      getWorkItem: async (key: string) => ({
+        item: { identifier: key, status, type: 'decision', executor: 'coding_agent' },
+      }),
+    } as unknown as MotirClient;
+
+    expect(await readGateReleased(client, 'PROD-2', 'decision', 'PROD-3')).toBe(released);
   });
 });

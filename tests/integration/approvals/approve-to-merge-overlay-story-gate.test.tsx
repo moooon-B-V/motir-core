@@ -544,3 +544,57 @@ describe('SEAM 5 · an EJECTED member reads the same in the overlay (MOTIR-5635)
     expect(within(web).queryByText(pra.outcome.leftQueue)).toBeNull();
   });
 });
+
+// A CONFLICT FIXED BY A PUSH (Bug MOTIR-6116). The queue ejected `web` with
+// `MERGE_CONFLICT` at an EARLIER head; a push fixed it, CI went green, and a fresh gate
+// was raised over the NEW head. The exit repository still hands back that older exit, and
+// the To-approve row opens THIS overlay — so it is where the stale verdict was seen.
+describe('SEAM 6 · a conflict a push fixed does not follow the fresh gate (MOTIR-6116)', () => {
+  const pra = en.approvalGate.pullRequestApproval;
+
+  async function openWithConflictAt(headSha: string) {
+    const story = await twoRepoStory();
+    await rawGate(story, 'pull_request_approval', story.id, setVersion);
+    const web = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
+    await adminDb.githubPullRequestQueueExit.create({
+      data: {
+        pullRequestId: web.id,
+        deliveryId: `guid-6116-${headSha.slice(0, 7)}`,
+        rawReason: 'MERGE_CONFLICT',
+        disposition: 'failure',
+        headSha,
+        exitedAt: new Date(),
+      },
+    });
+    signIn(owner());
+    nav.go(
+      `/workbench?tab=approvals&approval=${story.identifier}&approvalKind=pull_request_approval`,
+    );
+    renderWithIntl(<ApprovalOverlay />);
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: `Pull requests for ${story.identifier}` },
+      SLOW,
+    );
+    return { dialog, row: within(dialog).getByText('Change in web').closest('li')! };
+  }
+
+  it('an exit at an OLDER head: no cannot-land, no conflict line, and the gate’s own Approve and merge', async () => {
+    const { dialog, row } = await openWithConflictAt('2f1efb483296aaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+
+    expect(within(row).queryByText(pra.outcome.cannotLand)).toBeNull();
+    expect(within(dialog).queryByText(new RegExp(pra.exit.reason.MERGE_CONFLICT))).toBeNull();
+    // Not framed as a re-ask after the queue: nothing about THESE commits left it.
+    expect(within(dialog).queryByText(/Asked again after the merge queue/)).toBeNull();
+    expect(within(dialog).getAllByRole('button', { name: pra.verb.approveAndMerge })).toHaveLength(
+      1,
+    );
+  });
+
+  it('CONTROL — the same exit AT the gate’s head still draws the row as cannot-land', async () => {
+    const { dialog, row } = await openWithConflictAt(HEAD_WEB);
+
+    expect(within(row).getByText(pra.outcome.cannotLand)).toBeTruthy();
+    expect(within(dialog).getByText(new RegExp(pra.exit.reason.MERGE_CONFLICT))).toBeTruthy();
+  });
+});

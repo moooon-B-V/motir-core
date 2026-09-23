@@ -11,10 +11,15 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
+import {
+  BODY_ABOVE_FIELD_MOVE_REMEDY,
+  describeBodyAboveFieldMove,
+} from '@/lib/workItems/bodyAboveFieldMove';
 import type { WorkItemValidityDto } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
@@ -87,6 +92,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const subsumed = result.advisories.filter(isSubsumptionAdvisory);
   const oversized = result.advisories.filter(isSizingAdvisory);
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
+  const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
   const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
@@ -199,6 +205,18 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         'the design subtask a UI card must be linked to IS this card — which is why a check says ' +
         'it rather than a sentence. A card with CHILDREN is never reported: its design child can ' +
         'be reviewed before its code children run, which is the shape this asks for.',
+    );
+  }
+  // The BODY-EDIT-ABOVE-FIELD-MOVE member of the shape family (MOTIR-5399) — the
+  // one read off a card's HISTORY. MOTIR-4513 was `valid: true` here with its body
+  // describing the type one write had just moved it off (planning bug MOTIR-4577).
+  if (bodyAbove.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards' bodies were last written AFTER their fields ` +
+        'last moved, by a write that touched none of those fields:',
+      ...bodyAbove.map((a) => `  ${describeBodyAboveFieldMove(a)} (${a.severity})`),
+      BODY_ABOVE_FIELD_MOVE_REMEDY,
     );
   }
   // The SUBSUMPTION family (MOTIR-2903) — and this surface is the one whose
@@ -399,6 +417,12 @@ export function registerValidateWorkItem(
         'another builds the rendered surface that drawing decides (with BOTH 1-based indices, ' +
         '`designCriterionIndex` and `surfaceCriterionIndex`, because the remedy LIFTS the design ' +
         'criterion onto its own card rather than cutting the list at a line), or ' +
+        "`body-edit-above-field-move` when the card's newest body write moved none of the fields a " +
+        'body describes (`title`, `type`, `executor`, `targetRepo`/`targetRepos`, `kind`, ' +
+        '`storyPoints`, `estimateMinutes`) while the write directly beneath it did (with ' +
+        '`bodyEdit` and `fieldMove`, each `{ at, fields }`, and no criterion index — a prompt to ' +
+        're-read the body against the move, since a body rewritten to match it leaves the same ' +
+        'trail), or ' +
         "`likely-blocker-count-mismatch` when an explicit counted claim about the card's own " +
         'blocker siblings disagrees with its current blocked_by edge count (with the exact ' +
         '`claim`, `claimedCount`, and `blockerCount`). A `coverage` ' +
