@@ -176,7 +176,13 @@ import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import { planGateService } from '@/lib/services/planGateService';
 import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
-import type { DecidePlanInput } from '@/lib/services/planDecisionService';
+import {
+  asPlanStatusRefusal,
+  decideThroughDoor,
+  planAndGate,
+  refuseUngated,
+  type DecidePlanInput,
+} from '@/lib/services/planGateDoor';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
@@ -5785,17 +5791,18 @@ async function decideAskedPlanWithoutAReader(
   ctx: ServiceContext,
   opts: { provisionalProjectName?: string | null },
 ): Promise<PlanWithItemsDto | PlanDto> {
-  // Lazy: `planDecisionService` imports this module (the handler's cycle, broken the
-  // same way).
-  const { planDecisionService } = await import('@/lib/services/planDecisionService');
+  // Through `planGateDoor`, NOT `planDecisionService`: that service imports this module,
+  // and reaching back into it needed a lazy `await import(...)` the Playwright seed
+  // runtime cannot load. The door steps are the same ones `planDecisionService` composes.
   const input: DecidePlanInput = { planId, stamp: DECIDED_WITHOUT_A_READER, source: 'api' };
   try {
-    return decision === 'approve'
-      ? await planDecisionService.approve(input, ctx, opts)
-      : await planDecisionService.decline(input, ctx);
+    const { plan, gate } = await planAndGate(planId, ctx);
+    if (!gate) refuseUngated(plan, decision);
+    await decideThroughDoor(gate, decision, input, ctx, opts);
   } catch (err) {
-    throw await planDecisionService.asPlanStatusRefusal(err, planId, ctx);
+    throw await asPlanStatusRefusal(err, planId, ctx);
   }
+  return plansService.getPlan(planId, ctx);
 }
 
 /** Approve's PRE-TRANSACTION phase: the plan, the permission, the first gate pass and

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EarlierSessionDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
-import { announceGateDecided } from '@/lib/approvals/decidedGates';
+import { announceGateStateDecided } from '@/lib/approvals/decidedGates';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import {
   findResumableSession,
@@ -440,42 +440,17 @@ function resolveAnchor(
  * refresh (`lib/approvals/decidedGates.ts`). Only a plan the reader was shown AS a
  * question — an `awaiting` gate on the review in hand — announces anything.
  *
- * The row reads only the STATE; the gate's audit columns are the server's, and this
- * surface never received them, so they travel as unknown (null) rather than guessed.
+ * The row reads only the STATE, and the state is all this surface announces: the gate's
+ * audit columns are the server's and never reached it, so no gate row is built here
+ * (`announceGateStateDecided`) — `approval_gate.outcome_ref` keeps its one writer.
  */
 function announcePlanGateDecided(
   review: PlanReviewDto | null,
-  planId: string,
   state: 'approved' | 'declined',
 ): void {
   const gate = review?.gate;
   if (!gate || gate.state !== 'awaiting') return;
-  const now = new Date().toISOString();
-  announceGateDecided({
-    gate: {
-      id: gate.id,
-      workItemId: null,
-      kind: 'plan_approval',
-      subjectId: planId,
-      state,
-      decidedById: null,
-      decidedAt: now,
-      noteMd: null,
-      supersededCause: null,
-      subjectVersion: null,
-      decidedByLabel: null,
-      routedToId: null,
-      decidedUnderAuthority: null,
-      decisionSource: null,
-      outcomeRef: null,
-      chosenOption: null,
-      confirmedRecord: null,
-      replanOwed: null,
-      createdAt: now,
-      updatedAt: now,
-    },
-    filesKept: null,
-  });
+  announceGateStateDecided(gate.id, state);
 }
 
 export function usePlanChangeConversation({
@@ -1277,7 +1252,7 @@ export function usePlanChangeConversation({
       // THE ROW SETTLES IN PLACE (MOTIR-6037; design Part XX §20.2, § 20's rule). The
       // To-approve list under this overlay is a client island `router.refresh()` cannot
       // reach, so an asked plan's decision travels through the decided-gates store.
-      announcePlanGateDecided(review, planId, 'approved');
+      announcePlanGateDecided(review, 'approved');
       approvedCbRef.current?.(approved);
     } catch (err) {
       if (!mountedRef.current) return;
@@ -1304,7 +1279,7 @@ export function usePlanChangeConversation({
             ? declinePlanRequest(planId, stamp, noteMd)
             : declinePlanRequest(planId, stamp));
         }
-        if (planId) announcePlanGateDecided(review, planId, 'declined');
+        if (planId) announcePlanGateDecided(review, 'declined');
         if (!mountedRef.current) return;
         setState((s) => ({
           ...s,

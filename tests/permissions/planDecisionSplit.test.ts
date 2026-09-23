@@ -329,13 +329,21 @@ describe('the gates in plansService', () => {
         `planDecisionService.${verb} does not read through planAndGate`,
       ).toContain('planAndGate(');
     }
+    // …and so does the dispatchers' own asked path, through the same read.
+    expect(
+      functionBody(SOURCE, 'decideAskedPlanWithoutAReader'),
+      'decideAskedPlanWithoutAReader does not read through planAndGate',
+    ).toContain('planAndGate(');
+    // `planAndGate` lives in `planGateDoor`, which both services import (the cycle
+    // between them is gone rather than deferred to a lazy import).
+    const DOOR_SOURCE = readFileSync(
+      join(ROOT, 'lib', 'services', 'planGateDoor.ts'),
+      'utf8',
+    ).replace(/\nexport async function /g, '\nasync function ');
     const asked: Array<[string, string]> = [
       [
-        'planDecisionService.planAndGate',
-        functionBody(DECISION_SOURCE, 'planAndGate').replace(
-          'found.plan.projectId',
-          'plan.projectId',
-        ),
+        'planGateDoor.planAndGate',
+        functionBody(DOOR_SOURCE, 'planAndGate').replace('found.plan.projectId', 'plan.projectId'),
       ],
     ];
     for (const [name, body] of [...unasked, ...asked]) {

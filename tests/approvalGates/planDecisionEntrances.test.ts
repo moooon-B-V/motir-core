@@ -118,7 +118,6 @@ describe('THE INVENTORY — while a plan gate is awaiting, only the door writes 
       'app/api/plans/[id]/decline/route.ts',
       'app/api/v1/work-items/[key]/plan-approval/route.ts',
       'lib/services/planDecisionService.ts',
-      'lib/services/plansService.ts',
     ]);
   });
 

@@ -53,6 +53,7 @@ import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { BrandMark } from '@/components/brand/BrandMark';
+import { workbenchTabHref } from '@/lib/workbench/tab';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
@@ -464,7 +465,7 @@ export function PlanChangeRail({
             {tp.rich(rewritingPlan ? 'handoff.rewriting' : 'handoff.writing', {
               link: (chunks) => (
                 <Link
-                  href="/workbench?tab=approvals"
+                  href={workbenchTabHref('approvals')}
                   className="font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                 >
                   {chunks}

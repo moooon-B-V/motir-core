@@ -366,7 +366,9 @@ describe('GUARD: card-anchored plan resolution', () => {
       [{ op: 'add', proposedFields: { title: 'A proposed task', kind: 'task' } }],
       caller.ctx,
     );
-    await adminDb.plan.update({ where: { id: plannedId! }, data: { status: 'planned' } });
+    // Closed the way the engine closes it — `markPlanned` raises the plan's gate, and a
+    // `planned` plan nobody was asked about is not decidable (MOTIR-6038, §11.8).
+    await plansService.markPlanned(plannedId!, caller.ctx);
 
     const res = await v1Approve(
       new Request(`http://localhost:3000/api/v1/work-items/${item.identifier}/plan-approval`, {

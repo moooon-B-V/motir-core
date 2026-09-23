@@ -177,6 +177,7 @@ const { GET: anchorRoute } = await import('@/app/api/work-items/planning-anchor/
 // The SHIPPED approve client — what the close-with-pending guard's *Confirm &
 // add* reaches through `usePlanChangeConversation.approve` (MOTIR-4731).
 const { approvePlanRequest } = await import('@/lib/planning/planReviewClient');
+const { planReviewService } = await import('@/lib/services/planReviewService');
 
 const BASE = 'http://localhost:3000';
 
@@ -685,8 +686,13 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     await plansService.markPlanned(planId, svcCtx());
   }
 
-  const approvePlan = (planId: string) =>
-    approvePlanRoute(post(`/api/plans/${planId}/approve`), {
+  /** The `stamp` the review read shows its reader — what every press hands back
+   *  (MOTIR-6038; the approve route refuses a press without it). */
+  const shownStamp = async (planId: string) =>
+    (await planReviewService.getPlanReview(planId, svcCtx())).gate?.stamp ?? null;
+
+  const approvePlan = async (planId: string) =>
+    approvePlanRoute(post(`/api/plans/${planId}/approve`, { stamp: await shownStamp(planId) }), {
       params: Promise.resolve({ id: planId }),
     });
 
@@ -723,13 +729,22 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
       const url = String(input);
       seen.push({ url, method: init?.method });
       const id = url.split('/api/plans/')[1]!.split('/')[0]!;
-      return approvePlanRoute(new Request(`${BASE}${url}`, { method: init?.method ?? 'GET' }), {
-        params: Promise.resolve({ id: decodeURIComponent(id) }),
-      });
+      // The client's own body travels with it — the stamp it hands back.
+      return approvePlanRoute(
+        new Request(`${BASE}${url}`, {
+          method: init?.method ?? 'GET',
+          headers: init?.headers,
+          body: init?.body,
+        }),
+        { params: Promise.resolve({ id: decodeURIComponent(id) }) },
+      );
     });
 
+    // What the conversation holds when the guard's Confirm fires: the review it read,
+    // whose gate's stamp `approve` hands back (`usePlanChangeConversation`).
+    const stamp = await shownStamp(planId);
     try {
-      const approved = await approvePlanRequest(planId);
+      const approved = await approvePlanRequest(planId, stamp);
       expect(approved.id).toBe(planId);
     } finally {
       vi.unstubAllGlobals();

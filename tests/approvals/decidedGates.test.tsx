@@ -4,6 +4,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import {
   announceGateDecided,
+  announceGateStateDecided,
   useDecidedGate,
   useDecidedGateState,
 } from '@/lib/approvals/decidedGates';
@@ -121,5 +122,25 @@ describe('the decided-gate signal carries the WHOLE decision (MOTIR-5570)', () =
   it('renders null on the server for the whole decision too', () => {
     act(() => announceGateDecided(decision('g-whole-server', 'approved')));
     expect(renderToString(<WholeProbe gateId="g-whole-server" />)).toContain('none');
+  });
+});
+
+describe('a STATE-only announcement (MOTIR-6037 — a plan decided from the planning rail)', () => {
+  it('settles the row that reads the state, and invents no decided row for the whole-decision readers', () => {
+    render(
+      <>
+        <Probe gateId="g-plan" />
+        <WholeProbe gateId="g-plan" />
+      </>,
+    );
+    act(() => announceGateStateDecided('g-plan', 'declined'));
+    expect(screen.getByTestId('g-plan').textContent).toBe('declined');
+    expect(screen.getByTestId('whole-g-plan').textContent).toBe('none');
+  });
+
+  it('does not treat `awaiting` as a decision either', () => {
+    render(<Probe gateId="g-plan-await" />);
+    act(() => announceGateStateDecided('g-plan-await', 'awaiting'));
+    expect(screen.getByTestId('g-plan-await').textContent).toBe('none');
   });
 });

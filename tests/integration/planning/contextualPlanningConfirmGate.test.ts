@@ -101,8 +101,13 @@ const { POST: declinePlanRoute } = await import('@/app/api/plans/[id]/decline/ro
 const { PATCH: patchProposalRoute } = await import('@/app/api/plans/[id]/items/[itemId]/route');
 const { readPendingProposal, summarizePlanApproval, planDecisionErrorCode } =
   await import('@/lib/planning/planReview');
-const { approvePlanRequest, declinePlanRequest, updateProposalRequest, PlanRequestError } =
-  await import('@/lib/planning/planReviewClient');
+const {
+  approvePlanRequest,
+  declinePlanRequest,
+  fetchPlanReview,
+  updateProposalRequest,
+  PlanRequestError,
+} = await import('@/lib/planning/planReviewClient');
 const { aiPlanEditsService } = await import('@/lib/services/aiPlanEditsService');
 
 const BASE = 'http://localhost:3000';
@@ -127,16 +132,30 @@ function installRailFetch(): void {
       const approve = /^\/api\/plans\/([^/]+)\/approve$/.exec(path);
       if (approve) {
         const id = decodeURIComponent(approve[1]!);
-        return approvePlanRoute(new Request(`${BASE}${path}`, { method: 'POST' }), {
-          params: Promise.resolve({ id }),
-        });
+        // The press body travels as the client sent it — the `stamp` the reader was
+        // shown (MOTIR-6038), which the route refuses a press without.
+        return approvePlanRoute(
+          new Request(`${BASE}${path}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: (init?.body as string | undefined) ?? '{}',
+          }),
+          { params: Promise.resolve({ id }) },
+        );
       }
       const decline = /^\/api\/plans\/([^/]+)\/decline$/.exec(path);
       if (decline) {
         const id = decodeURIComponent(decline[1]!);
-        return declinePlanRoute(new Request(`${BASE}${path}`, { method: 'POST' }), {
-          params: Promise.resolve({ id }),
-        });
+        // The press body travels as the client sent it — the `stamp` the reader was
+        // shown (MOTIR-6038), which the route refuses a press without.
+        return declinePlanRoute(
+          new Request(`${BASE}${path}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: (init?.body as string | undefined) ?? '{}',
+          }),
+          { params: Promise.resolve({ id }) },
+        );
       }
       const item = /^\/api\/plans\/([^/]+)\/items\/([^/]+)$/.exec(path);
       if (item) {
@@ -190,6 +209,12 @@ afterAll(async () => {
 });
 
 const svcCtx = () => ({ userId: fx.ownerId, workspaceId: fx.workspaceId });
+
+/** What the rail does before a press: read the review, and hand back the `stamp` its
+ *  gate showed (MOTIR-6038). Read through the SHIPPED client over the real route. */
+async function shownStamp(planId: string): Promise<string | null> {
+  return (await fetchPlanReview(planId)).gate?.stamp ?? null;
+}
 
 /** Seed through the SERVICE, not the raw fixture helper: approve appends
  *  siblings with `generateKeyBetween`, which rejects the fixture's zero-padded
@@ -437,7 +462,7 @@ describe('seam · contextual submit → the run’s proposals → the rail’s r
     expect(workItemCount).toBe(1);
 
     // 4. The rail's CONFIRM — the same client the four entrances share.
-    const approved = await approvePlanRequest(planId);
+    const approved = await approvePlanRequest(planId, await shownStamp(planId));
     expect(approved.status).toBe('approved');
 
     // 5. What the rail says back, through its real summarizer…
@@ -495,7 +520,7 @@ describe('seam · contextual submit → the run’s proposals → the rail’s r
     const pending = await readPendingProposal(resumedPlanId!);
     expect(pending!.items.map((i) => i.title)).toEqual(['Indexing']);
 
-    await approvePlanRequest(resumedPlanId!);
+    await approvePlanRequest(resumedPlanId!, await shownStamp(resumedPlanId!));
     const workItemCount = await adminDb.workItem.count({ where: { title: 'Indexing' } });
     expect(workItemCount).toBe(1);
   });
@@ -574,7 +599,7 @@ describe('no approve ⇒ no write — a completed run proposes everything and wr
     );
 
     // …and it is the APPROVE, not the run, that writes.
-    await approvePlanRequest(planId);
+    await approvePlanRequest(planId, await shownStamp(planId));
     expect(await treeSnapshot()).not.toEqual(duringTheRun);
   });
 
@@ -591,7 +616,7 @@ describe('no approve ⇒ no write — a completed run proposes everything and wr
     // Through the rail's REAL Discard, not the service behind it — a run the user
     // rejected must end DECIDED, not orphaned at `planned` where the auto-plan
     // pause (MOTIR-1740) would keep reading it as awaiting review.
-    const declined = await declinePlanRequest(planId);
+    const declined = await declinePlanRequest(planId, await shownStamp(planId));
     expect(declined.status).toBe('declined');
 
     // … and gives it back on the decision. So the REJECT path is byte-identical
@@ -620,7 +645,9 @@ describe('no approve ⇒ no write — a completed run proposes everything and wr
     expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('declined');
 
     // Discarding twice is a no-op the surface can explain, not a crash.
-    const again = await declinePlanRequest(planId).catch((e: unknown) => e);
+    const again = await declinePlanRequest(planId, await shownStamp(planId)).catch(
+      (e: unknown) => e,
+    );
     expect(planDecisionErrorCode(again)).toBe('decided');
   });
 
@@ -650,7 +677,7 @@ describe('no approve ⇒ no write — a completed run proposes everything and wr
     const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     expect(workItemCount).toBe(1);
 
-    await approvePlanRequest(planId);
+    await approvePlanRequest(planId, await shownStamp(planId));
     const built = await adminDb.workItem.findFirstOrThrow({
       where: { projectId: fx.projectId, parentId: story.id },
     });
@@ -725,8 +752,8 @@ describe('the gate is TRIGGER-AGNOSTIC — same predicate, same confirm', () => 
     // Same confirm: neither is materialized until approved, and both then are.
     const workItemCount = await adminDb.workItem.count({ where: { title: 'Proposed leaf' } });
     expect(workItemCount).toBe(0);
-    await approvePlanRequest(userPlanId);
-    await approvePlanRequest(cadencePlanId);
+    await approvePlanRequest(userPlanId, await shownStamp(userPlanId));
+    await approvePlanRequest(cadencePlanId, await shownStamp(cadencePlanId));
     const created = await adminDb.workItem.findMany({ where: { title: 'Proposed leaf' } });
     expect(created).toHaveLength(2);
     expect(new Set(created.map((r) => r.parentId))).toEqual(
@@ -770,7 +797,9 @@ describe('the gate is TRIGGER-AGNOSTIC — same predicate, same confirm', () => 
 
     const before = await treeSnapshot();
     for (const planId of [userPlanId, cadencePlanId]) {
-      const err = await approvePlanRequest(planId).catch((e: unknown) => e);
+      const err = await approvePlanRequest(planId, await shownStamp(planId)).catch(
+        (e: unknown) => e,
+      );
       expect(err, `plan ${planId} must be refused`).toBeInstanceOf(PlanRequestError);
       expect((err as InstanceType<typeof PlanRequestError>).status).toBe(400);
       expect((err as InstanceType<typeof PlanRequestError>).code).toBe('PLAN_GRAMMAR_VIOLATION');
@@ -805,7 +834,7 @@ describe('every rejection class leaves the database untouched — through the an
     await engineProposes(planId, proposals, afterClose);
     const before = await treeSnapshot();
 
-    const err = await approvePlanRequest(planId).catch((e: unknown) => e);
+    const err = await approvePlanRequest(planId, await shownStamp(planId)).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PlanRequestError);
     const failure = err as InstanceType<typeof PlanRequestError>;
     expect(failure.status).toBe(expected.status);
@@ -946,7 +975,7 @@ describe('every rejection class leaves the database untouched — through the an
       data: { parentRef: `${TEMP_REF_PREFIX}${bId}` },
     });
 
-    const err = await approvePlanRequest(planId).catch((e: unknown) => e);
+    const err = await approvePlanRequest(planId, await shownStamp(planId)).catch((e: unknown) => e);
     expect((err as InstanceType<typeof PlanRequestError>).status).toBe(400);
     expect(await treeSnapshot()).toEqual(before);
   });
@@ -967,7 +996,9 @@ describe('every rejection class leaves the database untouched — through the an
         }
       },
     );
-    const immutable = await approvePlanRequest(planId).catch((e: unknown) => e);
+    const immutable = await approvePlanRequest(planId, await shownStamp(planId)).catch(
+      (e: unknown) => e,
+    );
     expect(planDecisionErrorCode(immutable)).toBe('immutable');
 
     // …and a plan someone else already decided reads as `decided`, not as a crash.
@@ -976,8 +1007,10 @@ describe('every rejection class leaves the database untouched — through the an
     await engineProposes(decidedId, [
       { op: 'add', proposedFields: { title: 'Once', kind: 'subtask' }, parentRef: other.id },
     ]);
-    await approvePlanRequest(decidedId);
-    const twice = await approvePlanRequest(decidedId).catch((e: unknown) => e);
+    await approvePlanRequest(decidedId, await shownStamp(decidedId));
+    const twice = await approvePlanRequest(decidedId, await shownStamp(decidedId)).catch(
+      (e: unknown) => e,
+    );
     expect(planDecisionErrorCode(twice)).toBe('decided');
     // The second confirm changed nothing — one approve, one materialize.
     const workItemCount = await adminDb.workItem.count({ where: { title: 'Once' } });
@@ -1082,6 +1115,7 @@ describe('tenancy — a plan outside the actor’s workspace is 404, never 403',
   it('the rail’s own client reports a cross-tenant plan as `decided`, not as an error dump', async () => {
     const rival = await makeWorkItemFixture({ name: 'Rival', identifier: 'RIVL' });
     const rivalPlan = await plansService.createPlan(rival.projectId, {}, rival.ctx);
+    // No stamp: the reader could never read a plan in another tenant (its review 404s).
     const err = await approvePlanRequest(rivalPlan.id).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PlanRequestError);
     expect((err as InstanceType<typeof PlanRequestError>).status).toBe(404);
