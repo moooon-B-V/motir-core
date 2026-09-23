@@ -722,10 +722,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // is `planned` and needs one more card" was that there is no such call — so
     // it is not a refusal met after choosing this tool, it is the fact that
     // decides whether this is the tool. Same test as the close, same verdict.
+    //
+    // MOTIR-6051 re-pinned the fingerprint WITHOUT touching the summary, by
+    // MOTIR-3194's test: a second `modify` now MERGES rather than refusing, which
+    // a caller meets after choosing this tool; and "ids come back in order" is
+    // still true — a merged proposal's slot carries the surviving id.
     summary:
       'Append proposals to a plan — close it with an empty final batch, or add to one you already closed with `revision: true`; ids come back in order, so the next batch can hang children off them.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'd75174c32f83',
+    descriptionFingerprint: 'f28a07a152ac',
   },
   update_plan_item: {
     summary:
