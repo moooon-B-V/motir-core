@@ -1297,6 +1297,12 @@ export type AwaitingGateRow = Prisma.ApprovalGateGetPayload<{
 export function translateApprovalGateWriteError(err: unknown): never {
   const message = extractMessage(err);
 
+  // ⚠️ The CARD-OR-NO-CARD CHECK (MOTIR-6032, ADR §11.1) raises the same SQLSTATE
+  // 23514 as the immutability trigger. It is a DEFECT in the writer (a card-less row
+  // of a card kind, or a plan gate given a card), never "already decided", so it is
+  // rethrown as it stands — the message names the constraint.
+  if (message.includes('approval_gate_work_item_iff_not_plan')) throw err;
+
   if (message.includes('AG_DECIDED_IMMUTABLE') || sqlStateOf(err) === '23514') {
     throw new ApprovalGateDecidedImmutableError();
   }

@@ -248,3 +248,25 @@ describe('`requireGateCard` / `requireGateWorkItem` — a card path never guesse
     });
   });
 });
+
+describe('the repository names a breach of the card-or-no-card CHECK honestly', () => {
+  it('a card-less design gate through `create` is NOT reported as "already decided"', async () => {
+    const { approvalGateRepository } = await import('@/lib/repositories/approvalGateRepository');
+    const { ApprovalGateDecidedImmutableError } = await import('@/lib/approvalGates/errors');
+    const { withWorkspaceContext } = await import('@/lib/workspaces/context');
+    const err = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.create(
+        {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          workItemId: null,
+          kind: 'design_result',
+          subjectId: 'ev-1',
+        },
+        tx,
+      ),
+    ).catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(ApprovalGateDecidedImmutableError);
+    expect(refusal(err)).toMatch(/approval_gate_work_item_iff_not_plan/);
+  });
+});

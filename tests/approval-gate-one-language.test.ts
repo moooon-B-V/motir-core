@@ -317,6 +317,21 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       writes: 'superseded',
       callers: ['lib/services/workItemsService.ts'],
     },
+    // Story MOTIR-6012 (ADR `approval-gates.md` §11.7): the CARD-LESS plan gate's raise
+    // and supersede, keyed on `(subjectId, kind)` because a plan gate has no work item.
+    // Product-written questions and withdrawals, never decisions — the plan's own
+    // approve and decline go through the door. MOTIR-6034 added the two writes; their
+    // callers arrive with MOTIR-6036 (the raise child), which declares them here.
+    {
+      method: 'createCardlessAwaitingIfAbsent',
+      writes: 'awaiting',
+      callers: [],
+    },
+    {
+      method: 'supersedeAwaitingCardlessBySubject',
+      writes: 'superseded',
+      callers: [],
+    },
   ] as const;
 
   it('routes every DECISION through `approvalGatesService.decide` — one call site', () => {

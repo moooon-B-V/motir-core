@@ -40,6 +40,8 @@ const ALL_KINDS = [
   'decision_choice',
   // Story MOTIR-5871 · MOTIR-5954: a person CONFIRMS or overturns a `human` decision.
   'decision_confirmation',
+  // Story MOTIR-6012 · MOTIR-6032: a person approves or declines a PLAN — no card.
+  'plan_approval',
 ] as const satisfies readonly ApprovalGateKind[];
 
 describe('the approval-gate registry — totality at runtime', () => {
@@ -77,8 +79,10 @@ describe('the approval-gate registry — totality at runtime', () => {
     expect(isRegisteredGateKind('pull_request_merge')).toBe(false);
   });
 
-  it('leaves ONE declared hole — the RETIRED merge kind', () => {
-    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['pull_request_merge']);
+  it('leaves ONE declared hole — the RETIRED merge kind — plus the NOT-YET plan kind', () => {
+    // `plan_approval` is a NOT-YET, not a hole: its schema ships ahead of its handler
+    // (MOTIR-6032), and MOTIR-6035 promotes it (ADR `approval-gates.md` §11).
+    expect([...UNREGISTERED_GATE_KINDS]).toEqual(['pull_request_merge', 'plan_approval']);
     // ⚠️ `decision_approval` WAS THE OTHER HOLE — unbuilt, owned by MOTIR-4907 — until
     // MOTIR-5676 built it. `pull_request_merge` is a different kind of hole: it was built
     // (MOTIR-4793), raised real gates, and was WITHDRAWN by MOTIR-5616 — nothing owns it
