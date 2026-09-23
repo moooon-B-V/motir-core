@@ -104,4 +104,39 @@ describe('handing the approval overlay a PLAN gate', () => {
     expect(replace).toHaveBeenCalledWith('/plans/plan-9');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  // Story MOTIR-6012's integration gate (MOTIR-6040): the forward is a REPLACE, so one
+  // that lands after the reader already left would yank them off wherever they went.
+  it.each([
+    [
+      'resolves',
+      (settle: { resolve: (v: PlanReviewDto) => void; reject: (e: Error) => void }) =>
+        settle.resolve(reviewWith({ sessionId: 's-9', hasTurns: true, targetKeys: [] })),
+    ],
+    [
+      'fails',
+      (settle: { resolve: (v: PlanReviewDto) => void; reject: (e: Error) => void }) =>
+        settle.reject(new Error('aborted')),
+    ],
+  ] as const)(
+    'a read that %s AFTER the overlay unmounted forwards nowhere',
+    async (_label, finish) => {
+      let settle!: { resolve: (v: PlanReviewDto) => void; reject: (e: Error) => void };
+      fetchPlanReview.mockImplementation(
+        () =>
+          new Promise<PlanReviewDto>((resolve, reject) => {
+            settle = { resolve, reject };
+          }),
+      );
+      const view = await openPlanGate();
+      const signal = fetchPlanReview.mock.calls[0]![1] as AbortSignal;
+      view.unmount();
+      expect(signal.aborted).toBe(true);
+      await act(async () => {
+        finish(settle);
+      });
+      expect(replace).not.toHaveBeenCalled();
+      expect(shallowReplace).not.toHaveBeenCalled();
+    },
+  );
 });
