@@ -6431,14 +6431,9 @@
   },
   "aiPlanning": {
     "heading": "Plans",
-    "subtitle": "every plan Motir AI proposed for {project}",
     "noProjectTitle": "No project selected",
     "noProjectDescription": "Switch to a project to see its plans.",
-    "emptyTitle": "No plans yet",
-    "emptyDescription": "Motir AI plans from your direction docs. Generate your first plan to see proposed work here.",
-    "untitledPlan": "Untitled plan",
     "itemCount": "{count, plural, one {# item} other {# items}}",
-    "mayBeOutOfDate": "{count} may be out of date",
     "createdAt": "created {when}",
     "plannedAt": "planned {when}",
     "approvedAt": "approved {when}",
@@ -6451,17 +6446,6 @@
       "stale": "Stale",
       "approved": "Approved",
       "declined": "Declined"
-    },
-    "listAria": "Plans",
-    "statusFilterAria": "Filter plans by status",
-    "tabEmpty": {
-      "generatingTitle": "Nothing generating",
-      "plannedTitle": "Nothing waiting on you",
-      "staleTitle": "Nothing stale",
-      "approvedTitle": "Nothing approved yet",
-      "declinedTitle": "Nothing declined",
-      "description": "This project's other plans are in the remaining tabs.",
-      "staleDescription": "A plan goes stale when work it proposes to change has since been finished. None have."
     },
     "loadingMore": "Loading…",
     "generation": {
@@ -6493,7 +6477,41 @@
     },
     "viaHarness": "via {harness}",
     "viaMotir": "via Motir AI",
-    "autoPlanned": "auto-planned"
+    "sessions": {
+      "subtitle": "Every planning conversation in {project}, newest activity first",
+      "emptyTitle": "No planning conversations yet",
+      "emptyDescription": "Start a conversation with Motir AI. Every conversation is listed here — with a plan or not yet — and opening one continues it.",
+      "listAria": "Planning conversations",
+      "filterAria": "Filter conversations by plan state",
+      "filter": {
+        "all": "All"
+      },
+      "planState": {
+        "none": "No plan yet",
+        "generating": "Writing",
+        "planned": "Waiting for approval",
+        "stale": "Stale",
+        "approved": "Approved",
+        "declined": "Declined"
+      },
+      "origin": {
+        "mcp": "Agent plan",
+        "generation": "Generated plan",
+        "expand": "Expanded plan",
+        "cadence": "Auto-planned",
+        "legacy": "Earlier plan"
+      },
+      "anchorProject": "Whole project",
+      "anchorMore": "{first} +{count}",
+      "lastActive": "active {when}",
+      "earlierPlans": "{count, plural, one {+# earlier plan} other {+# earlier plans}}",
+      "openPlanAria": "Open the plan — {state}",
+      "untitled": "Untitled conversation",
+      "filteredEmptyTitle": "No conversations in this state",
+      "filteredEmptyDescription": "This project's other conversations are under All.",
+      "loadMoreError": "Couldn’t load more conversations.",
+      "loadMoreRetry": "Retry"
+    }
   },
   "planningWorkspace": {
     "noProjectTitle": "No project selected",

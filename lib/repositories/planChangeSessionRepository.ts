@@ -1,4 +1,4 @@
-import { Prisma, type PlanChangeSession } from '@/generated/prisma/client';
+import { Prisma, type PlanChangeSession, type PlanStatus } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
 /**
@@ -211,4 +211,109 @@ export const planChangeSessionRepository = {
   ): Promise<PlanChangeSession> {
     return tx.planChangeSession.update({ where: { id }, data });
   },
+
+  /**
+   * ONE PAGE of the Plans page's session list (MOTIR-6025, AMENDMENT 17 §8),
+   * newest activity first, in ONE statement: each session with its starter, its
+   * first `user` turn, its LATEST plan and its plan count, joined laterally so no
+   * per-row read follows. Walks `(project_id, last_activity_at)`; the cursor is
+   * the last row's `(lastActivityAt, id)`, compared as a ROW so two sessions
+   * sharing a timestamp are neither skipped nor repeated across a page boundary.
+   *
+   * `state` filters on the LATEST plan: `none` = no plan at all, otherwise that
+   * plan's status. `sessionId` narrows to one row (the `?session=` landing).
+   */
+  async listPageByProject(
+    args: {
+      projectId: string;
+      workspaceId: string;
+      limit: number;
+      after: { lastActivityAt: Date; id: string } | null;
+      state: PlanSessionListState | null;
+      sessionId?: string;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanSessionListRow[]> {
+    const after = args.after
+      ? Prisma.sql`AND (s."last_activity_at", s."id") < (${args.after.lastActivityAt}, ${args.after.id})`
+      : Prisma.empty;
+    const only = args.sessionId ? Prisma.sql`AND s."id" = ${args.sessionId}` : Prisma.empty;
+    return tx.$queryRaw<PlanSessionListRow[]>`
+      SELECT s."id", s."origin"::text AS "origin", s."target_keys" AS "targetKeys",
+             s."last_activity_at" AS "lastActivityAt",
+             u."id" AS "starterId", u."name" AS "starterName",
+             ft."body" AS "firstTurn",
+             lp."id" AS "planId", lp."status"::text AS "planStatus",
+             lp."title" AS "planTitle", lp."summary" AS "planSummary",
+             pc."n" AS "planCount"
+      FROM "plan_change_session" s
+      LEFT JOIN "user" u ON u."id" = s."created_by_id"
+      LEFT JOIN LATERAL (
+        SELECT t."body" FROM "plan_change_turn" t
+        WHERE t."session_id" = s."id" AND t."role" = 'user'
+        ORDER BY t."seq" ASC LIMIT 1
+      ) ft ON true
+      ${latestPlanJoin}
+      LEFT JOIN LATERAL (
+        SELECT count(*)::int AS "n" FROM "plan" p WHERE p."session_id" = s."id"
+      ) pc ON true
+      WHERE s."project_id" = ${args.projectId} AND s."workspace_id" = ${args.workspaceId}
+        ${stateFilter(args.state)} ${after} ${only}
+      ORDER BY s."last_activity_at" DESC, s."id" DESC
+      LIMIT ${args.limit}
+    `;
+  },
+
+  /**
+   * How many of the project's sessions hold each plan state — the filter's
+   * counts — in ONE grouped statement over the same latest-plan join the list
+   * uses, so a count and its filtered list can never disagree. Returns only the
+   * states that have rows; the service zero-fills.
+   */
+  async countByLatestPlanState(
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ state: string; count: number }>> {
+    return tx.$queryRaw<Array<{ state: string; count: number }>>`
+      SELECT COALESCE(lp."status"::text, 'none') AS "state", count(*)::int AS "count"
+      FROM "plan_change_session" s
+      ${latestPlanJoin}
+      WHERE s."project_id" = ${projectId} AND s."workspace_id" = ${workspaceId}
+      GROUP BY 1
+    `;
+  },
 };
+
+/** A plan state the list filters on — `none` or a `PlanStatus` value. */
+export type PlanSessionListState = 'none' | PlanStatus;
+
+/** One raw row of {@link planChangeSessionRepository.listPageByProject}. */
+export interface PlanSessionListRow {
+  id: string;
+  origin: string;
+  targetKeys: string[];
+  lastActivityAt: Date;
+  starterId: string | null;
+  starterName: string | null;
+  firstTurn: string | null;
+  planId: string | null;
+  planStatus: string | null;
+  planTitle: string | null;
+  planSummary: string | null;
+  planCount: number;
+}
+
+/** A session's LATEST plan — newest `created_at`, `id` breaking a tie. */
+const latestPlanJoin = Prisma.sql`
+  LEFT JOIN LATERAL (
+    SELECT p."id", p."status", p."title", p."summary" FROM "plan" p
+    WHERE p."session_id" = s."id"
+    ORDER BY p."created_at" DESC, p."id" DESC LIMIT 1
+  ) lp ON true`;
+
+function stateFilter(state: PlanSessionListState | null): Prisma.Sql {
+  if (state === null) return Prisma.empty;
+  if (state === 'none') return Prisma.sql`AND lp."id" IS NULL`;
+  return Prisma.sql`AND lp."status" = CAST(${state} AS "plan_status")`;
+}

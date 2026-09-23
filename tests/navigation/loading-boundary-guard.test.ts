@@ -232,7 +232,7 @@ const LEGITIMATE_NAVIGATORS: { file: string; why: string }[] = [
   },
   {
     file: 'app/(authed)/plans/_components/PlanStatusTabs.tsx',
-    why: 'Each tab is its own paged read.',
+    why: 'Each plan-state filter is its own paged session read (MOTIR-6025).',
   },
   {
     file: 'app/(authed)/items/[key]/_components/ActivitySection.tsx',
@@ -442,7 +442,7 @@ const SERIAL_READ_DEBT: { page: string; count: number; why: string }[] = [
   {
     page: 'app/(authed)/plans/page.tsx',
     count: 5,
-    why: 'Measured by MOTIR-3445 and left undiffed. The capabilities read gates which tab strip renders and `buildPlanRowViews` consumes the wave that follows it, so the order is a dependency rather than a habit.',
+    why: 'Measured by MOTIR-3445 and left undiffed. The capabilities read gates the list, and `buildSessionRowViews` (MOTIR-6025) consumes the wave that follows it, so the order is a dependency rather than a habit.',
   },
   {
     page: 'app/(authed)/settings/workspace/page.tsx',

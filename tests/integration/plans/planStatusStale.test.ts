@@ -1,23 +1,15 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-
-// `buildPlanRowViews` is a SERVER module (see `planRowView.test.ts` for why the
-// formatter alone is stubbed). Everything else here is real — real Postgres, the
-// real services, the real repositories.
-vi.mock('next-intl/server', () => ({
-  getFormatter: async () => ({ relativeTime: (d: Date) => `at ${d.toISOString()}` }),
-}));
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { db } from '@/lib/db';
 import { PLAN_STATUS_DTO_VALUES, type PlanStatusDto } from '@/lib/dto/plans';
-import { planStatusFromParam } from '@/lib/planning/planStatusFilter';
+import { planStateFromParam } from '@/lib/planning/planSessionFilter';
+import { planSessionsService } from '@/lib/services/planSessionsService';
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
 import { planStatusSchema } from '@/lib/api/v1/workLoop/schema';
 import { makeWorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
-
-const { buildPlanRowViews } = await import('@/app/(authed)/plans/planRowView');
 
 // THE FIFTH `PlanStatus` MEMBER (Bug MOTIR-3560 · Subtask MOTIR-3578), decided by
 // `docs/decisions/agent-authored-plans.md` AMENDMENT 9 (MOTIR-3574).
@@ -82,12 +74,13 @@ describe('the vocabulary — one edit, and every derived surface follows', () =>
     expect(planStatusSchema.safeParse('outdated').success).toBe(false);
   });
 
-  it('the URL parser accepts it, and the DEFAULT tab is still `planned`', () => {
-    expect(planStatusFromParam('stale')).toBe('stale');
-    // The two properties that must NOT move: an absent parameter and an unknown
-    // one both resolve to `planned`, so every existing `/plans` link is unchanged.
-    expect(planStatusFromParam(null)).toBe('planned');
-    expect(planStatusFromParam('nonsense')).toBe('planned');
+  it('the Plans filter’s URL parser accepts it, and the DEFAULT is still All', () => {
+    // The list holds CONVERSATIONS since MOTIR-6025, filtered by the latest
+    // plan's state; `stale` is one of those states, and an absent or unknown
+    // parameter is All.
+    expect(planStateFromParam('stale')).toBe('stale');
+    expect(planStateFromParam(null)).toBeNull();
+    expect(planStateFromParam('nonsense')).toBeNull();
   });
 
   it('`countPlansByStatus` ZERO-FILLS it — derived from the array, not restated', async () => {
@@ -111,50 +104,25 @@ describe('the vocabulary — one edit, and every derived surface follows', () =>
   });
 });
 
-describe('the row view-model — the two sites the compiler cannot find', () => {
-  it('reads `plannedAt` with the PLANNED verb — a named arm, not the `default:`', async () => {
+describe('the Plans session list — a `stale` plan’s conversation is filed under Stale', () => {
+  // The retired plan-row view-model asserted two sites the compiler could not
+  // find (`whenFor`'s `default:` arm, `staleCountFor`'s guard); both went with
+  // the plan list (MOTIR-6025). The session list reads the status straight off
+  // the latest plan in SQL, so the property left to hold is that `stale` is a
+  // state of its own there — filtered and counted — never folded into another.
+  it('lists it under `stale` and counts it there', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx);
     await forceStale(planId);
-    const [plan] = (await plansService.listPlans(fx.projectId, fx.ctx, { status: 'stale' })).plans;
 
-    const [view] = await buildPlanRowViews([plan!], fx.ctx);
-
-    // ⚠️ THE ASSERTION IS ON THE KEY, and that is the point. `whenFor`'s
-    // `default:` arm answers `createdAt`, which is right for `generating` and
-    // silently wrong here — and is NOT a type error. A row falling through would
-    // render *created 3 days ago* on a plan whose own moment is its close.
-    expect(view!.whenKey).toBe('plannedAt');
-    expect(view!.whenLabel).toBe(`at ${plan!.plannedAt!}`);
-  });
-
-  it('still counts ADVISORY drift on it — `staleCountFor` agrees with the service', async () => {
-    const fx = await makeWorkItemFixture();
-    const planId = await plannedPlan(fx);
-    await forceStale(planId);
-    const [plan] = (await plansService.listPlans(fx.projectId, fx.ctx, { status: 'stale' })).plans;
-
-    // The engine is asked, rather than short-circuited to 0 — which is the whole
-    // of AMENDMENT 9 D3's widening. A spy is the assertion because the COUNT for
-    // an undrifted plan is 0 either way: the regression is the call not happening.
-    const engine = vi.spyOn(planStalenessService, 'computePlanStaleness');
-    await buildPlanRowViews([plan!], fx.ctx);
-    expect(engine).toHaveBeenCalledTimes(1);
-    engine.mockRestore();
-  });
-
-  it('a DECIDED plan still short-circuits — the widening did not become "always ask"', async () => {
-    const fx = await makeWorkItemFixture();
-    const planId = await plannedPlan(fx);
-    await adminDb.plan.update({ where: { id: planId }, data: { status: 'declined' } });
-    const [plan] = (await plansService.listPlans(fx.projectId, fx.ctx, { status: 'declined' }))
-      .plans;
-
-    const engine = vi.spyOn(planStalenessService, 'computePlanStaleness');
-    const [view] = await buildPlanRowViews([plan!], fx.ctx);
-    expect(engine).not.toHaveBeenCalled();
-    expect(view!.staleCount).toBe(0);
-    engine.mockRestore();
+    const page = await planSessionsService.listSessions(fx.projectId, fx.ctx, {
+      planState: 'stale',
+    });
+    expect(page.sessions.map((s) => s.latestPlan?.id)).toEqual([planId]);
+    expect(page.sessions[0]!.latestPlan!.status).toBe('stale');
+    const counts = await planSessionsService.countSessionsByPlanState(fx.projectId, fx.ctx);
+    expect(counts.stale).toBe(1);
+    expect(counts.planned).toBe(0);
   });
 });
 

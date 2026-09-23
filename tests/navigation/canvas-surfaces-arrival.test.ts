@@ -100,10 +100,13 @@ describe('the two pages that were ALREADY one wave (MOTIR-3445)', () => {
   // was picked up, so the card ships no diff for them and this records why.
   // A page reported as already concurrent having no diff is a correct outcome.
   it('/plans resolves its page and its counts together', () => {
+    // The reads are the SESSION list's since MOTIR-6025; the landing row joined
+    // the same wave rather than following it.
     const wave = waveContaining(
       read('plans', 'page.tsx'),
-      'plansService.listPlans',
-      'plansService.countPlansByStatus',
+      'planSessionsService.listSessions',
+      'planSessionsService.countSessionsByPlanState',
+      'planSessionsService.getSessionRow',
     );
     expect(wave).not.toBeNull();
   });

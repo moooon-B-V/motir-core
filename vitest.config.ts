@@ -1815,13 +1815,11 @@ export default defineConfig({
         // this section gives — a literal route-group path matches no reported
         // file and gates nothing.
         'lib/mcp/tools/authorPlan.ts',
-        'app/**/plans/planRowView.ts',
-        'app/**/plans/_components/PlanRow.tsx',
 
         // Story MOTIR-3232 · Subtask MOTIR-3242 — the Plans surface, refined. Every
-        // file the story ADDED that carries decision logic; the two it changed
-        // that were already gated (`planRowView.ts`, `PlanRow.tsx`) are directly
-        // above and stay there.
+        // file the story ADDED that carries decision logic. (The two it changed
+        // that were already gated, `planRowView.ts` and `PlanRow.tsx`, were
+        // retired by MOTIR-6025 — see its entry below.)
         //
         // ⚠️ Written `app/**/plans/…` for the reason this section's header gives:
         // a literal `app/(authed)/plans/…` matches no reported file and would
@@ -1834,15 +1832,18 @@ export default defineConfig({
         // is the trade the block above already refuses once.
         'lib/planning/planShape.ts',
         'lib/planning/planView.ts',
-        // MOTIR-3243 — the tab's URL vocabulary, moved OUT of the `'use client'`
-        // component it was declared in (a Server Component cannot call an export
-        // it reached through a client boundary; `/plans` 500'd). It is covered by
-        // the same `tests/components/PlanStatusTabs` suite, which now imports it
-        // from here.
-        'lib/planning/planStatusFilter.ts',
         'components/planning/PlanProposalList.tsx',
         'app/**/plans/_components/PlanStatusTabs.tsx',
-        'app/**/plans/_components/PlansList.tsx',
+        // Story MOTIR-6011 · Subtask MOTIR-6025 — `/plans` lists planning
+        // SESSIONS. The plan-row files it retired (`planRowView.ts`,
+        // `PlanRow.tsx`, `PlansList.tsx`, `lib/planning/planStatusFilter.ts`) left
+        // this list with them; these are their successors.
+        'lib/planning/planSessionFilter.ts',
+        'lib/services/planSessionsService.ts',
+        'lib/mappers/planSessionMappers.ts',
+        'app/**/plans/sessionRowView.ts',
+        'app/**/plans/_components/SessionRow.tsx',
+        'app/**/plans/_components/SessionsList.tsx',
 
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle.
         // The story's decision code, in one place: what a pull request delivers
@@ -4708,8 +4709,6 @@ export default defineConfig({
         // Pinned at the 90 floor rather than at the measured number, so a later
         // refactor has room without anyone loosening a gate to make a build pass.
         'lib/mcp/tools/authorPlan.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/**/plans/planRowView.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/**/plans/_components/PlanRow.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-3232 · Subtask MOTIR-3242 — the Plans surface, refined.
         // MEASURED on this branch before pinning (the sequence this block
         // prescribes throughout), with `tests/planning/planShape`,
@@ -4727,12 +4726,16 @@ export default defineConfig({
         // refactor has room without anyone loosening a gate to make a build pass.
         'lib/planning/planShape.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/planning/planView.ts': { branches: 90, functions: 90, lines: 90 },
-        // MOTIR-3243's extraction, measured the same way after the move:
-        //   lib/planning/planStatusFilter.ts             100 stmts ·  100 branch · 100 fn · 100 lines
-        'lib/planning/planStatusFilter.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/PlanProposalList.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/PlanStatusTabs.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/**/plans/_components/PlansList.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-6011 · Subtask MOTIR-6025 — the session list that replaced
+        // the plan list, pinned at the 90 floor (measured figures in the PR).
+        'lib/planning/planSessionFilter.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/planSessionsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/planSessionMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/plans/sessionRowView.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/plans/_components/SessionRow.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/plans/_components/SessionsList.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle
         // (see the `include` note above for why these five and not the three
         // pre-existing files the story also widened). MEASURED on this branch

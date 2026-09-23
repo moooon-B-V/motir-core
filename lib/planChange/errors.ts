@@ -172,3 +172,16 @@ export class PlanChangeMailboxJobMismatchError extends Error {
     this.name = 'PlanChangeMailboxJobMismatchError';
   }
 }
+
+/**
+ * A Plans-list `cursor` this read did not mint (MOTIR-6025) — undecodable, or
+ * naming no `(lastActivityAt, id)` pair. A cursor is opaque, so a malformed one
+ * is a client error, never an empty page. → 400
+ */
+export class InvalidPlanSessionCursorError extends Error {
+  readonly code = 'INVALID_PLAN_SESSION_CURSOR' as const;
+  constructor() {
+    super('The planning conversations cursor is not valid. Request the first page again.');
+    this.name = 'InvalidPlanSessionCursorError';
+  }
+}
