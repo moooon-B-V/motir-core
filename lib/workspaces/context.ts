@@ -54,8 +54,10 @@ import { db } from '@/lib/db';
 //   * A read already inside a bound transaction threads THAT `tx`. Never
 //     open a second — Prisma rejects nesting.
 //   * Read paths do NOT pass `options`. 118 ms against a 5 s default is a
-//     38x margin; see {@link TransactionBudget}, whose single shipped
-//     caller is a very different justification.
+//     38x margin; see {@link TransactionBudget}, whose callers carry very
+//     different justifications — including the one read path that does
+//     pass it (the 2FA gate, MOTIR-5866), where the budget is outgrown by a
+//     WAIT the expiry cannot shorten, never by the read's work.
 //
 // The ONE sanctioned exception is STRUCTURAL, never performance: a fan-out
 // whose members need DIFFERENT bindings. `publicProjectsService` is it —
@@ -401,7 +403,7 @@ export async function withBootstrapSlugContext<T>(
  * two loose numbers so that raising it is a visible, argued decision at the call
  * site instead of a magic literal.
  *
- * The shipped callers are THREE, and they are raised for different reasons — which
+ * The shipped callers are FOUR, and they are raised for different reasons — which
  * is why the type asks for an argument rather than a number:
  *
  *   * the per-project runner-group sync (MOTIR-1972), which must hold the
@@ -421,6 +423,14 @@ export async function withBootstrapSlugContext<T>(
  *     an expired transaction there loses a webhook GitHub never redelivers. Its
  *     `withSystemContext` calls take the same number through
  *     {@link SystemTransactionOptions}.
+ *   * the 2FA gate (MOTIR-5866, `twoFactorPolicyService.resolveRequirement`) —
+ *     the one READ path with a budget, and the exception the "read paths do not
+ *     pass `options`" rule at the top of this file names. That rule is argued
+ *     from WORK (118 ms against 5 s); this transaction is one read, and what
+ *     expired it in production was a 17 s WAIT. For a transaction that holds no
+ *     lock, the expiry cannot end a wait early — Prisma rolls back only after
+ *     the statement in flight returns — so it turns a slow answer into a slow
+ *     500, on a gate every signed-in request passes through.
  */
 export interface TransactionBudget {
   /** Max wall-clock ms the transaction body may run before Prisma rolls back. */
@@ -458,13 +468,21 @@ export interface TransactionBudget {
  * Before adding a read here, check `pg_policies` for an arm that reads
  * `app.user_id`, and check it for every table the query JOINS, not just the one
  * it targets.
+ *
+ * `options` raises Prisma's interactive-transaction budget — see
+ * {@link TransactionBudget}. Omit it and the default 5s applies, which is what
+ * every caller but the 2FA gate wants.
  */
 export async function withUserContext<T>(
   userId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options?: TransactionBudget,
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
-    return fn(tx);
-  });
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
+      return fn(tx);
+    },
+    options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+  );
 }
