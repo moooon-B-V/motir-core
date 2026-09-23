@@ -65,5 +65,10 @@ export async function readNamedSession(route: Route): Promise<APIResponse> {
   const origin = new URL(route.request().url()).origin;
   const query =
     typeof sessionId === 'string' && sessionId ? `?id=${encodeURIComponent(sessionId)}` : '';
-  return route.fetch({ url: `${origin}/api/ai/plan-change/session${query}` });
+  // ⚠️ `method: 'GET'` IS LOAD-BEARING. `route.fetch` inherits the intercepted
+  // request's method, and every caller intercepts a POST — so without it this
+  // "read" is a `POST …/session`, which since MOTIR-6024 STARTS a session and
+  // refuses a body-less call with 400. It used to pass by accident, back when
+  // that POST opened one.
+  return route.fetch({ url: `${origin}/api/ai/plan-change/session${query}`, method: 'GET' });
 }

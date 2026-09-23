@@ -331,9 +331,10 @@ test('a question the user ignores is SUPERSEDED — marked, never dropped and ne
   await page.evaluate(async () => {
     // A second surface names the conversation by id (MOTIR-6023): it reads the
     // caller's resumable session, then appends to exactly that one.
-    const session = (await (await fetch('/api/ai/plan-change/session')).json()) as {
-      id: string;
-    } | null;
+    // The resumable read answers `{ session, earlier }` since MOTIR-6024.
+    const { session } = (await (await fetch('/api/ai/plan-change/session')).json()) as {
+      session: { id: string } | null;
+    };
     await fetch('/api/ai/plan-change/session/turns', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

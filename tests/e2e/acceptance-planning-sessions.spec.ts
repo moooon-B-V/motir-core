@@ -44,7 +44,7 @@ const THREE_HOURS = 3 * 60 * 60 * 1000;
 const workspace = (page: Page) => page.getByRole('dialog', { name: /plan/i });
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 const composer = (page: Page) => rail(page).getByRole('textbox');
-const entrance = (page: Page) => page.getByTestId('work-item-plan-entrance');
+const entrance = (page: Page) => page.getByRole('main').getByTestId('work-item-plan-entrance');
 const earlierNotice = (page: Page) => rail(page).getByTestId('planning-earlier-session');
 const reopenedLine = (page: Page) => rail(page).getByTestId('planning-reopened-session');
 const sessionsList = (page: Page) => page.getByRole('list', { name: 'Planning conversations' });
@@ -218,7 +218,7 @@ test('a conversation is kept: come back to it, find it on Plans, start fresh, re
     await expect(rail(page).getByText(FIRST)).toBeVisible();
     await expect(reopenedLine(page)).toContainText('started by you');
     // …with its plan still waiting on the canvas, exactly where it was left.
-    await expect(page.getByTestId('plan-change-confirm-bar')).toBeVisible();
+    await expect(workspace(page).getByTestId('plan-change-confirm-bar')).toBeVisible();
     await beat();
   });
 
