@@ -325,6 +325,9 @@ export const monitorBugEnrichmentService = {
           executor: answer.executor,
           storyPoints: answer.storyPoints,
           estimateMinutes: answer.estimateMinutes,
+          // Only when the answer carries one: a null must never clear a
+          // difficulty a person set (MOTIR-6135).
+          ...(answer.difficulty !== null ? { difficulty: answer.difficulty } : {}),
         },
         binder,
         { expectedUpdatedAt: bug.updatedAt },

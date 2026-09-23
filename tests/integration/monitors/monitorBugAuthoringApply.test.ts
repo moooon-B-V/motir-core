@@ -75,6 +75,7 @@ const ANSWER = {
   executor: 'coding_agent',
   storyPoints: 3,
   estimateMinutes: 55,
+  difficulty: 'high',
   contextRefs: ['lib/services/exportService.ts'],
   candidateMechanisms: [
     'The column may be null when the board has no cards.',
@@ -192,6 +193,7 @@ const PLANNED_FIELDS = [
   'executor',
   'storyPoints',
   'estimateMinutes',
+  'difficulty',
 ] as const;
 const snapshot = async (id: string) => {
   const row = await read(id);
@@ -216,6 +218,7 @@ describe('a completed answer LANDS', () => {
     expect(bug.executor).toBe('coding_agent');
     expect(Number(bug.storyPoints)).toBe(3);
     expect(bug.estimateMinutes).toBe(55);
+    expect(bug.difficulty).toBe('high');
     expect(bug.explanationSource).toBe('ai_draft');
     // Read with the job's project scope — the tenant check on the read.
     expect(getJob).toHaveBeenCalledWith('job_author_1', target.projectId);
@@ -249,6 +252,89 @@ describe('a completed answer LANDS', () => {
     await monitorBugEnrichmentService.applyAuthoredBug(event, 'job_author_1');
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0]![2]).toEqual({ userId: fx.ctx.userId, workspaceId: fx.workspaceId });
+  });
+});
+
+/** Every revision diff recorded on the item that names `difficulty`. */
+async function difficultyRevisions(workItemId: string) {
+  const rows = await adminDb.workItemRevision.findMany({
+    where: { workItemId },
+    orderBy: { changedAt: 'asc' },
+    select: { diff: true },
+  });
+  return rows
+    .map((r) => r.diff as Record<string, unknown>)
+    .filter((diff) => 'difficulty' in diff)
+    .map((diff) => diff['difficulty']);
+}
+
+describe('the DIFFICULTY rides the same gated write (MOTIR-6135)', () => {
+  it("an answer carrying difficulty 'high' lands it, with ONE activity entry recording it", async () => {
+    const { target } = await seed();
+    const { workItemId, event } = await fileAndDispatch(target, 'difficulty-1');
+    expect((await read(workItemId)).difficulty).toBeNull();
+
+    await expect(
+      monitorBugEnrichmentService.applyAuthoredBug(event, 'job_author_1'),
+    ).resolves.toEqual({ status: 'applied' });
+
+    expect((await read(workItemId)).difficulty).toBe('high');
+    expect(await difficultyRevisions(workItemId)).toEqual([{ from: null, to: 'high' }]);
+  });
+
+  it('the updateWorkItem input carries the difficulty — no second write path', async () => {
+    const { target } = await seed();
+    const { event } = await fileAndDispatch(target, 'difficulty-spy');
+    const spy = vi.spyOn(workItemsService, 'updateWorkItem');
+    await monitorBugEnrichmentService.applyAuthoredBug(event, 'job_author_1');
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]![1]).toMatchObject({ difficulty: 'high' });
+  });
+
+  it('an answer with difficulty: null leaves a person-set value untouched, and the input omits the key', async () => {
+    const { fx, target } = await seed();
+    const { workItemId, event } = await fileAndDispatch(target, 'difficulty-null');
+    // A person sizes the difficulty before the answer arrives — the body stays
+    // as filed, so the enrichment still applies.
+    await workItemsService.updateWorkItem(workItemId, { difficulty: 'low' }, fx.ctx);
+    succeeds({ ...ANSWER, difficulty: null });
+    const spy = vi.spyOn(workItemsService, 'updateWorkItem');
+
+    await expect(
+      monitorBugEnrichmentService.applyAuthoredBug(event, 'job_author_1'),
+    ).resolves.toEqual({ status: 'applied' });
+
+    expect(spy.mock.calls[0]![1]).not.toHaveProperty('difficulty');
+    const bug = await read(workItemId);
+    expect(bug.difficulty).toBe('low');
+    expect(bug.explanationSource).toBe('ai_draft');
+    expect(await difficultyRevisions(workItemId)).toEqual([{ from: null, to: 'low' }]);
+  });
+
+  it('an answer WITHOUT the key (a motir-ai build that predates it) still lands, leaving difficulty null', async () => {
+    const { target } = await seed();
+    const { workItemId, event } = await fileAndDispatch(target, 'difficulty-absent');
+    const { difficulty: _omit, ...legacy } = ANSWER;
+    void _omit;
+    succeeds(legacy);
+
+    await expect(
+      monitorBugEnrichmentService.applyAuthoredBug(event, 'job_author_1'),
+    ).resolves.toEqual({ status: 'applied' });
+    const bug = await read(workItemId);
+    expect(bug.difficulty).toBeNull();
+    expect(Number(bug.storyPoints)).toBe(3);
+  });
+
+  it("an unknown difficulty ('extreme') aborts the whole apply and writes nothing", async () => {
+    const { target } = await seed();
+    const { workItemId, event } = await fileAndDispatch(target, 'difficulty-bad');
+    const before = await snapshot(workItemId);
+    succeeds({ ...ANSWER, difficulty: 'extreme' });
+    await expect(
+      monitorBugEnrichmentService.applyAuthoredBug(event, 'job_author_1'),
+    ).resolves.toEqual({ status: 'skipped', reason: 'invalid-answer' });
+    expect(await snapshot(workItemId)).toEqual(before);
   });
 });
 
