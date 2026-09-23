@@ -15,6 +15,8 @@
   AMENDMENT 10 amends AMENDMENT 8's boundary — it is written by MOTIR-3596 and consumed by
   MOTIR-3598 (the job-token door), MOTIR-3599 (the `revise_plan` submit), MOTIR-3600 (the motir-ai
   handler), MOTIR-3601 (the review-surface affordance) and MOTIR-3602 (the story's vitest gate).
+  AMENDMENT 17 (sessions as records, `Plan.sessionId`) is written by MOTIR-6018 and consumed by
+  MOTIR-6019 through MOTIR-6028, the children of story MOTIR-6011.
 
 > Every reading below was taken off `origin/main` at `d82b5fa7` on 2026-08-18. Where a
 > reading and a card's prose disagreed, the code won and the difference is recorded — in
@@ -2964,6 +2966,8 @@ cannot be resolved — a generation or `expand_item` job that opened no conversa
 and is held by nothing. Its targets are as claimable as they were before this amendment. That is not
 a regression (it is the shipped behaviour), and closing it needs the plan→session link to be a
 column rather than a `lastJobId` lookup. Left open deliberately.
+**→ Closed by AMENDMENT 17 §5** (MOTIR-6018): `Plan.sessionId` is that column, and every plan —
+generation and `expand_item` included — now belongs to a session.
 
 ### D6 — APPROVE rests each target at Blocked or To Do
 
@@ -3143,3 +3147,132 @@ exactly what the ruling forbids.
   with the edges rather than a status anything derives from.
 - **Roll-up and the downward cascade are untouched.** A parked parent is recomputed by
   `parentStatusRollupService` on the next child event exactly as before.
+
+## AMENDMENT 17 — a planning SESSION is a record from its first turn, and every plan belongs to exactly one (story MOTIR-6011 · MOTIR-6018, 2026-09-22)
+
+**The gap.** At `origin/main` `f9765f432` a planning conversation is a `PlanChangeSession`, and there
+is exactly one per project per anchor set, forever: `@@unique([projectId, scopeKey])`
+(`prisma/schema.prisma`, `PlanChangeSession`), found on every write by scope rather than by id
+(`planChangeSessionsService` → `planChangeSessionRepository.findByProjectAndScope`). A `Plan` knows
+its conversation only through `Plan.sourceJobId == session.lastJobId`, which covers the LATEST submit
+alone and breaks on a revision, because `aiPlanEditsService.submitRevise` re-points `sourceJobId` at
+the revision job. AMENDMENT 16 D5 named the consequence and left it open: _"closing it needs the
+plan→session link to be a column rather than a `lastJobId` lookup."_ This amendment closes it, and
+changes what a session IS on the way.
+
+Each section below is the contract one child of MOTIR-6011 builds to. The children cite the section
+number, not the prose.
+
+### §1 — what a session is: a conversation, recorded from its FIRST TURN
+
+A session is created by the first turn sent into it (`planChangeSessionsService`'s append path),
+never by opening the planning surface. Mounting the overlay, reading a scope and browsing the Plans
+page create nothing and take no lock. **Superseded:** the `PlanChangeSession` model header's
+_"ONE thread per project … a get-or-create with no ambiguity about WHICH thread resumes"_, the
+`@@unique([projectId, scopeKey])` it rests on, and `getOrCreateForScope` as a mount read.
+
+**The public `open` doors are an explicit start, not a look** (MOTIR-6028): `POST
+/api/v1/projects/{key}/plan-session` and the MCP `open_plan_session` resume the
+caller's recent session for the scope or create one, with no turn. They are an
+API client's or agent's deliberate "I am about to talk", and the deployed `motir
+plan` CLI reads a session from `open` before its first turn. The browser never
+calls them; its mount stays a read that creates nothing.
+
+### §2 — cardinality: many sessions per scope, each addressed by its ID
+
+A `(projectId, scopeKey)` pair holds any number of sessions over time; two sessions of one scope are
+legal and never merge. **Every door addresses a session by `id`** — turn, submit, mailbox message,
+stop, discard — and a write that names a session never lands on a sibling of the same scope.
+`scopeKey` stays, as a DESCRIPTION of what the conversation is anchored to (it still drives the
+anchor set motir-ai receives and the panel label), not as its identity. The composite
+`@@unique([id, workspaceId])` that the turn FK points at is unaffected.
+
+### §3 — resume: your OWN session for the scope, only while it is RECENT
+
+Opening the planning surface for a scope resumes **the opening member's own** most recent session
+for that scope **if its `lastActivityAt` is within `PLAN_SESSION_RESUME_WINDOW_MS` = 2 hours**;
+otherwise nothing is resumed and the next first turn starts a new session, and the surface points to
+the earlier one on the Plans page. `lastActivityAt` moves on EVERY turn (user, assistant, system)
+and on every submit, inside the append's own row lock. The resume read runs under that lock too, so
+two tabs racing a first turn resolve to one session.
+
+**Why 2 hours:** longer than a working interruption (a meeting, a review, lunch), shorter than a
+day's context switch. A conversation left overnight is about yesterday's intent, and resuming it
+silently is what the story exists to stop. It is ONE named constant, so changing it is one edit.
+
+Only a `conversation`-origin session is resumed (§4): a session a door opened for a plan with no
+conversation has no turns to return to, and is reopened from the Plans page by id like any other.
+
+**Auto-resume is own-only; reopening is not.** Any member holding `ai:plan` may reopen ANY session
+of the project by id from the Plans page, as the shared thread allows today. A member without
+`ai:plan` sees the list and cannot continue a session.
+
+### §4 — origin: WHY a session exists, in SIX values
+
+`PlanChangeSession.origin` ∈ `conversation · mcp · generation · expand · cadence · legacy`:
+
+| value          | written by                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `conversation` | a first turn in the planning surface or the v1 / MCP plan-session doors                                                             |
+| `mcp`          | `create_plan` (`lib/mcp/tools/authorPlan.ts`) — a runbook or external agent authoring directly                                      |
+| `generation`   | `aiGenerationService` — Generate and the onboarding / migrate generate step; also a one-shot augment submitted with no conversation |
+| `expand`       | `aiPlanEditsService.submitExpand` reached without a conversation                                                                    |
+| `cadence`      | `autoPlanCadenceService` — the auto-plan watcher, which submits through `submitExpand`                                              |
+| `legacy`       | **the BACKFILL ONLY**, for a pre-existing plan whose producing conversation cannot be identified                                    |
+
+`legacy` exists because honesty requires it: core stores no job kind, and the `sourceJobId` of an
+earlier submit or of a revision matches no session's `lastJobId`, so for those plans the true origin
+is _unknown_ — and a plausible guess would be a fabricated record. A plan written without a
+conversation still gets a session, of its own origin, so _"every plan has a session"_ holds with no
+exception.
+
+⚠️ **This is NOT `Plan.origin`.** `Plan.origin` (`PlanOrigin`: `user | cadence`, MOTIR-916) answers
+_what decided to start this plan_ and is unchanged. The session's origin answers _which door opened
+the session_, lives on a separate enum (`PlanSessionOrigin`), and the two are never folded.
+
+### §5 — plan ↔ session: `Plan.sessionId`, many plans to one session, set once
+
+`Plan.sessionId` is a required FK to `PlanChangeSession`, **set at plan creation on every path**
+(`plansService.createPlan`'s three callers: `aiPlanEditsService`, `aiGenerationService`,
+`authorPlan.ts`) and **never re-pointed**. A revision keeps its session — `submitRevise` may still
+re-point `sourceJobId` for the job, but not `sessionId`. Refining produces successive plans on one
+session, which is exactly AMENDMENT 16 D5's _"the two plans are ONE actor"_, now as a column.
+
+**This CLOSES AMENDMENT 16 D5's open item.** Every reader that finds a plan's conversation through
+`lastJobId` moves to the column — `plansService`'s card-anchored resolution
+(`resolvePlanIdForWorkItem` and the pending-plan read), `contextualPlanningService`,
+`planChangeMailboxService`, and `plansService.releasePlanTargetLocks`'s session release through
+`planChangeSessionRepository.findByProjectAndLastJobId`. `lastJobId` survives
+only as what it always was: the job a resumed rail re-attaches its stream to. Existing plans are
+BACKFILLED: a plan whose `sourceJobId` equals a session's `lastJobId` joins that session; every other
+plan gets a session of its own, `origin = legacy` unless its door is known from the row (`authorSource
+= mcp` ⇒ `mcp`, `Plan.origin = cadence` ⇒ `cadence`).
+
+### §6 — locks: a session-held lock belongs to ONE session, and passes between sessions of a scope
+
+A `PlanTargetLock` held by a session names that session (`plan_target_lock.session_id`). When a
+member starts a new session of a scope whose older session still holds a live lease, the new session
+**takes the lease over in one transaction** — the lease row's holder moves, the target stays at
+`planning`, and there is no window with no holder — rather than being refused
+`PlanTargetLockedError` against the member's own older conversation. This is the shape of
+`planTargetLockService.handOff` (release-and-acquire in one transaction) extended ACROSS sessions:
+today's `handOff` releases only `lock.sessionId === sessionId`, so the cross-session take-over is a
+new operation of the same shape, and it is limited to sessions of the SAME scope. A lock held by a
+different scope, a plan-held lock (AMENDMENT 16 D5) or an expired lease behaves exactly as today.
+
+### §7 — what does NOT change
+
+- **The motir-ai wire.** No session id crosses it; correlation stays by `jobId`.
+- **The mailbox.** `PlanChangeMailboxEntry` stays keyed by job; only how its session is FOUND moves
+  (§5).
+- **Retention.** A session is deleted only by the project / workspace cascade and personal-data
+  erasure, as today. Nothing archives or expires a session.
+- **The plan-held lock** of AMENDMENT 16 (bug MOTIR-5640) — its park, D6's rest and D8's restore.
+
+### §8 — the Plans page lists SESSIONS
+
+A row is a session: its first turn (what was asked), who started it (`createdById`), `lastActivityAt`,
+and its plan's state — the latest plan's `PlanStatus` on that session, or _none_ when the session has
+proposed nothing. A session with no plan IS listed. The list pages newest-activity first and filters
+on that plan state. What a row LOOKS like is the design's (MOTIR-6019); where a row opens is its
+conversation, with its plan one click away.

@@ -216,6 +216,14 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
    * asking *is it decided?* (AMENDMENT 6, D3).
    */
   decisionReason: z.enum(PLAN_DECISION_REASONS).nullable(),
+  /**
+   * The planning SESSION the plan belongs to (MOTIR-6022; AMENDMENT 17 §5) — an
+   * MCP-only field on the same extension point as the four above. An agent that
+   * authored a plan reads back which conversation it hangs off; `create_plan`
+   * opens one of origin `mcp` for it. Null only on a row a pre-session build
+   * wrote during a rollout.
+   */
+  sessionId: z.string().nullable(),
   items: z.array(z.unknown()),
 });
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
@@ -243,6 +251,7 @@ export function presentMcpPlan(
     authorHarness: plan.authorHarness,
     authorModel: plan.authorModel,
     decisionReason: plan.decisionReason,
+    sessionId: plan.sessionId,
     // Each proposal carries the folder it NAMES and that folder's path
     // (MOTIR-5415) — `/api/v1`'s `folderId` / `folderPath`, on the same item the
     // `parentRef` rides. Only when the caller resolved them; the fields are then

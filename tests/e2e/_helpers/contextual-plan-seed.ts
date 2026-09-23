@@ -98,7 +98,7 @@ export async function seedContextualProposal(
     projectId,
     args.anchorWorkItemId ?? null,
     args.jobId,
-    () => appendContextualProposals(ctx, projectId, args),
+    (sessionId) => appendContextualProposals(ctx, projectId, args, sessionId),
     { anchorIsWorkItemId: true },
   );
   await plansService.markPlanned(plan.id, ctx);
@@ -109,10 +109,15 @@ async function appendContextualProposals(
   ctx: ServiceContext,
   projectId: string,
   args: Parameters<typeof seedContextualProposal>[2],
+  sessionId: string,
 ) {
   const plan = await plansService.createPlan(
     projectId,
-    { title: args.title, sourceJobId: args.jobId },
+    // On the conversation's own session (AMENDMENT 17 §5, MOTIR-6022) — as
+    // `ai-augment-replan-seed` does. Without it the plan opens a session of its
+    // own, parks the anchor as a SECOND planner, and the browser's first turn
+    // over the same card is refused `PLAN_TARGET_LOCKED`.
+    { title: args.title, sourceJobId: args.jobId, session: { sessionId } },
     ctx,
   );
   await plansService.addProposals(

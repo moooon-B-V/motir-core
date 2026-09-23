@@ -426,7 +426,13 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         items: { type: 'string', minLength: 1 },
         maxItems: 20,
         description:
-          'Optional work-item identifiers (e.g. ["ACME-7", "ACME-9"], case-insensitive) to ANCHOR the conversation at. Omit for the project-wide planning thread. The anchor SET is the thread\'s identity — order and duplicates do not matter, and the same set always resumes the same conversation.',
+          'Optional work-item identifiers (e.g. ["ACME-7", "ACME-9"], case-insensitive) to ANCHOR the conversation at. Omit for the project-wide planning thread. The anchor SET describes what the conversation is about — order and duplicates do not matter.',
+      },
+      sessionId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The `id` of the planning session to address — the `id` that `open_plan_session`, `append_plan_turn` and `submit_plan_session` return. Pass it on every later call to keep talking to the SAME conversation. Omit it to use your own recent session for this scope (active in the last 2 hours), or to start a new one.',
       },
       body: {
         type: 'string',
@@ -1403,7 +1409,13 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         items: { type: 'string', minLength: 1 },
         maxItems: 20,
         description:
-          'Optional work-item identifiers (e.g. ["ACME-7", "ACME-9"], case-insensitive) to ANCHOR the conversation at. Omit for the project-wide planning thread. The anchor SET is the thread\'s identity — order and duplicates do not matter, and the same set always resumes the same conversation.',
+          'Optional work-item identifiers (e.g. ["ACME-7", "ACME-9"], case-insensitive) to ANCHOR the conversation at. Omit for the project-wide planning thread. The anchor SET describes what the conversation is about — order and duplicates do not matter.',
+      },
+      sessionId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The `id` of the planning session to address — the `id` that `open_plan_session`, `append_plan_turn` and `submit_plan_session` return. Pass it on every later call to keep talking to the SAME conversation. Omit it to use your own recent session for this scope (active in the last 2 hours), or to start a new one.',
       },
     },
     required: ['projectKey'],
@@ -1876,7 +1888,13 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         items: { type: 'string', minLength: 1 },
         maxItems: 20,
         description:
-          'Optional work-item identifiers (e.g. ["ACME-7", "ACME-9"], case-insensitive) to ANCHOR the conversation at. Omit for the project-wide planning thread. The anchor SET is the thread\'s identity — order and duplicates do not matter, and the same set always resumes the same conversation.',
+          'Optional work-item identifiers (e.g. ["ACME-7", "ACME-9"], case-insensitive) to ANCHOR the conversation at. Omit for the project-wide planning thread. The anchor SET describes what the conversation is about — order and duplicates do not matter.',
+      },
+      sessionId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The `id` of the planning session to address — the `id` that `open_plan_session`, `append_plan_turn` and `submit_plan_session` return. Pass it on every later call to keep talking to the SAME conversation. Omit it to use your own recent session for this scope (active in the last 2 hours), or to start a new one.',
       },
       requirement: {
         type: 'object',

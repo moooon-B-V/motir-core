@@ -1,12 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
+import type { PlanChangeScope } from '@/lib/planChange/scope';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
-import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { addressOf, openTestSession } from '../helpers/planSession';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -50,6 +51,16 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
 
+// The session each case works on (MOTIR-6028). Every write names its session by
+// id now that the scope-keyed wrappers are gone; `openCurrent` opens (or resumes)
+// it the way the public `open` doors do and remembers its address.
+let current: { sessionId: string } = { sessionId: '' };
+async function openCurrent(pctx: ProjectContext, scope?: PlanChangeScope) {
+  const session = await openTestSession(pctx, scope);
+  current = addressOf(session);
+  return session;
+}
+
 function projectCtx(fx: WorkItemFixture): ProjectContext {
   return {
     userId: fx.ownerId,
@@ -67,16 +78,16 @@ function jobWithTurn(turn: unknown) {
 /** Open a thread, put a user turn on it, and SUBMIT — the state a real planner
  *  turn always arrives into (the recording is gated on the thread's own job). */
 async function submittedThread(ctx: ProjectContext) {
-  await planChangeSessionsService.getOrCreateForProject(ctx);
-  await planChangeSessionsService.appendTurn('add payments', ctx);
-  return planChangeSessionsService.submit(ctx);
+  await openCurrent(ctx);
+  await planChangeSessionsService.appendTurn('add payments', ctx, current);
+  return planChangeSessionsService.submit(ctx, current);
 }
 
 async function threadRows(fx: WorkItemFixture) {
   const session = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-    planChangeSessionRepository.findByProjectAndScope(
+    planChangeSessionRepository.findByIdInProject(
+      current.sessionId,
       fx.projectId,
-      PROJECT_SCOPE_KEY,
       fx.workspaceId,
       tx,
     ),
@@ -89,6 +100,7 @@ async function threadRows(fx: WorkItemFixture) {
 let fx: WorkItemFixture;
 
 beforeEach(async () => {
+  current = { sessionId: '' };
   await truncateAuthTables();
   submitJobMock.mockClear();
   submitJobMock.mockResolvedValue({ jobId: 'job-augment-1' });
@@ -109,7 +121,7 @@ describe('recordPlannerTurn — the assistant turn persists', () => {
       jobWithTurn({ action: 'draft', message: 'I searched the plan.', question: null }),
     );
 
-    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx);
+    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
 
     const assistant = dto.turns.filter((t) => t.role === 'assistant');
     expect(assistant).toHaveLength(1);
@@ -134,7 +146,7 @@ describe('recordPlannerTurn — the assistant turn persists', () => {
       }),
     );
 
-    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx);
+    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
     const asked = dto.turns.find((t) => t.role === 'assistant');
     // Persisted, not held on the client — this is the whole reason the pending
     // question survives a reload and can still be answered tomorrow.
@@ -149,7 +161,7 @@ describe('recordPlannerTurn — the assistant turn persists', () => {
       jobWithTurn({ action: 'draft', message: 'a report', question: null }),
     );
 
-    await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx);
+    await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
 
     const after = await threadRows(fx);
     // Byte-for-byte identical rows, in the same positions: adding an enum member
@@ -168,15 +180,15 @@ describe('recordPlannerTurn — the SAME locked seq allocation', () => {
       jobWithTurn({ action: 'draft', message: 'a report', question: null }),
     );
 
-    await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx);
+    await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
 
     const rows = await threadRows(fx);
     expect(rows.map((r) => r.seq)).toEqual([0, 1, 2]);
     expect(rows.map((r) => r.role)).toEqual(['user', 'system', 'assistant']);
     const session = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndScope(
+      planChangeSessionRepository.findByIdInProject(
+        current.sessionId,
         fx.projectId,
-        PROJECT_SCOPE_KEY,
         fx.workspaceId,
         tx,
       ),
@@ -195,8 +207,8 @@ describe('recordPlannerTurn — the SAME locked seq allocation', () => {
     // would read the same `turnCount` as the concurrent user append, and one of
     // the two would be lost to the unique. Both must land, in some order.
     await Promise.all([
-      planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx),
-      planChangeSessionsService.appendTurn('and make them smaller', ctx),
+      planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current),
+      planChangeSessionsService.appendTurn('and make them smaller', ctx, current),
     ]);
 
     const rows = await threadRows(fx);
@@ -217,8 +229,8 @@ describe('recordPlannerTurn — exactly ONE turn per job', () => {
       jobWithTurn({ action: 'draft', message: 'a report', question: null }),
     );
 
-    await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx);
-    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx);
+    await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
+    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
 
     // A reload, a second tab and a retried settle all replay this call — each is
     // a no-op that returns the thread as it stands, never a duplicate bubble.
@@ -236,8 +248,8 @@ describe('recordPlannerTurn — exactly ONE turn per job', () => {
     // Two tabs settling at once. Checked outside the lock, both would see "not
     // there yet" and both would insert.
     await Promise.all([
-      planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx),
-      planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx),
+      planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current),
+      planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current),
     ]);
 
     const rows = await threadRows(fx);
@@ -263,7 +275,7 @@ describe('recordPlannerTurn — a silent job is not a failure', () => {
       error: null,
     });
 
-    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx);
+    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
 
     // The plan-edit run itself succeeded and its proposals are on the canvas.
     // The worst outcome of an unreadable utterance is a thread with no narration.
@@ -275,7 +287,11 @@ describe('recordPlannerTurn — a silent job is not a failure', () => {
     const ctx = projectCtx(fx);
     await submittedThread(ctx);
 
-    const dto = await planChangeSessionsService.recordPlannerTurn('someone-elses-job', ctx);
+    const dto = await planChangeSessionsService.recordPlannerTurn(
+      'someone-elses-job',
+      ctx,
+      current,
+    );
 
     expect(dto.turns.filter((t) => t.role === 'assistant')).toHaveLength(0);
     // Gated BEFORE the read: a job this conversation never ran has no business
@@ -300,7 +316,7 @@ describe('recordPlannerTurn — work-item references', () => {
       }),
     );
 
-    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx);
+    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
 
     const report = dto.turns.find((t) => t.role === 'assistant')!;
     // The SHIPPED write-side normalization (MOTIR-1440), reused: a bare key both
@@ -324,7 +340,7 @@ describe('recordPlannerTurn — work-item references', () => {
       }),
     );
 
-    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx);
+    const dto = await planChangeSessionsService.recordPlannerTurn('job-augment-1', ctx, current);
 
     const report = dto.turns.find((t) => t.role === 'assistant')!;
     expect(report.body).toContain(`${fx.projectIdentifier}-999999`);
@@ -336,9 +352,9 @@ describe('recordPlannerTurn — work-item references', () => {
 describe('appendTurn — the answer flag', () => {
   it('records a reply sent from the answer bar as an ANSWER', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
-    await planChangeSessionsService.appendTurn('taking money from customers', ctx, undefined, {
+    await planChangeSessionsService.appendTurn('taking money from customers', ctx, current, {
       isAnswer: true,
     });
 
@@ -348,9 +364,9 @@ describe('appendTurn — the answer flag', () => {
 
   it('defaults to NOT an answer — a turn that changed the subject supersedes', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
-    await planChangeSessionsService.appendTurn('actually, re-sequence Billing first', ctx);
+    await planChangeSessionsService.appendTurn('actually, re-sequence Billing first', ctx, current);
 
     const rows = await threadRows(fx);
     expect(rows[0]!.isAnswer).toBe(false);

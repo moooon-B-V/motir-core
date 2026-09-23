@@ -179,8 +179,14 @@ function gatedWrites(t: Tenant, page: Page): { name: string; run: () => Promise<
         }),
     },
     {
-      name: 'ai:plan — open a plan-change session',
-      run: () => page.request.post('/api/ai/plan-change/session', { data: {} }),
+      // A session exists from its FIRST TURN (MOTIR-6023), so the door needs one:
+      // an empty body is a 400 BEFORE the gate, which would pass every refusal
+      // row for the wrong reason.
+      name: 'ai:plan — start a plan-change session',
+      run: () =>
+        page.request.post('/api/ai/plan-change/session', {
+          data: { body: 'Plan the billing epic' },
+        }),
     },
     {
       name: 'work_item:triage — read the moderation queue',
@@ -352,7 +358,9 @@ test.describe('MOTIR-2291 — the member-facing permissions, end to end', () => 
     expect(charts.status(), 'report:view is the ONE of the eight they take').toBe(200);
 
     // …and cannot run the planner.
-    const planning = await page.request.post('/api/ai/plan-change/session', { data: {} });
+    const planning = await page.request.post('/api/ai/plan-change/session', {
+      data: { body: 'Plan the billing epic' },
+    });
     expect(planning.status(), 'ai:plan is NOT in the implicit grant').toBe(403);
     expect(
       await db.planChangeSession.count({ where: { projectId: t.projectId } }),

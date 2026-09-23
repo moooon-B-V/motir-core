@@ -39,6 +39,7 @@ import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { persistAskTurn } from './_helpers/plan-session-turn';
 import {
   seedAiAugmentReplan,
   seedPlanChangeProposal,
@@ -115,14 +116,9 @@ async function stubAskSubmit(page: Page, jobId: string, planId: string): Promise
       await route.continue();
       return;
     }
-    const body = route.request().postDataJSON() as { body?: string };
-    const url = new URL(route.request().url());
-    const appended = await route.fetch({
-      url: `${url.origin}/api/ai/plan-change/session/turns`,
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      postData: JSON.stringify({ body: body.body ?? '' }),
-    });
+    // Through the real session doors — the held session, or a first turn that
+    // starts one (MOTIR-6023).
+    const appended = await persistAskTurn(route);
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

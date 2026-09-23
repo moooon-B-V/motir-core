@@ -48,6 +48,8 @@ export function toPlanChangeSessionDto(
     turnCount: row.turnCount,
     lastJobId: row.lastJobId,
     lastSubmittedAt: row.lastSubmittedAt ? row.lastSubmittedAt.toISOString() : null,
+    lastActivityAt: row.lastActivityAt.toISOString(),
+    origin: row.origin,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     turns: turns.map(toPlanChangeTurnDto),

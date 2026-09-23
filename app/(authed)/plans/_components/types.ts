@@ -1,48 +1,26 @@
-import type { PlanAuthorSourceDto, PlanOriginDto, PlanStatusDto } from '@/lib/dto/plans';
+import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
+import type { PlanStatusDto } from '@/lib/dto/plans';
 
-// The serializable view-model the Plans LIST row binds to (Subtask 7.21.1 /
-// MOTIR-1338). Built ON THE SERVER (`planRowView.ts`) from the `PlanDto` +
-// staleness verdict, so the client list/row components stay presentational —
-// they never touch the service layer (the access-path/4-layer rule) and never
-// re-derive a relative time (which would risk an SSR/CSR hydration mismatch).
+// The serializable view-model a Plans-list SESSION row binds to (MOTIR-6025,
+// `design/ai-planning/design-notes.md` Part XIX §19.2). Built ON THE SERVER
+// (`sessionRowView.ts`) from `PlanSessionRowDto`, so the row stays
+// presentational and never re-derives a relative time — which would risk an
+// SSR/CSR hydration mismatch.
 
-/** Which lifecycle timestamp the row's relative-time reads, so the row labels it
- *  with the matching verb (`planned 2h ago` / `approved …` / `declined …`). */
-export type PlanWhenKey = 'createdAt' | 'plannedAt' | 'approvedAt' | 'declinedAt';
-
-export interface PlanRowView {
+export interface SessionRowView {
   id: string;
-  status: PlanStatusDto;
-  /** WHY the plan was started — `cadence` is the auto-plan watcher, which is the
-   *  one state with no requester to name (`design/ai-planning/design-notes.md`
-   *  Part III §3). */
-  origin: PlanOriginDto;
-  /** WHO ASKED — resolved to a display NAME server-side, batched across the page
-   *  (`planRowView.ts`), because the DTO carries only an id and the row must stay
-   *  presentational. Null on a cadence plan and on any plan predating the
-   *  column. */
-  createdByName: string | null;
-  /** WHO WROTE it, and the ONLY field the row reads for it (MOTIR-2996): `mcp` +
-   *  a harness is an agent, `native` is Motir. Null is the *unattributed* state —
-   *  a plan predating the column, which now means exactly that rather than
-   *  doubling as *Motir generated it*. */
-  /** WHO DECIDED it — resolved to a display NAME server-side in the SAME batched
-   *  lookup as `createdByName` (MOTIR-3238). Null while the plan is undecided,
-   *  on a plan predating the column, and on an ABANDONED one, whose
-   *  `decidedById` is deliberately null because nobody decided it (MOTIR-3189) —
-   *  the row draws that absence rather than a placeholder. */
-  decidedByName: string | null;
-  authorSource: PlanAuthorSourceDto | null;
-  authorHarness: string | null;
-  /** The resolved display title — the plan's summary/idea, falling back to its
-   *  title, then a placeholder for an un-named (still generating) plan. */
+  origin: PlanSessionOriginDto;
+  /** What was asked — the first `user` turn — or, with no turn, the latest
+   *  plan's title. Empty when the session has neither. */
   title: string;
-  itemCount: number;
-  /** Number of proposed items flagged out-of-date (MOTIR-1340). Non-zero only
-   *  for a `planned` plan whose tree context drifted; drives the stale pill. */
-  staleCount: number;
-  whenKey: PlanWhenKey;
-  /** Pre-formatted relative time for `whenKey` (e.g. "2 hours ago"), computed
-   *  server-side against the request's shared `now` so it is hydration-stable. */
-  whenLabel: string;
+  /** The anchor set; empty = the whole project. */
+  targetKeys: string[];
+  /** Pre-formatted relative `lastActivityAt` ("12 minutes ago"). */
+  activeLabel: string;
+  /** Who started it; null on a cadence session and a departed member's. */
+  startedByName: string | null;
+  /** The latest plan — what the chip names and opens — or null (`No plan yet`). */
+  latestPlan: { id: string; status: PlanStatusDto } | null;
+  /** How many plans the session holds, the latest included. */
+  planCount: number;
 }

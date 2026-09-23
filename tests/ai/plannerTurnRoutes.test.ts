@@ -43,9 +43,9 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   parseSseFrame: vi.fn(),
 }));
 
-const { POST: openSession } = await import('@/app/api/ai/plan-change/session/route');
-const { POST: appendTurn } = await import('@/app/api/ai/plan-change/session/turns/route');
-const { POST: submit } = await import('@/app/api/ai/plan-change/session/submit/route');
+const { POST: startRoute } = await import('@/app/api/ai/plan-change/session/route');
+const { POST: turnsRoute } = await import('@/app/api/ai/plan-change/session/turns/route');
+const { POST: submitRoute } = await import('@/app/api/ai/plan-change/session/submit/route');
 const { POST: plannerTurn } = await import('@/app/api/ai/plan-change/session/planner-turn/route');
 const { MotirAiJobNotFoundError, MotirAiUnavailableError } = await import('@/lib/ai/errors');
 
@@ -59,13 +59,40 @@ function req(path: string, body: unknown, raw?: string): Request {
   });
 }
 
+// The conversation these cases work on (MOTIR-6023: every door names its
+// session by id). Nothing is created by opening; the FIRST turn starts it.
+let sid: string | null = null;
+
 const plannerReq = (body: unknown, raw?: string) =>
-  req('/api/ai/plan-change/session/planner-turn', body, raw);
-const turnReq = (body: unknown) => req('/api/ai/plan-change/session/turns', body);
+  req(
+    '/api/ai/plan-change/session/planner-turn',
+    body && typeof body === 'object' ? { sessionId: sid ?? 'no-session', ...body } : body,
+    raw,
+  );
+const turnReq = (body: Record<string, unknown>) => body;
+
+/** A look creates nothing any more (AMENDMENT 17 §1) — kept so the cases read
+ *  as the journey they describe. */
+async function openSession(): Promise<void> {}
+
+/** The first turn STARTS the conversation; every later one names it. */
+async function appendTurn(body: Record<string, unknown>): Promise<Response> {
+  if (!sid) {
+    const res = await startRoute(req('/api/ai/plan-change/session', body));
+    if (res.ok) sid = ((await res.clone().json()) as { id: string }).id;
+    return res;
+  }
+  return turnsRoute(req('/api/ai/plan-change/session/turns', { ...body, sessionId: sid }));
+}
+
+async function submit(): Promise<Response> {
+  return submitRoute(req('/api/ai/plan-change/session/submit', { sessionId: sid }));
+}
 
 let fx: WorkItemFixture;
 
 beforeEach(async () => {
+  sid = null;
   await truncateAuthTables();
   submitJobMock.mockClear();
   submitJobMock.mockResolvedValue({ jobId: 'job-augment-1' });
@@ -173,7 +200,12 @@ describe('POST …/planner-turn — the ANCHORED thread', () => {
     });
 
     const res = await plannerTurn(
-      plannerReq({ jobId: run.jobId, anchorId: story.id, targetKeys: [] }),
+      plannerReq({
+        jobId: run.jobId,
+        anchorId: story.id,
+        targetKeys: [],
+        sessionId: run.sessionId,
+      }),
     );
 
     expect(res.status).toBe(200);

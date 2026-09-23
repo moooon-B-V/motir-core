@@ -6109,6 +6109,25 @@ enum PlanOrigin {
   @@map("plan_origin")
 }
 
+/// WHICH DOOR opened a `PlanChangeSession` (AMENDMENT 17 §4). Distinct from
+/// `PlanOrigin` (why a PLAN was started) and never folded into it.
+/// `conversation` — a first turn in the planning surface or a plan-session door;
+/// `mcp` — `create_plan`; `generation` — Generate / onboarding; `expand` — an
+/// expand job with no conversation; `cadence` — the auto-plan watcher;
+/// `legacy` — BACKFILL ONLY, for a pre-existing plan whose producing
+/// conversation cannot be identified (core stores no job kind, so the honest
+/// value is "unknown", never a plausible guess).
+enum PlanSessionOrigin {
+  conversation
+  mcp
+  generation
+  expand
+  cadence
+  legacy
+
+  @@map("plan_session_origin")
+}
+
 /// An AI-planning proposal bundle (Story 7.21 — the Plan substrate). A `Plan`
 /// gathers proposed `PlanItem` operations the user reviews and approves/declines
 /// as ONE unit. Nothing it proposes is real until approve: an `add` lives only
@@ -6195,13 +6214,21 @@ model Plan {
   /// reads null, so a consumer treats it as "not recorded" and falls back to the
   /// status. Never set on `approved` — an approval has one history.
   decisionReason PlanDecisionReason?     @map("decision_reason")
+  /// The planning SESSION this plan belongs to (AMENDMENT 17 §5) — set at
+  /// creation on every author path and NEVER re-pointed; a revision keeps it
+  /// (only `sourceJobId` moves). Closes AMENDMENT 16 D5's `lastJobId` lookup.
+  /// NULLABLE AT THE DATABASE only so a build predating this column can still
+  /// write a plan during a rollout; "every plan has a session" is enforced by
+  /// the author paths (MOTIR-6022) and the MOTIR-6020 backfill.
+  sessionId      String?                 @map("session_id")
 
-  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  decidedBy User?          @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-  createdBy User?          @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  items     PlanItem[]
-  revisions PlanRevision[]
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  session     PlanChangeSession? @relation(fields: [sessionId], references: [id], onDelete: NoAction)
+  decidedBy   User?              @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdBy   User?              @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items       PlanItem[]
+  revisions   PlanRevision[]
   /// The targets this plan has PARKED at `planning` while it is open
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
@@ -6209,6 +6236,9 @@ model Plan {
 
   @@index([workspaceId])
   @@index([projectId, createdAt])
+  /// A session's plans — the Plans row's latest-plan state and every
+  /// plan→session read that replaced the `lastJobId` lookup (AMENDMENT 17 §5).
+  @@index([sessionId])
   /// The pending-proposal GATE's read (MOTIR-916): "does this project have an
   /// UNDECIDED plan (`generating` / `planned`)?" runs per project on every
   /// cadence tick, so it gets its own composite index rather than riding the
@@ -7620,24 +7650,29 @@ enum MigrateOnboardingStatus {
 /// thread (the resumability anchor, the `MigrateOnboarding` precedent), and the
 /// accumulated turns — not just the latest one — are what the job receives.
 ///
-/// ONE thread per project (`project_id` UNIQUE — the DB is the guard, not an
-/// app-level check), so "open the plan-change conversation" is a get-or-create
-/// with no ambiguity about WHICH thread resumes. Workspace-scoped tenant data
-/// (RLS in the same migration).
+/// MANY sessions per project and per anchor set, over time (story MOTIR-6011 —
+/// `docs/decisions/agent-authored-plans.md` AMENDMENT 17 §1–§2, which
+/// supersedes the original "ONE thread per project"). A session is a record
+/// from its FIRST TURN, is addressed by its `id` on every door, and `scopeKey`
+/// DESCRIBES what it is anchored to rather than identifying it. Which session a
+/// re-opened surface resumes is a service decision (§3: your own, active within
+/// the resume window), not a uniqueness guarantee. Every `Plan` belongs to
+/// exactly one session through `Plan.sessionId` (§5). Workspace-scoped tenant
+/// data (RLS in the same migration).
 model PlanChangeSession {
-  id              String    @id @default(cuid())
-  workspaceId     String    @map("workspace_id")
-  projectId       String    @map("project_id")
+  id              String            @id @default(cuid())
+  workspaceId     String            @map("workspace_id")
+  projectId       String            @map("project_id")
   /// Who opened the thread. SetNull — a departed author leaves the conversation
   /// intact and unattributed (the `Notification` actor semantics).
-  createdById     String?   @map("created_by_id")
+  createdById     String?           @map("created_by_id")
   /// The number of turns on the thread — the READ-DERIVED value an append
   /// allocates the next `seq` from. Appends lock this row (`SELECT … FOR UPDATE`)
   /// and re-read it inside the transaction, so two concurrent appends serialize
   /// into two ordered turns instead of colliding on `seq` (the
   /// lock-before-read-derived-update rule); the `(session_id, seq)` unique is the
   /// DB-level backstop, translated to a typed error.
-  turnCount       Int       @default(0) @map("turn_count")
+  turnCount       Int               @default(0) @map("turn_count")
   /// The CANONICAL anchor-set discriminator (7.12.3 · MOTIR-909) — what makes a
   /// thread "the conversation about THESE work items" rather than "the project's
   /// conversation". Derived, never client-supplied: `targetKeys` deduped, sorted,
@@ -7645,23 +7680,33 @@ model PlanChangeSession {
   /// PROJECT-WIDE thread — the shipped 7.30 conversation, unchanged — so the
   /// `(project_id, scope_key)` unique still admits exactly one of those per
   /// project while allowing one contextual thread per distinct anchor set.
-  scopeKey        String    @default("") @map("scope_key")
+  scopeKey        String            @default("") @map("scope_key")
   /// The anchor SET this thread is scoped to, as work-item IDENTIFIERS ("MOTIR-812"),
   /// in the same canonical order `scopeKey` is built from. Empty on the project-wide
   /// thread. Stored (not re-derived from `scopeKey`) because it is what a RESUMED
   /// thread re-submits as the motir-ai `context.targetKeys` anchor set, and what the
   /// panel labels the conversation with. Identifiers, not FKs — the same opaque-token
   /// posture `last_job_id` takes; a deleted anchor must not cascade the conversation.
-  targetKeys      String[]  @default([]) @map("target_keys")
+  targetKeys      String[]          @default([]) @map("target_keys")
   /// The most recent plan-edit job this thread submitted (an OPAQUE motir-ai job
   /// token — a plain scalar, NOT an FK; the `plan.sourceJobId` precedent). What
   /// a resumed rail re-attaches its stream / diff review to.
-  lastJobId       String?   @map("last_job_id")
+  lastJobId       String?           @map("last_job_id")
   /// When that submission happened. Null until the thread has been submitted at
   /// least once (a thread can accumulate turns without ever submitting).
-  lastSubmittedAt DateTime? @map("last_submitted_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  lastSubmittedAt DateTime?         @map("last_submitted_at")
+  /// When the session was last USED — every turn (user, assistant, system) and
+  /// every submit moves it (AMENDMENT 17 §3). The resume window and the Plans
+  /// page's newest-activity order both read it. Not `updatedAt`, which any
+  /// bookkeeping write (a lock, a label) would also move.
+  lastActivityAt  DateTime          @default(now()) @map("last_activity_at")
+  /// WHICH DOOR opened the session (AMENDMENT 17 §4) — NOT `Plan.origin`, which
+  /// answers what decided to start a plan. `legacy` is written only by the
+  /// MOTIR-6020 backfill, for a pre-existing plan whose conversation cannot be
+  /// identified.
+  origin          PlanSessionOrigin @default(conversation)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
 
   workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -7674,21 +7719,24 @@ model PlanChangeSession {
   /// The work items this conversation currently HOLDS (Story MOTIR-2786 ·
   /// MOTIR-2787). Cascade — a deleted thread releases everything it held.
   targetLocks PlanTargetLock[]
+  /// The plans this conversation produced (AMENDMENT 17 §5) — many plans to one
+  /// session: a refine or a revision writes a successor plan on the SAME
+  /// session, never a new one.
+  plans       Plan[]
 
-  /// ONE plan-change conversation per project PER ANCHOR SET (7.12.3 · MOTIR-909
-  /// widened the 7.30 `@@unique([projectId])`). `scope_key = ''` is the
-  /// project-wide thread, so the original "one resumable thread per project"
-  /// guarantee is preserved exactly; a contextual thread anchored at a set of
-  /// work items gets its own row, and re-opening the same anchor set RESUMES it
-  /// rather than forking a second conversation. A lost create-race still
-  /// translates from P2002 to "read the winner's row".
-  @@unique([projectId, scopeKey])
   /// The composite-FK TARGET (MOTIR-1735). `id` is already unique on its own, so
   /// this adds no integrity constraint of its own — it exists solely to make
   /// `(id, workspace_id)` a referenceable key, so `plan_change_turn` can point its
   /// FK at the PAIR and prove a turn's tenancy against its parent's. See the
   /// `session` relation on `PlanChangeTurn`.
   @@unique([id, workspaceId])
+  /// The RESUME read (AMENDMENT 17 §3): "this member's most recent session in
+  /// this scope". Replaces the `@@unique([projectId, scopeKey])` MOTIR-909 set —
+  /// a scope now holds many sessions, so uniqueness is gone and this index
+  /// serves the one read the unique used to answer.
+  @@index([projectId, scopeKey, createdById, lastActivityAt])
+  /// The Plans page's session list (AMENDMENT 17 §8), newest activity first.
+  @@index([projectId, lastActivityAt])
   @@index([workspaceId])
   @@map("plan_change_session")
 }
@@ -8005,8 +8053,8 @@ model PlanTargetLock {
   /// (and a competing acquire) may take the item back.
   expiresAt   DateTime @map("expires_at")
 
-  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workItem  WorkItem           @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   session   PlanChangeSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   plan      Plan?              @relation(fields: [planId], references: [id], onDelete: Cascade)
@@ -10590,16 +10638,16 @@ model MonitorIssue {
   /// The tags have already been through the user-identifying filter
   /// (`lib/monitors/evidence.ts`), and the request is a method and a PATH — no
   /// query, header, cookie or body ever reaches this row.
-  exceptionType    String?   @map("exception_type")
-  exceptionMessage String?   @map("exception_message")
-  frames           Json?
-  tags             Json?
-  requestMethod    String?   @map("request_method")
-  requestPath      String?   @map("request_path")
-  eventId          String?   @map("event_id")
-  eventAt          DateTime? @map("event_at")
+  exceptionType     String?   @map("exception_type")
+  exceptionMessage  String?   @map("exception_message")
+  frames            Json?
+  tags              Json?
+  requestMethod     String?   @map("request_method")
+  requestPath       String?   @map("request_path")
+  eventId           String?   @map("event_id")
+  eventAt           DateTime? @map("event_at")
   /// When the evidence above was last READ successfully. `NULL` = never read.
-  evidenceReadAt   DateTime? @map("evidence_read_at")
+  evidenceReadAt    DateTime? @map("evidence_read_at")
   /// When a context read was last ATTEMPTED — a success writes it with
   /// `evidenceReadAt`, a failure writes it alone. Later than `evidenceReadAt` =
   /// the evidence is STALE: the last check failed, and what stands is older.

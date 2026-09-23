@@ -33,7 +33,12 @@ const streamContextual = vi.fn();
 const readPending = vi.fn();
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  openPlanChangeSession: (...a: unknown[]) => openSession(...a),
+  // The resume read answers `{ session, earlier }` (MOTIR-6024); these cases
+  // mock the SESSION, so the factory wraps it.
+  findResumableSession: async (...a: unknown[]) => ({
+    session: await (openSession as (...args: unknown[]) => unknown)(...a),
+    earlier: null,
+  }),
   resumeContextualSession: (...a: unknown[]) => resumeContextual(...a),
   recordPlannerTurn: (...a: unknown[]) => recordPlannerTurn(...a),
   submitContextualPlan: (...a: unknown[]) => submitContextualPlan(...a),
@@ -127,7 +132,7 @@ describe('the stop RAISES, and does not claim the run is over', () => {
     expect(result.current.state.stopping).toBe(true);
     expect(result.current.state.stopped).toBe(false);
     expect(result.current.state.phase).toBe('streaming');
-    expect(stopRun).toHaveBeenCalledWith('job-1', 'stop:job-1');
+    expect(stopRun).toHaveBeenCalledWith('s1', 'job-1', 'stop:job-1');
 
     await act(async () => {
       release();

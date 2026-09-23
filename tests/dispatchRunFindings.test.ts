@@ -502,7 +502,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     // the plan's `sourceJobId`. This is the chain `approvePlanForWorkItem`
     // walks forward; the recorder walks it back.
     const jobId = `job_${leaf.key.toLowerCase()}`;
-    await adminDb.planChangeSession.create({
+    const thread = await adminDb.planChangeSession.create({
       data: {
         workspaceId: fixture.workspaceId,
         projectId: fixture.projectId,
@@ -512,7 +512,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     });
     const plan = await plansService.createPlan(
       fixture.projectId,
-      { title: 'The work item was wrong', sourceJobId: jobId },
+      { title: 'The work item was wrong', sourceJobId: jobId, session: { sessionId: thread.id } },
       fixture.ctx,
     );
     await closeWithProposal(plan.id);
@@ -536,7 +536,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     const runId = await openRunWithLiveLeg(leaf.key);
 
     const jobId = `job_empty_${leaf.key.toLowerCase()}`;
-    await adminDb.planChangeSession.create({
+    const thread = await adminDb.planChangeSession.create({
       data: {
         workspaceId: fixture.workspaceId,
         projectId: fixture.projectId,
@@ -546,7 +546,11 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     });
     const plan = await plansService.createPlan(
       fixture.projectId,
-      { title: 'A pass that produced nothing', sourceJobId: jobId },
+      {
+        title: 'A pass that produced nothing',
+        sourceJobId: jobId,
+        session: { sessionId: thread.id },
+      },
       fixture.ctx,
     );
     const closed = await plansService.markPlanned(plan.id, fixture.ctx);
@@ -560,7 +564,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     const runId = await openRunWithLiveLeg(leaf.key);
 
     const jobId = 'job_project_wide';
-    await adminDb.planChangeSession.create({
+    const thread = await adminDb.planChangeSession.create({
       data: {
         workspaceId: fixture.workspaceId,
         projectId: fixture.projectId,
@@ -573,7 +577,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     });
     const plan = await plansService.createPlan(
       fixture.projectId,
-      { title: 'A project-wide plan', sourceJobId: jobId },
+      { title: 'A project-wide plan', sourceJobId: jobId, session: { sessionId: thread.id } },
       fixture.ctx,
     );
     await closeWithProposal(plan.id);
@@ -587,7 +591,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     const runId = await openRunWithLiveLeg(leaf.key);
 
     const jobId = 'job_multi';
-    await adminDb.planChangeSession.create({
+    const thread = await adminDb.planChangeSession.create({
       data: {
         workspaceId: fixture.workspaceId,
         projectId: fixture.projectId,
@@ -597,7 +601,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     });
     const plan = await plansService.createPlan(
       fixture.projectId,
-      { title: 'A two-anchor plan', sourceJobId: jobId },
+      { title: 'A two-anchor plan', sourceJobId: jobId, session: { sessionId: thread.id } },
       fixture.ctx,
     );
     await closeWithProposal(plan.id);
@@ -623,7 +627,7 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     const runId = await openRunWithLiveLeg(leaf.key);
 
     const jobId = 'job_ghost_anchor';
-    await adminDb.planChangeSession.create({
+    const thread = await adminDb.planChangeSession.create({
       data: {
         workspaceId: fixture.workspaceId,
         projectId: fixture.projectId,
@@ -634,7 +638,11 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     });
     const plan = await plansService.createPlan(
       fixture.projectId,
-      { title: 'Anchored at a work item that is gone', sourceJobId: jobId },
+      {
+        title: 'Anchored at a work item that is gone',
+        sourceJobId: jobId,
+        session: { sessionId: thread.id },
+      },
       fixture.ctx,
     );
     await closeWithProposal(plan.id);

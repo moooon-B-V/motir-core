@@ -238,6 +238,9 @@ export function PlanningWorkspaceHost({
   const { state, send, retry, correctTurn, approve, discard, stop } = usePlanChangeConversation({
     onApproved,
     anchorId,
+    // A NAMED conversation (`planSession=`, a Plans row) reopens that one
+    // (MOTIR-6024).
+    sessionId: launch.sessionId ?? null,
   });
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the

@@ -367,7 +367,7 @@ export const FILE_TEST_SECONDS: Readonly<Record<string, number>> = {
   'tests/integration/plans/planDrift.test.ts': 15.1,
   'tests/integration/plans/planReviewService.test.ts': 39.7,
   'tests/integration/plans/planRevisions.test.ts': 20.7,
-  'tests/integration/plans/planRowView.test.ts': 13.4,
+  'tests/integration/plans/planSessionsList.test.ts': 13.4,
   'tests/integration/plans/planStalenessService.test.ts': 23.9,
   'tests/integration/plans/planStatusStale.test.ts': 12.7,
   'tests/integration/plans/planTimelineMerge.test.ts': 10.9,

@@ -55,8 +55,8 @@ export interface PlanHistorySectionProps {
   initial: PlanHistoryInitial;
 }
 
-// PlanRow's own glyph and square per status (`app/(authed)/plans/_components/
-// PlanRow.tsx`) — reused so a plan reads the same here as on /plans.
+// The retired `PlanRow`'s glyph and square per status — `/plans` lists
+// conversations since MOTIR-6025, so this section is now their one reader.
 const STATUS_ICON: Record<PlanStatusDto, LucideIcon> = {
   generating: Loader2,
   planned: Clock,

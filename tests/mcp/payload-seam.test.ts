@@ -1004,8 +1004,11 @@ describe('the work-loop payloads', () => {
       // plan, and v1's `planSchema` stays as wide as it is today. `discarded`
       // rather than a null here so the enum arm is actually exercised.
       decisionReason: 'discarded' as const,
+      // The planning SESSION (MOTIR-6022) — the same MCP extension point.
+      sessionId: 'session-1',
       items: [{ id: 'p-1' }],
     } as never);
+    expect(plan.sessionId).toBe('session-1');
     expect(plan.decidedById).toBe('user-1');
     expect(plan.createdById).toBe('requester-1');
     expect(plan.authorSource).toBe('mcp');

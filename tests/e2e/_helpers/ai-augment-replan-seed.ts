@@ -201,10 +201,13 @@ export async function seedPlanChangeProposal(
   // The SESSION half of a real submit: the append runs as a turn of the scope's
   // conversation, which is then left as the browser finds it.
   const scopeKey = args.scopeKey ?? PROJECT_SCOPE_KEY;
-  const plan = await asConversationTurn(ctx, projectId, scopeKey, args.jobId, async () => {
+  const plan = await asConversationTurn(ctx, projectId, scopeKey, args.jobId, async (sessionId) => {
     const plan = await plansService.createPlan(
       projectId,
-      { title: args.title, sourceJobId: args.jobId },
+      // On the conversation's own session (AMENDMENT 17 §5, MOTIR-6022) — a
+      // plan with no session of its own would park its targets and collide
+      // with the next turn over the same card.
+      { title: args.title, sourceJobId: args.jobId, session: { sessionId } },
       ctx,
     );
     await plansService.addProposals(

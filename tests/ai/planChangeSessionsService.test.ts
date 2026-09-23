@@ -1,19 +1,22 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
+import type { PlanChangeScope } from '@/lib/planChange/scope';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import {
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
-  PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
+  PlanSessionNotFoundError,
 } from '@/lib/planChange/errors';
+import { usersService } from '@/lib/services/usersService';
+import { projectMembersService } from '@/lib/services/projectMembersService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { addressOf, openTestSession } from '../helpers/planSession';
 import { truncateAuthTables } from '../helpers/db';
 
 // planChangeSessionsService — the plan-change CONVERSATION seam (Story 7.30 ·
@@ -55,6 +58,16 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 const { planChangeSessionsService, buildAccumulatedIntent } =
   await import('@/lib/services/planChangeSessionsService');
 
+// The session each case works on (MOTIR-6028). Every write names its session by
+// id now that the scope-keyed wrappers are gone; `openCurrent` opens (or resumes)
+// it the way the public `open` doors do and remembers its address.
+let current: { sessionId: string } = { sessionId: '' };
+async function openCurrent(pctx: ProjectContext, scope?: PlanChangeScope) {
+  const session = await openTestSession(pctx, scope);
+  current = addressOf(session);
+  return session;
+}
+
 /** The ProjectContext the routes hand the service, built from a fixture. */
 function projectCtx(fx: WorkItemFixture): ProjectContext {
   return {
@@ -68,6 +81,7 @@ function projectCtx(fx: WorkItemFixture): ProjectContext {
 let fx: WorkItemFixture;
 
 beforeEach(async () => {
+  current = { sessionId: '' };
   await truncateAuthTables();
   submitJobMock.mockClear();
   submitJobMock.mockResolvedValue({ jobId: 'job-augment-1' });
@@ -119,41 +133,65 @@ describe('buildAccumulatedIntent', () => {
 describe('planChangeSessionsService — open + resume', () => {
   it('creates the project-scoped thread, then RESUMES the same one with its turns', async () => {
     const ctx = projectCtx(fx);
-    const opened = await planChangeSessionsService.getOrCreateForProject(ctx);
+    const opened = await openCurrent(ctx);
     expect(opened.projectId).toBe(fx.projectId);
     expect(opened.turns).toEqual([]);
     expect(opened.turnCount).toBe(0);
     expect(opened.lastJobId).toBeNull();
     expect(opened.lastSubmittedAt).toBeNull();
 
-    await planChangeSessionsService.appendTurn('Add auth to billing', ctx);
+    await planChangeSessionsService.appendTurn('Add auth to billing', ctx, current);
 
     // "Re-opening the workspace" — the same call the rail makes on mount.
-    const resumed = await planChangeSessionsService.getOrCreateForProject(ctx);
+    const resumed = await openCurrent(ctx);
     expect(resumed.id).toBe(opened.id);
     expect(resumed.turnCount).toBe(1);
     expect(resumed.turns.map((t) => t.body)).toEqual(['Add auth to billing']);
   });
 
-  it('keeps ONE thread per project under a concurrent open (the unique is the guard)', async () => {
+  it('keeps ONE session per member under a concurrent open (the scope lock is the guard)', async () => {
+    // MOTIR-6028: the `(project, scope)` unique is gone (AMENDMENT 17 §2), so the
+    // guard is `openForScope`'s per-member scope lock + the re-read under it.
     const ctx = projectCtx(fx);
-    const [a, b] = await Promise.all([
-      planChangeSessionsService.getOrCreateForProject(ctx),
-      planChangeSessionsService.getOrCreateForProject(ctx),
-    ]);
-    // Both callers get the SAME thread — get-or-create is idempotent, so a lost
-    // create-race resolves to the winner's row, not an error.
+    const [a, b] = await Promise.all([openCurrent(ctx), openCurrent(ctx)]);
+    // Both callers get the SAME session — the second open queues on the lock
+    // and resumes the first's row rather than forking one.
     expect(a.id).toBe(b.id);
     const rows = await adminDb.planChangeSession.findMany({ where: { projectId: fx.projectId } });
     expect(rows).toHaveLength(1);
+  });
+
+  it('gives a SECOND member of the same project a session of their own (AMENDMENT 17 §3)', async () => {
+    // Resume is own-only: a teammate opening the same scope does not land in the
+    // owner's conversation.
+    const teammate = await usersService.createUser({
+      email: 'open-teammate@example.com',
+      password: 'correct-horse-battery-staple-9',
+      name: 'Teammate',
+    });
+    await adminDb.workspaceMembership.create({
+      data: { userId: teammate.id, workspaceId: fx.workspaceId, role: 'member' },
+    });
+    await projectMembersService.addMember({
+      key: fx.project.identifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: teammate.id,
+      role: 'member',
+    });
+
+    const mine = await openCurrent(projectCtx(fx));
+    const theirs = await openCurrent({ ...projectCtx(fx), userId: teammate.id });
+    expect(theirs.id).not.toBe(mine.id);
+    expect(await adminDb.planChangeSession.count({ where: { projectId: fx.projectId } })).toBe(2);
   });
 
   it('gives each project its own thread', async () => {
     const other = await makeWorkItemFixture({ name: 'Acme', identifier: 'OTHR' });
     // Same workspace? No — makeWorkItemFixture mints a fresh tenant, so use its
     // own context. The assertion is that the threads are distinct rows.
-    const a = await planChangeSessionsService.getOrCreateForProject(projectCtx(fx));
-    const b = await planChangeSessionsService.getOrCreateForProject(projectCtx(other));
+    const a = await openCurrent(projectCtx(fx));
+    const b = await openCurrent(projectCtx(other));
     expect(a.id).not.toBe(b.id);
     expect(a.projectId).toBe(fx.projectId);
     expect(b.projectId).toBe(other.projectId);
@@ -163,11 +201,11 @@ describe('planChangeSessionsService — open + resume', () => {
 describe('planChangeSessionsService — appending turns', () => {
   it('appends in order with gapless 0-based seq and returns the updated session DTO', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
-    await planChangeSessionsService.appendTurn('First', ctx);
-    await planChangeSessionsService.appendTurn('Second', ctx);
-    const after = await planChangeSessionsService.appendTurn('Third', ctx);
+    await planChangeSessionsService.appendTurn('First', ctx, current);
+    await planChangeSessionsService.appendTurn('Second', ctx, current);
+    const after = await planChangeSessionsService.appendTurn('Third', ctx, current);
 
     expect(after.turnCount).toBe(3);
     expect(after.turns.map((t) => t.seq)).toEqual([0, 1, 2]);
@@ -179,43 +217,45 @@ describe('planChangeSessionsService — appending turns', () => {
 
   it('trims the body and rejects a blank turn', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
-    const after = await planChangeSessionsService.appendTurn('  padded  ', ctx);
+    const after = await planChangeSessionsService.appendTurn('  padded  ', ctx, current);
     expect(after.turns[0]!.body).toBe('padded');
 
-    await expect(planChangeSessionsService.appendTurn('   ', ctx)).rejects.toBeInstanceOf(
+    await expect(planChangeSessionsService.appendTurn('   ', ctx, current)).rejects.toBeInstanceOf(
       EmptyPlanChangeTurnError,
     );
   });
 
-  it('rejects an append when the project has no conversation yet', async () => {
+  it('rejects an append addressed to a session that does not exist', async () => {
     await expect(
-      planChangeSessionsService.appendTurn('anything', projectCtx(fx)),
-    ).rejects.toBeInstanceOf(PlanChangeSessionNotFoundError);
+      planChangeSessionsService.appendTurn('anything', projectCtx(fx), {
+        sessionId: 'no-such-session',
+      }),
+    ).rejects.toBeInstanceOf(PlanSessionNotFoundError);
   });
 });
 
 describe('planChangeSessionsService — append concurrency', () => {
   it('SERIALIZES two concurrent appends into two ordered turns (the row lock)', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
+    await openCurrent(ctx);
 
     // Both appends read the same `turnCount` before either commits — without the
     // `SELECT … FOR UPDATE` + re-read they would both allocate seq 0 and one
     // would be lost (or collide). Every legitimate outcome is accepted: the ORDER
     // of the two bodies is a genuine race, only the ordering invariant is not.
     await Promise.all([
-      planChangeSessionsService.appendTurn('A', ctx),
-      planChangeSessionsService.appendTurn('B', ctx),
+      planChangeSessionsService.appendTurn('A', ctx, current),
+      planChangeSessionsService.appendTurn('B', ctx, current),
     ]);
 
     const rows = await withWorkspaceServiceContext(fx.workspaceId, async (tx) =>
       planChangeTurnRepository.listBySessionId(
         (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-          planChangeSessionRepository.findByProjectAndScope(
+          planChangeSessionRepository.findByIdInProject(
+            current.sessionId,
             fx.projectId,
-            PROJECT_SCOPE_KEY,
             fx.workspaceId,
             tx,
           ),
@@ -228,9 +268,9 @@ describe('planChangeSessionsService — append concurrency', () => {
     expect(rows.map((r) => r.body).sort()).toEqual(['A', 'B']);
 
     const session = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndScope(
+      planChangeSessionRepository.findByIdInProject(
+        current.sessionId,
         fx.projectId,
-        PROJECT_SCOPE_KEY,
         fx.workspaceId,
         tx,
       ),
@@ -240,7 +280,7 @@ describe('planChangeSessionsService — append concurrency', () => {
 
   it('surfaces a LOST append race as a typed error, never a raw Prisma P2002', async () => {
     const ctx = projectCtx(fx);
-    const opened = await planChangeSessionsService.getOrCreateForProject(ctx);
+    const opened = await openCurrent(ctx);
 
     // Reproduce the state a lost race leaves behind: a turn already occupies the
     // position the session's `turnCount` still points at. (The lock prevents the
@@ -261,7 +301,9 @@ describe('planChangeSessionsService — append concurrency', () => {
         ),
     );
 
-    const err = await planChangeSessionsService.appendTurn('mine', ctx).catch((e: unknown) => e);
+    const err = await planChangeSessionsService
+      .appendTurn('mine', ctx, current)
+      .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PlanChangeTurnConflictError);
     expect((err as PlanChangeTurnConflictError).code).toBe('PLAN_CHANGE_TURN_CONFLICT');
   });
@@ -278,20 +320,18 @@ describe('planChangeSessionsService — tenant isolation', () => {
       projectId: other.projectId,
       project: other.project,
     };
-    await expect(planChangeSessionsService.getOrCreateForProject(crossCtx)).rejects.toBeInstanceOf(
-      ProjectNotFoundError,
-    );
-    await expect(planChangeSessionsService.appendTurn('x', crossCtx)).rejects.toBeInstanceOf(
-      ProjectNotFoundError,
-    );
-    await expect(planChangeSessionsService.submit(crossCtx)).rejects.toBeInstanceOf(
+    await expect(openCurrent(crossCtx)).rejects.toBeInstanceOf(ProjectNotFoundError);
+    await expect(
+      planChangeSessionsService.appendTurn('x', crossCtx, current),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+    await expect(planChangeSessionsService.submit(crossCtx, current)).rejects.toBeInstanceOf(
       ProjectNotFoundError,
     );
   });
 
   it('does not read another tenant’s thread through the workspace-scoped repository', async () => {
     const other = await makeWorkItemFixture({ name: 'Rival', identifier: 'RIVL' });
-    await planChangeSessionsService.getOrCreateForProject(projectCtx(other));
+    await openCurrent(projectCtx(other));
 
     // The row exists — but not for tenant A's workspace scope. BOTH reads bind
     // tenant B (MOTIR-2881): the row has to be VISIBLE for the pair to say anything,
@@ -300,9 +340,9 @@ describe('planChangeSessionsService — tenant isolation', () => {
     // because the POLICY hid the row, and the existence half proved nothing.
     expect(
       await withWorkspaceServiceContext(other.workspaceId, (tx) =>
-        planChangeSessionRepository.findByProjectAndScope(
+        planChangeSessionRepository.findByIdInProject(
+          current.sessionId,
           other.projectId,
-          PROJECT_SCOPE_KEY,
           fx.workspaceId,
           tx,
         ),
@@ -310,9 +350,9 @@ describe('planChangeSessionsService — tenant isolation', () => {
     ).toBeNull();
     expect(
       await withWorkspaceServiceContext(other.workspaceId, (tx) =>
-        planChangeSessionRepository.findByProjectAndScope(
+        planChangeSessionRepository.findByIdInProject(
+          current.sessionId,
           other.projectId,
-          PROJECT_SCOPE_KEY,
           other.workspaceId,
           tx,
         ),
@@ -324,11 +364,11 @@ describe('planChangeSessionsService — tenant isolation', () => {
 describe('planChangeSessionsService — submitting the accumulated intent', () => {
   it('sends EVERY turn to the SHIPPED augment job and records the submission', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
-    await planChangeSessionsService.appendTurn('Add auth to the billing epic', ctx);
-    await planChangeSessionsService.appendTurn('Make the subtasks smaller', ctx);
+    await openCurrent(ctx);
+    await planChangeSessionsService.appendTurn('Add auth to the billing epic', ctx, current);
+    await planChangeSessionsService.appendTurn('Make the subtasks smaller', ctx, current);
 
-    const result = await planChangeSessionsService.submit(ctx);
+    const result = await planChangeSessionsService.submit(ctx, current);
 
     // ONE job, of the SHIPPED kind — no new job kind, no engine change.
     expect(submitJobMock).toHaveBeenCalledTimes(1);
@@ -360,13 +400,13 @@ describe('planChangeSessionsService — submitting the accumulated intent', () =
 
   it('keeps accumulating ACROSS submissions — a second submit still carries turn 1', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
-    await planChangeSessionsService.appendTurn('Add auth to the billing epic', ctx);
-    await planChangeSessionsService.submit(ctx);
+    await openCurrent(ctx);
+    await planChangeSessionsService.appendTurn('Add auth to the billing epic', ctx, current);
+    await planChangeSessionsService.submit(ctx, current);
 
     submitJobMock.mockResolvedValue({ jobId: 'job-augment-2' });
-    await planChangeSessionsService.appendTurn('Actually, make them smaller', ctx);
-    const second = await planChangeSessionsService.submit(ctx);
+    await planChangeSessionsService.appendTurn('Actually, make them smaller', ctx, current);
+    const second = await planChangeSessionsService.submit(ctx, current);
 
     const payload = (
       submitJobMock.mock.calls[1] as unknown as [string, unknown, { prompt: string }]
@@ -380,28 +420,30 @@ describe('planChangeSessionsService — submitting the accumulated intent', () =
 
   it('rejects a submit with nothing to send', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
-    await expect(planChangeSessionsService.submit(ctx)).rejects.toBeInstanceOf(
+    await openCurrent(ctx);
+    await expect(planChangeSessionsService.submit(ctx, current)).rejects.toBeInstanceOf(
       EmptyPlanChangeIntentError,
     );
     expect(submitJobMock).not.toHaveBeenCalled();
   });
 
-  it('rejects a submit on a project with no conversation', async () => {
-    await expect(planChangeSessionsService.submit(projectCtx(fx))).rejects.toBeInstanceOf(
-      PlanChangeSessionNotFoundError,
-    );
+  it('rejects a submit addressed to a session that does not exist', async () => {
+    await expect(
+      planChangeSessionsService.submit(projectCtx(fx), { sessionId: 'no-such-session' }),
+    ).rejects.toBeInstanceOf(PlanSessionNotFoundError);
   });
 
   it('leaves the thread untouched when the AI submit fails — the turns survive a retry', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
-    await planChangeSessionsService.appendTurn('Split the epic', ctx);
+    await openCurrent(ctx);
+    await planChangeSessionsService.appendTurn('Split the epic', ctx, current);
 
     submitJobMock.mockRejectedValueOnce(new Error('motir-ai unreachable'));
-    await expect(planChangeSessionsService.submit(ctx)).rejects.toThrow('motir-ai unreachable');
+    await expect(planChangeSessionsService.submit(ctx, current)).rejects.toThrow(
+      'motir-ai unreachable',
+    );
 
-    const session = await planChangeSessionsService.getOrCreateForProject(ctx);
+    const session = await openCurrent(ctx);
     expect(session.turnCount).toBe(1);
     expect(session.lastJobId).toBeNull();
     expect(session.turns.map((t) => t.role)).toEqual(['user']);

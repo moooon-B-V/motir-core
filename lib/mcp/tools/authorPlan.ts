@@ -1137,6 +1137,9 @@ export async function runCreatePlan(
       authorSource: 'mcp',
       authorHarness: args.plannedWithHarness ?? null,
       authorModel: args.plannedWithModel ?? null,
+      // Its own session, of origin `mcp`, owned by the token's user
+      // (AMENDMENT 17 §4–§5; MOTIR-6022). The tool's INPUT schema is untouched.
+      session: { origin: 'mcp' },
     },
     ctx,
   );

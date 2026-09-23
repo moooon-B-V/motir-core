@@ -34,7 +34,9 @@ export const POST = withV1Route<{ projectKey: string }>({ permission: 'ai:plan' 
     ctx.service,
   );
 
-  const session = await planChangeSessionsService.getOrCreateForScope(pctx, scope);
+  // The named session, else the caller's resumable one, else a new one — the
+  // response's `id` is the session to pass back as `sessionId` (MOTIR-6028).
+  const session = await planChangeSessionsService.openPublic(pctx, scope, body.sessionId);
 
   return NextResponse.json(presentPlanSession(session));
 });

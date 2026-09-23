@@ -25,15 +25,31 @@ import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
-import type { PlanChangeSessionDto, PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
+import type {
+  PlanChangeSessionDto,
+  PlanChangeSubmitResultDto,
+  ResumableSessionDto,
+} from '@/lib/dto/planChange';
+import { planRepository } from '@/lib/repositories/planRepository';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import {
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
+  PlanSessionNotFoundError,
 } from '@/lib/planChange/errors';
-import { PROJECT_SCOPE, PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
+import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
+import { resumableSince } from '@/lib/planChange/sessionWindow';
+
+/**
+ * How a write ADDRESSES its session (AMENDMENT 17 §2, story MOTIR-6011): by its
+ * ID. A scope holds many sessions over time, so the id is the only address that
+ * names exactly one. (The scope-key compatibility address MOTIR-6021 kept for
+ * the doors' migration was removed with its last caller, MOTIR-6028.)
+ */
+export type PlanChangeSessionAddress = { sessionId: string };
 
 // The plan-change CONVERSATION seam (Story 7.30 · MOTIR-1728) — what makes
 // changing a plan a dialogue instead of a one-shot prompt.
@@ -156,28 +172,29 @@ async function assertCanPlan(projectId: string, ctx: ServiceContext): Promise<vo
   await projectAccessService.assertPermission(projectId, ctx, 'ai:plan');
 }
 
-/** Resolve ONE of the project's conversations — the shared precondition of append
- *  + submit. `scopeKey` selects the thread: `''` is the project-wide one (the
- *  shipped 7.30 behaviour), a canonical anchor-set key is a contextual planning
- *  thread (7.12.3 · MOTIR-909). Access-gated for EDIT: both mutate the thread.
- *  (The per-TARGET view gate is the caller's — `contextualPlanningService`
- *  resolves every anchor through `workItemsService` first, so an anchor the actor
- *  cannot browse never reaches a scope key.) */
+/** Resolve the ADDRESSED conversation — the shared precondition of every write
+ *  (AMENDMENT 17 §2: by id; a session of another project is
+ *  `PLAN_SESSION_NOT_FOUND`). Gated on `ai:plan`: every caller mutates it. */
 async function requireSession(
   pctx: ProjectContext,
-  scopeKey: string = PROJECT_SCOPE_KEY,
+  address: PlanChangeSessionAddress,
 ): Promise<PlanChangeSession> {
   const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
   await assertCanPlan(pctx.projectId, ctx);
+  return findSessionById(pctx, address.sessionId);
+}
+
+/** One session BY ID in this project, or the typed `PLAN_SESSION_NOT_FOUND` — an
+ *  id from another project never resolves to a sibling session of the same
+ *  scope (AMENDMENT 17 §2). Gate-free: the callers assert their own permission. */
+async function findSessionById(
+  pctx: ProjectContext,
+  sessionId: string,
+): Promise<PlanChangeSession> {
   const session = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-    planChangeSessionRepository.findByProjectAndScope(
-      pctx.projectId,
-      scopeKey,
-      pctx.workspaceId,
-      tx,
-    ),
+    planChangeSessionRepository.findByIdInProject(sessionId, pctx.projectId, pctx.workspaceId, tx),
   );
-  if (!session) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+  if (!session) throw new PlanSessionNotFoundError(sessionId);
   return session;
 }
 
@@ -227,207 +244,389 @@ async function resolveCitations(
   return wanted.filter((c) => known.has(c));
 }
 
+interface AppendTurn {
+  role: PlanChangeTurnRole;
+  body: string;
+  jobId?: string | null;
+  authorId?: string | null;
+  question?: string | null;
+  isAnswer?: boolean;
+  intent?: PlanChangeTurnIntent | null;
+  citations?: string[];
+}
+
 async function appendLocked(
   session: PlanChangeSession,
   pctx: ProjectContext,
-  turn: {
-    role: PlanChangeTurnRole;
-    body: string;
-    jobId?: string | null;
-    authorId?: string | null;
-    question?: string | null;
-    isAnswer?: boolean;
-    intent?: PlanChangeTurnIntent | null;
-    citations?: string[];
-  },
+  turn: AppendTurn,
   patch: PlanChangeSessionUpdateInput = {},
   skipIf?: (tx: Prisma.TransactionClient) => Promise<boolean>,
 ): Promise<PlanChangeSessionDto> {
   return withWorkspaceContext(
     { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
     async (tx) => {
-      const locked = await planChangeSessionRepository.lockById(session.id, tx);
-      if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-      // Re-read UNDER the lock: `turnCount` is the read-derived value the next
-      // `seq` comes from, and a sibling append may have moved it between the
-      // caller's read and this transaction.
-      const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
-      if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-
-      if (skipIf && (await skipIf(tx))) return toDto(fresh, pctx, tx);
-
-      const seq = fresh.turnCount;
-      try {
-        await planChangeTurnRepository.create(
-          {
-            workspaceId: pctx.workspaceId,
-            sessionId: fresh.id,
-            seq,
-            role: turn.role,
-            body: turn.body,
-            jobId: turn.jobId ?? null,
-            question: turn.question ?? null,
-            isAnswer: turn.isAnswer ?? false,
-            intent: turn.intent ?? null,
-            citations: turn.citations ?? [],
-            authorId: turn.authorId ?? null,
-          },
-          tx,
-        );
-      } catch (err) {
-        // The `(session_id, seq)` unique fired: some writer claimed this position
-        // without holding the lock (a desynced `turnCount`). Surface the typed
-        // conflict — a raw P2002 never escapes the service.
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-          throw new PlanChangeTurnConflictError(fresh.id, seq);
-        }
-        throw err;
-      }
-
-      const updated = await planChangeSessionRepository.update(
-        fresh.id,
-        { ...patch, turnCount: seq + 1 },
-        tx,
-      );
-      return toDto(updated, pctx, tx);
+      const row = await appendWithin(session.id, pctx, turn, patch, tx, skipIf);
+      return toDto(row, pctx, tx);
     },
   );
 }
 
+/**
+ * The transactional CORE of {@link appendLocked}, factored out so the FIRST turn
+ * of a new session can be appended inside the transaction that creates the
+ * session (MOTIR-6021) — a session with no turn is exactly the "opened by a look"
+ * row AMENDMENT 17 §1 forbids. `tx` is REQUIRED; this never opens a transaction.
+ *
+ * Every append moves `lastActivityAt` in the SAME update that bumps `turnCount`
+ * (§3): the resume window and the Plans page's order both read it, and a turn
+ * that did not move it would let a live conversation age out mid-sentence.
+ */
+async function appendWithin(
+  sessionId: string,
+  pctx: ProjectContext,
+  turn: AppendTurn,
+  patch: PlanChangeSessionUpdateInput,
+  tx: Prisma.TransactionClient,
+  skipIf?: (tx: Prisma.TransactionClient) => Promise<boolean>,
+): Promise<PlanChangeSession> {
+  const locked = await planChangeSessionRepository.lockById(sessionId, tx);
+  if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+  // Re-read UNDER the lock: `turnCount` is the read-derived value the next
+  // `seq` comes from, and a sibling append may have moved it between the
+  // caller's read and this transaction.
+  const fresh = await planChangeSessionRepository.findById(sessionId, pctx.workspaceId, tx);
+  if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+
+  if (skipIf && (await skipIf(tx))) return fresh;
+
+  const seq = fresh.turnCount;
+  try {
+    await planChangeTurnRepository.create(
+      {
+        workspaceId: pctx.workspaceId,
+        sessionId: fresh.id,
+        seq,
+        role: turn.role,
+        body: turn.body,
+        jobId: turn.jobId ?? null,
+        question: turn.question ?? null,
+        isAnswer: turn.isAnswer ?? false,
+        intent: turn.intent ?? null,
+        citations: turn.citations ?? [],
+        authorId: turn.authorId ?? null,
+      },
+      tx,
+    );
+  } catch (err) {
+    // The `(session_id, seq)` unique fired: some writer claimed this position
+    // without holding the lock (a desynced `turnCount`). Surface the typed
+    // conflict — a raw P2002 never escapes the service.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new PlanChangeTurnConflictError(fresh.id, seq);
+    }
+    throw err;
+  }
+
+  return planChangeSessionRepository.update(
+    fresh.id,
+    { ...patch, turnCount: seq + 1, lastActivityAt: new Date() },
+    tx,
+  );
+}
+
+/**
+ * RESUME-OR-START under the member's scope lock (AMENDMENT 17 §3, §6) — the core
+ * of {@link planChangeSessionsService.startWithFirstTurn} and of the public
+ * `open` doors' {@link planChangeSessionsService.openForScope}. Takes the
+ * member's scope lock, RE-READS their resumable session under it, and either
+ * resumes it (refreshing its target lease) or creates a new session and takes
+ * the scope's targets — handing over any live lease the member's own older
+ * sessions of this scope still hold. Returns the session id. `tx` is REQUIRED.
+ */
+async function resumeOrStartWithin(
+  pctx: ProjectContext,
+  scope: PlanChangeScope,
+  now: Date,
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  await planChangeSessionRepository.lockScopeForUser(
+    pctx.projectId,
+    scope.scopeKey,
+    pctx.userId,
+    tx,
+  );
+  const resumable = await planChangeSessionRepository.findResumableForUser(
+    pctx.projectId,
+    scope.scopeKey,
+    pctx.userId,
+    pctx.workspaceId,
+    resumableSince(now),
+    tx,
+  );
+
+  let sessionId: string;
+  if (resumable) {
+    sessionId = resumable.id;
+    await planTargetLockService.acquireForScopeWithin(sessionId, scope.targetKeys, pctx, now, tx);
+  } else {
+    const created = await planChangeSessionRepository.create(
+      {
+        workspaceId: pctx.workspaceId,
+        projectId: pctx.projectId,
+        createdById: pctx.userId,
+        scopeKey: scope.scopeKey,
+        targetKeys: scope.targetKeys,
+        origin: 'conversation',
+        lastActivityAt: now,
+      },
+      tx,
+    );
+    sessionId = created.id;
+    const predecessors = await planChangeSessionRepository.listIdsForUserInScope(
+      pctx.projectId,
+      scope.scopeKey,
+      pctx.userId,
+      pctx.workspaceId,
+      created.id,
+      tx,
+    );
+    await planTargetLockService.acquireForScopeWithin(sessionId, scope.targetKeys, pctx, now, tx, {
+      takeOverFrom: predecessors,
+    });
+  }
+  return sessionId;
+}
+
 export const planChangeSessionsService = {
   /**
-   * Open the conversation for ONE SCOPE, or RESUME the existing one — the rail's
-   * (and the work-item panel's) mount read. Idempotent by construction: the
-   * `(project_id, scope_key)` unique admits at most one thread per scope, so a
-   * lost create-race re-reads the winner's row and returns it rather than
-   * failing.
+   * The RESUME read (AMENDMENT 17 §3): the caller's OWN most recent session for
+   * the scope, if its last turn was inside `PLAN_SESSION_RESUME_WINDOW_MS`, else
+   * `null`. Another member's session is never resumed automatically — reopening
+   * one is an explicit by-id act ({@link getById}). WRITES NOTHING and takes no
+   * lock: looking at the door is not starting a conversation.
    *
-   * `scope` is derived from an ALREADY-RESOLVED anchor set (`buildScope`), never
-   * from raw client input: the caller has resolved and permission-checked every
-   * anchor, so an item the actor cannot browse can never become part of a key.
-   *
-   * ⚠️ OPENING TAKES THE TARGET LOCK (Story MOTIR-2786 · MOTIR-2787). Every
-   * anchor in the scope moves to `planning` and is held EXCLUSIVELY by this
-   * thread; a second session whose scope overlaps a held item is refused with
-   * `PlanTargetLockedError` naming the item and the holder. The scope key cannot
-   * do this job — `[MOTIR-9]` and `[MOTIR-9, MOTIR-4]` are two different threads
-   * addressing one common item — so the exclusion lives on the ITEM.
-   *
-   * It runs AFTER the session row exists, because the lease points at the session
-   * that holds it. It is idempotent for the holder (a re-open refreshes the lease
-   * rather than failing), which is what keeps this safe as a mount read. And it
-   * is deliberately NOT in {@link findForScope}: looking at the door is not
-   * starting a conversation, and must not take a lock any more than it writes a
-   * row.
+   * Browse-gated, like {@link getById}: it reads a conversation.
    */
-  async getOrCreateForScope(
+  async findResumable(
     pctx: ProjectContext,
-    scope: PlanChangeScope = PROJECT_SCOPE,
-  ): Promise<PlanChangeSessionDto> {
-    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
-    await assertCanPlan(pctx.projectId, ctx);
-
-    const existing = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndScope(
-        pctx.projectId,
-        scope.scopeKey,
-        pctx.workspaceId,
-        tx,
-      ),
-    );
-    if (existing) {
-      await planTargetLockService.acquireForScope(existing.id, scope.targetKeys, pctx);
-      return toDto(existing, pctx);
-    }
-
-    try {
-      const row = await withWorkspaceContext(
-        { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-        async (tx) => {
-          const created = await planChangeSessionRepository.create(
-            {
-              workspaceId: pctx.workspaceId,
-              projectId: pctx.projectId,
-              createdById: pctx.userId,
-              scopeKey: scope.scopeKey,
-              targetKeys: scope.targetKeys,
-            },
-            tx,
-          );
-          // ONE transaction with the session write. A thread row that commits
-          // while its leases do not would exist, be resumable, and hold nothing —
-          // so a refusal rolls the open back entirely: the conversation was never
-          // started, because its targets were already taken.
-          await planTargetLockService.acquireForScopeWithin(
-            created.id,
-            scope.targetKeys,
-            pctx,
-            new Date(),
-            tx,
-          );
-          return created;
-        },
-      );
-      return toDto(row, pctx);
-    } catch (err) {
-      // A concurrent opener won the unique-index race. "Open the conversation" is
-      // idempotent, so the right answer is the winner's thread — not an error.
-      // The LOCK is not idempotent that way, though: the winner's thread is a
-      // DIFFERENT session, so the loser acquires against it and is told who holds
-      // the targets, which is the correct answer to "can I plan this?".
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        const winner = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-          planChangeSessionRepository.findByProjectAndScope(
-            pctx.projectId,
-            scope.scopeKey,
-            pctx.workspaceId,
-            tx,
-          ),
-        );
-        if (winner) {
-          await planTargetLockService.acquireForScope(winner.id, scope.targetKeys, pctx);
-          return toDto(winner, pctx);
-        }
-      }
-      throw err;
-    }
-  },
-
-  /**
-   * READ one scope's thread without creating it — the entrance's mount read
-   * (MOTIR-910). The workspace opens on an item the user may never have planned
-   * before, and merely LOOKING at the door must not write a session row; so this
-   * returns `null` for a scope that has no thread yet, and the first submitted
-   * turn is what creates it (via {@link getOrCreateForScope}).
-   *
-   * Gated on `canBrowse` rather than `canEdit`: this is a read of a conversation,
-   * and the write paths (append / submit) keep their own edit gate.
-   */
-  async findForScope(
-    pctx: ProjectContext,
-    scope: PlanChangeScope,
+    scopeKey: string = PROJECT_SCOPE_KEY,
+    now: Date = new Date(),
   ): Promise<PlanChangeSessionDto | null> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
-
-    const existing = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndScope(
+    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findResumableForUser(
         pctx.projectId,
-        scope.scopeKey,
+        scopeKey,
+        pctx.userId,
         pctx.workspaceId,
+        resumableSince(now),
         tx,
       ),
     );
-    return existing ? toDto(existing, pctx) : null;
+    return row ? toDto(row, pctx) : null;
   },
 
   /**
-   * Open / resume the PROJECT-WIDE conversation — the shipped 7.30 entry point
-   * the planning rail mounts on, unchanged. The one-element case of
-   * {@link getOrCreateForScope} with the empty scope.
+   * One session BY ID — any member who may browse the project may READ any of
+   * its sessions (AMENDMENT 17 §3: reopening from the Plans page is not
+   * own-only). Writes nothing. An id outside this project is
+   * `PLAN_SESSION_NOT_FOUND`.
    */
-  async getOrCreateForProject(pctx: ProjectContext): Promise<PlanChangeSessionDto> {
-    return this.getOrCreateForScope(pctx, PROJECT_SCOPE);
+  async getById(pctx: ProjectContext, sessionId: string): Promise<PlanChangeSessionDto> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
+    const row = await findSessionById(pctx, sessionId);
+    // The REOPEN extras (MOTIR-6024): the reopened line names who started it,
+    // a member without `ai:plan` reads it read-only, and a still-undecided plan
+    // comes back reviewable — the three things a Plans row's reopen needs.
+    const [startedBy, pending, viewerCanPlan] = await Promise.all([
+      withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+        planChangeSessionRepository.findStarter(row.id, pctx.workspaceId, tx),
+      ),
+      withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+        planRepository.findLatestBySession(row.id, tx),
+      ),
+      assertCanPlan(pctx.projectId, ctx).then(
+        () => true,
+        (err: unknown) => {
+          if (err instanceof PermissionDeniedError) return false;
+          throw err;
+        },
+      ),
+    ]);
+    const undecided =
+      pending && pending.status !== 'approved' && pending.status !== 'declined' ? pending.id : null;
+    return {
+      ...(await toDto(row, pctx)),
+      startedBy,
+      startedByViewer: row.createdById === pctx.userId,
+      viewerCanPlan,
+      pendingPlanId: undecided,
+    };
+  },
+
+  /**
+   * The RESUME read plus what a FRESH start points to (AMENDMENT 17 §3;
+   * MOTIR-6024): the caller's resumable conversation for the scope — or, when
+   * there is none, the scope's most recent OTHER conversation (any member's),
+   * which the overlay's notice links to on the Plans page. Writes nothing.
+   */
+  async findResumableWithEarlier(
+    pctx: ProjectContext,
+    scopeKey: string = PROJECT_SCOPE_KEY,
+    now: Date = new Date(),
+  ): Promise<ResumableSessionDto> {
+    const session = await planChangeSessionsService.findResumable(pctx, scopeKey, now);
+    if (session) return { session, earlier: null };
+    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findLatestConversationInScope(
+        pctx.projectId,
+        scopeKey,
+        pctx.workspaceId,
+        null,
+        tx,
+      ),
+    );
+    return {
+      session: null,
+      earlier: row
+        ? {
+            id: row.id,
+            targetKeys: row.targetKeys,
+            lastActivityAt: row.lastActivityAt.toISOString(),
+            startedBy: row.createdBy,
+            mine: row.createdById === pctx.userId,
+          }
+        : null,
+    };
+  },
+
+  /**
+   * RESUME-OR-START with the member's FIRST TURN — the only way a conversation
+   * comes into existence (AMENDMENT 17 §1). In ONE transaction:
+   *
+   *  1. take the member's scope lock ({@link planChangeSessionRepository.lockScopeForUser});
+   *  2. RE-READ the resumable session UNDER it — so a second tab that sent its
+   *     first turn a moment earlier is found here, and this turn lands on THAT
+   *     session instead of forking a second one (the read-derived-write rule:
+   *     the choice between append and create reads `lastActivityAt`);
+   *  3. resume it (refreshing its target lease) — or create a new session and
+   *     take the scope's target lock, TAKING OVER any live lease the member's
+   *     own older sessions of this scope still hold (§6) rather than being
+   *     refused by their own earlier conversation;
+   *  4. append the turn, which moves `lastActivityAt`.
+   *
+   * The result is the session the turn landed on, so a caller that lost the race
+   * observes the winner's id. `ai:plan`-gated: it writes.
+   */
+  async startWithFirstTurn(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+    body: string,
+    opts: { isAnswer?: boolean } = {},
+  ): Promise<PlanChangeSessionDto> {
+    const trimmed = body.trim();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await assertCanPlan(pctx.projectId, ctx);
+    const now = new Date();
+
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const sessionId = await resumeOrStartWithin(pctx, scope, now, tx);
+
+        const row = await appendWithin(
+          sessionId,
+          pctx,
+          { role: 'user', body: trimmed, authorId: pctx.userId, isAnswer: opts.isAnswer === true },
+          {},
+          tx,
+        );
+        return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * The PUBLIC `open` doors' resume-or-start (MOTIR-6028) — `POST
+   * /api/v1/projects/{key}/plan-session` and the MCP `open_plan_session`. The
+   * caller's resumable session for the scope, or a NEW one, under the same lock
+   * and lease hand-over as {@link startWithFirstTurn}, and with no turn.
+   *
+   * ⚠️ WHY AN OPEN MAY CREATE HERE AND NOT IN THE BROWSER (AMENDMENT 17 §1).
+   * The browser's mount is a LOOK and creates nothing. These doors are an
+   * explicit act by an API client or agent that is about to talk — and the
+   * deployed `motir plan` CLI reads a session (its id and thread) from `open`
+   * before its first turn, so returning nothing would break every shipped
+   * client. The session this creates is a `conversation` like any other.
+   */
+  async openForScope(pctx: ProjectContext, scope: PlanChangeScope): Promise<PlanChangeSessionDto> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await assertCanPlan(pctx.projectId, ctx);
+    const now = new Date();
+    const row = await withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const sessionId = await resumeOrStartWithin(pctx, scope, now, tx);
+        const session = await planChangeSessionRepository.findById(sessionId, pctx.workspaceId, tx);
+        if (!session) throw new PlanSessionNotFoundError(sessionId);
+        return session;
+      },
+    );
+    return toDto(row, pctx);
+  },
+
+  // ── The PUBLIC doors (MOTIR-6028) ─────────────────────────────────────────
+  // The v1 plan-session routes and the MCP `open_plan_session` /
+  // `append_plan_turn` / `submit_plan_session` tools share ONE resolution, here,
+  // so the two surfaces cannot drift. Each takes an OPTIONAL `sessionId`: given,
+  // it addresses exactly that session (another project's is
+  // `PLAN_SESSION_NOT_FOUND`); absent, the caller keeps the pre-session
+  // behaviour — their resumable session for the scope, or a first turn starts
+  // one — so a client built before the id existed keeps working.
+
+  /** Open: the named session, else the caller's resumable one, else a new one. */
+  async openPublic(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+    sessionId?: string,
+  ): Promise<PlanChangeSessionDto> {
+    if (!sessionId) return planChangeSessionsService.openForScope(pctx, scope);
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await assertCanPlan(pctx.projectId, ctx);
+    return toDto(await findSessionById(pctx, sessionId), pctx);
+  },
+
+  /** Append: to the named session (re-taking its targets, as a continuing
+   *  conversation does), else resume-or-start with this turn. */
+  async appendPublic(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+    body: string,
+    sessionId?: string,
+  ): Promise<PlanChangeSessionDto> {
+    if (!sessionId) return planChangeSessionsService.startWithFirstTurn(pctx, scope, body);
+    await requireSession(pctx, { sessionId });
+    await planTargetLockService.acquireForScope(sessionId, scope.targetKeys, pctx);
+    return planChangeSessionsService.appendTurn(body, pctx, { sessionId });
+  },
+
+  /** Submit: the named session, else the caller's resumable one — with neither
+   *  there is nothing to submit (`PLAN_CHANGE_SESSION_NOT_FOUND`). */
+  async submitPublic(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+    requirement?: SubmittedRequirement,
+    sessionId?: string,
+  ): Promise<PlanChangeSubmitResultDto> {
+    // Gated by the SIBLINGS it delegates to (`findResumable` browse, `submit`
+    // `ai:plan`) — `tests/permissions/noUngovernedOperation.test.ts` follows this
+    // `this.` hop as its real-code control.
+    const id = sessionId ?? (await this.findResumable(pctx, scope.scopeKey))?.id;
+    if (!id) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+    return this.submit(pctx, { sessionId: id }, requirement);
   },
 
   /**
@@ -436,7 +635,7 @@ export const planChangeSessionsService = {
    * Appending does NOT submit: turns accumulate until the user asks for the
    * change, which is what makes refinement across turns possible.
    *
-   * `scopeKey` selects WHICH thread (default: the project-wide one).
+   * `address` names WHICH conversation, by its `{ sessionId }`.
    *
    * `isAnswer` marks the turn as the REPLY to the planner's pending question
    * (MOTIR-2226) — set by the composer's answer bar, and by nothing else. It
@@ -447,12 +646,12 @@ export const planChangeSessionsService = {
   async appendTurn(
     body: string,
     pctx: ProjectContext,
-    scopeKey: string = PROJECT_SCOPE_KEY,
+    address: PlanChangeSessionAddress,
     opts: { isAnswer?: boolean; intent?: PlanChangeTurnIntent; jobId?: string } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
-    const session = await requireSession(pctx, scopeKey);
+    const session = await requireSession(pctx, address);
     return appendLocked(session, pctx, {
       role: 'user',
       body: trimmed,
@@ -490,11 +689,11 @@ export const planChangeSessionsService = {
   async appendAnswerTurn(
     input: { jobId: string; body: string; citations?: readonly string[] },
     pctx: ProjectContext,
-    scopeKey: string = PROJECT_SCOPE_KEY,
+    address: PlanChangeSessionAddress,
   ): Promise<PlanChangeSessionDto> {
     const trimmed = input.body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
-    const session = await requireSession(pctx, scopeKey);
+    const session = await requireSession(pctx, address);
     const citations = await resolveCitations(input.citations ?? [], pctx);
     return appendLocked(
       session,
@@ -531,9 +730,9 @@ export const planChangeSessionsService = {
     intent: PlanChangeTurnIntent,
     pctx: ProjectContext,
     opts: { corrected?: boolean; jobId?: string } = {},
-    scopeKey: string = PROJECT_SCOPE_KEY,
+    address: PlanChangeSessionAddress,
   ): Promise<PlanChangeSessionDto> {
-    const session = await requireSession(pctx, scopeKey);
+    const session = await requireSession(pctx, address);
     return withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       async (tx) => {
@@ -558,8 +757,13 @@ export const planChangeSessionsService = {
           },
           tx,
         );
-        const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
-        if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        // A correction is the member acting on the thread, so it moves
+        // `lastActivityAt` like a turn does (AMENDMENT 17 §3).
+        const fresh = await planChangeSessionRepository.update(
+          session.id,
+          { lastActivityAt: new Date() },
+          tx,
+        );
         return toDto(fresh, pctx, tx);
       },
     );
@@ -598,9 +802,9 @@ export const planChangeSessionsService = {
   async recordPlannerTurn(
     jobId: string,
     pctx: ProjectContext,
-    scopeKey: string = PROJECT_SCOPE_KEY,
+    address: PlanChangeSessionAddress,
   ): Promise<PlanChangeSessionDto> {
-    const session = await requireSession(pctx, scopeKey);
+    const session = await requireSession(pctx, address);
     // (2) The thread narrates its OWN run. A mismatch is not an error — the
     // client may simply be replaying a stale settle after a newer turn — so it
     // yields the current thread rather than throwing at the user.
@@ -699,10 +903,10 @@ export const planChangeSessionsService = {
    */
   async submit(
     pctx: ProjectContext,
-    scopeKey: string = PROJECT_SCOPE_KEY,
+    address: PlanChangeSessionAddress,
     requirement?: SubmittedRequirement,
   ): Promise<PlanChangeSubmitResultDto> {
-    const session = await requireSession(pctx, scopeKey);
+    const session = await requireSession(pctx, address);
     const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
       planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx),
     );
@@ -718,8 +922,12 @@ export const planChangeSessionsService = {
     // orphan row to clean up.
     const { jobId, planId } =
       session.targetKeys.length > 0
-        ? await aiPlanEditsService.submitContextual(intent, session.targetKeys, pctx, requirement)
-        : await aiPlanEditsService.submitAugment(intent, pctx, requirement);
+        ? await aiPlanEditsService.submitContextual(intent, session.targetKeys, pctx, requirement, {
+            sessionId: session.id,
+          })
+        : await aiPlanEditsService.submitAugment(intent, pctx, requirement, {
+            sessionId: session.id,
+          });
 
     const updated = await appendLocked(
       session,
