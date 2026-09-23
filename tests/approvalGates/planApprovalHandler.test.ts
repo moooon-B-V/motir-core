@@ -38,11 +38,10 @@ import { truncateAuthTables } from '../helpers/db';
 // THE `plan_approval` HANDLER AND ITS REGISTRATION (Story MOTIR-6012 · Subtask
 // MOTIR-6035; ADR `approval-gates.md` §11.3–§11.6) — against a REAL Postgres.
 //
-// Nothing raises a plan gate yet (MOTIR-6036), so every gate here is inserted by
-// `adminDb` exactly as that raise will write it: card-less, the plan in `subjectId`,
-// routed to the requester. Everything else — the plan, its proposals, the revision
-// lease, the corrections — goes through the real `plansService` doors, and every
-// decision through the ONE decide door.
+// Every gate here is the one `markPlanned` RAISES (MOTIR-6036): card-less, the plan in
+// `subjectId`, routed to the requester. Everything else — the plan, its proposals, the
+// revision lease, the corrections — goes through the real `plansService` doors, and
+// every decision through the ONE decide door.
 
 const HARNESS = { source: 'mcp' as const, harness: 'Claude Code', model: null };
 
@@ -79,17 +78,10 @@ async function plannedPlan(titles: string[] = ['First proposal', 'Second proposa
   return { planId: plan.id, itemIds };
 }
 
-/** The awaiting gate MOTIR-6036's raise will write for `planId`. */
+/** The awaiting gate `markPlanned` raised for `planId` (MOTIR-6036). */
 function raiseGate(planId: string) {
-  return adminDb.approvalGate.create({
-    data: {
-      workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
-      workItemId: null,
-      kind: 'plan_approval',
-      subjectId: planId,
-      routedToId: fx.ownerId,
-    },
+  return adminDb.approvalGate.findFirstOrThrow({
+    where: { workItemId: null, kind: 'plan_approval', subjectId: planId, state: 'awaiting' },
   });
 }
 
@@ -714,7 +706,11 @@ describe('A FAILED APPROVE keeps `approvePlan`’s repair — the lazy `stale` b
 
     expect(await approving).toBeInstanceOf(PlanTargetImmutableError);
     expect((await planRow(plan.id)).status).toBe('stale');
-    expect((await gateRow(gate.id)).state).toBe('awaiting');
+    // The backstop's `stale` write withdraws the question with it (MOTIR-6036).
+    expect(await gateRow(gate.id)).toMatchObject({
+      state: 'superseded',
+      supersededCause: 'plan_stale',
+    });
     expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: target.id } })).title).toBe(
       'Racing target',
     );
@@ -757,7 +753,12 @@ describe('the To-approve ROW’s subject summary for a plan gate', () => {
   });
 
   it('`getForPlan` answers nothing for a plan with no gate, or no plan at all', async () => {
-    const { planId } = await plannedPlan();
+    // A `generating` plan asks nothing — only the close raises a gate (MOTIR-6036).
+    const { id: planId } = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Not closed' },
+      fx.ctx,
+    );
     for (const id of [planId, 'no-such-plan']) {
       const read = await approvalGatesService.getForPlan({ planId: id }, fx.ctx);
       expect(read).toMatchObject({ gate: null, stamp: null, canDecide: false });

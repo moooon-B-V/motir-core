@@ -169,6 +169,7 @@ import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessio
 import { buildScope } from '@/lib/planChange/scope';
 import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
+import { planGateService } from '@/lib/services/planGateService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
@@ -4113,6 +4114,10 @@ export const plansService = {
           tx,
         );
         const n = await planItemRepository.countByPlan(planId, tx);
+        // THE QUESTION IS ASKED WITH THE STATUS (MOTIR-6036; ADR approval-gates.md
+        // §11.7): the plan's `awaiting` gate, in this transaction and under the
+        // plan lock taken above, so a plan is never `planned` without it.
+        await planGateService.raise(updated, tx);
         // The close, on the trail (MOTIR-3535) — the moment the plan stopped
         // moving and became something a person is asked to read. The count is
         // what that person is being asked to approve.
@@ -4966,6 +4971,11 @@ export const plansService = {
             },
             tx,
           );
+          // The question ends with the plan (MOTIR-6036; §11.7): its awaiting gate
+          // is withdrawn as `plan_discarded`, under the plan lock this transaction
+          // already holds. A withdrawal SHORT of the last supersedes nothing — the
+          // stamp refuses a reader of the old set (§11.5c).
+          await planGateService.supersede(planId, 'plan_discarded', tx);
           await planRevisionsService.recordRevision(
             {
               planId,
@@ -6143,6 +6153,9 @@ async function markStaleOnImmutableTarget(
           const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
           if (!fresh || fresh.status !== 'planned') return;
           await planRepository.update(planId, { status: 'stale' }, tx);
+          // A stale plan cannot be approved, so its question is withdrawn in the
+          // same write (MOTIR-6036; §11.7) — plan lock first, then the gate.
+          await planGateService.supersede(planId, 'plan_stale', tx);
         },
       );
     } catch {

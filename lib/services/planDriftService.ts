@@ -1,6 +1,7 @@
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { planGateService } from '@/lib/services/planGateService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -123,6 +124,9 @@ export const planDriftService = {
         // this plan while the reads above were in flight.
         if (!fresh || fresh.status !== 'planned') return false;
         await planRepository.update(planId, { status: 'stale' }, tx);
+        // Nobody can approve a stale plan, so its question is withdrawn in the same
+        // write, under the plan lock above (MOTIR-6036; approval-gates.md §11.7).
+        await planGateService.supersede(planId, 'plan_stale', tx);
         return true;
       });
 
@@ -205,7 +209,10 @@ export const planDriftService = {
         if (!locked) return false;
         const fresh = await planRepository.findById(planId, workspaceId, tx);
         if (!fresh || fresh.status !== 'stale') return false;
-        await planRepository.update(planId, { status: 'planned' }, tx);
+        const restoredPlan = await planRepository.update(planId, { status: 'planned' }, tx);
+        // Asked AGAIN with a FRESH gate (MOTIR-6036; §11.7): the old one was
+        // superseded `plan_stale` while nobody could approve it.
+        await planGateService.raise(restoredPlan, tx);
         return true;
       });
 

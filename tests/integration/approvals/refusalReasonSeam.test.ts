@@ -218,7 +218,7 @@ describe('a refusal WITH a reason reaches the row, and the read carries it back 
 });
 
 describe('the PLAN gate at the REST route (MOTIR-6035; ADR §11.4) — Decline, and no Request changes', () => {
-  /** A `planned` plan with one proposal, and the awaiting gate MOTIR-6036 will raise. */
+  /** A `planned` plan with one proposal, and the awaiting gate its close raised (MOTIR-6036). */
   async function plannedPlanGate() {
     const { plansService } = await import('@/lib/services/plansService');
     const plan = await plansService.createPlan(fx.projectId, { title: 'A plan' }, fx.ctx);
@@ -228,15 +228,8 @@ describe('the PLAN gate at the REST route (MOTIR-6035; ADR §11.4) — Decline, 
       fx.ctx,
     );
     await plansService.markPlanned(plan.id, fx.ctx);
-    const gate = await adminDb.approvalGate.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
-        workItemId: null,
-        kind: 'plan_approval',
-        subjectId: plan.id,
-        routedToId: fx.ownerId,
-      },
+    const gate = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: null, kind: 'plan_approval', subjectId: plan.id, state: 'awaiting' },
     });
     const read = await approvalGatesService.getForPlan({ planId: plan.id }, fx.ctx);
     return { plan, gate, stamp: read.stamp! };
