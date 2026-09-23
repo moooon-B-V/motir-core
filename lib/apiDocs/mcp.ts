@@ -670,9 +670,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // another open card also names, with no edge between them). Summary
     // UNCHANGED, for the reason the coverage re-pin gave: the advisory channel,
     // never a gate, so the verdict line stays true.
+    //
+    // Re-pinned for MOTIR-5426: the `likely-ordering-violation` line was
+    // corrected in place to say it is a PARTIAL merge-word tell whose absence
+    // clears nothing (measured at about one post-deploy criterion in nine).
+    // Summary UNCHANGED: the correction is on the advisory channel, and this line
+    // describes the verdict.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '434346cf9e26',
+    descriptionFingerprint: '26751030f342',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

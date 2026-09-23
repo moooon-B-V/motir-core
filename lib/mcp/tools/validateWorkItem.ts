@@ -401,8 +401,10 @@ export function registerValidateWorkItem(
         'in-subtree card whose DESCRIPTION names a not-done work item it has no blocked_by edge ' +
         "to (severity `likely-missing-edge` when the reference sits in the card's own acceptance " +
         'criteria, else `advisory`); a `shape` advisory (`kind: "shape"`) names a card that ' +
-        'contradicts ITSELF — `likely-ordering-violation` when a criterion reads ' +
-        'on post-merge state (with the matched phrase), `likely-repo-straddle` when it names a ' +
+        'contradicts ITSELF — `likely-ordering-violation` when a criterion carries one of a few ' +
+        'MERGE-WORDS (with the matched phrase) — a partial tell: a criterion that reads the ' +
+        'deployment as EVIDENCE ("against real runs", "quoted here") carries none, so its ' +
+        'absence does NOT clear the card — `likely-repo-straddle` when it names a ' +
         "path in a repo that is not the card's `targetRepo` (with the path, that repo, and " +
         '`reason: "contradiction"`, or `"unpinnable"` when the card pins no repo and its criteria ' +
         'name two or more) — both with the 1-based criterion index to cut at — ' +

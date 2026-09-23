@@ -418,14 +418,14 @@ can read, does not say so.
 A **`shape`** entry has no far end at all: the card contradicts itself. Six
 severities, each with its own remedy:
 
-| severity                        | what it found                                                                                                                   | remedy                                                               |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `likely-ordering-violation`     | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                            | CUT the card at that criterion                                       |
-| `likely-repo-straddle`          | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                 | SPLIT the card per repo (one repo, one PR)                           |
-| `likely-over-gate-sizing`       | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)     | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
-| `likely-self-blocking-design`   | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws    | LIFT the design criterion onto its own `type: design` card           |
-| `likely-blocker-count-mismatch` | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count              | update the stale prose or wire the genuinely missing edge            |
-| `body-edit-above-field-move`    | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did | RE-READ the body against those fields — a prompt, never a stop       |
+| severity                        | what it found                                                                                                                                                               | remedy                                                               |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `likely-ordering-violation`     | criterion `criterionIndex` carries the merge-word `phrase` — a PARTIAL tell: an evidence-phrased post-deploy criterion carries none, so no entry is not a pass (MOTIR-5426) | CUT the card at that criterion                                       |
+| `likely-repo-straddle`          | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                                                             | SPLIT the card per repo (one repo, one PR)                           |
+| `likely-over-gate-sizing`       | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)                                                 | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
+| `likely-self-blocking-design`   | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws                                                | LIFT the design criterion onto its own `type: design` card           |
+| `likely-blocker-count-mismatch` | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count                                                          | update the stale prose or wire the genuinely missing edge            |
+| `body-edit-above-field-move`    | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did                                             | RE-READ the body against those fields — a prompt, never a stop       |
 
 **`likely-over-gate-sizing`'s two arms do not carry the same authority.**
 `storyPoints >= 8` IS the gate's rule — its literal split signal, read off the
@@ -2400,7 +2400,9 @@ A `reference` entry is `{ item, referenced, referencedStatus, severity }`, where
 
 A `shape` entry (`kind: "shape"`) reports a defect the card asserts about
 ITSELF, with no second work item involved: `likely-ordering-violation` (a
-criterion that turns on the card's own merge — cut there), `likely-repo-straddle`
+criterion carrying a merge-word — cut there; a partial tell whose absence clears
+nothing, since a criterion phrased as EVIDENCE — "against real runs", "quoted
+here" — carries none), `likely-repo-straddle`
 (a criterion naming a path outside the card's `targetRepo` — split per repo), or
 `likely-over-gate-sizing` (a childless `coding_agent` card at `storyPoints >= 13`
 or `estimateMinutes > 70` — split by size), or `likely-self-blocking-design` (a
