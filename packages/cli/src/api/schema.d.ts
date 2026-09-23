@@ -1705,6 +1705,19 @@ export interface components {
                 severity: string;
                 designCriterionIndex: number;
                 surfaceCriterionIndex: number;
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                bodyEdit: {
+                    at: string;
+                    fields: string[];
+                };
+                fieldMove: {
+                    at: string;
+                    fields: string[];
+                };
             } | ({
                 /** @constant */
                 kind: "subsumption";

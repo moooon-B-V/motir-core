@@ -3,6 +3,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -19,6 +20,11 @@ import {
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
+import {
+  BODY_ABOVE_FIELD_MOVE_SCAN,
+  bodyEditAboveFieldMove,
+  type RevisionKeys,
+} from '@/lib/workItems/bodyAboveFieldMove';
 import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -146,6 +152,17 @@ export interface ProseAdvisorySubject {
    * caller that has not looked must not take it by default.
    */
   hasDesignBlocker: boolean;
+  /**
+   * Whether a write the caller KNOWS is pending will land on top of the card's
+   * stored revision trail — read ONLY by the BODY-EDIT-ABOVE-FIELD-MOVE check
+   * (MOTIR-5399), which then skips the card rather than report the stored trail.
+   *
+   * Set by the PROJECTED path alone: a plan's `modify` that rewrites a body or
+   * moves a watched field makes the stored trail's newest relevant write stale
+   * about the card the plan would leave behind. Optional because every other
+   * caller reads the committed tree, where the stored trail IS the answer.
+   */
+  trailSuperseded?: boolean;
 }
 
 /**
@@ -253,6 +270,17 @@ export async function buildProseVsGraphAdvisories(
   // than as N queries.
   const subsumption = await buildSubsumptionIndex(scanned, ctx);
 
+  // The BODY-EDIT-ABOVE-FIELD-MOVE check's data source (MOTIR-5399): each card's
+  // newest revisions, reduced to the keys they moved. ONE read for the whole batch,
+  // and only for subjects with a stored row — a projected `add` has no history, and
+  // a card a plan's `modify` rewrites is about to get a newer one.
+  const trails = await readRecentTrails(
+    scanned.flatMap((s) =>
+      s.subject.id == null || s.subject.trailSuperseded ? [] : [s.subject.id],
+    ),
+    ctx,
+  );
+
   const advisories: WorkItemProseAdvisoryDto[] = [];
   for (const s of scanned) {
     // The SHAPE advisories first: they need no reference resolution at all (each
@@ -266,6 +294,11 @@ export async function buildProseVsGraphAdvisories(
     if (sizing) advisories.push(sizing);
     const selfBlocking = selfBlockingDesignAdvisory(s.subject);
     if (selfBlocking) advisories.push(selfBlocking);
+    const bodyAbove = bodyAboveFieldMoveAdvisory(
+      s.item,
+      s.subject.id == null ? undefined : trails.get(s.subject.id),
+    );
+    if (bodyAbove) advisories.push(bodyAbove);
     const subsumed = subsumptionAdvisory(s.subject, subsumption);
     if (subsumed) advisories.push(subsumed);
     for (const [id, severity] of s.refs) {
@@ -451,6 +484,60 @@ function selfBlockingDesignAdvisory(
     severity: 'likely-self-blocking-design',
     designCriterionIndex: found.designCriterionIndex,
     surfaceCriterionIndex: found.surfaceCriterionIndex,
+  };
+}
+
+/**
+ * The trail read behind {@link bodyAboveFieldMoveAdvisory} — each card's
+ * {@link BODY_ABOVE_FIELD_MOVE_SCAN} newest revisions, keys only, in ONE query.
+ *
+ * Read through `withWorkspaceServiceContext`, so the rows are the caller's tenant
+ * by RLS and not merely by the ids handed in. Every caller is a read path.
+ */
+async function readRecentTrails(
+  workItemIds: string[],
+  ctx: ServiceContext,
+): Promise<Map<string, RevisionKeys[]>> {
+  if (workItemIds.length === 0) return new Map();
+  return withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRevisionRepository.listRecentKeysByWorkItemIds(
+      workItemIds,
+      BODY_ABOVE_FIELD_MOVE_SCAN,
+      tx,
+    ),
+  );
+}
+
+/**
+ * THE BODY-EDIT-ABOVE-FIELD-MOVE advisory for ONE card (MOTIR-5399) — the card's
+ * newest body write sitting directly above a write that moved a field the body
+ * describes, with nothing between them re-touching either.
+ *
+ * The first shape member read off the card's HISTORY rather than its row: the
+ * other four compare the card with itself as it stands, and a card whose fields
+ * and prose disagree stands perfectly well — MOTIR-4513 was `ready: true` and
+ * `valid: true` with its body describing the type it had just been moved OFF.
+ * The pure signature is {@link bodyEditAboveFieldMove}; this only shapes it.
+ *
+ * NO exemption predicate. The class it cannot tell apart — a body rewritten to
+ * MATCH the move — is the reason the finding is worded as a prompt to re-read, and
+ * a mute keyed on anything the trail carries (the actor, the gap between the two
+ * writes) would silence the specimen too: its revert came from the same account,
+ * twenty-eight minutes after the move.
+ */
+function bodyAboveFieldMoveAdvisory(
+  item: string,
+  trail: readonly RevisionKeys[] | undefined,
+): WorkItemProseAdvisoryDto | null {
+  if (!trail) return null;
+  const found = bodyEditAboveFieldMove(trail);
+  if (!found) return null;
+  return {
+    kind: 'shape',
+    item,
+    severity: 'body-edit-above-field-move',
+    bodyEdit: { at: found.bodyEdit.at.toISOString(), fields: found.bodyEdit.fields },
+    fieldMove: { at: found.fieldMove.at.toISOString(), fields: found.fieldMove.fields },
   };
 }
 
@@ -820,7 +907,14 @@ export async function buildDispatchProseAdvisories(
     !sizingCandidate &&
     !selfBlockingCandidate
   ) {
-    return [];
+    // The BODY-EDIT-ABOVE-FIELD-MOVE check (MOTIR-5399) is the one member no scan
+    // above can clear: it reads the card's HISTORY, not its body or its columns, so
+    // a card that names nothing and is sized well can still carry it — the
+    // MOTIR-4513 specimen did. So the short-circuit still pays for that one read,
+    // keys only and bounded, and skips everything else.
+    const trails = await readRecentTrails([item.id], ctx);
+    const bodyAbove = bodyAboveFieldMoveAdvisory(item.identifier, trails.get(item.id));
+    return bodyAbove ? [bodyAbove] : [];
   }
 
   // The SUBSUMPTION check's `since`, when the caller's row shape carries it.

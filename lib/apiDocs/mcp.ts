@@ -656,9 +656,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     //
     // Re-pinned for MOTIR-5588: the over-gate sizing advisory's points arm moved
     // from 13+ to 8+ story points. Summary UNCHANGED — it names no threshold.
+    //
+    // Re-pinned for MOTIR-5399's FIFTH shape severity (`body-edit-above-field-move`,
+    // the first read off a card's revision trail). Summary UNCHANGED, as the
+    // MOTIR-3178 paragraph predicted a new member would be.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '06549ce0bbd1',
+    descriptionFingerprint: 'df3eba7b2552',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

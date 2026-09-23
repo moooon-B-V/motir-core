@@ -525,5 +525,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.35.0` over
  *   MOTIR-5719's `1.34.0` on the same parent branch. If the numbering has moved,
  *   RENUMBER both entries.
+ *
+ * - `1.36.0` — MOTIR-5399 adds a fourth `shape` variant to the dispatch prompt's
+ *   `advisories[]`: `body-edit-above-field-move`, carrying `bodyEdit` and
+ *   `fieldMove` (`{ at, fields }` each) — the card's newest body write sitting
+ *   directly above a write that moved a field the body describes. A prompt to
+ *   re-read, never a gate.
+ *
+ *   Additive: a new member of a union whose `severity` is documented open-ended
+ *   (§8's allowed list); no declared field changes type or meaning. Read-only, on
+ *   the same `work_item:edit` claim path; the grant is NOT widened.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.35.0`
+ *   at `d1ab5cf4c`, so this claims `1.36.0`. If a sibling has taken it since,
+ *   RENUMBER this entry — it names the ADVISORY VARIANT.
  */
-export const V1_CONTRACT_VERSION = '1.35.0';
+export const V1_CONTRACT_VERSION = '1.36.0';

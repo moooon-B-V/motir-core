@@ -237,6 +237,66 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * The `perItem` NEWEST revisions of each work item in `workItemIds`, reduced to
+   * their `changeKind`, `changedAt` and the top-level KEYS of their `diff` — newest
+   * first within each item (MOTIR-5399).
+   *
+   * The read behind the body-edit-above-field-move advisory, which asks WHICH
+   * fields each write moved and never what they were moved to. So the diff itself
+   * is not selected: a body edit's `{ from, to }` carries the whole text on both
+   * sides, and twenty such rows per card across a subtree would be a load of prose
+   * nobody reads.
+   *
+   * ONE query for the whole batch — `ROW_NUMBER()` over the `(workItemId,
+   * changedAt)` index, in the total order {@link listByWorkItem} uses
+   * (`changedAt DESC, id DESC`). A work item with no revisions has no entry.
+   * `jsonb_typeof` guards the (never-written, but JSON-typed) non-object diff, which
+   * reads as no keys rather than an error.
+   *
+   * `tx` is REQUIRED, unlike the reads above: `work_item_revision` is RLS-scoped,
+   * so a read outside a workspace context returns NO rows rather than failing —
+   * and a check that silently reads an empty trail reports nothing, forever. The
+   * only caller reads inside `withWorkspaceServiceContext`; requiring the handle
+   * makes the other spelling a type error rather than a quiet miss.
+   */
+  async listRecentKeysByWorkItemIds(
+    workItemIds: string[],
+    perItem: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, Array<{ changeKind: string; changedAt: Date; keys: string[] }>>> {
+    if (workItemIds.length === 0) return new Map();
+    const rows = await tx.$queryRaw<
+      Array<{ workItemId: string; changeKind: string; changedAt: Date; keys: string[] }>
+    >`
+      SELECT t."workItemId", t."changeKind", t."changedAt", t."keys"
+      FROM (
+        SELECT r."workItemId", r."changeKind", r."changedAt", r."id",
+               CASE WHEN jsonb_typeof(r."diff") = 'object'
+                    THEN ARRAY(SELECT jsonb_object_keys(r."diff"))
+                    ELSE ARRAY[]::text[] END AS "keys",
+               ROW_NUMBER() OVER (
+                 PARTITION BY r."workItemId" ORDER BY r."changedAt" DESC, r."id" DESC
+               ) AS rn
+        FROM "work_item_revision" r
+        WHERE r."workItemId" IN (${Prisma.join(workItemIds)})
+      ) t
+      WHERE t.rn <= ${perItem}
+      ORDER BY t."workItemId", t."changedAt" DESC, t."id" DESC
+    `;
+    const byItem = new Map<
+      string,
+      Array<{ changeKind: string; changedAt: Date; keys: string[] }>
+    >();
+    for (const r of rows) {
+      const entry = { changeKind: r.changeKind, changedAt: r.changedAt, keys: r.keys };
+      const list = byItem.get(r.workItemId);
+      if (list) list.push(entry);
+      else byItem.set(r.workItemId, [entry]);
+    }
+    return byItem;
+  },
+
+  /**
    * The ACTOR of the latest `'archived'` revision of one work item (Story 2.9 ·
    * Subtask 2.9.6) — the detail page's archived banner reads WHO archived it
    * from here (the WHEN comes from `work_item.archivedAt`). A re-archived item

@@ -8,7 +8,11 @@ import type { V1Collection } from '@/lib/api/v1/pagination';
 import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
-import { isSelfBlockingDesignAdvisory, isSizingAdvisory } from '@/lib/dto/workItems';
+import {
+  isBodyAboveFieldMoveAdvisory,
+  isSelfBlockingDesignAdvisory,
+  isSizingAdvisory,
+} from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { DispatchRunCloseOutPromptDto } from '@/lib/dto/dispatchRuns';
 import type { CurrentTestInstructionsDTO } from '@/lib/dto/testInstructions';
@@ -57,7 +61,7 @@ export const dispatchWorkflowModeSchema = z.enum(['per_item_pr', 'session_lineag
  * this field is documented as exactly that. Two families ship today
  * (`advisory` / `likely-missing-edge` on a reference; `likely-ordering-violation`
  * / `likely-repo-straddle` / `likely-over-gate-sizing` / `likely-self-blocking-design`
- * on a shape) and the advisory channel is designed to grow — MOTIR-2175,
+ * / `body-edit-above-field-move` on a shape) and the advisory channel is designed to grow — MOTIR-2175,
  * MOTIR-2177, MOTIR-3110 and MOTIR-3178 each added a severity to a shipped
  * surface.
  *
@@ -192,6 +196,39 @@ const selfBlockingDesignShapeAdvisorySchema = z.object({
   surfaceCriterionIndex: z.number().int(),
 });
 
+/** One end of a BODY-EDIT-ABOVE-FIELD-MOVE advisory: one revision of the card. */
+const revisionEndSchema = z.object({
+  /** When the revision was written, ISO-8601. */
+  at: z.string(),
+  /** The fields it moved that the check reads — body columns, or watched fields. */
+  fields: z.array(z.string()),
+});
+
+/**
+ * A BODY-EDIT-ABOVE-FIELD-MOVE SHAPE advisory — the card's newest body write
+ * moved none of the fields a body describes, and the write directly beneath it
+ * did (MOTIR-5399). A prompt to RE-READ the body against that move, never a defect
+ * claim: a body rewritten to match the move leaves the same trail as one that put
+ * the old framing back, and only the prose tells them apart.
+ *
+ * ⚠️ `kind: 'shape'` with neither `criterionIndex`, `threshold` nor the design
+ * pair — its REQUIRED fields are `bodyEdit` + `fieldMove`, so the four shape
+ * variants stay disjoint and the plain union resolves each unambiguously.
+ *
+ * ⚠️ Additive under §8, on the same terms as the sizing and self-blocking
+ * variants: a new member of a union whose `severity` was already open-ended.
+ * `V1_CONTRACT_VERSION` moves with it (Amendment 8's obligation).
+ */
+const bodyAboveFieldMoveShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  /** The newer write — it moved a body and no watched field. */
+  bodyEdit: revisionEndSchema,
+  /** The write directly beneath it — it moved at least one watched field. */
+  fieldMove: revisionEndSchema,
+});
+
 /**
  * A SUBSUMPTION advisory — a path the card's body names was touched by a merged
  * pull request that is not this card's own and that merged after the card was
@@ -263,6 +300,7 @@ export const dispatchAdvisorySchema = z.union([
   criterionShapeAdvisorySchema,
   sizingShapeAdvisorySchema,
   selfBlockingDesignShapeAdvisorySchema,
+  bodyAboveFieldMoveShapeAdvisorySchema,
   subsumptionAdvisorySchema,
   referenceAdvisorySchema,
 ]);
@@ -363,6 +401,17 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
           severity: advisory.severity,
           designCriterionIndex: advisory.designCriterionIndex,
           surfaceCriterionIndex: advisory.surfaceCriterionIndex,
+        };
+      }
+      // The BODY-EDIT-ABOVE-FIELD-MOVE member (MOTIR-5399) — the third `shape`
+      // variant with no `criterionIndex`, narrowed out for the same reason.
+      if (isBodyAboveFieldMoveAdvisory(advisory)) {
+        return {
+          kind: 'shape' as const,
+          item: advisory.item,
+          severity: advisory.severity,
+          bodyEdit: { at: advisory.bodyEdit.at, fields: [...advisory.bodyEdit.fields] },
+          fieldMove: { at: advisory.fieldMove.at, fields: [...advisory.fieldMove.fields] },
         };
       }
       // The SIZING member next, because it is the other `shape` variant with no
