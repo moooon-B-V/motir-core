@@ -6,6 +6,7 @@ import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   isCoverageAdvisory,
+  isBlockerCountAdvisory,
   isPathReferenceAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
@@ -86,10 +87,17 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const subsumed = result.advisories.filter(isSubsumptionAdvisory);
   const oversized = result.advisories.filter(isSizingAdvisory);
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
+  const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
   const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
 
   const lines: string[] = [];
+  for (const a of blockerCounts) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): ${a.item} claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Update the prose or the graph.`,
+    );
+  }
   if (references.length > 0) {
     lines.push(
       '',
@@ -390,7 +398,10 @@ export function registerValidateWorkItem(
         'a CHILDLESS card is its OWN design blocker — one criterion produces a design asset and ' +
         'another builds the rendered surface that drawing decides (with BOTH 1-based indices, ' +
         '`designCriterionIndex` and `surfaceCriterionIndex`, because the remedy LIFTS the design ' +
-        'criterion onto its own card rather than cutting the list at a line). A `coverage` ' +
+        'criterion onto its own card rather than cutting the list at a line), or ' +
+        "`likely-blocker-count-mismatch` when an explicit counted claim about the card's own " +
+        'blocker siblings disagrees with its current blocked_by edge count (with the exact ' +
+        '`claim`, `claimedCount`, and `blockerCount`). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +

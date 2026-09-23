@@ -1549,16 +1549,18 @@ export type WorkItemProseAdvisorySeverityDto = 'advisory' | 'likely-missing-edge
 
 /**
  * The severity of a SHAPE advisory (MOTIR-2175) — a defect the card asserts
- * about ITSELF, with no second work item involved. Four members: gate 14's
+ * about ITSELF, with no second work item involved. Five members: gate 14's
  * ORDERING axis, gate 1's repo column (MOTIR-2177), the ESTIMATION GATE's two
  * sizing ceilings (MOTIR-3110), and the DESIGN gate's degenerate reading — a
- * card that is its own design blocker (MOTIR-3178).
+ * card that is its own design blocker (MOTIR-3178), and an explicit counted
+ * claim about the card's blocker siblings that disagrees with its edges
+ * (MOTIR-5428).
  *
  * ⚠️ Only the first two carry the single `criterionIndex` their remedy cuts at.
  * The sizing member is a defect in two of the card's own COLUMNS and has no
  * criterion to point at; the self-blocking-design member has TWO, because its
  * remedy LIFTS one criterion out rather than cutting the list at a line. That is
- * why {@link WorkItemProseShapeAdvisoryBaseDto} carries only what all four share
+ * why {@link WorkItemProseShapeAdvisoryBaseDto} carries only what all five share
  * and the single criterion index sits one level down — see
  * {@link WorkItemProseCriterionShapeAdvisoryBaseDto}.
  */
@@ -1566,7 +1568,8 @@ export type WorkItemProseShapeSeverityDto =
   | 'likely-ordering-violation'
   | 'likely-repo-straddle'
   | 'likely-over-gate-sizing'
-  | 'likely-self-blocking-design';
+  | 'likely-self-blocking-design'
+  | 'likely-blocker-count-mismatch';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -1821,6 +1824,17 @@ export interface WorkItemProseSelfBlockingDesignAdvisoryDto extends WorkItemPros
   surfaceCriterionIndex: number;
 }
 
+/** A counted claim about this card's own blockers that disagrees with its edges. */
+export interface WorkItemProseBlockerCountAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-blocker-count-mismatch';
+  /** The exact normalized prose fragment whose number was checked. */
+  claim: string;
+  /** The number stated by the card. */
+  claimedCount: number;
+  /** The number of `blocked_by` edges currently held by the card. */
+  blockerCount: number;
+}
+
 /**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
  * once `kind === 'shape'` has narrowed the outer union.
@@ -1833,7 +1847,8 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseOrderingAdvisoryDto
   | WorkItemProseRepoStraddleAdvisoryDto
   | WorkItemProseSizingAdvisoryDto
-  | WorkItemProseSelfBlockingDesignAdvisoryDto;
+  | WorkItemProseSelfBlockingDesignAdvisoryDto
+  | WorkItemProseBlockerCountAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). Named rather than inlined
@@ -2138,4 +2153,11 @@ export function isSelfBlockingDesignAdvisory(
   a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseSelfBlockingDesignAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'likely-self-blocking-design';
+}
+
+/** Narrow an advisory to the counted-own-blockers shape (MOTIR-5428). */
+export function isBlockerCountAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseBlockerCountAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-blocker-count-mismatch';
 }

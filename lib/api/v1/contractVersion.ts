@@ -526,7 +526,12 @@
  *   MOTIR-5719's `1.34.0` on the same parent branch. If the numbering has moved,
  *   RENUMBER both entries.
  *
- * - `1.36.0` — MOTIR-6098 adds a leaf's `difficulty` (`low` / `medium` / `high`,
+ * - `1.36.0` — MOTIR-5428 adds the `likely-blocker-count-mismatch` dispatch
+ *   advisory shape: the exact counted claim, its stated number, and the current
+ *   number of `blocked_by` edges. Additive: one new member of an advisory union
+ *   whose severity is explicitly open-ended; no existing shape changes.
+ *
+ * - `1.37.0` — MOTIR-6098 adds a leaf's `difficulty` (`low` / `medium` / `high`,
  *   nullable) to the work-item resource every single-item read and write returns,
  *   and to the `createWorkItem` / `updateWorkItem` request bodies (`null` on a
  *   PATCH clears it), plus `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422) when a body
@@ -537,7 +542,8 @@
  *   condition. No declared field changes meaning. Gated on the same keys.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.35.0` at `d1ab5cf4c`, so this claims `1.36.0`. If a sibling has taken
+ *   was `1.36.0` at `412bc953b` (MOTIR-5428 took `1.36.0` while this branch was
+ *   open — renumbered from it), so this claims `1.37.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.36.0';
+export const V1_CONTRACT_VERSION = '1.37.0';
