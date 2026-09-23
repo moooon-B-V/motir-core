@@ -1126,68 +1126,79 @@ export function ProjectRoadmapCanvas({
       data-fullscreen={expanded || undefined}
       className={expanded ? 'fixed inset-0 z-50 bg-(--el-canvas)' : 'relative h-full w-full'}
     >
-      {/* breadcrumb + Back overlay — only while drilled */}
-      {drilled && (
-        <nav
-          aria-label={t('breadcrumb')}
-          // Widened from 36rem with the `identifier · title` crumb label (MOTIR-1805
-          // design DECISION 2) so a two-crumb chain reads without immediate ellipsis.
-          className="absolute top-3 left-3 z-10 flex max-w-[min(44rem,calc(100%-1.5rem))] items-center gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)"
-        >
-          <button
-            type="button"
-            onClick={goBack}
-            aria-label={t('back')}
-            className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+      {/* One top band owns BOTH sides of the chrome (MOTIR-5816). The breadcrumb
+          used to size itself against the whole canvas while the controls were
+          independently positioned from the right, so the two regions painted
+          over each other. A shared wrapping flex band keeps them side by side when
+          both fit and gives each its own row on a narrow canvas. The wrapper is
+          pointer-transparent so its empty band never masks the canvas; the two
+          pieces opt back in. */}
+      <div className="pointer-events-none absolute top-3 right-3 left-3 z-10 flex min-w-0 flex-wrap items-start gap-2">
+        {/* breadcrumb + Back overlay — only while drilled */}
+        {drilled && (
+          <nav
+            aria-label={t('breadcrumb')}
+            // Widened from 36rem with the `identifier · title` crumb label (MOTIR-1805
+            // design DECISION 2) so a two-crumb chain reads without immediate ellipsis.
+            // The 44rem basis is also the collision budget: when that and the fixed
+            // control cluster do not fit together, flex-wrap moves the controls to
+            // their own right-aligned row instead of crushing the crumb targets.
+            className="pointer-events-auto flex min-w-0 max-w-[44rem] basis-[44rem] flex-1 items-center gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)"
           >
-            <ChevronLeft className="size-4" aria-hidden="true" />
-          </button>
-          <ol className="flex min-w-0 items-center gap-1 text-sm">
-            <li className="shrink-0">
-              <Crumb label={resolvedRootLabel} active={false} onClick={() => navigate(null)} />
-            </li>
-            {breadcrumbSegments(crumbs, isFolderCrumb ?? (() => false)).map((seg) => {
-              if (seg.kind === 'ellipsis') {
-                const target = crumbs[seg.targetIndex]!;
-                const full = seg.path.join(' ▸ ');
+            <button
+              type="button"
+              onClick={goBack}
+              aria-label={t('back')}
+              className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+            >
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
+            <ol className="flex min-w-0 items-center gap-1 text-sm">
+              <li className="shrink-0">
+                <Crumb label={resolvedRootLabel} active={false} onClick={() => navigate(null)} />
+              </li>
+              {breadcrumbSegments(crumbs, isFolderCrumb ?? (() => false)).map((seg) => {
+                if (seg.kind === 'ellipsis') {
+                  const target = crumbs[seg.targetIndex]!;
+                  const full = seg.path.join(' ▸ ');
+                  return (
+                    <li key={`ellipsis:${target.id}`} className="flex min-w-0 items-center gap-1">
+                      <ChevronRight
+                        className="size-3.5 shrink-0 text-(--el-text-faint)"
+                        aria-hidden="true"
+                      />
+                      <Crumb
+                        label="…"
+                        title={full}
+                        ariaLabel={full}
+                        active={false}
+                        onClick={() => navigate(target.id)}
+                      />
+                    </li>
+                  );
+                }
+                const c = crumbs[seg.index]!;
                 return (
-                  <li key={`ellipsis:${target.id}`} className="flex min-w-0 items-center gap-1">
+                  <li key={c.id} className="flex min-w-0 items-center gap-1">
                     <ChevronRight
                       className="size-3.5 shrink-0 text-(--el-text-faint)"
                       aria-hidden="true"
                     />
                     <Crumb
-                      label="…"
-                      title={full}
-                      ariaLabel={full}
-                      active={false}
-                      onClick={() => navigate(target.id)}
+                      label={c.label}
+                      active={seg.index === crumbs.length - 1}
+                      onClick={() => navigate(c.id)}
+                      folder={seg.folder}
+                      srPrefix={seg.folder ? tFolders('breadcrumbFolderLabel') : undefined}
                     />
                   </li>
                 );
-              }
-              const c = crumbs[seg.index]!;
-              return (
-                <li key={c.id} className="flex min-w-0 items-center gap-1">
-                  <ChevronRight
-                    className="size-3.5 shrink-0 text-(--el-text-faint)"
-                    aria-hidden="true"
-                  />
-                  <Crumb
-                    label={c.label}
-                    active={seg.index === crumbs.length - 1}
-                    onClick={() => navigate(c.id)}
-                    folder={seg.folder}
-                    srPrefix={seg.folder ? tFolders('breadcrumbFolderLabel') : undefined}
-                  />
-                </li>
-              );
-            })}
-          </ol>
-        </nav>
-      )}
+              })}
+            </ol>
+          </nav>
+        )}
 
-      {/* TOP-RIGHT cluster: search-to-locate (within the current level), the
+        {/* TOP-RIGHT cluster: search-to-locate (within the current level), the
           SHOW-CHANGES toggle (MOTIR-3261) and the EXPAND-to-full-screen control,
           side by side (MOTIR-1420).
 
@@ -1197,72 +1208,74 @@ export function ProjectRoadmapCanvas({
           changes; it must not exist in the list view, which this cluster gets for
           free; and the emphasis state lives in this component, so a control in
           another one would have to lift it out. */}
-      {(searchable || fullScreenable || emphasis) && (
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-          {searchable && (
-            <form
-              role="search"
-              onSubmit={(e) => {
-                e.preventDefault();
-                locate();
-              }}
-              className="w-60"
-            >
-              <Input
-                ref={searchRef}
-                type="search"
-                // The CONSUMER's word, on both axes (MOTIR-4021). The foundation
-                // has four searchable mounts and knows which surface it is on for
-                // exactly none of them.
-                aria-label={searchLabel}
-                placeholder={searchLabel}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                addonStart={<Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />}
-              />
-            </form>
-          )}
-          {emphasis && (
-            <button
-              type="button"
-              data-testid="show-changes-toggle"
-              aria-pressed={showChanges}
-              // A level the plan does not reach: DISABLED with its reason, rather
-              // than an ON state that dims every card and rings none — a screen
-              // that says nothing is worse than a control that says why it cannot
-              // help (Part IX §L6).
-              // BOTH degenerate levels, each with its OWN reason (Part XIII §3d):
-              // a level the plan does not reach, where ON would dim every card and
-              // ring none; and a level made entirely OF the plan, where ON rings
-              // every card and dims none. Same disposition, opposite emptiness.
-              disabled={!emphasisArmable}
-              title={emphasisArmable ? undefined : emphasisDisabledReason}
-              aria-description={emphasisArmable ? undefined : emphasisDisabledReason}
-              onClick={() => setShowChangesOverride(!showChanges)}
-              className={[
-                'inline-flex h-(--height-control) shrink-0 items-center gap-1.5 rounded-(--radius-btn)',
-                'border px-(--spacing-control-x) text-xs font-semibold shadow-(--shadow-card)',
-                'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
-                'disabled:cursor-not-allowed disabled:opacity-50',
-                showChanges
-                  ? // ⚠️ `--el-tint-lavender`, NOT `--el-accent-soft` (MOTIR-4020, Part
-                    // XIII §3e). The latter is defined NOWHERE — it began as a LOCAL
-                    // variable in Part IX's own mock (`#f4f2fd`, a hex in neither
-                    // `theme.css` nor `globals.css`) that the note transcribed into the
-                    // `--el-*` namespace, and this class built faithfully. An unresolved
-                    // custom property is invalid at computed-value time, so the
-                    // declaration was dropped and the PRESSED control rendered with no
-                    // background at all — measured `rgba(0, 0, 0, 0)`. This pair is the
-                    // shipped active-destination treatment (`components/ui/Sidebar.tsx`)
-                    // and its contrast against `--el-accent-on-surface` is already
-                    // asserted by `inkContrastLint` over every palette x theme.
-                    'border-(--el-accent) bg-(--el-tint-lavender) text-(--el-accent-on-surface)'
-                  : 'border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)',
-              ].join(' ')}
-            >
-              <Eye className="size-4" aria-hidden="true" />
-              {emphasis.label}
-              {/* `n of m` only when the level holds fewer than the whole plan —
+        {(searchable || fullScreenable || emphasis) && (
+          <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-2">
+            {searchable && (
+              <form
+                role="search"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  locate();
+                }}
+                className="w-60"
+              >
+                <Input
+                  ref={searchRef}
+                  type="search"
+                  // The CONSUMER's word, on both axes (MOTIR-4021). The foundation
+                  // has four searchable mounts and knows which surface it is on for
+                  // exactly none of them.
+                  aria-label={searchLabel}
+                  placeholder={searchLabel}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  addonStart={
+                    <Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />
+                  }
+                />
+              </form>
+            )}
+            {emphasis && (
+              <button
+                type="button"
+                data-testid="show-changes-toggle"
+                aria-pressed={showChanges}
+                // A level the plan does not reach: DISABLED with its reason, rather
+                // than an ON state that dims every card and rings none — a screen
+                // that says nothing is worse than a control that says why it cannot
+                // help (Part IX §L6).
+                // BOTH degenerate levels, each with its OWN reason (Part XIII §3d):
+                // a level the plan does not reach, where ON would dim every card and
+                // ring none; and a level made entirely OF the plan, where ON rings
+                // every card and dims none. Same disposition, opposite emptiness.
+                disabled={!emphasisArmable}
+                title={emphasisArmable ? undefined : emphasisDisabledReason}
+                aria-description={emphasisArmable ? undefined : emphasisDisabledReason}
+                onClick={() => setShowChangesOverride(!showChanges)}
+                className={[
+                  'inline-flex h-(--height-control) shrink-0 items-center gap-1.5 rounded-(--radius-btn)',
+                  'border px-(--spacing-control-x) text-xs font-semibold shadow-(--shadow-card)',
+                  'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                  showChanges
+                    ? // ⚠️ `--el-tint-lavender`, NOT `--el-accent-soft` (MOTIR-4020, Part
+                      // XIII §3e). The latter is defined NOWHERE — it began as a LOCAL
+                      // variable in Part IX's own mock (`#f4f2fd`, a hex in neither
+                      // `theme.css` nor `globals.css`) that the note transcribed into the
+                      // `--el-*` namespace, and this class built faithfully. An unresolved
+                      // custom property is invalid at computed-value time, so the
+                      // declaration was dropped and the PRESSED control rendered with no
+                      // background at all — measured `rgba(0, 0, 0, 0)`. This pair is the
+                      // shipped active-destination treatment (`components/ui/Sidebar.tsx`)
+                      // and its contrast against `--el-accent-on-surface` is already
+                      // asserted by `inkContrastLint` over every palette x theme.
+                      'border-(--el-accent) bg-(--el-tint-lavender) text-(--el-accent-on-surface)'
+                    : 'border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)',
+                ].join(' ')}
+              >
+                <Eye className="size-4" aria-hidden="true" />
+                {emphasis.label}
+                {/* `n of m` only when the level holds fewer than the whole plan —
                   the canvas is per-level and most of a spread plan is off-screen.
                   It offers no way to reach the rest, deliberately: that is the
                   list view's job (Part IX §L5).
@@ -1274,31 +1287,32 @@ export function ProjectRoadmapCanvas({
                   it to find missing. Part IX §5 names the key and its wording:
                   `{n} of {total}`, which is also what a screen reader should
                   say. */}
-              {emphasisedIds.size < emphasis.total ? (
-                <span className="font-mono text-[11px] font-semibold tabular-nums">
-                  {t('showChangesCount', { n: emphasisedIds.size, total: emphasis.total })}
-                </span>
-              ) : null}
-            </button>
-          )}
-          {fullScreenable && (
-            <button
-              type="button"
-              data-testid="fullscreen-toggle"
-              aria-label={expanded ? t('exitFullScreen') : t('enterFullScreen')}
-              aria-pressed={expanded}
-              onClick={expanded ? exitFullScreen : enterFullScreen}
-              className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-            >
-              {expanded ? (
-                <Minimize className="size-4" aria-hidden="true" />
-              ) : (
-                <Maximize className="size-4" aria-hidden="true" />
-              )}
-            </button>
-          )}
-        </div>
-      )}
+                {emphasisedIds.size < emphasis.total ? (
+                  <span className="font-mono text-[11px] font-semibold tabular-nums">
+                    {t('showChangesCount', { n: emphasisedIds.size, total: emphasis.total })}
+                  </span>
+                ) : null}
+              </button>
+            )}
+            {fullScreenable && (
+              <button
+                type="button"
+                data-testid="fullscreen-toggle"
+                aria-label={expanded ? t('exitFullScreen') : t('enterFullScreen')}
+                aria-pressed={expanded}
+                onClick={expanded ? exitFullScreen : enterFullScreen}
+                className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              >
+                {expanded ? (
+                  <Minimize className="size-4" aria-hidden="true" />
+                ) : (
+                  <Maximize className="size-4" aria-hidden="true" />
+                )}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ESC hint — only while full screen; the other overlay controls stay reachable. */}
       {expanded && (
@@ -1604,7 +1618,7 @@ function Crumb({
       // Overflow stays the shipped answer: `truncate` + the native `title` tooltip — a
       // long chain ellipsises the last crumb BY DESIGN (not a second line, not a
       // smaller font).
-      className={`max-w-[18rem] truncate rounded-(--radius-control) px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
+      className={`min-w-0 max-w-[18rem] truncate rounded-(--radius-control) px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
         active
           ? 'font-semibold text-(--el-text)'
           : 'text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)'
