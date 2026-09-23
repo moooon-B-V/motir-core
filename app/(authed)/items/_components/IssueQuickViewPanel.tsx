@@ -44,6 +44,7 @@ import { EstimationConfigProvider } from '@/components/issues/EstimationConfigPr
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
 import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
+import { DifficultyIndicator, DifficultyPicker } from '@/components/issues/DifficultyPicker';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
@@ -722,6 +723,22 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         <QuickViewCloseButton variant="icon" onClose={props.onClose} />
       </QuickViewHeader>
 
+      {/* A `remove`'s REASON, directly under the header row (MOTIR-6055 · Part
+          XIX §19.5): it belongs to the op the header names, and a reader deciding
+          a removal needs the why before the what. Verbatim — the planner wrote it
+          for the reviewer. No reason ⇒ no band, the header byte-identical. */}
+      {proposal?.op === 'remove' && proposal.removeReason ? (
+        <div
+          data-testid="remove-reason"
+          className="flex flex-none items-baseline gap-3 border-b border-(--el-border) bg-(--el-surface-soft) py-2.5 pr-4 pl-5"
+        >
+          <span className="shrink-0 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+            {tPlan('removeReason')}
+          </span>
+          <p className="min-w-0 text-sm text-(--el-text)">{proposal.removeReason}</p>
+        </div>
+      ) : null}
+
       <QuickViewBody>
         {/* Main — title + the FULL description (scrollable). */}
         <QuickViewMain>
@@ -1086,6 +1103,30 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     />
                     <span className="truncate">{tl(`executor.${view.executor}`)}</span>
                   </>
+                ) : (
+                  <span className="text-(--el-text-secondary)">{t('none')}</span>
+                )}
+              </EditableRailField>
+              {/* Difficulty (Story MOTIR-6016 · MOTIR-6101) — below Executor in the
+                  same leaf-only branch, per core-fields--difficulty.mock.html: a
+                  label with a faint signal glyph, None when unset, and the same
+                  Segmented + Clear editor the item page uses. Not gated on a type. */}
+              <EditableRailField
+                label={t('difficulty')}
+                fieldKey="difficulty"
+                edit={edit}
+                control={
+                  <DifficultyPicker
+                    value={view.difficulty}
+                    onChange={(difficulty) => {
+                      edit.close();
+                      void edit.commit('difficulty', { difficulty }, { difficulty });
+                    }}
+                  />
+                }
+              >
+                {view.difficulty ? (
+                  <DifficultyIndicator difficulty={view.difficulty} />
                 ) : (
                   <span className="text-(--el-text-secondary)">{t('none')}</span>
                 )}

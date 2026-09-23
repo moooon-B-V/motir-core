@@ -151,6 +151,7 @@ const EMPTY: QuickViewData = {
   explanationMd: null,
   type: null,
   executor: null,
+  difficulty: null,
   assigneeName: null,
   reporterName: 'Alice Chen',
   priority: 'medium',

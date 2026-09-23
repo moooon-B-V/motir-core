@@ -26,6 +26,9 @@ export type BuiltInFilterFieldId =
   | 'ciState'
   | 'priority'
   | 'type'
+  /** How hard a leaf is to reason about (Story MOTIR-6016). Nullable: epics,
+   *  stories and every unset leaf are `null`, addressed by the empty pair. */
+  | 'difficulty'
   | 'assignee'
   | 'reporter'
   | 'sprint'

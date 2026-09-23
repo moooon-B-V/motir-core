@@ -201,6 +201,7 @@ class FakeServer {
             status: { key: item.status, category: 'todo' },
             type: item.type,
             executor: item.executor,
+            difficulty: null,
             assigneeId: item.assigneeId,
             inheritedSessionBranch: this.inherited(item) ?? item.sessionBranch,
           },

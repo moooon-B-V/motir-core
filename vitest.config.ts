@@ -156,6 +156,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
+        // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
+        // added, pinned at the project floor in `thresholds` below after being
+        // measured on this branch against the story's own specs.
+        'lib/issues/difficulty.ts',
+        'lib/hooks/useActivityRevision.ts',
+        'components/issues/DifficultyPicker.tsx',
         // Story MOTIR-3440 · Subtask MOTIR-3449 — the two ARRIVAL PRIMITIVES this
         // story added. `PageSkeleton` is the wrapper/header/reveal every in-page
         // frame composes (MOTIR-3531); `SettingsPaneFrame` is the settings
@@ -2449,6 +2455,20 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-6016 · DIFFICULTY (Subtask MOTIR-6102) ───────────────
+        'lib/issues/difficulty.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/hooks/useActivityRevision.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/issues/DifficultyPicker.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-4778 · APPROVAL GATES (Subtask MOTIR-4796) ───────────
         // Pinned at the project floor after measuring each on this branch. Seven
         // of the nine came out at 100 on all four axes; the two that did not are

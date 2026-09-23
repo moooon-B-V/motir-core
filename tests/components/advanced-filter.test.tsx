@@ -14,6 +14,7 @@ import { decodeFilterParam, encodeFilterParam, type FilterAst } from '@/lib/filt
 import { FILTER_FIELDS, type FilterFieldDef } from '@/lib/filters/registry';
 import { setAdvancedParam } from '@/lib/issues/issueListAdvancedFilter';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 
 // The advanced filter BUILDER (Subtask 6.1.4) under happy-dom — the card's
 // component AC: rows render FROM the registry (a test-only entry appears with
@@ -972,5 +973,56 @@ describe('IssueAdvancedFilter — the Checks field (MOTIR-5473)', () => {
     expect(screen.getByRole('option', { name: 'has no checks' })).toBeTruthy();
     expect(screen.getByRole('option', { name: 'has checks' })).toBeTruthy();
     expect(screen.queryByRole('option', { name: 'is empty' })).toBeNull();
+  });
+});
+
+// Story MOTIR-6016 · MOTIR-6100 — the Difficulty condition row, as drawn in
+// `design/work-items/filter-builder--difficulty.mock.html`: a three-value
+// picker, easiest first, and a chip that names the values, in en and zh.
+describe('the Difficulty condition row', () => {
+  it('offers Low · Medium · High and live-applies a pick', () => {
+    renderBuilder({
+      ast: {
+        combinator: 'and',
+        conditions: [{ field: 'difficulty', operator: 'is_any_of', value: ['low'] }],
+      },
+    });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Difficulty values' }));
+    const options = screen.getAllByRole('option').map((o) => o.textContent?.trim());
+    expect(options).toEqual(expect.arrayContaining(['Low', 'Medium', 'High']));
+    fireEvent.click(screen.getByRole('option', { name: /High/ }));
+    expect(lastPushedAst()).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'difficulty', operator: 'is_any_of', value: ['low', 'high'] }],
+    });
+  });
+
+  it.each([
+    ['en', 'Difficulty', 'is any of Medium, High'],
+    ['zh', '难度', null],
+  ] as const)('the applied chip names the field and its values (%s)', (locale, field, text) => {
+    renderWithIntl(
+      <AdvancedFilterSummary
+        ast={{
+          combinator: 'and',
+          conditions: [{ field: 'difficulty', operator: 'is_any_of', value: ['medium', 'high'] }],
+        }}
+        statuses={STATUSES}
+        members={MEMBERS}
+        sprints={SPRINTS}
+        customFields={CUSTOM_FIELDS}
+        components={COMPONENTS}
+        referencedLabels={REFERENCED_LABELS}
+      />,
+      locale === 'zh' ? { locale, messages: zhMessages } : {},
+    );
+    expect(screen.getByText(field)).toBeTruthy();
+    if (text) expect(screen.getByText(text)).toBeTruthy();
+    else {
+      expect(document.body.textContent).toContain('中');
+      expect(document.body.textContent).toContain('高');
+    }
   });
 });

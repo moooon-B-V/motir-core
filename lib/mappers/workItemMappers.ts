@@ -90,6 +90,9 @@ export function toWorkItemDto(
     // through (Prisma enums are plain string unions on the row).
     type: row.type,
     executor: row.executor,
+    // How hard the work is to reason about (Story MOTIR-6016) — a nullable
+    // enum, passed straight through like `type` / `executor`.
+    difficulty: row.difficulty,
     // The `Decimal(6, 2)` story-point estimate (Story 4.3) → a wire-safe number
     // (or null when unestimated); Decimals don't survive JSON otherwise.
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),

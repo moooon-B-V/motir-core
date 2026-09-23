@@ -148,6 +148,7 @@ function makeItem(overrides: Partial<WorkItemDto> = {}): WorkItemDto {
     estimateMinutes: 90,
     type: null,
     executor: null,
+    difficulty: null,
     storyPoints: null,
     position: 'a0',
     sprintId: null,

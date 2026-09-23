@@ -50,6 +50,7 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
+import { foldAppend } from '@/lib/plans/mergeModifyPatch';
 import {
   FOLDER_REF_PREFIX,
   TEMP_REF_PREFIX,
@@ -67,6 +68,7 @@ import {
   collectReferencedFolderIds,
   collectReferencedWorkItemIds,
   DEFAULT_PROPOSED_KIND,
+  proposedParentAnchorIds,
   validatePlanProposals,
   type LiveFolderState,
   type LiveWorkItemState,
@@ -83,7 +85,6 @@ import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTod
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import {
-  DuplicatePlanTargetError,
   InvalidProposalError,
   PlanGrammarError,
   PlanItemNotFoundError,
@@ -105,7 +106,6 @@ import {
   PlanRevisionInFlightError,
   PlanRefGraphError,
   PlanTargetImmutableError,
-  type PlanTargetOp,
   UnresolvedPlanRefError,
   InvalidPlanHistoryCursorError,
 } from '@/lib/plans/errors';
@@ -158,7 +158,11 @@ import type {
   WorkItemPlanHistoryEntryDto,
   WorkItemPlanHistoryPageDto,
 } from '@/lib/dto/plans';
-import { PLAN_STATUS_DTO_VALUES, WORK_ITEM_PENDING_PLAN_STATUSES } from '@/lib/dto/plans';
+import {
+  PLAN_ITEM_REASON_MAX,
+  PLAN_STATUS_DTO_VALUES,
+  WORK_ITEM_PENDING_PLAN_STATUSES,
+} from '@/lib/dto/plans';
 import {
   toPlanDto,
   toPlanItemDto,
@@ -329,7 +333,39 @@ function assertFolderRefNotBlank(
   }
 }
 
+/**
+ * A `remove`'s REASON (AMENDMENT 18 §3, MOTIR-6052): optional, `remove`-only,
+ * and 1–{@link PLAN_ITEM_REASON_MAX} characters after trimming. `null` and an
+ * absent key both mean "no reason", on any op.
+ */
+function assertReasonLegal(p: ProposalInput): void {
+  if (p.reason === undefined || p.reason === null) return;
+  const label = proposalLabel({
+    op: p.op,
+    workItemId: p.workItemId,
+    title: p.proposedFields?.title,
+  });
+  if (p.op !== 'remove') {
+    throw new InvalidProposalError(
+      `${label}: \`reason\` belongs to a \`remove\` proposal — it says why a card is being removed. ` +
+        `Put what an \`${p.op}\` means in its own fields instead.`,
+    );
+  }
+  const reason = p.reason.trim();
+  if (reason.length === 0) {
+    throw new InvalidProposalError(
+      `${label}: \`reason\` is blank. Say why the card is being removed, or omit the key.`,
+    );
+  }
+  if (reason.length > PLAN_ITEM_REASON_MAX) {
+    throw new InvalidProposalError(
+      `${label}: \`reason\` is ${reason.length} characters; it may be at most ${PLAN_ITEM_REASON_MAX}.`,
+    );
+  }
+}
+
 function validateProposal(p: ProposalInput): void {
+  assertReasonLegal(p);
   assertFolderRefNotBlank(
     p.parentRef,
     'parentRef',
@@ -408,14 +444,11 @@ function validateProposal(p: ProposalInput): void {
       p.patch.targetRepositories,
       p.patch.targetRepositoryRef,
     );
-    // A `modify` may RE-PARENT the target (MOTIR-3859) — and the ONE form of
-    // that key which is refused at the boundary rather than validated is an
-    // intra-plan temp-ref. It is checked HERE, in the pure per-proposal pass,
-    // for the same reason the repo role is: the answer needs no read at all, and
-    // an author writing a plan is the right person to hear it. The FIVE checks
-    // that DO need the tree run in `assertReparentLegal`, which the append and
-    // the approve share. See `PlanItemPatch.parentRef` for why a proposal is not
-    // a legal parent for an existing card.
+    // A `modify` may RE-PARENT the target (MOTIR-3859) — onto a live row, a
+    // folder, or (AMENDMENT 18 §1, MOTIR-6050) a proposed `add` on this plan.
+    // Only a BLANK ref is refused here, in the pure per-proposal pass; the five
+    // checks that need the tree — against the projection for a proposed parent
+    // — run in `assertReparentLegal`, which the append and the approve share.
     if (typeof p.patch.parentRef === 'string') {
       const ref = p.patch.parentRef.trim();
       if (ref.length === 0) {
@@ -423,16 +456,6 @@ function validateProposal(p: ProposalInput): void {
           `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`patch.parentRef\` is blank. ` +
             'Send a work-item key / id to re-parent under it, an explicit `null` to move it to the ' +
             'project root, or omit the key to leave the parent alone.',
-        );
-      }
-      if (isTempRef(ref)) {
-        throw new InvalidProposalError(
-          `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`patch.parentRef\` names a ` +
-            'proposal in this plan. A `modify` may only re-parent onto a work item that ALREADY ' +
-            'EXISTS — every check a re-parent owes (the kind-parent matrix, same-project tenancy, ' +
-            'the no-cycle walk, the depth cap, the terminal-parent refusal) is a question about a ' +
-            'live row, and a proposal has none until approve. To land a card under one this plan ' +
-            'is adding, `add` it with that `parentRef` instead.',
         );
       }
     }
@@ -480,23 +503,6 @@ function containPrismaFailure(err: unknown, operation: string): unknown {
     return new PlanPersistenceError(operation, ormCode);
   }
   return err;
-}
-
-/**
- * The targets a plan's proposals already claim — `workItemId → op` (MOTIR-3194).
- *
- * Only a `modify`/`remove` has a target while a plan is `generating`: an `add`
- * carries `workItemId: null` until materialize writes the created id back
- * (`planItemRepository.setWorkItemId`), which is the same reason Postgres's
- * NULL-distinct semantics let a plan hold many `add`s under
- * `@@unique([planId, workItemId])`.
- */
-function claimedTargets(items: readonly PlanItem[]): Map<string, PlanTargetOp> {
-  const claimed = new Map<string, PlanTargetOp>();
-  for (const item of items) {
-    if (item.op !== 'add' && item.workItemId) claimed.set(item.workItemId, item.op);
-  }
-  return claimed;
 }
 
 /**
@@ -944,18 +950,29 @@ async function assertCorrectionKeepsPlanApprovable(
   });
 }
 
-/** Every real work-item id a `modify` in `nodes` proposes as a NEW parent. */
+/**
+ * Every real work-item id whose ancestor chain the re-parent gate reads: each
+ * live row a `modify` proposes as a NEW parent, and — for a `modify` moving
+ * under a proposed `add` (AMENDMENT 18 §1, MOTIR-6050) — the committed ANCHOR
+ * that `add`'s chain is created under.
+ */
 function proposedParentIds(nodes: readonly ProposalNode[]): string[] {
   return [
-    ...new Set(
-      nodes
+    ...new Set([
+      ...nodes
         .filter((n) => n.op === 'modify')
         .map((n) => n.patch?.parentRef)
         .filter(
           (ref): ref is string => typeof ref === 'string' && !isTempRef(ref) && !isFolderRef(ref),
         ),
-    ),
+      ...proposedParentAnchorIds(nodes),
+    ]),
   ];
+}
+
+/** True when some `modify` in `nodes` carries a `patch.parentRef` the gate must judge. */
+function anyReparent(nodes: readonly ProposalNode[]): boolean {
+  return nodes.some((n) => n.op === 'modify' && typeof n.patch?.parentRef === 'string');
 }
 
 /**
@@ -2237,7 +2254,14 @@ async function materialize(
       if (!locked) throw new PlanItemTargetMissingError(item.workItemId);
       await workItemRepository.archive(item.workItemId, tx);
       await workItemRevisionsService.recordRevision(
-        { workItemId: item.workItemId, changedById: ctx.userId, changeKind: 'archived', diff: {} },
+        {
+          workItemId: item.workItemId,
+          changedById: ctx.userId,
+          changeKind: 'archived',
+          // WHY it was archived rides on its history (AMENDMENT 18 §3, MOTIR-6052);
+          // a remove with no reason keeps the empty diff it always wrote.
+          diff: item.reason ? { reason: item.reason } : {},
+        },
         tx,
       );
     }
@@ -2966,6 +2990,7 @@ async function assertReparentsLegalAtAppend(
     );
     const ancestorIdsById = await resolveReparentAncestors(nodes, ctx, tx);
     const folderById = await resolveFolderById(nodes, ctx, tx);
+    const addsById = new Map(nodes.filter((n) => n.op === 'add').map((n) => [n.id, n]));
     for (const node of nodes) {
       // The ref must RESOLVE before the gate can judge it — the same
       // precondition `validatePlanProposals` gives `assertReparentLegal` through
@@ -2986,6 +3011,7 @@ async function assertReparentsLegalAtAppend(
         terminalStatusKeys,
         planProjectId,
         folderById,
+        addsById,
       );
     }
   });
@@ -3538,12 +3564,13 @@ export const plansService = {
    * The plan row is locked + its status re-read so an append racing a
    * `markPlanned` is rejected once the plan leaves `generating`.
    *
-   * ⚠️ ONE PROPOSAL PER EXISTING TARGET, AND IT IS REFUSED IN WORDS (MOTIR-3194).
-   * `PlanItem @@unique([planId, workItemId])` admits at most one `modify`/`remove`
-   * per target, and the rule is KEPT — {@link DuplicatePlanTargetError} argues why
-   * on the record. What changed is how it announces itself: a check under the plan
-   * lock, BEFORE the insert, naming the work item and the alternatives, instead of
-   * an ORM string naming `prisma.planItem.create()`.
+   * ⚠️ ONE PROPOSAL PER EXISTING TARGET (MOTIR-3194), and a second `modify`
+   * MERGES into it (AMENDMENT 18 §2, MOTIR-6051). `PlanItem @@unique([planId,
+   * workItemId])` still admits one row per target; `foldAppend` decides, under the
+   * plan lock and before any gate, which proposals become rows and which fold into
+   * one, and every pairing with a `remove` is refused in words by
+   * `DuplicatePlanTargetError`. The result carries `appendedItemIds` — one id
+   * per proposal, in input order — because a merge adds no row to slice off.
    */
   /**
    * ⚠️ `opts.revision` is AMENDMENT 10 D1's relaxation, and it is opt-in PER CALL.
@@ -3581,7 +3608,7 @@ export const plansService = {
     proposals: ProposalInput[],
     ctx: ServiceContext,
     opts: { revision?: boolean } = {},
-  ): Promise<PlanWithItemsDto> {
+  ): Promise<PlanWithItemsDto & { appendedItemIds: string[] }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
@@ -3671,7 +3698,7 @@ export const plansService = {
         ? await workflowsService.getTerminalStatusKeys(plan.projectId, ctx.workspaceId)
         : (revisionTerminalStatusKeys ?? new Set<string>());
 
-    let result: { row: Plan; items: PlanItem[] };
+    let result: { row: Plan; items: PlanItem[]; appendedItemIds: string[] };
     try {
       result = await withWorkspaceContext(
         { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -3702,6 +3729,28 @@ export const plansService = {
           const existing = await planItemRepository.findByPlan(planId, tx);
           const carriesTempRef = proposals.some((p) => tempRefsOf(refCarrier(p)).length > 0);
 
+          // ⚠️ ONE PROPOSAL PER EXISTING TARGET — and a second `modify` of one
+          // card now MERGES into it (AMENDMENT 18 §2, MOTIR-6051). Decided HERE,
+          // before any gate, so every gate below judges the MERGED patch rather
+          // than either half alone: a `parentRef` from one call and a
+          // `blockedByAdd` from another can close a cycle neither closes on its
+          // own. Every other pairing on one target still throws
+          // `DuplicatePlanTargetError`, before the first insert.
+          const fold = foldAppend(existing, proposals);
+          const effectiveNodes: ProposalNode[] = [
+            ...existing.map((row) => {
+              const merged = fold.mergedExisting.get(row.id);
+              const node = toProposalNode(row);
+              return merged ? { ...node, patch: merged as ProposalNode['patch'] } : node;
+            }),
+            ...proposals.flatMap((p, index) => {
+              if (fold.dispositions[index]!.kind !== 'insert') return [];
+              const node = toIncomingProposalNode(p, index);
+              const merged = fold.mergedIncoming.get(index);
+              return [merged ? { ...node, patch: merged as ProposalNode['patch'] } : node];
+            }),
+          ];
+
           // THE PURE REF-GRAPH GATE, AT THE APPEND (MOTIR-3573). Everything
           // knowable about a proposal set WITHOUT a workspace read runs here,
           // before the first insert, so the author is told while the plan is
@@ -3716,15 +3765,7 @@ export const plansService = {
           // A rejection escapes as itself — `containPrismaFailure` re-throws
           // anything that is not a Prisma error — so the caller is told its
           // proposals ARE at fault, which `PlanPersistenceError` would deny.
-          assertProposalSetSelfConsistent([
-            ...existing.map(toProposalNode),
-            ...proposals.map(toIncomingProposalNode),
-          ]);
-
-          // The targets this plan ALREADY claims. Grown in-loop as well, because
-          // a duplicate inside ONE batch never reaches the database to be caught
-          // by anything.
-          const claimed = claimedTargets(existing);
+          assertProposalSetSelfConsistent(effectiveNodes);
 
           // ⚠️ REFUSE AN UNRESOLVABLE `planItem:` REF HERE, WHERE IT IS WRITTEN
           // (MOTIR-3539) — before the first row of the batch is inserted, so a
@@ -3769,11 +3810,8 @@ export const plansService = {
           // It is skipped entirely — no read, no terminal-status lookup — when no
           // proposal in the batch carries `patch.parentRef`, which is every plan
           // that does not use the key.
-          const withIncoming = [
-            ...existing.map(toProposalNode),
-            ...proposals.map(toIncomingProposalNode),
-          ];
-          if (proposedParentIds(withIncoming).length > 0) {
+          const withIncoming = effectiveNodes;
+          if (anyReparent(withIncoming)) {
             await assertReparentsLegalAtAppend(withIncoming, ctx, fresh.projectId, tx);
           }
 
@@ -3812,12 +3850,22 @@ export const plansService = {
             tx,
           );
 
-          for (const p of proposals) {
-            if (p.op !== 'add' && p.workItemId) {
-              const existing = claimed.get(p.workItemId);
-              if (existing) throw new DuplicatePlanTargetError(p.workItemId, existing, p.op);
-              claimed.set(p.workItemId, p.op);
+          // The id each incoming proposal ended as, in input order — a merged
+          // one reports the SURVIVING row, so a caller mapping ids by position
+          // still gets a real id (AMENDMENT 18 §2).
+          const appendedItemIds: string[] = [];
+          const inserted: ProposalInput[] = [];
+          for (const [index, p] of proposals.entries()) {
+            const disposition = fold.dispositions[index]!;
+            if (disposition.kind === 'mergeExisting') {
+              appendedItemIds.push(disposition.rowId);
+              continue;
             }
+            if (disposition.kind === 'mergeBatch') {
+              appendedItemIds.push(appendedItemIds[disposition.index]!);
+              continue;
+            }
+            const patch = p.op === 'modify' ? (fold.mergedIncoming.get(index) ?? p.patch) : p.patch;
             const data: PlanItemCreateInput = {
               workspaceId: ctx.workspaceId,
               planId,
@@ -3826,14 +3874,28 @@ export const plansService = {
               parentRef: p.parentRef ?? null,
               blockedByRefs: p.blockedByRefs ?? [],
               baseRevision: p.baseRevision ?? null,
+              reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
               ...(p.op === 'add' && p.proposedFields
                 ? { proposedFields: p.proposedFields as unknown as Prisma.InputJsonValue }
                 : {}),
-              ...(p.op === 'modify' && p.patch
-                ? { patch: p.patch as unknown as Prisma.InputJsonValue }
+              ...(p.op === 'modify' && patch
+                ? { patch: patch as unknown as Prisma.InputJsonValue }
                 : {}),
             };
-            await planItemRepository.create(data, tx);
+            appendedItemIds.push((await planItemRepository.create(data, tx)).id);
+            inserted.push(p);
+          }
+
+          // The merges INTO rows the plan already held: one write per row, with
+          // the fully-merged patch. The row's `baseRevision` is left alone — the
+          // EARLIER anchor is kept, so drift is measured from the revision the
+          // plan first read the card at.
+          for (const [rowId, merged] of fold.mergedExisting) {
+            await planItemRepository.update(
+              rowId,
+              { patch: merged as unknown as Prisma.InputJsonValue },
+              tx,
+            );
           }
 
           // The gate the header above argues for — after the inserts, so it
@@ -3863,26 +3925,41 @@ export const plansService = {
           // too would put *"0 proposals appended"* on the timeline of every plan
           // authored through that door, immediately above the close it belongs to.
           // The trail records what CHANGED; nothing did.
-          if (proposals.length > 0) {
+          if (inserted.length > 0) {
             await planRevisionsService.recordRevision(
               {
                 planId,
                 changeKind: 'appended',
                 ...generationActor(fresh, ctx),
                 diff: {
-                  proposalCount: proposals.length,
+                  proposalCount: inserted.length,
                   ops: {
-                    add: proposals.filter((p) => p.op === 'add').length,
-                    modify: proposals.filter((p) => p.op === 'modify').length,
-                    remove: proposals.filter((p) => p.op === 'remove').length,
+                    add: inserted.filter((p) => p.op === 'add').length,
+                    modify: inserted.filter((p) => p.op === 'modify').length,
+                    remove: inserted.filter((p) => p.op === 'remove').length,
                   },
                 },
               },
               tx,
             );
           }
+          // A merge WIDENS a proposal already on the plan, so it lands on the
+          // timeline as an EDIT of that proposal — the same verb the correction
+          // doors write — not as an append a reviewer would read as a new card.
+          for (const rowId of fold.mergedExisting.keys()) {
+            await planRevisionsService.recordRevision(
+              {
+                planId,
+                planItemId: rowId,
+                changeKind: 'edited',
+                ...generationActor(fresh, ctx),
+                diff: { fields: ['patch'], proposalCount: 1, merged: true },
+              },
+              tx,
+            );
+          }
           const allItems = await planItemRepository.findByPlan(planId, tx);
-          return { row: fresh, items: allItems };
+          return { row: fresh, items: allItems, appendedItemIds };
         },
       );
     } catch (err) {
@@ -3894,7 +3971,10 @@ export const plansService = {
       // including the typed refusals thrown a few lines up.
       throw containPrismaFailure(err, 'plan proposal append');
     }
-    return toPlanWithItemsDto(result.row, result.items);
+    return {
+      ...toPlanWithItemsDto(result.row, result.items),
+      appendedItemIds: result.appendedItemIds,
+    };
   },
 
   /**
@@ -4800,6 +4880,18 @@ export const plansService = {
         if (collectReferencedFolderIds([correctedNode]).length > 0) {
           await assertFolderPlacementsLegalAtAppend([correctedNode], ctx, plan.projectId, tx);
         }
+        // The append's RE-PARENT gate on the corrected shape, for the same reason
+        // as the folder gate above — including a move under a proposed `add`
+        // (AMENDMENT 18 §1, MOTIR-6050), judged against the plan's OTHER
+        // proposals, which is the set the corrected one will sit among.
+        if (anyReparent([correctedNode])) {
+          await assertReparentsLegalAtAppend(
+            [...all.filter((i) => i.id !== item.id).map(toProposalNode), correctedNode],
+            ctx,
+            plan.projectId,
+            tx,
+          );
+        }
 
         await planItemRepository.update(planItemId, data, tx);
 
@@ -4863,8 +4955,8 @@ export const plansService = {
    *
    * Withdrawing a `modify` RELEASES its target, so a corrected `modify` on that
    * work item can be appended — the escape `DUPLICATE_PLAN_TARGET` has never had.
-   * That falls out of the delete rather than being coded: `claimedTargets` reads
-   * the rows that exist.
+   * That falls out of the delete rather than being coded: `foldAppend` reads the
+   * rows that exist.
    */
   async withdrawProposal(
     planId: string,

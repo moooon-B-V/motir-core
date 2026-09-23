@@ -47,6 +47,7 @@ const DATA: QuickViewData = {
   explanationMd: null,
   type: 'code',
   executor: 'coding_agent',
+  difficulty: null,
   assigneeName: 'Marco Ortiz',
   reporterName: 'Alice Chen',
   priority: 'medium',
@@ -375,6 +376,26 @@ describe('the PROPOSED to-do list in proposal mode (MOTIR-4622)', () => {
     // target is a committed card whose list is a person's PROGRESS.
     renderProposal(MODIFY);
     expect(screen.queryByTestId('proposal-todos')).toBeNull();
+  });
+});
+
+// MOTIR-6055 · `design-notes.md` Part XIX §19.5 — a `remove`'s REASON is a band
+// directly under the header row, above the target's own title; none ⇒ no band.
+describe('the peek of a remove carrying a REASON (MOTIR-6055)', () => {
+  it('draws the band under the header, before the title, verbatim', () => {
+    renderProposal({ ...REMOVE, removeReason: 'Replaced by the JSON export (PROD-38).' });
+    const band = screen.getByTestId('remove-reason');
+    expect(band.textContent).toBe('ReasonReplaced by the JSON export (PROD-38).');
+    const title = screen.getByRole('heading', { level: 2 });
+    expect(band.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('draws nothing for a remove with no reason, nor for any other op', () => {
+    renderProposal({ ...REMOVE, removeReason: null });
+    expect(screen.queryByTestId('remove-reason')).toBeNull();
+    cleanup();
+    renderProposal({ ...MODIFY, removeReason: 'not a remove' });
+    expect(screen.queryByTestId('remove-reason')).toBeNull();
   });
 });
 

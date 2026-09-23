@@ -653,7 +653,9 @@ const MAX_WORK_ITEM_DEPTH = 4;
  * The order is the same discipline the gate above follows — a malformed
  * re-parent fails with the MOST specific reason:
  *
- *   1. a temp-ref parent (refused outright — see `PlanItemPatch.parentRef`)
+ *   1. a temp-ref parent — a proposed `add` on this plan — judged against the
+ *      PROJECTION instead (AMENDMENT 18 §1, MOTIR-6050): see
+ *      {@link assertReparentUnderProposalLegal}
  *   2. tenancy — the parent is in this project
  *   3. self / descendant — the move would create a cycle
  *   4. depth — the resulting depth is within the cap
@@ -670,6 +672,7 @@ export function assertReparentLegal(
   terminalStatusKeys: ReadonlySet<string>,
   planProjectId: string,
   folderById: ReadonlyMap<string, LiveFolderState> = new Map(),
+  addsById: ReadonlyMap<string, ProposalNode> = new Map(),
 ): void {
   if (item.op !== 'modify') return;
   const ref = item.patch?.parentRef;
@@ -708,16 +711,20 @@ export function assertReparentLegal(
     return;
   }
 
-  // 1. A proposal is not a legal parent for an existing card. The refusal is
-  //    also made at the append boundary (`validateProposal`), where it reaches
-  //    the author first; this is the backstop that keeps the two gate stages
-  //    total over the same input.
+  // 1. A PROPOSED parent (AMENDMENT 18 §1, MOTIR-6050). AMENDMENT 11 D2 refused
+  //    this outright because every guard was a question about a live row; the
+  //    plan's own `add`s now answer them, read off the projected chain.
   if (isTempRef(ref)) {
-    throw new PlanGrammarError(
-      'illegal_parent',
-      item.id,
-      `Proposal ${item.id}'s patch.parentRef "${ref}" names a proposal in this plan. A \`modify\` may only re-parent onto a work item that ALREADY EXISTS: every check a re-parent owes — the kind-parent matrix, same-project tenancy, the no-cycle walk, the depth cap and the terminal-parent refusal — is a question about a live row, and a proposal has none until approve. To land a card under one this plan is adding, \`add\` it with that \`parentRef\` instead.`,
+    assertReparentUnderProposalLegal(
+      item,
+      target,
+      ref,
+      liveById,
+      ancestorIdsById,
+      terminalStatusKeys,
+      addsById,
     );
+    return;
   }
 
   // Resolution is guaranteed by `assertRefsResolvable`.
@@ -789,6 +796,129 @@ export function assertReparentLegal(
       `${describeSubject(item, liveById)} would re-parent work item ${describeNode(target.id, [], liveById)} under ${describeNode(parent.id, [], liveById)}, which is in the terminal status "${parent.status}". Completing work is derived from a container's CURRENT child set, so giving a finished parent a new open child re-opens it and every ancestor above it.`,
     );
   }
+}
+
+/**
+ * Walk a proposed parent's chain UP through the plan's own `add`s (AMENDMENT 18
+ * §1): the `add`s above it, in order, and the first COMMITTED row the chain
+ * reaches — the ANCHOR the proposed subtree is created under. `anchorId` is
+ * `null` when the chain ends at the project root or in a folder, where a filed
+ * card is a root.
+ *
+ * Exported because the service needs the anchors BEFORE the gate runs: they are
+ * the rows whose live ancestor chains `findAncestorIdsForItems` has to read.
+ * Refs that do not resolve, and parent-ref cycles among the `add`s, are other
+ * checks' refusals (`assertRefsResolvable`, `assertParentRefsAcyclic`), so the
+ * walk simply stops at them rather than inventing a second message.
+ */
+export function projectedParentChain(
+  ref: string,
+  addsById: ReadonlyMap<string, ProposalNode>,
+): { proposedAncestors: ProposalNode[]; anchorId: string | null } {
+  const proposedAncestors: ProposalNode[] = [];
+  const seen = new Set<string>();
+  let node = addsById.get(tempRefId(ref));
+  let next = node?.parentRef ?? null;
+  while (node && next && isTempRef(next) && !seen.has(node.id)) {
+    seen.add(node.id);
+    node = addsById.get(tempRefId(next));
+    if (!node) return { proposedAncestors, anchorId: null };
+    proposedAncestors.push(node);
+    next = node.parentRef;
+  }
+  const anchorId = next && !isTempRef(next) && !isFolderRef(next) ? next : null;
+  return { proposedAncestors, anchorId };
+}
+
+/** Every COMMITTED anchor a `modify` in `items` reaches through a proposed parent. */
+export function proposedParentAnchorIds(items: readonly ProposalNode[]): string[] {
+  const addsById = new Map(items.filter((n) => n.op === 'add').map((n) => [n.id, n]));
+  const anchors = new Set<string>();
+  for (const item of items) {
+    const ref = item.op === 'modify' ? item.patch?.parentRef : undefined;
+    if (typeof ref !== 'string' || !isTempRef(ref)) continue;
+    const { anchorId } = projectedParentChain(ref, addsById);
+    if (anchorId) anchors.add(anchorId);
+  }
+  return [...anchors];
+}
+
+/**
+ * A `modify` moving its committed target under a PROPOSED `add` (AMENDMENT 18
+ * §1). The same five questions {@link assertReparentLegal} asks of a live
+ * parent, answered against the projection:
+ *
+ *   - TENANCY needs no check: an `add` is created in the plan's own project, and
+ *     a ref naming another plan's proposal, or a `modify` / `remove`, does not
+ *     resolve (`assertRefsResolvable` / the append's temp-ref check).
+ *   - CYCLE: the moving card must not sit in the projected chain — the anchor or
+ *     any of its live ancestors. The case a proposal CAN create: an `add` under
+ *     the moving card's own child.
+ *   - DEPTH: the proposed `add`s above the parent, plus the anchor's committed
+ *     chain, plus the parent and the moved row.
+ *   - KIND: the proposed `add`'s kind, defaulted the way `materialize` defaults it.
+ *   - TERMINAL: the proposed parent is born open, so D3's refusal lands on the
+ *     ANCHOR — the committed row that gains the new open subtree.
+ */
+function assertReparentUnderProposalLegal(
+  item: ProposalNode,
+  target: LiveWorkItemState,
+  ref: string,
+  liveById: ValidatePlanProposalsInput['liveById'],
+  ancestorIdsById: ValidatePlanProposalsInput['ancestorIdsById'],
+  terminalStatusKeys: ReadonlySet<string>,
+  addsById: ReadonlyMap<string, ProposalNode>,
+): void {
+  const parent = addsById.get(tempRefId(ref));
+  if (!parent) {
+    // The append checks temp-refs against the persisted `add`s and the gate's
+    // step 2 against the plan's; this arm is what keeps the function total when
+    // a caller runs it alone.
+    throw new PlanRefGraphError(
+      'dangling',
+      item.id,
+      `${describeSubject(item, liveById)}'s patch.parentRef "${ref}" names no \`add\` in this plan.`,
+    );
+  }
+  const { proposedAncestors, anchorId } = projectedParentChain(ref, addsById);
+  const committedChain = anchorId ? [anchorId, ...(ancestorIdsById.get(anchorId) ?? [])] : [];
+  const parentName = describeProposal(parent);
+
+  if (committedChain.includes(target.id)) {
+    throw new PlanRefGraphError(
+      'cycle',
+      item.id,
+      `${describeSubject(item, liveById)} would re-parent work item ${describeNode(target.id, [], liveById)} under ${parentName}, which this plan creates BELOW that work item — the move would create a cycle.`,
+    );
+  }
+
+  const resultingDepth = proposedAncestors.length + committedChain.length + 2;
+  if (resultingDepth > MAX_WORK_ITEM_DEPTH) {
+    throw new PlanGrammarError(
+      'parent_depth_limit',
+      item.id,
+      `${describeSubject(item, liveById)} would place work item ${describeNode(target.id, [], liveById)} under ${parentName} at depth ${resultingDepth}, past the limit of ${MAX_WORK_ITEM_DEPTH}.`,
+    );
+  }
+
+  assertParentKindLegal(item, issueKindOf(parent), target.kind as IssueType, liveById);
+
+  const anchor = anchorId ? liveById.get(anchorId) : undefined;
+  if (anchor && terminalStatusKeys.has(anchor.status)) {
+    throw new PlanGrammarError(
+      'parent_terminal',
+      item.id,
+      `${describeSubject(item, liveById)} would re-parent work item ${describeNode(target.id, [], liveById)} under ${parentName}, which this plan creates under ${describeNode(anchor.id, [], liveById)} — in the terminal status "${anchor.status}". Giving a finished work item a new open subtree re-opens it and every ancestor above it.`,
+    );
+  }
+}
+
+/** A proposed `add` named for a reader: its title when it has one, else its id. */
+function describeProposal(add: ProposalNode): string {
+  const title = add.proposedFields?.title;
+  return title
+    ? `proposed ${proposedKindOf(add)} "${title}" (${TEMP_REF_PREFIX}${add.id})`
+    : `${TEMP_REF_PREFIX}${add.id}`;
 }
 
 /** `assertValidParent`, with its `IllegalParentTypeError` re-thrown as the plan
@@ -1188,6 +1318,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
       terminalStatusKeys,
       planProjectId,
       folderById,
+      addsById,
     );
   }
 

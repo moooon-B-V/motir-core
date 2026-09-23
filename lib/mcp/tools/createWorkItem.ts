@@ -1,13 +1,19 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Executor, WorkItemPriority, WorkItemType } from '@/generated/prisma/client';
+import {
+  Executor,
+  WorkItemDifficulty,
+  WorkItemPriority,
+  WorkItemType,
+} from '@/generated/prisma/client';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   CreateWorkItemInput,
   ExecutorDto,
+  WorkItemDifficultyDto,
   WorkItemDto,
   WorkItemKindDto,
   WorkItemTypeDto,
@@ -139,6 +145,16 @@ const inputSchema = {
         'overrides the type default when supplied. Omit (or null) to take the ' +
         'type default (or leave it unset when no type is given).',
     ),
+  difficulty: z
+    .nativeEnum(WorkItemDifficulty)
+    .nullable()
+    .optional()
+    .describe(
+      'Optional difficulty — how hard the work is to REASON about, not how big it ' +
+        'is: "trivial", "low", "medium" or "high". Leaf items (task / bug / subtask) only; a ' +
+        'non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND). ' +
+        'Omit (or null) to leave it unset.',
+    ),
   targetRepo: z
     .string()
     .nullable()
@@ -220,6 +236,7 @@ interface CreateWorkItemArgs {
   estimateMinutes?: number | null;
   type?: WorkItemType | null;
   executor?: Executor | null;
+  difficulty?: WorkItemDifficulty | null;
   targetRepo?: string | null;
   targetRepos?: string[];
   targetRepositories?: string[];
@@ -281,6 +298,10 @@ export async function runCreateWorkItem(
       ...(args.estimateMinutes !== undefined ? { estimateMinutes: args.estimateMinutes } : {}),
       ...(args.type !== undefined ? { type: args.type as WorkItemTypeDto | null } : {}),
       ...(args.executor !== undefined ? { executor: args.executor as ExecutorDto | null } : {}),
+      // Difficulty (Story MOTIR-6016): the service owns the leaf-only refusal.
+      ...(args.difficulty !== undefined
+        ? { difficulty: args.difficulty as WorkItemDifficultyDto | null }
+        : {}),
       // Target repo (MOTIR-1804): forward only when supplied. The service owns
       // the normalization (`owner/name` → name) and the connected-set validation
       // — this stays a thin pass-through, like every other leaf field here.
@@ -329,9 +350,10 @@ export function registerCreateWorkItem(
         'The result carries a `placement` field saying where it landed. The reporter is the token owner. Use kind "epic" with no parent to ' +
         'create a top-level capability area; kind "bug" under a story/epic to LOG A BUG. ' +
         'Optionally set the leaf-authoring fields up front — story points, estimate ' +
-        '(minutes), work type, and executor — so a subtask can be created fully-specified in ' +
-        'one call. Honors the same kind-parent rules (an epic is root-only — a parented epic ' +
-        'is rejected), leaf-only type/executor rule, and access checks as the UI.',
+        '(minutes), work type, executor and difficulty — so a subtask can be created ' +
+        'fully-specified in one call. Honors the same kind-parent rules (an epic is root-only — ' +
+        'a parented epic is rejected), leaf-only type/executor/difficulty rule, and access ' +
+        'checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runCreateWorkItem(args, resolveContext(extra)),

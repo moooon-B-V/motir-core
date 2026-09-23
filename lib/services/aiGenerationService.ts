@@ -378,11 +378,10 @@ export const aiGenerationService = {
       const result = await plansService.addProposals(plan.id, proposals, ctx, {
         revision: opts.revision,
       });
-      // A generation job is the SOLE writer of its plan and appends sequentially
-      // (the handler awaits each batch), and `addProposals` returns every item in
-      // append order (createdAt asc, id asc) — so this call's creations are exactly
-      // the last `proposals.length` items.
-      createdIds = result.items.slice(result.items.length - proposals.length).map((i) => i.id);
+      // One id per proposal, in input order, as the service reports it — a
+      // second `modify` of one card MERGES into the row the plan already holds
+      // (AMENDMENT 18 §2), so the batch's ids are no longer the last N rows.
+      createdIds = result.appendedItemIds;
     }
 
     // ⚠️ `final` MEANS *THIS PASS IS OVER*, and what that costs depends on which

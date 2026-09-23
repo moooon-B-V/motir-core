@@ -109,6 +109,7 @@ const ITEMS = Array.from({ length: ITEM_COUNT }, (_unused, i) => ({
   status: { key: 'todo', category: 'todo' },
   type: 'code',
   executor: 'coding_agent',
+  difficulty: null,
   // The READY row stays unclaimed: the loop re-reads the set each iteration, and
   // an item it already took is held out by its STATUS (in review), not by the
   // claim — so leaving this null keeps the fixture honest about which rule does
@@ -387,6 +388,7 @@ function workItemDetail(key) {
       },
     ],
     executor: item?.executor ?? 'coding_agent',
+    difficulty: item?.difficulty ?? null,
     planningSource: null,
     planningHarness: null,
     planningModel: null,

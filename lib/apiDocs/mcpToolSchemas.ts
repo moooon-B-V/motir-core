@@ -355,7 +355,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 parentRef: {
                   type: ['string', 'null'],
                   description:
-                    'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead. Or `folder:<folderId>` to FILE the target into a folder of this project instead of under a work item — any kind may be filed, `subtask` included, and an unknown folder or another project’s is refused at the append.',
+                    'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. It may also be a `planItem:<id>` ref naming an `add` ALREADY on this plan (from an earlier call), to move an existing card under a card this plan creates; approve creates the `add` first, then moves the card. The move is checked against the tree the plan would produce — the kind-parent matrix, no cycle (never under a proposal this plan creates BELOW the card), the depth cap, and a refusal to hang new work under a FINISHED parent. Or `folder:<folderId>` to FILE the target into a folder of this project instead of under a work item — any kind may be filed, `subtask` included, and an unknown folder or another project’s is refused at the append.',
                 },
                 blockedByAdd: {
                   type: 'array',
@@ -389,6 +389,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               type: 'string',
               description:
                 '`modify` / `remove` only: the target revision the change was computed against.',
+            },
+            reason: {
+              type: 'string',
+              description:
+                '`remove` ONLY: WHY the card is being removed — shown to the reviewer beside the removal and written into the archived card’s history at approve. Trimmed, then 1–2000 characters. Refused on an `add` or a `modify`, and refused when blank; omit it to send none.',
             },
           },
           required: ['op'],
@@ -501,7 +506,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         enum: ['story', 'task', 'bug', 'subtask'],
         description:
-          "The new work item kind. Must keep the kind-parent matrix legal for both the item's current parent AND all of its children. (This is the hierarchy KIND, NOT the work type — use update_work_item to change type/executor.)",
+          "The new work item kind. Must keep the kind-parent matrix legal for both the item's current parent AND all of its children. (This is the hierarchy KIND, NOT the work type — use update_work_item to change type/executor/difficulty.)",
       },
     },
     required: ['key', 'kind'],
@@ -820,6 +825,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         anyOf: [{ type: 'string', enum: ['coding_agent', 'human'] }, { type: 'null' }],
         description:
           'Optional executor ("coding_agent" or "human") — leaf items only; overrides the type default when supplied. Omit (or null) to take the type default (or leave it unset when no type is given).',
+      },
+      difficulty: {
+        anyOf: [{ type: 'string', enum: ['trivial', 'low', 'medium', 'high'] }, { type: 'null' }],
+        description:
+          'Optional difficulty — how hard the work is to REASON about, not how big it is: "trivial", "low", "medium" or "high". Leaf items (task / bug / subtask) only; a non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND). Omit (or null) to leave it unset.',
       },
       targetRepo: {
         type: ['string', 'null'],
@@ -1723,7 +1733,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 field: {
                   type: 'string',
                   description:
-                    'Field id: a built-in (kind, status, priority, type, assignee, reporter, sprint, text, created, updated, due, storyPoints, estimate), a label/component (lbl, cmp), a folder (folder — matches the item’s own folder, else its root ancestor’s, including folders inside the chosen ones), or a custom field (cf:<fieldId>).',
+                    'Field id: a built-in (kind, status, priority, type, difficulty, assignee, reporter, sprint, text, created, updated, due, storyPoints, estimate), a label/component (lbl, cmp), a folder (folder — matches the item’s own folder, else its root ancestor’s, including folders inside the chosen ones), or a custom field (cf:<fieldId>).',
                 },
                 operator: {
                   type: 'string',
@@ -2437,7 +2447,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               parentRef: {
                 type: ['string', 'null'],
                 description:
-                  'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. ⚠️ It must name a work item that ALREADY EXISTS — a `planItem:<id>` ref is refused, because every check a re-parent owes (the kind-parent matrix, same-project, no cycle, the depth cap, and a refusal to hang new work under a FINISHED parent) is a question about a live row. To land a card under one this plan is adding, `add` it with that `parentRef` instead. Or `folder:<folderId>` to FILE the target into a folder of this project instead of under a work item — any kind may be filed, `subtask` included, and an unknown folder or another project’s is refused at the append.',
+                  'RE-PARENT the target: a work-item KEY ("ACME-7") or a real work-item id — the card this one should hang under instead. An explicit `null` moves it to the PROJECT ROOT. Omit the key to leave the parent where it is. It may also be a `planItem:<id>` ref naming an `add` ALREADY on this plan (from an earlier call), to move an existing card under a card this plan creates; approve creates the `add` first, then moves the card. The move is checked against the tree the plan would produce — the kind-parent matrix, no cycle (never under a proposal this plan creates BELOW the card), the depth cap, and a refusal to hang new work under a FINISHED parent. Or `folder:<folderId>` to FILE the target into a folder of this project instead of under a work item — any kind may be filed, `subtask` included, and an unknown folder or another project’s is refused at the append.',
               },
               blockedByAdd: {
                 type: 'array',
@@ -2547,6 +2557,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         anyOf: [{ type: 'string', enum: ['coding_agent', 'human'] }, { type: 'null' }],
         description:
           'Who executes the work ("coding_agent" or "human") — leaf items only; null clears it.',
+      },
+      difficulty: {
+        anyOf: [{ type: 'string', enum: ['trivial', 'low', 'medium', 'high'] }, { type: 'null' }],
+        description:
+          'How hard the work is to REASON about, not how big it is: "trivial", "low", "medium" or "high" — leaf items only; null clears it. A non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND), and so is changing the kind of a leaf that carries one to a container without clearing it in the same call.',
       },
       estimateMinutes: {
         anyOf: [{ type: 'integer', minimum: 0 }, { type: 'null' }],

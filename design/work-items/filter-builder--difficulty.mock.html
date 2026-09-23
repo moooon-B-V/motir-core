@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The Difficulty condition row in the filter builder (MOTIR-6097, a delta)
+    </title>
+    <!-- DELTA MOCK — Subtask MOTIR-6097 (Story MOTIR-6016); MOTIR-6100 builds it. Amends the filter-builder condition rows drawn in design/work-items/placement.mock.html (panel 5, the Folder row, MOTIR-5374); the base is not edited. -->
+    <style>
+      :root {
+        --el-page-bg: #ffffff;
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-tabnav-track: #f6f5f4;
+        --el-tabnav-active: #5645d4;
+        --el-accent: #5645d4;
+        --el-success: #1aae39;
+        --el-tint-sky: #dcecfa;
+        --el-link: #0075de;
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-control-x: 10px;
+        --height-control: 36px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .df-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+      }
+      .df-head h1 {
+        font-size: 20px;
+        margin: 0 0 6px;
+        color: var(--el-text-strong);
+      }
+      .df-head p {
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 0;
+        color: var(--el-text-secondary);
+        max-width: 900px;
+      }
+      .df-band {
+        max-width: 1180px;
+        margin: 0 auto 28px;
+      }
+      .df-band-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin: 0 0 10px;
+      }
+      .df-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .df-panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 14px;
+        width: 272px;
+      }
+      .df-panel-wide {
+        width: 560px;
+      }
+      .df-cap {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin: 0 0 10px;
+      }
+      .df-lang {
+        display: inline-block;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 0 6px;
+        margin-right: 6px;
+      }
+      .df-ic-sm {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+      }
+
+      .df-adv {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 14px;
+      }
+      .df-adv-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .df-adv-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .df-adv-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border: 0;
+        background: none;
+        color: var(--el-text-secondary);
+        font-family: inherit;
+        font-size: 13px;
+      }
+      .df-match {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .df-seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+      }
+      .df-seg-btn {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: calc(var(--radius-btn) - 2px);
+        background: none;
+        color: var(--el-text-secondary);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .df-seg-on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .df-cond {
+        display: grid;
+        grid-template-columns: 158px 168px minmax(0, 1fr) 26px;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .df-cond-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 4px;
+        border-radius: var(--radius-control);
+      }
+      .df-cb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-card);
+        color: var(--el-text);
+        font-family: inherit;
+        font-size: 13px;
+      }
+      .df-cb-lbl {
+        flex: 1;
+        text-align: left;
+      }
+      .df-caret {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+      .df-glyph {
+        color: var(--el-text-muted);
+        display: inline-flex;
+      }
+      .df-vbox {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        min-height: 32px;
+        align-items: center;
+        padding: 2px 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-card);
+      }
+      .df-vbox-muted {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        font-style: italic;
+        border-style: dashed;
+      }
+      .df-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 1px 4px 1px 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      .df-cx {
+        display: inline-flex;
+        border: 0;
+        background: none;
+        padding: 0;
+        color: var(--el-text-secondary);
+      }
+      .df-rm {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border: 0;
+        background: none;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+      }
+      .df-menu {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        width: 220px;
+      }
+      .df-msearch {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--el-border);
+        margin-bottom: 4px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .df-mgroup {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+        color: var(--el-text-secondary);
+        padding: 6px 8px 2px;
+      }
+      .df-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .df-opt-on {
+        background: var(--el-surface);
+      }
+      .df-opt-lbl {
+        flex: 1;
+      }
+      .df-check {
+        width: 16px;
+        height: 16px;
+        color: var(--el-accent);
+      }
+      .df-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .df-sum-chip {
+        display: inline-flex;
+        gap: 4px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      .df-sum-field {
+        font-weight: 600;
+      }
+      .df-count {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 8px 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-chev"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14M12 5v14" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </g>
+        <!-- lucide signal-low / signal-medium / signal-high — the quiet indicator -->
+        <g
+          id="d-low"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 20h.01M7 20v-4" />
+        </g>
+        <g
+          id="d-medium"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 20h.01M7 20v-4M12 20v-8" />
+        </g>
+        <g
+          id="d-high"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8" />
+        </g>
+        <!-- lucide bot (executor) -->
+        <g
+          id="e-agent"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2M20 14h2M15 13v2M9 13v2" />
+        </g>
+        <g
+          id="i-chevrons"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5M7 9l5-5 5 5" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+      </defs>
+    </svg>
+    <div class="df-head">
+      <h1>The Difficulty condition row — list and board filter builder</h1>
+      <p>
+        MOTIR-6097, for MOTIR-6100. Difficulty is a nullable closed enum, so it takes the registry’s
+        nullable-enum operator set — the same four Work type offers: is any of · is none of · is
+        empty · is not empty. It joins the Fields group directly after Work type. The value listbox
+        lists the three values easiest first, each with the same faint signal glyph the item page
+        uses. The same builder is mounted by the board’s filter control, so one row serves both.
+      </p>
+    </div>
+    <div class="df-band" lang="en">
+      <p class="df-band-title">
+        <span class="df-lang">en</span>1 · The builder — a Difficulty row under each of the four
+        operators (is empty / is not empty take no value)
+      </p>
+      <div class="df-row">
+        <div class="df-panel df-panel-wide">
+          <div class="df-adv" role="dialog" aria-label="Advanced filter">
+            <div class="df-adv-head">
+              <span class="df-adv-title">Advanced filter</span
+              ><button class="df-adv-clear">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" /></svg
+                >Clear all
+              </button>
+            </div>
+            <div class="df-match">
+              <span>Match</span>
+              <div class="df-seg" role="group">
+                <button class="df-seg-btn df-seg-on" aria-pressed="true">all</button
+                ><button class="df-seg-btn" aria-pressed="false">any</button>
+              </div>
+              <span>of the following conditions:</span>
+            </div>
+            <div class="df-cond df-cond-new" role="group">
+              <button class="df-cb" aria-haspopup="listbox">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                ><span class="df-cb-lbl">Difficulty</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg></button
+              ><button class="df-cb" aria-haspopup="listbox">
+                <span class="df-cb-lbl">is any of</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="df-vbox">
+                <span class="df-chip"
+                  ><span class="df-glyph" aria-hidden="true"
+                    ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#d-high" /></svg></span
+                  >High<button class="df-cx" aria-label="Remove High">
+                    <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-x" />
+                    </svg></button
+                ></span>
+              </div>
+              <button class="df-rm" aria-label="Remove">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" />
+                </svg>
+              </button>
+            </div>
+            <div class="df-cond df-cond-new" role="group">
+              <button class="df-cb" aria-haspopup="listbox">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                ><span class="df-cb-lbl">Difficulty</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg></button
+              ><button class="df-cb" aria-haspopup="listbox">
+                <span class="df-cb-lbl">is none of</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="df-vbox">
+                <span class="df-chip"
+                  ><span class="df-glyph" aria-hidden="true"
+                    ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#d-low" /></svg></span
+                  >Low<button class="df-cx" aria-label="Remove Low">
+                    <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-x" />
+                    </svg></button></span
+                ><span class="df-chip"
+                  ><span class="df-glyph" aria-hidden="true"
+                    ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#d-medium" /></svg></span
+                  >Medium<button class="df-cx" aria-label="Remove Medium">
+                    <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-x" />
+                    </svg></button
+                ></span>
+              </div>
+              <button class="df-rm" aria-label="Remove">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" />
+                </svg>
+              </button>
+            </div>
+            <div class="df-cond df-cond-new" role="group">
+              <button class="df-cb" aria-haspopup="listbox">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                ><span class="df-cb-lbl">Difficulty</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg></button
+              ><button class="df-cb" aria-haspopup="listbox">
+                <span class="df-cb-lbl">is empty</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="df-vbox df-vbox-muted">—</div>
+              <button class="df-rm" aria-label="Remove">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" />
+                </svg>
+              </button>
+            </div>
+            <div class="df-cond df-cond-new" role="group">
+              <button class="df-cb" aria-haspopup="listbox">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                ><span class="df-cb-lbl">Difficulty</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg></button
+              ><button class="df-cb" aria-haspopup="listbox">
+                <span class="df-cb-lbl">is not empty</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="df-vbox df-vbox-muted">—</div>
+              <button class="df-rm" aria-label="Remove">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="df-band" lang="en">
+      <div class="df-row">
+        <div class="df-panel">
+          <p class="df-cap">2 · The field menu — Difficulty joins Fields after Work type</p>
+          <div class="df-menu" role="listbox" aria-label="Difficulty">
+            <div class="df-msearch">
+              <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-search" /></svg
+              >Search fields…
+            </div>
+            <div class="df-mgroup">Fields</div>
+            <div class="df-opt"><span class="df-opt-lbl">Work type</span></div>
+            <div class="df-opt df-opt-on" aria-selected="true">
+              <span class="df-glyph" aria-hidden="true"
+                ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#d-high" /></svg></span
+              ><span class="df-opt-lbl">Difficulty</span
+              ><svg class="df-check" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-check" />
+              </svg>
+            </div>
+            <div class="df-opt"><span class="df-opt-lbl">Priority</span></div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">3 · The value picker open — multi-select, easiest first</p>
+          <div class="df-menu" role="listbox" aria-label="Difficulty">
+            <div class="df-opt" aria-selected="false">
+              <span class="df-glyph" aria-hidden="true"
+                ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#d-low" /></svg></span
+              ><span class="df-opt-lbl">Low</span>
+            </div>
+            <div class="df-opt df-opt-on" aria-selected="true">
+              <span class="df-glyph" aria-hidden="true"
+                ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#d-medium" /></svg></span
+              ><span class="df-opt-lbl">Medium</span
+              ><svg class="df-check" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-check" />
+              </svg>
+            </div>
+            <div class="df-opt df-opt-on" aria-selected="true">
+              <span class="df-glyph" aria-hidden="true"
+                ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#d-high" /></svg></span
+              ><span class="df-opt-lbl">High</span
+              ><svg class="df-check" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-check" />
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">4 · Applied — the summary chip names the values</p>
+          <div class="df-summary">
+            <span class="df-sum-chip"
+              ><span class="df-sum-field">Difficulty</span> is any of Medium, High</span
+            ><span class="df-sum-chip"
+              ><span class="df-sum-field">Difficulty</span> is not empty</span
+            >
+          </div>
+          <p class="df-count" role="status">2 work items match</p>
+        </div>
+      </div>
+    </div>
+    <div class="df-band" lang="zh">
+      <p class="df-band-title">
+        <span class="df-lang">zh</span>1 · 构建器 — 四种运算符下的难度条件行（为空 / 不为空 不取值）
+      </p>
+      <div class="df-row">
+        <div class="df-panel df-panel-wide">
+          <div class="df-adv" role="dialog" aria-label="高级筛选">
+            <div class="df-adv-head">
+              <span class="df-adv-title">高级筛选</span
+              ><button class="df-adv-clear">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" /></svg
+                >全部清除
+              </button>
+            </div>
+            <div class="df-match">
+              <span>匹配以下</span>
+              <div class="df-seg" role="group">
+                <button class="df-seg-btn df-seg-on" aria-pressed="true">全部</button
+                ><button class="df-seg-btn" aria-pressed="false">任一</button>
+              </div>
+              <span>条件：</span>
+            </div>
+            <div class="df-cond df-cond-new" role="group">
+              <button class="df-cb" aria-haspopup="listbox">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                ><span class="df-cb-lbl">难度</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg></button
+              ><button class="df-cb" aria-haspopup="listbox">
+                <span class="df-cb-lbl">为其中任一</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="df-vbox">
+                <span class="df-chip"
+                  ><span class="df-glyph" aria-hidden="true"
+                    ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#d-high" /></svg></span
+                  >高<button class="df-cx" aria-label="移除 高">
+                    <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-x" />
+                    </svg></button
+                ></span>
+              </div>
+              <button class="df-rm" aria-label="移除">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" />
+                </svg>
+              </button>
+            </div>
+            <div class="df-cond df-cond-new" role="group">
+              <button class="df-cb" aria-haspopup="listbox">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                ><span class="df-cb-lbl">难度</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg></button
+              ><button class="df-cb" aria-haspopup="listbox">
+                <span class="df-cb-lbl">不为其中任一</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="df-vbox">
+                <span class="df-chip"
+                  ><span class="df-glyph" aria-hidden="true"
+                    ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#d-low" /></svg></span
+                  >低<button class="df-cx" aria-label="移除 低">
+                    <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-x" />
+                    </svg></button></span
+                ><span class="df-chip"
+                  ><span class="df-glyph" aria-hidden="true"
+                    ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#d-medium" /></svg></span
+                  >中<button class="df-cx" aria-label="移除 中">
+                    <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-x" />
+                    </svg></button
+                ></span>
+              </div>
+              <button class="df-rm" aria-label="移除">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" />
+                </svg>
+              </button>
+            </div>
+            <div class="df-cond df-cond-new" role="group">
+              <button class="df-cb" aria-haspopup="listbox">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                ><span class="df-cb-lbl">难度</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg></button
+              ><button class="df-cb" aria-haspopup="listbox">
+                <span class="df-cb-lbl">为空</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="df-vbox df-vbox-muted">—</div>
+              <button class="df-rm" aria-label="移除">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" />
+                </svg>
+              </button>
+            </div>
+            <div class="df-cond df-cond-new" role="group">
+              <button class="df-cb" aria-haspopup="listbox">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                ><span class="df-cb-lbl">难度</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg></button
+              ><button class="df-cb" aria-haspopup="listbox">
+                <span class="df-cb-lbl">不为空</span
+                ><svg class="df-caret" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-chevrons" />
+                </svg>
+              </button>
+              <div class="df-vbox df-vbox-muted">—</div>
+              <button class="df-rm" aria-label="移除">
+                <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-x" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="df-band" lang="zh">
+      <div class="df-row">
+        <div class="df-panel">
+          <p class="df-cap">2 · 字段菜单 — 难度排在“字段”组的工作类型之后</p>
+          <div class="df-menu" role="listbox" aria-label="难度">
+            <div class="df-msearch">
+              <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-search" /></svg
+              >搜索字段…
+            </div>
+            <div class="df-mgroup">字段</div>
+            <div class="df-opt"><span class="df-opt-lbl">工作类型</span></div>
+            <div class="df-opt df-opt-on" aria-selected="true">
+              <span class="df-glyph" aria-hidden="true"
+                ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#d-high" /></svg></span
+              ><span class="df-opt-lbl">难度</span
+              ><svg class="df-check" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-check" />
+              </svg>
+            </div>
+            <div class="df-opt"><span class="df-opt-lbl">优先级</span></div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">3 · 值选择器展开 — 多选，由易到难</p>
+          <div class="df-menu" role="listbox" aria-label="难度">
+            <div class="df-opt" aria-selected="false">
+              <span class="df-glyph" aria-hidden="true"
+                ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#d-low" /></svg></span
+              ><span class="df-opt-lbl">低</span>
+            </div>
+            <div class="df-opt df-opt-on" aria-selected="true">
+              <span class="df-glyph" aria-hidden="true"
+                ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#d-medium" /></svg></span
+              ><span class="df-opt-lbl">中</span
+              ><svg class="df-check" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-check" />
+              </svg>
+            </div>
+            <div class="df-opt df-opt-on" aria-selected="true">
+              <span class="df-glyph" aria-hidden="true"
+                ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#d-high" /></svg></span
+              ><span class="df-opt-lbl">高</span
+              ><svg class="df-check" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-check" />
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">4 · 已应用 — 摘要标签列出所选值</p>
+          <div class="df-summary">
+            <span class="df-sum-chip"><span class="df-sum-field">难度</span> 为其中任一 中, 高</span
+            ><span class="df-sum-chip"><span class="df-sum-field">难度</span> 不为空</span>
+          </div>
+          <p class="df-count" role="status">匹配到2个工作项</p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

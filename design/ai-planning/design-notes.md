@@ -5350,3 +5350,157 @@ and the committed-container overflow noted in §18.0.
 - **The two-line-title overflow on a committed container card with a meter (§18.0)** is shipped
   behaviour visible in this render and in MOTIR-5713's; it was not measured against the app's real
   fonts here, so it is recorded as an observation, not filed as a defect.
+
+---
+
+# Part XIX — the plan review: a committed card MOVED under a PROPOSED parent, and a REMOVE's REASON (MOTIR-6053 · Story MOTIR-6013 — `plan-review--surgical-edits.mock.html`)
+
+**Its OWN asset**: `design/ai-planning/plan-review--surgical-edits.mock.html` (seven sheets, delta panels
+only), plus this section. It draws **no new surface and no new entrance**: the plan review is reached
+exactly as Part I §5 draws it (the left-nav _Plans_ entry, then a row) or from the item a plan was run
+on (the pending-plan indicator, `design/work-items/design-notes.md` § _The PENDING-PLAN indicator_).
+
+It **amends three approved designs** and redraws none of them:
+
+| amended asset                                        | card           | what this Part extends                                                                     |
+| ---------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| `design/ai-planning/plan-canvas-arrival.mock.html`   | **MOTIR-3259** | Part IX §1.3 — the crumb that names a proposed parent, `New · <title>`; Show changes       |
+| `design/ai-planning/plan-folder-placement.mock.html` | **MOTIR-5406** | Part XVII §17.4 — the placement row under Show changes, and the bottom-slot rule (§17.2)   |
+| `design/ai-planning/peek-proposal-mode.mock.html`    | **MOTIR-4182** | Part XIV §4 / §8 — the per-op header and the `remove` arm, where a remove's reason belongs |
+
+## 19.1 The workflow spec this Part draws to
+
+Nothing here decides behaviour. motir-core `docs/decisions/agent-authored-plans.md` **AMENDMENT 18**
+does (the story's cards call it _AMENDMENT 17_; open draft #3052 took that number first):
+
+| source                                | what it settles for the design                                                                                                                                                                        |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AMENDMENT 18 §1** — MOTIR-6050      | a `modify` may re-parent a COMMITTED card under an `add` in the same plan (`patch.parentRef` = `planItem:<id>`); approve creates the add first, then moves the card under it; a decline moves nothing |
+| **AMENDMENT 18 §2** — MOTIR-6051      | a second `modify` of one card MERGES into the plan's one `modify`, so a card moved AND edited is still ONE proposal with one change list                                                              |
+| **AMENDMENT 18 §3** — MOTIR-6052      | a `remove` carries an optional `removeReason` (trimmed, ≤ 2000 chars, blank = none); every plan written before it has none; it is written into the `archived` revision at approve                     |
+| **MOTIR-6055** — the review UI builds | the pixels, to this Part                                                                                                                                                                              |
+
+## 19.2 Drawn against SHIPPED reality — what was rendered, and what it settled
+
+Every node, list row and crumb is the shipped component's own markup: a throwaway RTL dump rendered
+`PlanItemNode` and `PlanProposalList` through the shipped `renderWithIntl` harness against
+`planReviewItem` fixtures, at `parent/MOTIR-6013-surgical-tools` `b35c53fce` (= `origin/main`
+`67ad15aa4` plus the amendment, which changes no code). The canvas chrome (breadcrumb, folder crumbs,
+Show changes) is Part XVIII sheet 5's, and the peek header is Part XIV panel 4's, identity re-pointed.
+The stylesheet is Tailwind's real output compiled from this document's class attributes only, with
+`theme.css`'s `.style-vignette` rules removed. The harness was deleted before this asset landed.
+
+**What the render settled (sheet 1):** a `modify` whose `patch.parentRef` is a temp-ref renders the
+RAW id — `Parent PROD-7 › planItem:pi_s` on the canvas diff line and `PROD-7 → planItem:pi_s` in the
+list — because `planReviewService`'s `nameParent` falls back to the id itself for a row neither read
+returned. The canvas PLACEMENT is already right: `parentNodeIdOf` resolves the temp-ref through
+`resolveNodeRef`, so the node is already drawn on the proposed story's level. Only the NAME is wrong.
+And a `remove` has no slot anywhere for a reason.
+
+## 19.3 DECISION 1 — a proposed parent is named `New · <title>`, the crumb's own grammar (sheets 2, 3)
+
+The TO side of the moved card's `Parent` change reads **`New · Webhook delivery guarantees`**: the
+string `workItemCrumbLabel(identifier ?? proposedCrumb, title)` already puts in the breadcrumb of the
+level the card is drawn on (Part IX §1.3). The reader sees the same words in the crumb and on the card.
+
+- **Never the `planItem:` id.** It is an internal token, and on the one surface whose promise is that
+  nothing is real until approve, a placeholder key would assert a work item that does not exist.
+- **Text first, and no second channel is added.** The word `New` IS the marker. The crumb carries
+  the accent ink, dashed border and `+` glyph as further channels because it is a control; a diff
+  VALUE stays in the shipped value ink, like every other value on that line.
+- **The label stays `Parent`.** Part XVII §17.4 relabels the row `Placement` only when a FOLDER is on
+  either side. A proposed story is a work-item parent, so the row is the shipped `Parent` row.
+- **A folder-filed proposed parent (sheet 3)** changes nothing on the card: the folder crumbs compose
+  ahead of the proposed crumb exactly as Part XVIII draws them. The folder is the PARENT's placement,
+  not the moved card's.
+- **The canvas LEVEL is unchanged** (Part XVIII decision 2): the card is drawn where it arrives — on
+  the proposed story's level, beside that story's own proposed children.
+- **The truncated case.** On the 280px node the line ellipsizes; the TO span carries the full string
+  in `title`. The list row never truncates it.
+
+## 19.4 DECISION 2 — a merged `modify` is drawn as ONE modify (not drawn)
+
+A card that is both moved and edited in one plan is ONE `modify` after AMENDMENT 18 §2's merge, with
+one change list. The node's diff line shows the first change and counts the rest (`+N more`), the list
+shows every change line, exactly as today. Nothing new to draw, so this Part draws nothing for it.
+
+## 19.5 DECISION 3 — a remove's reason: the node's bottom slot, a list row, a header band (sheets 4–6)
+
+The reason is written BY the planner FOR the reviewer, so it is shown verbatim and never translated.
+
+- **Canvas node (sheet 5).** A `remove` never spends the bottom slot (only a `modify`'s diff line and
+  a stale folder do), so the reason takes it: the label **`Reason`**, then the text on ONE line with an
+  ellipsis and the full text in `title`. Taking the slot clamps the title to one line, the rule Part
+  XVII §17.2 set for every slot tenant. The node is a glance; the full reason is one click away.
+- **List row (sheet 4).** A `Reason` row in the SAME label/value grid a `modify`'s change lines use
+  (`grid-cols-[6rem_1fr]`, the uppercase label), under the facts line. The value WRAPS — the list is the
+  body that says exactly what is being approved.
+- **Peek (sheet 6).** A band directly under the header row, inside the header region (Part XIV §4 puts
+  the op in the header; the reason belongs to the op): `bg-(--el-surface-soft)`, a bottom border, the
+  uppercase `Reason` label and the full text, wrapping. It sits ABOVE the target's own title, because a
+  reader deciding a removal needs the why before the what.
+- **No reason ⇒ nothing drawn.** Every legacy plan has none. No empty `Reason` row, no `—`, no band;
+  the node, the row and the header are byte-identical to today (`PROD-19` in sheets 4–5, the third peek
+  in sheet 6).
+
+## 19.6 DECISION 4 — the decided axis (sheet 7)
+
+Part VI's treatments, unchanged:
+
+- **Approved.** The add exists, so the moved card is drawn under the CREATED story and the TO side
+  names it by its NEW key (`PROD-60`), exactly as a committed parent is named today. The list's
+  `Applied` row reads `PROD-7 → PROD-60`.
+- **Declined.** Nothing was created or moved, so the card is drawn where it still is, on its own
+  parent's level. The line keeps `New · <title>`, and the chip's `declined` segment is what says it did
+  not happen (Part VI §3's remedy for a future-tense signal on a declined proposal).
+- **A remove's reason stays on both outcomes.** It is the record of why the removal was proposed.
+
+## 19.7 Which review-model field each drawn element reads
+
+| element                         | reads                                                                                                                                                                                              |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the `Parent` change's TO side   | `changes[].to` for `field: 'parent'` — **MOTIR-6055 must emit** `proposedCrumb · <the add's title>` for a temp-ref parent (today: the raw id), and after approve the materialized row's identifier |
+| its `title` attribute           | the same string                                                                                                                                                                                    |
+| the node's placement on a level | `parentNodeId` (shipped, already the add's node id)                                                                                                                                                |
+| the reason slot / row / band    | a NEW `removeReason: string \| null` on `PlanReviewItemDto`, read from the `PlanItem` column MOTIR-6052 adds; `null` ⇒ nothing drawn                                                               |
+
+## 19.8 Copy — English and Chinese
+
+| key                        | en     | zh   | note                                                                                       |
+| -------------------------- | ------ | ---- | ------------------------------------------------------------------------------------------ |
+| `planReview.proposedCrumb` | New    | 新   | REUSED — the key-slot word of a proposed parent, now also on the `Parent` change's TO side |
+| `planReview.removeReason`  | Reason | 原因 | **NEW** — the label on the node slot, the list row and the peek band                       |
+
+The proposed parent reads `New · <title>` / `新 · <title>`, joined with the shipped `·` of
+`workItemCrumbLabel`. Both catalogs change in the same PR; a key in one is a parity failure.
+
+## 19.9 a11y
+
+- The reason is TEXT in all three places, never a tooltip alone; the node's `title` only adds the
+  un-truncated tail.
+- The proposed parent is marked by the word `New`, never by colour.
+- The peek band is plain flow content inside the dialog, read after the header row and before the title.
+
+## 19.10 GIVES / TAKES
+
+- **GIVES MOTIR-6055**: §19.3's TO-side string and its `title`, §19.5's three placements and the
+  no-reason rule, §19.6's decided naming, §19.7's two data seams, §19.8's one new key.
+- **GIVES MOTIR-6058** (E2E + acceptance video): the visible strings to assert — `New · <title>` on the
+  moved card, `Reason` plus the reason text on the remove, and `PROD-7 → <created key>` after approve.
+- **TAKES** Part IX §1.3 (the crumb), Part XVII §17.2 / §17.4 (the slot rule, the placement row),
+  Part XVIII decision 2 (the arrival level), Part XIV §4 / §8 (the header, the remove arm), Part VI §3
+  (the decided treatments).
+
+## 19.11 What Part XIX does NOT draw
+
+- The **item page's history** row for the `archived` revision that now carries the reason (AMENDMENT
+  18 §3 (a)). It renders through the shipped activity feed; if that feed does not show a revision's
+  `diff.reason`, that is a separate surface to design, not this delta's.
+- The plan **timeline** event for a merged `modify` (AMENDMENT 18 §2 records it as an `edited` event,
+  which Part X already draws).
+- Any new entry point.
+
+## 19.12 ⚠️ Planning flags
+
+- **The numbering.** The story's cards cite AMENDMENT 17; it landed as **18**. Read every "17" under
+  MOTIR-6013 as this amendment.

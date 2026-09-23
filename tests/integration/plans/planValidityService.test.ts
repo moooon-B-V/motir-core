@@ -1957,28 +1957,27 @@ describe("a `modify`'s `patch.parentRef` moves the card in the PROJECTION (MOTIR
     expect(proj.childrenByParent.get(from.id) ?? []).toEqual([]);
   });
 
-  it('a `planItem:` parent needs NO projection branch — the append refuses one outright', async () => {
+  it('a `planItem:` parent PROJECTS the card under the proposed node (AMENDMENT 18 §1, MOTIR-6050)', async () => {
     const fx = await makeWorkItemFixture();
-    const story = await mk(fx, 'The story', 'story');
+    const epic = await mk(fx, 'The epic', 'epic');
+    const story = await mk(fx, 'The story', 'story', epic.id);
     const card = await mk(fx, 'The card', 'subtask', story.id);
 
     const planId = await freshPlan(fx);
     const added = await addProposal(fx, planId, {
       op: 'add',
       proposedFields: { title: 'A proposed story', kind: 'story' },
+      parentRef: epic.id,
     });
     const proposedRef = `${TEMP_REF_PREFIX}${itemIdByTitle(added, 'A proposed story')}`;
 
-    // ON THE RECORD, because it is why `buildProjection` resolves a patched
-    // `parentRef` and never has to reason about a not-yet-materialized parent:
-    // `PlanItemPatch.parentRef` refuses a temp-ref AT THE APPEND
-    // (`agent-authored-plans.md` AMENDMENT 11 D2), so a projected re-parent is
-    // always onto a committed node.
-    await expect(reparent(fx, planId, card.id, proposedRef)).rejects.toThrow(/ALREADY/);
+    // AMENDMENT 11 D2 refused this at the append; AMENDMENT 18 §1 admits it, and
+    // `buildProjection`'s `resolveRef` already maps a temp-ref to its projected
+    // node, so the card leaves its old story and joins the proposed one.
+    await reparent(fx, planId, card.id, proposedRef);
 
-    // And the projection is untouched by the refused append.
     const proj = await buildProjection(planId, fx.ctx);
-    expect(proj.nodes.get(card.id)!.parentId).toBe(story.id);
+    expect(proj.nodes.get(card.id)!.parentId).toBe(proposedRef);
   });
 });
 

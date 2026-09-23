@@ -29,6 +29,7 @@
 //   assigned to "none of" any member list).
 
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import { CI_STATES } from '@/lib/github/prCiState';
 import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 import {
@@ -62,6 +63,7 @@ export type FilterValueEditorKind =
   | 'ci-state-select'
   | 'priority-select'
   | 'type-select'
+  | 'difficulty-select'
   | 'member-select'
   | 'sprint-select'
   | 'label-select'
@@ -185,6 +187,13 @@ export const FILTER_FIELDS: ReadonlyArray<FilterFieldDef> = [
   // (lib/issues/executorDefaults — the 2.7.3 single source) is the whitelist
   // the AST validation rejects unknown values against.
   enumField('type', 'type-select', { nullable: true, valueWhitelist: WORK_ITEM_TYPES }),
+  // A leaf's DIFFICULTY (Story MOTIR-6016 · MOTIR-6100) — the same shape as
+  // `type`: a closed nullable enum, so the empty pair addresses the unset rows
+  // and `is_none_of` INCLUDES them (the registry's nullable-enum semantics).
+  enumField('difficulty', 'difficulty-select', {
+    nullable: true,
+    valueWhitelist: WORK_ITEM_DIFFICULTIES,
+  }),
   enumField('assignee', 'member-select', {
     nullable: true,
     emptySentinel: FILTER_UNASSIGNED_TOKEN,

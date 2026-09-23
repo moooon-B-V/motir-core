@@ -309,11 +309,12 @@ export async function buildProjection(planId: string, ctx: ServiceContext): Prom
     // the vacated parent loses the child and the joined parent gains it from this
     // one write, in the same pass and with no second adjacency to keep in step.
     //
-    // Applied UNCONDITIONALLY, exactly as `materialize` applies it: a temp-ref is
-    // refused at the append (`validateProposals`' `assertReparentLegal`, AMENDMENT
-    // 11 D2), as is a cross-project, kind-illegal, cyclic, too-deep or terminal
-    // parent — so a `parentRef` that reaches here already names a live, legal,
-    // same-project row, which `buildProjection`'s whole-project load always holds.
+    // Applied UNCONDITIONALLY, exactly as `materialize` applies it: a
+    // cross-project, kind-illegal, cyclic, too-deep or terminal parent is refused
+    // at the append (`validateProposals`' `assertReparentLegal`), so a `parentRef`
+    // that reaches here names a live, legal, same-project row — or, since
+    // AMENDMENT 18 §1 (MOTIR-6050), a proposed `add` on this plan, which
+    // `resolveRef` maps to its projected node like any other temp-ref.
     if (item.patch && 'parentRef' in item.patch) {
       const ref = item.patch.parentRef;
       // `!` rather than a guard: this loop already `continue`d on

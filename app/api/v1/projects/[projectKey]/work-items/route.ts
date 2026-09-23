@@ -129,6 +129,7 @@ export const POST = withV1Route<{ projectKey: string }>(
           'priority',
           'type',
           'executor',
+          'difficulty',
           'storyPoints',
           'estimateMinutes',
           'targetRepo',

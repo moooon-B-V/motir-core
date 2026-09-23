@@ -364,13 +364,10 @@ describe('the withdraw', () => {
       fx.ctx,
     );
 
-    // While it stands, a second `modify` on that target is refused.
+    // While it stands, a `remove` of that target is refused (a second `modify`
+    // would MERGE instead — AMENDMENT 18 §2, MOTIR-6051).
     await expect(
-      plansService.addProposals(
-        plan.id,
-        [{ op: 'modify', workItemId: target.id, patch: { priority: 'high' } }],
-        fx.ctx,
-      ),
+      plansService.addProposals(plan.id, [{ op: 'remove', workItemId: target.id }], fx.ctx),
     ).rejects.toThrow();
 
     await plansService.withdrawProposal(plan.id, appended.items[0]!.id, fx.ctx);
@@ -378,7 +375,7 @@ describe('the withdraw', () => {
     // …and once withdrawn it is appendable again.
     const after = await plansService.addProposals(
       plan.id,
-      [{ op: 'modify', workItemId: target.id, patch: { priority: 'high' } }],
+      [{ op: 'remove', workItemId: target.id }],
       fx.ctx,
     );
     expect(after.items).toHaveLength(1);

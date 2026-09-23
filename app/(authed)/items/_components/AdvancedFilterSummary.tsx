@@ -8,6 +8,7 @@ import {
   type FilterCondition,
 } from '@/lib/filters/ast';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
+import { isWorkItemDifficulty } from '@/lib/issues/difficulty';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -64,6 +65,7 @@ export function AdvancedFilterSummary({
   const tStatus = useTranslations('labels.defaultStatus');
   const tPriority = useTranslations('labels.priority');
   const tWorkType = useTranslations('labels.workItemType');
+  const tDifficulty = useTranslations('labels.difficulty');
   const format = useFormatter();
   const setOpen = useAdvancedFilterPopover()?.setOpen ?? (() => {});
 
@@ -114,6 +116,10 @@ export function AdvancedFilterSummary({
         return tPriority(id);
       case 'type':
         return tWorkType(id);
+      case 'difficulty':
+        // Only a member of the closed scale has a label; anything else is shown
+        // raw rather than asking next-intl for a key that does not exist.
+        return isWorkItemDifficulty(id) ? tDifficulty(id) : id;
       case 'assignee':
       case 'reporter': {
         if (id === 'unassigned') return t('unassigned');

@@ -74,6 +74,7 @@ const FIELD_NAME_KEYS: Record<string, string> = {
   dueDate: 'dueDate',
   estimateMinutes: 'estimateMinutes',
   storyPoints: 'storyPoints',
+  difficulty: 'difficulty',
   type: 'type',
   executor: 'executor',
   targetRepo: 'targetRepo',

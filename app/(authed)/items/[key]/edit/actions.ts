@@ -21,6 +21,7 @@ import {
 } from '@/lib/workItems/errors';
 import type {
   ExecutorDto,
+  WorkItemDifficultyDto,
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemTypeDto,
@@ -77,6 +78,9 @@ export interface UpdateIssueInput {
   // rejected there with a typed error the catch below surfaces.
   type?: WorkItemTypeDto | null;
   executor?: ExecutorDto | null;
+  // DIFFICULTY (Story MOTIR-6016) — set / change / clear from the rail. Leaf-only
+  // is the service's rule (DIFFICULTY_NOT_ALLOWED_ON_KIND), surfaced below.
+  difficulty?: WorkItemDifficultyDto | null;
 }
 
 export type IssueActionResult =
@@ -121,6 +125,7 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
         estimateMinutes: input.estimateMinutes,
         type: input.type,
         executor: input.executor,
+        difficulty: input.difficulty,
       },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       { expectedUpdatedAt: input.expectedUpdatedAt },

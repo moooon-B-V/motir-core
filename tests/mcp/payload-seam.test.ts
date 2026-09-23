@@ -488,6 +488,7 @@ const workItemDto = {
   estimateMinutes: 55,
   type: 'code' as const,
   executor: 'coding_agent' as const,
+  difficulty: null,
   storyPoints: 5,
   position: 'a2',
   sprintId: null,
@@ -601,6 +602,7 @@ describe('presentMcpReadyRow / presentMcpReadyDispatch', () => {
     inheritedSessionBranch: null,
     type: 'code' as const,
     executor: 'coding_agent' as const,
+    difficulty: null,
     descriptionMd: 'the body',
   };
 

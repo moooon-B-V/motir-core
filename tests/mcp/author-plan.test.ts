@@ -1007,7 +1007,29 @@ describe('the four registries and the gates', () => {
 // boundary is where the defect lived. A typed error the tool layer forgets to map
 // reaches an agent exactly as the untyped one did.
 describe('add_plan_items — one proposal per existing target (MOTIR-3194)', () => {
-  it('refuses a second `modify` in the AGENT’s words — the item, the rule, and both ways out', async () => {
+  it('MERGES a second `modify` and returns the surviving id (AMENDMENT 18 §2, MOTIR-6051)', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'The survivor' });
+
+    const first = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { title: 'Re-scoped' } }],
+    });
+    const second = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { priority: 'high' } }],
+    });
+    expect(second.isError, text(second)).toBeFalsy();
+    expect(ids(second)).toEqual(ids(first));
+    const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: ids(first)[0]! } });
+    expect(row.patch).toEqual({ title: 'Re-scoped', priority: 'high' });
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(1);
+    await client.close();
+  });
+
+  it('refuses a `remove` of a card the plan modifies, in the AGENT’s words — the item, the rule, and the ways out', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
@@ -1021,7 +1043,7 @@ describe('add_plan_items — one proposal per existing target (MOTIR-3194)', () 
 
     const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
-      proposals: [{ op: 'modify', workItemId: target.id, patch: { blockedByAdd: [target.id] } }],
+      proposals: [{ op: 'remove', workItemId: target.id }],
     });
 
     expect(refused.isError).toBe(true);
@@ -1212,9 +1234,14 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
     await client.close();
   });
 
-  it('REFUSES a `planItem:` temp-ref in `patch.parentRef`, and appends nothing', async () => {
+  it('ACCEPTS a `planItem:` temp-ref in `patch.parentRef` and stores it (AMENDMENT 18 §1, MOTIR-6050)', async () => {
     const fx = await makeWorkItemFixture();
-    const home = await createTestWorkItem(fx, { kind: 'story', title: 'Where it is' });
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'The epic' });
+    const home = await createTestWorkItem(fx, {
+      kind: 'story',
+      title: 'Where it is',
+      parentId: epic.id,
+    });
     const card = await createTestWorkItem(fx, {
       kind: 'subtask',
       title: 'The card',
@@ -1225,11 +1252,17 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
 
     const first = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
-      proposals: [{ op: 'add', proposedFields: { title: 'A proposed story', kind: 'story' } }],
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'A proposed story', kind: 'story' },
+          parentRef: epic.identifier,
+        },
+      ],
     });
     const proposedStoryId = ids(first)[0]!;
 
-    const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+    const moved = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
       proposals: [
         {
@@ -1239,11 +1272,34 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
         },
       ],
     });
+    expect(moved.isError).toBeFalsy();
+    const patch = (await adminDb.planItem.findUniqueOrThrow({ where: { id: ids(moved)[0]! } }))
+      .patch as { parentRef: string };
+    expect(patch.parentRef).toBe(`planItem:${proposedStoryId}`);
+    await client.close();
+  });
+
+  it('persists a `remove`’s `reason`, and refuses one on a `modify` (AMENDMENT 18 §3, MOTIR-6052)', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Obsolete' });
+    const other = await createTestWorkItem(fx, { kind: 'task', title: 'Other' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const removed = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'remove', workItemId: card.id, reason: 'Superseded.' }],
+    });
+    expect(removed.isError).toBeFalsy();
+    const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: ids(removed)[0]! } });
+    expect(row.reason).toBe('Superseded.');
+
+    const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: other.id, patch: { title: 'X' }, reason: 'why' }],
+    });
     expect(refused.isError).toBe(true);
-    // The refusal has to SAY what to do instead, because the caller is a machine
-    // that can act on an instruction and cannot act on a rejection.
-    expect(JSON.stringify(refused.content)).toContain('ALREADY');
-    expect(await adminDb.planItem.count({ where: { planId } })).toBe(1);
+    expect(JSON.stringify(refused.content)).toContain('reason');
     await client.close();
   });
 

@@ -1,13 +1,19 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Executor, WorkItemPriority, WorkItemType } from '@/generated/prisma/client';
+import {
+  Executor,
+  WorkItemDifficulty,
+  WorkItemPriority,
+  WorkItemType,
+} from '@/generated/prisma/client';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   ExecutorDto,
   UpdateWorkItemInput,
+  WorkItemDifficultyDto,
   WorkItemDto,
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
@@ -66,6 +72,16 @@ const inputSchema = {
     .optional()
     .describe(
       'Who executes the work ("coding_agent" or "human") — leaf items only; null clears it.',
+    ),
+  difficulty: z
+    .nativeEnum(WorkItemDifficulty)
+    .nullable()
+    .optional()
+    .describe(
+      'How hard the work is to REASON about, not how big it is: "trivial", "low", ' +
+        '"medium" or "high" — leaf items only; null clears it. A non-null value on an epic or story is ' +
+        'refused (DIFFICULTY_NOT_ALLOWED_ON_KIND), and so is changing the kind of a leaf ' +
+        'that carries one to a container without clearing it in the same call.',
     ),
   estimateMinutes: z
     .number()
@@ -140,6 +156,7 @@ interface UpdateWorkItemArgs {
   priority?: WorkItemPriority;
   type?: WorkItemType | null;
   executor?: Executor | null;
+  difficulty?: WorkItemDifficulty | null;
   estimateMinutes?: number | null;
   storyPoints?: number | null;
   targetRepo?: string | null;
@@ -158,6 +175,9 @@ function toPatch(args: UpdateWorkItemArgs): UpdateWorkItemInput {
   if (args.priority !== undefined) patch.priority = args.priority;
   if (args.type !== undefined) patch.type = args.type as WorkItemTypeDto | null;
   if (args.executor !== undefined) patch.executor = args.executor as ExecutorDto | null;
+  if (args.difficulty !== undefined) {
+    patch.difficulty = args.difficulty as WorkItemDifficultyDto | null;
+  }
   if (args.estimateMinutes !== undefined) patch.estimateMinutes = args.estimateMinutes;
   if (args.storyPoints !== undefined) patch.storyPoints = args.storyPoints;
   if (args.targetRepo !== undefined) patch.targetRepo = args.targetRepo;
@@ -209,7 +229,7 @@ export async function runUpdateWorkItem(
         NO_FIELDS_TO_PATCH_CODE,
         'update_work_item was called with no field to change — only "key" was supplied. ' +
           'Name at least one of: title, descriptionMd, explanationMd, priority, type, ' +
-          'executor, estimateMinutes, storyPoints, targetRepo, targetRepos, ' +
+          'executor, difficulty, estimateMinutes, storyPoints, targetRepo, targetRepos, ' +
           'targetRepositories, assigneeId, dueDate. (Use transition_status for the ' +
           'workflow status.)',
       );
@@ -237,10 +257,10 @@ export function registerUpdateWorkItem(
       title: 'Update work item',
       description:
         'Edit a work item (by identifier, e.g. "ACME-7"): patch any subset of title, ' +
-        'description, explanation, priority, type, executor, estimate, story points, target ' +
-        'repo, assignee, or due date. Use transition_status for the workflow status. Honors ' +
-        'the same leaf-only type rules, project-repository validation, assignee-membership check, ' +
-        'and access checks as the UI.',
+        'description, explanation, priority, type, executor, difficulty, estimate, story ' +
+        'points, target repo, assignee, or due date. Use transition_status for the workflow ' +
+        'status. Honors the same leaf-only type/difficulty rules, project-repository ' +
+        'validation, assignee-membership check, and access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runUpdateWorkItem(args, resolveContext(extra)),

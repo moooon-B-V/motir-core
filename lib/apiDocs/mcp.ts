@@ -742,10 +742,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // is `planned` and needs one more card" was that there is no such call — so
     // it is not a refusal met after choosing this tool, it is the fact that
     // decides whether this is the tool. Same test as the close, same verdict.
+    //
+    // MOTIR-6051 re-pinned the fingerprint WITHOUT touching the summary, by
+    // MOTIR-3194's test: a second `modify` now MERGES rather than refusing, which
+    // a caller meets after choosing this tool; and "ids come back in order" is
+    // still true — a merged proposal's slot carries the surviving id.
     summary:
       'Append proposals to a plan — close it with an empty final batch, or add to one you already closed with `revision: true`; ids come back in order, so the next batch can hang children off them.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'd75174c32f83',
+    descriptionFingerprint: 'f28a07a152ac',
   },
   update_plan_item: {
     summary:
@@ -789,17 +794,20 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   create_work_item: {
     // Re-pinned for MOTIR-5413: `folderId` files the new item into a folder.
+    // Re-pinned for MOTIR-6098: a leaf's `difficulty` joins the leaf fields.
     summary:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor and repo in one call.',
-    descriptionFingerprint: '94e776963f84',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty and repo in one call.',
+    descriptionFingerprint: 'caa65846168d',
   },
   update_work_item: {
     // Re-pinned for MOTIR-5585: the description now names PROJECT-repository
     // validation (MOTIR-4955) instead of the retired connected-repo rule; the
     // summary never named the rule, so it still holds.
+    // Re-pinned for MOTIR-6098: the description names `difficulty` among the
+    // patchable fields; the summary names no field list, so it still holds.
     summary:
       "Edit any subset of an item's fields, including the explanation body create cannot set.",
-    descriptionFingerprint: 'a0b37665094b',
+    descriptionFingerprint: 'e344328ca728',
   },
   transition_status: {
     summary:
@@ -896,8 +904,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '9d6435ea6cb1',
   },
   change_kind: {
+    // Re-pinned for MOTIR-6098: a leaf-only difficulty, like a type, must be
+    // cleared before a move to a container; the summary still holds.
     summary: "Reclassify a leaf's kind when it is mis-filed — subtask to task, and back.",
-    descriptionFingerprint: '7d5af7a4655e',
+    descriptionFingerprint: '57fec557359d',
   },
   archive_work_item: {
     summary: 'Soft-remove an item: it leaves the ready set and search, and stays fully restorable.',
