@@ -661,6 +661,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the first read off a card's revision trail). Summary UNCHANGED, as the
     // MOTIR-3178 paragraph predicted a new member would be.
     //
+    // Re-pinned for MOTIR-5428's counted-own-blockers shape severity. Summary
+    // UNCHANGED: like the preceding additions, it grows only the advisory
+    // channel and never changes the finishability verdict this line describes.
+    //
     // Re-pinned for MOTIR-5424's new advisory FAMILY, `path-reference`
     // (`likely-missing-path-edge` — a criterion naming a not-yet-existing file
     // another open card also names, with no edge between them). Summary
@@ -668,7 +672,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // never a gate, so the verdict line stays true.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: 'e8903590eb60',
+    descriptionFingerprint: '434346cf9e26',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

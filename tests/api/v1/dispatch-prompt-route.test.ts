@@ -756,10 +756,10 @@ describe('the dispatch-prompt schema', () => {
     expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
   });
 
-  it('all THREE `kind: "shape"` variants stay disjoint — none parses as another', () => {
+  it('all FOUR `kind: "shape"` variants stay disjoint — none parses as another', () => {
     // The union is plain, not discriminated, so this guarantee rests entirely on
-    // the three variants' REQUIRED fields being disjoint: `criterionIndex` /
-    // `threshold` / the index PAIR. Asserted directly, because the day it stops
+    // the four variants' REQUIRED fields being disjoint: `criterionIndex` /
+    // `threshold` / the index PAIR / the counted claim. Asserted directly, because the day it stops
     // holding the failure is a silently stripped payload rather than an error.
     const selfBlocking = {
       kind: 'shape' as const,
@@ -785,6 +785,14 @@ describe('the dispatch-prompt schema', () => {
       repo: 'motir-ai',
       reason: 'contradiction',
     };
+    const blockerCount = {
+      kind: 'shape' as const,
+      item: 'PROD-1',
+      severity: 'likely-blocker-count-mismatch',
+      claim: 'four siblings this card is blocked_by',
+      claimedCount: 4,
+      blockerCount: 2,
+    };
     const envelope = (advisories: unknown[]) => ({
       key: 'PROD-1',
       prompt: 'text',
@@ -803,11 +811,15 @@ describe('the dispatch-prompt schema', () => {
     );
     expect(dispatchPromptSchema.parse(envelope([sizing])).advisories[0]).toEqual(sizing);
     expect(dispatchPromptSchema.parse(envelope([straddle])).advisories[0]).toEqual(straddle);
-    // …and all three together, in one array, since that is how a card carrying
+    expect(dispatchPromptSchema.parse(envelope([blockerCount])).advisories[0]).toEqual(
+      blockerCount,
+    );
+    // …and all four together, in one array, since that is how a card carrying
     // several defects actually arrives.
     expect(
-      dispatchPromptSchema.parse(envelope([selfBlocking, sizing, straddle])).advisories,
-    ).toEqual([selfBlocking, sizing, straddle]);
+      dispatchPromptSchema.parse(envelope([selfBlocking, sizing, straddle, blockerCount]))
+        .advisories,
+    ).toEqual([selfBlocking, sizing, straddle, blockerCount]);
   });
 });
 

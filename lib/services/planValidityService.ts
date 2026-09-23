@@ -246,6 +246,7 @@ async function projectedProseAdvisories(
       trailSuperseded: touchesBodyOrWatchedField(
         Object.keys(proj.patchByWorkItemId.get(node.id) ?? {}),
       ),
+      blockerCount: proj.blockedBy.get(node.id)?.size ?? 0,
     };
   });
 

@@ -6,6 +6,7 @@ import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   isCoverageAdvisory,
+  isBlockerCountAdvisory,
   isPathReferenceAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
@@ -92,10 +93,17 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const oversized = result.advisories.filter(isSizingAdvisory);
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
+  const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
   const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
 
   const lines: string[] = [];
+  for (const a of blockerCounts) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): ${a.item} claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Update the prose or the graph.`,
+    );
+  }
   if (references.length > 0) {
     lines.push(
       '',
@@ -414,7 +422,10 @@ export function registerValidateWorkItem(
         '`storyPoints`, `estimateMinutes`) while the write directly beneath it did (with ' +
         '`bodyEdit` and `fieldMove`, each `{ at, fields }`, and no criterion index — a prompt to ' +
         're-read the body against the move, since a body rewritten to match it leaves the same ' +
-        'trail). A `coverage` ' +
+        'trail), or ' +
+        "`likely-blocker-count-mismatch` when an explicit counted claim about the card's own " +
+        'blocker siblings disagrees with its current blocked_by edge count (with the exact ' +
+        '`claim`, `claimedCount`, and `blockerCount`). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +

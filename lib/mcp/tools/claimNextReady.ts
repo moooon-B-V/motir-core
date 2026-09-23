@@ -8,6 +8,7 @@ import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryS
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ReadyItemDispatchDto } from '@/lib/dto/ready';
 import {
+  isBlockerCountAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
@@ -91,6 +92,12 @@ function summarize(
   const oversized = advisories.filter(isSizingAdvisory);
   const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = advisories.filter(isBodyAboveFieldMoveAdvisory);
+  const blockerCounts = advisories.filter(isBlockerCountAdvisory);
+  for (const a of blockerCounts) {
+    lines.push(
+      `Advisory (NOT a blocker — the claim stands): this card claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Check which side is stale before relying on the list.`,
+    );
+  }
   if (references.length > 0) {
     lines.push(
       `Advisory (NOT a blocker — the claim stands): this card's acceptance criteria name ` +

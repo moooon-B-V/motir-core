@@ -10,6 +10,7 @@ import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import {
   isBodyAboveFieldMoveAdvisory,
+  isBlockerCountAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
 } from '@/lib/dto/workItems';
@@ -177,8 +178,8 @@ const sizingShapeAdvisorySchema = z.object({
  * is a third variant beside {@link criterionShapeAdvisorySchema} rather than a
  * fourth severity inside it. It carries no `criterionIndex` at all — its remedy
  * LIFTS the design criterion onto its own card rather than cutting the list at a
- * line — and the three shape variants are disjoint on their REQUIRED fields
- * (`criterionIndex` / `threshold` / this pair), so the plain union below resolves
+ * line — and the shape variants are disjoint on their REQUIRED fields
+ * (`criterionIndex` / `threshold` / this pair / the counted claim), so the plain union below resolves
  * each unambiguously whichever order it tries them in.
  *
  * ⚠️ Additive under §8, on the same terms as the sizing and subsumption variants:
@@ -227,6 +228,15 @@ const bodyAboveFieldMoveShapeAdvisorySchema = z.object({
   bodyEdit: revisionEndSchema,
   /** The write directly beneath it — it moved at least one watched field. */
   fieldMove: revisionEndSchema,
+});
+
+const blockerCountShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  claim: z.string(),
+  claimedCount: z.number().int().nonnegative(),
+  blockerCount: z.number().int().nonnegative(),
 });
 
 /**
@@ -301,6 +311,7 @@ export const dispatchAdvisorySchema = z.union([
   sizingShapeAdvisorySchema,
   selfBlockingDesignShapeAdvisorySchema,
   bodyAboveFieldMoveShapeAdvisorySchema,
+  blockerCountShapeAdvisorySchema,
   subsumptionAdvisorySchema,
   referenceAdvisorySchema,
 ]);
@@ -391,6 +402,16 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
     advisories: dto.advisories.map((advisory) => {
+      if (isBlockerCountAdvisory(advisory)) {
+        return {
+          kind: 'shape' as const,
+          item: advisory.item,
+          severity: advisory.severity,
+          claim: advisory.claim,
+          claimedCount: advisory.claimedCount,
+          blockerCount: advisory.blockerCount,
+        };
+      }
       // The SELF-BLOCKING-DESIGN member (MOTIR-3178) — narrowed out here for the
       // same reason the SIZING member below is: it carries no `criterionIndex`,
       // and the generic `shape` branch further down reads one.

@@ -10,6 +10,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import {
   bodyFilePaths,
   bodyReferenceSeverities,
+  firstBlockerCountClaim,
   firstPostMergeCriterion,
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
@@ -70,6 +71,8 @@ export interface ProseAdvisorySubject {
    * `planItem:<id>` temp-ref on the projected path.
    */
   exemptIds: ReadonlySet<string>;
+  /** Number of outgoing `blocked_by` edges; compared with counted prose claims. */
+  blockerCount: number;
   /**
    * The card's work TYPE and EXECUTOR — read ONLY by the ORDERING check's
    * exemption ({@link isOrderingCheckExempt}), never by the reference scan.
@@ -299,6 +302,8 @@ export async function buildProseVsGraphAdvisories(
       s.subject.id == null ? undefined : trails.get(s.subject.id),
     );
     if (bodyAbove) advisories.push(bodyAbove);
+    const blockerCount = blockerCountAdvisory(s.subject);
+    if (blockerCount) advisories.push(blockerCount);
     const subsumed = subsumptionAdvisory(s.subject, subsumption);
     if (subsumed) advisories.push(subsumed);
     for (const [id, severity] of s.refs) {
@@ -365,6 +370,19 @@ function orderingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryD
     severity: 'likely-ordering-violation',
     phrase: found.phrase,
     criterionIndex: found.criterionIndex,
+  };
+}
+
+function blockerCountAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto | null {
+  const found = firstBlockerCountClaim(subject.descriptionMd);
+  if (!found || found.claimedCount === subject.blockerCount) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'likely-blocker-count-mismatch',
+    claim: found.claim,
+    claimedCount: found.claimedCount,
+    blockerCount: subject.blockerCount,
   };
 }
 
@@ -899,13 +917,17 @@ export async function buildDispatchProseAdvisories(
   // and no caller carries `hasChildren` on its row shape. Only a card that WOULD
   // fire pays for the row read below.
   const selfBlockingCandidate = selfBlockingDesignCriteria(item.descriptionMd) !== null;
+  // The counted-own-blockers check's clear-ness (MOTIR-5428) — the SEVENTH pure
+  // scan. A hit needs the edge read below even when every older family is clear.
+  const blockerCountCandidate = firstBlockerCountClaim(item.descriptionMd) !== null;
   if (
     namesNothing &&
     wellOrdered &&
     namesNoPath &&
     namesNoFile &&
     !sizingCandidate &&
-    !selfBlockingCandidate
+    !selfBlockingCandidate &&
+    !blockerCountCandidate
   ) {
     // The BODY-EDIT-ABOVE-FIELD-MOVE check (MOTIR-5399) is the one member no scan
     // above can clear: it reads the card's HISTORY, not its body or its columns, so
@@ -985,6 +1007,7 @@ export async function buildDispatchProseAdvisories(
         item: item.identifier,
         descriptionMd: item.descriptionMd,
         exemptIds,
+        blockerCount: blockerLinks.length,
         type,
         executor,
         targetRepos,

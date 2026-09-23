@@ -5,6 +5,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import {
+  isBlockerCountAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
@@ -99,7 +100,13 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
   const oversized = dto.advisories.filter(isSizingAdvisory);
   const selfBlocking = dto.advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = dto.advisories.filter(isBodyAboveFieldMoveAdvisory);
+  const blockerCounts = dto.advisories.filter(isBlockerCountAdvisory);
   const lines: string[] = [];
+  for (const a of blockerCounts) {
+    lines.push(
+      `Advisory (NOT a blocker — ${dto.key} still dispatches): it claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Check which side is stale.`,
+    );
+  }
   if (references.length > 0) {
     lines.push(
       `Advisory (NOT a blocker — ${dto.key} still dispatches): its acceptance criteria ` +

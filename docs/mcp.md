@@ -399,7 +399,8 @@ item they return:
   { "kind": "shape", "item": "ACME-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-over-gate-sizing", "threshold": "both", "storyPoints": 13, "estimateMinutes": 600 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-self-blocking-design", "designCriterionIndex": 1, "surfaceCriterionIndex": 4 },
-  { "kind": "shape", "item": "ACME-7", "severity": "body-edit-above-field-move", "bodyEdit": { "at": "2026-09-04T21:53:11.847Z", "fields": ["descriptionMd", "explanationMd"] }, "fieldMove": { "at": "2026-09-04T21:25:39.100Z", "fields": ["title", "type", "executor"] } }
+  { "kind": "shape", "item": "ACME-7", "severity": "body-edit-above-field-move", "bodyEdit": { "at": "2026-09-04T21:53:11.847Z", "fields": ["descriptionMd", "explanationMd"] }, "fieldMove": { "at": "2026-09-04T21:25:39.100Z", "fields": ["title", "type", "executor"] } },
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-blocker-count-mismatch", "claim": "four siblings this card is blocked_by", "claimedCount": 4, "blockerCount": 2 }
 ]
 ```
 
@@ -414,16 +415,17 @@ acceptance criterion is what the card is closed against, so naming a not-done
 item there is consuming it — and the graph, which is the only part a ready set
 can read, does not say so.
 
-A **`shape`** entry has no far end at all: the card contradicts itself. Five
+A **`shape`** entry has no far end at all: the card contradicts itself. Six
 severities, each with its own remedy:
 
-| severity                      | what it found                                                                                                                   | remedy                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `likely-ordering-violation`   | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                            | CUT the card at that criterion                                       |
-| `likely-repo-straddle`        | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                 | SPLIT the card per repo (one repo, one PR)                           |
-| `likely-over-gate-sizing`     | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)     | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
-| `likely-self-blocking-design` | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws    | LIFT the design criterion onto its own `type: design` card           |
-| `body-edit-above-field-move`  | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did | RE-READ the body against those fields — a prompt, never a stop       |
+| severity                        | what it found                                                                                                                   | remedy                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `likely-ordering-violation`     | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                            | CUT the card at that criterion                                       |
+| `likely-repo-straddle`          | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                 | SPLIT the card per repo (one repo, one PR)                           |
+| `likely-over-gate-sizing`       | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)     | BUILD it and report the sizing — size never stops a run (MOTIR-5372) |
+| `likely-self-blocking-design`   | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws    | LIFT the design criterion onto its own `type: design` card           |
+| `likely-blocker-count-mismatch` | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count              | update the stale prose or wire the genuinely missing edge            |
+| `body-edit-above-field-move`    | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did | RE-READ the body against those fields — a prompt, never a stop       |
 
 **`likely-over-gate-sizing`'s two arms do not carry the same authority.**
 `storyPoints >= 8` IS the gate's rule — its literal split signal, read off the
@@ -2404,14 +2406,17 @@ criterion that turns on the card's own merge — cut there), `likely-repo-stradd
 or `estimateMinutes > 70` — split by size), or `likely-self-blocking-design` (a
 childless card one of whose criteria produces a design asset while another builds
 the rendered surface it draws — LIFT the design criterion onto its own
-`type: design` card), or `body-edit-above-field-move` (the card's newest body
-write moved none of the fields a body describes while the write beneath it did —
-RE-READ the body against that move; read off the card's revision trail, and a
-prompt rather than a defect claim). The first two carry the `criterionIndex` they
-cut at; the third carries `threshold`, `storyPoints` and `estimateMinutes`; the
-fourth carries `designCriterionIndex` and `surfaceCriterionIndex`; the fifth
-carries `bodyEdit` and `fieldMove`. Only two of the five carry `criterionIndex`,
-so narrow on `severity` before reading one.
+`type: design` card), `likely-blocker-count-mismatch` (an explicit counted
+claim about the card's own blocker siblings that disagrees with its `blocked_by`
+edges), or `body-edit-above-field-move` (the card's newest body write moved none
+of the fields a body describes while the write beneath it did — RE-READ the body
+against that move; read off the card's revision trail, and a prompt rather than a
+defect claim). The first two carry the `criterionIndex` they cut at; the third
+carries `threshold`, `storyPoints` and `estimateMinutes`; the fourth carries
+`designCriterionIndex` and `surfaceCriterionIndex`; the blocker-count member
+carries the exact `claim`, its `claimedCount` and the graph's current
+`blockerCount`; the body-edit member carries `bodyEdit` and `fieldMove`. Only two
+of the six carry `criterionIndex`, so narrow on `severity` before reading one.
 
 A `subsumption` entry (`kind: "subsumption"`) reports that a path this card's
 body names is being changed SOMEWHERE ELSE — the one advisory family whose far
