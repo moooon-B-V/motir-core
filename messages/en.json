@@ -1532,12 +1532,15 @@
       "type": "Work type",
       "executor": "Executor",
       "targetRepo": "Target repo",
+      "targetRepos": "Repositories",
+      "folderId": "Folder",
       "descriptionMd": "Description",
       "explanationMd": "Explanation",
       "explanationSource": "Explanation source",
       "archivedAt": "Archived",
       "labels": "{count, plural, one {Label} other {Labels}}",
-      "components": "{count, plural, one {Component} other {Components}}"
+      "components": "{count, plural, one {Component} other {Components}}",
+      "todos": "{count, plural, one {Step} other {Steps}}"
     },
     "linkKinds": {
       "blocks": "blocks",

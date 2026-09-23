@@ -436,6 +436,11 @@ const REGISTRY: Record<string, RegistryEntry> = {
   components: collectionField(),
 };
 
+/** Every exact-match key the registry holds a disposition for — the population
+ * a reader of the feed must be able to NAME (the item page's field-name map is
+ * held to it by `tests/work-items/activity-entry-row-field-names.test.tsx`). */
+export const REGISTERED_DIFF_KEYS: readonly string[] = Object.keys(REGISTRY);
+
 /**
  * Prefix-matched dispositions for dynamic key families. `customFields.<key>`
  * (Story 5.3, in flight) renders as a text field for now; the definition /

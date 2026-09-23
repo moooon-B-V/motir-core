@@ -1532,12 +1532,15 @@
       "type": "工作类型",
       "executor": "执行者",
       "targetRepo": "目标仓库",
+      "targetRepos": "仓库",
+      "folderId": "文件夹",
       "descriptionMd": "描述",
       "explanationMd": "说明",
       "explanationSource": "说明来源",
       "archivedAt": "归档",
       "labels": "{count, plural, other {标签}}",
-      "components": "{count, plural, other {组件}}"
+      "components": "{count, plural, other {组件}}",
+      "todos": "{count, plural, other {步骤}}"
     },
     "linkKinds": {
       "blocks": "阻塞",

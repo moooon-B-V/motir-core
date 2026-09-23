@@ -74,6 +74,11 @@ const FIELD_NAME_KEYS: Record<string, string> = {
   dueDate: 'dueDate',
   estimateMinutes: 'estimateMinutes',
   storyPoints: 'storyPoints',
+  type: 'type',
+  executor: 'executor',
+  targetRepo: 'targetRepo',
+  targetRepos: 'targetRepos',
+  folderId: 'folderId',
   descriptionMd: 'descriptionMd',
   explanationMd: 'explanationMd',
   explanationSource: 'explanationSource',
@@ -282,13 +287,13 @@ export function ActivityEntryRow({
           };
         }
         // Labels / components — the 5.4 chip vocabulary verbatim (labels keep
-        // their name-hash tint; components stay neutral + glyph).
+        // their name-hash tint; components stay neutral + glyph). A card's steps
+        // (`todos`) read the same way: "added the Steps", counted.
         const isLabels = part.field === 'labels';
         const isComponents = part.field === 'components';
-        const collectionName = isLabels
-          ? t('fields.labels', { count: part.items.length })
-          : isComponents
-            ? t('fields.components', { count: part.items.length })
+        const collectionName =
+          isLabels || isComponents || part.field === 'todos'
+            ? t(`fields.${part.field}`, { count: part.items.length })
             : fieldName(part.field);
         return {
           sentence: t.rich(part.op === 'added' ? 'collectionAdded' : 'collectionRemoved', {
