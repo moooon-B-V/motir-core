@@ -33,6 +33,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     estimateMinutes: null,
     type: null,
     executor: null,
+    difficulty: null,
     storyPoints: null,
     position: 'a0',
     sprintId: null,
@@ -99,6 +100,7 @@ describe('toReadyItemDto', () => {
       inheritedSessionBranch: null,
       type: null,
       executor: null,
+      difficulty: null,
       // Not a manual row → no inline body (lean list payload).
       descriptionMd: null,
     });

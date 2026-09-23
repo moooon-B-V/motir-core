@@ -13,6 +13,7 @@ import type {
   WorkItemSummaryDto,
 } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
+import { bumpActivity } from '@/lib/hooks/useActivityRevision';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { LabelDto } from '@/lib/dto/labels';
@@ -38,6 +39,7 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
+import { DifficultyIndicator, DifficultyPicker } from '@/components/issues/DifficultyPicker';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
@@ -137,6 +139,7 @@ type EditableKey =
   | 'type'
   | 'workItemType'
   | 'executor'
+  | 'difficulty'
   | 'priority'
   | 'assignee'
   | 'parent'
@@ -327,6 +330,9 @@ export function CoreFieldsPanel({
       if (res.ok) {
         // The 200 IS the confirmation — keep the optimistic value, no refresh.
         setUpdatedAt(res.updatedAt);
+        // ...but the activity island (a client island the refresh could not
+        // reach anyway) re-reads, so the recorded change shows at once.
+        bumpActivity(item.id);
         // Only after a SUCCESSFUL parent change: a failed or stale save moved nothing.
         if (input.parentId !== undefined) reportPlacementChange(item.id);
       } else if (res.stale) {
@@ -525,6 +531,40 @@ export function CoreFieldsPanel({
               )}
             </FieldCard>
           ) : null}
+
+          {/* Difficulty (Story MOTIR-6016 · MOTIR-6101), per
+              design/work-items/core-fields--difficulty.mock.html — directly below
+              Executor, inside the SAME leaf-only branch, so an epic/story renders
+              no card at all. Unlike Executor it does not wait for a type. A
+              read-only viewer sees the value with no chevron. */}
+          <FieldCard
+            label={t('difficulty')}
+            editable={!readOnly}
+            editing={editing === 'difficulty'}
+            onToggle={() => toggle('difficulty')}
+          >
+            {editing === 'difficulty' ? (
+              <DifficultyPicker
+                value={eff.difficulty}
+                onChange={(d) => patch({ difficulty: d })}
+                disabled={isPending || readOnly}
+              />
+            ) : eff.difficulty ? (
+              <DifficultyIndicator difficulty={eff.difficulty} />
+            ) : readOnly ? (
+              <span className="text-(--el-text-secondary)">{t('none')}</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => toggle('difficulty')}
+                disabled={isPending}
+                className="inline-flex items-center gap-1.5 rounded-(--radius-badge) border border-dashed border-(--el-border-strong) px-(--spacing-chip-x) py-(--spacing-chip-y) text-(--el-text-muted) hover:text-(--el-text) disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5 text-(--el-text-faint)" aria-hidden />
+                {t('setDifficulty')}
+              </button>
+            )}
+          </FieldCard>
         </>
       ) : null}
 

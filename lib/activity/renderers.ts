@@ -377,6 +377,8 @@ const REGISTRY: Record<string, RegistryEntry> = {
   // kind/priority (a "changed type code → design" / "changed executor …" entry).
   type: textField(),
   executor: textField(),
+  // Difficulty (Story MOTIR-6016) — a plain enum scalar, rendered the same way.
+  difficulty: textField(),
   storyPoints: textField(),
   // The repo pin (Story 7.9 · MOTIR-1804) — a plain string scalar naming the repo
   // this item's work ships in. RENDERABLE, not suppressed: "which repo does this

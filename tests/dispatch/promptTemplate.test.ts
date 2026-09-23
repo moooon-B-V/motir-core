@@ -42,6 +42,7 @@ function source(over: Partial<DispatchPromptSource> = {}): DispatchPromptSource 
     kind: 'subtask',
     type: 'code',
     executor: 'coding_agent',
+    difficulty: null,
     priority: 'high',
     storyPoints: 5,
     estimateMinutes: 90,
@@ -2395,5 +2396,32 @@ describe('assembleDispatchPrompt — the ERROR EVIDENCE section (MOTIR-5975 · M
     expect(text).toContain('No exception');
     expect(text).toContain('Request: POST /api/github/webhook');
     expect(text).not.toContain('Stack frames');
+  });
+});
+
+// Story MOTIR-6016 · MOTIR-6099 — a leaf's DIFFICULTY is ONE fact line when it
+// is set, and the prompt says nothing about it when it is not.
+describe('the difficulty line', () => {
+  it.each(['trivial', 'low', 'medium', 'high'] as const)(
+    'states %s in exactly one line',
+    (difficulty) => {
+      const { prompt } = assembleDispatchPrompt(source({ difficulty }));
+      const lines = prompt.match(/^- Difficulty: .*$/gm) ?? [];
+      expect(lines).toHaveLength(1);
+      expect(prompt).toMatch(new RegExp(`^- Difficulty: ${difficulty}\\b`, 'm'));
+      // Named as reasoning, not size, so `high` is not read as "big".
+      expect(lines[0]).toContain('not its size');
+    },
+  );
+
+  it('says nothing about difficulty when it is unset — no line, no word', () => {
+    const { prompt } = assembleDispatchPrompt(source({ difficulty: null }));
+    expect(prompt).not.toMatch(/difficulty/i);
+  });
+
+  it('adds only its own line: an unset prompt is the set one minus that line', () => {
+    const unset = assembleDispatchPrompt(source({ difficulty: null })).prompt;
+    const set = assembleDispatchPrompt(source({ difficulty: 'medium' })).prompt;
+    expect(set.replace(/^- Difficulty: .*\n/m, '')).toBe(unset);
   });
 });

@@ -19,6 +19,7 @@ function source(over: Partial<DispatchPromptSource> = {}): DispatchPromptSource 
     kind: 'subtask',
     type: 'code',
     executor: 'coding_agent',
+    difficulty: null,
     priority: 'high',
     storyPoints: 3,
     estimateMinutes: 45,

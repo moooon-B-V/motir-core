@@ -53,6 +53,7 @@ export type RailEditKey =
   | 'priority'
   | 'workItemType'
   | 'executor'
+  | 'difficulty'
   | 'dueDate'
   | 'estimate'
   | 'storyPoints'

@@ -124,6 +124,7 @@ import {
   NotEpicError,
   StaleWorkItemError,
   TypeNotAllowedOnKindError,
+  DifficultyNotAllowedOnKindError,
   UnknownStatusError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
@@ -214,6 +215,7 @@ import type {
   WorkItemKindDto,
   WorkItemLineageDto,
   WorkItemTypeDto,
+  WorkItemDifficultyDto,
   PagedIssueListDto,
   WorkItemKeysetItemDto,
   PagedArchivedWorkItemsDto,
@@ -500,6 +502,23 @@ function assertTypeKindConsistent(
 }
 
 /**
+ * Leaf-only enforcement for `difficulty` (Story MOTIR-6016 · MOTIR-6096) — the
+ * SAME `isTypeableKind` predicate as {@link assertTypeKindConsistent}, so every
+ * leaf field agrees on which rows may carry it, but its own error code. Called
+ * with the EFFECTIVE post-write values, so a kind change onto a container that
+ * keeps a difficulty is refused exactly as setting one on a story is; clearing
+ * it to null is legal on any kind.
+ */
+function assertDifficultyKindConsistent(
+  kind: WorkItemKindDto,
+  difficulty: WorkItemDifficultyDto | null,
+): void {
+  if (difficulty !== null && !isTypeableKind(kind)) {
+    throw new DifficultyNotAllowedOnKindError(kind);
+  }
+}
+
+/**
  * Resolve the executor a create/update should persist, given the resulting
  * `type`, any explicitly-supplied executor, and the row's CURRENT executor.
  * SEED-IF-ABSENT (the 2.7.2 ADR "executor is seeded when a type is first
@@ -715,6 +734,9 @@ function buildCreatedDiff(row: WorkItem): Record<string, DiffCell> {
   // records the chosen type + (seeded or explicit) executor.
   set('type', row.type);
   set('executor', row.executor);
+  // Difficulty (Story MOTIR-6016): skipped when unset, so a create without one
+  // leaves the diff exactly as it was.
+  set('difficulty', row.difficulty);
   // The repo pin (Story 7.9 · MOTIR-1804): the `set` helper skips null, so an
   // unpinned create's diff is unchanged; a pinned create records the repo the
   // planner chose, which is exactly the "one subtask = one repo" decision a
@@ -1597,6 +1619,10 @@ export const workItemsService = {
     const itemType = input.type ?? null;
     const itemExecutor = resolveExecutor(itemType, input.executor, null);
     assertTypeKindConsistent(input.kind, itemType, itemExecutor);
+    // Difficulty (Story MOTIR-6016): leaf-only by the same kind rule, checked
+    // before the key-allocation transaction for the same reason.
+    const itemDifficulty = input.difficulty ?? null;
+    assertDifficultyKindConsistent(input.kind, itemDifficulty);
 
     // Story points (Story 4.3 · exposed on create in 7.8.21): validated with the
     // SAME shared rule the UI estimation path uses (finite, non-negative,
@@ -1849,6 +1875,7 @@ export const workItemsService = {
         // seeded above; nulls for an untyped leaf or a container kind.
         type: itemType,
         executor: itemExecutor,
+        difficulty: itemDifficulty,
         // The repo pin (Story 7.9 · MOTIR-1804) — validated above; null when the
         // caller didn't pin one (the dispatch payload resolves the default).
         targetRepo,
@@ -2110,6 +2137,7 @@ export const workItemsService = {
       'storyPoints',
       'type',
       'executor',
+      'difficulty',
       'targetRepo',
       'targetRepos',
       'targetRepositories',
@@ -2465,6 +2493,19 @@ export const workItemsService = {
       if (nextExecutor !== current.executor) {
         update.executor = nextExecutor;
         diff.executor = { from: current.executor, to: nextExecutor };
+      }
+
+      // ── Difficulty (Story MOTIR-6016) ─────────────────────────────────
+      // Same leaf-only rule, against the same EFFECTIVE post-patch kind: a
+      // story may only END UP with null, so re-kinding a leaf that carries one
+      // is refused unless this same patch clears it. Re-sending the current
+      // value is a no-op and records nothing.
+      const nextDifficulty: WorkItemDifficultyDto | null =
+        patch.difficulty !== undefined ? patch.difficulty : current.difficulty;
+      assertDifficultyKindConsistent(nextKind, nextDifficulty);
+      if (nextDifficulty !== current.difficulty) {
+        update.difficulty = nextDifficulty;
+        diff.difficulty = { from: current.difficulty, to: nextDifficulty };
       }
 
       // The repository REFERENCES (MOTIR-3039), written BEFORE the empty-diff

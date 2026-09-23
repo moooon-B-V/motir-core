@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { History } from 'lucide-react';
@@ -11,6 +11,7 @@ import type { ActivityAllEntryDto, ActivityAllPageDto } from '@/lib/dto/activity
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { useCommentsSort } from '@/lib/hooks/useCommentsSort';
+import { useActivityRevision } from '@/lib/hooks/useActivityRevision';
 import { ContentSectionCard } from './ContentSectionCard';
 import { CommentComposer } from './CommentComposer';
 import { CommentRow } from './CommentRow';
@@ -84,6 +85,28 @@ export function AllSection({
     if (!res.ok) throw new Error(`Activity read failed (${res.status})`);
     return (await res.json()) as ActivityAllPageDto;
   }
+
+  // A field saved on this page recorded a revision (MOTIR-6101): re-read the
+  // first page silently, so the merged feed shows it without a reload.
+  const revision = useActivityRevision(workItemId);
+  const seenRevision = useRef(revision);
+  useEffect(() => {
+    if (revision === seenRevision.current) return;
+    seenRevision.current = revision;
+    void fetchPage()
+      .then((page) => {
+        setEntries(page.entries);
+        setTotalComments(page.totalComments);
+        setTotalChanges(page.totalChanges);
+        setNextCursor(page.nextCursor);
+        setWorkItemRefs(page.workItemRefs ?? {});
+        setFailed(false);
+      })
+      .catch(() => {
+        // A failed refresh keeps the window it had; the next save retries.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchPage reads only workItemId
+  }, [revision]);
 
   function reload() {
     setFailed(false);

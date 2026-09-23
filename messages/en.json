@@ -540,6 +540,12 @@
       "coding_agent": "Agent",
       "human": "Human"
     },
+    "difficulty": {
+      "trivial": "Trivial",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
     "priority": {
       "highest": "Highest",
       "high": "High",
@@ -1367,6 +1373,9 @@
     "advancedFieldChecks": "Checks",
     "advancedFieldPriority": "Priority",
     "advancedFieldType": "Type",
+    "advancedFieldDifficulty": "Difficulty",
+    "difficulty": "Difficulty",
+    "setDifficulty": "Set difficulty",
     "advancedFieldReporter": "Reporter",
     "advancedFieldSprint": "Sprint",
     "advancedFieldText": "Text",
@@ -1535,6 +1544,7 @@
       "storyPoints": "Story points",
       "type": "Work type",
       "executor": "Executor",
+      "difficulty": "Difficulty",
       "targetRepo": "Target repo",
       "targetRepos": "Repositories",
       "folderId": "Folder",
@@ -1600,6 +1610,10 @@
     },
     "executorPicker": {
       "label": "Executor"
+    },
+    "difficultyPicker": {
+      "label": "Difficulty",
+      "clear": "Clear"
     },
     "priorityPicker": {
       "label": "Priority"

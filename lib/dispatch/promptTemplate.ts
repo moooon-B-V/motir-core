@@ -13,6 +13,7 @@ import {
 import { describeBodyAboveFieldMove } from '@/lib/workItems/bodyAboveFieldMove';
 import type {
   ExecutorDto,
+  WorkItemDifficultyDto,
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemProseAdvisoryDto,
@@ -294,6 +295,13 @@ export interface DispatchPromptSource {
   kind: WorkItemKindDto;
   type: WorkItemTypeDto | null;
   executor: ExecutorDto | null;
+  /**
+   * How HARD the work is to reason about (Story MOTIR-6016). Stated in ONE fact
+   * line when set; when `null` the prompt says nothing about it at all — no
+   * `unset` placeholder, unlike type and executor, so a leaf without one gets
+   * exactly the prompt it got before the field existed.
+   */
+  difficulty: WorkItemDifficultyDto | null;
   priority: WorkItemPriorityDto;
   storyPoints: number | null;
   estimateMinutes: number | null;
@@ -1135,6 +1143,10 @@ function contextSection(
   if (src.storyPoints !== null) sizing.push(`${src.storyPoints} story points`);
   if (src.estimateMinutes !== null) sizing.push(`~${src.estimateMinutes} min`);
   if (sizing.length > 0) facts.push(`- Sizing: ${sizing.join(' · ')}`);
+  // Named as REASONING, not size, so an agent does not read `high` as "big".
+  if (src.difficulty !== null) {
+    facts.push(`- Difficulty: ${src.difficulty} — the reasoning this work demands, not its size`);
+  }
 
   const repoSet = multiRepoSet(src);
   if (repoSet) {

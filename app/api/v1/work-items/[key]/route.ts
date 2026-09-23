@@ -108,6 +108,7 @@ export const PATCH = withV1Route<{ key: string }>({ permission: 'work_item:edit'
         'priority',
         'type',
         'executor',
+        'difficulty',
         'storyPoints',
         'estimateMinutes',
         'targetRepo',

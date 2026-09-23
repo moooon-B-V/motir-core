@@ -76,6 +76,7 @@ export function toQuickViewData(
     explanationMd: item.explanationMd,
     type: item.type,
     executor: item.executor,
+    difficulty: item.difficulty,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,
     reporterName: nameById.get(item.reporterId) ?? item.reporterId,
     priority: item.priority,

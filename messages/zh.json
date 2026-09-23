@@ -540,6 +540,12 @@
       "coding_agent": "智能体",
       "human": "人工"
     },
+    "difficulty": {
+      "trivial": "极简",
+      "low": "低",
+      "medium": "中",
+      "high": "高"
+    },
     "priority": {
       "highest": "最高",
       "high": "高",
@@ -1367,6 +1373,9 @@
     "advancedFieldChecks": "检查",
     "advancedFieldPriority": "优先级",
     "advancedFieldType": "工作类型",
+    "advancedFieldDifficulty": "难度",
+    "difficulty": "难度",
+    "setDifficulty": "设置难度",
     "advancedFieldReporter": "创建人",
     "advancedFieldSprint": "Sprint",
     "advancedFieldText": "文本",
@@ -1535,6 +1544,7 @@
       "storyPoints": "故事点",
       "type": "工作类型",
       "executor": "执行者",
+      "difficulty": "难度",
       "targetRepo": "目标仓库",
       "targetRepos": "仓库",
       "folderId": "文件夹",
@@ -1600,6 +1610,10 @@
     },
     "executorPicker": {
       "label": "执行者"
+    },
+    "difficultyPicker": {
+      "label": "难度",
+      "clear": "清除"
     },
     "priorityPicker": {
       "label": "优先级"

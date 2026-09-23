@@ -253,6 +253,9 @@ const workItemDtoExtras = {
   explanationMd: z.string().nullable(),
   explanationSource: z.string(),
   executor: z.string().nullable(),
+  /** How hard the leaf is to reason about (Story MOTIR-6016) — `low` | `medium`
+   *  | `high`, or null (always null on an epic or story). */
+  difficulty: z.string().nullable(),
   position: z.string(),
   sprintId: z.string().nullable(),
   backlogRank: z.string().nullable(),
@@ -328,6 +331,7 @@ export function presentMcpWorkItem(dto: WorkItemDto): McpWorkItem {
     explanationMd: dto.explanationMd,
     explanationSource: dto.explanationSource,
     executor: dto.executor,
+    difficulty: dto.difficulty,
     position: dto.position,
     sprintId: dto.sprintId,
     backlogRank: dto.backlogRank,
@@ -491,6 +495,7 @@ function readyRowFields(
     status: { key: item.status.key, category: item.status.category },
     type: item.type,
     executor: item.executor,
+    difficulty: item.difficulty,
     // The v1 field, derived from the object MCP already carried. Additive.
     assigneeId: item.assignee?.id ?? null,
     descriptionExcerpt: item.descriptionExcerpt,

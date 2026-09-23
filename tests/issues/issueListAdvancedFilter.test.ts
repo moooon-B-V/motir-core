@@ -239,6 +239,9 @@ describe('advancedBuilderFields (the registry-driven field menu)', () => {
       // after `priority`. Its `type-select` editor is now in the builder's
       // SUPPORTED_EDITOR_KINDS allowlist, so the field reaches the menu.
       'type',
+      // Story MOTIR-6016 · MOTIR-6100: the Difficulty field, registry-ordered
+      // right after `type`, admitted by the `difficulty-select` editor kind.
+      'difficulty',
       'assignee',
       'reporter',
       'sprint',

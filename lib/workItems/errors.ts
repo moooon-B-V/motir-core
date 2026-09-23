@@ -27,6 +27,7 @@ export type WorkItemErrorTag =
   | 'ILLEGAL_TRANSITION'
   | 'STALE_WORK_ITEM'
   | 'TYPE_NOT_ALLOWED_ON_KIND'
+  | 'DIFFICULTY_NOT_ALLOWED_ON_KIND'
   | 'NOT_EPIC'
   | 'UNKNOWN_TARGET_REPO'
   | 'UNKNOWN_PROJECT_REPO_REF'
@@ -243,6 +244,24 @@ export class TypeNotAllowedOnKindError extends WorkItemError {
   constructor(kind: string) {
     super(`A ${kind} cannot carry a type or executor (those are leaf-only).`);
     this.name = 'TypeNotAllowedOnKindError';
+  }
+}
+
+/**
+ * A `difficulty` would END UP on a work item whose `kind` is a CONTAINER (epic /
+ * story) — Story MOTIR-6016 · MOTIR-6096. Leaf-only by the same `isTypeableKind`
+ * predicate as {@link TypeNotAllowedOnKindError}, but its OWN code: a caller
+ * that sent a difficulty and is told that TYPE is not allowed is told something
+ * false. Covers a `kind` change onto a container that keeps a difficulty, not
+ * only a direct write. A client error → 422 (the blanket `WorkItemError`
+ * mapping); like `type`, no DB constraint backs it.
+ */
+export class DifficultyNotAllowedOnKindError extends WorkItemError {
+  readonly tag = 'DIFFICULTY_NOT_ALLOWED_ON_KIND' as const;
+  readonly code = 'DIFFICULTY_NOT_ALLOWED_ON_KIND' as const;
+  constructor(kind: string) {
+    super(`A ${kind} cannot carry a difficulty (it is leaf-only).`);
+    this.name = 'DifficultyNotAllowedOnKindError';
   }
 }
 

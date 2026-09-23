@@ -19,6 +19,7 @@
 
 import type {
   ExecutorDto,
+  WorkItemDifficultyDto,
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemTypeDto,
@@ -84,6 +85,12 @@ export interface ReadyItemDto {
    * {@link isManualReadyItem}.
    */
   executor: ExecutorDto | null;
+  /**
+   * How HARD the work is to reason about (Story MOTIR-6016) — `low` | `medium` |
+   * `high` | `null`. Carried on the row a CLI reads before dispatch so the agent
+   * that claims it can know it without a second read.
+   */
+  difficulty: WorkItemDifficultyDto | null;
   /**
    * The full Markdown instruction body — populated ONLY for a MANUAL row (the
    * source the *Show instruction* modal renders; 8.8.5 / 8.8.10) and `null` for

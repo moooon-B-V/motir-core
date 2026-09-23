@@ -417,6 +417,7 @@ describe('top-up — the ready filter parser and mapper, as units', () => {
         inheritedSessionBranch: null,
         type: null,
         executor: null,
+        difficulty: null,
         descriptionMd: null,
       },
       undefined,

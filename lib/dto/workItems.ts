@@ -67,6 +67,12 @@ export type WorkItemTypeDto =
  * when a type is first chosen, and overridable.
  */
 export type ExecutorDto = 'coding_agent' | 'human';
+/**
+ * How HARD a leaf is to REASON about (Story MOTIR-6016) — mirrors the
+ * `WorkItemDifficulty` Prisma enum, whose members `lib/issues/difficulty.ts`
+ * lists in order and asserts total. Leaf-only, exactly as `type` is.
+ */
+export type WorkItemDifficultyDto = 'trivial' | 'low' | 'medium' | 'high';
 
 /**
  * The full work-item shape for the detail view. Carries both content axes
@@ -127,6 +133,12 @@ export interface WorkItemDto {
    * when no type is set.
    */
   executor: ExecutorDto | null;
+  /**
+   * How HARD the work is to reason about (Story MOTIR-6016) — `low` | `medium`
+   * | `high`, set by a person (or, later, the planner). `null` when unset, and
+   * always `null` on a container kind (epic/story): the service refuses one.
+   */
+  difficulty: WorkItemDifficultyDto | null;
   /**
    * The agile STORY-POINT estimate (Story 4.3 · Subtask 4.3.3) — a separate
    * numeric estimate from `estimateMinutes` (TIME). Null = unestimated. The
@@ -1179,6 +1191,12 @@ export interface CreateWorkItemInput {
    */
   executor?: ExecutorDto | null;
   /**
+   * How HARD the work is to reason about (Story MOTIR-6016). Leaf-only by KIND,
+   * as `type` is: a non-null value on an epic/story is rejected with
+   * `DifficultyNotAllowedOnKindError` (422). Omitted → the column stays null.
+   */
+  difficulty?: WorkItemDifficultyDto | null;
+  /**
    * Pin the repo this item's work ships in (Story 7.9 · MOTIR-1804) — the bare
    * repo NAME, or the `owner/name` ref form (normalized to the name). Validated
    * against the PROJECT's repository set (MOTIR-4955) — a repository connected to
@@ -1369,6 +1387,13 @@ export interface UpdateWorkItemInput {
   type?: WorkItemTypeDto | null;
   /** Patch the executor (Story 2.7) — same leaf-only rule as `type`. */
   executor?: ExecutorDto | null;
+  /**
+   * Patch the difficulty (Story MOTIR-6016) — set / change / clear (`null`).
+   * Leaf-only by KIND: an epic/story may only ever END UP with `null`, so a
+   * `kind` change onto a container that keeps a difficulty is refused
+   * (`DifficultyNotAllowedOnKindError`, 422) unless this clears it.
+   */
+  difficulty?: WorkItemDifficultyDto | null;
   /**
    * Patch the repo pin (Story 7.9 · MOTIR-1804): set / change / clear (`null`,
    * or a blank string) the bare repo NAME this item's work ships in. The

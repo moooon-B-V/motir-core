@@ -186,6 +186,10 @@ const SUPPORTED_EDITOR_KINDS: ReadonlySet<FilterValueEditorKind> = new Set([
   // from the field picker — the predicate/AST worked (integration tests green)
   // while the user could never ADD the condition. Surfaced by 2.7.8's E2E.
   'type-select',
+  // Story MOTIR-6016 · MOTIR-6100: the Difficulty condition row — admitted to
+  // the menu HERE, in the same change as its registry entry, for the reason the
+  // two comments above record.
+  'difficulty-select',
   'member-select',
   'sprint-select',
   'label-select',

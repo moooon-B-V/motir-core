@@ -3,6 +3,7 @@ import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   ExecutorDto,
+  WorkItemDifficultyDto,
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemTypeDto,
@@ -111,6 +112,8 @@ export interface QuickViewData {
   type: WorkItemTypeDto | null;
   /** WHO executes the work (Story 2.7) — null when no type is set. */
   executor: ExecutorDto | null;
+  /** How hard the work is to reason about (Story MOTIR-6016) — null when unset. */
+  difficulty: WorkItemDifficultyDto | null;
   assigneeName: string | null;
   reporterName: string;
   priority: WorkItemPriorityDto;
