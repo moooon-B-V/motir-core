@@ -12,6 +12,7 @@ import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import {
+  changeToText,
   isFolderPlacementChange,
   PlacementLine,
   PlacementSide,
@@ -120,7 +121,11 @@ export function PlanItemNode({
   // line. The LIST body keeps its `in [folder]` fact (§17.3), unchanged.
   const showDiff = item.op === 'modify' && item.changes.length > 0;
   const showPlacement = !showDiff && item.folderMissing;
-  const hasSlot = showDiff || showPlacement;
+  // A `remove`'s REASON (MOTIR-6055 · Part XIX §19.5): a remove never spent the
+  // slot, so its reason takes it — after a stale folder, which is the one tenant
+  // a remove could already have. No reason ⇒ no slot, byte-identical to before.
+  const showReason = !showDiff && !showPlacement && item.op === 'remove' && !!item.removeReason;
+  const hasSlot = showDiff || showPlacement || showReason;
   // A deleted folder is a STALE fact the staleness read does not report (MOTIR-5415
   // carries it as `folderMissing`), so the node adds its reason beside the shipped ones.
   const staleReasons = item.staleReasons.map((r) => staleReasonLabel(r, t));
@@ -261,6 +266,24 @@ export function PlanItemNode({
       {showPlacement ? (
         <PlacementLine folderPath={item.folderPath} folderMissing={item.folderMissing} />
       ) : null}
+      {showReason ? <ReasonLine reason={item.removeReason!} label={t('removeReason')} /> : null}
+    </div>
+  );
+}
+
+/** The remove's reason on ONE line — the node is a glance; the list row and the
+ *  peek carry it in full, and so does `title` here. Written by the planner for
+ *  the reviewer, so it is shown verbatim, never translated. */
+function ReasonLine({ reason, label }: { reason: string; label: string }) {
+  return (
+    <div
+      data-testid="remove-reason"
+      className="mt-1.5 flex shrink-0 items-center gap-1 overflow-hidden text-xs text-(--el-text-secondary)"
+    >
+      <span className="shrink-0 font-medium text-(--el-text-secondary)">{label}</span>
+      <span className="truncate text-(--el-text)" title={reason}>
+        {reason}
+      </span>
     </div>
   );
 }
@@ -366,6 +389,9 @@ function DiffLine({
   // side with the glyph and path (Part XVII §17.4); a work-item → work-item move
   // keeps the shipped `Parent` row byte for byte.
   const placement = isFolderPlacementChange(first) ? first.placement : undefined;
+  // A move under a PROPOSED parent names it `New · <title>` (Part XIX §19.3); on
+  // the 280px node it may ellipsize, so the full string rides `title`.
+  const to = changeToText(first, t('proposedCrumb'));
   return (
     <div
       data-testid="diff-line"
@@ -397,7 +423,9 @@ function DiffLine({
             <span className="truncate text-(--el-text-secondary) line-through">{first.from}</span>
           ) : null}
           <ChevronRight className="size-3 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
-          <span className="truncate font-medium text-(--el-text)">{first.to ?? '—'}</span>
+          <span className="truncate font-medium text-(--el-text)" title={to ?? undefined}>
+            {to ?? '—'}
+          </span>
         </>
       )}
       {more > 0 ? (

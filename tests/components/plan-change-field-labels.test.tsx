@@ -129,6 +129,7 @@ function modifiedItem(changes: PlanReviewItemDto['changes']): PlanReviewItemDto 
     staleReasons: [],
     revised: false,
     targetMissing: false,
+    removeReason: null,
     todos: null,
     proposal: {
       op: 'add',

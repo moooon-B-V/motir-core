@@ -162,6 +162,7 @@ const MATERIALIZED: PlanWithItemsDto = {
       parentRef: null,
       blockedByRefs: [],
       baseRevision: null,
+      reason: null,
       createdAt: '2026-07-27T09:01:00.000Z',
     },
   ],

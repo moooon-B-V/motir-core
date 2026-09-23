@@ -306,7 +306,15 @@ export type PlanTargetOp = 'modify' | 'remove';
 
 /**
  * A second proposal in ONE plan targets a work item the plan already proposes
- * against (MOTIR-3194) — a second `modify`, or a `modify` alongside a `remove`.
+ * against (MOTIR-3194) — a `modify` alongside a `remove` (either order), or a
+ * second `remove`.
+ *
+ * ⚠️ NARROWED BY AMENDMENT 18 §2 (MOTIR-6051): a second `modify` of one card no
+ * longer lands here — it MERGES into the plan's one `modify`
+ * (`lib/plans/mergeModifyPatch.ts`). The three reasons below still hold, and a
+ * merge keeps every one of them true: ONE row, so one diff with one old side;
+ * ONE `baseRevision` (the earlier); and the constraint still refuses any pairing
+ * with a `remove`. The text below is the record of the rule as MOTIR-3194 kept it.
  *
  * ## The rule, and why it is KEPT rather than relaxed
  *
@@ -352,9 +360,11 @@ export class DuplicatePlanTargetError extends Error {
     super(
       `This plan already holds a \`${existingOp}\` proposal for work item ${workItemId}, and a ` +
         `plan holds at most ONE proposal per existing target — so this \`${op}\` is refused. ` +
-        `Fold everything you want to change about ${workItemId} into that one proposal instead; ` +
-        `or, if what you are recording is a dependency edge between two work items that ALREADY ` +
-        `exist, call \`link_work_items\` — an edge between committed items needs no proposal at all.`,
+        `A second \`modify\` merges into the first, but a \`modify\` and a \`remove\` of one card, ` +
+        `or two \`remove\`s, cannot both stand: withdraw the first proposal ` +
+        `(\`withdraw_plan_proposal\`) if you have changed your mind about ${workItemId}; or, if what ` +
+        `you are recording is a dependency edge between two work items that ALREADY exist, call ` +
+        `\`link_work_items\` — an edge between committed items needs no proposal at all.`,
     );
     this.name = 'DuplicatePlanTargetError';
   }

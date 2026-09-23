@@ -2,7 +2,8 @@
 
 import { Folder, FolderX } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import type { PlanPlacementSideDto } from '@/lib/dto/planReview';
+import type { PlanItemChangeDto, PlanPlacementSideDto } from '@/lib/dto/planReview';
+import { workItemCrumbLabel } from '@/lib/planning/projectCanvasModel';
 
 // Where a proposal will be FILED, on the plan review (Story MOTIR-5310 ·
 // MOTIR-5418, to `design/ai-planning/design-notes.md` Part XVII).
@@ -183,10 +184,35 @@ export function PlacementSide({
   if (side.kind === 'root') {
     return <span className={`truncate ${className} ${segmentClassName}`}>{tf('projectRoot')}</span>;
   }
+  const proposed = proposedParentLabel(side, t('proposedCrumb'));
   return (
-    <span className={`truncate ${className} ${segmentClassName}`}>
-      {side.identifier ?? fallback ?? '—'}
+    <span className={`truncate ${className} ${segmentClassName}`} title={proposed ?? undefined}>
+      {proposed ?? side.identifier ?? fallback ?? '—'}
     </span>
+  );
+}
+
+/**
+ * A PROPOSED parent — an `add` in this plan that approve has not created yet —
+ * named in the breadcrumb's own grammar, `New · <title>` (MOTIR-6055 ·
+ * `design-notes.md` Part XIX §19.3), so the reader sees the same words on the
+ * card as in the crumb of the level it is drawn on. `null` for every other side:
+ * a committed parent (and an APPROVED add) is named by its key.
+ */
+export function proposedParentLabel(
+  side: PlanPlacementSideDto | undefined,
+  proposedWord: string,
+): string | null {
+  if (side?.kind !== 'workItem' || side.identifier != null || !side.proposedTitle) return null;
+  return workItemCrumbLabel(proposedWord, side.proposedTitle);
+}
+
+/** The NEW side of a change as the reader's words: the proposed-parent label for
+ *  a move under an un-created `add`, else the change's own `to`. */
+export function changeToText(change: PlanItemChangeDto, proposedWord: string): string | null {
+  return (
+    (change.field === 'parent' ? proposedParentLabel(change.placement?.to, proposedWord) : null) ??
+    change.to
   );
 }
 

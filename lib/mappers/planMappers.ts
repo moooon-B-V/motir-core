@@ -25,6 +25,7 @@ export function toPlanItemDto(row: PlanItem): PlanItemDto {
     parentRef: row.parentRef,
     blockedByRefs: row.blockedByRefs,
     baseRevision: row.baseRevision,
+    reason: row.reason,
     createdAt: row.createdAt.toISOString(),
   };
 }

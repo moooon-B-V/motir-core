@@ -492,16 +492,14 @@ export interface PlanItemPatch {
    * an explicit `null` moves the target to the PROJECT ROOT (refused by the same
    * `assertValidParent(null, kind)` arm that refuses a root-level subtask).
    *
-   * ⚠️ A REAL work-item id ONLY — a `planItem:` temp-ref is REFUSED at the append
-   * (`validateProposal`), and that is a decision rather than an omission. Every
-   * guard this key owes — the kind-parent matrix, same-project tenancy, the
-   * no-cycle walk, the depth cap and the terminal-parent refusal — is a question
-   * about a LIVE row, and a proposal has none until approve. Admitting a temp-ref
-   * would mean a re-parent nothing could check until the DB trigger raised a raw
-   * SQLSTATE mid-materialize, which is exactly the shape this gate exists to
-   * prevent. A card that must land under a card the same plan is adding is
-   * expressible already: `add` it with that `parentRef` instead.
-   *
+   * A real work-item id, a `folder:` placement, or — since AMENDMENT 18 §1
+   * (MOTIR-6050) — a `planItem:` temp-ref naming an `add` already persisted on
+   * the same plan, which moves a committed card under a card the plan creates.
+   * AMENDMENT 11 D2 had refused the temp-ref because every guard was a question
+   * about a LIVE row; the plan's own `add`s now answer them, read off the
+   * projected chain (`validateProposals.ts` `assertReparentUnderProposalLegal`),
+   * and `materialize` already creates every `add` before it applies any `modify`.
+
    * Validated at the APPEND (`plansService.addProposals`) and again at approve
    * (`validatePlanProposals`), through ONE pure function so the two cannot
    * disagree; applied by `applyModify` with a `parentId` revision diff cell, the
@@ -556,6 +554,10 @@ export const PLAN_ITEM_PATCH_KEYS = [
 
 export type PlanItemPatchKey = (typeof PLAN_ITEM_PATCH_KEYS)[number];
 
+/** A `remove` proposal's reason, after trimming, is 1–this many characters
+ *  (`agent-authored-plans.md` AMENDMENT 18 §3, MOTIR-6052). */
+export const PLAN_ITEM_REASON_MAX = 2000;
+
 /**
  * The COMPILE-TIME half of the drift guard: {@link PlanItemPatch}'s keys and
  * {@link PLAN_ITEM_PATCH_KEYS} are the same set, in both directions.
@@ -584,6 +586,8 @@ export interface PlanItemDto {
   parentRef: string | null;
   blockedByRefs: string[];
   baseRevision: string | null;
+  /** `remove` only: why the card is removed (AMENDMENT 18 §3); null otherwise. */
+  reason: string | null;
   createdAt: string;
 }
 
@@ -737,6 +741,12 @@ export interface ProposalInput {
   blockedByRefs?: string[];
   /** `modify` / `remove`: the target's revision the change was computed against. */
   baseRevision?: string | null;
+  /**
+   * `remove` ONLY: why the card is being removed (AMENDMENT 18 §3, MOTIR-6052).
+   * Optional; trimmed, then 1–2000 characters. Refused by name on an `add` or a
+   * `modify`. Written into the archived revision at approve.
+   */
+  reason?: string | null;
 }
 
 /**

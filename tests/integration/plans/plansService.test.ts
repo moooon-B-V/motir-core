@@ -2296,63 +2296,68 @@ describe('plansService.approvePlan — a materialized add is born `blocked` when
 //      by the one error it was written for is not a boundary.
 
 describe('plansService.addProposals — one proposal per existing target (MOTIR-3194)', () => {
-  it('refuses a SECOND modify for a target the plan already patches, naming the item and both ways out', async () => {
+  it('MERGES a second modify into the one the plan holds (AMENDMENT 18 §2) — one row, and the survivor’s id back', async () => {
     const fx = await makeWorkItemFixture();
     const target = await seedItem(fx, 'The survivor');
+    const blocker = await seedItem(fx, 'A blocker');
     const plan = await plansService.createPlan(fx.projectId, { title: 'A re-plan' }, fx.ctx);
 
-    await plansService.addProposals(
+    const first = await plansService.addProposals(
       plan.id,
-      [{ op: 'modify', workItemId: target, patch: { title: 'Re-scoped' } }],
+      [{ op: 'modify', workItemId: target, patch: { title: 'Re-scoped', priority: 'low' } }],
+      fx.ctx,
+    );
+    const second = await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target, patch: { priority: 'high', blockedByAdd: [blocker] } }],
       fx.ctx,
     );
 
-    const refusal = await plansService
-      .addProposals(
-        plan.id,
-        [{ op: 'modify', workItemId: target, patch: { blockedByAdd: ['whatever'] } }],
-        fx.ctx,
-      )
-      .catch((err: unknown) => err);
-
-    expect(refusal).toBeInstanceOf(DuplicatePlanTargetError);
-    const err = refusal as DuplicatePlanTargetError;
-    expect(err.code).toBe('DUPLICATE_PLAN_TARGET');
-    expect(err.workItemId).toBe(target);
-    expect(err.existingOp).toBe('modify');
-    expect(err.op).toBe('modify');
-
-    // The MESSAGE is the deliverable — it names the subject and BOTH escapes,
-    // which is exactly what the ORM string it replaces named neither of.
-    expect(err.message).toContain(target);
-    expect(err.message).toContain('already holds');
-    expect(err.message).toContain('link_work_items');
-    // …and it is not the ORM's prose wearing a new class name.
-    expect(err.message).not.toMatch(/prisma/i);
-    expect(err.message).not.toContain('not available');
-
-    // The plan still holds exactly the first proposal.
+    expect(second.appendedItemIds).toEqual(first.appendedItemIds);
     const after = await plansService.getPlan(plan.id, fx.ctx);
     expect(after.items).toHaveLength(1);
-    expect((after.items[0]!.patch as { title?: string } | null)?.title).toBe('Re-scoped');
+    expect(after.items[0]!.patch).toEqual({
+      title: 'Re-scoped',
+      priority: 'high',
+      blockedByAdd: [blocker],
+    });
   });
 
-  it('refuses a duplicate INSIDE one batch, and appends NOTHING from it', async () => {
+  it('merges two modifies of one card INSIDE one batch, in batch order', async () => {
     const fx = await makeWorkItemFixture();
     const target = await seedItem(fx, 'The survivor');
-    const other = await seedItem(fx, 'A bystander');
     const plan = await plansService.createPlan(fx.projectId, { title: 'A re-plan' }, fx.ctx);
 
-    // The first two proposals are perfectly legal; the third collides with the
-    // second. A database constraint alone cannot see this until the insert, so
-    // the in-batch arm is a check the pre-read has to grow itself.
+    const appended = await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', proposedFields: { title: 'A new leaf' } },
+        { op: 'modify', workItemId: target, patch: { title: 'Re-scoped' } },
+        { op: 'modify', workItemId: target, patch: { title: 'Re-scoped again', priority: 'high' } },
+      ],
+      fx.ctx,
+    );
+
+    expect(appended.items).toHaveLength(2);
+    expect(appended.appendedItemIds).toHaveLength(3);
+    expect(appended.appendedItemIds[2]).toBe(appended.appendedItemIds[1]);
+    const modifyRow = appended.items.find((i) => i.op === 'modify')!;
+    expect(modifyRow.id).toBe(appended.appendedItemIds[1]);
+    expect(modifyRow.patch).toEqual({ title: 'Re-scoped again', priority: 'high' });
+  });
+
+  it('refuses a modify + remove of one card INSIDE one batch, and appends NOTHING from it', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'The survivor');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A re-plan' }, fx.ctx);
+
     await expect(
       plansService.addProposals(
         plan.id,
         [
           { op: 'add', proposedFields: { title: 'A new leaf' } },
           { op: 'modify', workItemId: target, patch: { title: 'Re-scoped' } },
-          { op: 'modify', workItemId: target, patch: { priority: 'high' } },
+          { op: 'remove', workItemId: target },
         ],
         fx.ctx,
       ),
@@ -2362,19 +2367,32 @@ describe('plansService.addProposals — one proposal per existing target (MOTIR-
     // back with it, so a retry of the corrected batch cannot double-append.
     const after = await plansService.getPlan(plan.id, fx.ctx);
     expect(after.items).toHaveLength(0);
+  });
 
-    // …and the same batch with the two patches FOLDED INTO ONE — the first
-    // alternative the message names — is accepted whole.
-    const fixed = await plansService.addProposals(
-      plan.id,
-      [
-        { op: 'add', proposedFields: { title: 'A new leaf' } },
-        { op: 'modify', workItemId: target, patch: { title: 'Re-scoped', priority: 'high' } },
-        { op: 'modify', workItemId: other, patch: { title: 'Also touched' } },
-      ],
-      fx.ctx,
-    );
-    expect(fixed.items).toHaveLength(3);
+  it('still refuses a `modify` after a `remove`, and a second `remove`, naming the way out', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'The obsolete card');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A re-plan' }, fx.ctx);
+    await plansService.addProposals(plan.id, [{ op: 'remove', workItemId: target }], fx.ctx);
+
+    const modifyAfter = await plansService
+      .addProposals(plan.id, [{ op: 'modify', workItemId: target, patch: { title: 'X' } }], fx.ctx)
+      .catch((err: unknown) => err);
+    expect(modifyAfter).toBeInstanceOf(DuplicatePlanTargetError);
+    const err = modifyAfter as DuplicatePlanTargetError;
+    expect(err.code).toBe('DUPLICATE_PLAN_TARGET');
+    expect(err.existingOp).toBe('remove');
+    expect(err.op).toBe('modify');
+    expect(err.message).toContain(target);
+    expect(err.message).toContain('withdraw_plan_proposal');
+    expect(err.message).toContain('link_work_items');
+    expect(err.message).not.toMatch(/prisma/i);
+
+    const secondRemove = await plansService
+      .addProposals(plan.id, [{ op: 'remove', workItemId: target }], fx.ctx)
+      .catch((e: unknown) => e);
+    expect(secondRemove).toBeInstanceOf(DuplicatePlanTargetError);
+    expect((await plansService.getPlan(plan.id, fx.ctx)).items).toHaveLength(1);
   });
 
   it('spans the two ops — a `remove` for a target already carrying a `modify` is refused', async () => {
