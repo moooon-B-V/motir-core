@@ -170,25 +170,49 @@ export function bodyReferenceSeverities(
 // of the offending criterion is therefore the actionable half of the finding:
 // it names where the cut goes.
 //
-// ⚠️ The phrase list below is gate 14's own, VERBATIM. It is not a heuristic to
-// tune and not a place to be clever — `notes.html` #221 chose a string match
-// over a smell test in those words, and MOTIR-2164 established that the miss
-// was about what EXECUTES the check, not about how it is worded. Widening or
-// narrowing this list is a change to `plan-rules.md` first, mirrored here.
+// ⚠️ THIS IS A PARTIAL TELL, NOT THE CHECK — AND IT IS NOT TO BE WIDENED
+// (MOTIR-5426). The list below was once gate 14's own test, verbatim. The rule
+// has since replaced it with a QUESTION — *does the criterion name a moment that
+// can only arrive once THIS work item's diff is on the default branch?* — and
+// calls the phrases "examples of a yes rather than the test" (`motir-meta`
+// `prompts/plan-rules/core.md`, gate 14(c)). So the list here is a fixed set of
+// merge-word examples, and its silence is not a verdict.
+//
+// MEASURED over the `done` corpus (MOTIR-5426, 2026-09-23): of ~121 post-deploy
+// criteria on non-exempt cards (stratified sample of 246 cards + a random 160),
+// these phrases match ~13 — about ONE IN NINE — and of the times they fire, one
+// to two in three land on a criterion that is not post-deploy. The misses name
+// an OBSERVATION, not a merge: "against real runs", "its number is quoted
+// here", "the next scheduled run is green", "curl app.motir.co after deploy".
+//
+// A WIDER predicate was measured too, and it does not rescue this. A deploy-
+// surface pattern (production / live / deploy / release / a host / `origin/main`
+// / a platform) reached 8 of 10 post-deploy criteria at 20% precision; a
+// "moment-after" pattern, 5 of 10 at 33%. Their false positives are the most
+// CAREFUL cards — the ones that name the post-deploy moment in order to DISCLAIM
+// it ("no criterion here asserts anything about production", "the post-deploy
+// card that confirms …"). A lexical test cannot tell a criterion that READS the
+// moment from one that DEFERS it; the class test is a relation between the
+// criterion and this card's own diff, and it needs a reader. So: do not add a
+// seventh phrase, and do not swap in a regex. The empty advisory is the
+// documented blind spot; gate 14(c)'s question is the check.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Gate 14's ORDERING phrase list (`plan-rules.md`, *"An ACCEPTANCE CRITERION
- * must be satisfiable INSIDE the card's own scope boundary"*), verbatim. A
- * criterion carrying any of these reads on state that exists only after the
- * card's own PR has merged.
+ * A fixed set of MERGE-WORD examples of gate 14's ORDERING axis. A criterion
+ * carrying any of them very likely reads on state that exists only after the
+ * card's own PR has merged — but a criterion carrying NONE of them is not
+ * cleared (see the block above: the set reaches about one post-deploy criterion
+ * in nine).
  *
- * `the published` is the list's `the published <X>` entry — the phrase is the
- * prefix; what follows it is the artifact and varies per card.
+ * `the published` is the rule's former `the published <X>` entry — the phrase is
+ * the prefix; what follows it is the artifact and varies per card.
  *
- * ⚠️ Pinned against the prose by `tests/workItems/proseVsGraph.test.ts`, so a
- * drift between `plan-rules.md` and this constant is a RED TEST rather than a
- * silent gap in the check.
+ * ⚠️ NOT pinned to the rule's prose any more (MOTIR-5426 retired that guard
+ * deliberately): the rule stopped being a list, and the pin had already been
+ * guarding a sentence the rule no longer contains. `tests/workItems/
+ * proseVsGraph.test.ts` pins this set BY VALUE instead, and pins the measured
+ * blind spot beside it.
  */
 export const POST_MERGE_CRITERION_PHRASES = [
   'merged to main',
@@ -228,7 +252,9 @@ export interface PostMergeCriterion {
 }
 
 /**
- * The FIRST acceptance criterion that reads on post-merge state, or `null`.
+ * The FIRST acceptance criterion carrying one of the
+ * {@link POST_MERGE_CRITERION_PHRASES}, or `null`. `null` means no merge-word was
+ * found — NOT that no criterion reads on post-merge state (MOTIR-5426).
  *
  * Scope is the **acceptance-criteria span only** — {@link acceptanceCriteriaSpan}
  * — and its degrade-never-suppress contract applies here unchanged, with one
