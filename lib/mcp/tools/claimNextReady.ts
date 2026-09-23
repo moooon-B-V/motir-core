@@ -12,10 +12,15 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
+import {
+  BODY_ABOVE_FIELD_MOVE_REMEDY,
+  describeBodyAboveFieldMove,
+} from '@/lib/workItems/bodyAboveFieldMove';
 import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -86,6 +91,7 @@ function summarize(
   const subsumed = advisories.filter(isSubsumptionAdvisory);
   const oversized = advisories.filter(isSizingAdvisory);
   const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
+  const bodyAbove = advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = advisories.filter(isBlockerCountAdvisory);
   for (const a of blockerCounts) {
     lines.push(
@@ -133,6 +139,15 @@ function summarize(
         `${d.surfaceCriterionIndex} builds the surface that drawing decides. Principle #13 is ` +
         'design before code WITHIN a story, so propose the design criterion as its own card and ' +
         'leave the rest blocked_by it rather than approving your own drawing by building on it.',
+    );
+  }
+  // THE BODY-EDIT-ABOVE-FIELD-MOVE finding (MOTIR-5399). The claimer is the party
+  // MOTIR-4513's revert first reached: a card whose fields say one thing and whose
+  // body, rewritten after them, may say another. A prompt to re-read, never a stop.
+  for (const b of bodyAbove) {
+    lines.push(
+      `Advisory (NOT a blocker — the claim stands): ${describeBodyAboveFieldMove(b)}. ` +
+        BODY_ABOVE_FIELD_MOVE_REMEDY,
     );
   }
   // The REPO-STRADDLE advisory (MOTIR-2177). The claimer is about to create ONE

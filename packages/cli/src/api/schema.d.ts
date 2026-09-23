@@ -1710,6 +1710,19 @@ export interface components {
                 kind: "shape";
                 item: string;
                 severity: string;
+                bodyEdit: {
+                    at: string;
+                    fields: string[];
+                };
+                fieldMove: {
+                    at: string;
+                    fields: string[];
+                };
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
                 claim: string;
                 claimedCount: number;
                 blockerCount: number;
