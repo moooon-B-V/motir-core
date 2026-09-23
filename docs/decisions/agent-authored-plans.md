@@ -3256,19 +3256,19 @@ internal job route go through it.
 
 ### §3 — a `remove` carries its REASON
 
-- **The field.** `PlanItem.removeReason`, a nullable text column.
+- **The field.** `PlanItem.reason`, a nullable text column, and `reason` on the wire.
 - **Op restriction.** Accepted only on `op: 'remove'`. On an `add` or a `modify` it is refused by
   name (`InvalidProposalError`, naming the op).
 - **Optional on the wire.** Every current caller is unchanged, and every legacy plan has none. The AI
   planner's own REMOVE tool REQUIRES it (`session-model.md` AMENDMENT 5 §5); that is the tool's rule,
   not the store's.
-- **Bound.** Trimmed; blank is stored as `null`; at most **2000 characters** after trimming, refused
-  above that by name. That is a paragraph, which is what a reason is.
+- **Bound.** Trimmed, then **1–2000 characters**: a blank reason and one over the bound are both
+  refused by name. Omit the field to send none. 2000 characters is a paragraph, which is what a
+  reason is.
 - **Where it surfaces.** (a) The `archived` revision written at approve records it, as
   `diff: { reason }` in place of today's `diff: {}`, so the card's history says why it was archived.
   (b) The plan review shows it on the remove, on the canvas, the Show-changes row and the peek (the
   design is MOTIR-6053's, the rendering MOTIR-6055's).
-- **Correctable** through `update_plan_proposal` like any other field of the proposal it rides on.
 
 ### §4 — what does NOT change
 

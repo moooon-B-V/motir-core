@@ -155,7 +155,11 @@ import type {
   WorkItemPlanHistoryEntryDto,
   WorkItemPlanHistoryPageDto,
 } from '@/lib/dto/plans';
-import { PLAN_STATUS_DTO_VALUES, WORK_ITEM_PENDING_PLAN_STATUSES } from '@/lib/dto/plans';
+import {
+  PLAN_ITEM_REASON_MAX,
+  PLAN_STATUS_DTO_VALUES,
+  WORK_ITEM_PENDING_PLAN_STATUSES,
+} from '@/lib/dto/plans';
 import {
   toPlanDto,
   toPlanItemDto,
@@ -321,7 +325,39 @@ function assertFolderRefNotBlank(
   }
 }
 
+/**
+ * A `remove`'s REASON (AMENDMENT 18 §3, MOTIR-6052): optional, `remove`-only,
+ * and 1–{@link PLAN_ITEM_REASON_MAX} characters after trimming. `null` and an
+ * absent key both mean "no reason", on any op.
+ */
+function assertReasonLegal(p: ProposalInput): void {
+  if (p.reason === undefined || p.reason === null) return;
+  const label = proposalLabel({
+    op: p.op,
+    workItemId: p.workItemId,
+    title: p.proposedFields?.title,
+  });
+  if (p.op !== 'remove') {
+    throw new InvalidProposalError(
+      `${label}: \`reason\` belongs to a \`remove\` proposal — it says why a card is being removed. ` +
+        `Put what an \`${p.op}\` means in its own fields instead.`,
+    );
+  }
+  const reason = p.reason.trim();
+  if (reason.length === 0) {
+    throw new InvalidProposalError(
+      `${label}: \`reason\` is blank. Say why the card is being removed, or omit the key.`,
+    );
+  }
+  if (reason.length > PLAN_ITEM_REASON_MAX) {
+    throw new InvalidProposalError(
+      `${label}: \`reason\` is ${reason.length} characters; it may be at most ${PLAN_ITEM_REASON_MAX}.`,
+    );
+  }
+}
+
 function validateProposal(p: ProposalInput): void {
+  assertReasonLegal(p);
   assertFolderRefNotBlank(
     p.parentRef,
     'parentRef',
@@ -2210,7 +2246,14 @@ async function materialize(
       if (!locked) throw new PlanItemTargetMissingError(item.workItemId);
       await workItemRepository.archive(item.workItemId, tx);
       await workItemRevisionsService.recordRevision(
-        { workItemId: item.workItemId, changedById: ctx.userId, changeKind: 'archived', diff: {} },
+        {
+          workItemId: item.workItemId,
+          changedById: ctx.userId,
+          changeKind: 'archived',
+          // WHY it was archived rides on its history (AMENDMENT 18 §3, MOTIR-6052);
+          // a remove with no reason keeps the empty diff it always wrote.
+          diff: item.reason ? { reason: item.reason } : {},
+        },
         tx,
       );
     }
@@ -3756,6 +3799,7 @@ export const plansService = {
               parentRef: p.parentRef ?? null,
               blockedByRefs: p.blockedByRefs ?? [],
               baseRevision: p.baseRevision ?? null,
+              reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
               ...(p.op === 'add' && p.proposedFields
                 ? { proposedFields: p.proposedFields as unknown as Prisma.InputJsonValue }
                 : {}),

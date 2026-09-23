@@ -553,6 +553,10 @@ export const PLAN_ITEM_PATCH_KEYS = [
 
 export type PlanItemPatchKey = (typeof PLAN_ITEM_PATCH_KEYS)[number];
 
+/** A `remove` proposal's reason, after trimming, is 1–this many characters
+ *  (`agent-authored-plans.md` AMENDMENT 18 §3, MOTIR-6052). */
+export const PLAN_ITEM_REASON_MAX = 2000;
+
 /**
  * The COMPILE-TIME half of the drift guard: {@link PlanItemPatch}'s keys and
  * {@link PLAN_ITEM_PATCH_KEYS} are the same set, in both directions.
@@ -581,6 +585,8 @@ export interface PlanItemDto {
   parentRef: string | null;
   blockedByRefs: string[];
   baseRevision: string | null;
+  /** `remove` only: why the card is removed (AMENDMENT 18 §3); null otherwise. */
+  reason: string | null;
   createdAt: string;
 }
 
@@ -713,6 +719,12 @@ export interface ProposalInput {
   blockedByRefs?: string[];
   /** `modify` / `remove`: the target's revision the change was computed against. */
   baseRevision?: string | null;
+  /**
+   * `remove` ONLY: why the card is being removed (AMENDMENT 18 §3, MOTIR-6052).
+   * Optional; trimmed, then 1–2000 characters. Refused by name on an `add` or a
+   * `modify`. Written into the archived revision at approve.
+   */
+  reason?: string | null;
 }
 
 /**

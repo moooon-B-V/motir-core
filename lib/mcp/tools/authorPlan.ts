@@ -17,6 +17,7 @@ import type {
   ProposedTodoInput,
   CorrectPlanBriefKey,
 } from '@/lib/dto/plans';
+import { PLAN_ITEM_REASON_MAX } from '@/lib/dto/plans';
 import {
   TODO_COMMAND_MAX_LENGTH,
   TODO_NOTES_MAX_LENGTH,
@@ -513,6 +514,15 @@ const proposalSchema = z.object({
     .string()
     .optional()
     .describe('`modify` / `remove` only: the target revision the change was computed against.'),
+  reason: z
+    .string()
+    .optional()
+    .describe(
+      '`remove` ONLY: WHY the card is being removed — shown to the reviewer beside the removal ' +
+        'and written into the archived card’s history at approve. Trimmed, then 1–' +
+        `${PLAN_ITEM_REASON_MAX} characters. Refused on an \`add\` or a \`modify\`, and refused ` +
+        'when blank; omit it to send none.',
+    ),
 });
 
 /**
@@ -1424,6 +1434,7 @@ export async function runAddPlanItems(
     parentRef: p.parentRef ?? null,
     blockedByRefs: p.blockedByRefs ?? [],
     baseRevision: p.baseRevision ?? null,
+    ...(p.reason !== undefined ? { reason: p.reason } : {}),
   }));
 
   // KEY → ID, before the service sees them (MOTIR-3576). The plan substrate's

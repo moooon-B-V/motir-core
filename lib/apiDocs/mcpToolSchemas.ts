@@ -390,6 +390,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               description:
                 '`modify` / `remove` only: the target revision the change was computed against.',
             },
+            reason: {
+              type: 'string',
+              description:
+                '`remove` ONLY: WHY the card is being removed — shown to the reviewer beside the removal and written into the archived card’s history at approve. Trimmed, then 1–2000 characters. Refused on an `add` or a `modify`, and refused when blank; omit it to send none.',
+            },
           },
           required: ['op'],
           additionalProperties: false,

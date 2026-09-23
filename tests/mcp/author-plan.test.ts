@@ -1279,6 +1279,30 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
     await client.close();
   });
 
+  it('persists a `remove`’s `reason`, and refuses one on a `modify` (AMENDMENT 18 §3, MOTIR-6052)', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await createTestWorkItem(fx, { kind: 'task', title: 'Obsolete' });
+    const other = await createTestWorkItem(fx, { kind: 'task', title: 'Other' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const removed = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'remove', workItemId: card.id, reason: 'Superseded.' }],
+    });
+    expect(removed.isError).toBeFalsy();
+    const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: ids(removed)[0]! } });
+    expect(row.reason).toBe('Superseded.');
+
+    const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: other.id, patch: { title: 'X' }, reason: 'why' }],
+    });
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.content)).toContain('reason');
+    await client.close();
+  });
+
   it('is case-INSENSITIVE, exactly as `get_work_item` is', async () => {
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
