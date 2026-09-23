@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { customFieldFilterFieldId, type FilterAst, type FilterCondition } from '@/lib/filters/ast';
@@ -60,6 +60,11 @@ function isoDate(daysOffset: number): string {
 }
 function dueDate(daysOffset: number): Date {
   return new Date(Date.now() + daysOffset * 86_400_000);
+}
+
+/** The UTC calendar day shared by the test fixture and relative-date predicates. */
+async function utcToday(): Promise<string> {
+  return new Date().toISOString().slice(0, 10);
 }
 
 interface Seeded {
@@ -499,6 +504,127 @@ function registryCells(): Set<string> {
   return cells;
 }
 
+async function collectMatrixFailures(seeded: Seeded): Promise<string[]> {
+  const expand = (handles: Handle[]) => handles.map((handle) => seeded.ids[handle]).sort();
+  const failures: string[] = [];
+
+  for (const matrixCase of CASES) {
+    const condition = matrixCase.build(seeded);
+    const want = expand(matrixCase.expected);
+    for (const combinator of ['and', 'or'] as const) {
+      const got = await listIdentifiers(seeded, { combinator, conditions: [condition] });
+      if (JSON.stringify(got) !== JSON.stringify(want)) {
+        failures.push(
+          `${matrixCase.cell} [${combinator}]: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`,
+        );
+      }
+    }
+  }
+
+  return failures;
+}
+
+interface UtcDayAttempt {
+  seededOn: string;
+  finishedOn: string;
+}
+
+/**
+ * Run a date-sensitive matrix inside one database UTC day. A rollover makes
+ * the fixture's "today" rows stale while the matrix is still walking its
+ * cells, so re-seed and retry exactly once. A stable-day mismatch is returned
+ * immediately, and a mismatch after the rollover retry keeps the real cell
+ * failures while also reporting both day ranges.
+ */
+async function runWithUtcDayRolloverRetry<T>({
+  utcDay,
+  seed,
+  reset,
+  run,
+}: {
+  utcDay: () => Promise<string>;
+  seed: () => Promise<T>;
+  reset: () => Promise<void>;
+  run: (seeded: T) => Promise<string[]>;
+}): Promise<string[]> {
+  const attempts: UtcDayAttempt[] = [];
+
+  const seededOn = await utcDay();
+  const firstFailures = await run(await seed());
+  const finishedOn = await utcDay();
+  attempts.push({ seededOn, finishedOn });
+  if (seededOn === finishedOn) return firstFailures;
+
+  await reset();
+  const retrySeededOn = await utcDay();
+  const retryFailures = await run(await seed());
+  const retryFinishedOn = await utcDay();
+  attempts.push({ seededOn: retrySeededOn, finishedOn: retryFinishedOn });
+
+  if (retryFailures.length === 0 && retrySeededOn === retryFinishedOn) return [];
+
+  const ranges = attempts
+    .map((attempt, index) => `attempt ${index + 1}: ${attempt.seededOn} -> ${attempt.finishedOn}`)
+    .join('; ');
+  const reason =
+    retrySeededOn === retryFinishedOn
+      ? 'matrix still failed after the UTC-day rollover retry'
+      : 'UTC day rolled over on both matrix attempts';
+  return [`${reason} (${ranges})`, ...retryFailures];
+}
+
+describe('UTC-day rollover retry', () => {
+  it('re-seeds and retries once when the first matrix attempt crosses midnight', async () => {
+    const days = ['2026-09-22', '2026-09-23', '2026-09-23', '2026-09-23'];
+    const utcDay = vi.fn(async () => days.shift()!);
+    const seed = vi.fn(async () => ({ attempt: seed.mock.calls.length }));
+    const reset = vi.fn(async () => undefined);
+    const run = vi
+      .fn<(seeded: { attempt: number }) => Promise<string[]>>()
+      .mockResolvedValueOnce(['created|in_next_days [and]: stale UTC day'])
+      .mockResolvedValueOnce([]);
+
+    await expect(runWithUtcDayRolloverRetry({ utcDay, seed, reset, run })).resolves.toEqual([]);
+    expect(seed).toHaveBeenCalledTimes(2);
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a genuine mismatch while the UTC day is stable', async () => {
+    const utcDay = vi.fn(async () => '2026-09-23');
+    const seed = vi.fn(async () => ({}));
+    const reset = vi.fn(async () => undefined);
+    const run = vi.fn(async () => ['kind|is_any_of [and]: genuinely wrong']);
+
+    await expect(runWithUtcDayRolloverRetry({ utcDay, seed, reset, run })).resolves.toEqual([
+      'kind|is_any_of [and]: genuinely wrong',
+    ]);
+    expect(seed).toHaveBeenCalledTimes(1);
+    expect(reset).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports both UTC-day ranges when the retry still has a genuine mismatch', async () => {
+    const days = ['2026-09-22', '2026-09-23', '2026-09-23', '2026-09-23'];
+    const utcDay = vi.fn(async () => days.shift()!);
+    const mismatch = 'kind|is_any_of [and]: genuinely wrong';
+    const run = vi.fn(async () => [mismatch]);
+
+    const failures = await runWithUtcDayRolloverRetry({
+      utcDay,
+      seed: async () => ({}),
+      reset: async () => undefined,
+      run,
+    });
+
+    expect(failures).toEqual([
+      'matrix still failed after the UTC-day rollover retry (attempt 1: 2026-09-22 -> 2026-09-23; attempt 2: 2026-09-23 -> 2026-09-23)',
+      mismatch,
+    ]);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('the filter-builder matrix covers the WHOLE registry (totality guard)', () => {
   it('every registry (field × operator) cell has exactly one matrix case', () => {
     const registry = registryCells();
@@ -519,22 +645,12 @@ describe('the filter-builder matrix covers the WHOLE registry (totality guard)',
 
 describe('every registry cell compiles to the right match set, under both combinators', () => {
   it('runs the full matrix as `and` and as `or` (a one-row filter is combinator-invariant)', async () => {
-    const seeded = await seedMatrix();
-    const expand = (handles: Handle[]) => handles.map((h) => seeded.ids[h]).sort();
-
-    const failures: string[] = [];
-    for (const matrixCase of CASES) {
-      const condition = matrixCase.build(seeded);
-      const want = expand(matrixCase.expected);
-      for (const combinator of ['and', 'or'] as const) {
-        const got = await listIdentifiers(seeded, { combinator, conditions: [condition] });
-        if (JSON.stringify(got) !== JSON.stringify(want)) {
-          failures.push(
-            `${matrixCase.cell} [${combinator}]: expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`,
-          );
-        }
-      }
-    }
+    const failures = await runWithUtcDayRolloverRetry({
+      utcDay: utcToday,
+      seed: seedMatrix,
+      reset: truncateAll,
+      run: collectMatrixFailures,
+    });
     expect(failures, `matrix cells with the wrong match set:\n${failures.join('\n')}`).toEqual([]);
   });
 });
