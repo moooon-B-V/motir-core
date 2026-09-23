@@ -4771,14 +4771,45 @@ become the handler's `…Within(tx)` effects.
 
 #### 11.9 The BACKFILL
 
-Every plan already `planned`, with at least one proposal and no `awaiting` gate,
+> **⚠️ AMENDED 2026-09-23 (MOTIR-6039), by the requester's decision: the backfill
+> RUNS AS A DATA MIGRATION, WITH THE DEPLOY.** The original text below is struck.
+> Any gap between the deploy and a manual run leaves every already-`planned` plan
+> missing from To approve and answering _not decidable yet_ at every approve door
+> (11.8). The reasons given for "never through raw SQL" do not survive a check:
+>
+> - **routing** (11.6) is `COALESCE(plan.created_by_id, <the workspace's earliest
+owner membership>)`, exactly `resolvePlanGateRoute`;
+> - **uniqueness** (11.2) is `NOT EXISTS (awaiting gate)`, backed by
+>   `approval_gate_one_awaiting_per_cardless_subject`;
+> - the **digest** (11.3) cannot be reproduced in SQL, and it does not need to be.
+>   The decide door stamps a `plan_approval` gate against the LIVE digest
+>   (`stampsLiveVersion`) and records the version at decision time, so a
+>   backfilled row carries a NULL `subject_version`.
+>
+> **What ships:**
+>
+> - `20260923200200_backfill_plan_approval_gates`: one `INSERT … SELECT` that
+>   raises an `awaiting`, card-less gate for every `planned` plan with at least
+>   one proposal and none awaiting. It is idempotent and cross-tenant (it runs as
+>   the migration owner).
+> - `pnpm db:backfill:plan-gates` stays as the tool that VERIFIES and REPAIRS.
+>   It goes through the shipped raise, one transaction per plan, with a
+>   `--dry-run`. After the deploy its dry-run reports 0 to raise.
+>
+> **The accepted cost** is that the population and routing rules exist a second
+> time, in SQL, frozen at this deploy. A migration runs once, so it only has to
+> match the rules as they stand at that deploy. A test proves the two copies agree
+> by checking that the script's dry-run predicts exactly the migration's rows.
+> **No operator step is owed after the deploy.**
+
+~~Every plan already `planned`, with at least one proposal and no `awaiting` gate,
 gets one **through the shipped raise** (MOTIR-6036's function, the same one
 `markPlanned` calls), never through raw SQL, so the routing (11.6), the index
 (11.2) and `routedToId` are exactly what a live raise writes. Idempotent by the
 index. One transaction per plan, so one failure does not roll back the rest. A
 `--dry-run` that reports what the real run would raise and routes nothing. The
 script is MOTIR-6039's. **Running it on production is NOT this story's**: that is
-an operator step after the deploy, owed as its own `manual` card.
+an operator step after the deploy, owed as its own `manual` card.~~
 
 #### 11.10 §10's plan row, and the KIND table's row
 
@@ -4805,7 +4836,7 @@ The row's and the surface's words and layout (MOTIR-6033). The hand-off message
 before generation (MOTIR-6033 draws it; MOTIR-6037 builds it). Refusing a manual
 move of a plan's cards out of Planning, which is Story MOTIR-6017, the consumer of
 this gate. Notifications. Where a plans row opens (Story MOTIR-6043, which
-consumes 11.5b's fallback). Running the backfill on production (11.9).
+consumes 11.5b's fallback). ~~Running the backfill on production (11.9).~~ The backfill now runs with the deploy (11.9, amended).
 
 ---
 

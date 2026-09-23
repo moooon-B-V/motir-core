@@ -161,7 +161,9 @@ cancelled elsewhere stops asking. Its row leaves To approve, and the plan page
 says why.
 
 Plans that were already waiting for approval before this shipped were given their
-question once, by `pnpm db:backfill:plan-gates` (the same raise a new plan gets).
+question once, when it was deployed. `pnpm db:backfill:plan-gates --dry-run`
+confirms none was missed, and the same command without `--dry-run` repairs any
+that were.
 
 ## What you see
 

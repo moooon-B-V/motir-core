@@ -1,5 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { db } from '@/lib/db';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { planGateBackfillService } from '@/lib/services/planGateBackfillService';
 import { planGateService } from '@/lib/services/planGateService';
 import { plansService } from '@/lib/services/plansService';
@@ -190,6 +193,71 @@ describe('the population — `planned`, ≥1 proposal, no awaiting gate', () => 
     expect(again.raised).toEqual([]);
     expect(again).toMatchObject({ alreadyAwaiting: 5, noProposals: 1, failed: [] });
     expect(await adminDb.approvalGate.findMany({ orderBy: { id: 'asc' } })).toEqual(before);
+  });
+});
+
+describe('the MIGRATION raises what the shipped raise would (MOTIR-6039, §11.9 amended)', () => {
+  // The deploy runs `20260923200200_backfill_plan_approval_gates`: plain SQL carrying a
+  // second, frozen copy of the population and routing rules. This proves the two copies
+  // agree — the script's dry-run (which goes through `planGateService`) predicts EXACTLY
+  // the rows the migration inserts, and afterwards predicts nothing.
+  const migrationSql = readFileSync(
+    path.join(
+      process.cwd(),
+      'prisma/migrations/20260923200200_backfill_plan_approval_gates/migration.sql',
+    ),
+    'utf8',
+  );
+
+  it('inserts one card-less awaiting gate per plan the dry-run predicts, routed the same', async () => {
+    const p = await seedPopulation();
+    const [askedGate] = await awaitingOf(p.asked);
+    const dry = await planGateBackfillService.backfill({ dryRun: true });
+
+    await adminDb.$executeRawUnsafe(migrationSql);
+
+    const inserted = await adminDb.approvalGate.findMany({
+      where: { kind: 'plan_approval', state: 'awaiting', NOT: { id: askedGate!.id } },
+    });
+    const key = (r: { planId: string; routedToId: string | null }) => `${r.planId}:${r.routedToId}`;
+    expect(
+      inserted.map((g) => key({ planId: g.subjectId, routedToId: g.routedToId })).sort(),
+    ).toEqual(dry.raised.map(key).sort());
+    expect(inserted.map((g) => g.subjectId).sort()).toEqual(
+      [p.ungated, p.cadence, p.orphaned, p.elsewhere].sort(),
+    );
+    for (const g of inserted) {
+      expect(g).toMatchObject({ workItemId: null, subjectVersion: null, decidedById: null });
+    }
+    // The already-asked plan keeps its one gate; nothing else gained one.
+    expect(await awaitingOf(p.asked)).toEqual([askedGate]);
+    for (const id of [p.empty, p.stale, p.approved, p.declined, p.generating]) {
+      expect(await adminDb.approvalGate.count({ where: { subjectId: id } })).toBe(0);
+    }
+
+    // After the deploy, the verification tool finds nothing left to raise.
+    expect((await planGateBackfillService.backfill({ dryRun: true })).raised).toEqual([]);
+  });
+
+  it('is idempotent — applying its SQL a second time inserts nothing', async () => {
+    await seedPopulation();
+    await adminDb.$executeRawUnsafe(migrationSql);
+    const before = await adminDb.approvalGate.findMany({ orderBy: { id: 'asc' } });
+    await adminDb.$executeRawUnsafe(migrationSql);
+    expect(await adminDb.approvalGate.findMany({ orderBy: { id: 'asc' } })).toEqual(before);
+  });
+
+  it('a migration-raised gate (no raise-time digest) is decided through the door like any other', async () => {
+    const p = await seedPopulation();
+    await adminDb.$executeRawUnsafe(migrationSql);
+    const read = await approvalGatesService.getForPlan({ planId: p.ungated }, fx.ctx);
+    expect(read.gate?.state).toBe('awaiting');
+    const decided = await approvalGatesService.decide(
+      { gateId: read.gate!.id, decision: 'decline', stamp: read.stamp!, source: 'api' },
+      fx.ctx,
+    );
+    expect(decided.gate.state).toBe('declined');
+    expect(decided.gate.subjectVersion).toMatch(/^plan\.v1\.[0-9a-f]{64}$/);
   });
 });
 
