@@ -231,7 +231,11 @@ import type {
   WorkItemRepositoryDto,
   WorkItemPlacementDto,
 } from '@/lib/dto/workItems';
-import { buildProseVsGraphAdvisories } from '@/lib/services/proseGraphAdvisoryService';
+import {
+  buildProseVsGraphAdvisories,
+  type ProseAdvisorySubject,
+} from '@/lib/services/proseGraphAdvisoryService';
+import { buildPathReferenceAdvisories } from '@/lib/services/pathReferenceAdvisoryService';
 import { containerCoverageFinding } from '@/lib/workItems/containerCoverage';
 import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
@@ -7604,6 +7608,8 @@ async function computeOwnBlockerReadiness(
  * not-done members — a SEPARATE, never-blocking channel, computed by
  * `buildProseVsGraphAdvisories`. `valid` and `blockers` are byte-identical
  * whether or not advisories are emitted; nothing below reads `advisories`.
+ * The container-COVERAGE (MOTIR-5362) and PATH-REFERENCE (MOTIR-5424) families
+ * ride the same channel, and are validate-only.
  */
 async function computeWorkItemValidity(
   root: WorkItemDto,
@@ -7663,13 +7669,32 @@ async function computeWorkItemValidity(
   // Deterministic order (by gated item, then blocker) for a stable wire shape.
   blockers.sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
 
-  const prose = await computeSubtreeProseAdvisories(root, notDone, membersById, edges, ctx);
+  const { advisories: prose, subjects } = await computeSubtreeProseAdvisories(
+    root,
+    notDone,
+    membersById,
+    edges,
+    ctx,
+  );
   const coverage = await computeSubtreeCoverageAdvisories(notDone, members, ctx);
+  // The PATH-REFERENCE family (MOTIR-5424), off the SAME scanned bodies the prose
+  // family read — `subjects` is `notDone` mapped in order, so the two zip.
+  const pathReferences = await buildPathReferenceAdvisories(
+    notDone.map((member, i) => ({
+      id: member.id,
+      identifier: member.identifier,
+      descriptionMd: subjects[i]?.descriptionMd ?? null,
+      targetRepos: subjects[i]?.targetRepos ?? [],
+    })),
+    root.projectId,
+    terminalForProject,
+    ctx,
+  );
   return {
     key: root.identifier,
     valid: blockers.length === 0,
     blockers,
-    advisories: [...prose, ...coverage],
+    advisories: [...prose, ...coverage, ...pathReferences],
   };
 }
 
@@ -7776,7 +7801,7 @@ async function computeSubtreeProseAdvisories(
   membersById: Map<string, { id: string; identifier: string; parentId: string | null }>,
   edges: Array<{ fromId: string; blockerId: string }>,
   ctx: ServiceContext,
-): Promise<WorkItemProseAdvisoryDto[]> {
+): Promise<{ advisories: WorkItemProseAdvisoryDto[]; subjects: ProseAdvisorySubject[] }> {
   // The root's OWN ancestors (above the subtree) — a member naming the epic its
   // story hangs under is naming an ancestor too, and the subtree walk alone
   // cannot see those.
@@ -7871,5 +7896,5 @@ async function computeSubtreeProseAdvisories(
     };
   });
 
-  return buildProseVsGraphAdvisories(subjects, ctx);
+  return { advisories: await buildProseVsGraphAdvisories(subjects, ctx), subjects };
 }
