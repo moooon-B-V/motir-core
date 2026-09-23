@@ -131,6 +131,12 @@ function frameGateFor(
           // The PRIMARY gate's stamp — it covers the pull requests beneath it too.
           stamp: read.stamp,
           members: r.mergeGate.members,
+          // ⚠️ AND THE VERSION THOSE MEMBERS ARE COUNTED OUT OF (Bug MOTIR-6080). No primary's
+          // own version is a delivery set — a design's is its published commit, a decision's
+          // its document blob, an acceptance's its recording — so the frame names what one
+          // press merges, and lands each member's outcome on its row, only through the merge
+          // gate's. A card with no merge question hands none, and the frame reads its own.
+          mergeSubjectVersion: r.mergeGate.gate?.subjectVersion,
           // The approval a re-asked merge gate replaced (MOTIR-5863) — the merge read's,
           // like `members`, whichever gate leads the frame.
           earlierApproval: r.mergeGate.earlierApproval,
@@ -151,12 +157,9 @@ function frameGateFor(
   }
   // THE STORY RUN'S PRIMARY (Story MOTIR-4949 · Subtask MOTIR-5790): the acceptance gate
   // is what the frame names and the press addresses while it awaits — its stamp covers
-  // the pull requests beneath it, and the MEMBERS are the merge gate's. It also carries
-  // `mergeSubjectVersion`, because the sentence names what the press merges and that is
-  // the merge gate's subject, never the recording's.
+  // the pull requests beneath it, and the MEMBERS (and their version) are the merge gate's.
   if (acceptanceLeads && r.mergeGate.gate && r.acceptanceGate.gate) {
-    const read = primary(r.acceptanceGate);
-    return read ? { ...read, mergeSubjectVersion: r.mergeGate.gate.subjectVersion } : null;
+    return primary(r.acceptanceGate);
   }
   if (r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate) return primary(r.designGate);
   if (merge?.gate.state === 'superseded' && !anyPullRequestOpen) return null;
