@@ -1,4 +1,5 @@
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
+import { touchesBodyOrWatchedField } from '@/lib/workItems/bodyAboveFieldMove';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { TEMP_REF_PREFIX, plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -238,6 +239,14 @@ async function projectedProseAdvisories(
       hasDesignBlocker: [...(proj.blockedBy.get(node.id) ?? [])].some(
         (blockerId) => blockerType(blockerId) === 'design',
       ),
+      // The BODY-EDIT-ABOVE-FIELD-MOVE check (MOTIR-5399) reads the STORED trail,
+      // and a `modify` that rewrites a body or moves a watched field lands a newer
+      // write on approve — so for that card the stored finding describes a row the
+      // plan is about to change, and is not reported.
+      trailSuperseded: touchesBodyOrWatchedField(
+        Object.keys(proj.patchByWorkItemId.get(node.id) ?? {}),
+      ),
+      blockerCount: proj.blockedBy.get(node.id)?.size ?? 0,
     };
   });
 

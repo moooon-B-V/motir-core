@@ -656,9 +656,29 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     //
     // Re-pinned for MOTIR-5588: the over-gate sizing advisory's points arm moved
     // from 13+ to 8+ story points. Summary UNCHANGED — it names no threshold.
+    //
+    // Re-pinned for MOTIR-5399's FIFTH shape severity (`body-edit-above-field-move`,
+    // the first read off a card's revision trail). Summary UNCHANGED, as the
+    // MOTIR-3178 paragraph predicted a new member would be.
+    //
+    // Re-pinned for MOTIR-5428's counted-own-blockers shape severity. Summary
+    // UNCHANGED: like the preceding additions, it grows only the advisory
+    // channel and never changes the finishability verdict this line describes.
+    //
+    // Re-pinned for MOTIR-5424's new advisory FAMILY, `path-reference`
+    // (`likely-missing-path-edge` — a criterion naming a not-yet-existing file
+    // another open card also names, with no edge between them). Summary
+    // UNCHANGED, for the reason the coverage re-pin gave: the advisory channel,
+    // never a gate, so the verdict line stays true.
+    //
+    // Re-pinned for MOTIR-5426: the `likely-ordering-violation` line was
+    // corrected in place to say it is a PARTIAL merge-word tell whose absence
+    // clears nothing (measured at about one post-deploy criterion in nine).
+    // Summary UNCHANGED: the correction is on the advisory channel, and this line
+    // describes the verdict.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '06549ce0bbd1',
+    descriptionFingerprint: '26751030f342',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

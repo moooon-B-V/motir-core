@@ -1,13 +1,16 @@
 import type { DispatchWorkflowMode } from '@/lib/dto/dispatch';
 import { isAgentDecisionItem, isManualReadyItem } from '@/lib/dto/ready';
 import {
+  isBlockerCountAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
+import { describeBodyAboveFieldMove } from '@/lib/workItems/bodyAboveFieldMove';
 import type {
   ExecutorDto,
   WorkItemKindDto,
@@ -828,7 +831,22 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   const subsumed = advisories.filter(isSubsumptionAdvisory);
   const oversized = advisories.filter(isSizingAdvisory);
   const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
+  const bodyAbove = advisories.filter(isBodyAboveFieldMoveAdvisory);
+  const blockerCounts = advisories.filter(isBlockerCountAdvisory);
   const lines: string[] = [];
+
+  if (blockerCounts.length > 0) {
+    lines.push(
+      '',
+      "A COUNTED CLAIM ABOUT THIS CARD'S BLOCKERS DISAGREES WITH THE GRAPH:",
+      ...blockerCounts.map(
+        (a) =>
+          `    - "${a.claim}" says ${a.claimedCount}; the graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}.`,
+      ),
+      '  Check which side is stale before relying on the prose. Update the card body when the',
+      '  graph is authoritative; wire the missing edge when the dependency is real.',
+    );
+  }
 
   if (references.length > 0) {
     lines.push(
@@ -946,6 +964,26 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
       '  criterion as its OWN type: design card, leave the rest blocked_by it, and STOP. Do not',
       '  draw and build in one pass. If the composition is genuinely right — the asset is a small',
       '  amendment nobody needs to approve separately — say so on the record and proceed.',
+    );
+  }
+
+  // THE BODY-EDIT-ABOVE-FIELD-MOVE finding (MOTIR-5399). Addressed to the agent
+  // because the agent is the first party that can notice: MOTIR-4513's fields said
+  // `content` and its body, rewritten after them, said `decision`, and every
+  // channel above reported the card healthy until the run built on it and stopped.
+  // A prompt to re-read — the trail cannot tell a revert from a matching rewrite —
+  // so it never tells the agent to stop, only where to look.
+  if (bodyAbove.length > 0) {
+    lines.push(
+      '',
+      "THIS CARD'S BODY WAS WRITTEN AFTER ITS FIELDS LAST MOVED — read both before you start:",
+      ...bodyAbove.map((a) => `    - ${describeBodyAboveFieldMove(a)}.`),
+      '  Re-read the description and explanation against the fields that write moved (the',
+      '  card header above shows their current values). A body rewritten to MATCH the move is',
+      '  the ordinary correction: proceed. If the body instead describes the card as it was',
+      "  BEFORE the move — another type, another executor, another repo — the card's fields and",
+      '  prose disagree: build to the FIELDS, which are what dispatch, review and the ready set',
+      '  read, and name in your report the sentences of the body that contradict them.',
     );
   }
 

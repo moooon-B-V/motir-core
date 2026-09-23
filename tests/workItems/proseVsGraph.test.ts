@@ -9,6 +9,7 @@ import {
   bodyFilePaths,
   bodyReferenceSeverities,
   criterionRepoPaths,
+  firstBlockerCountClaim,
   firstPostMergeCriterion,
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
@@ -27,6 +28,44 @@ import {
 // reference from `advisory` to `likely-missing-edge`. No DB, no IO.
 
 const token = (label: string, id: string) => `[${label}](motir:${id})`;
+
+describe('firstBlockerCountClaim — counted own-blocker prose', () => {
+  it('reads the measured plural-sibling grammar and preserves the checked claim', () => {
+    expect(
+      firstBlockerCountClaim(
+        'Context: all **four** member packs, as merged by the siblings this card is `blocked_by`.',
+      ),
+    ).toEqual({
+      claim: 'all four member packs, as merged by the siblings this card is blocked_by',
+      claimedCount: 4,
+    });
+    expect(
+      firstBlockerCountClaim('The three siblings it is blocked_by provide the fixtures.'),
+    ).toEqual({ claim: 'three siblings it is blocked_by', claimedCount: 3 });
+    expect(firstBlockerCountClaim('Both siblings this card is blocked_by are done first.')).toEqual(
+      {
+        claim: 'Both siblings this card is blocked_by',
+        claimedCount: 2,
+      },
+    );
+  });
+
+  it('does not consume quoted records, singular siblings, vague quantifiers, or remote numbers', () => {
+    expect(
+      firstBlockerCountClaim('The record says “four siblings this card is blocked_by”.'),
+    ).toBeNull();
+    expect(firstBlockerCountClaim('MOTIR-4160 is the sibling this card is blocked_by.')).toBeNull();
+    expect(
+      firstBlockerCountClaim('MOTIR-4160 records the siblings this card is blocked_by.'),
+    ).toBeNull();
+    expect(firstBlockerCountClaim('Every sibling this card is blocked_by is named.')).toBeNull();
+    expect(
+      firstBlockerCountClaim(
+        'Five actions are complete before many deliberately separating context words place the siblings this card is blocked_by here.',
+      ),
+    ).toBeNull();
+  });
+});
 
 describe('acceptanceCriteriaSpan — the section heuristic', () => {
   it('spans from the AC heading to the next heading of the SAME level', () => {

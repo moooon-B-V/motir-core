@@ -871,6 +871,12 @@ export default defineConfig({
         // reference/severity extractor and the service that resolves + gates it.
         'lib/workItems/proseVsGraph.ts',
         'lib/services/proseGraphAdvisoryService.ts',
+        // Its PATH arm (MOTIR-5424) — the pure path extraction + resolution
+        // verdict, and the service that finds the second namer, the ordering and
+        // asks the host. Measured first: 98.5 / 97.9 and 97.8 / 93.8 (stmts /
+        // branches) on this branch.
+        'lib/workItems/pathReference.ts',
+        'lib/services/pathReferenceAdvisoryService.ts',
         // The repository SET's per-repo DELIVERY classifier and its one shared
         // field component (Story MOTIR-2725 · MOTIR-2417). Gated on their own
         // because they are the seam the completion gate and BOTH surfaces read:
@@ -3896,6 +3902,8 @@ export default defineConfig({
         // inside workItemsService's blended number.
         'lib/workItems/proseVsGraph.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/proseGraphAdvisoryService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workItems/pathReference.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/pathReferenceAdvisoryService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workItems/repoDelivery.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRepoRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ai/projectRepoContext.ts': { branches: 90, functions: 90, lines: 90 },

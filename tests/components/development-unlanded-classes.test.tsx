@@ -293,6 +293,18 @@ describe('the row draws the class, and offers only what that class allows', () =
     expect(rowButton(pra.outcome.retry)).toBeTruthy();
   });
 
+  // Bug MOTIR-6116: a conflict FIXED BY A PUSH. The fresh gate names the new head, and the
+  // members read no longer carries an exit left at an older one — so this is the member
+  // it hands the frame. Nothing about these commits failed to land.
+  it('a conflict a push fixed: no pill, no conflict line, not a re-ask — the gate’s own Approve and merge', () => {
+    renderBlock({ members: members({ exitAtApprovedHead: false }) });
+
+    expect(within(gatewayRow()).queryByText(pra.outcome.cannotLand)).toBeNull();
+    expect(screen.queryByText(whole(plain(pra.exit.cannotLand)))).toBeNull();
+    expect(screen.queryByText(/Asked again after the merge queue/)).toBeNull();
+    expect(screen.getByRole('button', { name: pra.verb.approveAndMerge })).toBeTruthy();
+  });
+
   it('the row’s press asks FIRST — one confirm, and it says the press is a NEW approval', () => {
     const retryMember = vi.fn().mockResolvedValue({ ok: true, member: { outcome: 'enqueued' } });
     renderBlock(

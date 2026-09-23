@@ -19,6 +19,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { persistedRowOutcome } from '@/components/github/MergeOutcomeSlot';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -566,6 +567,82 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
         retryDecidesGateId: approval.id,
       })),
     );
+  });
+
+  // ⚠️ AN EXIT IS ABOUT THE COMMITS IT LEFT AT (Bug MOTIR-6116). A conflict ejects the
+  // pull request at one head; the fix is a PUSH, CI goes green and a fresh gate is raised
+  // over the NEW head. The exit repository hands back the pull request's LATEST exit with
+  // no head filter, so this read has to apply the head rule itself — the one every other
+  // reader applies through `queueExitStandsAtHead`.
+  const OLD_HEAD_WEB = '2f1efb483296aaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const conflictExit = (pullRequestId: string, headSha: string) =>
+    adminDb.githubPullRequestQueueExit.create({
+      data: {
+        pullRequestId,
+        deliveryId: `guid-6116-${(seq += 1)}`,
+        rawReason: 'MERGE_CONFLICT',
+        disposition: 'failure',
+        headSha,
+        exitedAt: new Date('2026-09-23T09:33:00.000Z'),
+        requeuedAt: null,
+      },
+    });
+  const webMember = async (item: { id: string }, approvalGateId: string, version: string) => {
+    const members = await pullRequestMergeService.listApprovalMembers(
+      { workItemId: item.id, approvalGateId },
+      fx.ctx,
+    );
+    return members.find((member) => member.subjectVersion === version)!;
+  };
+
+  it('a conflict exit at an OLDER head than the awaiting gate names does not stand — no exit, nothing that cannot land', async () => {
+    const { item, approval, web } = await pressable();
+    await conflictExit(web.prId, OLD_HEAD_WEB);
+
+    const member = await webMember(item, approval.id, web.version);
+    expect(member.exitAtApprovedHead).toBe(false);
+    expect(persistedRowOutcome(member)).not.toBe('cannotLand');
+    // Not about these commits at all, so the row draws nothing of it: the re-asked
+    // gate's own Approve and merge is the row's action.
+    expect(member.exit).toBeNull();
+    expect(persistedRowOutcome(member)).toBeNull();
+    expect(member.requeueable).toBe(false);
+  });
+
+  it('a conflict exit AT the gate’s own head still stands — the row cannot land', async () => {
+    const { item, approval, web } = await pressable();
+    await conflictExit(web.prId, HEAD_WEB);
+
+    const member = await webMember(item, approval.id, web.version);
+    expect(member.exit).toMatchObject({ rawReason: 'MERGE_CONFLICT', headSha: HEAD_WEB });
+    expect(member.exitAtApprovedHead).toBe(true);
+    expect(member.requeueable).toBe(false);
+    expect(persistedRowOutcome(member)).toBe('cannotLand');
+  });
+
+  it('an exit at the APPROVED head, then a push, still reads as new commits', async () => {
+    const { item, approval, web } = await pressable();
+    await adminDb.approvalGate.update({
+      where: { id: approval.id },
+      data: { state: 'approved', decidedAt: new Date('2026-09-23T09:07:00.000Z') },
+    });
+    await conflictExit(web.prId, HEAD_WEB);
+    // The push: a newer head the pull request's checks now run at.
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: web.prId,
+        commitSha: '183b79afd000000000000000000000000000000a',
+        checkName: 'Vitest',
+        conclusion: 'success',
+        createdAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    const member = await webMember(item, approval.id, web.version);
+    expect(member.exit).toMatchObject({ headSha: HEAD_WEB });
+    expect(member.exitAtApprovedHead).toBe(false);
+    expect(member.requeueable).toBe(false);
+    expect(persistedRowOutcome(member)).toBe('newCommits');
   });
 });
 

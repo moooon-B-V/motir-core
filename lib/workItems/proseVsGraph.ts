@@ -153,6 +153,85 @@ export function bodyReferenceSeverities(
   return out;
 }
 
+const BLOCKER_COUNT_WORDS: Readonly<Record<string, number>> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+  both: 2,
+};
+
+const BLOCKER_COUNT_TOKEN_RE =
+  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|both|\d+)\b/gi;
+const OWN_BLOCKERS_RE = /\bsiblings\s+(?:this\s+card|it)\s+is\s+blocked_by\b/i;
+
+export interface BlockerCountClaim {
+  claim: string;
+  claimedCount: number;
+}
+
+/**
+ * The first explicit cardinality claim a card makes about its own blocker set.
+ *
+ * This is intentionally the grammar measured for MOTIR-5428, not a general
+ * prose interpretation: an explicit count must occur within eight words of the
+ * plural `siblings this card is blocked_by` / `siblings it is blocked_by`
+ * anchor. Quoted lines are records or examples, and singular `sibling` phrases
+ * are not set-cardinality claims, so neither is consumed.
+ */
+export function firstBlockerCountClaim(md: string | null | undefined): BlockerCountClaim | null {
+  if (!md) return null;
+
+  for (const rawLine of md.split('\n')) {
+    if (/["“”]/.test(rawLine)) continue;
+    const line = rawLine.replace(INLINE_MARKUP_RE, '');
+    const anchor = OWN_BLOCKERS_RE.exec(line);
+    if (!anchor || anchor.index === undefined) continue;
+
+    const prefix = line.slice(0, anchor.index);
+    const counts = [...prefix.matchAll(BLOCKER_COUNT_TOKEN_RE)];
+    const count = counts.at(-1);
+    if (!count || count.index === undefined) continue;
+    if (/MOTIR-$/i.test(prefix.slice(0, count.index))) continue;
+
+    const between = prefix.slice(count.index + count[0].length);
+    if ((between.match(/\b[\p{L}\p{N}_-]+\b/gu) ?? []).length > 8) continue;
+
+    const token = count[0].toLowerCase();
+    const claimedCount = /^\d+$/.test(token) ? Number(token) : BLOCKER_COUNT_WORDS[token];
+    if (claimedCount === undefined || !Number.isSafeInteger(claimedCount)) continue;
+
+    let start = count.index;
+    const before = prefix.slice(0, start);
+    const all = /\ball\s*$/i.exec(before);
+    if (all?.index !== undefined) start = all.index;
+    return {
+      claim: line
+        .slice(start, anchor.index + anchor[0].length)
+        .replace(/\s+/g, ' ')
+        .trim(),
+      claimedCount,
+    };
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // THE ORDERING CHECK (MOTIR-2175) — gate 14's third axis, mechanized.
 //

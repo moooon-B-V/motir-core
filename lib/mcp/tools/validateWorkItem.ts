@@ -6,13 +6,20 @@ import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   isCoverageAdvisory,
+  isBlockerCountAdvisory,
+  isPathReferenceAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isBodyAboveFieldMoveAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
+import {
+  BODY_ABOVE_FIELD_MOVE_REMEDY,
+  describeBodyAboveFieldMove,
+} from '@/lib/workItems/bodyAboveFieldMove';
 import type { WorkItemValidityDto } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
@@ -85,9 +92,18 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const subsumed = result.advisories.filter(isSubsumptionAdvisory);
   const oversized = result.advisories.filter(isSizingAdvisory);
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
+  const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
+  const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
+  const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
 
   const lines: string[] = [];
+  for (const a of blockerCounts) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): ${a.item} claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Update the prose or the graph.`,
+    );
+  }
   if (references.length > 0) {
     lines.push(
       '',
@@ -191,6 +207,18 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         'be reviewed before its code children run, which is the shape this asks for.',
     );
   }
+  // The BODY-EDIT-ABOVE-FIELD-MOVE member of the shape family (MOTIR-5399) — the
+  // one read off a card's HISTORY. MOTIR-4513 was `valid: true` here with its body
+  // describing the type one write had just moved it off (planning bug MOTIR-4577).
+  if (bodyAbove.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards' bodies were last written AFTER their fields ` +
+        'last moved, by a write that touched none of those fields:',
+      ...bodyAbove.map((a) => `  ${describeBodyAboveFieldMove(a)} (${a.severity})`),
+      BODY_ABOVE_FIELD_MOVE_REMEDY,
+    );
+  }
   // The SUBSUMPTION family (MOTIR-2903) — and this surface is the one whose
   // `advisories: []` is the observation the family exists to invert. MOTIR-2757
   // was `valid: true` with an empty array while its whole deliverable sat merged
@@ -256,6 +284,27 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         "subtree is evidence about the children, not about the container's own criteria. Noun " +
         'overlap is not delivery: a child whose BODY delivers the criterion under a title that does ' +
         'not name it is reported here too, and a criterion over every child ("Each story …") never is.',
+    );
+  }
+  // The PATH-REFERENCE family (MOTIR-5424) — gate 4 read on a PATH rather than a
+  // key. MOTIR-5231 cited a mock its design sibling was creating, with no edge,
+  // and every key-based check on this surface was silent about it.
+  if (pathReferences.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards have an acceptance criterion naming a FILE that ` +
+        'does not exist yet on the default branch, and ANOTHER open card names the same file ' +
+        'with no blocked_by between the two — one of them creates it and the other cites it:',
+      ...pathReferences.map(
+        (a) =>
+          `  ${a.item} criterion ${a.criterionIndex} names ${a.path} (not yet in ${a.repo}), ` +
+          `also named by ${a.referenced} (${a.referencedStatus}) (${a.severity})`,
+      ),
+      'Wire blocked_by from the card that CITES the file to the card that CREATES it. Where the ' +
+        'repository checks that a cited path resolves, the missing edge is a red check, not a ' +
+        'stale reference. A card naming only the file it alone will create is never reported, ' +
+        'and neither is a file whose top-level directory is absent from the repository too — ' +
+        "that is another repository's file, not a forward reference.",
     );
   }
   return lines;
@@ -369,12 +418,27 @@ export function registerValidateWorkItem(
         'a CHILDLESS card is its OWN design blocker — one criterion produces a design asset and ' +
         'another builds the rendered surface that drawing decides (with BOTH 1-based indices, ' +
         '`designCriterionIndex` and `surfaceCriterionIndex`, because the remedy LIFTS the design ' +
-        'criterion onto its own card rather than cutting the list at a line). A `coverage` ' +
+        'criterion onto its own card rather than cutting the list at a line), or ' +
+        "`body-edit-above-field-move` when the card's newest body write moved none of the fields a " +
+        'body describes (`title`, `type`, `executor`, `targetRepo`/`targetRepos`, `kind`, ' +
+        '`storyPoints`, `estimateMinutes`) while the write directly beneath it did (with ' +
+        '`bodyEdit` and `fieldMove`, each `{ at, fields }`, and no criterion index — a prompt to ' +
+        're-read the body against the move, since a body rewritten to match it leaves the same ' +
+        'trail), or ' +
+        "`likely-blocker-count-mismatch` when an explicit counted claim about the card's own " +
+        'blocker siblings disagrees with its current blocked_by edge count (with the exact ' +
+        '`claim`, `claimedCount`, and `blockerCount`). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +
         '`adoptedChildren`; the remedy is to widen the adopted work item on the record or file the ' +
-        'sibling that covers the difference. Advisories ' +
+        'sibling that covers the difference. A `path-reference` advisory (`kind: ' +
+        '"path-reference"`, `likely-missing-path-edge`) names a card whose acceptance criterion ' +
+        'names a FILE PATH that does not exist yet on the default branch of its repository (its ' +
+        'top-level directory does) while ANOTHER not-done work item also names that path, with no ' +
+        'blocked_by between the two or their ancestors — with the `path`, the `criterionIndex`, ' +
+        'the `repo`, and the other item as `referenced` / `referencedStatus`; the remedy is to ' +
+        'wire blocked_by from the citing card to the creating one. Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +

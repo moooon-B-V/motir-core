@@ -685,6 +685,25 @@ describe('assembleDispatchPrompt — the prose-vs-graph advisory block (MOTIR-20
     expect(context).toContain('REFERENCED BUT NOT A DEPENDENCY');
   });
 
+  it('renders the exact counted blocker claim beside the graph count', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({
+        advisories: [
+          {
+            kind: 'shape',
+            item: 'PROD-7',
+            severity: 'likely-blocker-count-mismatch',
+            claim: 'all four siblings this card is blocked_by',
+            claimedCount: 4,
+            blockerCount: 2,
+          },
+        ],
+      }),
+    );
+    expect(prompt).toContain('"all four siblings this card is blocked_by" says 4');
+    expect(prompt).toContain('graph holds 2 blocked_by edges');
+  });
+
   it('instructs the agent to VERIFY against origin/main and to STOP rather than rebuild', () => {
     const { prompt } = assembleDispatchPrompt(
       source({ advisories: [advisory('PROD-5', 'in_review')] }),
