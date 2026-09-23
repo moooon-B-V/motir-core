@@ -8,6 +8,7 @@ import type { JobStatus } from '@/lib/ai/types';
 import type { ExecutorDto, WorkItemPlanningSourceDto } from '@/lib/dto/workItems';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
+import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 
 /** Wire form of the Prisma `PlanStatus` enum, as a VALUE — so a surface that
  *  must be total over the lifecycle (the tab strip, the per-status counts) can
@@ -598,6 +599,10 @@ export interface PlanDto {
   title: string | null;
   summary: string | null;
   sourceJobId: string | null;
+  /** The planning SESSION this plan belongs to (AMENDMENT 17 §5) — set at
+   *  creation on every author path and never re-pointed. Null only on a row a
+   *  pre-session build wrote during a rollout. */
+  sessionId: string | null;
   /** WHY the plan was started — `user` (someone clicked) or `cadence` (the
    *  auto-plan watcher fired it). Set at submit; never changes. */
   origin: PlanOriginDto;
@@ -659,8 +664,25 @@ export interface PlanListPageDto {
   nextCursor: string | null;
 }
 
+/**
+ * WHICH SESSION a new plan belongs to (AMENDMENT 17 §5): the conversation that
+ * produced it, or a new session of the door's own origin (§4) — `targetKeys`
+ * anchors that session (an expand is about its root item).
+ */
+export type PlanSessionRef =
+  | { sessionId: string }
+  | { origin: PlanSessionOriginDto; targetKeys?: readonly string[] };
+
 /** Input to `plansService.createPlan`. */
 export interface CreatePlanInput {
+  /**
+   * The session the plan belongs to. Every PRODUCTION author path passes it
+   * explicitly (MOTIR-6022). When absent, `createPlan` still attaches one — a
+   * new session whose origin it derives from the row (`mcp` for an MCP-authored
+   * plan, `cadence` for a cadence plan, else `generation`) — so "every plan has
+   * exactly one session" holds on every path, test fixtures included.
+   */
+  session?: PlanSessionRef;
   title?: string | null;
   summary?: string | null;
   sourceJobId?: string | null;

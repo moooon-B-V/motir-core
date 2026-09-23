@@ -31,8 +31,13 @@ export const POST = withV1Route<{ projectKey: string }>({ permission: 'ai:plan' 
     ctx.service,
   );
 
-  await planChangeSessionsService.getOrCreateForScope(pctx, scope);
-  const session = await planChangeSessionsService.appendTurn(body.body, pctx, scope.scopeKey);
+  // To the named session, else resume-or-start with this turn (MOTIR-6028).
+  const session = await planChangeSessionsService.appendPublic(
+    pctx,
+    scope,
+    body.body,
+    body.sessionId,
+  );
 
   return NextResponse.json(presentPlanSession(session));
 });

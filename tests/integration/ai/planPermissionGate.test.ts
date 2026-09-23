@@ -14,6 +14,7 @@ import { PermissionDeniedError } from '@/lib/projects/errors';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addressOf, openTestSession } from '../../helpers/planSession';
 import type { ProjectContext } from '@/lib/projects';
 
 // The `ai:plan` GATE (Story MOTIR-2291 · Subtask MOTIR-2355) — the two
@@ -97,15 +98,15 @@ afterAll(async () => {
 describe('the plan-change session asks ai:plan', () => {
   it('refuses a project VIEWER opening a thread, appending to it and submitting it', async () => {
     const fx = await makeFixture('viewer');
+    await expect(openTestSession(fx.viewerPctx)).rejects.toBeInstanceOf(PermissionDeniedError);
+    // A thread the OWNER opened, addressed by id — the viewer may not write to it.
+    const owners = await openTestSession(fx.ownerPctx);
     await expect(
-      planChangeSessionsService.getOrCreateForProject(fx.viewerPctx),
+      planChangeSessionsService.appendTurn('do a thing', fx.viewerPctx, addressOf(owners)),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(
-      planChangeSessionsService.appendTurn('do a thing', fx.viewerPctx),
+      planChangeSessionsService.submit(fx.viewerPctx, addressOf(owners)),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
-    await expect(planChangeSessionsService.submit(fx.viewerPctx)).rejects.toBeInstanceOf(
-      PermissionDeniedError,
-    );
   });
 
   it('refuses a workspace member with NO project membership — the case that does not follow from the viewer one', async () => {
@@ -119,17 +120,19 @@ describe('the plan-change session asks ai:plan', () => {
     expect(held.has('work_item:edit')).toBe(true);
     expect(held.has('ai:plan')).toBe(false);
 
-    await expect(
-      planChangeSessionsService.getOrCreateForProject(fx.outsiderPctx),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(openTestSession(fx.outsiderPctx)).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
   it('still admits a project MEMBER — the planner is member-facing, not administrative', async () => {
     const fx = await makeFixture('member');
-    const session = await planChangeSessionsService.getOrCreateForProject(fx.memberPctx);
+    const session = await openTestSession(fx.memberPctx);
     expect(session.id).toBeTruthy();
     await expect(
-      planChangeSessionsService.appendTurn('split the auth story', fx.memberPctx),
+      planChangeSessionsService.appendTurn(
+        'split the auth story',
+        fx.memberPctx,
+        addressOf(session),
+      ),
     ).resolves.toBeTruthy();
   });
 });

@@ -43,16 +43,28 @@ const { POST: ingest } = await import('@/app/api/ai/plan-change/session/mailbox/
 const { POST: stopDoor } = await import('@/app/api/ai/plan-change/session/mailbox/stop/route');
 const { POST: readDoor } = await import('@/app/api/internal/ai/plan-change-mailbox/route');
 const { mintJobToken } = await import('@/lib/ai/jobToken');
-const { PlanChangeJobNotRunningError, PlanChangeMailboxJobMismatchError } =
-  await import('@/lib/planChange/errors');
+const {
+  PlanChangeJobNotRunningError,
+  PlanChangeMailboxJobMismatchError,
+  PlanSessionNotFoundError,
+} = await import('@/lib/planChange/errors');
+
+// Every conversation door names its session by id (MOTIR-6023). The builders add
+// the one these cases hold unless a case is about its absence.
+const SESSION_ID = 's1';
+const withSession = (body: unknown) =>
+  body && typeof body === 'object' && !('sessionId' in body)
+    ? { sessionId: SESSION_ID, ...body }
+    : body;
 
 const SERVICE_SECRET = 'core-callback-secret-test';
 const EMPTY = { turns: [], stopped: false };
 
-function ingestReq(body: unknown): Request {
+function ingestReq(body: unknown, opts: { session?: boolean } = {}): Request {
+  const sent = opts.session === false ? body : withSession(body);
   return new Request('http://localhost:3000/api/ai/plan-change/session/mailbox', {
     method: 'POST',
-    body: typeof body === 'string' ? body : JSON.stringify(body),
+    body: typeof sent === 'string' ? sent : JSON.stringify(sent),
   });
 }
 
@@ -83,10 +95,11 @@ beforeEach(() => {
   raiseStop.mockResolvedValue({ turns: [], stopped: true });
 });
 
-function stopReq(body: unknown): Request {
+function stopReq(body: unknown, opts: { session?: boolean } = {}): Request {
+  const sent = opts.session === false ? body : withSession(body);
   return new Request('http://localhost:3000/api/ai/plan-change/session/mailbox/stop', {
     method: 'POST',
-    body: typeof body === 'string' ? body : JSON.stringify(body),
+    body: typeof sent === 'string' ? sent : JSON.stringify(sent),
   });
 }
 
@@ -112,6 +125,7 @@ describe('the INGEST — POST /api/ai/plan-change/session/mailbox', () => {
     expect(attachTurn).toHaveBeenCalledWith(
       {
         jobId: 'job-1',
+        sessionId: SESSION_ID,
         body: 'queued',
         idempotencyKey: 'k1',
         disposition: 'fold',
@@ -188,6 +202,19 @@ describe('the INGEST — POST /api/ai/plan-change/session/mailbox', () => {
       code: 'PLAN_CHANGE_JOB_NOT_RUNNING',
       jobStatus: 'succeeded',
     });
+  });
+
+  it('400s a turn that names no session, and 404s one from another project (MOTIR-6023)', async () => {
+    const res = await ingest(
+      ingestReq({ jobId: 'job-1', body: 'x', idempotencyKey: 'k' }, { session: false }),
+    );
+    expect(res.status).toBe(400);
+    expect(attachTurn).not.toHaveBeenCalled();
+
+    attachTurn.mockRejectedValue(new PlanSessionNotFoundError('elsewhere'));
+    const foreign = await ingest(ingestReq({ jobId: 'job-1', body: 'x', idempotencyKey: 'k' }));
+    expect(foreign.status).toBe(404);
+    await expect(foreign.json()).resolves.toMatchObject({ code: 'PLAN_SESSION_NOT_FOUND' });
   });
 
   it('404s a job this thread is not on — no existence leak', async () => {
@@ -304,7 +331,7 @@ describe('the STOP door — POST /api/ai/plan-change/session/mailbox/stop (MOTIR
     // ONE pipe. The turns and the stop share a `seq` sequence per job, which is
     // only true while both go through this service — a stop with a store of its
     // own would let it overtake a turn typed before it.
-    expect(raiseStop).toHaveBeenCalledWith('job-1', 'stop:job-1', activeCtx.current);
+    expect(raiseStop).toHaveBeenCalledWith('job-1', 'stop:job-1', activeCtx.current, SESSION_ID);
     expect(attachTurn).not.toHaveBeenCalled();
   });
 
@@ -335,6 +362,12 @@ describe('the STOP door — POST /api/ai/plan-change/session/mailbox/stop (MOTIR
     raiseStop.mockResolvedValue({ turns: [], stopped: true });
     const res = await stopDoor(stopReq({ jobId: 'job-1', idempotencyKey: 'stop:job-1' }));
     expect(res.status).toBe(200);
+  });
+
+  it('400s a stop that names no session', async () => {
+    const res = await stopDoor(stopReq({ jobId: 'j', idempotencyKey: 'k' }, { session: false }));
+    expect(res.status).toBe(400);
+    expect(raiseStop).not.toHaveBeenCalled();
   });
 
   it('404s a job this thread is not on', async () => {

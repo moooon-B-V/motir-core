@@ -413,6 +413,28 @@ describe('motir plan — the interactive conversation', () => {
 
     expect(callsTo('open_plan_session')[0]).toEqual({ projectKey: 'PROD' });
   });
+
+  // MOTIR-6028: a scope can hold several conversations, so once an invocation
+  // holds a session it addresses EVERY later call to it by id.
+  it('lands every turn and the submit of ONE invocation on the session it opened', async () => {
+    server.scriptV1(planScript());
+
+    await planCommand([], {}, reader(['add auth', 'keep it small', '/submit']));
+
+    expect(callsTo('open_plan_session')[0]).toEqual({ projectKey: 'PROD' });
+    expect(callsTo('append_plan_turn').map((c) => c['sessionId'])).toEqual(['s1', 's1']);
+    expect(callsTo('submit_plan_session')[0]).toEqual({ projectKey: 'PROD', sessionId: 's1' });
+  });
+
+  it('a SECOND invocation carries no id over from the first — it asks the server afresh', async () => {
+    server.scriptV1(planScript());
+    await planCommand([], {}, reader(['/exit']));
+    await planCommand([], {}, reader(['/exit']));
+
+    const opens = callsTo('open_plan_session');
+    expect(opens).toHaveLength(2);
+    expect(opens.every((o) => !('sessionId' in o))).toBe(true);
+  });
 });
 
 describe('motir plan "<text>" — the non-interactive shorthand', () => {
@@ -426,7 +448,10 @@ describe('motir plan "<text>" — the non-interactive shorthand', () => {
     );
 
     expect(callsTo('append_plan_turn')[0]).toMatchObject({ body: 'split the billing epic' });
-    expect(callsTo('submit_plan_session')).toHaveLength(1);
+    // The first turn names no session (the server resumes or starts one); the
+    // submit then names THE session that turn landed on (MOTIR-6028).
+    expect(callsTo('append_plan_turn')[0]).not.toHaveProperty('sessionId');
+    expect(callsTo('submit_plan_session')).toEqual([{ projectKey: 'PROD', sessionId: 's1' }]);
     // Never opened a prompt: the shorthand is the unattended path.
     expect(OUT()).toContain('Plan plan_1 — planned, 2 proposals.');
     expect(OUT()).toContain('+ [story] Billing epic');

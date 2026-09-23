@@ -1363,12 +1363,13 @@ collide outright. So the overlay's parameters are **NAMESPACED**, and they are r
 the way `design/runs/design-notes.md` records `/runs?run=<id>` — rather than in whichever of the
 three files is written first.
 
-| parameter      | carries                                                                                                                                                                                                                   | values                                                         | read by                               |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------- |
-| **`plan`**     | **the presence switch AND the mode.** Its presence is what opens the overlay — one `has('plan')` test, the way `?run=` and `?peek=` each own one word. Total: an unrecognised value degrades to `project`, never an error | `project` · `generation` · `replan` · `contextual` · `roadmap` | the overlay                           |
-| **`planFrom`** | the ORIGIN kind. It is what decides which of the two below may be READ, so a hand-edited `?planFrom=roadmap&planItem=X` cannot smuggle a target                                                                           | `project` · `work-item` · `roadmap` · `convention-refine`      | the overlay · the rail's opening line |
-| **`planItem`** | the ANCHOR's work-item key. Written **only** when `planFrom=work-item`; the overlay hands it to `GET /api/work-items/planning-anchor` (MOTIR-4727)                                                                        | `MOTIR-<n>`                                                    | the overlay                           |
-| **`planRepo`** | the repository key. Written **only** when `planFrom=convention-refine`                                                                                                                                                    | a repo key                                                     | the overlay                           |
+| parameter         | carries                                                                                                                                                                                                                        | values                                                         | read by                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------- |
+| **`plan`**        | **the presence switch AND the mode.** Its presence is what opens the overlay — one `has('plan')` test, the way `?run=` and `?peek=` each own one word. Total: an unrecognised value degrades to `project`, never an error      | `project` · `generation` · `replan` · `contextual` · `roadmap` | the overlay                           |
+| **`planFrom`**    | the ORIGIN kind. It is what decides which of the two below may be READ, so a hand-edited `?planFrom=roadmap&planItem=X` cannot smuggle a target                                                                                | `project` · `work-item` · `roadmap` · `convention-refine`      | the overlay · the rail's opening line |
+| **`planItem`**    | the ANCHOR's work-item key. Written **only** when `planFrom=work-item`; the overlay hands it to `GET /api/work-items/planning-anchor` (MOTIR-4727)                                                                             | `MOTIR-<n>`                                                    | the overlay                           |
+| **`planRepo`**    | the repository key. Written **only** when `planFrom=convention-refine`                                                                                                                                                         | a repo key                                                     | the overlay                           |
+| **`planSession`** | a SESSION's id — reopens that planning conversation by id, the window notwithstanding (MOTIR-6019's published design, §19.8; built by MOTIR-6024). Read only when `plan` is present and `planFrom` is `project` or `work-item` | a session id                                                   | the overlay                           |
 
 **Why the mode rides on `plan` rather than on a fifth name.** The overlay needs ONE parameter
 whose mere presence means _open_, exactly as `?run=` and `?peek=` do; the mode is already total
@@ -1382,7 +1383,7 @@ the launcher module WRITES and PARSES them, the overlay READS them off `useSearc
 retiring `/planning` forward REWRITES the old `mode` / `from` / `item` / `repo` onto them.
 Renaming one is a change to this section first.
 
-**Close strips exactly these four and leaves every other parameter byte-identical** — that is what
+**Close strips exactly these five (four until MOTIR-6024 added `planSession`) and leaves every other parameter byte-identical** — that is what
 makes "back to exactly where you were" true of a filtered, scrolled list rather than only of a
 bare route. `withPlanningOverlay('/roadmap?item=MOTIR-12', …)` keeps `item=MOTIR-12`;
 `withoutPlanningOverlay` of the result returns it unchanged, with no dangling `?`.

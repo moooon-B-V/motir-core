@@ -43,12 +43,16 @@ export async function GET(
   if (!ctx) return noActiveProject();
 
   const { id } = await params;
-  const parsed = parseTargetKeys(new URL(req.url).searchParams.getAll('targetKey'));
+  const search = new URL(req.url).searchParams;
+  const parsed = parseTargetKeys(search.getAll('targetKey'));
   if ('error' in parsed) return parsed.error;
+  // `sessionId` names ONE conversation (MOTIR-6023); without it the read answers
+  // the caller's own RESUMABLE session for the item, and creates nothing.
+  const sessionId = sessionIdFrom(search.get('sessionId'));
 
   try {
     const result = await contextualPlanningService.getSessionForWorkItem(
-      { anchorId: id, targetKeys: parsed.targetKeys },
+      { anchorId: id, targetKeys: parsed.targetKeys, ...sessionId },
       ctx,
     );
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -92,17 +96,21 @@ export async function POST(
 
   const parsed = parseTargetKeys((body as { targetKeys?: unknown })?.targetKeys);
   if ('error' in parsed) return parsed.error;
+  // The conversation the client holds (MOTIR-6023). Absent on a first turn,
+  // which STARTS the session (or lands on the caller's resumable one).
+  const sessionId = sessionIdFrom((body as { sessionId?: unknown })?.sessionId);
 
   try {
     const result = resubmit
       ? await contextualPlanningService.resubmitFromWorkItem(
-          { anchorId: id, targetKeys: parsed.targetKeys },
+          { anchorId: id, targetKeys: parsed.targetKeys, ...sessionId },
           ctx,
         )
       : await contextualPlanningService.planFromWorkItem(
           {
             anchorId: id,
             targetKeys: parsed.targetKeys,
+            ...sessionId,
             prompt,
             // MOTIR-2226: read strictly — anything but `true` is "not an answer",
             // which is the disposition the transcript records forever after.
@@ -124,6 +132,11 @@ export async function POST(
  * silently dropping a target the user picked would plan against a set they never
  * asked for. Shared by all three verbs so one shape can never diverge.
  */
+/** An optional `sessionId`, spread-ready: `{ sessionId }` or `{}`. */
+function sessionIdFrom(raw: unknown): { sessionId?: string } {
+  return typeof raw === 'string' && raw.length > 0 ? { sessionId: raw } : {};
+}
+
 function parseTargetKeys(raw: unknown): { targetKeys: string[] } | { error: NextResponse } {
   if (raw !== undefined && !Array.isArray(raw)) {
     return {

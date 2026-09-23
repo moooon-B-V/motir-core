@@ -326,6 +326,13 @@ function assertsRefusalAgainstSharedStore(file: string): boolean {
  */
 const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
   [
+    'tests/ai/askRoutes.test.ts',
+    'Its one 429 is a refusal the SPEC hands back: `enforceAiRateLimit` is mocked to ' +
+      'return a prepared Response so the ask route’s early return is exercised ' +
+      '(MOTIR-6026). No budget is spent and no store is resolved — every other case ' +
+      'passes through to the real limiter and asserts no refusal.',
+  ],
+  [
     'tests/rateLimit/retryAfterPluralisation.test.ts',
     'Constructs `RateLimitDecision` object literals by hand and passes them to ' +
       '`rateLimitedResponse` / `mcpRateLimitedResponse` to assert the 429’s PROSE and ' +

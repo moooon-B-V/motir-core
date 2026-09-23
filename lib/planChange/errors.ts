@@ -14,6 +14,21 @@ export class PlanChangeSessionNotFoundError extends Error {
 }
 
 /**
+ * A session addressed BY ID does not exist in this project (AMENDMENT 17 §2 —
+ * every door addresses a session by its id). Distinct from
+ * {@link PlanChangeSessionNotFoundError}, which answers a SCOPE that has no
+ * conversation: an id from another project, another tenant or a deleted session
+ * is refused here, never resolved to a sibling session of the same scope.
+ */
+export class PlanSessionNotFoundError extends Error {
+  readonly code = 'PLAN_SESSION_NOT_FOUND' as const;
+  constructor(sessionId: string) {
+    super(`No planning session ${sessionId} exists in this project.`);
+    this.name = 'PlanSessionNotFoundError';
+  }
+}
+
+/**
  * A concurrent append claimed the same position on the thread. Turn order is
  * allocated under the session row's `SELECT … FOR UPDATE` lock with a re-read
  * inside the transaction, so two concurrent appends normally SERIALIZE into two
@@ -155,5 +170,18 @@ export class PlanChangeMailboxJobMismatchError extends Error {
   constructor(readonly jobId: string) {
     super(`Job ${jobId} is not the run this plan-change conversation is on.`);
     this.name = 'PlanChangeMailboxJobMismatchError';
+  }
+}
+
+/**
+ * A Plans-list `cursor` this read did not mint (MOTIR-6025) — undecodable, or
+ * naming no `(lastActivityAt, id)` pair. A cursor is opaque, so a malformed one
+ * is a client error, never an empty page. → 400
+ */
+export class InvalidPlanSessionCursorError extends Error {
+  readonly code = 'INVALID_PLAN_SESSION_CURSOR' as const;
+  constructor() {
+    super('The planning conversations cursor is not valid. Request the first page again.');
+    this.name = 'InvalidPlanSessionCursorError';
   }
 }

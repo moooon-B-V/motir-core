@@ -5,7 +5,12 @@ import { getActiveProject } from '@/lib/projects';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { contextualPlanningService } from '@/lib/services/contextualPlanningService';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
-import { mapPlanChangeError, noActiveProject } from '../../_errors';
+import {
+  mapPlanChangeError,
+  missingSessionId,
+  noActiveProject,
+  readSessionId,
+} from '../../_errors';
 
 // POST /api/ai/plan-change/session/planner-turn — record the PLANNER's turn for
 // a settled planning job (MOTIR-2226, consuming MOTIR-2222).
@@ -49,6 +54,12 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  // The conversation is named by `sessionId` (MOTIR-6023). An ANCHORED caller
+  // may still send its anchor set, which the contextual service view-gates
+  // before recording on that same session.
+  const sessionId = readSessionId((body as { sessionId?: unknown })?.sessionId);
+  if (!sessionId) return missingSessionId();
+
   // The ANCHORED thread (MOTIR-909/910) narrates through the same endpoint,
   // addressed by its anchor set — the contextual service owns scope resolution
   // and its view gate, so the client never computes a scope key.
@@ -66,10 +77,10 @@ export async function POST(req: Request): Promise<Response> {
     const result =
       typeof anchorId === 'string' && anchorId.length > 0
         ? await contextualPlanningService.recordPlannerTurnForWorkItem(
-            { anchorId, targetKeys, jobId },
+            { anchorId, targetKeys, jobId, sessionId },
             ctx,
           )
-        : await planChangeSessionsService.recordPlannerTurn(jobId, ctx);
+        : await planChangeSessionsService.recordPlannerTurn(jobId, ctx, { sessionId });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     if (err instanceof MotirAiJobNotFoundError) {

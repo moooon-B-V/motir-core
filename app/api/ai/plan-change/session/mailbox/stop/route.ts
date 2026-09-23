@@ -3,7 +3,12 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { planChangeMailboxService } from '@/lib/services/planChangeMailboxService';
-import { mapPlanChangeError, noActiveProject } from '../../../_errors';
+import {
+  mapPlanChangeError,
+  missingSessionId,
+  noActiveProject,
+  readSessionId,
+} from '../../../_errors';
 
 // POST /api/ai/plan-change/session/mailbox/stop — END the RUNNING planning job of
 // the active project's conversation (Story MOTIR-4054 · MOTIR-4068).
@@ -65,8 +70,13 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  // The conversation the caller holds (MOTIR-6023): a Stop is raised on the job
+  // only when it is running on THIS session.
+  const sessionId = readSessionId(bag['sessionId']);
+  if (!sessionId) return missingSessionId();
+
   try {
-    const result = await planChangeMailboxService.raiseStop(jobId, idempotencyKey, ctx);
+    const result = await planChangeMailboxService.raiseStop(jobId, idempotencyKey, ctx, sessionId);
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);

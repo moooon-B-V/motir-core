@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiAskService } from '@/lib/services/aiAskService';
-import { mapPlanChangeError, noActiveProject } from '../plan-change/_errors';
+import { mapPlanChangeError, noActiveProject, readSessionId } from '../plan-change/_errors';
 import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
 // POST /api/ai/ask — the project conversation's ONE DOOR for a user turn
@@ -60,11 +60,19 @@ export async function POST(req: Request): Promise<Response> {
     turnId?: unknown;
     flip?: unknown;
     isAnswer?: unknown;
+    sessionId?: unknown;
   };
+  // The conversation the client holds (MOTIR-6023; AMENDMENT 17 §2). Optional
+  // here: with none, the caller's resumable project-wide session is used, and a
+  // new turn with none STARTS one — the ask door stays self-sufficient.
+  const sessionId = readSessionId(body.sessionId) ?? undefined;
 
   try {
     if (typeof body.turnId === 'string' && body.turnId.length > 0) {
-      const result = await aiAskService.resubmit(body.turnId, ctx, { flip: body.flip === true });
+      const result = await aiAskService.resubmit(body.turnId, ctx, {
+        flip: body.flip === true,
+        ...(sessionId ? { sessionId } : {}),
+      });
       return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
     }
     if (typeof body.body !== 'string') {
@@ -75,6 +83,7 @@ export async function POST(req: Request): Promise<Response> {
     }
     const result = await aiAskService.submitTurn(body.body, ctx, {
       isAnswer: body.isAnswer === true,
+      ...(sessionId ? { sessionId } : {}),
     });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {

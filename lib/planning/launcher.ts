@@ -41,8 +41,8 @@ export type PlanningMode = 'project' | 'generation' | 'replan' | 'contextual' | 
  *   (MOTIR-1663: the Code-health page's "Refine with Motir" entry).
  */
 export type PlanningLaunchContext =
-  | { kind: 'project'; hasPlan?: boolean }
-  | { kind: 'work-item'; itemKey: string; hasPlan?: boolean }
+  | { kind: 'project'; hasPlan?: boolean; sessionId?: string }
+  | { kind: 'work-item'; itemKey: string; hasPlan?: boolean; sessionId?: string }
   | { kind: 'roadmap' }
   | { kind: 'convention-refine'; repoKey: string };
 
@@ -141,6 +141,8 @@ export interface PlanningLaunch {
   itemKey: string | null;
   /** The `convention-refine` origin's repo key, when carried. */
   repoKey: string | null;
+  /** A named session to reopen (`planSession`), when carried (MOTIR-6024). */
+  sessionId?: string | null;
 }
 
 /** The default a missing / unknown `?mode=` falls back to (never an error). */
@@ -227,6 +229,12 @@ export const OVERLAY_PARAM_NAMES = {
   item: 'planItem',
   /** the repository key; written ONLY for a `convention-refine` origin. */
   repo: 'planRepo',
+  /**
+   * A NAMED planning session to reopen (MOTIR-6024; AMENDMENT 17 §2) — what a
+   * Plans row writes. Read only for a `project` or `work-item` origin, and it
+   * bypasses the resume window: a named conversation opens whatever its age.
+   */
+  session: 'planSession',
 } as const;
 
 /**
@@ -269,6 +277,9 @@ export function planningOverlaySearch(context: PlanningLaunchContext): URLSearch
   });
   if (context.kind === 'work-item') params.set(OVERLAY_PARAM_NAMES.item, context.itemKey);
   if (context.kind === 'convention-refine') params.set(OVERLAY_PARAM_NAMES.repo, context.repoKey);
+  if ((context.kind === 'project' || context.kind === 'work-item') && context.sessionId) {
+    params.set(OVERLAY_PARAM_NAMES.session, context.sessionId);
+  }
   return params;
 }
 
@@ -390,11 +401,18 @@ function readParam(params: PlanningOverlayParams, name: string): RawParam {
 export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLaunch | null {
   if (first(readParam(params, OVERLAY_PARAM_NAMES.mode)) === null) return null;
   const from = parsePlanningOrigin(readParam(params, OVERLAY_PARAM_NAMES.origin));
+  const sessionId =
+    from === 'project' || from === 'work-item'
+      ? first(readParam(params, OVERLAY_PARAM_NAMES.session))
+      : null;
   return {
     mode: parsePlanningMode(readParam(params, OVERLAY_PARAM_NAMES.mode)),
     from,
     itemKey: from === 'work-item' ? first(readParam(params, OVERLAY_PARAM_NAMES.item)) : null,
     repoKey:
       from === 'convention-refine' ? first(readParam(params, OVERLAY_PARAM_NAMES.repo)) : null,
+    // Only the two origins a Plans row writes may carry a named session, and the
+    // key is present only when it does — every other launch reads as before.
+    ...(sessionId ? { sessionId } : {}),
   };
 }

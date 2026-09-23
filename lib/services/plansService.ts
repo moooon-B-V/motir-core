@@ -135,6 +135,8 @@ import { PROJECT_REPO_ROLES, isProjectRepoRole } from '@/lib/projectRepos/vocabu
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type {
   CreatePlanInput,
+  PlanAuthorSourceDto,
+  PlanOriginDto,
   ListPlansOptions,
   PlanDto,
   PlanItemPatch,
@@ -165,6 +167,8 @@ import {
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { buildScope } from '@/lib/planChange/scope';
+import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
+import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
@@ -3134,10 +3138,13 @@ async function editAddProposal(
  * they never will. Either way the conversation has finished with the items it was
  * holding, and holding them any longer blocks a colleague for nothing.
  *
- * Resolved through `plan.sourceJobId` → the session whose `lastJobId` it is, which
- * is the same link the resume path (`findPendingPlanIdForJob`) walks in the other
- * direction. A plan with no source job, or one whose thread has since been
- * deleted, releases nothing.
+ * Resolved through `Plan.sessionId` (AMENDMENT 17 §5; MOTIR-6022), and only
+ * when this plan is its session's LATEST — the conversation's current output.
+ * That is the question the retired `sourceJobId == session.lastJobId` lookup
+ * answered (it matched the latest submit only); deciding an earlier plan of a
+ * conversation that has since produced a newer one must not hand the newer one's
+ * targets back. A session that holds no leases (every non-conversation origin)
+ * releases nothing.
  *
  * BEST-EFFORT and AFTER the commit, like the two triggers beside it: a lock that
  * fails to release is recoverable (the lease expires and the sweep clears it),
@@ -3147,7 +3154,7 @@ async function editAddProposal(
  * status write lost a race.
  */
 async function releasePlanTargetLocks(
-  plan: { id: string; projectId: string; sourceJobId: string | null },
+  plan: { id: string; projectId: string; sessionId: string | null },
   ctx: ServiceContext,
 ): Promise<void> {
   // ⚠️ THE PLAN'S OWN LOCKS FIRST, AND UNCONDITIONALLY (MOTIR-5646). This
@@ -3179,18 +3186,14 @@ async function releasePlanTargetLocks(
 
   // The SESSION half, unchanged: a plan produced by a planning conversation also
   // hands that conversation's own leases back when it is decided.
-  if (!plan.sourceJobId) return;
+  if (!plan.sessionId) return;
+  const sessionId = plan.sessionId;
   try {
-    const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndLastJobId(
-        plan.projectId,
-        plan.sourceJobId!,
-        ctx.workspaceId,
-        tx,
-      ),
+    const latest = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findLatestIdBySession(sessionId, tx),
     );
-    if (!session) return;
-    await planTargetLockService.releaseForSession(session.id, {
+    if (latest !== plan.id) return;
+    await planTargetLockService.releaseForSession(sessionId, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       projectId: plan.projectId,
@@ -3343,21 +3346,22 @@ function generationActor(
  * absence of a finding is the correct record, not a miss to log.
  */
 async function recordSubmittedPlanFinding(
-  row: { id: string; projectId: string; sourceJobId: string | null },
+  row: { id: string; projectId: string; sessionId: string | null },
   proposalCount: number,
   ctx: ServiceContext,
 ): Promise<void> {
-  if (!row.sourceJobId) return;
+  if (!row.sessionId) return;
+  const sessionId = row.sessionId;
   try {
     const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndLastJobId(
-        row.projectId,
-        row.sourceJobId!,
-        ctx.workspaceId,
-        tx,
-      ),
+      planChangeSessionRepository.findByIdInProject(sessionId, row.projectId, ctx.workspaceId, tx),
     );
-    if (!session) return;
+    // A RUN's re-plan arrives through a planning CONVERSATION (the plan-session
+    // doors). A session a door opened for a plan with no conversation — an
+    // expand, a generation, `create_plan` — was never a run's submission, which
+    // is exactly the population the retired `lastJobId` lookup could not reach
+    // either (AMENDMENT 17 §5, MOTIR-6022).
+    if (!session || session.origin !== 'conversation') return;
 
     // `scopeKey` is `buildScope`'s output — the deduped, sorted anchor keys
     // joined by a comma — so it reads straight back with no second source of
@@ -3389,6 +3393,54 @@ async function recordSubmittedPlanFinding(
   }
 }
 
+/**
+ * Resolve the session a NEW plan belongs to, inside the plan's own transaction
+ * (AMENDMENT 17 §4–§5; MOTIR-6022). An explicit `{ sessionId }` — a
+ * conversation's submit — must name a session of THIS project. Otherwise a new
+ * session of the door's origin is opened: owned by the plan's requester (null
+ * for cadence, where nobody asked), with no turn, anchored at `targetKeys`.
+ */
+async function attachPlanSessionWithin(
+  projectId: string,
+  input: CreatePlanInput,
+  resolved: { origin: PlanOriginDto; authorSource: PlanAuthorSourceDto | null },
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  const ref = input.session;
+  if (ref && 'sessionId' in ref) {
+    const existing = await planChangeSessionRepository.findByIdInProject(
+      ref.sessionId,
+      projectId,
+      ctx.workspaceId,
+      tx,
+    );
+    if (!existing) throw new PlanSessionNotFoundError(ref.sessionId);
+    return existing.id;
+  }
+  const origin: PlanSessionOriginDto =
+    ref?.origin ??
+    (resolved.authorSource === 'mcp'
+      ? 'mcp'
+      : resolved.origin === 'cadence'
+        ? 'cadence'
+        : 'generation');
+  const scope = buildScope(ref?.targetKeys ?? []);
+  const created = await planChangeSessionRepository.create(
+    {
+      workspaceId: ctx.workspaceId,
+      projectId,
+      createdById: input.createdById ?? null,
+      scopeKey: scope.scopeKey,
+      targetKeys: scope.targetKeys,
+      origin,
+      lastActivityAt: new Date(),
+    },
+    tx,
+  );
+  return created.id;
+}
+
 export const plansService = {
   /**
    * Open a `generating` Plan — the producer (7.4 generation / 7.11 re-planning)
@@ -3409,10 +3461,20 @@ export const plansService = {
     const row = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
       async (tx) => {
+        // The plan's SESSION, in the SAME transaction as the plan (AMENDMENT 17
+        // §5): no plan is ever observable without one.
+        const sessionId = await attachPlanSessionWithin(
+          projectId,
+          input,
+          { origin, authorSource },
+          ctx,
+          tx,
+        );
         const created = await planRepository.create(
           {
             workspaceId: ctx.workspaceId,
             projectId,
+            sessionId,
             status: 'generating',
             title: input.title ?? null,
             summary: input.summary ?? null,
@@ -3570,16 +3632,25 @@ export const plansService = {
     // A plan with NO session parks its own targets, and that is the whole of the
     // reported bug: `create_plan` / `add_plan_items` through the MCP, which is
     // every runbook planning pass.
-    const sessionHoldingThisPlan = plan.sourceJobId
+    //
+    // ⚠️ SINCE AMENDMENT 17 §5 EVERY PLAN HAS A SESSION, so "resolves to NO
+    // session" now reads "resolves to no CONVERSATION" (MOTIR-6022). The
+    // session a door opens for `create_plan`, an expand, a generation or a
+    // cadence plan holds no target leases — nothing acquires for it — so it is
+    // not a holder, and its plan parks its own targets exactly as before.
+    // Testing the column alone would silently turn every MCP plan back into the
+    // park-nothing bug AMENDMENT 16 fixed.
+    const planSession = plan.sessionId
       ? await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-          planChangeSessionRepository.findByProjectAndLastJobId(
+          planChangeSessionRepository.findByIdInProject(
+            plan.sessionId!,
             plan.projectId,
-            plan.sourceJobId!,
             ctx.workspaceId,
             tx,
           ),
         )
       : null;
+    const sessionHoldingThisPlan = planSession?.origin === 'conversation' ? planSession : null;
     const planTargets = sessionHoldingThisPlan ? [] : committedPlanTargets(proposals);
 
     // The park's TERMINAL SET, resolved OUT HERE for the reason the block above
@@ -4187,6 +4258,26 @@ export const plansService = {
     await projectAccessService.assertCanBrowse(projectId, ctx);
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
+    );
+    if (!plan || plan.projectId !== projectId) return null;
+    if (plan.status === 'approved' || plan.status === 'declined') return null;
+    return plan.id;
+  },
+
+  /**
+   * A SESSION's still-undecided plan (MOTIR-6023; AMENDMENT 17 §5) — the
+   * by-session sibling of {@link findPendingPlanIdForJob}, reading the COLUMN:
+   * the session's latest plan, when it is not yet decided. Browse-gated; a
+   * session of another project answers `null`.
+   */
+  async findPendingPlanIdForSession(
+    projectId: string,
+    sessionId: string,
+    ctx: ServiceContext,
+  ): Promise<string | null> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findLatestBySession(sessionId, tx),
     );
     if (!plan || plan.projectId !== projectId) return null;
     if (plan.status === 'approved' || plan.status === 'declined') return null;
@@ -5191,8 +5282,10 @@ export const plansService = {
 
   /**
    * The ANCHORING walk, in one place: the card's key → `buildScope([key])` → the
-   * plan-change session at that anchor set → its `lastJobId` → the plan that job
-   * produced. Throws {@link NoPlanForWorkItemError} when any hop is missing.
+   * LATEST plan of the most recently active session anchored at exactly that
+   * scope (AMENDMENT 17 §5 — the column, not the retired `lastJobId` hop; a card
+   * with several sessions resolves to the one in use). Throws
+   * {@link NoPlanForWorkItemError} when there is none.
    *
    * ⚠️ NO CONVERSATION MEANS NO, and that is the bound both callers inherit. A
    * cadence plan, an onboarding generation and a plan submitted from the
@@ -5210,19 +5303,11 @@ export const plansService = {
     // would silently become the floor for both. Every caller asserts BEFORE it
     // calls this; it is private to the two above and reachable from no route.
     const scope = buildScope([workItemKey]);
-    const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      planChangeSessionRepository.findByProjectAndScope(
-        projectId,
-        scope.scopeKey,
-        ctx.workspaceId,
-        tx,
-      ),
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findLatestInScope(projectId, scope.scopeKey, ctx.workspaceId, tx),
     );
-    const planId = session?.lastJobId
-      ? await plansService.findPlanIdForJob(session.lastJobId, ctx)
-      : null;
-    if (!planId) throw new NoPlanForWorkItemError(workItemKey);
-    return planId;
+    if (!plan) throw new NoPlanForWorkItemError(workItemKey);
+    return plan.id;
   },
 
   /**

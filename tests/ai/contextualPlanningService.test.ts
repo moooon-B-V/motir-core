@@ -15,6 +15,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addressOf, openTestSession } from '../helpers/planSession';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // contextualPlanningService — the motir-core side of CONTEXTUAL PLANNING
@@ -216,7 +217,7 @@ describe('contextualPlanningService.planFromWorkItem', () => {
       { anchorId: other.id, prompt: 'b' },
       ctx,
     );
-    const projectWide = await planChangeSessionsService.getOrCreateForProject(ctx);
+    const projectWide = await openTestSession(ctx);
 
     expect(new Set([one.sessionId, two.sessionId, projectWide.id]).size).toBe(3);
     expect(projectWide.targetKeys).toEqual([]);
@@ -224,9 +225,13 @@ describe('contextualPlanningService.planFromWorkItem', () => {
 
   it('the project-wide thread still submits WITHOUT targetKeys — 7.30 is untouched', async () => {
     const ctx = projectCtx(fx);
-    await planChangeSessionsService.getOrCreateForProject(ctx);
-    await planChangeSessionsService.appendTurn('Add auth to the billing epic', ctx);
-    await planChangeSessionsService.submit(ctx);
+    const thread = await openTestSession(ctx);
+    await planChangeSessionsService.appendTurn(
+      'Add auth to the billing epic',
+      ctx,
+      addressOf(thread),
+    );
+    await planChangeSessionsService.submit(ctx, addressOf(thread));
 
     expect(submittedKind()).toBe('plan');
     expect(submittedContext()).not.toHaveProperty('targetKeys');
@@ -654,8 +659,8 @@ describe('the contextual seam carries the job’s planId (MOTIR-1745)', () => {
 
   it('reports NO plan for a thread that exists but never submitted', async () => {
     const scope = buildScope([story.identifier]);
-    await planChangeSessionsService.getOrCreateForScope(projectCtx(fx), scope);
-    await planChangeSessionsService.appendTurn('Just typing', projectCtx(fx), scope.scopeKey);
+    const thread = await openTestSession(projectCtx(fx), scope);
+    await planChangeSessionsService.appendTurn('Just typing', projectCtx(fx), addressOf(thread));
 
     const resumed = await contextualPlanningService.getSessionForWorkItem(
       { anchorId: story.id },

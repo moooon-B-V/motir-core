@@ -3,7 +3,12 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
-import { mapPlanChangeError, noActiveProject } from '../../_errors';
+import {
+  mapPlanChangeError,
+  missingSessionId,
+  noActiveProject,
+  readSessionId,
+} from '../../_errors';
 import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
 // POST /api/ai/plan-change/session/submit — send the conversation's ACCUMULATED
@@ -18,7 +23,8 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 // HTTP only (CLAUDE.md 4-layer): call ONE service method and map typed errors —
 // including the metered-AI ones (402 out-of-credits / 502 transport) the submit
 // path can raise.
-export async function POST(): Promise<Response> {
+// The conversation to submit is named by `sessionId` in the body (MOTIR-6023).
+export async function POST(req: Request): Promise<Response> {
   const gate = await requireCompliantSession();
   if (!gate.ok) return gate.response;
 
@@ -32,8 +38,17 @@ export async function POST(): Promise<Response> {
   const limited = await enforceAiRateLimit(ctx, 'ai:generate');
   if (limited) return limited;
 
+  let body: unknown;
   try {
-    const result = await planChangeSessionsService.submit(ctx);
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ code: 'BAD_REQUEST', error: 'Invalid JSON body.' }, { status: 400 });
+  }
+  const sessionId = readSessionId((body as { sessionId?: unknown })?.sessionId);
+  if (!sessionId) return missingSessionId();
+
+  try {
+    const result = await planChangeSessionsService.submit(ctx, { sessionId });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);

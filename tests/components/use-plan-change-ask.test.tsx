@@ -24,7 +24,12 @@ const { open, submitAsk, rerunAsk, settleAsk, streamAsk, stream, fetchReview } =
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  openPlanChangeSession: open,
+  // The resume read answers `{ session, earlier }` (MOTIR-6024); these cases
+  // mock the SESSION, so the factory wraps it.
+  findResumableSession: async (...a: unknown[]) => ({
+    session: await (open as (...args: unknown[]) => unknown)(...a),
+    earlier: null,
+  }),
   appendPlanChangeTurn: vi.fn(),
   submitPlanChange: vi.fn(),
   recordPlannerTurn: vi.fn(async () => session(['x'])),
@@ -94,6 +99,8 @@ function session(bodies: string[]): PlanChangeSessionDto {
     turnCount: bodies.length,
     lastJobId: null,
     lastSubmittedAt: null,
+    lastActivityAt: '2026-01-01T00:00:00.000Z',
+    origin: 'conversation',
     createdAt: '2026-08-20T09:00:00.000Z',
     updatedAt: '2026-08-20T10:00:00.000Z',
     turns: bodies.map((body, seq) => ({
@@ -154,7 +161,7 @@ describe('an ANSWER', () => {
     });
 
     expect(streamAsk).toHaveBeenCalledTimes(1);
-    expect(settleAsk).toHaveBeenCalledWith('ask-1', expect.anything());
+    expect(settleAsk).toHaveBeenCalledWith('ask-1', expect.anything(), 's1');
     expect(result.current.state.phase).toBe('idle');
     expect(result.current.state.session).toEqual(ANSWERED);
     expect(result.current.state.progress).toBeNull();
@@ -256,7 +263,7 @@ describe('the CORRECTION re-run', () => {
     // Which intent to flip TO is derived server-side from what the turn ran as,
     // so even the affordance where a person explicitly asks for a different
     // reading leaves the intent server-resolved (ADR §1).
-    expect(rerunAsk).toHaveBeenCalledWith('t0', { flip: true }, expect.anything());
+    expect(rerunAsk).toHaveBeenCalledWith('t0', { flip: true, sessionId: 's1' }, expect.anything());
     expect(submitAsk).not.toHaveBeenCalled();
   });
 
@@ -268,7 +275,7 @@ describe('the CORRECTION re-run', () => {
     });
 
     expect(streamAsk).toHaveBeenCalledTimes(1);
-    expect(settleAsk).toHaveBeenCalledWith('ask-2', expect.anything());
+    expect(settleAsk).toHaveBeenCalledWith('ask-2', expect.anything(), 's1');
     expect(result.current.state.session).toEqual(ANSWERED);
     expect(result.current.state.phase).toBe('idle');
   });

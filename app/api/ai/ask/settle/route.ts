@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { aiAskService } from '@/lib/services/aiAskService';
-import { mapPlanChangeError, noActiveProject } from '../../plan-change/_errors';
+import { mapPlanChangeError, noActiveProject, readSessionId } from '../../plan-change/_errors';
 
 // POST /api/ai/ask/settle — file what a finished `ask_project` job produced
 // (Story MOTIR-1343 · MOTIR-1819).
@@ -47,7 +47,9 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   try {
-    const result = await aiAskService.settle(jobId, ctx);
+    // The conversation the job was asked on (MOTIR-6023), when the client names it.
+    const sessionId = readSessionId((raw as { sessionId?: unknown })?.sessionId);
+    const result = await aiAskService.settle(jobId, ctx, sessionId ? { sessionId } : {});
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);

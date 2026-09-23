@@ -50,6 +50,45 @@ export const planRepository = {
    * — a cross-tenant lookup returns `null` (→ 404, never 403). Newest-first so a
    * re-submitted job resolves to its latest plan. Read-only.
    */
+  /** A session's LATEST plan row — the pending-plan read (AMENDMENT 17 §5). */
+  async findLatestBySession(sessionId: string, tx: Prisma.TransactionClient): Promise<Plan | null> {
+    return tx.plan.findFirst({
+      where: { sessionId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /** The id of a session's LATEST plan — "is this plan the conversation's current
+   *  one?" (AMENDMENT 17 §5), the question `lastJobId` used to answer only for
+   *  the latest submit. `tx` required: it guards a following release. */
+  async findLatestIdBySession(
+    sessionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const row = await tx.plan.findFirst({
+      where: { sessionId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  },
+
+  /** The CARD-ANCHORED read (AMENDMENT 17 §5): the latest plan of the most
+   *  recently active session anchored at exactly this scope — the plan the
+   *  v1 plan-approval route and the item page's pending-plan notice mean when
+   *  they say "this card's plan". */
+  async findLatestInScope(
+    projectId: string,
+    scopeKey: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Plan | null> {
+    return tx.plan.findFirst({
+      where: { projectId, workspaceId, session: { is: { scopeKey } } },
+      orderBy: [{ session: { lastActivityAt: 'desc' } }, { createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   async findBySourceJobId(
     sourceJobId: string,
     workspaceId: string,

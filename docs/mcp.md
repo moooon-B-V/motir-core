@@ -3354,22 +3354,31 @@ when you are ready. These three tools are that conversation over MCP — the sam
 substrate the Motir web app's planning rail talks through, so a terminal client
 and a browser are two views of one thread.
 
-**One thread per scope, addressed by scope.** A thread's identity is
-`(project, anchor set)`, so every one of these tools takes `projectKey` plus an
-optional `targetKeys` and never a session id:
+**Many conversations per scope, addressed by session id** (story MOTIR-6011,
+`docs/decisions/agent-authored-plans.md` AMENDMENT 17). A project — or an anchor
+set of work items — can hold several planning conversations over time. Every
+one of these tools takes `projectKey` plus an optional `targetKeys`, and an
+optional **`sessionId`**: the `id` any of the three returned. Pass it on every
+later call to stay on that exact conversation.
 
-| Input        | Type     | Required | Notes                                                                                                                                                                                |
-| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `projectKey` | string   | yes      | The project key, e.g. `"ACME"` (case-insensitive).                                                                                                                                   |
-| `targetKeys` | string[] | no       | Work-item identifiers to ANCHOR the conversation at (max 20, case-insensitive). Omit for the **project-wide** thread. The SET is the identity — order and duplicates are irrelevant. |
-| `body`       | string   | yes\*    | `append_plan_turn` only — what you want changed about the plan.                                                                                                                      |
+| Input        | Type     | Required | Notes                                                                                                                                                                                                               |
+| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `projectKey` | string   | yes      | The project key, e.g. `"ACME"` (case-insensitive).                                                                                                                                                                  |
+| `targetKeys` | string[] | no       | Work-item identifiers to ANCHOR the conversation at (max 20, case-insensitive). Omit for the **project-wide** scope. Order and duplicates are irrelevant.                                                           |
+| `sessionId`  | string   | no       | The conversation to address — the `id` a previous call returned. A session of another project is refused as `NOT_FOUND` (`PLAN_SESSION_NOT_FOUND`). Omit it and your own recent conversation for the scope is used. |
+| `body`       | string   | yes\*    | `append_plan_turn` only — what you want changed about the plan.                                                                                                                                                     |
 
-Re-opening a scope **RESUMES** its conversation (same row, every turn already on
-it); a different anchor set is a different conversation. Anchors are resolved
-and permission-checked before they become a scope, so an item you cannot see is
-a `NOT_FOUND`, never a silent anchor.
+**Without a `sessionId`**, each tool behaves as it did before the id existed, for
+a caller with one conversation: it uses **your own** conversation for the scope
+if you were active in it within the last **2 hours** (AMENDMENT 17 §3), and
+otherwise `open_plan_session` / a first `append_plan_turn` starts a new one. So
+an agent that never passes an id keeps working — it simply cannot reach back to
+an older conversation. Anchors are resolved and permission-checked before they
+become a scope, so an item you cannot see is a `NOT_FOUND`, never a silent
+anchor.
 
-- **`open_plan_session`** — open or resume the thread and read it.
+- **`open_plan_session`** — open or resume a conversation and read it: the one
+  `sessionId` names, else your recent one for the scope, else a new one.
   **Output** — `structuredContent`: the session DTO
   `{ id, projectId, targetKeys, turnCount, lastJobId, lastSubmittedAt, createdAt, updatedAt, turns }`,
   where `turns` is the FULL ordered thread (`user` turns are what was typed,

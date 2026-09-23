@@ -48,6 +48,8 @@ function session(turns: PlanChangeTurnDto[], targetKeys: string[] = []): PlanCha
     turnCount: turns.length,
     lastJobId: null,
     lastSubmittedAt: null,
+    lastActivityAt: '2026-01-01T00:00:00.000Z',
+    origin: 'conversation',
     createdAt: '2026-07-27T09:00:00.000Z',
     updatedAt: '2026-07-27T10:00:00.000Z',
     turns,
@@ -99,6 +101,9 @@ const BASE: PlanChangeConversationState = {
   stopping: false,
   stopped: false,
   queued: [],
+  earlier: null,
+  reopened: null,
+  readOnly: false,
   acts: [],
 };
 

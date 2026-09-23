@@ -1,3 +1,5 @@
+import { plansService } from '@/lib/services/plansService';
+import { adminDb } from './db-reset';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { buildScope, PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -43,7 +45,7 @@ export async function asConversationTurn<T>(
    *  `null` means the project-wide thread. */
   anchor: string | null,
   jobId: string,
-  append: () => Promise<T>,
+  append: (sessionId: string) => Promise<T>,
   opts: { anchorIsWorkItemId?: boolean } = {},
 ): Promise<T> {
   const { sessionId, previousLastJobId } = await withWorkspaceServiceContext(
@@ -76,7 +78,7 @@ export async function asConversationTurn<T>(
   );
 
   try {
-    return await append();
+    return await append(sessionId);
   } finally {
     // Back to the state the BROWSER finds: no turn submitted yet.
     await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -86,4 +88,55 @@ export async function asConversationTurn<T>(
       }),
     );
   }
+}
+
+// ── Session TIME, set rather than waited (Story MOTIR-6011 · MOTIR-6027) ─────
+//
+// The resume window is two hours (`PLAN_SESSION_RESUME_WINDOW_MS`), and a spec
+// never waits real time for it: it moves the session's `lastActivityAt` back.
+// That column is the ONLY input the window reads — `updatedAt` and the turns'
+// own timestamps are not consulted — so moving it is the product's own notion
+// of "a conversation you left three hours ago", not a simulation of one.
+
+/** The member's most recently active planning conversation in the project. */
+export async function latestPlanningSession(
+  email: string,
+): Promise<{ id: string; workspaceId: string; createdById: string }> {
+  const user = await adminDb.user.findUniqueOrThrow({ where: { email } });
+  const session = await adminDb.planChangeSession.findFirstOrThrow({
+    where: { createdById: user.id },
+    orderBy: { lastActivityAt: 'desc' },
+  });
+  return { id: session.id, workspaceId: session.workspaceId, createdById: user.id };
+}
+
+/** Move a conversation's last activity `ms` into the past. */
+export async function agePlanningSession(sessionId: string, ms: number): Promise<void> {
+  await adminDb.planChangeSession.update({
+    where: { id: sessionId },
+    data: { lastActivityAt: new Date(Date.now() - ms) },
+  });
+}
+
+/**
+ * Let the conversation's run FINISH: its latest plan gains one proposal and
+ * closes as `planned` — what the planner's handler does when a real job
+ * completes (`addProposals` → `markPlanned`, the same shipped services). The lane's
+ * motir-ai mock settles a plan job with nothing proposed, so without this the
+ * plan would stay `generating` for ever.
+ */
+export async function finishSessionPlan(sessionId: string, title: string): Promise<string> {
+  const plan = await adminDb.plan.findFirstOrThrow({
+    where: { sessionId },
+    orderBy: { createdAt: 'desc' },
+  });
+  const session = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } });
+  const ctx = { userId: session.createdById!, workspaceId: session.workspaceId };
+  await plansService.addProposals(
+    plan.id,
+    [{ op: 'add', proposedFields: { title, kind: 'task' } }],
+    ctx,
+  );
+  await plansService.markPlanned(plan.id, ctx);
+  return plan.id;
 }

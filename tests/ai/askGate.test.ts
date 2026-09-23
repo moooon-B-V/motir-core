@@ -8,6 +8,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { openTestSession } from '../helpers/planSession';
 
 // The story's GATE (MOTIR-1822) — the seams `askRoutes.test.ts` cannot reach on
 // its own, against a REAL Postgres: the thread as it reads back through the DTO
@@ -49,7 +50,6 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 const { POST: ask } = await import('@/app/api/ai/ask/route');
 const { POST: settle } = await import('@/app/api/ai/ask/settle/route');
-const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
 
 const BASE = 'http://localhost:3000';
 const post = (path: string, body: unknown) =>
@@ -112,7 +112,7 @@ describe('the seam: service → DTO → the RAIL’s own renderer', () => {
     const key = cited.identifier;
     await askAndAnswer('which stories are blocked?', `Two are. [${key}](motir:${cited.id})`, [key]);
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     const answer = thread.turns.filter((t) => t.role === 'assistant').at(-1)!;
     expect(answer.citations).toEqual([key]);
     // …and the summary the rail renders the chip FROM is resolved on the thread,
@@ -123,7 +123,7 @@ describe('the seam: service → DTO → the RAIL’s own renderer', () => {
   it('drops a citation that names nothing — an answer never cites a key it invented', async () => {
     await askAndAnswer('what about billing?', 'Nothing covers it.', ['NOPE-999']);
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     const answer = thread.turns.filter((t) => t.role === 'assistant').at(-1)!;
     expect(answer.citations).toEqual([]);
   });
@@ -133,7 +133,7 @@ describe('the seam: route → store', () => {
   it('persists the question and its answer in `seq` order on the ONE thread', async () => {
     await askAndAnswer('which stories are blocked?', 'Two are.');
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.map((t) => [t.seq, t.role])).toEqual([
       [0, 'user'],
       [1, 'assistant'],
@@ -147,7 +147,7 @@ describe('the seam: route → store', () => {
     await askAndAnswer('which stories are blocked?', `See [${key}](motir:${cited.id}).`, [key]);
 
     // A fresh read, as a reload does: the answer is not client state.
-    const reopened = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const reopened = await openTestSession(activeCtx.current!);
     const answer = reopened.turns.filter((t) => t.role === 'assistant').at(-1)!;
     expect(answer.body).toContain(`motir:${cited.id}`);
     expect(answer.citations).toEqual([key]);
@@ -169,7 +169,7 @@ describe('the seam: a MIXED thread, in both orders', () => {
     submitJobMock.mockResolvedValue({ jobId: 'job-augment-1' });
     await settle(post('/api/ai/ask/settle', { jobId: second.jobId }));
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     const roles = thread.turns.map((t) => t.role);
     // user, assistant(answer), user, system(the shipped submission marker)
     expect(roles).toEqual(['user', 'assistant', 'user', 'system']);
@@ -192,7 +192,7 @@ describe('the seam: a MIXED thread, in both orders', () => {
 
     await askAndAnswer('what does that cover?', 'The four stories under it.');
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.turns.map((t) => t.role)).toEqual(['user', 'system', 'user', 'assistant']);
     const users = thread.turns.filter((t) => t.role === 'user');
     // The plan-change turn keeps its disposition — a later question does not
@@ -242,7 +242,7 @@ describe('the guard: tenant isolation', () => {
       project: other.project,
     };
 
-    const theirs = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const theirs = await openTestSession(activeCtx.current!);
     expect(theirs.turns).toEqual([]);
     expect(theirs.projectId).toBe(other.projectId);
   });
@@ -256,7 +256,7 @@ describe('the guard: tenant isolation', () => {
       theirs.identifier,
     ]);
 
-    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const thread = await openTestSession(activeCtx.current!);
     expect(thread.workItemRefs[theirs.id]).toBeUndefined();
     expect(thread.turns.filter((t) => t.role === 'assistant').at(-1)!.citations).toEqual([]);
   });

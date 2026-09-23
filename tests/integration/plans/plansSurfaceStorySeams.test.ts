@@ -1,12 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-
-// `buildPlanRowViews` is a SERVER module reaching `next-intl/server` for the
-// request-shared formatter, which has no request context in a test. Stubbing just
-// the formatter keeps everything else real — real Postgres, the real services,
-// the real repositories — which is the whole point of this file.
-vi.mock('next-intl/server', () => ({
-  getFormatter: async () => ({ relativeTime: (d: Date) => `at ${d.toISOString()}` }),
-}));
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
@@ -22,15 +14,13 @@ import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../..
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
-const { buildPlanRowViews } = await import('@/app/(authed)/plans/planRowView');
-
 // MOTIR-3242 — the STORY-LEVEL vitest gate for MOTIR-3232.
 //
 // Each feature card shipped its own units. This file drives one card's REAL
 // output into the next card's REAL consumer, against real Postgres, because the
 // seams BETWEEN them are what no per-card test can see:
 //
-//   • read → view-model → row: the page size, the cursor, and BOTH resolved names
+//   • read → page: the page size and the cursor
 //   • counts ↔ pages: a predicate and a `groupBy` drifting apart
 //   • the discard round trip: the three endings that share one status
 //   • add_plan_items → getPlanReview → the plan's SHAPE — the ONLY place the
@@ -104,8 +94,8 @@ async function walkTab(fx: WorkItemFixture, status: (typeof PLAN_STATUS_DTO_VALU
   throw new Error('cursor did not terminate');
 }
 
-describe('SEAM: read → view-model → row', () => {
-  it('pages ten at a time within a status, disjointly, and carries BOTH names', async () => {
+describe('SEAM: read → page', () => {
+  it('pages ten at a time within a status, disjointly', async () => {
     const fx = await makeWorkItemFixture();
     const mara = await createTestUser({ email: 'mara@example.com', name: 'Mara' });
 
@@ -129,13 +119,11 @@ describe('SEAM: read → view-model → row', () => {
     const seen = new Set([...first.plans, ...second.plans].map((p) => p.id));
     expect(seen.size).toBe(12);
 
-    // …and the DTO drives the real view-model, which drives the row.
-    const page = await plansService.listPlans(fx.projectId, fx.ctx, { status: 'approved' });
-    const [view] = await buildPlanRowViews(page.plans, fx.ctx);
-    expect(view!.id).toBe(decided);
-    expect(view!.createdByName).toBe('Mara');
-    expect(view!.decidedByName).toBe(fx.owner.name);
-    expect(view!.whenKey).toBe('approvedAt');
+    // The decided plan is in its own status, not this one. (The plan-row
+    // view-model this seam used to drive is retired: `/plans` lists
+    // conversations since MOTIR-6025, and its row seams live in
+    // `tests/integration/plans/planSessionsList.test.ts`.)
+    expect(seen.has(decided)).toBe(false);
   });
 });
 

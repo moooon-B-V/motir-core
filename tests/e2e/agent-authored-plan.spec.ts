@@ -66,9 +66,17 @@ function mcpOrigin(baseURL: string | undefined): string {
   return baseURL;
 }
 
-/** The Plans list row for a plan, addressed by its link target. */
+/** A plan's chip on the Plans list — its link target is the plan. */
 const planRow = (page: Parameters<typeof signIn>[0], planId: string) =>
   page.locator(`a[href="/plans/${planId}"]`);
+
+/** The whole conversation ROW that plan's chip sits in (`/plans` lists
+ *  conversations since MOTIR-6025; an MCP plan opens its own). */
+const conversationRow = (page: Parameters<typeof signIn>[0], planId: string) =>
+  page
+    .getByRole('list', { name: 'Planning conversations' })
+    .getByRole('listitem')
+    .filter({ has: planRow(page, planId) });
 
 async function signInAsReviewer(page: Parameters<typeof signIn>[0], seed: AgentPlanSeed) {
   await signIn(page, seed.email, AGENT_PLAN_SEED_PASSWORD);
@@ -106,16 +114,18 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     await plansNav.click();
     await page.waitForURL('**/plans');
 
-    const row = planRow(page, authored.planId);
-    await expect(row).toBeVisible();
-    await expect(row).toContainText('Planned');
-    await expect(row).toContainText('3 items');
+    await expect(planRow(page, authored.planId)).toHaveAccessibleName(
+      'Open the plan — Waiting for approval',
+    );
     await beat();
 
-    // The point of the whole story: WHO asked and WHO wrote, on the row where a
-    // reviewer decides which plan to open.
+    // The point of the whole story: WHO asked, and that an AGENT wrote it, on the
+    // row where a reviewer decides which plan to open. The row is the agent's
+    // conversation (MOTIR-6025): its starter is the token's owner, its origin
+    // reads `Agent plan`, and the harness by name is the plan page's to show.
+    const row = conversationRow(page, authored.planId);
     await expect(row).toContainText(seed.reviewerName);
-    await expect(row).toContainText(`via ${AGENT_HARNESS}`);
+    await expect(row).toContainText('Agent plan');
     await beat();
   });
 
@@ -256,7 +266,7 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
   });
 });
 
-test('the list renders the states the happy path skips — long harness, and no author at all', async ({
+test('the list renders the states the happy path skips — a long title, and no author at all', async ({
   page,
   baseURL,
 }) => {
@@ -272,23 +282,23 @@ test('the list renders the states the happy path skips — long harness, and no 
   await signInAsReviewer(page, seed);
   await page.goto('/plans');
 
-  // A long self-reported harness truncates rather than pushing the row around,
-  // and the FULL value stays reachable on the element's title (design Part III §5).
-  const longRow = planRow(page, long.planId);
+  // An agent's conversation has no first turn, so its row is titled by its
+  // plan (MOTIR-6025 AC 1) and names the door that opened it. The long
+  // self-reported harness is the plan page's attribution now, not the row's.
+  const longRow = conversationRow(page, long.planId);
   await expect(longRow).toBeVisible();
-  const harness = longRow.getByTitle(LONG_HARNESS);
-  await expect(harness).toBeVisible();
-  const truncated = await harness.evaluate((el) => el.scrollWidth > el.clientWidth);
-  expect(truncated, 'the long harness is clipped rather than laid out full-width').toBe(true);
-  // The plan TITLE is not shortened by it — it keeps its own ellipsis.
   await expect(longRow).toContainText('Invoicing pipeline migration');
+  await expect(longRow).toContainText('Agent plan');
+  await expect(longRow).not.toContainText(LONG_HARNESS);
 
-  // A plan predating the columns: the attribution entry is ABSENT — no
+  // A plan nobody is recorded as asking for: the starter entry is ABSENT — no
   // placeholder, no dash, nothing that reads as a value.
-  const legacyRow = planRow(page, seed.unattributedPlanId);
+  const legacyRow = conversationRow(page, seed.unattributedPlanId);
   await expect(legacyRow).toBeVisible();
-  await expect(legacyRow).toContainText('Planned');
-  await expect(legacyRow).not.toContainText('via ');
+  await expect(planRow(page, seed.unattributedPlanId)).toHaveAccessibleName(
+    'Open the plan — Waiting for approval',
+  );
+  await expect(legacyRow).toContainText('Generated plan');
   await expect(legacyRow).not.toContainText(seed.reviewerName);
 });
 

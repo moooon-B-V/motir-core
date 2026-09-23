@@ -270,13 +270,29 @@ describe('aiPlanEditsService.submitExpand', () => {
 // `addProposals` callback. These assert the half the submit tests above never
 // covered: the resulting Plan, not just that the job fired.
 describe("aiPlanEditsService — opens the job's Plan on submit", () => {
-  const CASES: Array<{ name: string; run: () => Promise<{ jobId: string; planId: string }> }> = [
-    { name: 'submitAugment', run: () => aiPlanEditsService.submitAugment('add a login flow', ctx) },
+  // `session` (MOTIR-6022; AMENDMENT 17 §4–§5): with no conversation behind the
+  // submit, the plan gets a session of the door's own origin — an expand is
+  // anchored at its root item.
+  const CASES: Array<{
+    name: string;
+    run: () => Promise<{ jobId: string; planId: string }>;
+    session: unknown;
+  }> = [
+    {
+      name: 'submitAugment',
+      run: () => aiPlanEditsService.submitAugment('add a login flow', ctx),
+      session: { origin: 'generation' },
+    },
     {
       name: 'submitContextual',
       run: () => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], ctx),
+      session: { origin: 'generation' },
     },
-    { name: 'submitExpand', run: () => aiPlanEditsService.submitExpand('MOTIR-100', ctx) },
+    {
+      name: 'submitExpand',
+      run: () => aiPlanEditsService.submitExpand('MOTIR-100', ctx),
+      session: { origin: 'expand', targetKeys: ['MOTIR-100'] },
+    },
   ];
 
   beforeEach(() => {
@@ -321,6 +337,7 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
           createdById: ctx.userId,
           authorSource: 'native',
           authorHarness: 'Motir',
+          session: c.session,
         },
         ctx,
       );

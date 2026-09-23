@@ -9569,6 +9569,8 @@ export interface operations {
             content: {
                 "application/json": {
                     targetKeys?: string[];
+                    /** @description The `id` of the planning session to address, as a previous call returned it. Omit to use your resumable session for the scope (or start one with a turn). */
+                    sessionId?: string;
                 };
             };
         };
@@ -9723,6 +9725,8 @@ export interface operations {
             content: {
                 "application/json": {
                     targetKeys?: string[];
+                    /** @description The `id` of the planning session to address, as a previous call returned it. Omit to use your resumable session for the scope (or start one with a turn). */
+                    sessionId?: string;
                     body: string;
                 };
             };
@@ -9897,6 +9901,8 @@ export interface operations {
             content: {
                 "application/json": {
                     targetKeys?: string[];
+                    /** @description The `id` of the planning session to address, as a previous call returned it. Omit to use your resumable session for the scope (or start one with a turn). */
+                    sessionId?: string;
                 };
             };
         };

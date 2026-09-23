@@ -102,5 +102,7 @@ function contextValueKey(context: PlanningLaunchContext): string {
         ? context.repoKey
         : '';
   const hasPlan = 'hasPlan' in context ? String(context.hasPlan) : '';
-  return `${context.kind}|${target}|${hasPlan}`;
+  // `sessionId` changes the address too — `planSession=<id>` (MOTIR-6024).
+  const session = 'sessionId' in context ? (context.sessionId ?? '') : '';
+  return `${context.kind}|${target}|${hasPlan}|${session}`;
 }

@@ -3,7 +3,12 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { planChangeMailboxService } from '@/lib/services/planChangeMailboxService';
-import { mapPlanChangeError, noActiveProject } from '../../_errors';
+import {
+  mapPlanChangeError,
+  missingSessionId,
+  noActiveProject,
+  readSessionId,
+} from '../../_errors';
 
 // POST /api/ai/plan-change/session/mailbox — attach ONE turn to the RUNNING
 // planning job of the active project's conversation (Story MOTIR-4054 ·
@@ -76,13 +81,17 @@ export async function POST(req: Request): Promise<Response> {
   // are not symmetric — folding carries on, restarting withdraws what the pass
   // appended — so an unrecognised value must land on the branch that destroys
   // nothing, which is the same reading `motir-ai`'s parse takes.
+  // The conversation the caller holds (MOTIR-6023): the job must be running on
+  // THIS session, never on a sibling session of the same scope.
+  const sessionId = readSessionId(bag['sessionId']);
+  if (!sessionId) return missingSessionId();
   const disposition = bag['disposition'] === 'restart' ? 'restart' : 'fold';
   const rawTarget = bag['target'];
   const restartTarget = typeof rawTarget === 'string' && rawTarget.length > 0 ? rawTarget : null;
 
   try {
     const result = await planChangeMailboxService.attachTurn(
-      { jobId, body: rawBody, idempotencyKey, disposition, restartTarget },
+      { jobId, sessionId, body: rawBody, idempotencyKey, disposition, restartTarget },
       ctx,
     );
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -116,7 +125,8 @@ export async function GET(req: Request): Promise<Response> {
   const ctx = await getActiveProject();
   if (!ctx) return noActiveProject();
 
-  const jobId = new URL(req.url).searchParams.get('jobId');
+  const params = new URL(req.url).searchParams;
+  const jobId = params.get('jobId');
   if (!jobId) {
     return NextResponse.json(
       { code: 'BAD_REQUEST', error: '`jobId` is required.' },
@@ -124,8 +134,11 @@ export async function GET(req: Request): Promise<Response> {
     );
   }
 
+  const sessionId = readSessionId(params.get('sessionId'));
+  if (!sessionId) return missingSessionId();
+
   try {
-    const result = await planChangeMailboxService.peekForJob(jobId, ctx);
+    const result = await planChangeMailboxService.peekForJob(jobId, ctx, sessionId);
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);

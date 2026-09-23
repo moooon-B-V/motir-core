@@ -75,6 +75,16 @@ export interface PlanChangeTurnDto {
   createdAt: string;
 }
 
+/** Which door opened a planning session (AMENDMENT 17 §4) — the
+ *  `PlanSessionOrigin` enum, restated so the boundary does not import Prisma. */
+export type PlanSessionOriginDto =
+  | 'conversation'
+  | 'mcp'
+  | 'generation'
+  | 'expand'
+  | 'cadence'
+  | 'legacy';
+
 /**
  * The project's plan-change conversation as the rail renders it. `turns` is the
  * FULL ordered thread (the resume payload — re-opening the workspace re-reads
@@ -98,6 +108,11 @@ export interface PlanChangeSessionDto {
   turnCount: number;
   lastJobId: string | null;
   lastSubmittedAt: string | null;
+  /** When the session was last used — every turn and every submit moves it
+   *  (AMENDMENT 17 §3). The resume window and the Plans list read it. */
+  lastActivityAt: string;
+  /** Which door opened the session (AMENDMENT 17 §4). */
+  origin: PlanSessionOriginDto;
   createdAt: string;
   updatedAt: string;
   turns: PlanChangeTurnDto[];
@@ -109,6 +124,17 @@ export interface PlanChangeSessionDto {
    * second inline treatment. Empty when nothing resolved.
    */
   workItemRefs: WorkItemRefMap;
+  /**
+   * The REOPEN read's extras (MOTIR-6024) — filled by `getById` only, which is
+   * how a Plans row reopens a conversation: who started it (the reopened line),
+   * whether the viewer may continue it (else the rail is read-only), and its
+   * still-undecided plan. Optional: every other read leaves them out.
+   */
+  startedBy?: { id: string; name: string } | null;
+  /** Whether the viewer started it — "started by you" on the reopened line. */
+  startedByViewer?: boolean;
+  viewerCanPlan?: boolean;
+  pendingPlanId?: string | null;
 }
 
 /**
@@ -157,4 +183,29 @@ export interface ContextualPlanResultDto extends PlanChangeSubmitResultDto {
 export interface ContextualSessionResumeDto {
   session: PlanChangeSessionDto | null;
   planId: string | null;
+  /** When NOTHING resumed: the scope's most recent other conversation, for the
+   *  fresh-start notice (MOTIR-6024). Absent/null otherwise. */
+  earlier?: EarlierSessionDto | null;
+}
+
+/**
+ * The scope's most recent OTHER conversation — any member's — that a FRESH
+ * start points to (AMENDMENT 17 §3; MOTIR-6024's notice, design §19.8). A read:
+ * nothing about it is recorded.
+ */
+export interface EarlierSessionDto {
+  id: string;
+  targetKeys: string[];
+  lastActivityAt: string;
+  /** Who started it; null for a departed or absent starter. */
+  startedBy: { id: string; name: string } | null;
+  /** Whether the caller started it — picks "Your earlier…" vs "…started by {name}". */
+  mine: boolean;
+}
+
+/** The project-wide RESUME read (`GET /api/ai/plan-change/session`): the
+ *  caller's resumable conversation, or none — and then the earlier one. */
+export interface ResumableSessionDto {
+  session: PlanChangeSessionDto | null;
+  earlier: EarlierSessionDto | null;
 }
