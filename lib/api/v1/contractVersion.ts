@@ -525,5 +525,10 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.35.0` over
  *   MOTIR-5719's `1.34.0` on the same parent branch. If the numbering has moved,
  *   RENUMBER both entries.
+ *
+ * - `1.36.0` — MOTIR-5428 adds the `likely-blocker-count-mismatch` dispatch
+ *   advisory shape: the exact counted claim, its stated number, and the current
+ *   number of `blocked_by` edges. Additive: one new member of an advisory union
+ *   whose severity is explicitly open-ended; no existing shape changes.
  */
-export const V1_CONTRACT_VERSION = '1.35.0';
+export const V1_CONTRACT_VERSION = '1.36.0';

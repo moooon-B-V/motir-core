@@ -238,6 +238,7 @@ async function projectedProseAdvisories(
       hasDesignBlocker: [...(proj.blockedBy.get(node.id) ?? [])].some(
         (blockerId) => blockerType(blockerId) === 'design',
       ),
+      blockerCount: proj.blockedBy.get(node.id)?.size ?? 0,
     };
   });
 

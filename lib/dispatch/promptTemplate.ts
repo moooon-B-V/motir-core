@@ -1,6 +1,7 @@
 import type { DispatchWorkflowMode } from '@/lib/dto/dispatch';
 import { isAgentDecisionItem, isManualReadyItem } from '@/lib/dto/ready';
 import {
+  isBlockerCountAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
@@ -828,7 +829,21 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   const subsumed = advisories.filter(isSubsumptionAdvisory);
   const oversized = advisories.filter(isSizingAdvisory);
   const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
+  const blockerCounts = advisories.filter(isBlockerCountAdvisory);
   const lines: string[] = [];
+
+  if (blockerCounts.length > 0) {
+    lines.push(
+      '',
+      "A COUNTED CLAIM ABOUT THIS CARD'S BLOCKERS DISAGREES WITH THE GRAPH:",
+      ...blockerCounts.map(
+        (a) =>
+          `    - "${a.claim}" says ${a.claimedCount}; the graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}.`,
+      ),
+      '  Check which side is stale before relying on the prose. Update the card body when the',
+      '  graph is authoritative; wire the missing edge when the dependency is real.',
+    );
+  }
 
   if (references.length > 0) {
     lines.push(

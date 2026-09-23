@@ -259,6 +259,47 @@ describe('buildDispatchProseAdvisories — the single-card resolver', () => {
     expect(await buildDispatchProseAdvisories(bare, fx.ctx)).toEqual([]);
     expect(await buildDispatchProseAdvisories(plain, fx.ctx)).toEqual([]);
   });
+
+  it('reports a counted own-blocker claim only when it disagrees with the graph', async () => {
+    const fx = await makeWorkItemFixture();
+    const first = await makeItem(fx, 'First blocker');
+    const second = await makeItem(fx, 'Second blocker');
+    const stale = await makeItem(
+      fx,
+      'Stale count',
+      'The four siblings this card is blocked_by provide the complete substrate.',
+    );
+    for (const blocker of [first, second]) {
+      await workItemsService.linkWorkItems(
+        { fromId: stale.id, toId: blocker.id, kind: 'is_blocked_by' },
+        fx.ctx,
+      );
+    }
+
+    expect(await buildDispatchProseAdvisories(stale, fx.ctx)).toEqual([
+      {
+        kind: 'shape',
+        item: stale.identifier,
+        severity: 'likely-blocker-count-mismatch',
+        claim: 'four siblings this card is blocked_by',
+        claimedCount: 4,
+        blockerCount: 2,
+      },
+    ]);
+
+    const accurate = await makeItem(
+      fx,
+      'Accurate count',
+      'The two siblings this card is blocked_by provide the complete substrate.',
+    );
+    for (const blocker of [first, second]) {
+      await workItemsService.linkWorkItems(
+        { fromId: accurate.id, toId: blocker.id, kind: 'is_blocked_by' },
+        fx.ctx,
+      );
+    }
+    expect(await buildDispatchProseAdvisories(accurate, fx.ctx)).toEqual([]);
+  });
 });
 
 describe('dispatch_prompt — the advisories reach the AGENT', () => {
