@@ -1,0 +1,1660 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The Difficulty field — item page core fields + quick view (MOTIR-6097, a delta)
+    </title>
+    <!-- DELTA MOCK — Subtask MOTIR-6097 (Story MOTIR-6016); MOTIR-6101 builds it. Amends design/work-items/type-executor-picker.mock.html (the core-fields rail, panel 3) and design/work-items/quick-view.mock.html (the quick-view rail); neither base is edited. Only the Difficulty field and its immediate neighbour are drawn. -->
+    <style>
+      :root {
+        --el-page-bg: #ffffff;
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-tabnav-track: #f6f5f4;
+        --el-tabnav-active: #5645d4;
+        --el-accent: #5645d4;
+        --el-success: #1aae39;
+        --el-tint-sky: #dcecfa;
+        --el-link: #0075de;
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-control-x: 10px;
+        --height-control: 36px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .df-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+      }
+      .df-head h1 {
+        font-size: 20px;
+        margin: 0 0 6px;
+        color: var(--el-text-strong);
+      }
+      .df-head p {
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 0;
+        color: var(--el-text-secondary);
+        max-width: 900px;
+      }
+      .df-band {
+        max-width: 1180px;
+        margin: 0 auto 28px;
+      }
+      .df-band-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin: 0 0 10px;
+      }
+      .df-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .df-panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 14px;
+        width: 272px;
+      }
+      .df-panel-wide {
+        width: 560px;
+      }
+      .df-cap {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin: 0 0 10px;
+      }
+      .df-lang {
+        display: inline-block;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 0 6px;
+        margin-right: 6px;
+      }
+      .df-ic {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+      }
+      .df-ic-sm {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+      }
+
+      .df-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .df-fcard {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 10px 14px;
+        box-shadow: var(--shadow-card);
+      }
+      .df-fcard-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 3px;
+      }
+      .df-fcard-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .df-flabel {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .df-chev {
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        margin-top: -2px;
+        border-radius: var(--radius-control);
+        padding: 2px;
+        background: none;
+        border: 0;
+      }
+      .df-chev-open {
+        transform: rotate(180deg);
+      }
+      .df-fval {
+        margin-top: 6px;
+        font-size: 14px;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .df-glyph {
+        color: var(--el-text-faint);
+        display: inline-flex;
+      }
+      .df-set {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        color: var(--el-text-muted);
+        font-size: 14px;
+        background: none;
+        font-family: inherit;
+      }
+      .df-status {
+        display: inline-flex;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .df-edit {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .df-seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+      }
+      .df-seg-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 0;
+        border-radius: calc(var(--radius-btn) - 2px);
+        background: none;
+        color: var(--el-text-secondary);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .df-seg-on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .df-seg-ic {
+        color: var(--el-text-faint);
+        display: inline-flex;
+      }
+      .df-seg-ic-on {
+        color: var(--el-tabnav-active);
+        display: inline-flex;
+      }
+      .df-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border: 0;
+        background: none;
+        padding: 0;
+        color: var(--el-text-secondary);
+        font-family: inherit;
+        font-size: 13px;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .df-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .df-rf {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .df-rf-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 4px;
+        border-radius: var(--radius-control);
+      }
+      .df-rdt {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .df-rchev {
+        margin-left: auto;
+        color: var(--el-text-faint);
+        display: inline-flex;
+      }
+      .df-saved {
+        display: inline-flex;
+        color: var(--el-success);
+      }
+      .df-rdd {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .df-act {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        column-gap: 10px;
+      }
+      .df-avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-strong);
+        font-size: 10px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .df-act-line {
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .df-act-actor {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .df-act-field {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .df-act-vals {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        margin-top: 4px;
+        color: var(--el-text);
+      }
+      .df-from {
+        color: var(--el-text-muted);
+        text-decoration: line-through;
+        text-decoration-color: var(--el-border-strong);
+      }
+      .df-to {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .df-arrow {
+        color: var(--el-text-faint);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-chev"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14M12 5v14" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </g>
+        <!-- lucide signal-low / signal-medium / signal-high — the quiet indicator -->
+        <g
+          id="d-low"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 20h.01M7 20v-4" />
+        </g>
+        <g
+          id="d-medium"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 20h.01M7 20v-4M12 20v-8" />
+        </g>
+        <g
+          id="d-high"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8" />
+        </g>
+        <!-- lucide bot (executor) -->
+        <g
+          id="e-agent"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2M20 14h2M15 13v2M9 13v2" />
+        </g>
+        <g
+          id="i-chevrons"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5M7 9l5-5 5 5" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+      </defs>
+    </svg>
+    <div class="df-head">
+      <h1>The Difficulty field — item page + quick view</h1>
+      <p>
+        MOTIR-6097, for MOTIR-6101. A leaf (task · subtask · bug) carries a difficulty of
+        <b>low · medium · high</b>, or none. It sits directly below Executor on both surfaces. The
+        value is a plain label with a quiet signal glyph in the faint ink — never a coloured pill,
+        so it cannot be mistaken for Priority (which shares the words Medium and High). The dashed
+        outline marks the new element; it is review chrome, not part of the design.
+      </p>
+    </div>
+    <div class="df-band" lang="en">
+      <p class="df-band-title">
+        <span class="df-lang">en</span>1 · Item page — the core fields rail (FieldCard below
+        Executor)
+      </p>
+      <div class="df-row">
+        <div class="df-panel">
+          <p class="df-cap">1 · unset — every leaf before this story; no default is shown</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Executor</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Executor">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Difficulty</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Difficulty">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <button class="df-set">
+                  <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-plus" /></svg
+                  >Set difficulty
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · low</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Executor</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Executor">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Difficulty</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Difficulty">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-low" /></svg></span
+                >Low
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · medium</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Executor</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Executor">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Difficulty</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Difficulty">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-medium" /></svg></span
+                >Medium
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · high</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Executor</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Executor">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Difficulty</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Difficulty">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                >High
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · editing — the Segmented open, plus Clear</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Executor</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Executor">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Difficulty</span
+                ><button
+                  class="df-chev df-chev-open"
+                  aria-expanded="true"
+                  aria-label="Close Difficulty"
+                >
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-edit">
+                <div class="df-seg" role="group" aria-label="Difficulty">
+                  <button class="df-seg-btn" aria-pressed="false">
+                    <span class="df-seg-ic" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-low" /></svg></span
+                    >Low</button
+                  ><button class="df-seg-btn df-seg-on" aria-pressed="true">
+                    <span class="df-seg-ic-on" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-medium" /></svg></span
+                    >Medium</button
+                  ><button class="df-seg-btn" aria-pressed="false">
+                    <span class="df-seg-ic" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-high" /></svg></span
+                    >High
+                  </button>
+                </div>
+                <button class="df-clear">
+                  <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-x" /></svg
+                  >Clear
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · cleared — back to unset (the quick view marks it saved)</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Executor</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Executor">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Difficulty</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Difficulty">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <button class="df-set">
+                  <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-plus" /></svg
+                  >Set difficulty
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · read-only viewer — value, no chevron, no picker</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Executor</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Executor">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top"><span class="df-flabel">Difficulty</span></div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                >High
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="df-band" lang="en">
+      <p class="df-band-title">
+        <span class="df-lang">en</span>2 · Quick view — the rail (EditableRailField below Executor)
+      </p>
+      <div class="df-row">
+        <div class="df-panel">
+          <p class="df-cap">2 · unset — every leaf before this story; no default is shown</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                Executor<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                Difficulty<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">None</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · low</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                Executor<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                Difficulty<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-low" /></svg></span
+                >Low
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · medium</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                Executor<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                Difficulty<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-medium" /></svg></span
+                >Medium
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · high</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                Executor<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                Difficulty<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                >High
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · editing — the Segmented open, plus Clear</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                Executor<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                Difficulty<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <div class="df-seg" role="group" aria-label="Difficulty">
+                  <button class="df-seg-btn" aria-pressed="false">
+                    <span class="df-seg-ic" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-low" /></svg></span
+                    >Low</button
+                  ><button class="df-seg-btn df-seg-on" aria-pressed="true">
+                    <span class="df-seg-ic-on" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-medium" /></svg></span
+                    >Medium</button
+                  ><button class="df-seg-btn" aria-pressed="false">
+                    <span class="df-seg-ic" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-high" /></svg></span
+                    >High
+                  </button>
+                </div>
+                <button class="df-clear">
+                  <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-x" /></svg
+                  >Clear
+                </button>
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · cleared — back to unset (the quick view marks it saved)</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                Executor<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                Difficulty<span class="df-saved" title="Saved"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-check" /></svg></span
+                ><span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">None</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · read-only viewer — value, no chevron, no picker</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">Executor</dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >Agent
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">Difficulty</dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                >High
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="df-band" lang="en">
+      <div class="df-row">
+        <div class="df-panel">
+          <p class="df-cap">
+            3 · A story page — no Work type, no Executor, and NO Difficulty card: no empty slot, no
+            disabled control
+          </p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Status</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Status">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval"><span class="df-status">In Progress</span></div>
+            </div>
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Type</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Type">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">Story</div>
+            </div>
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Priority</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Priority">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">Medium</div>
+            </div>
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">Assignee</span
+                ><button class="df-chev" aria-expanded="false" aria-label="Edit Assignee">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">Mo</div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel df-panel-wide">
+          <p class="df-cap">
+            4 · The activity feed entry — the shipped ActivityEntryRow: field name localised, the
+            values are the stored keys (as Executor’s are today)
+          </p>
+          <div class="df-act">
+            <span class="df-avatar" aria-hidden="true">MO</span>
+            <div>
+              <div class="df-act-line">
+                <span class="df-act-actor">Mo</span> changed the
+                <span class="df-act-field">Difficulty</span>
+              </div>
+              <div class="df-act-vals">
+                <span class="df-from">medium</span><span class="df-arrow" aria-hidden="true">→</span
+                ><span class="df-to">high</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="df-band" lang="zh">
+      <p class="df-band-title">
+        <span class="df-lang">zh</span>1 · Item page — the core fields rail (FieldCard below
+        Executor)
+      </p>
+      <div class="df-row">
+        <div class="df-panel">
+          <p class="df-cap">1 · 未设置 — 本故事之前的所有叶子项；不显示默认值</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">执行者</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 执行者">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">难度</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 难度">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <button class="df-set">
+                  <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-plus" /></svg
+                  >设置难度
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · 低</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">执行者</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 执行者">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">难度</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 难度">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-low" /></svg></span
+                >低
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · 中</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">执行者</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 执行者">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">难度</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 难度">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-medium" /></svg></span
+                >中
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · 高</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">执行者</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 执行者">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">难度</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 难度">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                >高
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · 编辑中 — 分段控件展开，外加清除</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">执行者</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 执行者">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">难度</span
+                ><button class="df-chev df-chev-open" aria-expanded="true" aria-label="关闭 难度">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-edit">
+                <div class="df-seg" role="group" aria-label="难度">
+                  <button class="df-seg-btn" aria-pressed="false">
+                    <span class="df-seg-ic" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-low" /></svg></span
+                    >低</button
+                  ><button class="df-seg-btn df-seg-on" aria-pressed="true">
+                    <span class="df-seg-ic-on" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-medium" /></svg></span
+                    >中</button
+                  ><button class="df-seg-btn" aria-pressed="false">
+                    <span class="df-seg-ic" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-high" /></svg></span
+                    >高
+                  </button>
+                </div>
+                <button class="df-clear">
+                  <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-x" /></svg
+                  >清除
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · 已清除 — 回到未设置（快速查看标记已保存）</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">执行者</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 执行者">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top">
+                <span class="df-flabel">难度</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 难度">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <button class="df-set">
+                  <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-plus" /></svg
+                  >设置难度
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">1 · 只读成员 — 只见值，无展开箭头、无选择器</p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">执行者</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 执行者">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </div>
+            </div>
+            <div class="df-fcard df-fcard-new">
+              <div class="df-fcard-top"><span class="df-flabel">难度</span></div>
+              <div class="df-fval">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                >高
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="df-band" lang="zh">
+      <p class="df-band-title">
+        <span class="df-lang">zh</span>2 · Quick view — the rail (EditableRailField below Executor)
+      </p>
+      <div class="df-row">
+        <div class="df-panel">
+          <p class="df-cap">2 · 未设置 — 本故事之前的所有叶子项；不显示默认值</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                执行者<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                难度<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">无</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · 低</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                执行者<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                难度<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-low" /></svg></span
+                >低
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · 中</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                执行者<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                难度<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-medium" /></svg></span
+                >中
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · 高</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                执行者<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                难度<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                >高
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · 编辑中 — 分段控件展开，外加清除</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                执行者<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                难度<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <div class="df-seg" role="group" aria-label="难度">
+                  <button class="df-seg-btn" aria-pressed="false">
+                    <span class="df-seg-ic" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-low" /></svg></span
+                    >低</button
+                  ><button class="df-seg-btn df-seg-on" aria-pressed="true">
+                    <span class="df-seg-ic-on" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-medium" /></svg></span
+                    >中</button
+                  ><button class="df-seg-btn" aria-pressed="false">
+                    <span class="df-seg-ic" aria-hidden="true"
+                      ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#d-high" /></svg></span
+                    >高
+                  </button>
+                </div>
+                <button class="df-clear">
+                  <svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-x" /></svg
+                  >清除
+                </button>
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · 已清除 — 回到未设置（快速查看标记已保存）</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">
+                执行者<span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">
+                难度<span class="df-saved" title="已保存"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-check" /></svg></span
+                ><span class="df-rchev" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" /></svg
+                ></span>
+              </dt>
+              <dd class="df-rdd">无</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="df-panel">
+          <p class="df-cap">2 · 只读成员 — 只见值，无展开箭头、无选择器</p>
+          <dl class="df-rail">
+            <div class="df-rf">
+              <dt class="df-rdt">执行者</dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#e-agent" /></svg></span
+                >智能体
+              </dd>
+            </div>
+            <div class="df-rf df-rf-new">
+              <dt class="df-rdt">难度</dt>
+              <dd class="df-rdd">
+                <span class="df-glyph" aria-hidden="true"
+                  ><svg class="df-ic-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#d-high" /></svg></span
+                >高
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="df-band" lang="zh">
+      <div class="df-row">
+        <div class="df-panel">
+          <p class="df-cap">
+            3 · 故事页 — 无工作类型、无执行者，也没有难度卡片：不留空位，不显示禁用控件
+          </p>
+          <div class="df-stack">
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">状态</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 状态">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval"><span class="df-status">进行中</span></div>
+            </div>
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">类型</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 类型">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">故事</div>
+            </div>
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">优先级</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 优先级">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">中</div>
+            </div>
+            <div class="df-fcard">
+              <div class="df-fcard-top">
+                <span class="df-flabel">负责人</span
+                ><button class="df-chev" aria-expanded="false" aria-label="编辑 负责人">
+                  <svg class="df-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg>
+                </button>
+              </div>
+              <div class="df-fval">Mo</div>
+            </div>
+          </div>
+        </div>
+        <div class="df-panel df-panel-wide">
+          <p class="df-cap">
+            4 · 活动记录 — 沿用 ActivityEntryRow：字段名本地化，值为存储的键（与执行者现状一致）
+          </p>
+          <div class="df-act">
+            <span class="df-avatar" aria-hidden="true">MO</span>
+            <div>
+              <div class="df-act-line">
+                <span class="df-act-actor">Mo</span> 更改了 <span class="df-act-field">难度</span>
+              </div>
+              <div class="df-act-vals">
+                <span class="df-from">medium</span><span class="df-arrow" aria-hidden="true">→</span
+                ><span class="df-to">high</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

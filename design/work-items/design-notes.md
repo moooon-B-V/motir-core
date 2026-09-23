@@ -8650,3 +8650,59 @@ The Markdown headings and keys the parser reads (`## Question`, `## Why this is 
 - `design/work-items/design-notes.md:6647` and `:6657` — the frame's GIVES/TAKES rows allocating the option rows, their named axes (here: what each option is best for) and the stamp to MOTIR-4914. This section is that allocation.
 
 No sibling asset draws a choice row, so nothing here is redrawn and nothing elsewhere needs a pointer.
+
+## ⭐ The DIFFICULTY field — how hard a leaf is to reason about, on the item page, the quick view and the filter builder (Story MOTIR-6016 · MOTIR-6097 — `core-fields--difficulty.mock.html` + `filter-builder--difficulty.mock.html`, DATED 2026-09-23)
+
+**What it is.** A leaf (task · subtask · bug) carries a difficulty of `low` · `medium` · `high`, or none (`WorkItemDifficulty`, `lib/issues/difficulty.ts`, MOTIR-6096). Epics and stories never carry one — the service refuses it with `DIFFICULTY_NOT_ALLOWED_ON_KIND`. Every leaf that existed before this story is unset, and nothing guesses a value.
+
+**Two delta mocks; the bases are records and are not edited.**
+
+- `design/work-items/core-fields--difficulty.mock.html` amends `design/work-items/type-executor-picker.mock.html` (the core-fields rail, its panel 3) and `design/work-items/quick-view.mock.html` (the quick-view rail).
+- `design/work-items/filter-builder--difficulty.mock.html` amends the builder's condition rows drawn in `design/work-items/placement.mock.html` (panel 5, the Folder row, MOTIR-5374).
+
+### The treatment — a label, never a colour
+
+The value is a plain label with a **quiet signal glyph** (lucide `signal-low` / `signal-medium` / `signal-high`) in `--el-text-faint`, `aria-hidden`. There is **no pill and no hue**, on purpose: Priority shares the words _Medium_ and _High_ and owns a coloured pill, so a coloured difficulty would read as a second priority. The glyph's bar count carries the scale for a reader who scans.
+
+| state                    | item page (`FieldCard`)                                                                       | quick view (`EditableRailField`)                                |
+| ------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| unset                    | the dashed **Set difficulty** affordance — the same one an untyped leaf's **Set a type** uses | **None** in `--el-text-secondary`, as Type and Executor show it |
+| low · medium · high      | glyph + label in `--el-text`                                                                  | glyph + label in the rail's `--el-text-secondary`               |
+| editing                  | the card's chevron turns; a three-option **`Segmented`** plus a **Clear** text button         | the same `Segmented` + **Clear**, inline in the rail            |
+| cleared                  | back to **Set difficulty**                                                                    | back to **None**, with the rail's shipped _Saved_ tick          |
+| read-only viewer         | `FieldCard editable={false}` — the value, no chevron                                          | the value, no chevron, no picker                                |
+| container (epic / story) | **absent** — no card, no empty slot, no disabled control                                      | **absent**, by the same `isTypeableKind` guard Work type uses   |
+
+**Why a `Segmented` and not a `Combobox`.** Three ordered values fit one row, and `Segmented` is already how the Executor control is edited (`components/issues/ExecutorPicker.tsx`), so the two neighbouring fields edit the same way. The `Segmented` has no empty member, so **Clear** sits beside it rather than inside it — a person clears on purpose, and there is no fourth "None" segment to press by accident.
+
+**Placement.** Directly below **Executor** on both surfaces, inside the same `isTypeableKind(kind)` branch that renders Work type and Executor — so the leaf-only rule is the rendering rule, not a second check. Unlike Executor it does **not** wait for a type: a leaf with no type can still have a difficulty.
+
+**The activity entry** is the shipped `ActivityEntryRow` unchanged: _Mo changed the **Difficulty**_ with the struck old value → new value. The field NAME is localised (`activity.fields.difficulty`, MOTIR-6096); the VALUES are the stored keys (`medium → high`), exactly as Executor's are today (`coding_agent → human`). Localising activity values is a feed-wide question, not this field's, and is not drawn here.
+
+### The filter row
+
+Difficulty is a **nullable closed enum**, so it takes the registry's nullable-enum operator set — the four Work type offers (`lib/filters/registry.ts`): **is any of** · **is none of** · **is empty** · **is not empty**, labelled by the shipped `issueViews.advancedOpIs*` strings. It joins the field menu's **Fields** group directly after **Work type**. The value listbox lists the three values easiest first, multi-select, each with the same faint signal glyph. The applied summary chip reads _**Difficulty** is any of Medium, High_. The board's filter control mounts the same builder, so one row serves the list and the board.
+
+### Composed primitives
+
+`Card` (via the item page's `FieldCard`), `Segmented` (`packages/design-system/src/components/ui/Segmented.tsx`), the quick view's `QuickViewRailField` / `EditableRailField`, the builder's `Combobox` rows and multi-select value box (`FilterConditionBuilder.tsx`), and lucide icons. Colour only through `--el-*` (`--el-text`, `--el-text-secondary`, `--el-text-muted` on white only, `--el-text-faint` on glyphs only, `--el-tabnav-track` / `--el-tabnav-active` for the `Segmented`, `--el-border` / `--el-border-strong`, `--el-success` for the saved tick); shape through the radius / spacing / height tokens. `grep -- '--color-'` over both mocks returns nothing.
+
+### Access paths
+
+- **Item page** — any row in the List, the Tree or the Board opens `/items/<KEY>`; the field sits in the right-hand core-fields rail.
+- **Quick view** — a row click in the List, or a card click on the Board, opens the quick view; the field sits in its rail.
+- **Filter builder** — the List's **Advanced** filter button, or the Board's filter control, opens the builder; **Add condition** → **Difficulty**.
+
+### Strings (en · zh)
+
+Already in both catalogues (MOTIR-6096): `activity.fields.difficulty` _Difficulty · 难度_, `labels.difficulty.{low,medium,high}` _Low · 低, Medium · 中, High · 高_. **New, owed by the builders:** the field label on the item page and the quick view (_Difficulty · 难度_), **Set difficulty · 设置难度**, the `Segmented`'s aria-label, and the builder's field label `issueViews.advancedFieldDifficulty` (_Difficulty · 难度_). **Clear · 清除** reuses the shipped word.
+
+### GIVES / TAKES — who builds what
+
+| element                                                                                                                                                                                          | built by       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| the item page's Difficulty `FieldCard` (every state above), the quick view's rail field (every state), the `Segmented` + Clear editor, the absence on an epic / story, and their en + zh strings | **MOTIR-6101** |
+| the builder's Difficulty field-menu entry, its four operators, the value listbox, the applied summary chip on the List and the Board, and `issueViews.advancedFieldDifficulty` in en + zh        | **MOTIR-6100** |
+| the activity entry — nothing to build; MOTIR-6096 already registered the field and its label                                                                                                     | —              |
+
+**Not drawn, and owed by nobody:** a List column or a Board-card badge (the story asks for a filter), the plan review's rendering of a proposed difficulty (the sibling planner story, MOTIR-6095), and any model-choice UI.
