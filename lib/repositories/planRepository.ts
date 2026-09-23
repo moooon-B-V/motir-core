@@ -321,6 +321,31 @@ export const planRepository = {
     });
   },
 
+  /**
+   * Every `planned` plan, oldest id first — the plan-gate BACKFILL's candidate scan
+   * (MOTIR-6039; ADR `approval-gates.md` §11.9). Narrowed to one workspace when
+   * `workspaceId` is given.
+   *
+   * Cross-workspace, so it runs under `withSystemContext` against the plan policy's
+   * `FOR SELECT` system arm (`plan_system_read`). It selects on STATUS only: whether a
+   * plan holds proposals and already has an awaiting gate is decided per plan by
+   * `planGateService`, under that plan's own workspace binding, so the scan never
+   * re-states the raise's predicate.
+   */
+  async listPlannedForGateBackfill(
+    scope: { workspaceId?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Plan, 'id' | 'workspaceId' | 'projectId' | 'createdById'>>> {
+    return tx.plan.findMany({
+      where: {
+        status: 'planned',
+        ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
+      },
+      select: { id: true, workspaceId: true, projectId: true, createdById: true },
+      orderBy: { id: 'asc' },
+    });
+  },
+
   async create(data: Prisma.PlanUncheckedCreateInput, tx: Prisma.TransactionClient): Promise<Plan> {
     return tx.plan.create({ data });
   },

@@ -160,6 +160,9 @@ A plan that becomes out of date because work it changes was finished or
 cancelled elsewhere stops asking. Its row leaves To approve, and the plan page
 says why.
 
+Plans that were already waiting for approval before this shipped were given their
+question once, by `pnpm db:backfill:plan-gates` (the same raise a new plan gets).
+
 ## What you see
 
 The gate always renders as the same three bands, in the same order, and the order

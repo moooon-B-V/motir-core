@@ -53,6 +53,33 @@ const KIND = 'plan_approval' as const;
 /** The two causes a plan-side writer withdraws a plan gate with (§11.7). */
 export type PlanGateSupersedeCause = Extract<LiveSupersedeCause, 'plan_stale' | 'plan_discarded'>;
 
+/**
+ * Whether a plan asks a question RIGHT NOW (§11.7 row 1): it is `planned` and holds at
+ * least one proposal. Returns the gate's subject id (the plan's), or null. The ONE
+ * predicate both {@link planGateService.raise} and {@link planGateService.assess} use,
+ * so the backfill's `--dry-run` cannot disagree with the raise it rehearses.
+ */
+async function askedSubjectOf(
+  plan: Pick<Plan, 'id' | 'workspaceId'>,
+  tx: Prisma.TransactionClient,
+): Promise<string | null> {
+  const subjectId = await currentPlanSubject(plan.id, plan.workspaceId, tx);
+  if (!subjectId) return null;
+  if ((await planItemRepository.countByPlan(plan.id, tx)) === 0) return null;
+  return subjectId;
+}
+
+/**
+ * What {@link planGateService.raise} WOULD do to a plan, read without writing
+ * (MOTIR-6039's backfill; ADR §11.9):
+ *
+ *   · `raise`           — a question with no awaiting gate: a raise inserts one.
+ *   · `already_awaiting` — a question already asked: a raise is a no-op.
+ *   · `no_proposals`    — `planned` but empty: nothing to ask.
+ *   · `not_planned`     — any other status (or gone): nothing to ask.
+ */
+export type PlanGateAssessment = 'raise' | 'already_awaiting' | 'no_proposals' | 'not_planned';
+
 /** What {@link planGateService.raise} did. */
 export interface PlanGateRaise {
   /** True when THIS call inserted the awaiting row. */
@@ -78,9 +105,8 @@ export const planGateService = {
     tx: Prisma.TransactionClient,
   ): Promise<PlanGateRaise> {
     await planRepository.lockById(plan.id, tx);
-    const subjectId = await currentPlanSubject(plan.id, plan.workspaceId, tx);
+    const subjectId = await askedSubjectOf(plan, tx);
     if (!subjectId) return { raised: false };
-    if ((await planItemRepository.countByPlan(plan.id, tx)) === 0) return { raised: false };
     const raised = await approvalGateRepository.createCardlessAwaitingIfAbsent(
       {
         workspaceId: plan.workspaceId,
@@ -95,6 +121,31 @@ export const planGateService = {
     // Under the plan lock the row just raised — or the winner's — is the one awaiting.
     const [gate] = await approvalGateRepository.findAwaitingCardlessBySubject(KIND, subjectId, tx);
     return { raised, gate };
+  },
+
+  /**
+   * PREDICT a {@link planGateService.raise} without writing (the backfill's `--dry-run`,
+   * and the real run's classification of a plan the raise skipped). Shares the raise's
+   * own predicate ({@link askedSubjectOf}); the only extra read is the awaiting row the
+   * raise's `ON CONFLICT DO NOTHING` would collide with. Lock-free: a rehearsal must not
+   * hold plan locks against live traffic, and a caller that needs the answer to be
+   * stable reads it after `raise` has taken the lock in the same transaction.
+   */
+  async assess(
+    plan: Pick<Plan, 'id' | 'workspaceId'>,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanGateAssessment> {
+    const subjectId = await askedSubjectOf(plan, tx);
+    if (!subjectId) {
+      const row = await planRepository.findById(plan.id, plan.workspaceId, tx);
+      return row?.status === 'planned' ? 'no_proposals' : 'not_planned';
+    }
+    const [awaiting] = await approvalGateRepository.findAwaitingCardlessBySubject(
+      KIND,
+      subjectId,
+      tx,
+    );
+    return awaiting ? 'already_awaiting' : 'raise';
   },
 
   /**
