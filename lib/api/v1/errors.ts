@@ -395,6 +395,12 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // entrances answering one condition two ways is what "no second approval
   // implementation" is meant to prevent.
   PLAN_NOT_IN_EXPECTED_STATUS: 409,
+  // MOTIR-6105 — a `planned` plan holding NO proposals (the legacy row MOTIR-4124
+  // left unmigrated). 409, the status the in-app approve answers for the same
+  // `PlanHasNoProposalsError`: the request is fine, the plan's STATE is what
+  // cannot be approved, and the answer the reviewer is owed is Decline. Unmapped,
+  // the wrapper logged a correct refusal as an unhandled fault and answered 500.
+  PLAN_HAS_NO_PROPOSALS: 409,
   // ⚠️ 422 HERE, where the BROWSER route answers 400 — and the difference is
   // the published vocabulary, not a disagreement about the condition. v1's
   // statuses are a closed set (`lib/api/v1/openapi/statuses.ts`, ADR §4's table
