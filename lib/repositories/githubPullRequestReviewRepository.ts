@@ -29,6 +29,8 @@ export interface GithubPullRequestReviewUpsertInput {
   reviewerPermission: GithubRepositoryPermission;
   submittedAt: Date;
   htmlUrl?: string | null;
+  /** `review.body` — what the reviewer wrote; null when there is none (MOTIR-6074). */
+  body?: string | null;
 }
 
 export const githubPullRequestReviewRepository = {
@@ -60,6 +62,7 @@ export const githubPullRequestReviewRepository = {
       reviewerPermission,
       submittedAt,
       htmlUrl = null,
+      body = null,
     } = input;
 
     // The dismissal guard is a conditional updateMany rather than an upsert's
@@ -67,7 +70,7 @@ export const githubPullRequestReviewRepository = {
     // is dismissed matches nothing here and is left exactly as it stands.
     const updated = await tx.githubPullRequestReview.updateMany({
       where: { githubReviewId, state: { not: 'dismissed' } },
-      data: { state, reviewerPermission, submittedAt, reviewerLogin, htmlUrl },
+      data: { state, reviewerPermission, submittedAt, reviewerLogin, htmlUrl, body },
     });
 
     if (updated.count === 0) {
@@ -96,6 +99,7 @@ export const githubPullRequestReviewRepository = {
             reviewerPermission,
             submittedAt,
             htmlUrl,
+            body,
           },
         ],
         skipDuplicates: true,

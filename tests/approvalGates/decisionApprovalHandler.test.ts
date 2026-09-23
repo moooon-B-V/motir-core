@@ -145,7 +145,13 @@ function awaitingGate(itemId: string, subjectVersion: string | null = null) {
 
 const decide = (gateId: string, decision: 'approve' | 'request_changes') =>
   approvalGatesService.decide(
-    { stamp: DECIDED_WITHOUT_A_READER, gateId, decision, source: 'ui' },
+    {
+      stamp: DECIDED_WITHOUT_A_READER,
+      gateId,
+      decision,
+      source: 'ui',
+      noteMd: decision === 'request_changes' ? 'Needs changes.' : null,
+    },
     fx.ctx,
   );
 

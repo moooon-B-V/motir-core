@@ -355,10 +355,13 @@ test.describe('an agent’s decision waits for a person', () => {
         dev.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }),
       ).toBeDisabled();
       // Request changes is exactly what this case needs — and it moves nothing.
-      const action = serverAction(page);
       await dev
         .getByRole('button', { name: en.approvalGate.verb.requestChanges, exact: true })
         .click();
+      // A refusal SAYS WHY (MOTIR-6075) — here, that there is no document to accept.
+      await dev.getByLabel(en.approvalGate.reason.label).fill('There is no decision document.');
+      const action = serverAction(page);
+      await dev.getByRole('button', { name: en.approvalGate.reason.proceed, exact: true }).click();
       expect((await action).status()).toBe(200);
       await expect(dev.getByText(en.approvalGate.state.changesRequested)).toBeVisible();
       expect(journal().filter((call) => call.method === 'PUT')).toHaveLength(1);

@@ -148,6 +148,7 @@ describe('the /approvals page', () => {
               },
               subject: null,
               confirmedRecord: null,
+              refusalReason: null,
               chosenOption: null,
             },
           ],

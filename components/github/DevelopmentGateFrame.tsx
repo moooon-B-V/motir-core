@@ -9,6 +9,7 @@ import {
   useRefusalCopy,
   type GateVerb,
 } from '@/components/approvals/ApprovalGateControl';
+import { useRefusalVerb } from '@/components/approvals/RefusalReason';
 import { useOptimisticStatusWriter } from '@/app/(authed)/items/[key]/_components/OptimisticStatusProvider';
 import type {
   approveAndMergeAction,
@@ -252,6 +253,8 @@ export function DevelopmentGateFrame({
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
   const tGate = useTranslations('approvalGate');
+  // A refusal SAYS WHY (MOTIR-6075; design `approval-control--refusal-reason.mock.html` Panel 2).
+  const refusalVerb = useRefusalVerb();
   const tDesign = useTranslations('approvalGate.designResult');
   const tAcceptance = useTranslations('approvalGate.acceptanceResult');
   const tDecision = useTranslations('approvalGate.decision');
@@ -462,7 +465,11 @@ export function DevelopmentGateFrame({
   const membersIn = (kind: RowMergeOutcome['kind']) =>
     members.filter((member) => rowOutcomes.get(rowKey(member.repo, member.number))?.kind === kind);
 
-  async function onDecide(decision: GateDecision): Promise<GateRefusal | null> {
+  async function onDecide(
+    decision: GateDecision,
+    _optionId?: string,
+    noteMd?: string,
+  ): Promise<GateRefusal | null> {
     if (!actions) return null;
     if (decision === 'approve') {
       setPressing(true);
@@ -497,6 +504,9 @@ export function DevelopmentGateFrame({
       decision,
       identifier: itemIdentifier,
       stamp: read.stamp ?? '',
+      // The refusal's REQUIRED reason (ADR §10a). This path is only ever a refusal —
+      // an approval goes through `approveAndMerge` above — so the note always travels.
+      noteMd,
     });
     if (!result.ok) return result.refusal;
     setDecided(result.gate);
@@ -630,15 +640,11 @@ export function DevelopmentGateFrame({
   // ── Band 3 ────────────────────────────────────────────────────────────────────
   const verbs: GateVerb[] = actions
     ? [
-        {
-          decision: 'request_changes',
-          label: tGate('verb.requestChanges'),
-          variant: 'secondary',
-          // Sending the pull requests back records a note and moves nothing, so it does not
-          // confirm — a reversible act asked twice is friction rather than care.
-          confirms: false,
+        // Sending the work back moves nothing, and now CONFIRMS: the confirm band is where
+        // the REQUIRED reason is written (ADR §10a) — the press asks why, not "are you sure".
+        refusalVerb(isDecision ? 'decision' : 'commits', itemIdentifier, {
           disabled: verbsDisabled,
-        },
+        }),
         {
           decision: 'approve',
           label: t('verb.approveAndMerge'),

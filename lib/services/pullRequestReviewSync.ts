@@ -94,6 +94,9 @@ interface GateReviewSet {
   members: MemberReviews[];
   /** Every member's pull-request row id, in the gate's own order. */
   memberPullRequestIds: string[];
+  /** What each review SAID, by `githubReviewId` — kept beside the verdict rather than
+   *  inside it, because the verdict reads a review's standing and never its text. */
+  bodies: Map<string, string | null>;
 }
 
 /**
@@ -150,6 +153,7 @@ async function readGateReviewSet(
       rows: byPullRequest.get(pullRequestId) ?? [],
     })),
     memberPullRequestIds: pairs.map((p) => p.pullRequestId),
+    bodies: new Map(rows.map((row) => [row.githubReviewId, row.body])),
   };
 }
 
@@ -220,7 +224,15 @@ async function evaluateOne(workItemId: string, workspaceId: string): Promise<Rev
   }
 
   const decision = verdict.verdict === 'approved' ? 'approve' : 'request_changes';
-  const noteMd = verdict.verdict === 'approved' ? countingReviewNote(verdict.counting) : null;
+  // ⚠️ A REFUSAL SAYS WHY — and on GitHub, what the reviewer WROTE is the why (ADR §10b,
+  // MOTIR-6074). The deciding review's body becomes the gate's reason; a review with no
+  // text records NULL, which a surface reads as *no reason given on GitHub*. This path is
+  // never refused for an empty reason: the door keys that rule on a source somebody
+  // PRESSED, and nobody pressed this in Motir.
+  const noteMd =
+    verdict.verdict === 'approved'
+      ? countingReviewNote(verdict.counting)
+      : (set.bodies.get(verdict.decider.githubReviewId) ?? null);
   const ctx: Ctx = { userId: actors.writerUserId, workspaceId: set.workspaceId };
 
   try {

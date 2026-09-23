@@ -1134,6 +1134,8 @@ const RECORD_GATE_SELECT = {
   // The room's person cell says WHERE a decision was made as well as who
   // (MOTIR-5599) — the two are one question in a 144px cell.
   decisionSource: true,
+  // A refusal's REASON (MOTIR-6075) — the mapper keeps it on `changes_requested` only.
+  noteMd: true,
   subjectVersion: true,
   // What a CHOICE picked (MOTIR-5897) — a decided choice row names it.
   chosenOption: true,

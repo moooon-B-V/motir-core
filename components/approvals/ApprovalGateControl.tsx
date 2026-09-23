@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { FormField } from '@/components/ui/FormField';
 import { Textarea } from '@/components/ui/Textarea';
+import { RefusalReasonQuote } from './RefusalReason';
 import { PortRenderStatusProvider, usePortRenderStatus } from './portRenderStatus';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 import type { GateDecision } from '@/lib/dto/approvalGate';
@@ -1013,13 +1014,30 @@ export function ApprovalGateControl({
     // an approval, and it is this frame's confirm, pending and refusal that report it).
     // Only a verb that NAMES an option passes one, so every other kind's `onDecide`
     // is called exactly as it always was.
-    const refusal = verb.perform
-      ? await verb.perform()
-      : note !== undefined
-        ? await onDecide(verb.decision, undefined, note)
-        : verb.optionId !== undefined
-          ? await onDecide(verb.decision, verb.optionId)
-          : await onDecide(verb.decision);
+    // ⚠️ A SEND THAT THROWS — the action failed, the network died — is the union's own
+    // `UNEXPECTED` arm (`lib/approvalGates/refusals.ts`), drawn IN PLACE like every other
+    // refusal. Unhandled, the rejection left the frame at *Recording…* for ever, with no
+    // way on (MOTIR-6077 found it by injecting a 5xx).
+    let refusal: GateRefusal | null;
+    try {
+      refusal = verb.perform
+        ? await verb.perform()
+        : note !== undefined
+          ? await onDecide(verb.decision, undefined, note)
+          : verb.optionId !== undefined
+            ? await onDecide(verb.decision, verb.optionId)
+            : await onDecide(verb.decision);
+    } catch {
+      refusal = { tag: 'UNEXPECTED' };
+    }
+    // A note verb the DOOR refused as not offered is the empty-reason refusal arriving
+    // late (a stale client, a race — MOTIR-6075): it is answered IN PLACE, with the
+    // field's own error, exactly as the empty press above is. The band stays open.
+    if (refusal && verb.note && refusal.tag === 'APPROVAL_GATE_VERB_NOT_OFFERED') {
+      setPhase({ kind: 'confirming', verb });
+      setNoteRefused(true);
+      return;
+    }
     // On success the CALLER has reconciled and re-rendered us with the decided
     // gate, so there is no success branch to draw here — which is what keeps
     // this component free of the write's own state.
@@ -1260,6 +1278,11 @@ export function ApprovalGateControl({
           {gate.state === 'changes_requested' ? (
             <span>{changesRequestedLine ?? t('record.willRepublish')}</span>
           ) : null}
+          {/* A REFUSAL SAYS WHY (MOTIR-6075; design Panel 4) — quoted as the overturned
+              record quotes its note, after who / when / version and the kind's line. */}
+          {gate.state === 'changes_requested' ? (
+            <RefusalReasonQuote noteMd={gate.noteMd} decisionSource={gate.decisionSource} />
+          ) : null}
           {/* ⚠️ ONLY ON AN APPROVAL, AND ONLY WHEN THE KIND ANSWERED. §6c pins
               for approvals alone, so the line has no meaning on a rejection —
               and `null` means the kind was not asked, which renders nothing
@@ -1392,7 +1415,10 @@ export function ApprovalGateControl({
                       disabled={
                         verb.disabled === true ||
                         phase.kind === 'pending' ||
-                        phase.kind === 'refused'
+                        // ⚠️ EXCEPT `UNEXPECTED` — a send that failed in transit is RETRIED,
+                        // and its own copy says so ("check your connection and try again").
+                        // Every other refusal is about the question and would be refused again.
+                        (phase.kind === 'refused' && phase.refusal.tag !== 'UNEXPECTED')
                       }
                       aria-disabled={verb.disabled === true ? true : undefined}
                       onClick={() =>

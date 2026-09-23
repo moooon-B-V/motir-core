@@ -717,6 +717,14 @@ export interface ApprovalRecordDecidedRowDto {
    * other kind and on an overturned decision.
    */
   confirmedRecord: ConfirmedRecordDTO | null;
+  /**
+   * WHAT A REFUSAL ASKED FOR (Story MOTIR-6067 · MOTIR-6075; ADR `approval-gates.md` §10a–b)
+   * — the gate's `noteMd`, on a `changes_requested` row ONLY. Null on every other state:
+   * an approval's note (a synced approval's review list) and an overturn's note are not a
+   * refusal's reason, and the row does not quote them. With `decisionSource` it says where
+   * the reason came from — a GitHub review with no body is null here.
+   */
+  refusalReason: string | null;
 }
 
 /** One SECTION of the room: its rows on this page, and its total over every page. */

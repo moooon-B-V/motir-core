@@ -103,7 +103,13 @@ const statusOf = async (id: string) =>
 
 const decide = (gateId: string, decision: 'approve' | 'request_changes') =>
   approvalGatesService.decide(
-    { gateId, decision, noteMd: null, source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
+    {
+      gateId,
+      decision,
+      noteMd: decision === 'request_changes' ? 'Needs changes.' : null,
+      source: 'ui',
+      stamp: DECIDED_WITHOUT_A_READER,
+    },
     fx.ctx,
   );
 

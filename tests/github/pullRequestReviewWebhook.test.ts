@@ -208,6 +208,23 @@ describe('recording a review (MOTIR-5598)', () => {
     );
   });
 
+  it('records what a changes-requested review SAID, and that text is the gate’s reason (MOTIR-6074)', async () => {
+    const { pr, gate } = await pullRequest({ linked: true, withGate: true });
+
+    const result = await send(delivery('submitted-changes-requested'));
+
+    expect(result).toEqual({ event: 'pull_request_review', outcome: 'decided_changes_requested' });
+    const [row] = await reviewRows(pr.id);
+    expect(row!.body).toBe('Looks right to me.');
+    expect(await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate!.id } })).toMatchObject(
+      {
+        state: 'changes_requested',
+        noteMd: 'Looks right to me.',
+        decisionSource: 'github',
+      },
+    );
+  });
+
   it('is IDEMPOTENT on the review id — the same delivery twice leaves one row', async () => {
     const { pr } = await pullRequest({ linked: true, withGate: true });
     const body = delivery('submitted-approved');

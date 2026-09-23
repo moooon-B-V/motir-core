@@ -4226,10 +4226,13 @@ anything else: `github_pull_request_review` stores no body
 (`prisma/schema.prisma`, `model GithubPullRequestReview`). So:
 
 - **The review BODY is captured.** A new nullable `body` column on
-  `github_pull_request_review`, written from `review.body` on every
-  `submitted` / `edited` delivery (`githubWebhookService`'s
+  `github_pull_request_review`, written from `review.body` whenever the row is
+  written — a `submitted` or `dismissed` delivery (`githubWebhookService`'s
   `pull_request_review` arm, via the normalised event in `lib/git/types.ts`).
-  Expand-only. An empty or absent body is stored as NULL.
+  Expand-only. An empty or absent body is stored as NULL, trimmed otherwise.
+  **An `edited` delivery stays ignored**, as it is today: a `changes_requested`
+  review decides the gate on the delivery that SUBMITS it, so an edit always
+  arrives after the decision, and the decided row is immutable anyway.
 - **The deciding review's body is the reason.** §8's FOURTH AMENDMENT decision 1
   decides the gate `changes_requested` on the FIRST countable changes-requested
   review; that review's body is passed as `noteMd`, trimmed, NULL when empty.

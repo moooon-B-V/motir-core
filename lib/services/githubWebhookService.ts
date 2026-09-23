@@ -481,6 +481,7 @@ export const githubWebhookService = {
           reviewerPermission,
           submittedAt: review.review.submittedAt,
           htmlUrl: review.review.htmlUrl,
+          body: review.review.body,
         },
         tx,
       );

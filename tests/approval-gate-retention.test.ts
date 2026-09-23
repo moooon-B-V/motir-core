@@ -606,6 +606,7 @@ describe('the decide response says whether THIS version’s files were kept (MOT
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: (await gateFor(v1.id)).id,
         decision: 'request_changes',
+        noteMd: 'Needs changes.',
         source: 'ui',
       },
       fx.ctx,

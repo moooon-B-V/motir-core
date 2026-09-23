@@ -26,7 +26,14 @@ export async function decideAcceptance(
     where: { workItemId, kind: 'acceptance_result', state: 'awaiting' },
   });
   await approvalGatesService.decide(
-    { gateId: gate.id, decision, noteMd: null, source: 'ui', stamp: DECIDED_WITHOUT_A_READER },
+    {
+      gateId: gate.id,
+      decision,
+      // A refusal SAYS WHY (ADR §10a, MOTIR-6074) — the door refuses a reasonless one.
+      noteMd: decision === 'request_changes' ? 'Needs changes.' : null,
+      source: 'ui',
+      stamp: DECIDED_WITHOUT_A_READER,
+    },
     ctx,
   );
   const evidence = await acceptanceEvidenceService.getForGateSubject(

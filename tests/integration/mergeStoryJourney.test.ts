@@ -244,7 +244,12 @@ async function decide(gateId: string, decision = 'approve') {
   const res = await decideRoute(
     new Request(`http://localhost/api/approval-gates/${gateId}/decide`, {
       method: 'POST',
-      body: JSON.stringify({ decision, stamp }),
+      // A refusal SAYS WHY (ADR §10a) — the route refuses a reasonless one.
+      body: JSON.stringify({
+        decision,
+        stamp,
+        ...(decision === 'request_changes' ? { noteMd: 'Needs changes.' } : {}),
+      }),
     }),
     { params: Promise.resolve({ id: gateId }) },
   );

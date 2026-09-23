@@ -207,6 +207,7 @@ describe('deciding the gate', () => {
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
+        noteMd: 'Needs changes.',
         source: 'ui',
       },
       fx.ctx,

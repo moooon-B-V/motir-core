@@ -19,6 +19,7 @@ import { Pill } from '@/components/ui/Pill';
 import { ChoiceGateFrame } from '@/components/approvals/ChoiceGate';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import { DecisionConfirmGateFrame } from '@/components/approvals/DecisionConfirmGate';
+import { useRefusalVerb } from './RefusalReason';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from '@/app/(authed)/items/[key]/_components/DesignResultPanel';
 import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
@@ -368,6 +369,8 @@ export function ApprovalOverlay() {
   const tc = useTranslations('common');
   const tRow = useTranslations('workbench.approvals');
   const tGate = useTranslations('approvalGate');
+  // A refusal SAYS WHY (MOTIR-6075) — built here, used in the branch that knows the subject.
+  const refusalVerb = useRefusalVerb();
   const tDesign = useTranslations('approvalGate.designResult');
   const tAcceptance = useTranslations('approvalGate.acceptanceResult');
   const tPullRequest = useTranslations('approvalGate.pullRequestApproval');
@@ -684,12 +687,9 @@ export function ApprovalOverlay() {
       const decidedState = gate.state !== 'awaiting';
 
       const verbs: GateVerb[] = [
-        {
-          decision: 'request_changes',
-          label: tGate('verb.requestChanges'),
-          variant: 'secondary',
-          confirms: false,
-        },
+        // A design or a recording sent back: the reason is REQUIRED (ADR §10a; design
+        // `approval-control--refusal-reason.mock.html` Panel 1).
+        refusalVerb('version', identifier),
         {
           decision: 'approve',
           label: tGate('verb.approve'),

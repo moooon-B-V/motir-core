@@ -65,6 +65,16 @@ describe('parseReviewEvent — normalising a pull_request_review delivery (MOTIR
     expect(event!.review.htmlUrl).toContain('#pullrequestreview-999100');
   });
 
+  it('carries the review BODY, trimmed, and NULL when there is none (MOTIR-6074)', () => {
+    const base = fixture('submitted-changes-requested') as { review: Record<string, unknown> };
+    const withBody = { ...base, review: { ...base.review, body: '  Add a ceiling.\n' } };
+    expect(githubProvider.parseReviewEvent!(withBody)!.review.body).toBe('Add a ceiling.');
+    for (const body of ['', '   ', null, undefined, 42]) {
+      const blank = { ...base, review: { ...base.review, body } };
+      expect(githubProvider.parseReviewEvent!(blank)!.review.body).toBeNull();
+    }
+  });
+
   it('normalises changes_requested, commented, dismissed and edited', () => {
     expect(
       githubProvider.parseReviewEvent!(fixture('submitted-changes-requested'))!.review.state,
