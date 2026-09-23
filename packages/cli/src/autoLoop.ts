@@ -70,6 +70,23 @@ export function isAgentDecisionItem(item: {
 }
 
 /**
+ * A `design` card an AGENT runs — its published result raises a design gate that
+ * a PERSON answers, so a scoped drain holds the cards waiting on it until that
+ * gate is approved, exactly as it holds a decision's (MOTIR-6117).
+ *
+ * Landing is not approval: the drain used to count a landed design as a
+ * satisfied blocker and dispatch its dependents straight into the run-time
+ * design gate, whose remedy — propose a new design card — is wrong for a design
+ * that is simply awaiting a person.
+ */
+export function isAgentDesignItem(item: {
+  type?: string | null;
+  executor?: string | null;
+}): boolean {
+  return item.type === 'design' && item.executor !== 'human';
+}
+
+/**
  * The status keys at which a decision's GATE has been answered yes — what
  * releases the work that waits on it (MOTIR-6094).
  *
