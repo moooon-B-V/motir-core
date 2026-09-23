@@ -2222,6 +2222,10 @@ plan is immutable and the only repair is to author a new one. That is precisely 
 **Nothing is lost.** A card that must land under a card the same plan is adding is already
 expressible — `add` it with that `parentRef`.
 
+> **⚠️ SUPERSEDED by AMENDMENT 18 §1 (MOTIR-6013, 2026-09-23).** The plan's projection now holds the
+> row a proposal will become, so every guard above is answerable against it, and a `modify` may name a
+> `planItem:` parent. This text is kept as the record of why it was refused until then.
+
 ### D3 — a re-parent onto a `done`-category parent is REFUSED, and this is the load-bearing check
 
 The interactive `move_to_parent` permits it. The plan path must not, and the asymmetry is not
@@ -3143,3 +3147,134 @@ exactly what the ruling forbids.
   with the edges rather than a status anything derives from.
 - **Roll-up and the downward cascade are untouched.** A parked parent is recomputed by
   `parentStatusRollupService` on the next child event exactly as before.
+
+---
+
+## AMENDMENT 18 — a `modify` may re-parent under an `add` in the same plan, a second `modify` of one card MERGES, and a `remove` carries its REASON (story MOTIR-6013 · MOTIR-6048, 2026-09-23)
+
+> **Numbering.** The story's cards cite this as _AMENDMENT 17_. The open draft for story MOTIR-6011
+> (motir-core #3052) already takes that number in this file, so this one is 18. A citation of
+> "AMENDMENT 17" from any MOTIR-6013 card means this section.
+
+**The gap.** The AI planner is getting three surgical tools that work in every session: ADD, UPDATE
+and REMOVE over any work item in the project (`motir-ai` `docs/decisions/session-model.md`
+AMENDMENT 5). Three of the moves those tools make are refused by this file today:
+
+1. **Moving an existing card under a story the same plan is adding.** AMENDMENT 11 D2 refuses a
+   `modify` whose `patch.parentRef` is a `planItem:` temp-ref.
+2. **Changing a card twice in one plan.** A lay session updates a card in another epic, and later an
+   author session finds a second change the same card needs. `DuplicatePlanTargetError` refuses the
+   second `modify` (MOTIR-3194).
+3. **Saying why a card is being removed.** A `remove` carries no text, so the reviewer sees a card
+   struck out with no reason, and the archive revision records `diff: {}`.
+
+Each refusal was decided on the record, with reasons. This amendment answers those reasons one at a
+time. It does not work around them.
+
+### §1 — a `modify` may re-parent under an `add` in the same plan (overturning AMENDMENT 11 D2)
+
+**D2's reason, verbatim:** _"Every guard a re-parent owes is a question about a LIVE row — the
+kind-parent matrix, same-project tenancy, the no-cycle walk, the depth cap, and D3's terminal-parent
+refusal below — and a proposal has none until approve."_
+
+That was true when D2 was written. It is not true now, because the plan has a PROJECTION
+(`lib/services/planProjectionService.ts`, MOTIR-3867). The projection holds the row a proposal will
+become, and it already resolves a `modify`'s temp-ref parent (Pass 3). Each guard, answered against
+the projection:
+
+| guard                            | answered by                                                                                                                                                                                                                                                                             |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **kind-parent matrix**           | the proposed `add`'s `proposedFields.kind` (`DEFAULT_PROPOSED_KIND` when it names none — the same read `materialize` makes). `lib/issues/parentRules.ts` is still the one matrix asked                                                                                                  |
+| **tenancy**                      | an `add` is created in the plan's own project, so a temp-ref parent is same-project by construction. Nothing to check                                                                                                                                                                   |
+| **depth cap**                    | the proposed ancestor chain: the `add`'s own `parentRef` chain, walked through other `add`s until it reaches a committed row, then that row's live ancestors. The target lands at _(chain length + 2)_, exactly the arithmetic `assertReparentLegal` step 4 already uses                |
+| **no-cycle**                     | the same proposed chain. **A proposal CAN create a cycle**, and this is the case the walk exists for: an `add` A placed under X's own child C, with X then moved under A. Walking up from A reaches C and then X, the card being moved. That move is refused as `cycle`, naming A and X |
+| **D3's terminal-parent refusal** | cannot fire on the `add` itself, which is born at the initial status. It still fires on every COMMITTED ancestor in the chain, since the proposed parent's committed ancestors are what a re-open would walk up                                                                         |
+
+**Where the checks run.** At the APPEND, against the projection, in `assertReparentLegal`
+(`lib/plans/validateProposals.ts`). Again at APPROVE, where `validatePlanProposals` runs the same
+function under the approve's row locks. One implementation, as AMENDMENT 11 D4 requires. The append
+boundary's early refusal in `plansService.validateProposal` (the `patch.parentRef` temp-ref arm) and
+the MCP and internal schemas stop refusing a temp-ref there. They still refuse a blank ref and a
+malformed one.
+
+**Materialize needs no reordering.** It already runs every `modify` after every `add`: the modify loop
+comes after Pass 3 (`plansService.ts`, `materialize`), and `applyModify`'s own contract says _"every
+`add` on this plan already has its row"_. `applyModify` resolves `patch.parentRef` through the same
+`resolveRef` the `add`s use, so a temp-ref resolves to the created row with no new code on that path.
+
+**A withdraw is still refused while a `modify` points at the `add`.** `withdraw_plan_proposal` of an
+`add` that a `modify` re-parents under raises `PlanProposalReferencedError`, naming the `modify`. The
+referrer scan (`withdrawProposal` → `tempRefsOf`, `lib/plans/refs.ts`) already reads
+`patch.parentRef`, so this needs no code, only a test that pins it.
+
+**D2's text stays as the record** and carries a pointer here, so an old citation lands somewhere.
+
+### §2 — a second `modify` of one committed card MERGES (narrowing `DUPLICATE_PLAN_TARGET`)
+
+**The three reasons `DuplicatePlanTargetError` gives (`lib/plans/errors.ts`), each kept true by a
+merge:**
+
+1. _"The review surface would show a wrong diff"_, because two rows render two diffs whose old side
+   is the same live value. **A merge leaves ONE row**, so there is one diff with one old side.
+2. _"`baseRevision` is per target, not per row."_ **A merge leaves ONE anchor** (the rule for which
+   one is below).
+3. _"The constraint spans `modify` AND `remove`."_ **The merge is `modify` + `modify` ONLY.** Every
+   combination with a `remove` still refuses.
+
+**The merge rule, precise enough that two implementations compute the same patch.** Given the plan's
+existing `modify` of card X with patch **E**, and an incoming `modify` of X with patch **N**:
+
+- **Scalar keys** — every key of `PLAN_ITEM_PATCH_KEYS` (`lib/dto/plans.ts`) except the two edge
+  lists, `parentRef` included: **N wins per key.** A key absent from N leaves E's value. An explicit
+  `null` in N CLEARS, exactly as it does on a fresh patch.
+- **`blockedByAdd` / `blockedByRemove`:** each is the UNION of E's and N's list, de-duplicated. **A ref
+  that ends up in BOTH lists cancels to NEITHER.** Add-then-remove of the same edge in one plan means
+  "no change to that edge", and a patch that both adds and removes one ref would be ambiguous at
+  approve.
+- **`baseRevision`:** the **EARLIER** one is kept, i.e. E's. Drift detection then compares against the
+  revision the plan first read the card at. That is the conservative choice: a card that moved between
+  the two appends is reported as drifted, never silently absorbed.
+
+**What STILL refuses, with `DuplicatePlanTargetError` unchanged:**
+
+- a `modify` of a card the plan already `remove`s;
+- a `remove` of a card the plan already `modify`s;
+- a second `remove` of one card.
+
+To change its mind between those, the planner withdraws the first proposal
+(`withdraw_plan_proposal`, which AMENDMENT 8 D4 made release the target) and appends the other.
+
+**What the caller sees.** The merge happens at the APPEND (`plansService.addProposals`, under the plan
+lock, where the refusal is thrown today). The response's `planItemIds` returns the **SURVIVING**
+proposal's id in the incoming proposal's slot, so a caller mapping ids by position still gets a real
+id. The merge lands on the plan's timeline as an EDIT of that proposal (the correction trail's
+`edited` verb, MOTIR-3532), not as an append, so a reviewer reads _"this change was widened"_.
+
+**Where it applies.** On a `generating` plan, and on a `revision: true` append to a `planned` plan
+(AMENDMENT 12) alike. It is the APPEND's rule, so both the MCP door (`add_plan_items`) and the
+internal job route go through it.
+
+### §3 — a `remove` carries its REASON
+
+- **The field.** `PlanItem.removeReason`, a nullable text column.
+- **Op restriction.** Accepted only on `op: 'remove'`. On an `add` or a `modify` it is refused by
+  name (`InvalidProposalError`, naming the op).
+- **Optional on the wire.** Every current caller is unchanged, and every legacy plan has none. The AI
+  planner's own REMOVE tool REQUIRES it (`session-model.md` AMENDMENT 5 §5); that is the tool's rule,
+  not the store's.
+- **Bound.** Trimmed; blank is stored as `null`; at most **2000 characters** after trimming, refused
+  above that by name. That is a paragraph, which is what a reason is.
+- **Where it surfaces.** (a) The `archived` revision written at approve records it, as
+  `diff: { reason }` in place of today's `diff: {}`, so the card's history says why it was archived.
+  (b) The plan review shows it on the remove, on the canvas, the Show-changes row and the peek (the
+  design is MOTIR-6053's, the rendering MOTIR-6055's).
+- **Correctable** through `update_plan_proposal` like any other field of the proposal it rides on.
+
+### §4 — what does NOT change
+
+- **`update_plan_item` (the deepen) stays `add`-only.** AMENDMENT 3 D3 is untouched.
+- **`correctProposal` still REPLACES a `modify`'s patch wholesale.** The merge is the APPEND's rule. A
+  correction is a deliberate rewrite of one proposal, and its caller already holds the whole patch.
+- **Readiness is still derived from `blocked_by` only.** A moved card's readiness follows its edges,
+  not its new parent.
+- **`@@unique([planId, workItemId])` stays.** The merge is what keeps it true: two appends, one row.
