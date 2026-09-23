@@ -74,15 +74,12 @@ const FIELD_NAME_KEYS: Record<string, string> = {
   dueDate: 'dueDate',
   estimateMinutes: 'estimateMinutes',
   storyPoints: 'storyPoints',
-<<<<<<< HEAD
   difficulty: 'difficulty',
-=======
   type: 'type',
   executor: 'executor',
   targetRepo: 'targetRepo',
   targetRepos: 'targetRepos',
   folderId: 'folderId',
->>>>>>> origin/main
   descriptionMd: 'descriptionMd',
   explanationMd: 'explanationMd',
   explanationSource: 'explanationSource',
