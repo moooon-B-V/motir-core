@@ -26,6 +26,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **The grouped non-epic roots on a plan canvas** | **`plan-canvas-grouped-roots.mock.html`** + `.png`        | MOTIR-4773           | Part XVI   |
 | **A proposal FILED into a folder**              | **`plan-folder-placement.mock.html`** + `.png`            | MOTIR-5406           | Part XVII  |
 | **Folders as LEVELS on the planning canvases**  | **`plan-folder-levels.mock.html`**                        | MOTIR-5793           | Part XVIII |
+| **A leaf's DIFFICULTY on the plan review**      | **`plan-review--difficulty.mock.html`**                   | MOTIR-6134           | Part XX    |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -5504,3 +5505,205 @@ The proposed parent reads `New · <title>` / `新 · <title>`, joined with the s
 
 - **The numbering.** The story's cards cite AMENDMENT 17; it landed as **18**. Read every "17" under
   MOTIR-6013 as this amendment.
+
+---
+
+# Part XX — the plan review shows a leaf's DIFFICULTY (MOTIR-6134 · Story MOTIR-6095 — `plan-review--difficulty.mock.html`)
+
+**Its OWN asset**: `design/ai-planning/plan-review--difficulty.mock.html` (seven sheets, delta panels
+only), plus this section. It draws **no new surface and no new entrance**. The ACCESS PATH is
+unchanged: the plan review is reached exactly as today, from a row on the **Plans** page (Part I §5)
+or from the **To approve** list. Nothing about how a reviewer arrives is redrawn.
+
+It **amends two approved designs** of this area and redraws neither:
+
+| amended asset                                              | card           | what this Part extends                                                                                            |
+| ---------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `design/ai-planning/plan-review--surgical-edits.mock.html` | **MOTIR-6053** | Part XIX, the latest review delta: the node's top row and bottom slot, the list's facts line and label/value grid |
+| `design/ai-planning/peek-proposal-mode.mock.html`          | **MOTIR-4182** | Part XIV §3 / §4: the proposal-mode rail, its `changed` mark and its `{n} of {m}` count line                      |
+
+It **composes** the difficulty glyph and label from **MOTIR-6097**'s
+`design/work-items/core-fields--difficulty.mock.html` (verdict approved, published at `bfe3876b`).
+That published asset predates the fourth level. **The version composed here is the one on `main` at
+`b22dc0a09`** (`git log -1 --format=%h -- design/work-items/core-fields--difficulty.mock.html`, the
+merge of MOTIR-6016, PR #3063): four levels, `trivial · low · medium · high`, each a signal-bar glyph
+(`SignalLow`, `SignalMedium`, `SignalHigh`, `Signal`) beside the `labels.difficulty.*` label, as
+`DifficultyIndicator` (`components/issues/DifficultyPicker.tsx`) renders it at the same commit.
+
+## 20.1 The behaviour this Part draws to
+
+Nothing here decides behaviour. **MOTIR-6133** (the plan-wire card) does:
+
+- **The value set** is the work item's own: `trivial`, `low`, `medium`, `high`, or none. A plan
+  proposal carries it in `proposedFields`, a `modify` patch sets, changes or clears it, and approve
+  writes it onto the work item.
+- **A container cannot carry one.** A difficulty on an epic or story proposal is refused on the
+  merged kind, so the review never receives one to draw (§20.6).
+- **MOTIR-6137** builds the pixels to this Part, including every copy key in §20.9.
+
+## 20.2 Drawn against SHIPPED reality: what was rendered
+
+Every card, list row, rail row and frame is the shipped component's own markup. A throwaway RTL dump
+rendered `PlanItemNode`, `PlanProposalList`, `PlanChangeDiffFrame` (around a real `WorkItemNode`) and
+`IssueQuickViewPanel` in proposal mode through the shipped `renderWithIntl` harness against
+`planReviewItem` fixtures, at `main` `b22dc0a09`. Those files have not changed since then:
+`components/planning/{ProposalPeek,PlanItemNode,PlanProposalList}.tsx`,
+`components/issues/DifficultyPicker.tsx` and `IssueQuickViewPanel.tsx` all last change at or before
+`b22dc0a09`. The new elements were spliced into that markup, and nothing else was hand-drawn. The
+stylesheet is Tailwind's real output compiled from this document's class attributes only, with
+`theme.css`'s `.style-vignette` rules removed and the utilities that the captions' prose alone
+produced pruned. The harness was deleted before this asset landed.
+
+**What the render settled (sheet 1).** The quick view already draws a leaf's Difficulty row in
+proposal mode, in the leaf-only branch below Executor, as `DifficultyIndicator` or **None**. The
+peek is therefore already correct once its payload carries the value: `ProposalPeek.proposedPayload`
+hard-codes `difficulty: null` (the `// … MOTIR-6095` line), so today every proposal reads **None**
+whatever the planner judged. The canvas card and the list row have no slot for it at all.
+
+## 20.3 DECISION 1: an `add` card carries the value at the right end of its top row (sheet 2)
+
+- **Where.** The node's top row is `OpBadge` on the left and an `ml-auto` cluster on the right (the
+  stale badge, the status pill, the drill chevron). A proposed leaf `add` has no status and no
+  children, so that cluster is empty today. The value goes there, after anything already in it.
+  The **bottom slot is not used**, because spending it clamps the title to one line (Part XVII
+  §17.2), and a difficulty is not worth half the title.
+- **What.** The same glyph map and the same label as the item page (`DIFFICULTY_GLYPH`,
+  `labels.difficulty.*`), in a compact form: `inline-flex shrink-0 items-center gap-1 text-xs
+text-(--el-text-secondary)`, with the glyph at `h-3 w-3` (the node's own glyph size; the op badge
+  uses `size-3`) and `text-(--el-text-faint)`, `aria-hidden`. `DifficultyIndicator` today renders a
+  block `flex` at `h-4 w-4`. MOTIR-6137 either adds a compact variant to it or exports
+  `DIFFICULTY_GLYPH`. It must not keep a second glyph map.
+- **Named for a screen reader.** A visually hidden `Difficulty` (`sr-only`) precedes the glyph, so
+  the value is announced as _Difficulty Medium_ and never as a bare _Medium_, which Priority also
+  says.
+- **Ink.** `--el-text-secondary` on the `add` frame's `--el-tint-lavender`, not `--el-text-muted`.
+- **A `modify` card does NOT show the current value in its top row.** On the canvas a `modify` card
+  says what CHANGES (its diff line, §20.5), and a committed card on the roadmap carries no
+  difficulty either. Only an `add` draws its values on the card, because only an `add`'s card is
+  the whole of what exists.
+
+## 20.4 DECISION 2: NONE is the item page's empty rendering in the peek, and nothing on the card (sheet 3)
+
+A plan written before the rule, or a pass that left the value out, still reaches review.
+
+- **Peek.** The rail's Difficulty row reads **None** in `--el-text-secondary`: the quick view's own
+  read-only empty state (`issueViews.none`), unchanged. It is never a blank row and never a missing row.
+- **Card.** Nothing is drawn in the slot. An unlabelled _None_ on a card names nothing (the card has
+  no field labels), and beside siblings that carry a glyph, the empty end of the top row is itself
+  the visible absence.
+- **List row.** Omitted. The facts line already omits every empty fact (points, minutes,
+  repository), and this follows the same rule.
+
+## 20.5 DECISION 3: a `modify` shows it as a field change, in the grammar `Story points` uses (sheet 4)
+
+- **The field** is `difficulty` in `PLAN_ITEM_CHANGE_FIELDS`, emitted by `buildChanges` directly
+  after `estimateMinutes` (the sizing group), and given a `FIELD_KEY` entry `difficulty`.
+- **The values are the item page's LABELS** (`Low`, `High`), never the wire words (`low`, `high`).
+  The reviewer reads the same word here as on the item page after approving.
+- **Card, bottom slot**: the shipped `DiffLine`. The label **Difficulty**, the old value struck, the
+  chevron, the new value, `+N more` when it is not the first change.
+- **List**: the shipped `ChangeLines` grid. The uppercase **DIFFICULTY** label, the old value struck,
+  `→`, the new value in `--el-text-strong`.
+- **An empty side follows the shipped rule for every field, and this Part does not special-case it.**
+  _Sets_ (`— → Medium`): an empty FROM is not drawn, so the card reads `Difficulty › Medium` and the
+  list reads `DIFFICULTY  Medium`. _Clears_ (`Medium → —`): the TO reads **—**. The card's
+  shorthand `— → medium` is this rendering.
+- **Untouched**: no Difficulty change is emitted, so there is no row. The card's slot and the list's
+  grid show only what did change (sheet 4d, `Story points 3 → 5`).
+- **Peek**: the rail's Difficulty row shows the value approve will WRITE, with the shipped
+  **changed** mark (`planReview.railChangedMark`) when the plan moves it. That takes two seams in
+  `ProposalPeek`: the target overlay gains `difficulty` (as it has `storyPoints`), and
+  `markFor('difficulty')` is passed to the row. Once MOTIR-6133 adds `difficulty` to the patch,
+  `PATCH_KEY_RAIL_ROW` (total over the patch type) must map it to the `difficulty` rail row, so the denominator becomes **7**: _This plan changes 1 of the 7
+  fields it can set._
+- **The facts line** of a `modify` row carries the value approve will write (§20.7), exactly as it
+  carries the points. A cleared value is omitted there.
+
+## 20.6 DECISION 4: an epic or story proposal has no difficulty affordance anywhere (sheet 6)
+
+A container cannot carry one (MOTIR-6133 refuses it on the merged kind), so nothing is drawn:
+no slot on the card (its top row keeps the drill chevron), no fact on the list row, and no row in
+the peek. The rail's leaf-only branch (Type, Executor, Difficulty) is absent, exactly as on the item
+page, so Repositories is followed directly by Priority. No disabled control and no "not applicable"
+text is drawn.
+
+## 20.7 DECISION 5: at scale the value rides the LIST ROW, beside the points (sheet 7)
+
+**Decided: the glyph and label sit in the row's facts line, directly after `listPoints`**
+(`subtask · code · 3 pts · ▂▄▆ Medium · 45 min · motir-core`), not in the peek only.
+
+**The reason.** The list is the body that says _exactly what is being approved_ (Part VIII §3), and
+a difficulty is judged ACROSS siblings: is this one really High beside that Low? That question needs
+the 40 values side by side, and peek-only would make it forty opens. Points and difficulty are read
+together (size beside hardness), so they sit together. It costs no row height: the facts line is one
+line at the pane's width and wraps where it must, as it already does.
+
+**The markup.** The facts join becomes nodes joined by `·` rather than one string. The difficulty
+node is the compact form of §20.3 plus `align-top`, so the inline-flex sits on the text line. A null
+value is dropped like any other null fact. A container row never has one.
+
+## 20.8 Which review-model field each drawn element reads
+
+| element                                  | reads                                                                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| the card's top-row value, the facts node | a NEW `difficulty: WorkItemDifficultyDto \| null` on `PlanReviewItemDto`, the value approve will write (`proposedValue`) |
+| the diff line / change row               | `changes[]` entry `{ field: 'difficulty', from, to }`, both sides the LABEL, `null` for none                             |
+| the peek's rail row                      | `QuickViewData.difficulty`: `item.difficulty` on an `add` (replaces the hard-coded `null`), the overlay on a `modify`    |
+| the peek's `changed` mark                | `proposal.changedFields` includes `difficulty`                                                                           |
+| the planning workspace chip (sheet 5)    | `changedFields(item)` via `FIELD_KEY.difficulty` → `planningWorkspace.conversation.diff.field.difficulty`                |
+
+## 20.9 Copy: English and Chinese
+
+| key                                                    | en                | zh        | note                                                          |
+| ------------------------------------------------------ | ----------------- | --------- | ------------------------------------------------------------- |
+| `labels.difficulty.{trivial,low,medium,high}`          | Trivial …         | 极简 …    | REUSED, the item page's own labels                            |
+| `issueViews.difficulty` · `issueViews.none`            | Difficulty · None | 难度 · 无 | REUSED, the rail row as the quick view ships it               |
+| `planReview.field_difficulty`                          | Difficulty        | 难度      | **NEW**: the diff line, the change row and the `sr-only` name |
+| `planningWorkspace.conversation.diff.field.difficulty` | difficulty        | 难度      | **NEW**: the change frame's chip, lowercase like its siblings |
+| `planReview.railChangeCount`                           | (unchanged)       |           | REUSED; its `{m}` becomes 7                                   |
+
+Both catalogs change in the same PR, and a key in one alone is a parity failure.
+
+## 20.10 a11y
+
+- The glyph is decorative (`aria-hidden`, `--el-text-faint`), and the LABEL is the value.
+  Difficulty is never carried by the glyph or by colour alone, and it has no hue (6097's rule:
+  Priority owns the coloured pill for the same words).
+- The card's and the list's value is prefixed by a visually hidden **Difficulty**, so it is never
+  announced as a bare _Medium_.
+- The change row's struck old value keeps the shipped `line-through` plus the arrow. The strike is a
+  second signal, never the only one.
+
+## 20.11 GIVES / TAKES: every key the mock names
+
+`grep -n 'MOTIR-' design/ai-planning/plan-review--difficulty.mock.html` names seven keys:
+
+- **MOTIR-6134** (this card): the asset's own key. It neither gives nor takes.
+- **MOTIR-6095** (the story): **GIVES** it the review half of "the plan review shows it": the
+  visible strings its acceptance walk (MOTIR-6142) asserts, namely a card's `Medium`, a list row's
+  `3 pts · Medium`, a peek's **Difficulty** row, and a re-plan's `DIFFICULTY  Low → High`.
+- **MOTIR-6053** (Part XIX): **TAKES** the review's structure, namely the node's top row and the
+  bottom-slot rule, the list's facts line and its label/value grid, and the peek-as-quick-view
+  premise. Nothing is given back; Part XIX's asset is not edited.
+- **MOTIR-4182** (Part XIV): **TAKES** the proposal-mode rail, its `changed` mark and its
+  `{n} of {m}` count line. It **GIVES** Part XIV a seventh settable rail row (§20.5).
+- **MOTIR-6097** (the difficulty field's design): **TAKES** the glyph, the label, the None
+  rendering and the leaf-only branch, in the four-level form on `main` at `b22dc0a09`. It gives
+  nothing back.
+- **MOTIR-6016** (the story that shipped the field): **TAKES** its premise, the shipped
+  `DifficultyIndicator` and the quick view's Difficulty row, and the `difficulty: null` placeholder
+  this Part replaces.
+- **MOTIR-6133** (the plan-wire card): **TAKES** the value set and the container refusal (§20.1).
+  It **GIVES** it nothing structural. The review only reads what the wire carries.
+
+Not named in the mock, but owed: **GIVES MOTIR-6137** (the review renderer, `blocked_by` this card)
+§20.3–§20.7's placements, §20.8's data seams and §20.9's two new keys.
+
+## 20.12 What Part XX does NOT draw
+
+- **Editing** a proposal's difficulty on the review. The review edits nothing new; a person's edit of
+  a proposal's fields stays the existing proposal-edit surface, reached through its API door
+  (MOTIR-6136).
+- A **decided** plan's rendering. Part VI's treatments apply unchanged: the value stays where it is
+  on an approved or declined card and row, and after approve it lives on the created work item.
+- Any new entry point (see the access path above).
