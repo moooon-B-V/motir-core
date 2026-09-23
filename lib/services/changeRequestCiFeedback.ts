@@ -3,6 +3,8 @@ import {
   bindWorkspaceContext,
   withSystemContext,
   withWorkspaceContext,
+  type SystemTransactionOptions,
+  type TransactionBudget,
 } from '@/lib/workspaces/context';
 import type { GitProviderId, NormalizedStatusEvent } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
@@ -78,6 +80,43 @@ import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprova
 // winner) because the loser is no longer consulted at all. BOTH derivations
 // share that one function — the comment's and the promotion's — since two
 // opinions about one commit is exactly what MOTIR-2946 removed.
+
+/**
+ * The budget EVERY transaction in this consumer runs under (MOTIR-5865) — raised
+ * from Prisma's 5000 ms default, because of what these transactions are for
+ * rather than how much they do.
+ *
+ * None of them does much: the largest is the phase-1 resolve, nine single-row
+ * indexed reads with no network call and no row lock. So the default is not
+ * outgrown by WORK. It is outgrown by WAITING — for a lock another session holds
+ * on a table a transaction reads (a migration's `ALTER TABLE` takes ACCESS
+ * EXCLUSIVE and every reader queues behind it), for the change request's row lock
+ * behind a burst of sibling deliveries, or for a stalled process. Production
+ * recorded that 100 times: `P2028`, *5000 ms, however 19058 ms passed*, at the
+ * phase-1 resolve.
+ *
+ * And a wait that expires a transaction HERE is not a retryable error. GitHub
+ * does not redeliver a failed webhook and nothing enqueues this path, so the
+ * delivery's conclusion is simply never recorded — and every derivation below is
+ * a fold over the RECORDED rows, so a lost `failure` reads as green (MOTIR-4264).
+ * A delivery that waits and then records is correct; one that gives up is a
+ * silently wrong verdict. That is the whole argument for the number.
+ *
+ * 30 s is more than half again the worst wait observed. It widens nothing but the
+ * ceiling: a transaction that is not waiting finishes exactly as fast as before.
+ */
+const CI_FEEDBACK_TX_TIMEOUT_MS = 30_000;
+
+/** {@link CI_FEEDBACK_TX_TIMEOUT_MS} in the shape `withSystemContext` takes. */
+const CI_FEEDBACK_SYSTEM_TX: SystemTransactionOptions = { timeout: CI_FEEDBACK_TX_TIMEOUT_MS };
+
+/** The same budget for the one tenant-context transaction (the `ciState`
+ *  recompute). `maxWaitMs` stays Prisma's default: this card is about a
+ *  transaction that STARTED and then waited, not about waiting to start one. */
+const CI_FEEDBACK_TENANT_TX: TransactionBudget = {
+  timeoutMs: CI_FEEDBACK_TX_TIMEOUT_MS,
+  maxWaitMs: 2_000,
+};
 
 /** The CI-feedback result — the canonical outcome shared by both providers. The
  *  `event: 'ci'` tag is for logging / test assertions, not a wire contract. */
@@ -252,7 +291,7 @@ export async function applyCiStatusFeedback(
       readReportedCheckSet: ctx.readReportedCheckSet,
       actorUserId: owner?.userId ?? null,
     };
-  });
+  }, CI_FEEDBACK_SYSTEM_TX);
 
   if (resolved.kind === 'unknown_installation')
     return { event: 'ci', outcome: 'unknown_installation' };
@@ -305,7 +344,7 @@ export async function applyCiStatusFeedback(
       for (const workItemId of resolved.allDeliveredWorkItemIds) {
         await recomputeWorkItemCiState(workItemId, tx);
       }
-    });
+    }, CI_FEEDBACK_SYSTEM_TX);
     return {
       event: 'ci',
       outcome: 'pending_recorded',
@@ -396,7 +435,7 @@ export async function applyCiStatusFeedback(
     // commit withdraws nothing.
     await withdrawPullRequestApprovalGatesOnHeadMove(resolved.prId, tx);
     return githubCheckRunRepository.listByPrAndSha(resolved.prId, event.commitSha, tx);
-  });
+  }, CI_FEEDBACK_SYSTEM_TX);
 
   // ── 1b. IS THAT SET THE WHOLE SET? (MOTIR-4199) ──────────────────────────
   // Everything below folds these rows into a sentence and an action —
@@ -425,7 +464,7 @@ export async function applyCiStatusFeedback(
           recorded: recordedAtSha,
           tx,
         });
-      });
+      }, CI_FEEDBACK_SYSTEM_TX);
     }
   }
 
@@ -469,11 +508,15 @@ export async function applyCiStatusFeedback(
   // The session arm is included now (defect 3): `allDeliveredWorkItemIds` rather
   // than the linked-only list, so a card delivered by a run's own branch finally
   // gets a verdict instead of a permanent `null`.
-  await withWorkspaceContext(actorCtx, async (tx) => {
-    for (const workItemId of resolved.allDeliveredWorkItemIds) {
-      await recomputeWorkItemCiState(workItemId, tx);
-    }
-  });
+  await withWorkspaceContext(
+    actorCtx,
+    async (tx) => {
+      for (const workItemId of resolved.allDeliveredWorkItemIds) {
+        await recomputeWorkItemCiState(workItemId, tx);
+      }
+    },
+    CI_FEEDBACK_TENANT_TX,
+  );
 
   // ── CI GREEN PROMOTES (MOTIR-3006) ──────────────────────────────────────
   // EDGE 1 of the latch: a terminal green moves every card this change request
@@ -597,7 +640,7 @@ async function renderFeedbackComments(
           recordedComments.map((row) => [row.workItemId, row.commentId] as const),
         ),
       };
-    });
+    }, CI_FEEDBACK_SYSTEM_TX);
 
     ciState = deriveCiState(fold.rows.map((r) => r.conclusion));
     // (deriveCiState ignores non-terminal conclusions — pending rows at this sha,
@@ -627,7 +670,7 @@ async function renderFeedbackComments(
     const after = await withSystemContext(async (tx) => {
       await bindWorkspaceContext(tx, workspaceId);
       return githubCheckRunRepository.listByPrAndSha(prId, commitSha, tx);
-    });
+    }, CI_FEEDBACK_SYSTEM_TX);
     if (checkSetFingerprint(after) === fold.fingerprint) return ciState;
   }
 
@@ -672,7 +715,7 @@ async function writeCardComment(args: {
       { pullRequestId: prId, commitSha, workItemId, commentId: created.id },
       tx,
     );
-  });
+  }, CI_FEEDBACK_SYSTEM_TX);
 
   if (winner.commentId === created.id) return;
 
@@ -705,7 +748,7 @@ async function deriveRecordedCiState(
   const rows = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, workspaceId);
     return githubCheckRunRepository.listByPrAndSha(prId, commitSha, tx);
-  });
+  }, CI_FEEDBACK_SYSTEM_TX);
   return deriveCiState(liveCheckRows(rows).map((r) => r.conclusion));
 }
 

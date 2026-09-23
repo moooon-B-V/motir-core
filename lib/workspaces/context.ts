@@ -401,7 +401,7 @@ export async function withBootstrapSlugContext<T>(
  * two loose numbers so that raising it is a visible, argued decision at the call
  * site instead of a magic literal.
  *
- * The shipped callers are TWO, and they are raised for opposite reasons — which
+ * The shipped callers are THREE, and they are raised for different reasons — which
  * is why the type asks for an argument rather than a number:
  *
  *   * the per-project runner-group sync (MOTIR-1972), which must hold the
@@ -415,6 +415,12 @@ export async function withBootstrapSlugContext<T>(
  *     that call site has to explain why the work could not be made smaller
  *     first. It was: batching the `blocked_by` pass took a 15-item / 27-edge
  *     plan from ~42 statements of edge-writing to 1.
+ *   * the CI-feedback consumer (MOTIR-5865, `changeRequestCiFeedback`), whose
+ *     transactions are small and whose budget covers time spent WAITING on our
+ *     own database — a lock another session holds, a stalled process — because
+ *     an expired transaction there loses a webhook GitHub never redelivers. Its
+ *     `withSystemContext` calls take the same number through
+ *     {@link SystemTransactionOptions}.
  */
 export interface TransactionBudget {
   /** Max wall-clock ms the transaction body may run before Prisma rolls back. */
