@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { customFieldFilterFieldId, type FilterAst, type FilterCondition } from '@/lib/filters/ast';
@@ -63,12 +62,9 @@ function dueDate(daysOffset: number): Date {
   return new Date(Date.now() + daysOffset * 86_400_000);
 }
 
-/** The database calendar day that relative-date predicates use as "today". */
-async function utcTodayInDb(): Promise<string> {
-  const rows = await db.$queryRaw<{ day: string }[]>(
-    Prisma.sql`SELECT to_char((now() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS day`,
-  );
-  return rows[0]!.day;
+/** The UTC calendar day shared by the test fixture and relative-date predicates. */
+async function utcToday(): Promise<string> {
+  return new Date().toISOString().slice(0, 10);
 }
 
 interface Seeded {
@@ -650,7 +646,7 @@ describe('the filter-builder matrix covers the WHOLE registry (totality guard)',
 describe('every registry cell compiles to the right match set, under both combinators', () => {
   it('runs the full matrix as `and` and as `or` (a one-row filter is combinator-invariant)', async () => {
     const failures = await runWithUtcDayRolloverRetry({
-      utcDay: utcTodayInDb,
+      utcDay: utcToday,
       seed: seedMatrix,
       reset: truncateAll,
       run: collectMatrixFailures,
