@@ -217,7 +217,16 @@ export const contextualPlanningService = {
     const session = req.sessionId
       ? await planChangeSessionsService.getById(pctx, req.sessionId)
       : await planChangeSessionsService.findResumable(pctx, scope.scopeKey);
-    if (!session) return { session, planId: null };
+    if (!session) {
+      // Nothing resumed — say where the scope's earlier conversation is, when
+      // there is one (MOTIR-6024's notice). Never for a NAMED session.
+      if (req.sessionId) return { session, planId: null };
+      const { earlier } = await planChangeSessionsService.findResumableWithEarlier(
+        pctx,
+        scope.scopeKey,
+      );
+      return { session, planId: null, earlier };
+    }
 
     // The session's still-undecided plan, through the COLUMN (AMENDMENT 17 §5).
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };

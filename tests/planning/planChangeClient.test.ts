@@ -66,9 +66,17 @@ const SESSION = {
 
 describe('planChangeClient — the session calls hit the SHIPPED endpoints, by session id', () => {
   it('RESUMES with a bodyless GET — looking creates nothing (MOTIR-6023)', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(SESSION));
+    const EARLIER = {
+      id: 's0',
+      targetKeys: ['MOTIR-812'],
+      lastActivityAt: '2026-09-20T10:00:00.000Z',
+      startedBy: { id: 'u2', name: 'Mara' },
+      mine: false,
+    };
+    fetchMock.mockResolvedValue(jsonResponse({ session: SESSION, earlier: EARLIER }));
 
-    await expect(findResumableSession()).resolves.toEqual(SESSION);
+    // `{ session, earlier }` (MOTIR-6024) — the earlier conversation rides along.
+    await expect(findResumableSession()).resolves.toEqual({ session: SESSION, earlier: EARLIER });
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/ai/plan-change/session');
@@ -77,10 +85,12 @@ describe('planChangeClient — the session calls hit the SHIPPED endpoints, by s
     expect(init.headers).toMatchObject({ Accept: 'application/json' });
   });
 
-  it('reads NO resumable session as null, not an error', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(null));
+  it('reads NO resumable session as a null session, not an error — and tolerates a bare null body', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ session: null, earlier: null }));
+    await expect(findResumableSession()).resolves.toEqual({ session: null, earlier: null });
 
-    await expect(findResumableSession()).resolves.toBeNull();
+    fetchMock.mockResolvedValue(jsonResponse(null));
+    await expect(findResumableSession()).resolves.toEqual({ session: null, earlier: null });
   });
 
   it('reopens ONE session by id, encoded into the query', async () => {
@@ -289,6 +299,7 @@ describe('planChangeClient — the planId echo is read DEFENSIVELY (MOTIR-1745)'
     await expect(resumeContextualSession('wi_812')).resolves.toEqual({
       session: SESSION,
       planId: 'plan_7',
+      earlier: null,
     });
 
     // No thread, and a response predating the field, both read as "nothing
@@ -297,6 +308,7 @@ describe('planChangeClient — the planId echo is read DEFENSIVELY (MOTIR-1745)'
     await expect(resumeContextualSession('wi_812')).resolves.toEqual({
       session: null,
       planId: null,
+      earlier: null,
     });
   });
 });
@@ -346,7 +358,11 @@ describe('the anchored transport — a work item’s own thread', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ session: null }));
     // The ENVELOPE, not the bare session (MOTIR-1745) — a resume also reports the
     // thread's pending proposal, so an unplanned item reads as null on both.
-    expect(await resumeContextualSession('wi_123')).toEqual({ session: null, planId: null });
+    expect(await resumeContextualSession('wi_123')).toEqual({
+      session: null,
+      planId: null,
+      earlier: null,
+    });
 
     const [url, init] = lastCall();
     expect(url).toBe('/api/work-items/wi_123/ai/plan');

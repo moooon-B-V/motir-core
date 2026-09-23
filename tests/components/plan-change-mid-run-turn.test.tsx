@@ -32,7 +32,12 @@ const streamContextual = vi.fn();
 const readPending = vi.fn();
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  findResumableSession: (...a: unknown[]) => openSession(...a),
+  // The resume read answers `{ session, earlier }` (MOTIR-6024); these cases
+  // mock the SESSION, so the factory wraps it.
+  findResumableSession: async (...a: unknown[]) => ({
+    session: await (openSession as (...args: unknown[]) => unknown)(...a),
+    earlier: null,
+  }),
   resumeContextualSession: (...a: unknown[]) => resumeContextual(...a),
   recordPlannerTurn: (...a: unknown[]) => recordPlannerTurn(...a),
   submitContextualPlan: (...a: unknown[]) => submitContextualPlan(...a),

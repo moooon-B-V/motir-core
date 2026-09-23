@@ -102,6 +102,42 @@ export const planChangeSessionRepository = {
     });
   },
 
+  /** The scope's most recent OTHER conversation, any member's — what a fresh
+   *  start's notice points to (MOTIR-6024). Conversation origin only: a session
+   *  a door opened for a plan has no conversation to return to. */
+  async findLatestConversationInScope(
+    projectId: string,
+    scopeKey: string,
+    workspaceId: string,
+    excludeId: string | null,
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.planChangeSession.findFirst({
+      where: {
+        projectId,
+        scopeKey,
+        workspaceId,
+        origin: 'conversation',
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+      include: { createdBy: { select: { id: true, name: true } } },
+    });
+  },
+
+  /** Who STARTED a session — the reopened line's name (MOTIR-6024). */
+  async findStarter(
+    id: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; name: string } | null> {
+    const row = await tx.planChangeSession.findFirst({
+      where: { id, workspaceId },
+      select: { createdBy: { select: { id: true, name: true } } },
+    });
+    return row?.createdBy ?? null;
+  },
+
   /** The ids of this member's OTHER sessions of the scope — the predecessors a new
    *  session may take a live target lease over from (AMENDMENT 17 §6). */
   async listIdsForUserInScope(

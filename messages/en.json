@@ -6721,7 +6721,17 @@
       "sourceItems": "{count} work items",
       "sourceItemsCapped": "{count}+ work items"
     },
-    "returnAck": "You finished setting up. Picking up where we left off."
+    "returnAck": "You finished setting up. Picking up where we left off.",
+    "session": {
+      "earlierAnchored": "Your earlier conversation about <anchor>{label}</anchor> is on the <link>Plans page</link>.",
+      "earlierProject": "Your earlier conversation about {project} is on the <link>Plans page</link>.",
+      "earlierOther": "An earlier conversation about <anchor>{label}</anchor>, started by {name}, is on the <link>Plans page</link>.",
+      "anchorMore": "<key>{first}</key> and {count} more",
+      "reopened": "Reopened from the Plans page · started by {name} · last active {when}",
+      "reopenedYours": "Reopened from the Plans page · started by you · last active {when}",
+      "readOnly": "You can read this conversation. Continuing it needs permission to plan with Motir AI.",
+      "someone": "someone"
+    }
   },
   "codeHealth": {
     "title": "Code health",

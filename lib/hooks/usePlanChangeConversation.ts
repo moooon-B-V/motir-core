@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
+import type { EarlierSessionDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import {
   findResumableSession,
+  getPlanChangeSession,
   recordPlannerTurn,
   rerunAskTurn,
   resubmitContextualPlan,
@@ -245,6 +246,24 @@ export interface PlanChangeConversationState {
    * before the stop is worth exactly what it was worth a second earlier.
    */
   stopped: boolean;
+  /**
+   * FRESH START pointer (MOTIR-6024; design §19.8): nothing resumed on open, and
+   * the scope has an EARLIER conversation — the notice links to its Plans row.
+   * Null once this conversation has a turn, and on a resumed or reopened one.
+   */
+  earlier: EarlierSessionDto | null;
+  /**
+   * REOPENED by id (a Plans row, `planSession=<id>`): who started it and when it
+   * was last active, for the one line above the opener. Null otherwise.
+   */
+  reopened: {
+    startedBy: { id: string; name: string } | null;
+    mine: boolean;
+    lastActivityAt: string;
+  } | null;
+  /** The reopened conversation is READ-ONLY for this viewer (no `ai:plan`): the
+   *  composer is replaced by the reason. */
+  readOnly: boolean;
 }
 
 const INITIAL: PlanChangeConversationState = {
@@ -262,6 +281,9 @@ const INITIAL: PlanChangeConversationState = {
   stopping: false,
   stopped: false,
   queued: [],
+  earlier: null,
+  reopened: null,
+  readOnly: false,
 };
 
 const OUT_OF_CREDITS_CODES = new Set(['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits']);
@@ -375,6 +397,12 @@ export interface UsePlanChangeConversationOptions {
    * Absent (the launcher's project/roadmap contexts) → the shipped 7.30 thread.
    */
   anchorId?: string | null;
+  /**
+   * REOPEN this exact conversation (MOTIR-6024) — the overlay's `planSession`
+   * address, which a Plans row writes. The resume window does not apply: a
+   * named session opens whatever its age or starter.
+   */
+  sessionId?: string | null;
 }
 
 /**
@@ -407,6 +435,7 @@ function resolveAnchor(
 export function usePlanChangeConversation({
   onApproved,
   anchorId = null,
+  sessionId = null,
 }: UsePlanChangeConversationOptions = {}) {
   const [state, setState] = useState<PlanChangeConversationState>(INITIAL);
   const mountedRef = useRef(true);
@@ -464,18 +493,54 @@ export function usePlanChangeConversation({
     const controller = new AbortController();
     void (async () => {
       try {
-        // The anchored resume also reports the thread's still-undecided proposal
-        // (MOTIR-1745); the project thread's open carries no plan of its own.
-        const { session, planId } = anchorId
-          ? // Mount-time resume is the ENTRANCE's single anchor: the picker's set
-            // is seeded from that same item, and any target the user adds later
-            // starts a differently-scoped thread anyway.
-            await resumeContextualSession(anchorId, [], controller.signal)
-          : // The caller's RESUMABLE project-wide session, or none — a look creates
-            // nothing; the first turn starts the session (AMENDMENT 17 §1, §3).
-            { session: await findResumableSession(controller.signal), planId: null };
+        // Three opens (AMENDMENT 17 §1, §3; MOTIR-6024), none of which writes:
+        //  · a NAMED session (`planSession=`, a Plans row) reopens that one,
+        //    whatever its age — with who started it and whether it is read-only;
+        //  · otherwise the caller's RESUMABLE session for the scope (anchored or
+        //    project-wide), with its still-undecided plan;
+        //  · otherwise NOTHING: an empty rail, and the scope's earlier
+        //    conversation for the notice. The first turn starts the session.
+        const opened = sessionId
+          ? await getPlanChangeSession(sessionId, controller.signal).then((named) => ({
+              session: named,
+              planId: named.pendingPlanId ?? null,
+              earlier: null,
+              reopened: {
+                startedBy: named.startedBy ?? null,
+                mine: named.startedByViewer === true,
+                lastActivityAt: named.lastActivityAt,
+              },
+              readOnly: named.viewerCanPlan === false,
+            }))
+          : anchorId
+            ? // Mount-time resume is the ENTRANCE's single anchor: the picker's set
+              // is seeded from that same item, and any target the user adds later
+              // starts a differently-scoped thread anyway.
+              await resumeContextualSession(anchorId, [], controller.signal).then((r) => ({
+                session: r.session,
+                planId: r.planId ?? null,
+                earlier: r.earlier ?? null,
+                reopened: null,
+                readOnly: false,
+              }))
+            : await findResumableSession(controller.signal).then((r) => ({
+                session: r.session,
+                planId: null,
+                earlier: r.earlier,
+                reopened: null,
+                readOnly: false,
+              }));
+        const { session, planId } = opened;
         if (!mountedRef.current) return;
-        setState((s) => ({ ...s, phase: 'idle', session, planId: planId ?? null }));
+        setState((s) => ({
+          ...s,
+          phase: 'idle',
+          session,
+          planId: planId ?? null,
+          earlier: opened.earlier,
+          reopened: opened.reopened,
+          readOnly: opened.readOnly,
+        }));
 
         // A thread that left a proposal UNDECIDED comes back reviewable: read its
         // Plan and re-enter the gate, so closing the workspace mid-review is not
@@ -496,7 +561,7 @@ export function usePlanChangeConversation({
       }
     })();
     return () => controller.abort();
-  }, [anchorId]);
+  }, [anchorId, sessionId]);
 
   /**
    * STREAM a plan-edit job to its end, then file what it proposed — the tail of

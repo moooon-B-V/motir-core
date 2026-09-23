@@ -130,7 +130,7 @@ describe('GET /api/ai/plan-change/session — a look creates nothing (MOTIR-6023
     const res = await readSession(readReq());
     expect(res.status).toBe(200);
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
-    expect(await res.json()).toBeNull();
+    expect(await res.json()).toEqual({ session: null, earlier: null });
     expect(await adminDb.planChangeSession.count()).toBe(0);
   });
 
@@ -138,10 +138,43 @@ describe('GET /api/ai/plan-change/session — a look creates nothing (MOTIR-6023
     const id = await started();
     const before = await adminDb.planChangeSession.count();
 
-    const resumed = (await (await readSession(readReq())).json()) as { id: string };
-    expect(resumed.id).toBe(id);
-    const byId = (await (await readSession(readReq(`?id=${id}`))).json()) as { id: string };
+    const resumed = (await (await readSession(readReq())).json()) as {
+      session: { id: string };
+      earlier: unknown;
+    };
+    expect(resumed.session.id).toBe(id);
+    expect(resumed.earlier).toBeNull();
+    // The REOPEN read (MOTIR-6024) carries who started it and whether the viewer
+    // may continue it.
+    const byId = (await (await readSession(readReq(`?id=${id}`))).json()) as {
+      id: string;
+      startedBy: { id: string; name: string } | null;
+      startedByViewer: boolean;
+      viewerCanPlan: boolean;
+      pendingPlanId: string | null;
+    };
     expect(byId.id).toBe(id);
+    expect(byId.startedBy?.id).toBe(fx.ownerId);
+    expect(byId.startedByViewer).toBe(true);
+    expect(byId.viewerCanPlan).toBe(true);
+    expect(byId.pendingPlanId).toBeNull();
+    expect(await adminDb.planChangeSession.count()).toBe(before);
+  });
+
+  it('past the window: no resumable conversation, and the EARLIER one to point to (MOTIR-6024)', async () => {
+    const id = await started();
+    await adminDb.planChangeSession.update({
+      where: { id },
+      data: { lastActivityAt: new Date(Date.now() - 3 * 60 * 60 * 1000) },
+    });
+    const before = await adminDb.planChangeSession.count();
+
+    const body = (await (await readSession(readReq())).json()) as {
+      session: unknown;
+      earlier: { id: string; mine: boolean; targetKeys: string[] } | null;
+    };
+    expect(body.session).toBeNull();
+    expect(body.earlier).toMatchObject({ id, mine: true, targetKeys: [] });
     expect(await adminDb.planChangeSession.count()).toBe(before);
   });
 

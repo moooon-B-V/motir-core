@@ -12,9 +12,11 @@ import { mapPlanChangeError, noActiveProject, readSessionId } from '../_errors';
 //
 //   GET  ?id=<sessionId> → that session (browse). An id outside this project is
 //                          404 `PLAN_SESSION_NOT_FOUND`.
-//   GET  [?scope=<key>]  → the caller's own RESUMABLE session for the scope
-//                          (default: the project-wide one), or `null`. A read:
-//                          looking at the door creates nothing.
+//   GET  [?scope=<key>]  → `{ session, earlier }`: the caller's own RESUMABLE
+//                          session for the scope (default: the project-wide
+//                          one), or `null` — and then the scope's most recent
+//                          OTHER conversation for the fresh-start notice
+//                          (MOTIR-6024). A read: looking creates nothing.
 //   POST { body, isAnswer? } → START with the first turn — or, when the caller
 //                          already has a resumable project-wide session, append
 //                          to it (the service decides under a lock). This is the
@@ -36,7 +38,7 @@ export async function GET(req: Request): Promise<Response> {
   try {
     const result = id
       ? await planChangeSessionsService.getById(ctx, id)
-      : await planChangeSessionsService.findResumable(
+      : await planChangeSessionsService.findResumableWithEarlier(
           ctx,
           params.get('scope') ?? PROJECT_SCOPE_KEY,
         );

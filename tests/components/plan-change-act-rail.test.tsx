@@ -69,6 +69,9 @@ const BASE: PlanChangeConversationState = {
   stopping: false,
   stopped: false,
   queued: [],
+  earlier: null,
+  reopened: null,
+  readOnly: false,
   acts: [],
 };
 

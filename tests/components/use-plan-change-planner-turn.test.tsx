@@ -44,7 +44,12 @@ const {
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
-  findResumableSession: open,
+  // The resume read answers `{ session, earlier }` (MOTIR-6024); these cases
+  // mock the SESSION, so the factory wraps it.
+  findResumableSession: async (...a: unknown[]) => ({
+    session: await (open as (...args: unknown[]) => unknown)(...a),
+    earlier: null,
+  }),
   appendPlanChangeTurn: append,
   submitPlanChange: submit,
   recordPlannerTurn: record,

@@ -25,7 +25,13 @@ import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs
 import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { SubmittedRequirement } from '@/lib/ai/types';
-import type { PlanChangeSessionDto, PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
+import type {
+  PlanChangeSessionDto,
+  PlanChangeSubmitResultDto,
+  ResumableSessionDto,
+} from '@/lib/dto/planChange';
+import { planRepository } from '@/lib/repositories/planRepository';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import {
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
@@ -430,7 +436,70 @@ export const planChangeSessionsService = {
   async getById(pctx: ProjectContext, sessionId: string): Promise<PlanChangeSessionDto> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
-    return toDto(await findSessionById(pctx, sessionId), pctx);
+    const row = await findSessionById(pctx, sessionId);
+    // The REOPEN extras (MOTIR-6024): the reopened line names who started it,
+    // a member without `ai:plan` reads it read-only, and a still-undecided plan
+    // comes back reviewable — the three things a Plans row's reopen needs.
+    const [startedBy, pending, viewerCanPlan] = await Promise.all([
+      withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+        planChangeSessionRepository.findStarter(row.id, pctx.workspaceId, tx),
+      ),
+      withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+        planRepository.findLatestBySession(row.id, tx),
+      ),
+      assertCanPlan(pctx.projectId, ctx).then(
+        () => true,
+        (err: unknown) => {
+          if (err instanceof PermissionDeniedError) return false;
+          throw err;
+        },
+      ),
+    ]);
+    const undecided =
+      pending && pending.status !== 'approved' && pending.status !== 'declined' ? pending.id : null;
+    return {
+      ...(await toDto(row, pctx)),
+      startedBy,
+      startedByViewer: row.createdById === pctx.userId,
+      viewerCanPlan,
+      pendingPlanId: undecided,
+    };
+  },
+
+  /**
+   * The RESUME read plus what a FRESH start points to (AMENDMENT 17 §3;
+   * MOTIR-6024): the caller's resumable conversation for the scope — or, when
+   * there is none, the scope's most recent OTHER conversation (any member's),
+   * which the overlay's notice links to on the Plans page. Writes nothing.
+   */
+  async findResumableWithEarlier(
+    pctx: ProjectContext,
+    scopeKey: string = PROJECT_SCOPE_KEY,
+    now: Date = new Date(),
+  ): Promise<ResumableSessionDto> {
+    const session = await planChangeSessionsService.findResumable(pctx, scopeKey, now);
+    if (session) return { session, earlier: null };
+    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findLatestConversationInScope(
+        pctx.projectId,
+        scopeKey,
+        pctx.workspaceId,
+        null,
+        tx,
+      ),
+    );
+    return {
+      session: null,
+      earlier: row
+        ? {
+            id: row.id,
+            targetKeys: row.targetKeys,
+            lastActivityAt: row.lastActivityAt.toISOString(),
+            startedBy: row.createdBy,
+            mine: row.createdById === pctx.userId,
+          }
+        : null,
+    };
   },
 
   /**

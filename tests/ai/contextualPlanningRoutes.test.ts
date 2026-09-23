@@ -287,7 +287,9 @@ describe('GET /api/work-items/[id]/ai/plan — resume the item’s thread', () =
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
     // The envelope carries `planId` too (MOTIR-1745) — null here, because an item
     // never planned has no thread and so nothing pending to confirm.
-    expect(await res.json()).toEqual({ session: null, planId: null });
+    // Never planned: nothing resumes and there is no earlier conversation to
+    // point to (MOTIR-6024).
+    expect(await res.json()).toEqual({ session: null, planId: null, earlier: null });
     expect(submitJobMock).not.toHaveBeenCalled();
   });
 

@@ -6717,7 +6717,17 @@
       "sourceItems": "{count} 个工作项",
       "sourceItemsCapped": "{count}+ 个工作项"
     },
-    "returnAck": "设置已完成。我们从刚才的地方继续。"
+    "returnAck": "设置已完成。我们从刚才的地方继续。",
+    "session": {
+      "earlierAnchored": "你之前关于 <anchor>{label}</anchor> 的对话在<link>计划页面</link>上。",
+      "earlierProject": "你之前关于 {project} 的对话在<link>计划页面</link>上。",
+      "earlierOther": "{name} 发起的关于 <anchor>{label}</anchor> 的较早对话在<link>计划页面</link>上。",
+      "anchorMore": "<key>{first}</key> 等 {count} 项",
+      "reopened": "从计划页面重新打开 · 发起人 {name} · 最近活动 {when}",
+      "reopenedYours": "从计划页面重新打开 · 由你发起 · 最近活动 {when}",
+      "readOnly": "你可以阅读此对话。继续对话需要使用 Motir AI 规划的权限。",
+      "someone": "某人"
+    }
   },
   "codeHealth": {
     "title": "代码健康度",

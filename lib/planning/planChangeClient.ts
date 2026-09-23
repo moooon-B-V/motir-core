@@ -1,5 +1,9 @@
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
-import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
+import type {
+  EarlierSessionDto,
+  PlanChangeSessionDto,
+  ResumableSessionDto,
+} from '@/lib/dto/planChange';
 
 // Client reads/writes for the plan-change CONVERSATION seam (Story 7.30 ·
 // MOTIR-1728's routes), consumed by the conversational rail (MOTIR-1730). No
@@ -41,6 +45,8 @@ export interface ContextualPlanResponse extends PlanChangeSubmitResponse {
 export interface ContextualSessionResumeResponse {
   session: PlanChangeSessionDto | null;
   planId?: string | null;
+  /** The scope's earlier conversation when nothing resumed (MOTIR-6024). */
+  earlier?: EarlierSessionDto | null;
 }
 
 const JSON_HEADERS = { Accept: 'application/json', 'Content-Type': 'application/json' } as const;
@@ -74,10 +80,13 @@ async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
 /** The caller's own RESUMABLE project-wide conversation — their session active
  *  within the resume window — or `null` (MOTIR-6023; AMENDMENT 17 §3). A READ:
  *  mounting the rail creates nothing; the first turn does ({@link startPlanChangeSession}). */
-export async function findResumableSession(
-  signal?: AbortSignal,
-): Promise<PlanChangeSessionDto | null> {
-  return get<PlanChangeSessionDto | null>('/api/ai/plan-change/session', signal);
+export async function findResumableSession(signal?: AbortSignal): Promise<ResumableSessionDto> {
+  const body = await get<Partial<ResumableSessionDto> | null>(
+    '/api/ai/plan-change/session',
+    signal,
+  );
+  // Read defensively (an E2E stub may answer the older bare shape or nothing).
+  return { session: body?.session ?? null, earlier: body?.earlier ?? null };
 }
 
 /** One conversation BY ID — a reopened session (the Plans page's row). */
@@ -420,7 +429,11 @@ export async function resumeContextualSession(
   });
   if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
   const body = (await res.json()) as ContextualSessionResumeResponse;
-  return { session: body.session ?? null, planId: body.planId ?? null };
+  return {
+    session: body.session ?? null,
+    planId: body.planId ?? null,
+    earlier: body.earlier ?? null,
+  };
 }
 
 /** Append the turn to the item's thread AND submit the accumulated intent — one

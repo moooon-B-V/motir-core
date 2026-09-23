@@ -117,8 +117,9 @@ async function openSessionRoute(): Promise<Response> {
   const res = await readSessionRoute(
     new Request('http://localhost:3000/api/ai/plan-change/session'),
   );
-  const body = (await res.clone().json()) as { id: string } | null;
-  if (body) heldSessionId = body.id;
+  // `{ session, earlier }` since MOTIR-6024.
+  const body = (await res.clone().json()) as { session: { id: string } | null };
+  if (body.session) heldSessionId = body.session.id;
   return res;
 }
 
@@ -593,8 +594,10 @@ describe('seam · the ACCUMULATED thread is what the plan-edit job receives', ()
     );
 
     const resumed = await openSessionRoute();
-    const resumedBody = (await resumed.json()) as { turns: Array<{ body: string }> };
-    expect(resumedBody.turns.map((t) => t.body)).toEqual(['Add auth to the billing epic']);
+    const resumedBody = (await resumed.json()) as {
+      session: { turns: Array<{ body: string }> };
+    };
+    expect(resumedBody.session.turns.map((t) => t.body)).toEqual(['Add auth to the billing epic']);
 
     await appendTurnRoute(
       post('/api/ai/plan-change/session/turns', { body: 'Make the subtasks smaller' }),
