@@ -710,7 +710,9 @@ test('re-planning the PARENT goes through the same confirm', async ({ page, acce
   //    roadmap canvas because that opened at the root; it is the crumb away now.
   await viewButton(page, 'Canvas').click();
   await crumbs(page).getByRole('button', { name: 'Roadmap' }).click();
-  await expect(page.locator('[data-op="modify"]')).toHaveCount(1);
+  // Scoped to the dialog like every other locator in this file — the overlay is
+  // the live subtree, and `main` is `aria-hidden` while it is open.
+  await expect(workspace(page).locator('[data-op="modify"]')).toHaveCount(1);
 
   // Nothing written yet — the rename has not touched the item.
   const before = await db.workItem.findUniqueOrThrow({ where: { id: authEpicId } });
