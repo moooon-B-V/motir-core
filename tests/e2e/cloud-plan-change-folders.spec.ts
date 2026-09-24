@@ -182,10 +182,14 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   }
 
   // ── 3. DRILL THE FOLDER: its child folder, its items, the filed proposal ─────
-  const level = folderLoad(page, seed.archiveId);
+  // ⚠️ NO NETWORK WAIT HERE, AND THAT IS THE FOLLOW-MOVE'S DOING (MOTIR-6154/6161).
+  // The move above already READ this folder's level, and `PlanChangeCanvas`'s
+  // `loadLevel` serves a level it has read from `cacheRef` — cleared only when the
+  // diff key changes, which it last did when the plan settled. So this drill issues
+  // no second GET and a `folderLoad` wait here hangs for the full test budget. Same
+  // treatment the re-visits in step 4 already carry: the DOM is the signal.
   await archive.click();
   await canvas.getByTestId('drill-button').click();
-  await level;
   await expect(folderCard(canvas, seed.importsId)).toBeVisible();
   for (const title of seed.archivedTitles) {
     await expect(canvas.getByText(title, { exact: true })).toBeVisible();
