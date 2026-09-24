@@ -2101,6 +2101,15 @@ export default defineConfig({
         'components/planning/PlanningWorkspaceOverlay.tsx',
         'components/planning/PlanCloseGuard.tsx',
         'components/planning/PlanningWorkspaceHost.tsx',
+        // Story MOTIR-6155 · Subtask MOTIR-6186 — the plan page's List | Canvas
+        // pane, lifted into ONE component that the plan page AND the planning
+        // surface both mount. It is this story's own file and carries only the
+        // switch and the choice of body, so gating it gates nothing but this
+        // story's work — which is exactly the trade this section's header asks
+        // for, and the reason `PlanDetail.tsx` is still deliberately absent
+        // (see the note above): that island carries far more logic than this
+        // story owns. Measured at 100 / 100 / 100 by MOTIR-6187's gate.
+        'components/planning/PlanProposalViews.tsx',
         'app/api/work-items/planning-anchor/route.ts',
         // The `/planning` FORWARD. A route-group path is entered as `app/**/…`
         // (the note above) — `app/(authed)/planning/page.tsx` resolves to nothing.
@@ -2884,6 +2893,12 @@ export default defineConfig({
           statements: 90,
         },
         'components/planning/PlanningWorkspaceHost.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/PlanProposalViews.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
