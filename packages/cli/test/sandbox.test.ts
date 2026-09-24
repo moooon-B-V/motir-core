@@ -171,6 +171,22 @@ describe('sandbox Dockerfile', () => {
     expect(aptPackages).toMatch(/install -y --no-install-recommends gh \\$/m);
   });
 
+  it('installs python3 and smoke-tests it — the RUNBOOK path needs an interpreter (MOTIR-6195)', () => {
+    // Read the DIRECTIVES: the block comment above this layer now explains why
+    // python3 is contract, so a prose match would pass on the explanation of the
+    // package rather than on the package.
+    const directives = directivesOf(dockerfile);
+    const aptPackages = directives.slice(
+      directives.indexOf('apt-get install'),
+      directives.indexOf('rm -rf /var/lib/apt/lists'),
+    );
+    expect(aptPackages).toMatch(/^\s+python3-minimal \\$/m);
+    // Same reasoning as `motir --version` below: a base that cannot run python3
+    // must fail the BUILD, not the first `motir sweep planning bugs`. The two
+    // doors that drive prompts/sweep-planning-bugs.py have no degraded mode.
+    expect(directives).toMatch(/&& python3 --version/);
+  });
+
   it('installs the motir binary and smoke-tests it in the same layer', () => {
     expect(dockerfile).toContain('npm install -g /tmp/motir-cli.tgz');
     // A base that cannot run `motir --version` must fail the BUILD.
