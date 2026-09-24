@@ -42,6 +42,17 @@ import {
 const CLI_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 const README = readFileSync(join(CLI_DIR, 'sandbox', 'README.md'), 'utf8');
 
+// The README is the SHIPPED file, and every release lane prepends a section to
+// it. So a test that needs "the newest recorded release" or "the next one" reads
+// it from the file, never types it: a typed `0.4.0` held only until the first
+// digest PR after 0.4.0, which it then failed (MOTIR-6182).
+const shippedNewest = parseSections(README)[0]?.version ?? '0.0.0';
+/** A release strictly newer than any the README carries — what a lane records. */
+const NEXT = (() => {
+  const [maj, min] = shippedNewest.split('.').map(Number);
+  return `${maj}.${(min ?? 0) + 1}.0`;
+})();
+
 const digest = (char: string): string => `sha256:${char.repeat(64)}`;
 
 interface StubState {
@@ -400,15 +411,6 @@ describe('reading the file it edits', () => {
 });
 
 describe('placing the section in the file', () => {
-  // The version to INSERT must be strictly newer than whatever the shipped
-  // README currently carries, or the insert under test is not an insert. Derived
-  // rather than typed, for the every-release reason above.
-  const shippedNewest = parseSections(README)[0]?.version ?? '0.0.0';
-  const NEXT = (() => {
-    const [maj, min] = shippedNewest.split('.').map(Number);
-    return `${maj}.${(min ?? 0) + 1}.0`;
-  })();
-
   const section = (version: string, sha: string) =>
     renderSection({
       image: 'ghcr.io/moooon-b-v/motir-sandbox',
@@ -456,31 +458,38 @@ describe('placing the section in the file', () => {
     // A moved tag republishes the images, so the digests really can change under a
     // version that already has a section. Replacing it in place is right;
     // prepending a second one for the same release is not.
-    const once = updateReadme(README, { version: '0.4.0', section: section('0.4.0', 'a') });
+    // Re-recording the NEWEST shipped release is the realistic case: a moved tag
+    // republishes the current release, never an old one.
+    const once = updateReadme(README, {
+      version: shippedNewest,
+      section: section(shippedNewest, 'a'),
+    });
     const twice = updateReadme(once.content as string, {
-      version: '0.4.0',
-      section: section('0.4.0', 'b'),
+      version: shippedNewest,
+      section: section(shippedNewest, 'b'),
     });
     expect(twice.action).toBe('replaced');
     expect(twice.changed).toBe(true);
-    expect(parseSections(twice.content as string).map((s) => s.version)).toEqual([
-      '0.4.0',
-      '0.3.0',
-      '0.2.0',
-      '0.1.1',
-      '0.1.0',
-    ]);
-    // The demotion is not applied twice — 0.3.0 was already displaced.
-    expect((twice.content as string).match(/\*\*was\*\* the current release/g)).toHaveLength(3);
+    // Same sections in the same order — replaced in place, nothing prepended.
+    expect(parseSections(twice.content as string).map((s) => s.version)).toEqual(
+      parseSections(README).map((s) => s.version),
+    );
+    // No demotion either: every older section was already displaced, so the count
+    // of "was" lines is exactly the shipped file's.
+    const wasLines = (text: string) => text.match(/\*\*was\*\* the current release/g) ?? [];
+    expect(wasLines(twice.content as string)).toHaveLength(wasLines(README).length);
   });
 
   it('reports changed: false when the section is already exactly right', () => {
     // Criterion 5, at its source. The writer knowing it changed nothing is what
     // makes a no-op release commit nothing at all.
-    const once = updateReadme(README, { version: '0.4.0', section: section('0.4.0', 'a') });
+    const once = updateReadme(README, {
+      version: shippedNewest,
+      section: section(shippedNewest, 'a'),
+    });
     const again = updateReadme(once.content as string, {
-      version: '0.4.0',
-      section: section('0.4.0', 'a'),
+      version: shippedNewest,
+      section: section(shippedNewest, 'a'),
     });
     expect(again.changed).toBe(false);
   });
@@ -552,7 +561,7 @@ describe('the release lane driving it end to end', () => {
     '--image',
     image(),
     '--version',
-    '0.4.0',
+    NEXT,
     '--profiles',
     'profiles.json',
     '--digests',
@@ -567,16 +576,16 @@ describe('the release lane driving it end to end', () => {
   ];
 
   it('writes the README and reports changed=true', async () => {
-    publish('0.4.0', { base: digest('a'), claude: digest('b') });
+    publish(NEXT, { base: digest('a'), claude: digest('b') });
     const written: Record<string, string> = {};
     expect(await main(argv(['--write']), io(files(), written))).toBe(0);
     expect(written['::changed']).toBe('true');
-    expect(written['README.md']).toContain('### Release `cli-v0.4.0`');
-    expect(written['README.md']).toContain('**was** the current release until `cli-v0.4.0`');
+    expect(written['README.md']).toContain(`### Release \`cli-v${NEXT}\``);
+    expect(written['README.md']).toContain(`**was** the current release until \`cli-v${NEXT}\``);
   });
 
   it('writes NOTHING without --write, so a human can read the section first', async () => {
-    publish('0.4.0', { base: digest('a'), claude: digest('b') });
+    publish(NEXT, { base: digest('a'), claude: digest('b') });
     const written: Record<string, string> = {};
     expect(await main(argv(), io(files(), written))).toBe(0);
     expect(written['README.md']).toBeUndefined();
@@ -587,7 +596,7 @@ describe('the release lane driving it end to end', () => {
     // The no-op release, end to end: a re-run of a tag whose section is already
     // exact must not produce a commit — the workflow gates its commit step on
     // this one output.
-    publish('0.4.0', { base: digest('a'), claude: digest('b') });
+    publish(NEXT, { base: digest('a'), claude: digest('b') });
     const first: Record<string, string> = {};
     await main(argv(['--write']), io(files(), first));
     const second: Record<string, string> = {};
@@ -601,7 +610,7 @@ describe('the release lane driving it end to end', () => {
   });
 
   it('writes NOTHING when a recorded digest disagrees with the registry', async () => {
-    publish('0.4.0', { base: digest('a'), claude: digest('b') });
+    publish(NEXT, { base: digest('a'), claude: digest('b') });
     const written: Record<string, string> = {};
     const code = await main(
       argv(['--write']),
@@ -613,7 +622,7 @@ describe('the release lane driving it end to end', () => {
   });
 
   it('writes NOTHING when a moving tag has drifted from its immutable twin', async () => {
-    publish('0.4.0', { base: digest('a'), claude: digest('b') });
+    publish(NEXT, { base: digest('a'), claude: digest('b') });
     state.tags.set('claude', digest('f'));
     const written: Record<string, string> = {};
     expect(await main(argv(['--write']), io(files(), written))).toBe(1);
@@ -621,10 +630,17 @@ describe('the release lane driving it end to end', () => {
   });
 
   it('writes NOTHING when a digest is unchanged since the previous release', async () => {
-    // Reproduced through the real README: 0.3.0's own claude digest, republished
-    // under 0.4.0, is a variant that did not rebuild.
-    const unchanged = 'sha256:9d7222cb3700a96effe39c1f0cc7074df79138ee795b396bafb4bef1d4395f7e';
-    publish('0.4.0', { base: digest('a'), claude: unchanged });
+    // Reproduced through the real README: the newest shipped release's own claude
+    // digest, republished under the next release, is a variant that did not
+    // rebuild. Read from the file — that section is the baseline the novelty
+    // check compares against, so a typed digest from an older one stops matching
+    // the day a release is recorded above it (MOTIR-6182).
+    const [newest] = parseSections(README);
+    const unchanged = parseRows(
+      README.split('\n').slice(newest?.start, newest?.end).join('\n'),
+    ).find((row) => row.name === 'claude')?.digest as string;
+    expect(unchanged).toMatch(/^sha256:[0-9a-f]{64}$/);
+    publish(NEXT, { base: digest('a'), claude: unchanged });
     const written: Record<string, string> = {};
     const code = await main(
       argv(['--write']),
@@ -635,7 +651,7 @@ describe('the release lane driving it end to end', () => {
   });
 
   it('exits 2 — never 1, and never a write — when the control does not answer', async () => {
-    publish('0.4.0', { base: digest('a'), claude: digest('b') });
+    publish(NEXT, { base: digest('a'), claude: digest('b') });
     const written: Record<string, string> = {};
     const code = await main(
       [
@@ -653,7 +669,7 @@ describe('the release lane driving it end to end', () => {
     const written: Record<string, string> = {};
     await expect(
       main(
-        argv(['--write']).map((value) => (value === '0.4.0' ? 'cli-v0.4.0' : value)),
+        argv(['--write']).map((value) => (value === NEXT ? `cli-v${NEXT}` : value)),
         io(files(), written),
       ),
     ).rejects.toThrow(/bare x\.y\.z/);
