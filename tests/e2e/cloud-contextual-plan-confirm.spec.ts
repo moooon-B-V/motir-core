@@ -299,6 +299,13 @@ const itemPage = (page: Page) => page.getByRole('main');
  *  because its accessible name is what two of the assertions below MEASURE. */
 const entrance = (page: Page) => itemPage(page).getByTestId('work-item-plan-entrance');
 const addFrames = (page: Page) => workspace(page).locator('[data-diff-state="add"]');
+/** A BREADCRUMB crumb on the overlay's canvas, by its `KEY · Title` label. The
+ *  bar renders only once the canvas is drilled, which — since MOTIR-6154 — it is
+ *  from the moment the surface opens inside its target. */
+const crumb = (page: Page, label: string) =>
+  workspace(page)
+    .getByRole('navigation', { name: 'Breadcrumb' })
+    .getByRole('button', { name: label });
 /** A committed or proposed CARD on the canvas, by its title. */
 const canvasTitle = (page: Page, title: string) =>
   workspace(page).getByText(title, { exact: true });
@@ -343,16 +350,6 @@ async function sendTurn(page: Page, text: string): Promise<void> {
   await composer(page).fill(text);
   await rail(page).getByRole('button', { name: 'Send' }).click();
   await submitted;
-}
-
-/** Select a node on the canvas and drill into it, awaiting its level fetch. */
-async function drillInto(page: Page, title: string, parentId: string): Promise<void> {
-  await workspace(page).locator('[data-node-id]').filter({ hasText: title }).first().click();
-  const openButton = workspace(page).getByTestId('drill-button');
-  await expect(openButton).toBeVisible();
-  const loaded = levelLoad(page, parentId);
-  await openButton.click();
-  await loaded;
 }
 
 /** Approve the pending proposal, waiting on the approve's 200 before any re-read
@@ -498,10 +495,19 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
   await dwell(page);
 
   await chapter('Nothing is written until you confirm', async () => {
-    // The proposal is reviewable ON THE CANVAS, one level down — the anchor was
-    // childless, so it became drillable precisely because the run proposed work
-    // under it.
-    await drillInto(page, 'Notifications', seed.notifId);
+    // The proposal is reviewable ON THE CANVAS with NO drill: MOTIR-6154 opens the
+    // surface INSIDE the anchor, so the level the run proposed onto is the level
+    // already on screen. The anchor was childless, which is why that level was
+    // empty in the first chapter and carries the two proposals now.
+    //
+    // (Before MOTIR-6154 the canvas opened BESIDE the anchor and this step drilled
+    // in by hand. Keeping the drill would hunt for a `Notifications` CARD that the
+    // arrival has already left behind — the same reason the sibling test below
+    // stopped drilling when MOTIR-2070 moved the arrival the first time.)
+    await expect(crumb(page, `${seed.notifKey} · Notifications`)).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     await expect(addFrames(page)).toHaveCount(2);
     await expect(canvasTitle(page, DIGEST)).toBeVisible();
     await expect(canvasTitle(page, TOASTS)).toBeVisible();
@@ -621,11 +627,25 @@ test('a SIBLING under the anchor’s parent goes through the same confirm', asyn
   // actually loaded. (Before MOTIR-2070 the canvas opened on the roots and this
   // step drilled down by hand; keeping the drill after it would hunt for an
   // `Authentication` card that the arrival has already left behind.)
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Breadcrumb' })
-      .getByRole('button', { name: `${seed.authEpicKey} · Authentication` }),
-  ).toHaveAttribute('aria-current', 'page');
+  // ⚠️ SINCE MOTIR-6154 THE ARRIVAL IS THE ANCHOR ITSELF, not its parent: the
+  // surface opens INSIDE `Login UI`, so that is the crumb marked current and the
+  // epic is an ANCESTOR crumb one click away. (Before it, the canvas opened on
+  // the epic's level and `Authentication` carried `aria-current`.)
+  await expect(crumb(page, `${seed.loginKey} · Login UI`)).toHaveAttribute('aria-current', 'page');
+  await expect(crumb(page, `${seed.authEpicKey} · Authentication`)).not.toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+
+  // …and the proposal lands under the EPIC, which is where the canvas is not.
+  // The follow-move does NOT rescue this: it is armed only for a surface that
+  // opened with no target at all (MOTIR-6161), and this one opened on `Login UI`.
+  // So the sibling is reached the way a person reaches it — through the crumb.
+  // Filed as a finding, not papered over: MOTIR-6223.
+  await expect(addFrames(page)).toHaveCount(0);
+  const epicLevel = levelLoad(page, authEpicId);
+  await crumb(page, `${seed.authEpicKey} · Authentication`).click();
+  await epicLevel;
   await expect(addFrames(page)).toHaveCount(1);
   // ON THE CANVAS — the file's own helper, scoped to the overlay.
   await expect(canvasTitle(page, SIBLING)).toBeVisible();
@@ -673,7 +693,37 @@ test('re-planning the PARENT goes through the same confirm', async ({ page, acce
   await expect(confirmBar(page)).toContainText('1 added, 1 changed');
   await expect(rail(page).getByRole('alert')).toHaveCount(0);
 
-  // The epic is a ROOT node, so its `change` frame is on the level already shown.
+  // ⚠️ SINCE MOTIR-6154 THE ANCHOR IS THE LEVEL, NOT A CARD ON IT. The surface
+  // opens INSIDE the epic, so what is on screen is the epic's children — the
+  // proposed `Account recovery` among them — and the epic's own `change` frame is
+  // NOT drawn, because `decoratePlanChangeLevel` frames nodes ON a level and the
+  // anchor is the level itself. (Before MOTIR-6154 the canvas opened at the root,
+  // where the epic WAS a card, and the frame was on screen from the first paint.)
+  //
+  // That the rename is invisible from the level the surface arrives on is a real
+  // consequence of this story, not a property worth asserting — it is filed as
+  // MOTIR-6223. What this test rules on is that the rename is REVIEWABLE before
+  // the confirm, so it goes where the frame is drawn: the root.
+  await expect(crumb(page, `${seed.authEpicKey} · Authentication`)).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(canvasTitle(page, UNDER_PARENT)).toBeVisible();
+
+  // The ROOT read is the one with NO `parentId` — a bare `/roadmap` predicate
+  // would also match the level read the arrival itself issued.
+  const rootLevel = page.waitForResponse(
+    (r) =>
+      r.url().includes('/roadmap') &&
+      !r.url().includes('parentId=') &&
+      r.request().method() === 'GET' &&
+      r.ok(),
+  );
+  await workspace(page)
+    .getByRole('navigation', { name: 'Breadcrumb' })
+    .getByRole('button', { name: 'Roadmap' })
+    .click();
+  await rootLevel;
   await expect(page.locator('[data-diff-state="change"]')).toHaveCount(1);
 
   // Nothing written yet — the rename has not touched the item.

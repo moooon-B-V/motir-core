@@ -148,6 +148,30 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   expect((await asked).status()).toBe(200);
   await expect(workspace(page).getByTestId('plan-change-confirm-bar')).toContainText('2 added');
 
+  // ── 1b. THE FOLLOW-MOVE (MOTIR-6154/6161) ───────────────────────────────────
+  // This surface opened from the PROJECT with no target, so it began at the root
+  // — and the moment the plan settled it moved inside the level the plan fills,
+  // which for a plan that files work into Archive is the Archive FOLDER. So the
+  // canvas is no longer where step 1 left it, and the root assertions below are
+  // reached the way a person reaches them: through the crumb.
+  await expect(crumbs(canvas).getByRole('button', { name: 'Folder: Archive' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(canvas.getByText(plan.filedTitle, { exact: true })).toBeVisible();
+
+  // The ROOT read carries neither key — `folderLoad` above is the folder form.
+  const backToRoot = page.waitForResponse(
+    (r) =>
+      r.url().includes('/roadmap') &&
+      !r.url().includes('parentId=') &&
+      !r.url().includes('folderId=') &&
+      r.request().method() === 'GET' &&
+      r.ok(),
+  );
+  await crumbs(canvas).getByRole('button', { name: 'Roadmap' }).click();
+  await backToRoot;
+
   // ── 2. THE ROOT: folder cards, nothing filed loose, the badge (decisions 1–3) ─
   await expect(archive.getByTestId('folder-changes')).toHaveText('1 change');
   await expect(folderCard(canvas, seed.laterId)).toBeVisible();

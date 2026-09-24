@@ -43,6 +43,65 @@ describe('followFromTarget — the person ADDED a target', () => {
 });
 
 describe('followFromPlan — the plan showed where it LANDS', () => {
+  it('follows a plan into a FOLDER — a folder is a level like any other', () => {
+    // ⚠️ THE PREMISE `tests/e2e/cloud-plan-change-folders.spec.ts` RESTS ON. That
+    // spec opens the surface from the project with no target, asks for work to be
+    // FILED into a folder, and then reads the canvas — so whether the follow-move
+    // fires for a folder decides which level that spec is looking at. It is ruled
+    // on here, where it is one call, rather than inferred from a browser.
+    //
+    // It follows from `arrivalLevel` treating a folder as a container (the plan
+    // page's own engine, reused by MOTIR-6161 rather than re-cut), but "follows
+    // from" is not "asserted".
+    const folderTrail = [{ id: 'f_archive', name: 'Archive' }];
+    const review = planReview([
+      planReviewItem({
+        op: 'add',
+        nodeId: 'p1',
+        parentNodeId: null,
+        folderId: 'f_archive',
+        folderTrail,
+        folderMissing: false,
+      }),
+      planReviewItem({
+        op: 'add',
+        nodeId: 'p2',
+        parentNodeId: null,
+        folderId: 'f_archive',
+        folderTrail,
+        folderMissing: false,
+      }),
+    ]);
+
+    const req = followFromPlan(review, 'New');
+    expect(req?.trail.map((c) => c.label)).toEqual(['Archive']);
+  });
+
+  it('asks for NOTHING when the plan files into a STALE folder', () => {
+    // No level to navigate to, so no move — the same silence a target the viewer
+    // cannot see gets.
+    const review = planReview([
+      planReviewItem({
+        op: 'add',
+        nodeId: 'p1',
+        parentNodeId: null,
+        folderId: 'f_gone',
+        folderTrail: [{ id: 'f_gone', name: 'Gone' }],
+        folderMissing: true,
+      }),
+      planReviewItem({
+        op: 'add',
+        nodeId: 'p2',
+        parentNodeId: null,
+        folderId: 'f_gone',
+        folderTrail: [{ id: 'f_gone', name: 'Gone' }],
+        folderMissing: true,
+      }),
+    ]);
+
+    expect(followFromPlan(review, 'New')).toBeNull();
+  });
+
   it('asks for the level the plan most fills, keyed on that level', () => {
     const review = planReview([
       planReviewItem({
