@@ -344,6 +344,7 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // says about itself, and `tests/mcp/update-plan.test.ts` asserts that refusal
   // off the constant.
   update_plan: 'ai:view_plan',
+  record_plan_revision_reason: 'ai:view_plan',
 
   // ── removal — the RECOVERABLE and the IRREVERSIBLE, now two keys ─────────
   // ⚠️ CORRECTED (MOTIR-3629). This block used to read: "`archiveWorkItem` /

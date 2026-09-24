@@ -785,6 +785,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '3c8e94ce5a31',
   },
+  record_plan_revision_reason: {
+    // The line has to say the thing that makes this tool unlike its six
+    // neighbours: they all CHANGE the plan and this one does not — it records
+    // why it had to change. A reader picking between them is choosing on
+    // exactly that.
+    summary:
+      'Record WHY an unapproved plan had to change — four branches, two of which file a planning bug; it changes nothing about the plan.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: 'f58da227efc6',
+  },
   open_plan_session: {
     // Re-worded for MOTIR-6028: a scope holds MANY conversations now, and the
     // result's session `id` is how every later call names the one it means.

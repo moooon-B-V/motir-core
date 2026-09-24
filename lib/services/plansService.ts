@@ -5265,11 +5265,34 @@ export const plansService = {
       planId: string;
       branch: RevisionReasonBranch;
       evidenceMd: string;
+      /** The planning bug by its work-item ID — what motir-ai's `createBug` hands back. */
       planningBugId?: string | null;
+      /**
+       * The planning bug by its `MOTIR-<n>` KEY — what the runbook holds after
+       * `create_work_item`.
+       *
+       * ⚠️ TWO SPELLINGS OF ONE ARGUMENT, resolved HERE rather than at each door,
+       * because resolving a key needs the PLAN'S PROJECT and this method is the
+       * only place that already has it. A door that resolved it for itself would
+       * have to read the plan a second time just to learn the project — and the
+       * MCP transport is supposed to make one service call, not three.
+       *
+       * Giving both is refused rather than silently resolved: they are the same
+       * field in two forms, so a call sending both has not decided what it means.
+       */
+      planningBugKey?: string | null;
       actor?: PlanRevisionAgentActor | null;
     },
     ctx: ServiceContext,
-  ): Promise<{ revisionId: string; branch: RevisionReasonBranch; planningBugId: string | null }> {
+  ): Promise<{
+    revisionId: string;
+    branch: RevisionReasonBranch;
+    planningBugId: string | null;
+    planningBugKey: string | null;
+    /** The row's OWN `changedAt`, so a caller reports when it was recorded
+     *  rather than when it asked. */
+    at: string;
+  }> {
     const { planId, branch } = args;
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -5305,23 +5328,60 @@ export const plansService = {
       );
     }
 
+    // ONE ARGUMENT, TWO SPELLINGS. Both given is refused rather than resolved —
+    // the same call `assertSingleTargetRepoInput` makes for the repository axis,
+    // and for the same reason: a caller sending two forms of one field has not
+    // decided what it means, and inventing a precedence rule would settle it for
+    // them silently.
+    const rawKey = args.planningBugKey?.trim() ?? '';
+    if (args.planningBugId && rawKey !== '') {
+      throw new PlanRevisionClassificationInvalidError(
+        planId,
+        branch,
+        'it names the planning bug twice — give `planningBugId` or `planningBugKey`, not both.',
+      );
+    }
+
     // THE BRANCH AND THE BUG MUST AGREE. Both directions are refused, because
-    // both make the row say something its caller did not.
-    const planningBugId = args.planningBugId ?? null;
+    // both make the row say something its caller did not. Asked of the PAIR
+    // rather than of the resolved id, so a rule branch that sent no key at all
+    // is refused before a lookup it has nothing to look up.
+    const namesABug = Boolean(args.planningBugId) || rawKey !== '';
     const filesABug = isRuleRevisionReasonBranch(branch);
-    if (filesABug && !planningBugId) {
+    if (filesABug && !namesABug) {
       throw new PlanRevisionClassificationInvalidError(
         planId,
         branch,
         "it is a branch about the planner, so it files exactly one planning bug — pass that bug's id. File the bug first; this row records which bug the classification produced.",
       );
     }
-    if (!filesABug && planningBugId) {
+    if (!filesABug && namesABug) {
       throw new PlanRevisionClassificationInvalidError(
         planId,
         branch,
         'it is a branch about what the person wants, so it files nothing — a planning bug here would be the noise this classification exists to remove.',
       );
+    }
+
+    // THE KEY, RESOLVED — in the plan's OWN project, which is what makes the
+    // same-project rule below hold for this spelling by construction: a key in
+    // another project is not found rather than found-and-refused, which is the
+    // family's no-leak posture.
+    let planningBugId = args.planningBugId ?? null;
+    let planningBugKey: string | null = null;
+    if (rawKey !== '') {
+      const resolved = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findByIdentifier(plan.projectId, rawKey.toUpperCase(), tx),
+      );
+      if (!resolved) {
+        throw new PlanRevisionClassificationInvalidError(
+          planId,
+          branch,
+          `no work item \`${rawKey.toUpperCase()}\` exists in this plan's project.`,
+        );
+      }
+      planningBugId = resolved.id;
+      planningBugKey = rawKey.toUpperCase();
     }
 
     // THE BUG MUST BE A BUG, AND IT MUST BE IN THE PLAN'S OWN PROJECT.
@@ -5367,7 +5427,7 @@ export const plansService = {
     // is what makes the status check meaningful — without it a plan can be
     // approved between the read and the write, and the classification would land
     // on a plan nothing can change any more.
-    const revisionId = await withWorkspaceContext(
+    const row = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
         const locked = await planRepository.lockById(planId, tx);
@@ -5397,7 +5457,16 @@ export const plansService = {
       },
     );
 
-    return { revisionId, branch, planningBugId };
+    // The KEY rides back only when the caller supplied one: a door that named
+    // the bug by id never asked for its key, and resolving one to report it
+    // would be a read nobody needs.
+    return {
+      revisionId: row.id,
+      branch,
+      planningBugId,
+      planningBugKey,
+      at: row.changedAt.toISOString(),
+    };
   },
 
   // `approvePlanForWorkItem` — the v1 plan-approval route's entrance — moved to

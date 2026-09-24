@@ -24,7 +24,7 @@
 // DTO are the sibling card's), no reads. `workItemRevisionsService` is the
 // shipped precedent this mirrors exactly.
 
-import type { Prisma, WorkItemPlanningSource } from '@/generated/prisma/client';
+import type { PlanRevision, Prisma, WorkItemPlanningSource } from '@/generated/prisma/client';
 import { INTERNAL_PLAN_REVISION_CHANGE_KINDS } from '@/lib/plans/revisionReason';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 
@@ -168,14 +168,20 @@ export interface RecordPlanRevisionArgs {
 export const planRevisionsService = {
   /**
    * Record one revision row for a plan mutation, inside the caller's transaction
-   * (required `tx`). Returns the created row's id; every current call site is
-   * free to ignore it.
+   * (required `tx`).
+   *
+   * Returns the CREATED ROW; every call site but one is free to ignore it. The
+   * exception is `recordRevisionClassification`, whose caller reports WHEN the
+   * classification was recorded — and the only honest answer to that is the
+   * row's own `changedAt`, written by the database. A service that returned the
+   * id alone would leave its caller to stamp `new Date()`, which is the time it
+   * ASKED rather than the time the row exists at.
    */
   async recordRevision(
     args: RecordPlanRevisionArgs,
     tx: Prisma.TransactionClient,
-  ): Promise<string> {
-    const row = await planRevisionRepository.create(
+  ): Promise<PlanRevision> {
+    return planRevisionRepository.create(
       {
         planId: args.planId,
         planItemId: args.planItemId ?? null,
@@ -189,6 +195,5 @@ export const planRevisionsService = {
       },
       tx,
     );
-    return row.id;
   },
 };
