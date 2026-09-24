@@ -261,12 +261,20 @@ case "$AGENT" in
         ;;
 
     aider)
-        # Aider (Apache-2.0) is the one PYTHON agent, so the thin Python layer
-        # is installed HERE and not in the base — no other profile pays for it.
-        # A venv keeps pip off Debian's externally-managed system Python
-        # (PEP 668) without resorting to --break-system-packages.
+        # Aider (Apache-2.0) is the one PYTHON agent — but it is no longer the
+        # only reason this image has an interpreter, so it no longer asks for
+        # one. `python3-minimal` is in the BASE (MOTIR-6195: the runbook doors
+        # drive Python scripts on every profile, and MOTIR-6204 is where this
+        # arm stopped contradicting the layer below it by claiming otherwise).
+        #
+        # `python3-venv` IS still this arm's own — nothing else in the image
+        # needs it — and it is what keeps pip off Debian's externally-managed
+        # system Python without --break-system-packages (PEP 668). Whatever
+        # further stdlib a venv needs on top of `-minimal` arrives as ITS
+        # dependencies, which is the package manager's job rather than a list
+        # for this arm to keep current.
         apt-get update
-        apt-get install -y --no-install-recommends python3 python3-venv
+        apt-get install -y --no-install-recommends python3-venv
         rm -rf /var/lib/apt/lists/*
         python3 -m venv "$AGENT_ROOT/aider"
         "$AGENT_ROOT"/aider/bin/pip install --no-cache-dir --upgrade pip

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import {
   InvalidProposalError,
@@ -18,6 +19,7 @@ import {
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
 import type { CorrectProposalInput, PlanItemPatch, UpdateProposalInput } from '@/lib/dto/plans';
 
 // PATCH /api/internal/ai/plan-proposals/[itemId] (Subtask 7.4.4a · MOTIR-1441) —
@@ -48,6 +50,11 @@ import type { CorrectProposalInput, PlanItemPatch, UpdateProposalInput } from '@
 //   PlanNotInExpectedStatusError /
 //     PlanNotGeneratingError              → 409 (the plan already left `generating`)
 //   InvalidProposalError                  → 422 (empty title / editing a non-`add` / bad sizing)
+//   ProjectNotFoundError / PermissionDeniedError
+//                                         → 404 / 403 naming the key — the plan
+//                                           gate (`ai:view_plan`), mapped by
+//                                           `aiPlanGateErrorResponse` exactly as
+//                                           the human route maps it (MOTIR-6153)
 //   ProjectAccessDeniedError              → 404 browse / 403 edit
 //
 // ── `mode: 'correct'` (Story MOTIR-3595 · Subtask MOTIR-3598) ────────────────
@@ -68,6 +75,7 @@ import type { CorrectProposalInput, PlanItemPatch, UpdateProposalInput } from '@
 //   UnresolvedPlanRefError                → 422 (a corrected ref names no proposal)
 //   PlanItemUnknownTargetRepoError        → 422 (a repo outside the project's set)
 //   PlanItemUnknownTargetRepoRoleError    → 422 (a role outside the shared vocabulary)
+//   ConflictingTargetRepoInputError       → 422 (more than one repository field named)
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ itemId: string }> },
@@ -209,6 +217,13 @@ export async function PATCH(
         : await aiGenerationService.patchProposal(jobId, itemId, input, auth.ctx);
     return NextResponse.json(result);
   } catch (err) {
+    // The plan gate's two refusals (MOTIR-6153). A job token acts as its user,
+    // so a VIEWER's token reaches `plansService`'s `ai:view_plan` assertion and
+    // is refused there — which this route answered with a 500 that motir-ai
+    // reads as a server fault and retries. The human route has mapped the same
+    // refusal since MOTIR-2291; one helper, so the two doors cannot disagree.
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     if (
       err instanceof NoPlanForJobError ||
       err instanceof PlanNotFoundError ||
@@ -231,7 +246,12 @@ export async function PATCH(
       // has mapped it since MOTIR-1912 and this one had nothing to map, because
       // it carried no role. A correction that pins an unknown role must answer
       // the same typed 422 the append does, not a 500.
-      err instanceof PlanItemUnknownTargetRepoRoleError
+      err instanceof PlanItemUnknownTargetRepoRoleError ||
+      // More than one of `targetRepo` / `targetRepos` / `targetRepositories` on
+      // one correction (MOTIR-6153) — the service refuses rather than picking a
+      // winner, and the refusal names the fields. The MCP door has always
+      // answered it as a tool error; this door answered it as a 500.
+      err instanceof ConflictingTargetRepoInputError
     ) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
     }
@@ -379,6 +399,8 @@ function correctionFrom(
 //     PlanItemNotFoundError               → 404
 //   PlanNotEditableError                  → 409 (`approved` / `declined`)
 //   PlanProposalReferencedError           → 409 (a sibling still refs it)
+//   ProjectNotFoundError / PermissionDeniedError
+//                                         → 404 / 403 naming the key (the plan gate)
 //   ProjectAccessDeniedError              → 404 browse / 403 edit
 export async function DELETE(
   req: Request,
@@ -407,6 +429,9 @@ export async function DELETE(
       await aiGenerationService.withdrawProposalForJob(jobId, itemId, auth.ctx),
     );
   } catch (err) {
+    // The plan gate, as on PATCH above (MOTIR-6153).
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     if (
       err instanceof NoPlanForJobError ||
       err instanceof PlanNotFoundError ||
