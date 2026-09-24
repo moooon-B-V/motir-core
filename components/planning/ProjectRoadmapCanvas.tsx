@@ -14,6 +14,7 @@ import {
   Minimize,
   RotateCcw,
   Search,
+  Target,
 } from 'lucide-react';
 import {
   PlanningCanvas,
@@ -215,6 +216,22 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   isFolderCrumb?: (crumb: CanvasCrumb) => boolean;
   /**
+   * Which crumb is the PLANNING TARGET (MOTIR-6160, Story MOTIR-6154).
+   *
+   * The planning surface opens INSIDE the node being planned, so the target is
+   * no longer a node on the level — it is the level. MOTIR-2070 objected to
+   * exactly this ("Opening on the anchor's CHILDREN would hide the item the
+   * conversation is about"), and this is the answer: the target keeps a mark,
+   * moved from the node ring to the crumb it became.
+   *
+   * Answered by the CONSUMER, for the same reason `isFolderCrumb` is — only the
+   * consumer knows what a crumb id means. `PlanChangeCanvas` answers it from the
+   * `targetIds` it already has, so a target that becomes known LATER marks its
+   * crumb with no further wiring. Absent ⇒ no crumb is one, which is every other
+   * consumer.
+   */
+  isTargetCrumb?: (crumb: CanvasCrumb) => boolean;
+  /**
    * ARRIVE ALREADY DRILLED (MOTIR-2070). The breadcrumb trail the canvas OPENS on,
    * root-ancestor first: the LAST crumb is the level it loads, and the whole array
    * becomes the breadcrumb. `[]` (the default) is the shipped behaviour — open at
@@ -407,6 +424,7 @@ export function ProjectRoadmapCanvas({
   emptyRoot,
   emptyDrilledFor,
   isFolderCrumb,
+  isTargetCrumb,
   initialTrail,
   onLevelChange,
   controlledTrail,
@@ -416,6 +434,7 @@ export function ProjectRoadmapCanvas({
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tFolders = useTranslations('folders');
+  const tTarget = useTranslations('planningWorkspace.arrival');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
   // to the localized project-scope copy; a caller (e.g. the sprint-scoped roadmap)
   // overrides the warning row with its own "blocker not in sprint" copy (MOTIR-1379,
@@ -1189,7 +1208,20 @@ export function ProjectRoadmapCanvas({
                       active={seg.index === crumbs.length - 1}
                       onClick={() => navigate(c.id)}
                       folder={seg.folder}
-                      srPrefix={seg.folder ? tFolders('breadcrumbFolderLabel') : undefined}
+                      // THE TARGET CRUMB (MOTIR-6160) — the planning surface's
+                      // answer to MOTIR-2070. Standing INSIDE the target removes
+                      // the node its ring was drawn on, so the mark moves to the
+                      // crumb: this level IS the thing being planned. A folder
+                      // crumb wins the glyph slot if both ever applied, which
+                      // they cannot — a folder is not a work item.
+                      planningTarget={!seg.folder && (isTargetCrumb?.(c) ?? false)}
+                      srPrefix={
+                        seg.folder
+                          ? tFolders('breadcrumbFolderLabel')
+                          : (isTargetCrumb?.(c) ?? false)
+                            ? tTarget('crumbTargetPrefix')
+                            : undefined
+                      }
                     />
                   </li>
                 );
@@ -1589,6 +1621,7 @@ function Crumb({
   active,
   onClick,
   folder = false,
+  planningTarget = false,
   srPrefix,
   title,
   ariaLabel,
@@ -1599,6 +1632,12 @@ function Crumb({
   /** A FOLDER crumb (Bug MOTIR-5710 · MOTIR-5742): led by the 14px lucide `folder`
    *  glyph, so it reads as a folder without the reader reading it. */
   folder?: boolean;
+  /** The PLANNING-TARGET crumb (MOTIR-6160): led by the 14px lucide `target`
+   *  glyph — the same mark `PlanningTargetFrame`'s node pill carries, so "target"
+   *  means one thing on this surface whether it is a node or the level — plus a
+   *  2px accent underline at the node ring's own weight. NOT COLOUR ALONE: the
+   *  `srPrefix` carries the state in words, exactly as the folder crumb does. */
+  planningTarget?: boolean;
   /** A visually-hidden word ahead of the label — the folder crumb's `Folder:`. */
   srPrefix?: string;
   /** The native tooltip, when it should say more than the label (the `…` crumb's
@@ -1622,11 +1661,23 @@ function Crumb({
         active
           ? 'font-semibold text-(--el-text)'
           : 'text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)'
-      }${folder ? ' inline-flex items-center gap-1' : ''}`}
+      }${folder || planningTarget ? ' inline-flex items-center gap-1' : ''}`}
     >
       {folder ? <Folder className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+      {planningTarget ? (
+        <Target className="size-3.5 shrink-0 text-(--el-accent-on-surface)" aria-hidden="true" />
+      ) : null}
       {srPrefix ? <span className="sr-only">{`${srPrefix} `}</span> : null}
-      {folder ? <span className="truncate">{label}</span> : label}
+      {folder ? (
+        <span className="truncate">{label}</span>
+      ) : planningTarget ? (
+        // The 2px accent underline, at the node ring's own weight — it marks
+        // without tinting the label, so the crumb keeps the shipped active-crumb
+        // ink and its AA contrast.
+        <span className="truncate shadow-[inset_0_-2px_0_0_var(--el-accent)]">{label}</span>
+      ) : (
+        label
+      )}
     </button>
   );
 }

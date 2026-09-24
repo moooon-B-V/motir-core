@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
@@ -405,6 +405,21 @@ export function PlanChangeCanvas({
     (crumb: CanvasCrumb) => folderIdFromNodeId(crumb.id) !== null,
     [],
   );
+  // THE TARGET CRUMB (MOTIR-6160, Story MOTIR-6154). The surface opens INSIDE the
+  // node being planned, so the target is no longer a node on the level wearing
+  // `decorateTargetLevel`'s ring — it IS the level. This answers it from the same
+  // `targetIds` that rings a node, which is what keeps the two marks one fact:
+  // whichever of the crumb and the node the target currently is, exactly one of
+  // them is marked, and neither needs to know about the other.
+  //
+  // It also means the FOLLOW-MOVE (MOTIR-6161) needs no wiring here at all — a
+  // target added to the set later marks its crumb the moment the canvas stands
+  // in it.
+  const targetIdSet = useMemo(() => new Set(targetIds ?? []), [targetIds]);
+  const isTargetCrumb = useCallback(
+    (crumb: CanvasCrumb) => targetIdSet.has(crumb.id),
+    [targetIdSet],
+  );
   const emptyDrilledFor = useCallback(
     (focus: { id: string; label: string }) =>
       folderIdFromNodeId(focus.id) !== null ? <FolderEmptyLevel name={focus.label} /> : null,
@@ -438,6 +453,7 @@ export function PlanChangeCanvas({
         loadingFallback={loadingFallback}
         emptyRoot={emptyRoot}
         isFolderCrumb={isFolderCrumb}
+        isTargetCrumb={isTargetCrumb}
         emptyDrilledFor={emptyDrilledFor}
       />
       {quickView}

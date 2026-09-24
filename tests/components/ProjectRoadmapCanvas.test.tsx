@@ -1665,4 +1665,60 @@ describe('ProjectRoadmapCanvas — "Reset layout" respects the fold inset', () =
       'bottom-4 left-[8.25rem]',
     );
   });
+
+  // ── THE TARGET CRUMB (MOTIR-6160, Story MOTIR-6154) ───────────────────────
+  //
+  // The planning surface opens INSIDE the node being planned, so the target stops
+  // being a node on the level and becomes the level. MOTIR-2070 objected to
+  // exactly that ("Opening on the anchor's CHILDREN would hide the item the
+  // conversation is about"); the mark moving to the crumb is the answer, so these
+  // rule on the answer rather than on a decoration.
+  describe('the planning-target crumb', () => {
+    const trail = [{ id: 'E1', label: 'MOTIR-1 · Epic one' }];
+
+    it('marks the crumb the consumer names, in WORDS as well as colour', async () => {
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          rootLabel="Roadmap"
+          initialTrail={trail}
+          isTargetCrumb={(c) => c.id === 'E1'}
+        />,
+      );
+      await screen.findByText('Story one');
+      const crumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      // NOT COLOUR ALONE — the state reaches a screen reader as text, the same
+      // discipline the folder crumb and the node's "Target" pill already keep.
+      expect(within(crumb).getByText('Planning target:')).toBeTruthy();
+      // …and it is the ACTIVE crumb, i.e. the level being stood in.
+      const current = within(crumb).getByRole('button', { current: 'page' });
+      expect(current.textContent).toContain('MOTIR-1 · Epic one');
+    });
+
+    it('marks NOTHING when the consumer does not answer — every other canvas', async () => {
+      render(
+        <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" initialTrail={trail} />,
+      );
+      await screen.findByText('Story one');
+      const crumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      expect(within(crumb).queryByText('Planning target:')).toBeNull();
+    });
+
+    it('marks no crumb when the target is not one — the LEAF arrival', async () => {
+      // A subtask target is a NODE on the level, not a crumb, so the ring keeps
+      // the mark and the breadcrumb says nothing. Exactly one of the two is
+      // marked, which is the property that makes them one fact.
+      render(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          rootLabel="Roadmap"
+          initialTrail={trail}
+          isTargetCrumb={(c) => c.id === 'S1'}
+        />,
+      );
+      await screen.findByText('Story one');
+      const crumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+      expect(within(crumb).queryByText('Planning target:')).toBeNull();
+    });
+  });
 });
