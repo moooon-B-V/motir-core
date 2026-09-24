@@ -110,8 +110,38 @@ if (maj < 24 || (maj === 24 && min < 15)) { \
 # loop driver — the FIRST call of each, with no degraded mode — and every corpus
 # guard in motir-meta (`DOORS.check.py`, `prompts/plan-rules/*.py`) is a Python
 # script, so without an interpreter a rules change cannot be checked before it is
-# pushed. `-minimal` is deliberate and sufficient: those scripts import stdlib
-# only, so no pip and no virtualenv is needed.
+# pushed.
+#
+# ⚠️ IT IS `python3`, NOT `python3-minimal`, AND THE DIFFERENCE IS NOT A
+# PREFERENCE (MOTIR-6204). MOTIR-6195 chose `-minimal` on the grounds that those
+# scripts "import stdlib only" — true, and not the question `-minimal` asks.
+# `libpython3.11-minimal` carries 81 modules, not the standard library: `re`,
+# `collections`, `importlib`, `argparse`, `subprocess`, `tempfile`, `io`,
+# `contextlib` and `functools` are in it; **`json`, `shutil` and `difflib` are
+# NOT**. The corpus imports all three —
+#
+#   json     prompts/plan-rules/SELECTOR.check.py
+#   difflib  prompts/plan-rules/SELECTOR.check.py, COMPRESSION.conserve.py
+#   shutil   prompts/plan-rules/MIRROR.check.py
+#
+# — so `SELECTOR.check.py`, the guard that asserts MANIFEST.md is byte-identical
+# to what `split.py` generates, died on `import json` in the image that was
+# shipped to fix exactly that. Verified against bookworm's own file lists on
+# 2026-09-24:
+#   curl -fsSL https://packages.debian.org/bookworm/amd64/libpython3.11-minimal/filelist
+# The full interpreter is the fix, and "stdlib only" now buys what it says.
+#
+# The METAPACKAGE is pinned (identical on amd64 and arm64), not `python3.11`
+# itself: the interpreter's patch level follows Debian's security updates, and
+# pinning THAT would fail the build on the day a CVE is fixed.
+#
+# The build-time assertion below is the IMPORTS THE CONSUMER MAKES, not a
+# `--version`. That distinction is the whole of this fix: `-minimal` answered
+# `python3 --version` perfectly for as long as it shipped, while the guard it
+# was installed for could not start. Naming the three omitted modules is what
+# makes a future narrowing of this package fail the BUILD instead of somebody's
+# sweep.
+ARG PYTHON_VERSION=3.11.2-1+b1
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -120,7 +150,7 @@ RUN apt-get update \
         gnupg \
         less \
         openssh-client \
-        python3-minimal \
+        "python3=${PYTHON_VERSION}" \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
         -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
@@ -130,7 +160,8 @@ RUN apt-get update \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/* \
-    && python3 --version
+    && python3 --version \
+    && python3 -c 'import json, shutil, difflib, re, collections, importlib, argparse'
 
 # ── A Postgres to DEBUG AGAINST (MOTIR-6204) ─────────────────────────────────
 #

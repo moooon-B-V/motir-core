@@ -42,16 +42,21 @@ fail() {
 echo "== the three runtimes, as $(id -un) (uid $(id -u))"
 
 # ── Python ──────────────────────────────────────────────────────────────────
-# The consumer is motir-meta's corpus guards and the two sweep doors, which are
-# stdlib-only scripts — so the interpreter is the whole requirement, and `-m
-# json.tool` is a cheap proof the stdlib came with it rather than just the
-# binary.
+# The consumer is motir-meta's corpus guards and the two sweep doors. They are
+# stdlib-only, which is why "an interpreter is installed" LOOKS like the whole
+# requirement — and is not: `python3-minimal` answers `--version` perfectly and
+# ships 81 modules rather than the standard library, so SELECTOR.check.py died
+# on `import json` under the image installed to let it run (MOTIR-6204). So the
+# assertion is the IMPORTS, and it names the three `-minimal` omits.
 if python_version="$(python3 --version 2>&1)"; then
     pass "python3 runs — $python_version"
-    if echo '{"motir":1}' | python3 -m json.tool >/dev/null 2>&1; then
-        pass 'python3 carries its standard library (json.tool)'
+    if python3 -c 'import json, shutil, difflib, re, collections, importlib, argparse' 2>/dev/null; then
+        pass 'python3 carries the stdlib the corpus imports (json, shutil, difflib, …)'
     else
-        fail 'python3 cannot run `-m json.tool` — the stdlib is incomplete'
+        missing="$(for m in json shutil difflib re collections importlib argparse; do
+            python3 -c "import $m" 2>/dev/null || printf '%s ' "$m"
+        done)"
+        fail "python3 is a REDUCED stdlib — cannot import: ${missing:-unknown}"
     fi
 else
     fail "python3 is not runnable as $(id -un): $python_version"
