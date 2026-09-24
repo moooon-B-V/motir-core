@@ -9,6 +9,7 @@ import { Segmented } from '@/components/ui/Segmented';
 import type { PlanViewDto } from '@/lib/planning/planView';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 
 // The plan page's List | Canvas pane, as ONE component two hosts mount
 // (Subtask MOTIR-6185 · Story MOTIR-6155).
@@ -78,6 +79,21 @@ export interface PlanProposalViewsProps {
    * a keyboard user on List cannot land inside a canvas they cannot see.
    */
   preserveCanvasLevel?: boolean;
+  /**
+   * THE ARRIVAL HAND-OFF, when a HOST swapped this component in underneath a
+   * reader (MOTIR-6155). Forwarded verbatim to `PlanReviewCanvas`; the plan page
+   * passes none of it and is unchanged by its existence.
+   *
+   * Together they are MOTIR-6161's rule surviving a change of pane: the canvas
+   * opens on `canvasHeldTrail` rather than the plan's level, starts already
+   * `readerHasNavigated`, and so DECLINES `followTo` into the bar's offer instead
+   * of moving somebody who chose where to stand.
+   */
+  canvasHeldTrail?: readonly CanvasCrumb[] | null;
+  followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  onFollowDeclined?: (key: string) => void;
+  readerHasNavigated?: boolean;
+  onCanvasLevelChange?: (trail: readonly CanvasCrumb[]) => void;
 }
 
 export function PlanProposalViews({
@@ -90,6 +106,11 @@ export function PlanProposalViews({
   onViewChange,
   band,
   preserveCanvasLevel = false,
+  canvasHeldTrail = null,
+  followTo = null,
+  onFollowDeclined,
+  readerHasNavigated = false,
+  onCanvasLevelChange,
 }: PlanProposalViewsProps) {
   const t = useTranslations('planReview');
   const showingList = view === 'list';
@@ -100,6 +121,11 @@ export function PlanProposalViews({
       version={version}
       outcome={outcome}
       ariaLabel={ariaLabel}
+      heldTrail={canvasHeldTrail}
+      followTo={followTo}
+      onFollowDeclined={onFollowDeclined}
+      readerHasNavigated={readerHasNavigated}
+      onLevelChange={onCanvasLevelChange}
     />
   );
 

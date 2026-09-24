@@ -341,6 +341,27 @@ export function PlanningWorkspaceHost({
   // and the plan's landing place is an inference about it. The canvas honours at
   // most one request per mount regardless, so this is belt and braces on purpose.
   const followTo = followRequest(followFromTheTarget, followFromThePlan);
+
+  // ⭐ WHERE THE READER IS STANDING, carried ACROSS THE PANE SWAP (MOTIR-6155,
+  // honouring MOTIR-6161's rule).
+  //
+  // `navigated` is per-mount state inside `ProjectRoadmapCanvas`, which is right
+  // until a surface REPLACES its canvas — and this one does, the moment a plan is
+  // proposed. Without this, the fresh `PlanReviewCanvas` mounted with
+  // `navigated: false`, granted the pending `followTo`, and moved a reader off the
+  // level they had chosen. That is the one thing MOTIR-6161 decided must not
+  // happen, and its own gate catches it.
+  //
+  // ⚠️ `onLevelChange` IS THE READER'S SIGNAL, and that is not an accident of
+  // naming: the foundation fires it from `applyDrill` and `navigate` — the two
+  // movers the reader's own acts funnel through — and NOT from a granted follow,
+  // which sets the crumbs directly. So "this fired" means "the reader moved", and
+  // no second reporting prop is needed to know it.
+  const [canvasHeldTrail, setCanvasHeldTrail] = useState<readonly CanvasCrumb[] | null>(null);
+  const noteReaderLevel = useCallback((trail: readonly CanvasCrumb[]) => {
+    setCanvasHeldTrail(trail);
+  }, []);
+  const readerHasNavigated = canvasHeldTrail !== null;
   // One key for "what the canvas is drawing": a new proposal, or a fresh commit.
   const diffKey = `${treeVersion}:${state.jobId ?? 'none'}:${state.decided ?? 'pending'}:${index.counts.added}-${index.counts.changed}-${index.counts.removed}`;
 
@@ -578,6 +599,13 @@ export function PlanningWorkspaceHost({
                 // who drills the canvas, reads the List and comes back is returned
                 // to the level they were on.
                 preserveCanvasLevel
+                // The hand-off: open where the reader was, already marked as having
+                // navigated, so the pending request is DECLINED into the bar's
+                // offer rather than granted as a move.
+                canvasHeldTrail={canvasHeldTrail}
+                followTo={followTo}
+                readerHasNavigated={readerHasNavigated}
+                onCanvasLevelChange={noteReaderLevel}
               />
             ) : (
               <PlanChangeCanvas
@@ -593,6 +621,7 @@ export function PlanningWorkspaceHost({
                 // plan yet, and once a plan is PROPOSED the pane is the plan page's
                 // component, which does its own arriving (`arrivalLevel`).
                 followTo={followTo}
+                onLevelChange={noteReaderLevel}
                 ariaLabel={t('canvasAria', { project: projectName })}
                 loadingFallback={<PlanningCanvasSkeleton />}
                 emptyRoot={

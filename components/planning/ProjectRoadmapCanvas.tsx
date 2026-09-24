@@ -278,6 +278,22 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   onFollowDeclined?: (key: string) => void;
   /**
+   * THE READER HAD ALREADY NAVIGATED — BEFORE THIS MOUNT (MOTIR-6155).
+   *
+   * `navigated` is per-mount state, and that is right for a canvas that lives as
+   * long as its surface. The planning surface SWAPS the pane when a plan becomes
+   * proposed (`PlanChangeCanvas` → the plan page's component), so a reader who had
+   * drilled somewhere met a FRESH canvas with `navigated: false`, which granted the
+   * follow and moved them off the level they chose — the one thing MOTIR-6161 ruled
+   * must not happen. Seeding the flag carries that fact across the swap, so the new
+   * canvas declines exactly as the old one would have and the bar offers the trip.
+   *
+   * It seeds MOUNT state only: the reader's own navigation still sets the flag, and
+   * a later change of this prop does not clear it. A surface that never swaps its
+   * canvas has no reason to pass it.
+   */
+  readerHasNavigated?: boolean;
+  /**
    * ARRIVE ALREADY DRILLED (MOTIR-2070). The breadcrumb trail the canvas OPENS on,
    * root-ancestor first: the LAST crumb is the level it loads, and the whole array
    * becomes the breadcrumb. `[]` (the default) is the shipped behaviour — open at
@@ -473,6 +489,7 @@ export function ProjectRoadmapCanvas({
   isTargetCrumb,
   followTo = null,
   onFollowDeclined,
+  readerHasNavigated = false,
   initialTrail,
   onLevelChange,
   controlledTrail,
@@ -641,7 +658,12 @@ export function ProjectRoadmapCanvas({
   // (`applyDrill` and `navigate`, which the crumbs and `goBack` funnel through)
   // rather than inferred from the level, because an auto-descend moves the level
   // too and it is not the reader.
-  const [navigated, setNavigated] = useState(false);
+  // ⚠️ SEEDED, not merely initialised false (MOTIR-6155). A surface that swaps its
+  // canvas mid-session — the planning surface, when a plan becomes proposed — hands
+  // the fact forward through `readerHasNavigated`, so a reader who had drilled is
+  // not moved by the fresh mount's first `followTo`. Mount-only by construction:
+  // `useState`'s argument is read once, which is exactly the semantics wanted.
+  const [navigated, setNavigated] = useState(readerHasNavigated);
   // The request last SEEN. It is held for a DECLINED key as well, which is what
   // makes "honoured at most once" true of a decline too — a re-render cannot
   // retry a request the reader already outran. `everGranted` is the separate
