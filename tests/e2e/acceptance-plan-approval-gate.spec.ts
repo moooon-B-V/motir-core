@@ -451,6 +451,19 @@ test('a reader who may not decide sees the plan and no verbs; a plan with no con
     plan.ctx,
   );
   await plansService.markPlanned(loose.id, plan.ctx);
+  // ⚠️ AMENDED by Story MOTIR-6043 · MOTIR-6045. This case used to rest on
+  // `createPlan` producing a plan whose session held no TURNS, which §11.5b then
+  // sent to the plan page. The turns reading is overturned
+  // (`docs/decisions/mcp-authored-plan-review.md`) and the predicate is now the
+  // session's EXISTENCE, so that plan opens the SURFACE like any other — the case
+  // this test is about needs a plan with no session AT ALL.
+  //
+  // `Plan.sessionId` is *"NULLABLE AT THE DATABASE only so a build predating this
+  // column can still write a plan during a rollout"* (`prisma/schema.prisma`) and
+  // every author path sets it, so this state has no shipped producer to drive:
+  // clearing the column IS that rollout, simulated. The same seed, with the same
+  // reasoning, is `tests/integration/planning/planRowDestinationGate.test.ts`.
+  await adminDb.plan.update({ where: { id: loose.id }, data: { sessionId: null } });
 
   await openToApprove(page);
   const looseRow = planRow(page, 'Telemetry baseline');
