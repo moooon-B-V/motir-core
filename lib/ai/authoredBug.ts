@@ -1,4 +1,5 @@
-import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemDifficultyDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import { WORK_ITEM_DIFFICULTIES, isWorkItemDifficulty } from '@/lib/issues/difficulty';
 import { isWorkItemType } from '@/lib/issues/executorDefaults';
 
 // The PLANNED BUG an `author_bug` job returns (Story MOTIR-4930 · Subtask
@@ -46,6 +47,9 @@ export interface AuthoredBug {
   executor: ExecutorDto;
   storyPoints: (typeof AUTHORED_STORY_POINTS)[number];
   estimateMinutes: number;
+  /** How hard the fix is to reason about (MOTIR-6135). `null` when the answer
+   *  carried no key — a motir-ai build that predates the field. */
+  difficulty: WorkItemDifficultyDto | null;
   contextRefs: string[];
   candidateMechanisms: string[];
   grounded: boolean;
@@ -100,8 +104,11 @@ function section(md: string, heading: string): string | null {
  * {@link InvalidAuthoredBugError} naming the first field that failed. Every check
  * the story states: `type` in the fourteen-member enum, `executor` in its two,
  * `storyPoints` in `1 | 2 | 3 | 5`, `estimateMinutes` a positive integer within
- * the cap, both bodies non-empty and within their caps, `candidateMechanisms`
- * empty or two-or-more, and a description carrying `## Acceptance criteria` with
+ * the cap, `difficulty` in `trivial | low | medium | high` when present (an
+ * ABSENT key reads as `null` — rollout tolerance for a motir-ai build that does
+ * not emit it yet — while a present unknown value is refused, as `storyPoints`
+ * is), both bodies non-empty and within their caps, `candidateMechanisms` empty
+ * or two-or-more, and a description carrying `## Acceptance criteria` with
  * a bullet and `## Context refs`.
  */
 export function parseAuthoredBug(raw: unknown): AuthoredBug {
@@ -124,6 +131,19 @@ export function parseAuthoredBug(raw: unknown): AuthoredBug {
       `must be one of ${AUTHORED_STORY_POINTS.join(' | ')}`,
     );
   }
+  // Absent (or explicitly null) → null; present → must be a known member.
+  const rawDifficulty = raw['difficulty'];
+  if (
+    rawDifficulty !== undefined &&
+    rawDifficulty !== null &&
+    !isWorkItemDifficulty(rawDifficulty)
+  ) {
+    throw new InvalidAuthoredBugError(
+      'difficulty',
+      `must be one of ${WORK_ITEM_DIFFICULTIES.join(' | ')}`,
+    );
+  }
+  const difficulty: WorkItemDifficultyDto | null = rawDifficulty ?? null;
   const estimate = raw['estimateMinutes'];
   if (
     typeof estimate !== 'number' ||
@@ -172,6 +192,7 @@ export function parseAuthoredBug(raw: unknown): AuthoredBug {
     executor,
     storyPoints: storyPoints as AuthoredBug['storyPoints'],
     estimateMinutes: estimate,
+    difficulty,
     contextRefs,
     candidateMechanisms,
     grounded: raw['grounded'],

@@ -480,7 +480,18 @@ export type PlanGrammarViolation =
    * refused one hop later, by the planner's own resolver. What this refuses is a
    * value that could not name a `subject-<name>.md` file at all.
    */
-  | 'malformed_subject';
+  | 'malformed_subject'
+  /**
+   * A non-null DIFFICULTY on a container kind (Story MOTIR-6095 · MOTIR-6133;
+   * `agent-authored-plans.md` AMENDMENT 19) — an `add` proposing an `epic` /
+   * `story` with one, or a `modify` whose `patch.difficulty` targets a work item
+   * that is a container NOW. The proposal doors refuse both with
+   * `INVALID_PROPOSAL`; this reason exists for the one path they cannot see, a
+   * committed target re-kinded to a container after the append. Without it,
+   * approve writes the column directly (it bypasses `workItemsService`) and a
+   * story ends up with the difficulty every other door refuses it.
+   */
+  | 'difficulty_on_container';
 
 /*
  * ⚠️ `subject_on_container` WAS A MEMBER AND IS RETIRED (MOTIR-5607).
@@ -517,6 +528,7 @@ const PLAN_GRAMMAR_VIOLATION_MEMBERS: Record<PlanGrammarViolation, true> = {
   parent_depth_limit: true,
   parent_terminal: true,
   malformed_subject: true,
+  difficulty_on_container: true,
 };
 
 /** {@link PlanGrammarViolation}'s members as an array — see the record above. */

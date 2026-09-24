@@ -331,7 +331,7 @@ describe('the proposal envelope the peek reads (MOTIR-4183)', () => {
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     for (const item of review.items) {
       expect(item.proposal.settableRailFields).toEqual(PLAN_ITEM_SETTABLE_RAIL_FIELDS);
-      expect(item.proposal.settableRailFields).toHaveLength(6);
+      expect(item.proposal.settableRailFields).toHaveLength(7);
       // The marker can never mark a rail row the denominator does not count.
       const railChanges = item.proposal.changedFields.filter((f) =>
         (PLAN_ITEM_SETTABLE_RAIL_FIELDS as readonly string[]).includes(f),

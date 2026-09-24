@@ -1030,6 +1030,12 @@ export default defineConfig({
         // graph, done-work immutability); it is the load-bearing SAFETY contract
         // of the planning pipeline, so every branch of the verdict is gated.
         'lib/plans/validateProposals.ts',
+        // Story MOTIR-6095 · MOTIR-6141 — the plan path's ONE difficulty bar
+        // (every proposal write door and the approve-time grammar ask it). New in
+        // the story, measured BEFORE pinning from its own specs
+        // (`tests/plans/validateProposedDifficulty`, `proposedDifficulty`,
+        // `planDifficultyStoryGate`): 100 stmts · 100 branch · 100 fn · 100 lines.
+        'lib/plans/validateProposedDifficulty.ts',
         // Story 7.12 · Subtask 7.12.6 (MOTIR-912) — the REVIEW-AND-CONFIRM seam
         // the story's rail runs on (MOTIR-1746/1747). `planReview.ts` answers the
         // three questions every AI-planning entrance asks of a run (is a proposal
@@ -4322,6 +4328,13 @@ export default defineConfig({
         'lib/jobs/definitions/abandonedPlanSweep.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.12.5 (MOTIR-911) — the persist-time confirmation gate.
         'lib/plans/validateProposals.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-6095 · MOTIR-6141 — the plan path's difficulty bar.
+        'lib/plans/validateProposedDifficulty.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
         // Subtask 7.12.6 (MOTIR-912) — the shared review/confirm seam.
         'lib/planning/planReview.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/planning/planReviewClient.ts': { branches: 90, functions: 90, lines: 90 },

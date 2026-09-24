@@ -76,6 +76,7 @@ import {
 } from '@/lib/plans/validateProposals';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
+import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
@@ -389,6 +390,14 @@ function validateProposal(p: ProposalInput): void {
       p.proposedFields.kind ?? DEFAULT_PROPOSED_KIND,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
+    // The leaf's DIFFICULTY (MOTIR-6133 · AMENDMENT 19) — membership plus the
+    // container refusal, on the kind `materialize` will create, through the ONE
+    // validator every proposal door shares.
+    validateProposedDifficulty(
+      p.proposedFields.difficulty,
+      p.proposedFields.kind ?? DEFAULT_PROPOSED_KIND,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
     assertKnownPlanningSource(
       p.proposedFields,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
@@ -425,6 +434,15 @@ function validateProposal(p: ProposalInput): void {
     // sizing alone, or an explicit `null` that clears it.
     validateStoryPoints(p.patch.storyPoints ?? null);
     validateEstimateMinutes(p.patch.estimateMinutes ?? null);
+    // A `modify` may RE-JUDGE the target's difficulty (MOTIR-6133). MEMBERSHIP
+    // only here — this pass is pure and the target's KIND needs a read, so the
+    // container half runs inside `addProposals`' transaction
+    // (`assertModifyDifficultiesLegalAtAppend`), through the same validator.
+    validateProposedDifficulty(
+      p.patch.difficulty,
+      null,
+      proposalLabel({ op: p.op, workItemId: p.workItemId }),
+    );
     // A `modify` may RE-PIN the role (MOTIR-1912) — same vocabulary check as the
     // `add` path, so the two cannot disagree about what a role is.
     assertKnownRepoRole(
@@ -537,6 +555,9 @@ function mergeProposedFields(
   if (input.priority !== undefined) next.priority = input.priority;
   if (input.storyPoints !== undefined) next.storyPoints = input.storyPoints;
   if (input.estimateMinutes !== undefined) next.estimateMinutes = input.estimateMinutes;
+  // A leaf's DIFFICULTY (MOTIR-6133) — sparse like the sizing above it; an
+  // explicit `null` clears it.
+  if (input.difficulty !== undefined) next.difficulty = input.difficulty;
   if (input.explanationMd !== undefined) next.explanationMd = input.explanationMd;
   // AMENDMENT 4 D3a (MOTIR-3089) — the deepen turn's one widening. Sparse like
   // every key above it: absent leaves the proposal's executor alone, an explicit
@@ -593,6 +614,9 @@ function buildAddDiff(
   // so record it numeric (the same `Number(...)` shape estimationService logs).
   if (row.estimateMinutes != null) diff.estimateMinutes = { from: null, to: row.estimateMinutes };
   if (row.storyPoints != null) diff.storyPoints = { from: null, to: Number(row.storyPoints) };
+  // A leaf's DIFFICULTY (MOTIR-6133) — `difficulty` has a `textField()`
+  // disposition in lib/activity/renderers.ts (MOTIR-6096). Omitted when unset.
+  if (row.difficulty != null) diff.difficulty = { from: null, to: row.difficulty };
   // The repo pin (MOTIR-1884) — recorded when the proposal carried one (null =
   // unpinned is omitted, like every other optional field here). `targetRepo` has a
   // `textField()` disposition in lib/activity/renderers.ts, so the created-revision
@@ -1880,6 +1904,11 @@ async function materialize(
       // storyPoints column). Null when the `add` carried no estimate.
       estimateMinutes: pf.estimateMinutes ?? null,
       storyPoints: pf.storyPoints ?? null,
+      // A leaf's DIFFICULTY (MOTIR-6133) — validated at every proposal door
+      // (membership + container refusal) and re-checked for the container half
+      // by the approve gate (`difficulty_on_container`). This write bypasses
+      // `workItemsService`, which is exactly why the plan path owns that check.
+      difficulty: pf.difficulty ?? null,
       // WHICH REPO this item ships in (MOTIR-1884) — already normalized to the
       // bare name and validated against the project's set before the transaction
       // opened. Absent from the map = the proposal carried no pin, which stores
@@ -2646,6 +2675,15 @@ async function applyModify(
     update.estimateMinutes = patch.estimateMinutes;
     diff.estimateMinutes = { from: current.estimateMinutes, to: patch.estimateMinutes };
   }
+  // Re-judge the DIFFICULTY (MOTIR-6133) — the same column the `add` path
+  // materializes. Sparse: absent leaves it, `null` clears. The container half
+  // was refused before this transaction wrote anything (the approve gate's
+  // `difficulty_on_container`). `difficulty` has a `textField()` renderer
+  // disposition (MOTIR-6096), the same cell `workItemsService` records.
+  if (patch.difficulty !== undefined && patch.difficulty !== current.difficulty) {
+    update.difficulty = patch.difficulty;
+    diff.difficulty = { from: current.difficulty, to: patch.difficulty };
+  }
   // RE-PIN the repo (MOTIR-1884) — present in `repoPins` ONLY when the patch
   // carried a `targetRepo` key, which is what keeps "leave it alone" distinct
   // from "unpin it" (an explicit null resolves to null and clears the column).
@@ -3014,6 +3052,51 @@ async function assertReparentsLegalAtAppend(
 }
 
 /**
+ * The container refusal for a `modify`'s `patch.difficulty`, at the APPEND
+ * (MOTIR-6133 · AMENDMENT 19) — the half `validateProposal` defers because it
+ * needs the TARGET's kind. Judged through the same shared validator the `add`
+ * path, the deepen and the correction call.
+ *
+ * Only the INCOMING batch is judged: rows already on the plan were judged when
+ * they were appended, and a target re-kinded since is the approve gate's case
+ * (`difficulty_on_container`). A target that resolves to nothing is left to the
+ * close, as every other live-row question on this path is. Skipped with no read
+ * when no incoming `modify` sets a non-null difficulty.
+ */
+async function assertModifyDifficultiesLegalAtAppend(
+  proposals: readonly ProposalInput[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const judged = proposals.filter(
+    (p) =>
+      p.op === 'modify' &&
+      p.workItemId &&
+      p.patch?.difficulty !== undefined &&
+      p.patch?.difficulty !== null,
+  );
+  if (judged.length === 0) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const rows = await workItemRepository.findByIdsInWorkspace(
+      [...new Set(judged.map((p) => p.workItemId!))],
+      ctx.workspaceId,
+      tx,
+    );
+    const kindById = new Map(rows.map((r) => [r.id, r.kind as string]));
+    for (const p of judged) {
+      const kind = kindById.get(p.workItemId!);
+      if (kind === undefined) continue;
+      validateProposedDifficulty(
+        p.patch!.difficulty,
+        kind,
+        proposalLabel({ op: p.op, workItemId: p.workItemId }),
+      );
+    }
+  });
+}
+
+/**
  * Judge every `folder:` placement at the APPEND (MOTIR-5414): the folder exists
  * and belongs to the plan's project.
  *
@@ -3109,6 +3192,14 @@ async function editAddProposal(
       // `story` with a checklist in two calls that are each individually legal.
       validateProposedTodos(
         next.todos,
+        next.kind ?? DEFAULT_PROPOSED_KIND,
+        proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+      );
+      // And the DIFFICULTY on the MERGED result (MOTIR-6133), for the same
+      // reason: a deepen that patches only `kind` to `story` must still be judged
+      // against the difficulty the proposal already carries.
+      validateProposedDifficulty(
+        next.difficulty,
         next.kind ?? DEFAULT_PROPOSED_KIND,
         proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
       );
@@ -3762,6 +3853,11 @@ export const plansService = {
           // anything that is not a Prisma error — so the caller is told its
           // proposals ARE at fault, which `PlanPersistenceError` would deny.
           assertProposalSetSelfConsistent(effectiveNodes);
+
+          // The container half of a `modify`'s DIFFICULTY (MOTIR-6133), which
+          // `validateProposal` could not judge without the target's kind. Costs
+          // one batched read, and only when the batch sets a non-null one.
+          await assertModifyDifficultiesLegalAtAppend(proposals, ctx, fresh.projectId, tx);
 
           // ⚠️ REFUSE AN UNRESOLVABLE `planItem:` REF HERE, WHERE IT IS WRITTEN
           // (MOTIR-3539) — before the first row of the batch is inserted, so a
@@ -4778,6 +4874,12 @@ export const plansService = {
             next.kind ?? DEFAULT_PROPOSED_KIND,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
+          // The DIFFICULTY, on the MERGED result — the deepen's rule (MOTIR-6133).
+          validateProposedDifficulty(
+            next.difficulty,
+            next.kind ?? DEFAULT_PROPOSED_KIND,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+          );
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
             ...Object.keys(input).filter((k) => k !== 'parentRef' && k !== 'blockedByRefs'),
@@ -4800,6 +4902,19 @@ export const plansService = {
             }
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the
+            // TARGET's live kind — the append's two halves in one call, since the
+            // transaction is already open.
+            if (input.patch?.difficulty !== undefined && input.patch?.difficulty !== null) {
+              const target = item.workItemId
+                ? await workItemRepository.findById(item.workItemId, tx)
+                : null;
+              validateProposedDifficulty(
+                input.patch.difficulty,
+                target ? target.kind : null,
+                proposalLabel({ op: item.op, workItemId: item.workItemId }),
+              );
+            }
             assertKnownRepoRole(
               input.patch?.targetRepoRole,
               item.id,

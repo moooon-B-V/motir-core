@@ -721,7 +721,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // of what was proposed.
     summary:
       'A plan with the proposals it bundles: what the planner actually proposed, not just how much.',
-    descriptionFingerprint: '95d3e64618dd',
+    descriptionFingerprint: 'ec35160c0f7b',
   },
   create_plan: {
     summary:

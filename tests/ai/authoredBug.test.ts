@@ -32,6 +32,7 @@ const GOOD = {
   executor: 'coding_agent',
   storyPoints: 2,
   estimateMinutes: 45,
+  difficulty: 'medium',
   contextRefs: ['lib/services/exportService.ts'],
   candidateMechanisms: [],
   grounded: true,
@@ -48,6 +49,8 @@ describe('parseAuthoredBug', () => {
     ['executor', 'robot'],
     ['storyPoints', 4],
     ['storyPoints', 8],
+    ['difficulty', 'extreme'],
+    ['difficulty', 3],
     ['estimateMinutes', 0],
     ['estimateMinutes', 12.5],
     ['estimateMinutes', 100_000],
@@ -63,6 +66,44 @@ describe('parseAuthoredBug', () => {
     const run = () => parseAuthoredBug({ ...GOOD, [field]: value });
     expect(run).toThrow(InvalidAuthoredBugError);
     expect(run).toThrow(new RegExp(`at ${field}`));
+  });
+
+  it.each(['trivial', 'low', 'medium', 'high'] as const)(
+    'accepts difficulty %s and returns it',
+    (difficulty) => {
+      expect(parseAuthoredBug({ ...GOOD, difficulty }).difficulty).toBe(difficulty);
+    },
+  );
+
+  it('an ABSENT difficulty validates as null — rollout tolerance for a motir-ai build that predates it', () => {
+    const { difficulty: _omit, ...withoutDifficulty } = GOOD;
+    void _omit;
+    expect(parseAuthoredBug(withoutDifficulty)).toEqual({ ...GOOD, difficulty: null });
+  });
+
+  it('an unknown difficulty is refused with the SAME error shape an unknown storyPoints gets', () => {
+    const refusal = (field: string, value: unknown) => {
+      try {
+        parseAuthoredBug({ ...GOOD, [field]: value });
+      } catch (err) {
+        return err;
+      }
+      throw new Error(`${field} = ${String(value)} was accepted`);
+    };
+    const bad = refusal('difficulty', 'extreme') as InvalidAuthoredBugError;
+    const points = refusal('storyPoints', 4) as InvalidAuthoredBugError;
+    for (const err of [bad, points]) {
+      expect(err).toBeInstanceOf(InvalidAuthoredBugError);
+      expect(err.code).toBe('INVALID_AUTHORED_BUG');
+      expect(err.name).toBe('InvalidAuthoredBugError');
+    }
+    expect(bad.field).toBe('difficulty');
+    expect(bad.message).toBe(
+      'author_bug answer refused at difficulty: must be one of trivial | low | medium | high',
+    );
+    expect(points.message).toBe(
+      'author_bug answer refused at storyPoints: must be one of 1 | 2 | 3 | 5',
+    );
   });
 
   it('refuses a description without the two required sections', () => {
