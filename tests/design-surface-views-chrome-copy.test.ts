@@ -62,17 +62,21 @@ const CHROME_KEYS = ['close', 'escKey'] as const;
  * ⚠️ `footerRestingTitle` / `footerRestingBody` are NOT in `CHROME_KEYS`, and
  * their ABSENCE is asserted instead (Part XXI 21.8).
  *
- * They were, until the same review round that found the invented copy. The
- * decision that followed is that the resting foot says NOTHING: the rail on the
- * right already makes the planning status plain before a plan is proposed, so a
- * line in the foot repeating it is a second voice for one fact. The slot keeps
- * its HEIGHT — the confirm bar is a `shrink-0` sibling below the `min-h-0 flex-1`
- * canvas box and the canvas anchors three control clusters to that box's bottom,
- * so a collapsing slot slides all three (bug MOTIR-1815) — and draws nothing.
+ * They were, until the review round that found the invented copy. The decision
+ * that followed is that **when there is nothing to show in the footer, the footer
+ * hides**: with no proposal there is no slot at all and the canvas runs to the
+ * pane's bottom edge.
+ *
+ * That is only safe because 21.8 also moves the bar from a `shrink-0` SIBLING of
+ * the `min-h-0 flex-1` canvas box to an OVERLAY on its bottom edge. As a sibling,
+ * a slot that came and went resized the box and slid the three control clusters
+ * anchored to its bottom — bug MOTIR-1815, whose shipped fix was the always-there
+ * resting footer. As an overlay the box is always full height, the clusters carry
+ * a permanent inset, and nothing moves in either direction.
  *
  * Asserting the absence rather than simply dropping the keys is the point: an
  * un-asserted removal and an accidental re-add look identical in a later diff,
- * and the obvious "fix" for a foot that looks empty is to put the old line back.
+ * and the obvious "fix" for a pane with no foot is to put the old line back.
  */
 const REMOVED_KEYS = ['footerRestingTitle', 'footerRestingBody'] as const;
 
@@ -107,32 +111,31 @@ describe("the surface-views asset's chrome copy comes from the catalogue (MOTIR-
     const value = messages.planningWorkspace[key];
 
     // The key still exists in the catalogue while the shipped host still renders
-    // it; MOTIR-6186 is what removes both. If it has already gone, this assertion
-    // is vacuously satisfied and the next line says so rather than passing quietly.
-    if (typeof value !== 'string' || value.length === 0) {
-      expect(
-        mock.includes('class="restfoot"'),
-        `planningWorkspace.${key} is gone from the catalogue, so this spec can no longer ` +
-          'check the foot by its old copy — assert the empty foot directly instead.',
-      ).toBe(true);
-      return;
-    }
+    // it; MOTIR-6186 is what removes both. Once it has gone this assertion is
+    // vacuously satisfied, so say so rather than passing quietly.
+    if (typeof value !== 'string' || value.length === 0) return;
 
     expect(
       mock.includes(asRendered(value)),
       `${MOCK} draws planningWorkspace.${key} (${JSON.stringify(value)}) in the foot. ` +
-        'Part XXI 21.8 empties the resting foot: the rail already says where the plan has ' +
-        'got to. The slot keeps its height and draws nothing.',
+        'Part XXI 21.8 HIDES the footer when there is nothing to show: the rail already ' +
+        'says where the plan has got to, and an empty box holding its own height is chrome ' +
+        'that exists to be invisible.',
     ).toBe(false);
   });
 
-  it('keeps the foot present-but-empty, so the canvas box never resizes', () => {
-    // The height is the whole reason the slot survives at all (MOTIR-1815).
+  it('draws the strip the bar overlays, so the hidden footer costs no layout shift', () => {
+    // 21.8 hides the slot AND moves the bar from a sibling to an overlay. The
+    // strip is how the asset shows that the space is reserved for the bar and the
+    // canvas's control clusters sit above it — which is what replaces MOTIR-1815's
+    // always-there resting footer. An asset that hides the foot and does NOT draw
+    // this is specifying the regression.
     expect(
-      mock.includes('class="restfoot"'),
-      `${MOCK} draws no resting foot at all. It must stay PRESENT and empty: the confirm ` +
-        'bar is a shrink-0 sibling below the canvas box, and a slot that collapses when ' +
-        'resting slides the canvas’s three bottom-anchored control clusters.',
+      mock.includes('class="barStrip"'),
+      `${MOCK} hides the footer without drawing the strip the confirm bar overlays. ` +
+        'Hiding the slot is only safe because the bar stops being a shrink-0 sibling of ' +
+        'the canvas box (21.8); an asset that shows the first half and not the second ' +
+        'reads as a licence to make the box conditional, which is bug MOTIR-1815.',
     ).toBe(true);
   });
 

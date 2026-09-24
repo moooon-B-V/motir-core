@@ -4301,16 +4301,43 @@
         font-weight: 600;
         color: var(--el-text-secondary);
       }
-      /* THE RESTING FOOT — present, and empty (21.8). It holds the confirm bar's
-         height so the canvas box never changes size, and draws nothing: no border,
-         no fill of its own, no copy. The canvas colour runs to the pane's edge.
-         The height here is the bar's MEASURED height and is a drawing convenience;
-         21.8 requires the build to derive it structurally from the bar's own box,
-         never to pin this number. */
-      .restfoot {
-        flex: none;
+      /* A RESTING pane: no foot at all, and the canvas runs to the pane's bottom
+         edge. The strip the bar will overlay is drawn so the decision is visible —
+         the clusters sit above it whether or not the bar is up (21.8). */
+      .region--resting {
+        justify-content: flex-start;
+        padding-top: 32%;
+        position: relative;
+      }
+      .barStrip {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
         height: 57px;
-        background: var(--el-canvas);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-top: 1px dashed var(--el-border);
+      }
+      .barStripCap {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .clusters {
+        position: absolute;
+        bottom: 73px;
+        left: 16px;
+        display: flex;
+        gap: 8px;
+      }
+      .cluster {
+        display: block;
+        width: 52px;
+        height: 22px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
       }
       .regionCap {
         font-size: 11.5px;
@@ -4415,21 +4442,29 @@
                   </div>
 
                   <div class="min-h-0 flex-1 overflow-hidden">
-                    <div class="region region--roadmap">
+                    <div class="region region--roadmap region--resting">
                       <span class="regionName">PlanChangeCanvas</span>
                       <span class="regionCap">the project roadmap, undecorated</span>
+                      <span class="clusters" aria-hidden="true"
+                        ><span class="cluster"></span><span class="cluster"></span
+                      ></span>
+                      <span class="barStrip"
+                        ><span class="barStripCap"
+                          >the strip the confirm bar overlays — canvas when there is nothing to
+                          show</span
+                        ></span
+                      >
                     </div>
                   </div>
-
-                  <div class="restfoot" aria-hidden="true"></div>
                 </div>
               </div>
             </div>
             <span class="hostcap"
               >The conversation only. There is nothing to list, so the pane header does not render,
-              the pane is the roadmap with nothing decorated over it, and <b>the foot is empty</b> —
-              the rail on the right is where the planner says where the plan has got to. The slot
-              keeps the bar's height so the canvas box never resizes (21.8).</span
+              and <b>there is no foot at all</b> — the canvas runs to the pane's bottom edge. The
+              rail on the right is where the planner says where the plan has got to. The dashed
+              strip is where the confirm bar will OVERLAY the canvas; the two control clusters sit
+              above it whether or not the bar is up, which is what keeps them still (21.8).</span
             >
           </div>
 
@@ -6846,9 +6881,10 @@
           <b>Sheet 6 — a DECIDED plan keeps the view the person was on</b
           ><span class="cap"
             >After approve or decline the pane stays on the component and on the SAME view, in Part
-            VI's decided treatment, reading the three-valued <code>outcome</code>. The bar leaves
-            with the proposal and <b>the foot goes empty</b> — it keeps its height, so nothing under
-            the canvas moves when the decision lands.</span
+            VI's decided treatment, reading the three-valued <code>outcome</code>.
+            <b>The bar leaves with the proposal and the foot goes with it</b> — there is nothing to
+            show, so nothing is shown. Because the bar overlaid the canvas rather than sitting below
+            it, the body does not resize when it goes.</span
           >
         </div>
         <div class="row">
@@ -7190,8 +7226,6 @@
                       </section>
                     </div>
                   </div>
-
-                  <div class="restfoot" aria-hidden="true"></div>
                 </div>
               </div>
             </div>
@@ -7305,11 +7339,11 @@
                   <div class="min-h-0 flex-1 overflow-hidden">
                     <div class="region region--declined">
                       <span class="regionName">PlanReviewCanvas</span>
-                      <span class="regionCap">the declined overlay, kept (MOTIR-3162)</span>
+                      <span class="regionCap"
+                        >the declined overlay, kept (MOTIR-3162) — and no foot beneath it</span
+                      >
                     </div>
                   </div>
-
-                  <div class="restfoot" aria-hidden="true"></div>
                 </div>
               </div>
             </div>

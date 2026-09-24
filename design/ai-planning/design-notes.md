@@ -5751,10 +5751,12 @@ Almost everything. This Part adds no element and changes nothing inside one:
   shipped, **including their COPY**: `planningWorkspace.close` and `escKey`, resolved from the
   catalogue rather than typed (21.11).
 
-**The ONE thing it does not compose — and the one change this Part makes to a shipped surface — is the
-footer slot's RESTING content.** The shipped host draws a two-line statement there; **21.8 empties
-it**, keeping the slot's height and nothing else. That is a decision about the pane this Part owns,
-not a re-drawing of anything inside the confirm bar, whose every state is composed unchanged (21.6).
+**The ONE thing it does not compose — and the one change this Part makes to a shipped surface — is
+the footer SLOT.** The shipped host keeps a resting footer in it at all times; **21.8 hides the slot
+entirely when there is nothing to show**, and moves the confirm bar from a sibling below the canvas to
+an overlay on its bottom edge so that hiding it resizes nothing. That is a decision about the pane
+this Part owns, not a re-drawing of anything inside the bar, whose every state is composed unchanged
+(21.6).
 
 **The canvas is a LABELLED REGION in the asset, not a redrawing** — the same treatment MOTIR-6033's
 own mock gives it, and for the same reason: nothing inside it changes. This Part decides where the
@@ -5873,48 +5875,69 @@ and the level survives because the component never unmounted.
 **The composer draft is untouched by all of this.** It lives in the RAIL, which is the other pane; a
 switch in the left pane cannot reach it. Drawn nowhere, asserted everywhere.
 
-## 21.8 The RESTING FOOT is EMPTY — present, and silent
+## 21.8 When there is NOTHING to show, the footer HIDES — and the bar OVERLAYS the canvas
 
-**Yue's decision, this review round.** With no proposal in hand the footer slot says **nothing**. No
-border, no fill of its own, no copy: the canvas colour runs to the pane's edge.
+**Yue's decision, this review round: if there is nothing to show in the footer, the footer should be
+hiding.** With no proposal in hand there is no footer slot at all. The canvas runs to the pane's
+bottom edge.
 
-**Why.** The rail on the right IS the planner. Before a plan is proposed it is where the conversation
-is happening and where the planner says where it has got to — so a line in the foot restating that is
-a second voice for one fact, and the two can only ever agree less well than one of them. The shipped
-line (`planningWorkspace.footerRestingTitle` / `footerRestingBody` — _"Roadmap — as saved"_ /
-_"Nothing proposed. The conversation has changed nothing."_) is answering a question the rail has
-already answered, at the far side of the surface from where the reader is looking.
+**Why the foot has nothing to say.** The rail on the right IS the planner. Before a plan is proposed
+it is where the conversation is happening and where the planner says where it has got to — so a line
+in the foot restating that is a second voice for one fact, at the far side of the surface from where
+the reader is looking. And once it has nothing to say, an empty box holding its own height is worse
+than no box: it is chrome that exists to be invisible.
 
-**⚠️ THE SLOT STAYS. ONLY ITS CONTENT GOES — and the reason is a shipped bug, not tidiness.**
+### The structural change that makes hiding SAFE — the bar stops being a sibling
 
-The confirm bar is a `shrink-0` sibling BELOW the `min-h-0 flex-1` canvas box, and the canvas anchors
-three control clusters to the bottom of that box: the engine's zoom + fit (`bottom-4 left-4`,
-`PlanningCanvas.tsx`), LOCATE (`bottom-4 left-[8.25rem]`, `ProjectRoadmapCanvas.tsx`) and full-screen
-(`right-3 bottom-4`). A slot that mounts and unmounts therefore grows and shrinks the box by the bar's
-full height on every proposal, and all three clusters slide with it — **bug MOTIR-1815**, whose fix was
-to stop the box changing size at all. The resting footer's copy was the visible part of that fix; the
-BOX was the fix.
+Hiding the slot cannot be done by itself, and this is the part a build must not skip.
 
-So the foot keeps the bar's height and loses everything else. A build that deletes the box instead of
-emptying it reintroduces MOTIR-1815, and nothing in the design lane would catch it.
+The confirm bar is today a `shrink-0` sibling BELOW the `min-h-0 flex-1` canvas box. The canvas
+anchors three control clusters to the bottom of that box — the engine's zoom + fit
+(`bottom-4 left-4`, `PlanningCanvas.tsx`), LOCATE (`bottom-4 left-[8.25rem]`,
+`ProjectRoadmapCanvas.tsx`) and full-screen (`right-3 bottom-4`). So a slot that comes and goes
+resizes that box by the bar's full height on every proposal, and all three clusters slide with it.
+That is **bug MOTIR-1815**, and the fix that shipped was to stop the box changing size by keeping a
+resting footer in the slot at all times.
 
-**Two obligations this puts on [the mount card](motir-ref:cmufauqe10011hvoizre3i5ik):**
+**This Part replaces that fix rather than reverting it**, and the replacement is strictly better:
 
-1. **DERIVE the height, never pin it.** The empty foot's height is the confirm bar's own, matched
-   structurally — the same discipline the shipped resting footer already keeps, and for the same
-   reason: _"a magic `min-h` would drift the moment the bar's own content changed and re-introduce
-   the jump this slot exists to remove."_ The `57px` in this asset's board chrome is a drawing
-   convenience and is **not** the specification. If matching structurally with no content proves
-   impossible, the fallback is a reserved strip whose height is read from the bar, never a literal.
-2. **Retire the two catalogue keys with their only consumer.** `footerRestingTitle` and
-   `footerRestingBody` are rendered in exactly one place, `PlanningWorkspaceHost.tsx`
-   (`git grep -n "footerRestingTitle" -- components app` → one file). Removing the copy orphans both,
-   in `messages/en.json` **and** `messages/zh.json`. They go in the same change; a dead key that still
-   reads as live copy is how a later card puts the line back.
+- **The canvas box is ALWAYS the full height of the pane below the header.** It has no footer sibling,
+  ever.
+- **The confirm bar OVERLAYS its bottom edge** when there is a proposal, instead of sitting under it.
+- **The three clusters carry a permanent bottom inset of the bar's height**, so they sit above the
+  strip the bar will occupy whether or not the bar is up.
+
+The result is that **nothing resizes and nothing moves, in either direction** — which is more than the
+old fix achieved, because the old fix held the box constant by always spending the space. Here the
+space is only ever _drawn into_ when there is something to draw.
+
+**Drawn in sheet 1 panel A**: the dashed strip at the foot of the canvas is the region the bar will
+overlay, and the two control clusters sit above it. When resting, that strip is canvas — the reader
+sees the roadmap, not a box.
+
+### What a build must get right
+
+1. **Do not make the canvas box's height conditional on the proposal.** If `PlanChangeCanvas` /
+   `PlanProposalViews` grows and shrinks, MOTIR-1815 is back and no guard in the design lane will
+   see it. The box is constant because it is always full; the bar floats.
+2. **Inset the clusters permanently, and derive the inset** from the bar's own box rather than pinning
+   a number — the same discipline the shipped resting footer already keeps: _"a magic `min-h` would
+   drift the moment the bar's own content changed and re-introduce the jump this slot exists to
+   remove."_ The `57px` in this asset's board chrome is a drawing convenience and is **not** the
+   specification.
+3. **Retire the two catalogue keys with their only consumer.** `planningWorkspace.footerRestingTitle`
+   and `footerRestingBody` are rendered in exactly one place, `PlanningWorkspaceHost.tsx`
+   (`git grep -n "footerRestingTitle" -- components app` → one file). Removing the resting footer
+   orphans both, in `messages/en.json` **and** `messages/zh.json`. They go in the same change; a dead
+   key that still reads as live copy is how a later card puts the line back.
+4. **A test asserts the canvas box is the same height with a proposal and without one**, and that the
+   clusters are at the same offset in both. That is the assertion MOTIR-1815 never had — its fix was
+   protected by a visible footer rather than by a measurement, which is why emptying that footer was
+   able to look safe.
 
 **What this does NOT change.** The confirm bar itself, in every one of its states — the verbs, the
 consequence line, the decline band, the held reason, the stale alert — is untouched (21.6). This
-decision is only about what the slot holds when there is **no** decision to take.
+decision is about the slot, not its content: where the bar sits, and what happens when there is no bar.
 
 ## 21.9 Token and shape roles
 
