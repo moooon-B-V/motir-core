@@ -485,6 +485,73 @@ token with `MOTIR_TOKEN`. See [the three ways](#three-ways-to-give-it-a-motir-cr
 > the ready set by its status. If the store is unwritable wherever it lands, the
 > CLI says so once and carries on.
 
+## What is in it — the three runtimes (MOTIR-6204)
+
+Everything an agent needs at run time has to be here at BUILD time. The
+container is unprivileged and ships no `sudo`, so `apt-get install` inside it
+answers `Could not open lock file /var/lib/dpkg/lock-frontend` and there is no
+way around that from the inside. Three runtimes are therefore baked in.
+
+| Runtime      | Version                                                   | Why that version                                                                                                                                                                                                 |
+| ------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Python 3** | 3.11 (`python3`, pinned)                                  | The corpus guards and the two sweep doors in `motir-meta` are Python. **Not `python3-minimal`** — that ships 81 modules rather than the standard library, and `json`, `shutil` and `difflib` are not among them. |
+| **Postgres** | **16** + pgvector, `C.UTF-8`                              | The **consumer's**, not the newest — see below.                                                                                                                                                                  |
+| **Browser**  | chromium via Playwright 1.62.1, plus its system libraries | The repositories this image serves resolve 1.62.x. `PLAYWRIGHT_BROWSERS_PATH=/opt/motir-browsers`, writable by `node`.                                                                                           |
+
+### The database is for DEBUGGING — and that is why it is 16
+
+`motir-sandbox-postgres` drives an initialised cluster that the image ships:
+
+```sh
+motir-sandbox-postgres start      # idempotent; prints the URL
+motir-sandbox-postgres status
+motir-sandbox-postgres psql       # a shell on the database
+motir-sandbox-postgres reset      # drop + recreate the database, extension and all
+motir-sandbox-postgres stop
+```
+
+`DATABASE_URL` is already set in the image to
+`postgresql://prodect:prodect@localhost:5432/prodect` — the role, database and
+port every CI job in these repositories uses — so a test command runs as typed.
+
+**It is not started by the entrypoint**, deliberately: every devcontainer recipe
+sets `"overrideCommand": true`, which replaces the ENTRYPOINT as well as the CMD
+(the same fact behind MOTIR-4956), so an entrypoint start would work on the
+`docker run` route and silently not on the VS Code one. Start it by name.
+
+**What it is for:** running the few tests around a failure you are debugging.
+**What it is not:** CI parity, or a full-suite runner. `fsync` is off and the
+cluster dies with the container. A suite-wide number is the pull request's CI to
+answer, not this.
+
+**Three properties are load-bearing, and one of them is why this entry is pinned
+BELOW the newest release:**
+
+- **Postgres 16** — `motir-core`, `motir-ai` and the starter all pin 16, in
+  compose and in CI. A newer major here would debug against an engine no CI
+  runs, so a reproduction would mean less, not more.
+- **pgvector** — `motir-core`'s `work_item_embedding` migration and `motir-ai`'s
+  `20260624000000_enable_pgvector` both run `CREATE EXTENSION vector`. Without
+  it the migrations fail and no database test runs at all.
+- **`C.UTF-8` collation** — `lib/workItems/positioning.ts` mints base-62
+  fractional keys that mix cases, so `'Zz' < 'a0'` holds only under BYTE
+  ordering. The last cluster that drifted to glibc's `en_US.utf8` turned eleven
+  ordering assertions red across three Vitest shards, naming no cause. `reset`
+  recreates the DATABASE and not the cluster, so the collation survives it by
+  construction.
+
+### The browser ships its libraries AND a binary
+
+The system libraries are the half an unprivileged agent could never add, and a
+downloaded browser will not launch without them. The binary is baked too —
+which is where this image deliberately disagrees with `infra/ci-runner`, whose
+header argues _against_ baking one. That runner is pulled fresh per job, so a
+baked browser there trades a CDN download for an equal-sized registry pull; this
+container is pulled once and lived in for days, so the same bytes are paid once
+instead of per debugging session. A repository pinned to another Playwright
+version runs `playwright install` itself — that download needs no privilege, and
+`/opt/motir-browsers` is writable.
+
 ## Build it yourself
 
 Everything below still works from a checkout — that is the path to take when you
@@ -851,7 +918,19 @@ recipe from [Run](#run), because whether a credential mount is present and
 whether a token is in the environment are properties of how the container was
 LAUNCHED, not something a script can simulate from inside one.
 
-**Run 1 — with the read-only credential mount.** Four suites:
+**Run 1 — with the read-only credential mount.** Five suites:
+
+- **`runtimes-smoke.sh`** — the three runtimes, asserted **as `node`**, which is
+  the point: each build layer already smoke-tests its own install as ROOT, and
+  every one of those can pass on a runtime the container's own user cannot reach
+  (that is MOTIR-6183's defect, one layer over). Python is asserted by the
+  IMPORTS the corpus makes rather than by `--version` — `python3-minimal`
+  answered `--version` perfectly while `SELECTOR.check.py` could not import
+  `json`. Postgres is asserted by the debugging contract: it starts, it accepts
+  a connection on `$DATABASE_URL`, `CREATE EXTENSION vector` succeeds, and
+  `'Zz' < 'a0'` still orders by byte. The browser is LAUNCHED, because chromium
+  without its system libraries exists and refuses to start. It runs first: a
+  missing runtime explains any later failure, and nothing later explains it.
 
 - **`confinement.sh`** — asserts the blast radius against `/proc/self/mounts`,
   the ground truth: `/workspace` is the one writable host bind, every credential
@@ -1051,14 +1130,16 @@ and the **hosted** run image, which is 9.1.3 / 9.1.4's separate registry.
 
 | File                             | What it is                                                                                                                                                                                                                                                                                                                   |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Dockerfile`                     | The base image: Node floor assertion, git + `gh`, the packed `motir` binary, the CodeGraph engine, the `AGENT` selector, the unprivileged user and the `/workspace` entrypoint.                                                                                                                                              |
+| `Dockerfile`                     | The base image: Node floor assertion, git + `gh`, the three runtimes (Python, the debugging Postgres, the browser), the packed `motir` binary, the CodeGraph engine, the `AGENT` selector, the unprivileged user and the `/workspace` entrypoint.                                                                            |
 | `install-agent.sh`               | The per-agent layer seam invoked by the `AGENT` build arg — one case arm per profile, each smoke-testing the binary it installs and wiring the codegraph MCP server where codegraph has a target.                                                                                                                            |
+| `postgres.sh`                    | Installed as `motir-sandbox-postgres`: start / stop / status / reset / psql for the debugging cluster the image ships. A named command rather than entrypoint work, because `overrideCommand: true` means the devcontainer route never runs the entrypoint.                                                                  |
 | `entrypoint.sh`                  | Verifies the mounts, names all three credential paths when none is present, redirects the three agents whose codegraph config a `:ro` mount would mask, indexes `/workspace` with CodeGraph and installs its git sync hooks, drops into `/workspace`, `exec`s your command. All output on stderr so stdout stays pipe-clean. |
 | `docker-compose.yml`             | The compose form — one service + compose profile per agent, each passing `MOTIR_TOKEN` / `MOTIR_SERVER` through and mounting its agent credential.                                                                                                                                                                           |
 | `devcontainer/devcontainer.json` | The dev-container form of the base image.                                                                                                                                                                                                                                                                                    |
 | `devcontainer/<profile>/`        | The dev-container form of each agent profile.                                                                                                                                                                                                                                                                                |
 | `smoke/run.sh`                   | The validation driver: build the image, then run it through each documented credential recipe — mounted, env-only, and nothing-at-all — executing the suites that belong to each.                                                                                                                                            |
 | `smoke/confinement.sh`           | The blast-radius assertions, read from `/proc/self/mounts` rather than from this page.                                                                                                                                                                                                                                       |
+| `smoke/runtimes-smoke.sh`        | The three runtimes asserted AS `node`: the stdlib the corpus imports, and for Postgres the DEBUGGING contract rather than a version string — it starts, it accepts the documented URL, `CREATE EXTENSION vector` succeeds, and `Zz` sorts before `a0`.                                                                       |
 | `smoke/loop-smoke.sh`            | `motir auto --agent <fake-agent>` end to end inside the image — builds its own git fixture, needs no LLM and no server.                                                                                                                                                                                                      |
 | `smoke/failure-smoke.sh`         | The failure path: an agent that dies mid-run must still cost nothing — the branch is pushed and the pull request opened, with the store writable and unwritable.                                                                                                                                                             |
 | `smoke/env-credential-smoke.sh`  | The mount-free environment tier: proves the bind is absent, then runs the whole loop on `MOTIR_TOKEN` alone.                                                                                                                                                                                                                 |

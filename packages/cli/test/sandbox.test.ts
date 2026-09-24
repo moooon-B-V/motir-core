@@ -180,11 +180,24 @@ describe('sandbox Dockerfile', () => {
       directives.indexOf('apt-get install'),
       directives.indexOf('rm -rf /var/lib/apt/lists'),
     );
-    expect(aptPackages).toMatch(/^\s+python3-minimal \\$/m);
+    // ⚠️ The FULL interpreter, pinned — NOT `python3-minimal` (MOTIR-6204).
+    // `libpython3.11-minimal` is 81 modules rather than the standard library,
+    // and `json`, `shutil` and `difflib` are not among them, so
+    // SELECTOR.check.py died on `import json` in the image shipped to let it
+    // run. The negative assertion is the load-bearing one: it is what stops the
+    // package being narrowed back for size.
+    expect(aptPackages).toMatch(/^\s+"python3=\$\{PYTHON_VERSION\}" \\$/m);
+    expect(aptPackages).not.toContain('python3-minimal');
+    expect(directives).toMatch(/^ARG PYTHON_VERSION=\d+\.\d+\.\d+-\d+(\+b\d+)?$/m);
     // Same reasoning as `motir --version` below: a base that cannot run python3
     // must fail the BUILD, not the first `motir sweep planning bugs`. The two
     // doors that drive prompts/sweep-planning-bugs.py have no degraded mode.
     expect(directives).toMatch(/&& python3 --version/);
+    // And the assertion is what the CONSUMER IMPORTS — a `--version` is exactly
+    // what passed while the guard could not start.
+    expect(directives).toMatch(/python3 -c 'import [^']*\bjson\b/);
+    expect(directives).toMatch(/python3 -c 'import [^']*\bshutil\b/);
+    expect(directives).toMatch(/python3 -c 'import [^']*\bdifflib\b/);
   });
 
   it('installs the motir binary and smoke-tests it in the same layer', () => {
@@ -229,10 +242,95 @@ describe('sandbox Dockerfile', () => {
     // BEFORE the agent layer, so the arms install into it.
     expect(prefixAt).toBeLessThan(dockerfile.indexOf('install-agent.sh "${AGENT}"'));
     // And node owns it — created even in `base`, which installs nothing there.
+    // Matched with a WORD BOUNDARY rather than an end-of-line anchor: the same
+    // chown now also carries /opt/motir-browsers (MOTIR-6204), and this
+    // assertion is about who owns the agent prefix, not about what happens to
+    // be last on the line.
     expect(dockerfile).toMatch(/mkdir -p [^\n]*\/opt\/motir-agents\/bin/);
-    expect(dockerfile).toMatch(/chown -R node:node [^\n]*\/opt\/motir-agents$/m);
+    expect(dockerfile).toMatch(/chown -R node:node [^\n]*\/opt\/motir-agents(\s|$)/m);
     // The retired approach is gone: nothing turns an updater off.
     expect(dockerfile).not.toContain('DISABLE_AUTOUPDATER');
+  });
+
+  it('ships a DEBUGGING Postgres — 16, pgvector, C.UTF-8, owned by node (MOTIR-6204)', () => {
+    // The image is unprivileged with no sudo, so a database absent at build
+    // time is absent for every run. These four properties are what make the one
+    // it ships usable AND honest; three of them are invisible to a `--version`.
+    const directives = directivesOf(dockerfile);
+    // Pinned exactly, and on BOTH published architectures — an unpinned apt
+    // install is how two builds of one immutable tag come to differ.
+    expect(directives).toMatch(/^ARG PG_VERSION=16\.\d+-\d+\.pgdg\d+\+\d+$/m);
+    expect(directives).toMatch(/^ARG PGVECTOR_VERSION=\d+\.\d+\.\d+-\d+\.pgdg\d+\+\d+$/m);
+    expect(directives).toContain('"postgresql-${PG_MAJOR}=${PG_VERSION}"');
+    expect(directives).toContain('"postgresql-${PG_MAJOR}-pgvector=${PGVECTOR_VERSION}"');
+    // Debian's postgresql-common creates a cluster under the SYSTEM locale on
+    // install. Shipping it would put exactly the collation this layer exists to
+    // avoid beside the one it wants, so it is never created.
+    expect(directives).toContain("'create_main_cluster = false'");
+    // The socket directory is load-bearing: the compiled-in default is
+    // /var/run/postgresql, owned by postgres:postgres, so a server run by `node`
+    // cannot create its lock file there and refuses to start.
+    expect(directives).toContain("unix_socket_directories = '/tmp'");
+    // The collation the fractional-index ordering depends on, and the extension
+    // two repositories' migrations run on their first apply.
+    expect(directives).toContain('--locale=C.UTF-8');
+    expect(directives).toContain('CREATE EXTENSION IF NOT EXISTS vector');
+    // Asserted at BUILD time on the same grounds as `motir --version`: a
+    // cluster that collates by dictionary must fail the build, not somebody's
+    // debugging session eleven red assertions later.
+    expect(directives).toContain("SELECT 'Zz' < 'a0'");
+    // initdb runs as `node`, so the runtime user owns every byte and needs no
+    // privilege to start it. A root-initialised cluster is MOTIR-6183's defect
+    // one directory over.
+    expect(directives).toMatch(/su node -c "[^"]*initdb/);
+    expect(directives).toMatch(/^ENV PGDATA=\/var\/lib\/motir-postgres$/m);
+    // The role, database and port every CI job in these repositories sets, so a
+    // test command runs as typed.
+    expect(directives).toMatch(
+      /^ENV DATABASE_URL=postgresql:\/\/prodect:prodect@localhost:5432\/prodect$/m,
+    );
+    // Driven by a named command, NOT the entrypoint: `overrideCommand: true`
+    // means the devcontainer route never runs the entrypoint (MOTIR-4956), so an
+    // entrypoint start works on one documented route and silently not the other.
+    expect(directives).toContain('/usr/local/bin/motir-sandbox-postgres');
+    expect(directivesOf(entrypoint)).not.toContain('pg_ctl');
+    // The client binaries reach a LOGIN shell too. `ENV PATH` does not: Debian's
+    // /etc/profile replaces PATH for a non-root user, and `bash -l` is this
+    // image's own CMD — so `psql` would be missing from the shell a reader gets
+    // while working perfectly under the `bash -c` the smoke suite uses. That
+    // asymmetry is what made MOTIR-6183's agent PATH need the same hook.
+    expect(directives).toContain('> /etc/profile.d/motir-postgres-path.sh');
+    expect(directives).toMatch(/PATH="\/usr\/lib\/postgresql\/16\/bin:\$PATH"/);
+  });
+
+  it('ships a browser AND the libraries only root could install (MOTIR-6204)', () => {
+    const directives = directivesOf(dockerfile);
+    expect(directives).toMatch(/^ARG PLAYWRIGHT_VERSION=\d+\.\d+\.\d+$/m);
+    // BOTH halves. The libraries are the half an unprivileged agent can never
+    // add, and without them a downloaded browser does not launch at all; the
+    // binary is baked because this container is pulled once and lived in, which
+    // is the opposite of infra/ci-runner's per-job pull (it bakes libraries
+    // only, on the same evidence read the other way — see the layer comment).
+    expect(directives).toContain('install-deps chromium');
+    expect(directives).toMatch(/playwright@\$\{PLAYWRIGHT_VERSION\}" install chromium/);
+    // A shared path rather than ~/.cache/ms-playwright, which a devcontainer's
+    // home mount can shadow and which a root-run install writes to root's home.
+    expect(directives).toMatch(/^ENV PLAYWRIGHT_BROWSERS_PATH=\/opt\/motir-browsers$/m);
+    // Writable by the runtime user: a repo pinned to a Playwright this image did
+    // not bake runs `playwright install` itself, and that download has to land.
+    expect(directives).toMatch(/chown -R node:node [^\n]*\/opt\/motir-browsers$/m);
+  });
+
+  it('puts both runtime layers BEFORE the motir install, so they cache across profiles', () => {
+    // `COPY --from=builder /pkg/*.tgz` is invalidated by every source change,
+    // and everything after it rebuilds with it. Two apt/download layers of this
+    // size behind that line would be re-fetched on every commit, ×9 profiles
+    // ×2 architectures — the same reasoning the codegraph layer states for
+    // sitting where it does.
+    const motirInstallAt = dockerfile.indexOf('COPY --from=builder /pkg/*.tgz');
+    expect(motirInstallAt).toBeGreaterThan(-1);
+    expect(dockerfile.search(/^ARG PG_VERSION=/m)).toBeLessThan(motirInstallAt);
+    expect(dockerfile.search(/^ARG PLAYWRIGHT_VERSION=/m)).toBeLessThan(motirInstallAt);
   });
 
   it('exposes the AGENT selector with a base-only default and routes it through the seam', () => {
@@ -314,6 +412,20 @@ describe('the per-agent layer seam', () => {
     expect(installAgent).toContain('AGENT_ROOT="${MOTIR_AGENT_PREFIX:-/opt/motir-agents}"');
     expect(installAgent).toContain('AGENT_PREFIX="$AGENT_ROOT/bin"');
     expect(installAgent).not.toMatch(/\/usr\/local\/bin|\/opt\/aider|\/opt\/cursor-agent/);
+  });
+
+  it('does NOT re-install the interpreter the base already ships (MOTIR-6204)', () => {
+    // MOTIR-6195 put python3-minimal in the base, which made the aider arm's
+    // "installed HERE and not in the base — no other profile pays for it"
+    // false while the apt line under it still said so. Read the DIRECTIVES: the
+    // arm's comment now explains the history, so a prose match would pass on
+    // the explanation of the package rather than on the package.
+    const arm = directivesOf(armOf('aider'));
+    expect(arm).not.toMatch(/install[^\n]*\bpython3\b(?!-)/);
+    // python3-venv stays — nothing else in the image needs it, and it is what
+    // keeps pip off Debian's externally-managed system Python (PEP 668).
+    expect(arm).toContain('python3-venv');
+    expect(arm).toContain('python3 -m venv');
   });
 
   it('ships NO Gemini CLI profile — Antigravity replaces the retired tool', () => {
