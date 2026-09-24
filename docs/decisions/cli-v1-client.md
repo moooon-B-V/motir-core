@@ -95,6 +95,17 @@ Two details that are decisions, not incidentals:
   server change into a hard CLI failure. The generator therefore passes
   `strictSchema: false` and no format library — stated here so the omission
   reads as a choice rather than an oversight.
+- **Objects are compiled OPEN** (added by MOTIR-6180). The emitted document
+  closes every object with `additionalProperties: false`, because the server's
+  schemas are `.strict()`. The generator drops that keyword before compiling.
+  These validators read RESPONSES, and `public-api-conventions.md` §8 lets a
+  server add a response field within `v1` and requires a client to tolerate it.
+  Compiled closed, a CLI rejected every server newer than itself on any shape
+  that had grown a field. That is also what the skew table below assumes:
+  within a major, a newer server's bodies must still parse. `@motir/cli@0.5.0`
+  broke on `getProjectReadySet` the day `ReadyItem.difficulty` shipped. Missing
+  fields, wrong types and enum values are still rejected, and a schema-valued
+  `additionalProperties` is kept.
 
 ### Why — and its honest cost
 
@@ -416,6 +427,8 @@ differently:
    - a MISSING field reports the PARENT's path (`''`) with the name in
      `params.missingProperty`;
    - an UNEXPECTED field reports the parent's path with `params.additionalProperty`.
+     (Since MOTIR-6180 the generated validators are compiled open, so they never
+     raise this one. `describeField` still handles it.)
 
    A message built from `instancePath` alone therefore says
    _"` ` must have required property"_ for the case that matters most — a
