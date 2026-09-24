@@ -996,6 +996,35 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_approval_gate: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item the gate hangs off — the project key, a dash, the number (e.g. "ACME-7"), case-insensitive. The card whose approval you are asking about, not the gate id (gates have no public ids to address).',
+      },
+      kind: {
+        type: 'string',
+        enum: [
+          'decision_approval',
+          'design_result',
+          'acceptance_result',
+          'pull_request_approval',
+          'decision_choice',
+          'decision_confirmation',
+          'plan_approval',
+          'pull_request_merge',
+        ],
+        description:
+          'Which decision to read. `decision_approval` is the gate on a `type: decision` card you authored; `design_result` the one your published design raised; `acceptance_result` a story run’s receipt; `pull_request_approval` the approve-and-merge question over a run’s whole delivery set; `decision_choice` and `decision_confirmation` the two decision kinds a person answers directly. `plan_approval` belongs to a PLAN rather than to a card, so no card has one. `pull_request_merge` is built and withdrawn — only historical rows exist.',
+      },
+    },
+    required: ['key', 'kind'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_design: {
     type: 'object',
     properties: {

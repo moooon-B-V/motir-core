@@ -259,6 +259,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         get_work_item: { key: item1 },
         get_design: { key: item1 },
         list_designs: { projectKey: 'PROD' },
+        // MOTIR-6191 — the gate read is item-keyed, so a non-member must read tenant
+        // A's card as not-found rather than learn what was decided on it; on the
+        // caller's own card it EXECUTES and answers `gate: null` (no such gate).
+        get_approval_gate: { key: item1, kind: 'decision_approval' },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },
         next_ready: { projectKey: 'PROD' },
@@ -776,6 +780,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         get_work_item: { key: item1 },
         get_design: { key: item1 },
         list_designs: { projectKey: 'PROD' },
+        // MOTIR-6191 — the gate read is item-keyed, so a non-member must read tenant
+        // A's card as not-found rather than learn what was decided on it; on the
+        // caller's own card it EXECUTES and answers `gate: null` (no such gate).
+        get_approval_gate: { key: item1, kind: 'decision_approval' },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },
         next_ready: { projectKey: 'PROD' },

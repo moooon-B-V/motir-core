@@ -1,6 +1,7 @@
 import type { ApprovalGate } from '@/generated/prisma/client';
 import type {
   ApprovalGateDTO,
+  ApprovalGateDecisionDTO,
   ApprovalGateSubjectSummaryDTO,
   ApprovalQueueRowDto,
   ApprovalRecordDecidedRowDto,
@@ -175,5 +176,38 @@ function pickRowCard<
     title: card.title,
     kind: card.kind as T['kind'],
     type: card.type as T['type'],
+  };
+}
+
+/**
+ * The wire DTO → the DECISION RECORD a token-authed caller reads (Bug MOTIR-6191).
+ *
+ * ⚠️ IT PROJECTS {@link ApprovalGateDTO} RATHER THAN THE PRISMA ROW, deliberately.
+ * The render DTO is where the audit set is already assembled — `decidedByLabel`
+ * surviving its person's departure, the dates as ISO strings, the enums narrowed —
+ * so mapping from the row again would be a SECOND derivation of the same facts,
+ * and the two would drift on the first column that gains a rule. The consequence
+ * worth keeping: the agent-facing record can only ever say what the item page says.
+ *
+ * ⚠️ AND IT IS FIELD BY FIELD, never a spread, for the reason this file's header
+ * gives one level down. A spread would carry the stamp, `canDecide`'s neighbours
+ * and the port's `subjectId` onto a public surface the moment somebody widened the
+ * render DTO, and nothing anywhere would fail.
+ */
+export function toApprovalGateDecisionDto(gate: ApprovalGateDTO): ApprovalGateDecisionDTO {
+  return {
+    id: gate.id,
+    kind: gate.kind,
+    state: gate.state,
+    noteMd: gate.noteMd,
+    decidedAt: gate.decidedAt,
+    decidedByLabel: gate.decidedByLabel,
+    decidedUnderAuthority: gate.decidedUnderAuthority,
+    decisionSource: gate.decisionSource,
+    subjectVersion: gate.subjectVersion,
+    supersededCause: gate.supersededCause,
+    outcomeRef: gate.outcomeRef,
+    createdAt: gate.createdAt,
+    updatedAt: gate.updatedAt,
   };
 }

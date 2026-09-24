@@ -15,6 +15,15 @@ import type {
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
+import type {
+  ApprovalGateAuthorityDTO,
+  ApprovalGateDecisionDTO,
+  ApprovalGateDecisionSourceDTO,
+  ApprovalGateKindDTO,
+  ApprovalGateRecordDTO,
+  ApprovalGateStateDTO,
+  ApprovalGateSupersedeCauseDTO,
+} from '@/lib/dto/approvalGate';
 
 // The v1 WORK-ITEM resource, declared once (Story 11.2 · Subtask 11.2.2 —
 // MOTIR-2040). Every sibling endpoint — list, detail, create, update,
@@ -1383,3 +1392,169 @@ export type V1DesignVerdict = z.infer<typeof designVerdictSchema>;
 /** The `…/designs` body: one verdict per design card the item waits on. */
 export const workItemDesignsSchema = z.object({ designs: z.array(designVerdictSchema) });
 export type V1WorkItemDesigns = z.infer<typeof workItemDesignsSchema>;
+
+// ── THE APPROVAL-GATE DECISION RECORD (Bug MOTIR-6191) ──────────────────────
+//
+// The wire shape for `GET /api/v1/work-items/{key}/approval-gate`, and — through
+// `lib/mcp/payloads/approvalGates.ts` — for the `get_approval_gate` tool, so the
+// two agent doors publish ONE shape. `docs/decisions/approval-gates.md` §6a is
+// what it encodes: the audit set a gate row carries *"read months later by
+// someone who was not there"*.
+//
+// ⚠️ A READ ONLY. Nothing here decides a gate, and §2's *"the decide route is
+// session-authed and no MCP tool or `/api/v1` operation asserts the key"* stays
+// true word for word — `approval:decide_any` is not asserted, mentioned or
+// reachable from this resource.
+
+const APPROVAL_GATE_KIND_VALUES = [
+  'design_result',
+  'decision_approval',
+  'pull_request_approval',
+  'pull_request_merge',
+  'acceptance_result',
+  'decision_choice',
+  'decision_confirmation',
+  'plan_approval',
+] as const satisfies readonly ApprovalGateKindDTO[];
+const _gateKindsTotal: AssertTotal<
+  ApprovalGateKindDTO,
+  (typeof APPROVAL_GATE_KIND_VALUES)[number]
+> = true;
+
+const APPROVAL_GATE_STATE_VALUES = [
+  'awaiting',
+  'approved',
+  'changes_requested',
+  'superseded',
+  'overturned',
+  'declined',
+] as const satisfies readonly ApprovalGateStateDTO[];
+const _gateStatesTotal: AssertTotal<
+  ApprovalGateStateDTO,
+  (typeof APPROVAL_GATE_STATE_VALUES)[number]
+> = true;
+
+const APPROVAL_GATE_AUTHORITY_VALUES = [
+  'assignee',
+  'reporter',
+  'admin',
+  'github_review',
+  'plan_permission',
+] as const satisfies readonly ApprovalGateAuthorityDTO[];
+const _gateAuthoritiesTotal: AssertTotal<
+  ApprovalGateAuthorityDTO,
+  (typeof APPROVAL_GATE_AUTHORITY_VALUES)[number]
+> = true;
+
+const APPROVAL_GATE_SOURCE_VALUES = [
+  'ui',
+  'api',
+  'mcp',
+  'github',
+] as const satisfies readonly ApprovalGateDecisionSourceDTO[];
+const _gateSourcesTotal: AssertTotal<
+  ApprovalGateDecisionSourceDTO,
+  (typeof APPROVAL_GATE_SOURCE_VALUES)[number]
+> = true;
+
+const APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES = [
+  'republished',
+  'withdrawn',
+  'head_moved',
+  'member_closed',
+  'member_drafted',
+  'conflict',
+  'set_changed',
+  'pulled_back',
+  'unknown',
+  'plan_stale',
+  'plan_discarded',
+] as const satisfies readonly ApprovalGateSupersedeCauseDTO[];
+const _gateCausesTotal: AssertTotal<
+  ApprovalGateSupersedeCauseDTO,
+  (typeof APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES)[number]
+> = true;
+
+/** Which vocabulary of decision verbs a gate carries (ADR §1). */
+export const approvalGateKindSchema = z.enum(APPROVAL_GATE_KIND_VALUES);
+
+/**
+ * ONE gate's decision record.
+ *
+ * ⚠️ READ `state` FIRST AND THE AUDIT SET SECOND. Every audit field is nullable
+ * on the wire because it is nullable in the column, and for the same reason: five
+ * are written BY the decision, so a null is *not yet decided* and never *decided
+ * by nobody* (§6b's amendment). `awaiting` means the question is still open;
+ * `superseded` means it was withdrawn before anyone answered, and carries
+ * `supersededCause` rather than a decider.
+ */
+export const approvalGateDecisionSchema = z.object({
+  id: z.string(),
+  kind: approvalGateKindSchema,
+  state: z.enum(APPROVAL_GATE_STATE_VALUES),
+  /** Why they said yes, or WHAT THEY SENT BACK. Null while `awaiting`. */
+  noteMd: z.string().nullable(),
+  decidedAt: isoDateTimeSchema.nullable(),
+  /** WHO decided, as a label that survives their departure from the workspace. */
+  decidedByLabel: z.string().nullable(),
+  /** UNDER WHICH permission they acted, frozen at decision time. */
+  decidedUnderAuthority: z.enum(APPROVAL_GATE_AUTHORITY_VALUES).nullable(),
+  /** THROUGH WHICH surface it arrived — `ui` is a human at a browser. */
+  decisionSource: z.enum(APPROVAL_GATE_SOURCE_VALUES).nullable(),
+  /** WHAT was decided, immutably: the subject's version at decision time. */
+  subjectVersion: z.string().nullable(),
+  /** WHY the question was withdrawn — `superseded` only, and never an actor. */
+  supersededCause: z.enum(APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES).nullable(),
+  /** WHAT it caused — a merge commit sha, a status key, a chosen option's id. */
+  outcomeRef: z.string().nullable(),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
+});
+export type V1ApprovalGateDecision = z.infer<typeof approvalGateDecisionSchema>;
+
+/**
+ * The `…/approval-gate` body — the ENVELOPE, which stays each surface's own.
+ *
+ * `gate: null` is an ANSWER: the card has no gate of that kind, so nothing is
+ * waiting and nothing was decided. A key that does not resolve, or a project the
+ * caller may not browse, is the 404 instead.
+ */
+export const approvalGateRecordSchema = z.object({
+  workItemKey: workItemKeySchema,
+  workItemTitle: z.string(),
+  kind: approvalGateKindSchema,
+  gate: approvalGateDecisionSchema.nullable(),
+  /** WHOSE decision it is waiting on, as a name — the LIVE routing answer, not
+   *  the gate's frozen `routedToId` (§2). Null when it routes to nobody. */
+  routedToLabel: z.string().nullable(),
+});
+export type V1ApprovalGateRecord = z.infer<typeof approvalGateRecordSchema>;
+
+/** Service DTO → the wire shape, field by field (this file's own header rule). */
+export function presentApprovalGateRecord(dto: ApprovalGateRecordDTO): V1ApprovalGateRecord {
+  return {
+    workItemKey: dto.workItemKey,
+    workItemTitle: dto.workItemTitle,
+    kind: dto.kind,
+    gate: dto.gate === null ? null : presentApprovalGateDecision(dto.gate),
+    routedToLabel: dto.routedToLabel,
+  };
+}
+
+function presentApprovalGateDecision(gate: ApprovalGateDecisionDTO): V1ApprovalGateDecision {
+  return {
+    id: gate.id,
+    kind: gate.kind,
+    state: gate.state,
+    noteMd: gate.noteMd,
+    decidedAt: gate.decidedAt,
+    decidedByLabel: gate.decidedByLabel,
+    decidedUnderAuthority: gate.decidedUnderAuthority,
+    decisionSource: gate.decisionSource,
+    subjectVersion: gate.subjectVersion,
+    supersededCause: gate.supersededCause,
+    outcomeRef: gate.outcomeRef,
+    createdAt: gate.createdAt,
+    updatedAt: gate.updatedAt,
+  };
+}

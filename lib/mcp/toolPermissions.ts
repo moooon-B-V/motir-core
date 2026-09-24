@@ -40,6 +40,18 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // sandboxed run already holds.
   get_design: 'project:browse',
   list_designs: 'project:browse',
+  // Bug MOTIR-6191's gate read. It resolves the card through
+  // `projectsService.getByKey` → `assertCanBrowse` (`approvalGateAccessService`),
+  // and reading a decision about the card you are working on is browsing the
+  // project — so, like the design reads above, the key is one `CLI_TOKEN_GRANT`
+  // ALREADY carries and the grant is not widened by this tool.
+  //
+  // ⚠️ IT IS NOT `approval:decide_any`, and the difference is the whole point.
+  // That key gates DECIDING a gate, it is UNGRANTABLE to an API token by
+  // derivation (`lib/tokens/grant.ts`), and `approval-gates.md` §2 says why: a
+  // decision names a PERSON. No tool in this map asserts it and none should. This
+  // one READS a decision a person already made, which leaks no authority.
+  get_approval_gate: 'project:browse',
   // `activityService.listHistory` asserts `project:browse` by name; `listAll`
   // reaches it through `commentsService.listComments` → `assertCanBrowse`.
   get_work_item_activity: 'project:browse',
