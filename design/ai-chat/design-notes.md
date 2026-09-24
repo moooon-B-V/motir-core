@@ -3217,3 +3217,138 @@ existing tokens rather than a new primitive.
 committed export) · this section. It AMENDS `MOTIR-4766`'s asset rather than opening a new one:
 this is one more state of the same screen — the plan window reading a project — and a separate file
 would leave a reader to work out that they are the same surface.
+
+---
+
+## ⭐ The MULTI-LINE planning composer — growth to its cap, and the line-broken user bubble (MOTIR-6236, 2026-09-24)
+
+**Asset:** `design/ai-chat/planning-workspace--multiline-composer.mock.html` — a **DELTA**, twelve
+sheets, light and dark, at the rail's real `22rem`. It amends `planning-workspace.mock.html`
+(MOTIR-1193), `target-picker.mock.html` (MOTIR-1490), `plan-change-planner-speaks.mock.html`
+(MOTIR-2225), `plan-change-run-live.mock.html` (MOTIR-4066) and
+`design/ai-planning/plan-revision.mock.html` (MOTIR-3597). **Those five are records of their own
+moment and are not edited.**
+
+**Story MOTIR-6156.** The composer is one component — `components/planning/PlanChangeComposer.tsx` —
+with two hosts: the planning surface's rail (`PlanChangeRail.tsx:710`) and the plan page's revise box
+(`PlanReviewRail.tsx:409`, `mentions={false}`). It ships as a single-line `<input type="text">`. It
+becomes a **multi-line field that grows with its content to a cap, then scrolls inside itself**.
+
+### How the asset was made, and which fragments carry which warranty
+
+Every **composer** fragment is the REAL emitted markup of the shipped component, captured from a
+headless render through the repo's own `tests/helpers/renderWithIntl` harness → `container.innerHTML`,
+in eight states. **Exactly one node is changed in each: the `<input>` becomes a `<textarea>`.** The
+**user-bubble** and **rail-header** fragments are NOT renders — their class strings are copied
+byte-for-byte from `PlanChangeRail.tsx`'s `Bubble` (`:1124-1152`) and from
+`plan-change-run-live.mock.html`, which is a render of that rail. The stylesheet is Tailwind's
+compiled output, lifted verbatim from that same asset.
+
+**Four things the render corrected that reading the `.tsx` did not:**
+
+1. **Send is a SIBLING of the field**, not a child — one `flex items-center gap-2` row. So growth
+   moves Send unless the row is re-aligned, which is why alignment is a decision this card owes.
+2. **The `@` trigger is `position: absolute; left: 1.5`** inside that centring row, so it drifts to
+   the vertical middle of a grown field with no class of its own changing.
+3. **The user bubble has NO whitespace handling and no `min-w-0`.** `{turn.body}` is a bare text
+   child of a `<div>`, so **a multi-line message collapses to one run-on line today.**
+4. **A textarea does not vertically centre one line the way an `<input>` does.** Reproducing the
+   shipped 44px at one row is therefore arithmetic, not a token — see below.
+
+### The measurements, and the four decisions
+
+**Height.** `--height-input` (44px) at one row, **+ one `line-height` (20px) per further row**:
+44 / 64 / 84 / … / **184 at the cap**. The vertical padding that makes one row _exactly_ the shipped
+44px is derived rather than taken from a token —
+`(--height-input − line-height − 2 × border) ÷ 2` = `(44 − 20 − 2) ÷ 2` = **11px**. Using
+`--spacing-input-y` (12px) instead makes the at-rest field **46px**, which is a visible 2px growth on
+a composer nobody has typed into. **The code reads line-height, padding and border from the computed
+style and clamps** (MOTIR-6237's own contract), so the clamp stays exact under every type scale and
+density; the numbers here are those tokens' current values, not constants to hard-code.
+
+1. **THE CAP IS 8 ROWS (184px).** This confirms the story's assumption. The worst-case footer is the
+   cap **plus** the target tray **plus** the running bar: `24 + 34 + 56 + 184 ≈ 298px`. On an 800px
+   rail that leaves the transcript ~446px — still the majority of the surface. At ten rows the same
+   stack is ~338px, which on a 700px viewport drops the transcript under half. **Eight is the last
+   row count at which the transcript stays the larger region in the worst case.** The revise box
+   takes the same cap.
+2. **`@` AND SEND ALIGN TO THE BOTTOM** — `items-end` on the control row, `bottom-1.5` on the
+   trigger. Centre-aligning walks both controls down the field as it grows, so the target a person is
+   aiming at moves while they type; bottom-aligning holds them a fixed distance from the caret's last
+   line. It is also where MUI X's chat composer puts its send control, in a toolbar below the field.
+   **The price, stated rather than buried: at rest the row is 44px and Send is 32px, so
+   bottom-aligning drops Send 6px lower than today's centring.** That 6px is the only visible change
+   to the untouched composer, and it buys a control that never moves again from one row to eight.
+3. **NO PERSISTENT KEYBOARD HINT**, and **no message key is owed** in either locale. Checked against
+   two references. **MUI X's Chat Composer** documents the behaviour — _"submits on Enter and inserts
+   a newline on Shift+Enter"_ — and its published component anatomy carries no hint element; the
+   behaviour is implicit. **Slack** documents _"Create a new line: Shift Enter"_ in its **help
+   centre**, not as composer chrome. At `22rem` a permanent hint line costs ~18px of the one region
+   that never scrolls, forever, to teach a convention both references treat as already known.
+   _(Both checks are of published documentation, not of a rendered screenshot — said plainly so the
+   next reader knows what was and was not verified.)_
+4. **THE MANUAL RESIZE HANDLE IS GONE** — `resize-none`, replacing the primitive's `resize-y`. The
+   two fight: a hand-dragged height is overwritten by the next keystroke's measurement.
+
+### The bubble
+
+`whitespace-pre-wrap` so the typed newlines survive, plus **`wrap-anywhere` and `min-w-0`** so a long
+unbroken token (a URL, a key) breaks inside the bubble instead of widening it past the rail.
+`wrap-anywhere` is the class the shipped rail already uses for exactly this on the revision-held line
+(`PlanReviewRail.tsx:398`), so this is the surface's own treatment rather than a new one.
+**Assistant bubbles are unchanged** — they render Markdown through `MarkdownView`, which blocks its
+own paragraphs. Only the user bubble renders raw typed text.
+
+### The sheets, and which shipped card owns the behaviour each draws
+
+| #   | State                                                           | Behaviour owned by                                  |
+| --- | --------------------------------------------------------------- | --------------------------------------------------- |
+| 1   | At rest — byte-identical to today                               | MOTIR-1193 (the rail), MOTIR-1491 (the `@` trigger) |
+| 2   | Grown to three rows; the transcript shrinks and scrolls         | this card                                           |
+| 3   | At the cap; a ten-line paste scrolls inside the field           | this card                                           |
+| 4   | Grown, with the target tray                                     | MOTIR-1491                                          |
+| 5   | Grown, with the answer bar; Send reads **Answer**               | MOTIR-2226                                          |
+| 6   | Grown, with the running bar and **Stop**; a queued mid-run turn | MOTIR-4068, MOTIR-4274                              |
+| 7   | Disabled while grown; the draft AND its height are kept         | MOTIR-6033 §20.5                                    |
+| 8   | A pre-filled multi-line draft, sized on first paint             | MOTIR-6210 (a later consumer)                       |
+| 9   | The user bubble keeps its line breaks                           | this card                                           |
+| 10  | A long unbroken token wraps inside the bubble                   | this card                                           |
+| 11  | The plan page's revise box, at rest and grown                   | MOTIR-3601                                          |
+| 12  | The decisions, the anatomy, and what is unchanged               | —                                                   |
+
+**Access path — UNCHANGED, and drawn so.** The rail composer is reached through the planning surface
+(the Plan-with-AI entrance, MOTIR-910 / MOTIR-1193); the revise box on a plan's page (MOTIR-3601).
+Every state is drawn **inside its host frame**, not as a floating field, so the entry context is
+visible. This card adds no new door.
+
+### Primitives and tokens
+
+The shared **`Textarea`** (MOTIR-6237 gives it `autoGrow` + `maxRows`), **`Button`**
+(`primary`/`secondary`, `sm`), **`Spinner`**, **`PlanningTargetChip`**, **`BrandMark`**. Nothing is
+hand-rolled. Shape flows through `--radius-input|card|control|badge|btn`, `--spacing-input-x|y`,
+`--spacing-chip-x|y`, `--height-input`, `--height-btn-sm`; colour through the `--el-*` element layer
+only.
+
+> **⚠️ A NOTE FOR WHOEVER LIFTS THIS STYLESHEET NEXT.** Tailwind v4 **tree-shakes `@theme`
+> variables** — it emits only the ones a compiled utility actually references. The sheet lifted from
+> `plan-change-run-live.mock.html` was built for a board that never used `py-(--spacing-input-y)`, so
+> **that token was absent from `:root` and the rule silently computed to `0`**. A lifted stylesheet
+> carries the tokens of the asset it came from, not the whole theme. This was caught only by
+> RENDERING the board and measuring the box; it is invisible in the markup.
+
+### GIVES / TAKES — every key the asset names
+
+**GIVES** — **MOTIR-6238** (the composer card): the cap, the height arithmetic, the bottom alignment,
+the `whitespace-pre-wrap` + `wrap-anywhere` + `min-w-0` bubble, and the no-hint decision (so it owes
+no new string). **MOTIR-6237** (the primitive): the one-row-equals-`--height-input` contract, the
+per-row increment, and `resize-none`. **MOTIR-6210**: sheet 8's pre-filled shape.
+
+**TAKES — nothing, from any card.** No criterion on MOTIR-6237, MOTIR-6238, MOTIR-6239, MOTIR-6240,
+MOTIR-6206 or MOTIR-6210 is contradicted or removed: the cap this asset settles is the number those
+cards already say they read from it, and the story's own eight-line assumption is confirmed rather
+than corrected. **No amendment to any card is owed by this PR.**
+
+Referenced for provenance only, unchanged by this asset: MOTIR-1193, MOTIR-1490, MOTIR-1491,
+MOTIR-2225, MOTIR-2226, MOTIR-3597, MOTIR-3601, MOTIR-4066, MOTIR-4068, MOTIR-4274, MOTIR-6033,
+MOTIR-6156, MOTIR-6010. `MOTIR-812` / `MOTIR-918` are the repo's own composer test fixtures, used as
+sample tray chips. `MOTIR-4944` appears inside the lifted stylesheet's own comment.

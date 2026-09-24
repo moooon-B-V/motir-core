@@ -2866,6 +2866,25 @@ worth repeating outside it:
   where it moved. A per-proposal diff is a real surface and a different card; nothing here depends on
   it.
 
+## ⚠️ AMENDED 2026-09-24 by MOTIR-6236 — the revise box is a MULTI-LINE field
+
+**The drawing lives in `design/ai-chat/planning-workspace--multiline-composer.mock.html`, sheet 11,
+and this is a POINTER to it rather than a second drawing.** Part XII's own panels stay exactly as
+drawn.
+
+`PlanChangeComposer` is one component with two hosts, and the revise box is the second. When it
+becomes a multi-line auto-growing field on the planning rail it becomes one here too, with the same
+cap (**8 rows / 184px**), the same bottom-aligned Send and the same `resize-none`. Two things are
+specific to this host and are drawn on that sheet:
+
+- **`mentions={false}` still holds** (§B's reason is unchanged — a revision names PROPOSALS, which
+  have no key to mention), so there is no `@` trigger and the field carries no left inset.
+- **The pinned decision footer does not move.** The box grows into the scrolling body above it, never
+  into the footer — which is what keeps §A's _composer inside the decision block, above the two
+  verbs_ true at every height.
+
+`reviseNote` is unchanged: shown only while the field has text.
+
 ---
 
 # Part XIII — The plan DETAIL, refined: the proposed title, the fold, the changes lit on arrival, the locate walk, the search box's own words, the derived default, a clickable row, and the rail's decision (MOTIR-4017 / Story MOTIR-4016)
