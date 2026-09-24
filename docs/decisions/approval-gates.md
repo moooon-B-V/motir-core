@@ -4643,11 +4643,69 @@ kind for which that is true.
   address, and it opens nowhere in the overlay. An overlay that is handed one
   anyway (a stale link) sends the person to the planning surface rather than
   rendering a frame with no port. That is MOTIR-6037's.
-- **A plan with NO conversation** (a backfilled plan, an agent-authored MCP plan
+- ~~**A plan with NO conversation** (a backfilled plan, an agent-authored MCP plan
   whose session has no turns, a cadence plan) opens its own plan page
-  (`/plans/<id>`), where the same two verbs sit.
+  (`/plans/<id>`), where the same two verbs sit.~~ **AMENDED — read the block
+  below.** A plan with **NO SESSION** opens its own plan page (`/plans/<id>`),
+  where the same two verbs sit.
 - The row's words, the two verbs' placement and copy, and the hand-off message
   before generation are MOTIR-6033's to draw.
+
+> **⚠️ AMENDED 2026-09-24 (MOTIR-6157), by the requester's decision: THE
+> DISCRIMINATOR IS THE SESSION, AND AN MCP-AUTHORED PLAN HAS ONE.**
+>
+> A plan an agent writes through the MCP (`create_plan` → `add_plan_items` →
+> `update_plan_item`) is reviewed on the **planning surface**, exactly as a Motir
+> AI plan is. The agent held its conversation in its own CLI, and the planning
+> phase is what the person watches and decides here: cards arrive as the agent
+> appends them, the proposed plan reads as a List or a Canvas, and the person can
+> keep talking to Motir AI to change it.
+>
+> **So the branch above is keyed on the SESSION, never on whether that session
+> holds TURNS.** `create_plan` opens a session of origin `mcp` in the same call
+> that opens the plan (`lib/mcp/tools/authorPlan.ts`, `session: { origin: 'mcp' }`
+> — AMENDMENT 17 §4–§5 in `agent-authored-plans.md`), so an MCP plan has a
+> conversation surface to open from its first proposal. A turn count is not the
+> question, and an empty transcript is not an absent one.
+>
+> - **Undecided WITH a session** (`generating` · `planned` · `stale`) → the
+>   planning surface at that session, **an MCP-authored plan whose session holds
+>   no turns included**.
+> - **Undecided with NO session** → the plan page.
+> - **Decided** (`approved` · `declined`) → the plan page, unchanged.
+>
+> **⚠️ AND THE STRUCK BULLET'S THREE EXAMPLES ARE NOT THE NO-SESSION SET — TWO OF
+> THE THREE HAVE A SESSION, so do not carry them forward as a population.**
+> AMENDMENT 17 §4–§5 gives EVERY plan a session: a `cadence` plan gets one of
+> origin `cadence`, and the MOTIR-6020 backfill gives every pre-existing plan one
+> of origin `legacy` — or of `mcp` / `cadence` where the row itself says so.
+> `Plan.sessionId` is nullable **at the database only**, _"so a build predating
+> this column can still write a plan during a rollout"_ (`prisma/schema.prisma`).
+> **The no-session branch is therefore real but NARROW** — a row written inside
+> that rollout window, or one the backfill did not reach — and it is not
+> _backfilled or cadence_. A consumer that implements this branch by testing for
+> _cadence_ or for _backfilled_ implements a different rule from the one decided
+> here, and it will send a plan that has a conversation to a page that cannot show
+> it.
+>
+> **What this RETIRES and NARROWS in MOTIR-6033's published design** (§20.2's
+> access-path table and §20.5's _no conversation → the plan page_ state, read from
+> the published result, which is the authority —
+> `design-result.md` AMENDMENT 5 Q1):
+> `approvalGate.planApproval.noConversation.agent` — _"{harness} wrote this plan
+> outside a conversation, so it opened on its own page"_ — **is RETIRED**, because
+> that plan now opens the surface and the sentence can no longer be true.
+> `.cadence` and `.earlier` survive only for a plan with genuinely no session row,
+> which is narrower than either key's words currently claim. MOTIR-6044 redraws
+> the state; MOTIR-6045 builds the rule and is already keyed on the session id.
+>
+> **⚠️ ONE CONSEQUENCE THE DECIDING CARD DID NOT SQUARELY SETTLE — FLAGGED, NOT
+> ASSUMED.** Keyed on the session, a **`cadence`** plan has one and therefore opens
+> the planning surface. MOTIR-6157's rule sentence says the session decides; its
+> parenthetical still lists cadence under _no session_. The two disagree, and which
+> was meant is the requester's to say. **Until they do, build the SESSION rule** —
+> it is what MOTIR-6043's and MOTIR-6045's acceptance criteria already state — and
+> treat the cadence arm as open (11.11).
 
 #### 11.5c HELD while the planner rewrites — NOT superseded, NOT re-raised
 
@@ -4826,9 +4884,9 @@ decided here.
 
 **The KIND table's row:**
 
-| kind            | the port shows                                                                                           | fires when                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `plan_approval` | **no port** — the planning surface at the plan's conversation, or the plan page when it has none (11.5b) | a plan reaches `planned` with at least one proposal (11.7) — **never** a work item's review |
+| kind            | the port shows                                                                                                                      | fires when                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `plan_approval` | **no port** — the planning surface at the plan's session, or the plan page when it has NO SESSION (11.5b, as amended by MOTIR-6157) | a plan reaches `planned` with at least one proposal (11.7) — **never** a work item's review |
 
 #### 11.11 What this section does NOT decide
 
@@ -4836,7 +4894,11 @@ The row's and the surface's words and layout (MOTIR-6033). The hand-off message
 before generation (MOTIR-6033 draws it; MOTIR-6037 builds it). Refusing a manual
 move of a plan's cards out of Planning, which is Story MOTIR-6017, the consumer of
 this gate. Notifications. Where a plans row opens (Story MOTIR-6043, which
-consumes 11.5b's fallback). ~~Running the backfill on production (11.9).~~ The backfill now runs with the deploy (11.9, amended).
+consumes 11.5b's fallback). ~~Running the backfill on production (11.9).~~ The
+backfill now runs with the deploy (11.9, amended). **Whether a `cadence` plan
+opens the planning surface** — session-keyed it does, and MOTIR-6157's
+parenthetical says otherwise; 11.5b's amendment states the disagreement and
+leaves it to the requester.
 
 ---
 
