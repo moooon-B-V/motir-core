@@ -158,7 +158,13 @@ test('a CONTAINER anchor (a story) opens INSIDE it — its children, not its sib
   await expect(breadcrumb).toContainText(`${seed.storyKey} · ${seed.storyTitle}`);
   // MOTIR-2070's objection, answered: the target is still NAMED, as the current
   // crumb, rather than being a ring on a node that is no longer drawn.
-  await expect(breadcrumb.getByRole('button', { current: 'page' })).toContainText(
+  //
+  // ⚠️ By ATTRIBUTE, not by a `getByRole` option: `current` is Testing Library's
+  // role filter, and Playwright's takes no such key. The two APIs read alike and
+  // are not the same, which `tsconfig.e2e.json` is what catches — the product
+  // `tsconfig.json` does not include `tests/`, so only `pnpm typecheck` (the
+  // solution build) sees this file at all.
+  await expect(breadcrumb.locator('[aria-current="page"]')).toContainText(
     `${seed.storyKey} · ${seed.storyTitle}`,
   );
 
