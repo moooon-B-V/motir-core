@@ -1838,7 +1838,13 @@ export async function runRecordPlanRevisionReason(
       planId: args.planId,
       branch: recorded.branch,
       planningBugKey: recorded.planningBugKey,
-      at: new Date().toISOString(),
+      // ⚠️ THE ROW'S OWN TIME, NOT THIS CALL'S. `recordRevisionClassification`
+      // returns `at` from the written row precisely so this door does not have
+      // to guess; `new Date()` here would report the moment the tool was ASKED,
+      // which drifts from the moment the row exists at by however long the
+      // transaction took. `planRevisionsService.recordRevision` returns the row
+      // instead of its id for this one reason.
+      at: recorded.at,
     }),
   );
 }

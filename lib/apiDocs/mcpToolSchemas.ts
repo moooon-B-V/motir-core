@@ -1649,6 +1649,34 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  record_plan_revision_reason: {
+    type: 'object',
+    properties: {
+      planId: { type: 'string', minLength: 1, description: 'The plan id `create_plan` returned.' },
+      branch: {
+        type: 'string',
+        enum: ['new_ask', 'different_solution', 'rule_gap', 'rule_not_followed'],
+        description:
+          'WHY this plan has to change. `new_ask` — the person now wants something the conversation that settled the plan never raised. `different_solution` — the plan answered what was asked and they prefer another answer. `rule_gap` — the plan missed a check and NO planning rule asks for it; its fix is a new rule. `rule_not_followed` — a rule requires the check and this pass did not apply it. The first two are about the person and file NO planning bug; the last two are about the planner and each file exactly one.',
+      },
+      evidenceMd: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 4000,
+        description:
+          'WHY you chose that branch, in Markdown — required on every branch. For `new_ask` / `different_solution`, quote the turn that raised the thing or say that none did. For the two rule branches, quote the rule SEARCH: choosing between them, and ruling both out, is a search and not a judgement, and a gap asserted without one is an unverified negative.',
+      },
+      planningBugKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The planning bug you filed, by its key (`MOTIR-123`) — REQUIRED on `rule_gap` and `rule_not_followed`, and REFUSED on the other two. File it first with `create_work_item` into the project’s `Planning bugs` folder, then pass its key here so the classification points at the record it produced.',
+      },
+    },
+    required: ['planId', 'branch', 'evidenceMd'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   reinforce_lesson: {
     type: 'object',
     properties: {
@@ -2121,34 +2149,6 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['planId'],
-    additionalProperties: false,
-    $schema: 'http://json-schema.org/draft-07/schema#',
-  },
-  record_plan_revision_reason: {
-    type: 'object',
-    properties: {
-      planId: { type: 'string', minLength: 1, description: 'The plan id `create_plan` returned.' },
-      branch: {
-        type: 'string',
-        enum: ['new_ask', 'different_solution', 'rule_gap', 'rule_not_followed'],
-        description:
-          'WHY this plan has to change. `new_ask` — the person now wants something the conversation that settled the plan never raised. `different_solution` — the plan answered what was asked and they prefer another answer. `rule_gap` — the plan missed a check and NO planning rule asks for it; its fix is a new rule. `rule_not_followed` — a rule requires the check and this pass did not apply it. The first two are about the person and file NO planning bug; the last two are about the planner and each file exactly one.',
-      },
-      evidenceMd: {
-        type: 'string',
-        minLength: 1,
-        maxLength: 4000,
-        description:
-          'WHY you chose that branch, in Markdown — required on every branch. For `new_ask` / `different_solution`, quote the turn that raised the thing or say that none did. For the two rule branches, quote the rule SEARCH: choosing between them, and ruling both out, is a search and not a judgement, and a gap asserted without one is an unverified negative.',
-      },
-      planningBugKey: {
-        type: 'string',
-        minLength: 1,
-        description:
-          'The planning bug you filed, by its key (`MOTIR-123`) — REQUIRED on `rule_gap` and `rule_not_followed`, and REFUSED on the other two. File it first with `create_work_item` into the project’s `Planning bugs` folder, then pass its key here so the classification points at the record it produced.',
-      },
-    },
-    required: ['planId', 'branch', 'evidenceMd'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

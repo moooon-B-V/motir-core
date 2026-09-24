@@ -245,6 +245,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       "The work-item plan-history read's refusal of a malformed page cursor (MOTIR-5546). Approve takes a plan id and pages nothing.",
   },
+  PLAN_REVISION_CLASSIFICATION_INVALID: {
+    cause: 'not-approve',
+    justification:
+      "The re-plan classification door's refusal (MOTIR-5543) — a branch outside the four, missing or oversized evidence, a branch-vs-bug disagreement, or a key naming something that is not a `bug` in the plan's own project. It records WHY a reviewer asked for a change on an UNAPPROVED plan; approve is the act that ends that window, and it classifies nothing.",
+  },
 } as const;
 
 /** The refusal ids the CLOSE must also raise — the card's invariant, as a set. */

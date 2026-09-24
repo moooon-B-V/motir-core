@@ -649,9 +649,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     //
     // Re-pinned again for MOTIR-3271, and this one is NOT a new severity: the
     // `likely-over-gate-sizing` line was corrected in place — its minutes
-    // threshold moved 60 → 70 and the text now says that arm is a PROXY, since
-    // `estimateMinutes` sums agent time and CI time while the gate ceilings the
-    // agent run alone. Summary UNCHANGED for the reason above, which the
+    // threshold moved from sixty to seventy and the text now says that arm is a
+    // PROXY, since `estimateMinutes` sums agent time and CI time while the gate
+    // ceilings the agent run alone. (Those two numbers are SPELLED OUT, not
+    // written as digits: `tests/mcp/mcp-doc-guards.test.ts` forbids the CURRENT
+    // tool count as a bare literal anywhere below `McpCatalogueToolName`, and a
+    // threshold that merely happens to equal it would trip a guard aimed at
+    // something else. Do not "tidy" them back into numerals.)
+    // Summary UNCHANGED for the reason above, which the
     // paragraph anticipated: the drift is on the advisory channel, and the
     // summary describes the verdict.
     //
