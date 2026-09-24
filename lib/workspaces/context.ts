@@ -55,9 +55,11 @@ import { db } from '@/lib/db';
 //     open a second — Prisma rejects nesting.
 //   * Read paths do NOT pass `options`. 118 ms against a 5 s default is a
 //     38x margin; see {@link TransactionBudget}, whose callers carry very
-//     different justifications — including the one read path that does
-//     pass it (the 2FA gate, MOTIR-5866), where the budget is outgrown by a
-//     WAIT the expiry cannot shorten, never by the read's work.
+//     different justifications — including the two read paths that do
+//     pass it (the 2FA gate, MOTIR-5866, and the active-project resolver,
+//     MOTIR-6254), where the budget is outgrown by a WAIT the expiry cannot
+//     shorten, never by the read's work. Both are DOORS nearly every signed-in
+//     request passes through; that, not the read, is what earns the exception.
 //
 // The ONE sanctioned exception is STRUCTURAL, never performance: a fan-out
 // whose members need DIFFERENT bindings. `publicProjectsService` is it —
@@ -403,7 +405,7 @@ export async function withBootstrapSlugContext<T>(
  * two loose numbers so that raising it is a visible, argued decision at the call
  * site instead of a magic literal.
  *
- * The shipped callers are FOUR, and they are raised for different reasons — which
+ * The shipped callers are FIVE, and they are raised for different reasons — which
  * is why the type asks for an argument rather than a number:
  *
  *   * the per-project runner-group sync (MOTIR-1972), which must hold the
@@ -431,6 +433,13 @@ export async function withBootstrapSlugContext<T>(
  *     lock, the expiry cannot end a wait early — Prisma rolls back only after
  *     the statement in flight returns — so it turns a slow answer into a slow
  *     500, on a gate every signed-in request passes through.
+ *   * the active-project resolver (MOTIR-6254, `projectsService.getActiveProject`)
+ *     — the SECOND read path with a budget, on the same argument: two indexed
+ *     reads under the (authed) layout and ~130 other callers, expired in
+ *     production at COMMIT after a 6.4 s wait. Its one lock (the pointer heal's
+ *     UPDATE) is its LAST statement, so the ceiling cannot lengthen how long a
+ *     lock is held. A third read path reaching for this owes the same two
+ *     facts: that it is a door, and that the time is a wait, not work.
  */
 export interface TransactionBudget {
   /** Max wall-clock ms the transaction body may run before Prisma rolls back. */
