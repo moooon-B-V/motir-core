@@ -549,6 +549,14 @@ documents one.
 | `aider`       | 2    | PyPI `aider-chat` in a venv (Apache-2.0)                              | `aider`                        | `~/.aider.conf.yml` + a model key from the env         |
 | `goose`       | 2    | `curl -fsSL …/goose/releases/download/stable/download_cli.sh \| bash` | `goose`                        | `~/.config/goose`                                      |
 
+**Agents do not update themselves in the image.** Every agent is installed onto
+the root-owned global prefix and the container runs as `node`, so an in-place
+update could only fail — and would be lost on the next container anyway. The
+image sets `DISABLE_AUTOUPDATER=1`, which turns Claude Code's self-updater off
+(MOTIR-6183). To move to a newer agent, pull the image and start a new container:
+`--pull=always` on the `docker run` route, or `docker pull` then **Dev Containers:
+Rebuild Container** on the VS Code route.
+
 ### Auto-approve flags — VERIFIED, not remembered
 
 An unattended run needs the agent to stop asking for approval, and **these flags

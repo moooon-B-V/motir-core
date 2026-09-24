@@ -158,6 +158,18 @@ RUN npm install -g --no-fund --no-audit @colbymchenry/codegraph \
 # installs onto the GLOBAL path rather than into a user's home.
 ARG AGENT=base
 ENV MOTIR_SANDBOX_AGENT=${AGENT}
+
+# The agent never updates ITSELF in here (MOTIR-6183). Every arm installs onto
+# the root-owned global prefix, and the container runs as `node`, so Claude
+# Code's self-updater can only fail — it did, on every session, with "Auto-update
+# failed: no write permission to npm prefix". That is by design, not a
+# permission to repair: the image is DISPOSABLE (MOTIR-4970), and a newer agent
+# arrives the same way a newer `motir` does — `docker pull` + a new container
+# (`--pull=always`, or the guide's Rebuild Container). Making the prefix
+# writable would only let an update land in a layer the next rebuild deletes.
+# Unconditional on purpose: only Claude Code reads it, and it is inert in
+# `base`. MOTIR-4973 is the `motir` CLI's own counterpart.
+ENV DISABLE_AUTOUPDATER=1
 COPY --chmod=0755 packages/cli/sandbox/install-agent.sh /usr/local/lib/motir-sandbox/install-agent.sh
 RUN /usr/local/lib/motir-sandbox/install-agent.sh "${AGENT}"
 

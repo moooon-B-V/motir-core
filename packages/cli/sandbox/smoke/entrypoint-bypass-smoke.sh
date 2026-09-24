@@ -97,4 +97,15 @@ check 'login shell' -lc
 # carries on, and stderr is not what is captured here.
 check 'interactive non-login shell' -ic
 
+# MOTIR-6183: Claude Code's self-updater is OFF in the built image, as `node`,
+# on the same bypassed-entrypoint route — an in-place update can only fail on
+# the root-owned global prefix, and the image is updated by pulling it.
+if [ "$PROFILE" = claude ]; then
+    updater=$(docker run --rm -i --entrypoint /bin/bash "$IMAGE" -lc \
+        'printf "%s:%s" "$(id -un)" "${DISABLE_AUTOUPDATER:-UNSET}"')
+    [ "$updater" = 'node:1' ] \
+        || fail "self-updater: expected node:1 (user:DISABLE_AUTOUPDATER), got [$updater] — Claude Code would try to update into the root-owned prefix and warn on every session (MOTIR-6183)."
+    echo "== $PROFILE / self-updater: DISABLE_AUTOUPDATER=1 as node"
+fi
+
 echo "== $PROFILE: the agent config survives an entrypoint bypass"

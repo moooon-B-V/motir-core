@@ -193,6 +193,18 @@ describe('sandbox Dockerfile', () => {
     expect(mkdirAt).toBeLessThan(packAt);
   });
 
+  it("turns Claude Code's self-updater off — the image is updated by pulling it (MOTIR-6183)", () => {
+    // The per-agent layer installs onto the root-owned global prefix and the
+    // container runs as `node`, so an in-place update can only fail — and every
+    // session said so ("Auto-update failed: no write permission to npm prefix").
+    // Updates come from `docker pull` + a new container, never from inside one.
+    expect(dockerfile).toMatch(/^ENV DISABLE_AUTOUPDATER=1$/m);
+    // Set BEFORE `USER node`, next to the agent selector, so it is in the runtime
+    // environment of every shell — including a devcontainer's bypassed entrypoint.
+    const envAt = dockerfile.search(/^ENV DISABLE_AUTOUPDATER=1$/m);
+    expect(envAt).toBeLessThan(dockerfile.search(/^USER node$/m));
+  });
+
   it('exposes the AGENT selector with a base-only default and routes it through the seam', () => {
     expect(dockerfile).toMatch(/^ARG AGENT=base$/m);
     expect(dockerfile).toContain('install-agent.sh "${AGENT}"');

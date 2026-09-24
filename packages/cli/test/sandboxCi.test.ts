@@ -234,6 +234,15 @@ describe('the sandbox smoke harness', () => {
     expect(guard).toContain('EXPECTED_PREFIX=/home/node/.motir-sandbox/agent-config');
   });
 
+  it("asserts Claude Code's self-updater is OFF in the built image, with the entrypoint bypassed (MOTIR-6183)", () => {
+    // The Dockerfile line is checked in sandbox.test.ts; this is the BUILT
+    // image, as `node`, launched the way the devcontainer recipe launches it —
+    // the route the "Auto-update failed" warning was reported on.
+    const guard = read(join(SMOKE_DIR, 'entrypoint-bypass-smoke.sh'));
+    expect(guard).toContain('DISABLE_AUTOUPDATER');
+    expect(guard).toContain('MOTIR-6183');
+  });
+
   it('asserts the read-only login fails as ONE SENTENCE, never as a stack', () => {
     // MOTIR-1836's class: a supported configuration used correctly must not
     // surface as a raw errno.
