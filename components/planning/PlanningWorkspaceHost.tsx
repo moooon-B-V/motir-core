@@ -448,6 +448,12 @@ export function PlanningWorkspaceHost({
       // `h-dvh` child of it overflows by whatever the panel's own box costs. The
       // variant its own docstring offers is exactly this case.
       className="h-full w-full"
+      // THE RESIZABLE SPLIT (MOTIR-6250), opt-in — this host is its ONE consumer.
+      // `state.review` is non-null exactly when a plan has been PROPOSED, which is
+      // the transition the reset fires on; it is the workspace's own state rather
+      // than a route change, so it covers a plan watched as it is written.
+      resizable
+      proposalPresent={state.review !== null}
       canvas={
         <div className="flex h-full min-h-0 flex-col bg-(--el-canvas)">
           {/* The shell's own exit chrome + project crumb. The canvas keeps its

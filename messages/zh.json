@@ -6777,7 +6777,8 @@
       "crumbTargetPrefix": "规划目标：",
       "movedAnnouncement": "正在显示 {target} 内的工作",
       "goToTarget": "方案在 {identifier} · 前往"
-    }
+    },
+    "dividerAria": "调整对话窗口宽度"
   },
   "codeHealth": {
     "title": "代码健康度",
