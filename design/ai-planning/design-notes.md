@@ -5748,7 +5748,10 @@ Everything. This Part adds no element and changes nothing inside one:
 - `PlanChangeConfirmBar`, its decline band, its held reason and its stale alert — MOTIR-6033's design,
   §20.4 and §20.5 of its own fragment;
 - the surface's Close + project bar, the audit-coverage banner's seam and the resting footer —
-  `PlanningWorkspaceHost` as shipped.
+  `PlanningWorkspaceHost` as shipped, **including their COPY**: the footer says
+  `planningWorkspace.footerRestingTitle` / `footerRestingBody` (_"Roadmap — as saved"_ /
+  _"Nothing proposed. The conversation has changed nothing."_), which is a quiet statement of fact and
+  not an invitation to act. Nothing in this Part re-words it (21.10).
 
 **The canvas is a LABELLED REGION in the asset, not a redrawing** — the same treatment MOTIR-6033's
 own mock gives it, and for the same reason: nothing inside it changes. This Part decides where the
@@ -5905,7 +5908,31 @@ checkable:
   `origin/main` @ `d0976c0ab` and emitted verbatim — real `Segmented`, real `PlanProposalList`, real
   `PlanChangeConfirmBar`, real `en` catalogue strings. Not a transcription.
 - The Close + project bar and the resting footer are copied verbatim from
-  `components/planning/PlanningWorkspaceHost.tsx` at that commit.
+  `components/planning/PlanningWorkspaceHost.tsx` at that commit — its inline chrome is not a
+  component that can be rendered on its own, so its MARKUP is copied and **its TEXT is resolved from
+  `messages/en.json`**, never typed.
+
+  ⚠️ **That last clause is a correction, and it is worth reading.** The first version of this asset
+  copied those class strings correctly and then TYPED the words: the resting footer read
+  _"Ask for a change"_ / _"Asking writes nothing — you will see the plan before anything is created."_
+  where the catalogue says `planningWorkspace.footerRestingTitle` / `footerRestingBody` —
+  _"Roadmap — as saved"_ / _"Nothing proposed. The conversation has changed nothing."_. The invented
+  pair was worse than merely wrong: it read as a call to action, which is precisely what that footer
+  must not do (`PlanningWorkspaceHost.tsx`: _"deliberately quiet … so it never competes with the gate
+  or reads as something to act on"_). **A mock is product COPY**, in the register it ships in, and a
+  later card building to this asset would have transcribed it. It shipped in a published result and
+  was caught by a person reading the board.
+
+  Two things changed as a result. The asset's own build resolves every product string through a
+  catalogue lookup that THROWS on a missing key, so a string it cannot resolve fails rather than
+  ships. And **`tests/design-surface-views-chrome-copy.test.ts`** now reads this asset and
+  `messages/en.json` together and requires each of the four chrome strings verbatim, hard-coding
+  none of them — the same shape as `design-lesson-phase-chips` (MOTIR-5107) and
+  `design-github-development-copy` (MOTIR-5152). It is in the design lane, because a `design/*` pull
+  request editing this mock skips every app lane and is the one that must not skip this. Every other
+  guard in that lane was green over the invented copy: they rule on colour, shape, structure and dead
+  rules, and none of them reads a string.
+
 - `PlanReviewCanvas` and `PlanChangeCanvas` are labelled regions (21.1).
 - The first stylesheet is the project's real Tailwind v4.3.0 output, compiled over this document's own
   class attributes with `@motir/design-system/theme.css` — the token layer is generated, not
