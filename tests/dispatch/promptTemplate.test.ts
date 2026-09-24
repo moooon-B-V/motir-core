@@ -267,6 +267,75 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
       expect(agentPrompt()).toContain(rule);
     });
 
+    // ── MOTIR-6194: the record's SUBJECT and its SCOPE, which the count cannot reach
+    //
+    // Clause 3 makes the FILE the gate's subject, so WHICH file decides what the
+    // person is asked to approve. The lane used to say only "EXACTLY ONE" and
+    // "Change no other file": a COUNT. Both are satisfied by rewriting one wrong
+    // file without limit, which is how MOTIR-6157's decision landed in the record
+    // it CONTRADICTS and settled a question its card never asked, under 13 green
+    // lanes. `motir-meta` `prompts/run.md` step 5b carries the same two rules for
+    // the runbook — neither side can detect the other's absence, so both are
+    // asserted where they live.
+    describe('the record’s SUBJECT and SCOPE are bounded, not just its count (MOTIR-6194)', () => {
+      it('names the file from the decision’s SUBJECT, not from the text it contradicts', () => {
+        const prompt = agentPrompt();
+        expect(prompt).toContain('3a. WHICH file — the record goes where its SUBJECT lives');
+        expect(prompt).toContain('Name it from the thing being DECIDED, not');
+        expect(prompt).toContain('from the text the decision contradicts');
+        // The default is a NEW record; an existing one is the exception, and the
+        // test for it is OWNERSHIP of the subject rather than proximity to it.
+        expect(prompt).toContain('DEFAULT to a new');
+        expect(prompt).toContain('record only when that record already OWNS this subject');
+        expect(prompt).toContain('does not belong in that record');
+      });
+
+      // The gate's subject is `<owner/name>:<path>@<blobSha>` (§8's FIFTH AMENDMENT
+      // clause 4) — the WHOLE file, not the diff. There is no publish call for a
+      // decision document, so the pull-request head is the only lever. MOTIR-6157's
+      // second rewrite put the decision in the ADR that genuinely owns it and made
+      // the subject a 3,581-line file with the amendment at line 3,495; the review
+      // came back "did you republish?". Unreadable is indistinguishable from absent.
+      it('requires an amended record to be READABLE AS ONE QUESTION, not merely correct', () => {
+        const prompt = agentPrompt();
+        expect(prompt).toContain('small enough to be READ AS ONE QUESTION');
+        expect(prompt).toContain('The gate hands the reviewer the');
+        expect(prompt).toContain('WHOLE file, not your diff');
+        expect(prompt).toContain('<owner/name>:<path>@<blobSha>');
+        expect(prompt).toContain('a decision document has no publish call');
+        expect(prompt).toContain('unreadable and absent look the same');
+      });
+
+      it('bounds the record to the card’s own decision — the count rule does not', () => {
+        const prompt = agentPrompt();
+        expect(prompt).toContain(
+          "3b. HOW MUCH — the record is BOUNDED by this card's own decision",
+        );
+        expect(prompt).toContain('Do not settle a neighbouring question');
+        expect(prompt).toContain('do not retire copy, keys or clauses the card did not name');
+        expect(prompt).toContain('do not repair');
+        expect(prompt).toContain('what is merely wrong AROUND the part you came to write');
+        expect(prompt).toContain('Something else wrong in that file is a bug to log');
+      });
+
+      it('asks for a “What this does NOT decide” fence, so the scope is checkable at the gate', () => {
+        const prompt = agentPrompt();
+        expect(prompt).toContain('3c. End the record with a "What this does NOT decide" section');
+        expect(prompt).toContain('questions a reader could think it settled and it does not');
+      });
+
+      // MOTIR-6157 carried NO targetRepo, and step 3 says "in this card's target
+      // repository". An unpinned card dispatches to `unpinned_root` — the workspace
+      // root, which is not a repository at all — so the presupposition fails and the
+      // agent must stop rather than pick a repository, which is a planning decision.
+      it('tells an agent to STOP when the card pins no repository', () => {
+        expect(agentPrompt()).toContain(
+          'If this card pins NO repository, STOP and say so in a comment',
+        );
+        expect(agentPrompt()).toContain('picking one is a planning decision, not yours');
+      });
+    });
+
     // Design review 2026-09-19 (MOTIR-5673): the decision port shows NO How to test, so the
     // agent is not asked to write one — neither the record nor the pull request's section.
     it('an agent’s decision card writes NO How to test — not the record, not the PR section', () => {
