@@ -934,3 +934,35 @@ export class PlanDecisionStampRequiredError extends Error {
     this.name = 'PlanDecisionStampRequiredError';
   }
 }
+
+/**
+ * A `reason_classified` write whose BRANCH and `planningBugId` contradict each
+ * other, or whose bug id does not name a `bug` (Story MOTIR-5543 · MOTIR-6083).
+ *
+ * The four branches split two and two, and the split IS the card: `rule_gap` and
+ * `rule_not_followed` are about the planner and each file exactly one planning
+ * bug; `new_ask` and `different_solution` are about the person and file none. So
+ * a rule branch with no bug id, and a no-bug branch carrying one, are both a
+ * classification that disagrees with itself — and a trail that can disagree with
+ * itself is read as evidence anyway, which is the whole reason the write is
+ * validated rather than trusted.
+ *
+ * ⚠️ REFUSED, NOT COERCED. Dropping a stray bug id, or filing a bug to satisfy a
+ * branch, would each make the row say something its caller did not: the point of
+ * recording a judgement is that it is the caller's.
+ *
+ * The message NAMES the branch and what it requires, because the caller is
+ * normally an agent that can act on being told the rule and cannot act on being
+ * told no. → 400
+ */
+export class PlanRevisionClassificationInvalidError extends Error {
+  readonly code = 'PLAN_REVISION_CLASSIFICATION_INVALID' as const;
+  constructor(
+    readonly planId: string,
+    readonly branch: string,
+    readonly reason: string,
+  ) {
+    super(`The \`${branch}\` classification for plan ${planId} is not recordable: ${reason}`);
+    this.name = 'PlanRevisionClassificationInvalidError';
+  }
+}

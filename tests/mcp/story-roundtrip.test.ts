@@ -292,6 +292,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // The plan's OWN heading (MOTIR-4637) — plan-id-keyed and needing no
         // proposal at all, so a non-member must be refused on the PLAN.
         update_plan: { planId: plan.id, summary: 'leak?' },
+        // WHY a plan had to change (MOTIR-6086) — plan-id-keyed and needing no
+        // proposal, so a non-member must be refused on the PLAN. Recording a
+        // judgement about a plan is as much a leak as reading one.
+        record_plan_revision_reason: { planId: plan.id, branch: 'new_ask', evidenceMd: 'leak?' },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'leak?' },
         submit_plan_session: { projectKey: 'PROD' },
@@ -803,6 +807,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         },
         withdraw_plan_proposal: { planId: plan.id, planItemId: 'pi_scoped' },
         update_plan: { planId: plan.id, summary: 'scoped brief correction' },
+        record_plan_revision_reason: {
+          planId: plan.id,
+          branch: 'new_ask',
+          evidenceMd: 'scoped classification',
+        },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },
         submit_plan_session: { projectKey: 'PROD' },
