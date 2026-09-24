@@ -131,6 +131,7 @@ describe('the sandbox smoke harness', () => {
     'login-smoke.sh',
     'readonly-login-smoke.sh',
     'entrypoint-bypass-smoke.sh',
+    'agent-update-smoke.sh',
     'fake-agent.sh',
     'failing-agent.sh',
     'stub-server.mjs',
@@ -232,6 +233,19 @@ describe('the sandbox smoke harness', () => {
     // It must demand the image-owned home, not merely a non-empty value: the
     // read-only mount is a perfectly non-empty path and is the wrong answer.
     expect(guard).toContain('EXPECTED_PREFIX=/home/node/.motir-sandbox/agent-config');
+  });
+
+  it('runs the agent-update guard on EVERY profile leg (MOTIR-6183)', () => {
+    // The built image, as node: the agent resolves under the node-owned prefix
+    // and can be rewritten by its own updater; motir stays root-owned.
+    expect(images).toContain('packages/cli/sandbox/smoke/agent-update-smoke.sh');
+    expect(images).toContain('--liveness "${{ matrix.profile.liveness }}"');
+    const guard = read(join(SMOKE_DIR, 'agent-update-smoke.sh'));
+    expect(guard).toContain('--entrypoint /bin/bash');
+    expect(guard).toContain('AGENT_PREFIX=/opt/motir-agents');
+    expect(guard).toContain('/usr/local/bin/motir');
+    expect(guard).toContain('/usr/local/lib/node_modules/@motir/cli');
+    expect(guard).toContain('MOTIR-6183');
   });
 
   it('asserts the read-only login fails as ONE SENTENCE, never as a stack', () => {
