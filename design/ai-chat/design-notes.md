@@ -3217,3 +3217,269 @@ existing tokens rather than a new primitive.
 committed export) · this section. It AMENDS `MOTIR-4766`'s asset rather than opening a new one:
 this is one more state of the same screen — the plan window reading a project — and a separate file
 would leave a reader to work out that they are the same surface.
+
+## ⭐ The planning split is RESIZABLE — the default third, the divider, the bounds, and the reset on propose (MOTIR-6249, 2026-09-24)
+
+**Asset:** `planning-workspace--resizable-split.mock.html`, nine panels plus a GIVES/TAKES ledger. A
+DELTA — it amends `planning-workspace.mock.html` (MOTIR-1193) and edits nothing in it.
+**Story:** MOTIR-6248 — _the planning surface is a resizable split_. **Epic:** MOTIR-6010.
+
+**The requirement, in the requester's own words** (the Request-changes note on MOTIR-6236's design
+gate, 2026-09-24):
+
+> Need to redesign the planning surface. The right conversation window is too narrow, so the textarea
+> is too narrow too. We give one-third of the width to the conversation window initially, and the
+> user can drag the width freely to change the width of both windows. When the plan is proposed, we
+> reset the canvas width to 2/3 of the width.
+
+### What changes, and what deliberately does not
+
+`components/planning/PlanningWorkspace.tsx` lays the frame out as
+`grid grid-cols-1 md:grid-cols-[1fr_22rem]` — the conversation column is a constant `22rem` = 352px,
+the width MOTIR-2225 measured and the width every `design/ai-chat/` board is drawn at. It becomes
+`grid-template-columns: 1fr var(--rail-w)` with a variable track, a draggable seam and a reset.
+
+**Nothing inside either pane changes.** This asset draws the FRAME and the SEAM. The rail's contents
+are MOTIR-4066's render, reproduced untouched; the canvas's contents are MOTIR-6155's and
+MOTIR-6158's; the composer's own panels are MOTIR-6236's, re-scoped by the widths settled here.
+
+### THE SIX DECISIONS
+
+Stated together, because the code card (MOTIR-6250) builds these literally and decides none of them.
+
+| #                           | Decision                                                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1 · **the default**         | `clamp(352px, 33.333%, 50%)` — a fraction **of the split container**, floored at the shipped 352px. **480px at a 1440 viewport.**                      |
+| 2 · **the bounds**          | conversation **min 352px** (22rem, the shipped width); **max 50%** of the split container. The canvas takes the remainder and has no floor of its own. |
+| 3 · **the divider**         | **1px** visible (`--el-border`), **11px** hit area — the line plus 5px either side, absolutely positioned over the seam.                               |
+| 4 · **the reset**           | **animated, 200ms `ease-out`**, on the column width; instant under `prefers-reduced-motion: reduce`. Fires **once** per proposal.                      |
+| 5 · **persistence**         | **PERSISTS**, in `localStorage`, one global key, integer CSS pixels, clamped into the current container's bounds on read.                              |
+| 6 · **the narrow viewport** | **768px** (Tailwind `md`) — the breakpoint already shipping. Below it the panes stack and **the divider is not rendered at all**.                      |
+
+### 1 · The default is a fraction of the SPLIT CONTAINER, never of the viewport
+
+**The closed form is `max(352px, 33.333% of the split container)`** — written as
+`clamp(352px, 33.333%, 50%)`, whose upper bound never binds for the default because a third is always
+less than a half. Every number below comes from that one expression.
+
+**Why the container and not the viewport.** This split ships in two containers. On the full-screen
+planning workspace the container IS the viewport. On the plan page it is not: the app shell has
+already taken its own width, and `lib/planning/planView.ts` measured what is left — _"the rail takes
+352px and the canvas is 782px wide at 1440x900"_, so the split container there is **1134px** and the
+shell holds the other 306px. A viewport fraction would hand the plan page a conversation wider than a
+third of what its reader can actually see.
+
+| viewport           | split container | conversation (default)  | canvas | min | max | canvas at max |
+| ------------------ | --------------- | ----------------------- | ------ | --- | --- | ------------- |
+| 1440               | 1440            | **480** · 33.3%         | 960    | 352 | 720 | 720           |
+| 1280               | 1280            | **426.67** · 33.3%      | 853.33 | 352 | 640 | 640           |
+| 1152               | 1152            | **384** · 33.3%         | 768    | 352 | 576 | 576           |
+| 1056               | 1056            | **352** · 33.3%         | 704    | 352 | 528 | 528           |
+| 1024               | 1024            | **352** · 34.4% (floor) | 672    | 352 | 512 | 512           |
+| 900                | 900             | **352** · 39.1% (floor) | 548    | 352 | 450 | 450           |
+| 768                | 768             | **352** · 45.8% (floor) | 416    | 352 | 384 | 384           |
+| 1440 · _plan page_ | 1134            | **378** · 33.3%         | 756    | 352 | 567 | 567           |
+
+**The crossover is 1056px**, and it is the most useful number in the table: below it a third is under
+the 352px floor, so the default clamps and **the conversation opens at exactly the width it ships at
+today**. This change is a no-op for every split viewport between 768px and 1056px, and a real change
+above it. At 1440 the canvas gets 960px — the two-thirds the requirement asks for, exactly.
+
+### 2 · Both bounds, and why each is where it is
+
+**The conversation's MINIMUM is 352px = 22rem — the width the rail ships at.** It is the floor because
+it is the only narrow width this rail has ever been drawn and MEASURED at: MOTIR-2225 measured the
+header row **already full** there (status dot + `Motir AI` + mode chip), and both
+`plan-change-run-live.mock.html` and MOTIR-6236 draw the composer at it. The three elements the story
+requires to stay usable are all at a width somebody has already drawn — the composer field at its
+shipped 44px (`--height-input`), the `@` trigger which is `position: absolute` and costs the field no
+width at all, and Send, a sibling of the field in one flex row rather than a child, so the field
+yields first. **The minimum state therefore needs no design of its own**, which is the argument for
+putting the floor here rather than at a rounder number.
+
+**The conversation's MAXIMUM is 50% of the split container**, and it is not a canvas pixel floor. The
+measurement that would have given one cuts the other way: `lib/planning/canvasGeometry.ts` puts a
+three-column level at **800px wide at the 0.80 legibility floor**, which with `arrivalView`'s 48px
+padding wants an 896px canvas — and the shipped surface is **already below that** at ordinary sizes
+(`planView.ts` measures a width term of 0.526 at 1280×800). A canvas pixel floor would be a floor the
+product does not honour today.
+
+**What does not recover is the MODEL.** This area is built on _the canvas IS the roadmap; the chat is
+a right rail_ (this file's first section). The canvas's legibility is recoverable at any width — it
+pans and zooms — and the model is not: past half, the rail is the surface and the canvas is the
+companion, which is the opposite of what a proposed plan is read on. Half is the last width at which
+that sentence is still true.
+
+**Neither pane collapses to zero.** The bounds are a resize, not a hide: no double-click-to-collapse,
+no chevron. Hiding a pane is a different product question and this card does not open it.
+
+### 3 · The divider — 1px visible, 11px of hit area, and three token steps
+
+**At rest it is the rail's edge and nothing more:** 1px of `--el-border`, no handle, no grip dots, no
+tint. A decision rather than an omission — this surface already carries a top bar, a breadcrumb, two
+canvas overlay clusters, a rail header and a pinned footer, and a permanent grip down a full-height
+edge is chrome for an affordance most people reach for once a session.
+
+| state    | line                                     | ink                  | cursor       |
+| -------- | ---------------------------------------- | -------------------- | ------------ |
+| rest     | 1px                                      | `--el-border`        | default      |
+| hover    | 3px, grown **±1px about its own centre** | `--el-border-strong` | `col-resize` |
+| dragging | 3px                                      | `--el-accent`        | `col-resize` |
+
+**The 11px hit area is absolutely positioned over the seam**, so it costs the grid nothing and neither
+pane moves by a pixel when it lights up — a divider that nudges the text you are about to resize is a
+divider that feels broken, which is also why the hover growth is symmetric. Transitions are **120ms
+ease-out**, in and out.
+
+**11px is the narrowest strip a pointer acquires without aiming, and it is deliberately not the answer
+to the 24px target-size guideline.** A full-height splitter has no 24px width that is not a visible
+slab; the answer to target size here is the keyboard control below, which is exact at any size.
+
+**The divider TAKES the rail's left edge.** `PlanChangeRail.tsx`:299 paints
+`border-l border-(--el-border)` today. The divider draws that same 1px line instead, so the seam has
+one owner and the frame never grows a second edge — the rail's `border-l` comes off in the code card.
+
+**Dragging, and the four things it settles.** **(a)** The panes re-lay-out **LIVE**, on every
+`pointermove`, coalesced into one `requestAnimationFrame` — not on release. You are choosing a width
+for text you are reading, so you have to watch the text reflow while you choose; a release-only resize
+makes it a guess you repeat. **(b)** The pointer is **captured** (`setPointerCapture`), so the drag
+survives leaving the 11px strip. **(c)** Nothing is dimmed or frozen — both panes keep rendering; only
+text SELECTION is suppressed (`user-select: none` on the frame), because a drag across a transcript
+otherwise selects it. **(d)** The canvas keeps its own pan and zoom **untouched** — no re-fit during
+the drag and none on release. A re-fit would make the level jump under the pointer, and a wider canvas
+revealing more of the world is the correct answer to a wider canvas.
+
+**At a bound the divider stops and the pointer may keep travelling.** Releasing outside the bounds
+commits the bound, not the pointer.
+
+### 4 · Keyboard — a real separator with a stated step
+
+The divider is a focusable `role="separator"` with `aria-orientation="vertical"`, `aria-valuenow` /
+`aria-valuemin` / `aria-valuemax` carrying the conversation's width in CSS pixels, and `aria-label`
+_Resize the conversation_. **The focus ring is drawn on the 11px hit strip, not on the 1px line** —
+the standard `focus-visible:ring-2 ring-(--focus-ring-color)`, which on a 1px box would be a ring
+wider than the thing it rings.
+
+| key                 | what it does                                                |
+| ------------------- | ----------------------------------------------------------- |
+| `←`                 | divider LEFT — **widens the conversation by 16px**          |
+| `→`                 | divider RIGHT — narrows the conversation by 16px            |
+| `Shift` + `←` / `→` | **64px** per press                                          |
+| `Home`              | the minimum conversation (352px)                            |
+| `End`               | the maximum conversation (50%)                              |
+| `Enter`             | back to the default third — the same act the reset performs |
+
+**16px, and the arrow directions are spatial rather than semantic.** At 1440 the range is 352–720px =
+368px, so 16px crosses it in 23 presses and `Shift` in 6 — small enough to tune a width, coarse enough
+that nobody holds a key down. `←` moves the DIVIDER left, which happens to widen the conversation;
+naming the divider's direction rather than a pane's is what keeps it guessable from the picture.
+
+**Every bound above is the same clamp the pointer gets.** One function answers _what width may this
+be_, and the pointer, the arrow keys, `Home`/`End`, the reset and the stored value all go through it —
+which is the only way these states cannot disagree.
+
+### 5 · The reset on propose — animated, 200ms, and once
+
+**200ms `ease-out` on the column width**, instant under `prefers-reduced-motion: reduce`. An instant
+jump at the exact moment a plan appears reads as the plan having glitched the layout; 200ms is long
+enough to be a deliberate return without delaying the reading.
+
+Three things the requirement leaves open, settled here:
+
+- **It fires ONCE, on the transition into _a plan is proposed_** — not on every render while one is on
+  screen, or a person who drags wider to read a long card is fought by the layout on every re-render.
+- **It does NOT clear the stored width.** The reset is a one-shot return for reading THIS plan; the
+  width the person chose is still theirs and comes back next time they open the surface. A reset that
+  also forgot the preference would punish dragging.
+- **It is a no-op when the conversation is already at or below the default.** There is nothing to give
+  back, and animating a frame that is already right is a flicker with no content.
+
+**The canvas is not re-fitted by the reset either** — the same rule as the drag. The column animates;
+the canvas's pan and zoom are the person's and survive it.
+
+### 6 · A dragged width PERSISTS — `localStorage`, one global key
+
+**Persisted, not per visit**, in `localStorage`, under one global key (`motir.planning.railWidth`), as
+an integer of CSS pixels. The mould is one this repo already has four of —
+`lib/hooks/useSidebarCollapsed.ts`, with `lib/hooks/useCommentsSort.ts`,
+`lib/hooks/useAttachmentsView.ts` and `lib/hooks/useCollapsedLanes.ts` beside it: a module-level cached
+store, the initial value read lazily once on the first client render, the server render taking the
+stable default, and a write failure accepted rather than surfaced.
+
+- **Why global rather than per project:** the number is about this person's screen and how they read,
+  not about a project — and every member of that existing family is global, so a per-project key would
+  ask someone to re-choose a width on every project they open and buy nothing.
+- **Why persisted rather than per visit:** a width you have to re-drag every time is a width you stop
+  dragging, and the reset above already covers the one case where a remembered width is in the way.
+- **The read is CLAMPED into the current container's bounds** — a 900px conversation stored on a
+  2560px monitor opens at half of a 1440px laptop, not at 900px.
+
+**It is a preference, not state to migrate.** Per browser, and losing it costs one drag — which is
+exactly why it does not belong on the user record or in a query parameter.
+
+### 7 · The narrow viewport — 768px, and no divider below it
+
+**The breakpoint is 768px and it is the one already shipping.** The frame is
+`grid-cols-1 md:grid-cols-[1fr_22rem]` today: below Tailwind's `md` it is a single column and the panes
+stack, canvas then conversation. That stays exactly as it is, and **the divider is not rendered at
+all** — not hidden, not disabled, absent: there is no seam to drag. The stored width is left untouched,
+so returning to a wide window restores it.
+
+**Why 768px and not a new number.** At 768px the two bounds have already closed on each other: the
+floor is 352px and half the container is 384px, so the whole travel is 32px and the canvas is between
+384px and 416px whatever anyone drags. A divider whose entire range is 32px is a control that cannot
+pay for its own chrome. Below 768px the stack is the only layout that leaves either pane usable, which
+is what the shipped breakpoint already decided — so this card inherits it rather than inventing a
+second one.
+
+### ⚠️ One obligation this design hands the code card that the card does not yet name
+
+`defaultPlanView` (`lib/planning/planView.ts`) decides list-vs-canvas partly from **the canvas width
+implied by `grid-cols-[1fr_22rem]`** — its own comment derives _"the rail takes 352px and the canvas is
+782px wide at 1440x900"_ and reasons from it. **Once the rail is variable, that premise is a constant
+that no longer exists.** Nothing in this design breaks that read, and nothing in it fixes it either:
+the code card owes a decision about which width that computation uses (the default, the stored width,
+or the live one). It is named on MOTIR-6250 as a GIVES.
+
+### The GIVES / TAKES ledger — every `MOTIR-` key the asset names
+
+`grep -o 'MOTIR-[0-9]*'` over the delta mock returns these, and each is dispositioned. The mock carries
+the same table as its last panel.
+
+| key                                  | GIVES / TAKES | what                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-6250**                       | **GIVES**     | The whole build: the closed form, both bounds, the 1px/11px divider and its three token steps, live re-layout with pointer capture, the six keyboard bindings and their steps, the 200ms one-shot reset and its three conditions, and the `localStorage` mould. **Plus the `defaultPlanView` obligation named above.** Amended on the card. |
+| **MOTIR-6236**                       | **TAKES**     | Its composer panels are drawn at `22rem`. After this card 22rem is the **floor**, not the width, and the default at 1440 is 480px — so its boards owe the composer at the default width as well as at the floor. **Amended on the card in this run.**                                                                                       |
+| MOTIR-2225                           | cited         | Where `22rem` came from, and the measurement that makes it this design's floor. A record; nothing taken.                                                                                                                                                                                                                                    |
+| MOTIR-4066                           | cited         | `plan-change-run-live.mock.html` — the rail render every board reproduces, and the source of the compiled stylesheet. Unedited.                                                                                                                                                                                                             |
+| MOTIR-1193                           | amends        | `planning-workspace.mock.html`, the base this delta amends. Unedited — it is the record of the fixed-column frame.                                                                                                                                                                                                                          |
+| MOTIR-910 · MOTIR-6043               | cited         | The access path, which this card does not change.                                                                                                                                                                                                                                                                                           |
+| MOTIR-6155 · MOTIR-6158              | cited         | The canvas's own content and its live drawing — explicitly not this card's.                                                                                                                                                                                                                                                                 |
+| MOTIR-6156                           | cited         | The composer story this unblocks; its subtask MOTIR-6236 carries the TAKES.                                                                                                                                                                                                                                                                 |
+| MOTIR-6249 · MOTIR-6248 · MOTIR-6010 | self          | This card, its story, its epic.                                                                                                                                                                                                                                                                                                             |
+| MOTIR-4944                           | inherited     | Appears only inside the lifted stylesheet's own comments, which are MOTIR-4066's bytes reproduced unedited. Not a reference this design makes.                                                                                                                                                                                              |
+
+### Access path — unchanged, and that is the finding rather than an omission
+
+The split is the workspace's own layout, so this card adds no door: the surface is still reached by
+**Plan with AI** on a work item or a project (MOTIR-910 / MOTIR-1193), and by a Plans or To-approve
+row. The divider is not a destination and has no entry affordance of its own — which is why it is drawn
+in every panel _inside the real frame_, never as an isolated control: the only place it exists is on
+that seam.
+
+#### Primitives composed (no hand-rolling)
+
+The rail, its header, its transcript bubbles and its pinned composer footer are MOTIR-4066's render,
+lifted byte-for-byte and unedited. The canvas keeps its shipped dot-grid backdrop. **The only new
+element is the divider**, and it is a 1px line inside an 11px absolutely-positioned strip — a geometry,
+not a new primitive. Colour steps through `--el-border` → `--el-border-strong` → `--el-accent` and the
+focus ring through `--focus-ring-color`; no state paints a raw hue or a Tier-0 `--color-*`, and shape
+flows through the element-semantic tokens only.
+
+#### Deliverable
+
+`design/ai-chat/planning-workspace--resizable-split.mock.html` (nine panels + the GIVES/TAKES ledger,
+each board drawn at its TRUE viewport width 1:1 so every width is measurable in the picture; board
+HEIGHTS are illustrative) · this section. It is a DELTA on MOTIR-1193's
+`planning-workspace.mock.html`, which is not edited: that asset is the record of the fixed-column
+frame. Published as MOTIR-6249's design result, which is what MOTIR-6250 and MOTIR-6236 read. **No pull request:** a design card opens none — the published result is the source of truth and its gate is the review, so the two files sit on this card's own branch — the commit the gate names as its `subjectVersion` — and nothing merges them.
