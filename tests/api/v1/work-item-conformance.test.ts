@@ -589,13 +589,23 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // operations are additionally driven end-to-end by the drift guard, so
     // excluding them here hides nothing.
     const DESIGN_SUBRESOURCE = /\/(designs|design)\//;
+    // ⚠️ Bug MOTIR-6191's APPROVAL-GATE read is excluded on the same terms, and
+    // they are worth restating rather than inheriting: `…/approval-gate` hangs
+    // off a work item because the card is what the decision is ABOUT, but it is
+    // the approval-gate access door and its journey is its own suite
+    // (`tests/api/v1/approval-gate-route.test.ts`), where the permission, the
+    // 404-not-403 answer, the `gate: null`-is-an-answer distinction and the 422
+    // on an unparseable kind are all driven. The operation is additionally driven
+    // end-to-end by the drift guard, so excluding it here hides nothing.
+    const APPROVAL_GATE_SUBRESOURCE = /\/approval-gate\//;
     const shipped = v1RouteFiles(process.cwd()).filter(
       (f) =>
         f.includes('work-items') &&
         !/\/(sprints|backlog)\//.test(f) &&
         !WORK_LOOP_SUBRESOURCES.test(f) &&
         !ATTACHMENT_SUBRESOURCE.test(f) &&
-        !DESIGN_SUBRESOURCE.test(f),
+        !DESIGN_SUBRESOURCE.test(f) &&
+        !APPROVAL_GATE_SUBRESOURCE.test(f),
     );
 
     // Enumerated rather than counted: a NEW work-item endpoint appears here as a

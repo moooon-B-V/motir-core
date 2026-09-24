@@ -114,6 +114,8 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   get_work_item: true,
   get_design: true,
   list_designs: true,
+  // MOTIR-6191 — the gate read
+  get_approval_gate: true,
   // 11.6.3 — the work-item family (MOTIR-2229)
   search_work_items: true,
   list_ready: true,
