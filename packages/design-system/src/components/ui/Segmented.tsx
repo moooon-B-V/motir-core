@@ -42,6 +42,7 @@ export function Segmented<T extends string>({
   label,
   className,
   disabled,
+  fill,
 }: {
   options: SegmentedOption<T>[];
   value: T;
@@ -50,13 +51,29 @@ export function Segmented<T extends string>({
   label: string;
   className?: string;
   disabled?: boolean;
+  /**
+   * FILL the container instead of sizing to the options (MOTIR-6200, for
+   * MOTIR-6199): the track becomes `w-full` and the segments divide it evenly.
+   *
+   * WHY IT IS A VARIANT AND NOT THE DEFAULT. The track is `inline-flex` with no
+   * wrap and no shrink, so its width is `max-content` — fine in a toolbar that
+   * can grow, and unsurvivable in a FIXED rail. The Difficulty editor sits in an
+   * 18rem item-page rail and a 300px quick-view rail, and when its scale gained a
+   * fourth member the track overran both. Filling makes the width the
+   * CONTAINER's, so it holds at any label set, at any `--spacing-control-x`
+   * (10 / 12 / 14px across the shipped styles) and at a fifth member.
+   *
+   * Off by default: every other call site keeps byte-identical markup.
+   */
+  fill?: boolean;
 }) {
   return (
     <div
       role="group"
       aria-label={label}
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5',
+        'items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5',
+        fill ? 'flex w-full' : 'inline-flex',
         className,
       )}
     >
@@ -79,7 +96,11 @@ export function Segmented<T extends string>({
               // `--radius-control` breaks when a style makes `--radius-btn` a full
               // pill (soft-playful / retrofuturism: pill track, but a small-radius
               // chip floating inside it). Mirrors AppearancePickers' option radius.
-              'inline-flex h-(--height-control) items-center gap-1.5 rounded-[calc(var(--radius-btn)-2px)] px-(--spacing-control-x) text-[13px] font-medium transition-colors',
+              'inline-flex h-(--height-control) items-center gap-1.5 rounded-[calc(var(--radius-btn)-2px)] text-[13px] font-medium transition-colors',
+              // In FILL mode the segment's width comes from the track, so the
+              // per-style control padding no longer sizes it — keeping it would
+              // re-introduce the token dependency the variant exists to remove.
+              fill ? 'min-w-0 flex-1 justify-center px-1' : 'px-(--spacing-control-x)',
               'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50',
               active
@@ -104,7 +125,12 @@ export function Segmented<T extends string>({
                 {opt.icon}
               </span>
             ) : null}
-            {opt.label}
+            {/* FILL mode gives each segment a share of the track rather than its
+                own content width, so a long label has to yield rather than push.
+                Truncating needs an element to truncate, hence the span — added
+                ONLY in fill mode, so every other call site's markup is
+                unchanged. */}
+            {fill ? <span className="truncate">{opt.label}</span> : opt.label}
             {opt.trailing != null ? (
               <span
                 className={cn(

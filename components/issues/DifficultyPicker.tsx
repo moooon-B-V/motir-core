@@ -70,17 +70,23 @@ export interface DifficultyPickerProps {
 export function DifficultyPicker({ value, onChange, disabled }: DifficultyPickerProps) {
   const tl = useTranslations('labels');
   const tu = useTranslations('ui');
-  const options: SegmentedOption<WorkItemDifficultyDto>[] = WORK_ITEM_DIFFICULTIES.map((d) => {
-    const Glyph = DIFFICULTY_GLYPH[d];
-    return {
-      value: d,
-      label: tl(`difficulty.${d}`),
-      icon: <Glyph className="h-3.5 w-3.5" aria-hidden />,
-    };
-  });
+  // NO leading glyph in the EDITOR (MOTIR-6200, for MOTIR-6199). Every option is
+  // on screen at once here, so the glyph discriminates nothing a label does not —
+  // and it cost 20px a segment in a rail that had none to give. Read mode is the
+  // opposite case and KEEPS its glyph: a lone "Medium" has to say difficulty
+  // rather than priority (the note at the top of this file).
+  const options: SegmentedOption<WorkItemDifficultyDto>[] = WORK_ITEM_DIFFICULTIES.map((d) => ({
+    value: d,
+    label: tl(`difficulty.${d}`),
+  }));
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Segmented
+        // FILL the rail rather than size to the options: this control lives in a
+        // FIXED 18rem item-page rail and a 300px quick-view rail, so a
+        // content-sized track overran both as soon as the scale gained a fourth
+        // member. Filling makes the width the rail's at any style and any level.
+        fill
         options={options}
         // An unset value presses nothing: `Segmented` compares by identity.
         value={(value ?? '') as WorkItemDifficultyDto}
