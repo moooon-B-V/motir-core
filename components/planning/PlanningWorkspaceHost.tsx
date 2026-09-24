@@ -17,7 +17,10 @@ import { AuditCoverageBanner } from '@/components/planning/AuditCoverageBanner';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
 import { PlanningCanvasSkeleton } from '@/components/planning/PlanningWorkspaceSkeleton';
-import { PlanChangeConfirmBar } from '@/components/planning/PlanChangeConfirmBar';
+import {
+  PlanChangeConfirmBar,
+  PLAN_CONFIRM_BAR_HEIGHT,
+} from '@/components/planning/PlanChangeConfirmBar';
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
@@ -487,7 +490,7 @@ export function PlanningWorkspaceHost({
               level. */}
           <div
             className="relative min-h-0 flex-1 overflow-hidden"
-            style={{ '--canvas-foot': 'var(--height-plan-confirm-bar)' } as CSSProperties}
+            style={{ '--canvas-foot-inset': PLAN_CONFIRM_BAR_HEIGHT } as CSSProperties}
           >
             {showsProposalViews ? (
               <PlanProposalViews

@@ -1334,7 +1334,7 @@ export function ProjectRoadmapCanvas({
           bottom-left, just RIGHT of the engine's zoom + fit cluster (bottom-4 left-4,
           ~7rem wide), so it reads as part of the viewport-navigation controls. */}
       {locatable && (
-        <div className="absolute bottom-[calc(var(--canvas-foot,0px)+--spacing(4))] left-[8.25rem] z-10 flex items-center gap-2">
+        <div className="absolute bottom-[calc(--spacing(4)+var(--canvas-foot-inset,0px))] left-[8.25rem] z-10 flex items-center gap-2">
           <button
             type="button"
             data-testid="locate-button"
@@ -1374,7 +1374,19 @@ export function ProjectRoadmapCanvas({
           // shell's clearance band (today: the roadmap page); it defaults to `0px`,
           // so every other mount — the item page's Children panel, the two plan
           // canvases — is exactly where it is now.
-          className="absolute right-3 bottom-[calc(1rem+var(--canvas-fold-inset,0px))] z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          //
+          // ⚠️ TWO INSETS, AND THEY ARE NOT THE SAME SHAPE (MOTIR-6186). This
+          // control adds BOTH; the left-anchored overlays add only the second.
+          //   • `--canvas-fold-inset` — a bottom-RIGHT obstruction (the orb). It
+          //     reaches one corner, which is why the left overlays ignore it and
+          //     `ProjectRoadmapCanvas.test.tsx` asserts they do.
+          //   • `--canvas-foot-inset` — an obstruction spanning the canvas's FULL
+          //     WIDTH: the planning surface's confirm bar, which since MOTIR-6186
+          //     floats over this box's bottom edge rather than sitting below it.
+          //     A full-width bar reaches every bottom-anchored overlay, so all
+          //     four add it.
+          // Both default to `0px`, so a mount that declares neither is untouched.
+          className="absolute right-3 bottom-[calc(1rem+var(--canvas-fold-inset,0px)+var(--canvas-foot-inset,0px))] z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
         >
           <RotateCcw className="size-3.5" aria-hidden="true" />
           {t('resetLayout')}
@@ -1446,7 +1458,7 @@ export function ProjectRoadmapCanvas({
         <div
           data-testid="edge-legend"
           data-collapsed={legendCollapsed || undefined}
-          className="absolute bottom-[4.25rem] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
+          className="absolute bottom-[calc(4.25rem+var(--canvas-foot-inset,0px))] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
         >
           {/* COLLAPSE (MOTIR-3838). The chevron rides the panel's OWN heading row
               rather than being a bare pill beside it: the heading is the one thing
