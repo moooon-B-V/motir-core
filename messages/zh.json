@@ -6774,7 +6774,9 @@
       "someone": "某人"
     },
     "arrival": {
-      "crumbTargetPrefix": "规划目标："
+      "crumbTargetPrefix": "规划目标：",
+      "movedAnnouncement": "正在显示 {target} 内的工作",
+      "goToTarget": "方案在 {identifier} · 前往"
     }
   },
   "codeHealth": {

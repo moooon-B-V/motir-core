@@ -6778,7 +6778,9 @@
       "someone": "someone"
     },
     "arrival": {
-      "crumbTargetPrefix": "Planning target:"
+      "crumbTargetPrefix": "Planning target:",
+      "movedAnnouncement": "Showing work inside {target}",
+      "goToTarget": "Plan is in {identifier} · Go there"
     }
   },
   "codeHealth": {

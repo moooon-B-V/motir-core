@@ -30,6 +30,12 @@ function node(id: string, label: string, drillable = false): ProjectCanvasNode {
 const levels: Record<string, RoadmapLevel> = {
   __root__: { nodes: [node('E1', 'Epic one', true), node('E2', 'Epic two')], deps: [] },
   E1: { nodes: [node('S1', 'Story one'), node('S2', 'Story two')], deps: [] },
+  // A THIRD level (MOTIR-6161): the follow-move has to be able to ask for a level
+  // that is neither where the reader is nor the root, which two levels cannot
+  // express. `S1` is not drillable, so nothing reaches this level by hand and no
+  // existing test's behaviour changes — `loadLevel` is only called for a FOCUSED
+  // id, and only the follow tests focus this one.
+  S1: { nodes: [node('T1', 'Subtask one'), node('T2', 'Subtask two')], deps: [] },
 };
 const loadLevel = (parentId: string | null): Promise<RoadmapLevel> =>
   Promise.resolve(levels[parentId ?? '__root__'] ?? { nodes: [], deps: [] });
@@ -1719,6 +1725,170 @@ describe('ProjectRoadmapCanvas — "Reset layout" respects the fold inset', () =
       await screen.findByText('Story one');
       const crumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
       expect(within(crumb).queryByText('Planning target:')).toBeNull();
+    });
+  });
+
+  // ── THE FOLLOW-MOVE (MOTIR-6161, Story MOTIR-6154) ────────────────────────
+  //
+  // A keyed, one-shot REQUEST the canvas may DECLINE. All three clauses of the
+  // contract are ruled on here, because each of them is a way the feature could
+  // be wrong while looking right: moving twice, moving on a re-render, and
+  // moving a reader who had already gone somewhere else.
+  describe('followTo', () => {
+    const inside = [{ id: 'E1', label: 'MOTIR-1 · Epic one' }];
+    const deeper = [
+      { id: 'E1', label: 'MOTIR-1 · Epic one' },
+      { id: 'S1', label: 'MOTIR-2 · Story one' },
+    ];
+
+    it('moves inside the target, and says where it went', async () => {
+      const view = render(<ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" />);
+      expect(await screen.findByText('Epic one')).toBeTruthy();
+
+      view.rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          rootLabel="Roadmap"
+          followTo={{ key: 'plan:E1', trail: inside }}
+        />,
+      );
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      // The announcement is the half a reader who was not watching gets.
+      expect(screen.getByTestId('canvas-follow-live').textContent).toContain('MOTIR-1 · Epic one');
+    });
+
+    it('honours a given key AT MOST ONCE — a re-render is not a second move', async () => {
+      const req = { key: 'plan:E1', trail: inside };
+      const view = render(
+        <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" followTo={req} />,
+      );
+      expect(await screen.findByText('Story one')).toBeTruthy();
+
+      // the reader drills on, then the SAME request re-renders
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect(await screen.findByText('Epic one')).toBeTruthy();
+      view.rerender(
+        <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" followTo={{ ...req }} />,
+      );
+      await act(async () => {});
+      // Still at the root: the key was already honoured.
+      expect(screen.getByText('Epic one')).toBeTruthy();
+      expect(screen.queryByText('Story one')).toBeNull();
+    });
+
+    it('moves AT MOST ONCE per mount — a second target does not move it again', async () => {
+      const view = render(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          rootLabel="Roadmap"
+          followTo={{ key: 'target:E1', trail: inside }}
+        />,
+      );
+      expect(await screen.findByText('Story one')).toBeTruthy();
+
+      view.rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          rootLabel="Roadmap"
+          followTo={{ key: 'target:S1', trail: deeper }}
+        />,
+      );
+      await act(async () => {});
+      // The reader has already been shown where the plan is; a second move would
+      // be the canvas wandering.
+      expect(screen.getByText('Story one')).toBeTruthy();
+      expect(screen.queryByText('Subtask one')).toBeNull();
+    });
+
+    it('DECLINES after the reader drilled, and offers to go there instead', async () => {
+      const onFollowDeclined = vi.fn();
+      const view = render(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          rootLabel="Roadmap"
+          onFollowDeclined={onFollowDeclined}
+        />,
+      );
+      expect(await screen.findByText('Epic one')).toBeTruthy();
+
+      // the reader navigates FIRST
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      expect(await screen.findByText('Story one')).toBeTruthy();
+
+      // …and only then does a target settle, somewhere else
+      view.rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          rootLabel="Roadmap"
+          onFollowDeclined={onFollowDeclined}
+          followTo={{ key: 'plan:S1', trail: deeper }}
+        />,
+      );
+      await act(async () => {});
+
+      // NOT moved — a deliberate navigation is not overridden.
+      expect(screen.getByText('Story one')).toBeTruthy();
+      expect(screen.queryByText('Subtask one')).toBeNull();
+      expect(onFollowDeclined).toHaveBeenCalledWith('plan:S1');
+
+      // …and the reader is told, rather than left beside a plan they cannot see.
+      const offer = screen.getByTestId('canvas-follow-offer');
+      expect(offer).toBeTruthy();
+
+      // Taking the offer IS an explicit act, so it moves.
+      fireEvent.click(offer);
+      expect(await screen.findByText('Subtask one')).toBeTruthy();
+      expect(screen.queryByTestId('canvas-follow-offer')).toBeNull();
+    });
+
+    it('DECLINES after a crumb click too — Back is navigation', async () => {
+      const view = render(
+        <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" initialTrail={inside} />,
+      );
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect(await screen.findByText('Epic one')).toBeTruthy();
+
+      view.rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          rootLabel="Roadmap"
+          initialTrail={inside}
+          followTo={{ key: 'plan:E1', trail: inside }}
+        />,
+      );
+      await act(async () => {});
+      expect(screen.getByText('Epic one')).toBeTruthy();
+      expect(screen.getByTestId('canvas-follow-offer')).toBeTruthy();
+    });
+
+    it('carries the reduced-motion escape on the level it fades', async () => {
+      // The move is instant under `prefers-reduced-motion` DECLARATIVELY — the
+      // class is what the engine drops, so there is no media query here to fall
+      // out of step with the design.
+      const view = render(<ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" />);
+      await screen.findByText('Epic one');
+      view.rerender(
+        <ProjectRoadmapCanvas
+          loadLevel={loadLevel}
+          rootLabel="Roadmap"
+          followTo={{ key: 'plan:E1', trail: inside }}
+        />,
+      );
+      await screen.findByText('Story one');
+      const canvas = screen.getByTestId('planning-canvas').parentElement!;
+      expect(canvas.className).toContain('motion-reduce:transition-none');
+      expect(canvas.className).toContain('transition-opacity');
+    });
+
+    it('announces NOTHING on an ordinary drill', async () => {
+      render(<ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" />);
+      await screen.findByText('Epic one');
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Story one');
+      expect(screen.getByTestId('canvas-follow-live').textContent).toBe('');
     });
   });
 });

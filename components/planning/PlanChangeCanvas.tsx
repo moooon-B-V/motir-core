@@ -67,6 +67,13 @@ export interface PlanChangeCanvasProps {
    *  its target ring would be drawn on a level nobody is looking at. Empty /
    *  omitted → the root, unchanged. */
   initialTrail?: readonly CanvasCrumb[];
+  /** FOLLOW a target that became known after the surface opened (MOTIR-6161) — a
+   *  keyed, one-shot request the canvas may DECLINE if the reader has already
+   *  navigated. Forwarded verbatim; this canvas adds nothing to the contract. */
+  followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  /** The canvas declined the request above, so the host can offer its own way
+   *  there rather than leaving the reader beside a plan they cannot see. */
+  onFollowDeclined?: (key: string) => void;
   ariaLabel?: string;
   /** What fills the canvas while the first level is still being read
    *  (MOTIR-2069) — the workspace passes its level-shaped skeleton. */
@@ -84,6 +91,8 @@ export function PlanChangeCanvas({
   outcome = null,
   targetIds,
   initialTrail,
+  followTo = null,
+  onFollowDeclined,
   ariaLabel,
   loadingFallback,
   emptyRoot,
@@ -454,6 +463,8 @@ export function PlanChangeCanvas({
         emptyRoot={emptyRoot}
         isFolderCrumb={isFolderCrumb}
         isTargetCrumb={isTargetCrumb}
+        followTo={followTo}
+        onFollowDeclined={onFollowDeclined}
         emptyDrilledFor={emptyDrilledFor}
       />
       {quickView}
