@@ -645,38 +645,29 @@ test('a SIBLING under the anchor’s parent goes through the same confirm', asyn
   await expect(confirmBar(page)).toContainText('1 added');
   await expect(rail(page).getByRole('alert')).toHaveCount(0);
 
-  // It is reviewable on the PARENT's level, where the proposal actually belongs —
-  // and NO drill is needed to get there. The anchored arrival (MOTIR-2070) opens
-  // the workspace canvas on the ANCHOR'S OWN level, and the anchor here is a story
-  // (Login UI), so its own level IS the epic's children: the level a sibling
-  // parented on the epic lands on (`proposedAddsForLevel(index, focusNodeId)`,
-  // planChangeLevel.tsx). The breadcrumb naming the epic is that arrival's
-  // authoritative signal — the canvas publishes a trail only for a level it has
-  // actually loaded. (Before MOTIR-2070 the canvas opened on the roots and this
-  // step drilled down by hand; keeping the drill after it would hunt for an
-  // `Authentication` card that the arrival has already left behind.)
-  // ⚠️ SINCE MOTIR-6154 THE ARRIVAL IS THE ANCHOR ITSELF, not its parent: the
-  // surface opens INSIDE `Login UI`, so that is the crumb marked current and the
-  // epic is an ANCESTOR crumb one click away. (Before it, the canvas opened on
-  // the epic's level and `Authentication` carried `aria-current`.)
+  // ⭐ IT IS REVIEWABLE ON THE PARENT'S LEVEL, WHERE THE PROPOSAL BELONGS — with
+  // no drill and no crumb. This step is where the two merged stories DISAGREED,
+  // and the disagreement resolved in favour of the reader.
   //
-  // MOTIR-6155 does not move this one: the plan has a single proposal, so its
-  // component opens on CANVAS, and the crumb is clickable rather than inert.
-  await expect(crumb(page, `${seed.loginKey} · Login UI`)).toHaveAttribute('aria-current', 'page');
-  await expect(crumb(page, `${seed.authEpicKey} · Authentication`)).not.toHaveAttribute(
+  // MOTIR-6154 opens the surface INSIDE its target, and the target here is the
+  // story `Login UI`. The sibling is proposed under the EPIC, so under that story
+  // alone the proposal was NOT on the arrival level: the canvas stood one level
+  // below the thing it was meant to be showing, and reaching it took a crumb. That
+  // is real, and MOTIR-6154 filed it rather than papering over it — MOTIR-6223.
+  //
+  // MOTIR-6155 removes the gap rather than routing around it. Once the plan is
+  // PROPOSED the pane is the plan page's own component, and that component arrives
+  // at `fullestContainer` — the container the plan most fills, which IS the epic.
+  // So the arrival is the proposal's own level, the epic carries `aria-current`,
+  // and the sibling is on screen from the first paint. `Login UI` is not a crumb
+  // at all any more: the trail is the path to the epic.
+  //
+  // The breadcrumb is the authoritative arrival signal either way — the canvas
+  // publishes a trail only for a level it has actually loaded.
+  await expect(crumb(page, `${seed.authEpicKey} · Authentication`)).toHaveAttribute(
     'aria-current',
     'page',
   );
-
-  // …and the proposal lands under the EPIC, which is where the canvas is not.
-  // The follow-move does NOT rescue this: it is armed only for a surface that
-  // opened with no target at all (MOTIR-6161), and this one opened on `Login UI`.
-  // So the sibling is reached the way a person reaches it — through the crumb.
-  // Filed as a finding, not papered over: MOTIR-6223.
-  await expect(addFrames(page)).toHaveCount(0);
-  const epicLevel = levelLoad(page, authEpicId);
-  await crumb(page, `${seed.authEpicKey} · Authentication`).click();
-  await epicLevel;
   await expect(addFrames(page)).toHaveCount(1);
   // ON THE CANVAS — the file's own helper, scoped to the overlay.
   await expect(canvasTitle(page, SIBLING)).toBeVisible();
