@@ -8,6 +8,16 @@ import { decideAcceptance } from '../helpers/acceptanceGate';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import { AcceptanceEvidenceStoryClosedError } from '@/lib/acceptanceEvidence/errors';
+import { ApprovalGateSupersededError } from '@/lib/approvalGates/errors';
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
+
+/** A settled promise's rejection, spelled out — class, code and message — for an assertion message. */
+function reasonOf(result: PromiseSettledResult<unknown>): string {
+  if (result.status === 'fulfilled') return 'fulfilled';
+  const e = result.reason as { name?: string; code?: string; message?: string } | undefined;
+  return `${e?.name ?? typeof result.reason} [${e?.code ?? 'no code'}] ${e?.message ?? String(result.reason)}`;
+}
 
 // The WIRE code, written out rather than imported — deliberately (MOTIR-4096).
 //
@@ -298,14 +308,45 @@ describe('the freeze seam, end to end', () => {
         publish(story, 'racing.webm', `bbbbbb${round}`),
       ]);
 
-      // The approval is never the casualty — a "fix" that serialises by refusing
-      // it would pass every invariant below and break the review loop.
-      expect(approveResult.status, `round ${round}: the approval was refused`).toBe('fulfilled');
-      expect(publishResult.status).toBe('fulfilled');
+      // ⚠️ EVERY REJECTION CARRIES ITS REASON INTO THE MESSAGE (MOTIR-6217). This
+      // spec once asserted only `.status`, so a CI failure said "rejected" and
+      // nothing else — a deadlock and a typed domain refusal read identically.
+      expect(
+        publishResult.status,
+        `round ${round}: the publish threw — ${reasonOf(publishResult)}`,
+      ).toBe('fulfilled');
       const publishStatus = publishResult.status === 'fulfilled' ? publishResult.value.status : -1;
       // 409 = the approval closed the story first; 201 = it superseded a still-`pending`
       // receipt. Anything else (a raw P2002, a 500) is a new defect, not a race.
       expect([201, 409]).toContain(publishStatus);
+
+      // THE APPROVAL IS REFUSED IN EXACTLY ONE INTERLEAVING, AND IT IS THE GATE
+      // CONTRACT (MOTIR-6217). `decideAcceptance` reads the awaiting gate and then
+      // presses it — a reader is shown a question, then answers it. A publish that
+      // commits BETWEEN the two withdraws that question (`superseded`, cause
+      // `republished`, approval-gates.md §6b) and raises a new one over the new
+      // recording, so the press is refused: nobody watched the bytes it would sign.
+      // Reproduced by giving the publish a ~20 ms head start — 4 rounds in 4. This
+      // spec predates the gate (it drove `acceptanceEvidenceService.decide`, which
+      // followed the current receipt), and MOTIR-4949 swapped the call without
+      // teaching the race this third outcome.
+      //
+      // So the refusal is accepted ONLY as that pair — a SUPERSEDED refusal for
+      // `republished` while the publish WON. Any other rejection (a `40P01`
+      // deadlock, a `40001` serialisation failure, another typed error) still
+      // fails here, naming itself. "The approval is never refused" survives where it
+      // is deterministic: both orders below, where each press is answered.
+      const questionWithdrawn =
+        approveResult.status === 'rejected' &&
+        approveResult.reason instanceof ApprovalGateSupersededError &&
+        approveResult.reason.supersedeCause === 'republished' &&
+        publishStatus === 201;
+      if (!questionWithdrawn) {
+        expect(
+          approveResult.status,
+          `round ${round}: the approval was refused — ${reasonOf(approveResult)}`,
+        ).toBe('fulfilled');
+      }
 
       const rows = await adminDb.acceptanceEvidence.findMany({ where: { workItemId: story.id } });
       const currents = rows.filter((r) => r.isCurrent);
@@ -319,6 +360,20 @@ describe('the freeze seam, end to end', () => {
       // MOTIR-2764 closed, reached by approving a few hundred ms earlier.
       const stranded = rows.filter((r) => r.status === 'approved' && !r.isCurrent);
       expect(stranded, `round ${round}: an approval landed on a superseded receipt`).toEqual([]);
+
+      if (questionWithdrawn) {
+        // Nothing was signed, the new recording is the current receipt, and the
+        // question is ASKED AGAIN over it — the review loop is intact, not broken.
+        expect(rows.filter((r) => r.status === 'approved')).toEqual([]);
+        expect(row.commitSha).toBe(`bbbbbb${round}`);
+        expect(row.status).toBe('pending');
+        const reasked = await adminDb.approvalGate.findMany({
+          where: { workItemId: story.id, kind: 'acceptance_result', state: 'awaiting' },
+        });
+        expect(reasked.map((g) => g.subjectId)).toEqual([row.id]);
+        outcomes.push('question-withdrawn');
+        continue;
+      }
 
       // Exactly one approval, it IS the current receipt, and its bytes are still
       // linked — the survival set, checked on whichever row the race elected.
@@ -337,23 +392,25 @@ describe('the freeze seam, end to end', () => {
         expect(rows).toHaveLength(1);
         outcomes.push('approval-first');
       } else {
-        // The publish won: it superseded a receipt that was still `pending` at
-        // the moment it held the lock, which is correct, and the approval then
-        // stamped the NEW current row — the recording the reviewer is looking at.
+        // The publish won AND committed before the approval read its question, so
+        // the question the approval pressed was already the NEW one — raised over
+        // the new current row, the recording the reviewer is looking at.
         expect(row.commitSha).toBe(`bbbbbb${round}`);
         outcomes.push('publish-first');
       }
     }
-    // Both outcomes are legal and neither is guaranteed in any given round, so
+    // All three outcomes are legal and none is guaranteed in any given round, so
     // this records what fired rather than requiring it — the deterministic test
-    // below is what asserts BOTH interleavings without a timing dependency.
+    // below is what asserts EVERY interleaving without a timing dependency.
     expect(outcomes).toHaveLength(5);
   });
 
-  it('BOTH legal interleavings, driven deterministically — the approval survives either order', async () => {
-    // The race test above cannot assert both orders without a flaky expectation,
+  it('EVERY legal interleaving, driven deterministically — an approval of the question shown is never refused', async () => {
+    // The race test above cannot assert each order without a flaky expectation,
     // and "the fix serialises by always refusing the approval" would satisfy one
-    // of them. So each order is forced here, and in each the approval SUCCEEDS.
+    // of them. So each order is forced here: in the first two the approval
+    // SUCCEEDS, and in the third it is refused only because its question was
+    // withdrawn — after which the question now shown is answered.
 
     // ORDER 1 — the approval commits first: the publish is refused, and the
     // signed receipt is the one that stays. (Its full survival set — the stamps,
@@ -390,6 +447,53 @@ describe('the freeze seam, end to end', () => {
     expect(displaced.isCurrent).toBe(false);
     expect(displaced.status).toBe('pending');
     expect(displaced.approvedById).toBeNull();
+
+    // ORDER 3 — the question is READ, a publish commits, THEN the press lands
+    // (MOTIR-6217: the interleaving CI hit and a quiet machine never does). The
+    // press answers a question the publish withdrew, so it is refused as
+    // superseded for `republished` — and the new recording is asked about afresh.
+    const withdrawn = await inReviewStory();
+    await publish(withdrawn, 'first.webm', 'eeeeeee');
+    const shown = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: withdrawn.id, kind: 'acceptance_result', state: 'awaiting' },
+    });
+    expect((await publish(withdrawn, 'second.webm', 'fffffff')).status).toBe(201);
+
+    const refusal = await approvalGatesService
+      .decide(
+        {
+          gateId: shown.id,
+          decision: 'approve',
+          noteMd: null,
+          source: 'ui',
+          stamp: DECIDED_WITHOUT_A_READER,
+        },
+        fx.ctx,
+      )
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+    expect(refusal).toBeInstanceOf(ApprovalGateSupersededError);
+    expect((refusal as ApprovalGateSupersededError).supersedeCause).toBe('republished');
+
+    const current = await acceptanceEvidenceService.getCurrentForStory(withdrawn.id, fx.ctx);
+    expect(current!.commitSha).toBe('fffffff');
+    expect(current!.status).toBe('pending');
+    expect(
+      await adminDb.acceptanceEvidence.count({
+        where: { workItemId: withdrawn.id, status: 'approved' },
+      }),
+    ).toBe(0);
+    const asked = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: withdrawn.id, kind: 'acceptance_result', state: 'awaiting' },
+    });
+    expect(asked.id).not.toBe(shown.id);
+    expect(asked.subjectId).toBe(current!.id);
+    // …and pressing the question actually shown NOW is answered.
+    const decidedThird = await decideAcceptance(withdrawn.id, 'approve', fx.ctx);
+    expect(decidedThird.evidence.commitSha).toBe('fffffff');
+    expect(decidedThird.evidence.status).toBe('approved');
   });
 });
 

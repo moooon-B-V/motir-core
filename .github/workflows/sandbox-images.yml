@@ -115,6 +115,57 @@ jobs:
       - name: Smoke the image
         run: packages/cli/sandbox/smoke/run.sh --no-build --image motir-sandbox:smoke
 
+      # ── What the image COSTS, on the run that built it (MOTIR-6204) ────────
+      #
+      # Every runtime in the shared base is paid by all nine published tags, on
+      # both architectures, on every pull — so the size is a number a reviewer
+      # needs and a number nobody could produce by hand: the sandbox the agent
+      # runs in has no docker daemon (that is the confinement working, and it is
+      # the same fact MOTIR-6204 was filed about). A pull request that adds a
+      # tenth runtime should be able to read what the ninth cost, so the number
+      # is emitted where the build already happens rather than pasted by hand
+      # into a body that then goes stale.
+      # ⚠️ IT REPORTS A DELTA, NOT A NUMBER, and the two have to be the SAME
+      # METRIC or the comparison is worthless. `docker image inspect .Size` is
+      # the UNCOMPRESSED on-disk size; a registry manifest's layer total is the
+      # COMPRESSED download. Those differ by several times, so reading one
+      # against the other reads as a huge regression (or a huge saving) that is
+      # purely the unit. The published `:base` is therefore PULLED and measured
+      # with the same command, rather than read from its manifest.
+      #
+      # Only this job pays that pull: the profile legs below report their own
+      # absolute size, because nine more pulls of the published tags would cost
+      # more than the comparison is worth.
+      - name: Record the image size
+        run: |
+          size="$(docker image inspect motir-sandbox:smoke --format '{{.Size}}')"
+          human="$(numfmt --to=iec --suffix=B "$size")"
+
+          # The published base is the BEFORE. It is public (see the README's
+          # "Public, and asserted to be"), so this needs no credential — and a
+          # pull that fails must not fail the build, since the delta is a
+          # courtesy and the absolute number is the deliverable.
+          before=''
+          if docker pull --quiet ghcr.io/moooon-b-v/motir-sandbox:base >/dev/null 2>&1; then
+            before="$(docker image inspect ghcr.io/moooon-b-v/motir-sandbox:base --format '{{.Size}}')"
+          fi
+
+          {
+            echo '### Image size — `base`'
+            echo
+            echo '| | uncompressed |'
+            echo '| --- | --- |'
+            if [ -n "$before" ]; then
+              echo "| published \`:base\` (before) | $(numfmt --to=iec --suffix=B "$before") |"
+              echo "| this build (after) | $human |"
+              echo "| **delta** | **$(numfmt --to=iec --suffix=B "$((size - before))")** |"
+            else
+              echo "| this build | $human |"
+              echo "| published \`:base\` | could not pull — delta not computed |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "motir-sandbox:base — $human ($size bytes); published before: ${before:-unavailable}"
+
       # ── Everything below only runs on the release lane, and only now that the
       # image above has been built AND proven. This ordering IS the publish gate.
       - name: Resolve the @motir/cli version
@@ -264,6 +315,22 @@ jobs:
             --image motir-sandbox:${{ matrix.profile.id }} \
             --profile ${{ matrix.profile.id }} \
             --liveness "${{ matrix.profile.liveness }}"
+
+      # The per-profile half of the base job's size line (MOTIR-6204): the
+      # shared base is paid once per PROFILE, so the profile number is what says
+      # what a reader actually pulls.
+      - name: Record the image size
+        run: |
+          size="$(docker image inspect motir-sandbox:${{ matrix.profile.id }} --format '{{.Size}}')"
+          human="$(numfmt --to=iec --suffix=B "$size")"
+          {
+            echo '### Image size'
+            echo
+            echo '| profile | size |'
+            echo '| --- | --- |'
+            echo "| \`${{ matrix.profile.id }}\` | $human |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "motir-sandbox:${{ matrix.profile.id }} — $human ($size bytes)"
 
       # ── Release lane only, and only after the checks above passed.
       - name: Resolve the @motir/cli version
