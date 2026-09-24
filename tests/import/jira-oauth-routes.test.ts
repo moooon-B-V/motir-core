@@ -10,14 +10,15 @@ import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.16 · MOTIR-1654 — HTTP smoke for the Jira 3LO OAuth routes + a
 // service-level check of the refresh helper. The only mock is the session
-// (CLAUDE.md: the test env has no cookies) — here `auth.api.getSession`, which
+// (CLAUDE.md: the test env has no cookies) — here `readSession`, which
 // the workspace-context resolver reads; the real resolver then self-heals the
 // user's workspace against the real Postgres. Atlassian's HTTP is stubbed via a
 // global `fetch` mock; persistence + encryption hit the real DB.
 
 const session: { current: { user: { id: string; name?: string } } | null } = { current: null };
 vi.mock('@/lib/auth', () => ({
-  auth: { api: { getSession: async () => session.current } },
+  // `resolveWorkspaceContext` reads through `readSession` (MOTIR-5864).
+  readSession: async () => session.current,
   getSession: async () => session.current,
 }));
 

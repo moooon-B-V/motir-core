@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, SessionUnavailableError } from '@/lib/auth';
 import { TWO_FACTOR_REQUIRED_PATH } from '@/lib/auth/twoFactorGate';
 import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import { getWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces';
@@ -53,6 +53,35 @@ export type CompliantSessionResult =
   | { ok: false; response: NextResponse };
 
 /**
+ * The session could not be READ (MOTIR-5864) — `getSession` retried a dropped
+ * database connection once and it failed again. A 503, not a 401: the person
+ * may well be signed in, and a 401 tells a client to sign them out. The bell
+ * poll ignores a non-OK answer and asks again on its next tick, which is the
+ * `Retry-After` this names.
+ */
+const SESSION_UNAVAILABLE_RETRY_AFTER_S = 5;
+
+function sessionUnavailable(): NextResponse {
+  return NextResponse.json(
+    { code: 'SESSION_UNAVAILABLE' },
+    { status: 503, headers: { 'Retry-After': String(SESSION_UNAVAILABLE_RETRY_AFTER_S) } },
+  );
+}
+
+/** Run a session read, answering `SessionUnavailableError` as the 503 above. */
+async function readOrUnavailable<T>(
+  read: () => Promise<T>,
+): Promise<{ ok: true; value: T } | { ok: false; response: NextResponse }> {
+  try {
+    return { ok: true, value: await read() };
+  } catch (error) {
+    if (error instanceof SessionUnavailableError)
+      return { ok: false, response: sessionUnavailable() };
+    throw error;
+  }
+}
+
+/**
  * Read the session AND the 2FA requirement, refusing when either fails.
  *
  * Replaces the two-line preamble every cookie-authenticated route carried:
@@ -79,7 +108,9 @@ export type CompliantSessionResult =
  * with a 403 would tell an anonymous caller to go and enrol.
  */
 export async function requireCompliantSession(): Promise<CompliantSessionResult> {
-  const session = await getSession();
+  const read = await readOrUnavailable(() => getSession());
+  if (!read.ok) return read;
+  const session = read.value;
   if (!session) {
     return {
       ok: false,
@@ -193,7 +224,9 @@ export type CompliantWorkspaceContextResult =
  * the session again. One policy query, no extra auth round trip.
  */
 export async function requireCompliantWorkspaceContext(): Promise<CompliantWorkspaceContextResult> {
-  const ctx = await getWorkspaceContext();
+  const read = await readOrUnavailable(() => getWorkspaceContext());
+  if (!read.ok) return read;
+  const ctx = read.value;
   if (!ctx) {
     return {
       ok: false,
