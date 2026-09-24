@@ -2324,3 +2324,292 @@ A delta of `approvals-row.mock.html`, drawn the way `approvals-row--decision.moc
 - **7c — dark.** The hue token is declared in the `[data-appearance-scope]` block so it re-resolves in a dark scope.
 
 Built by MOTIR-5897.
+
+## 28 · TO APPROVE SAYS WHAT IS WAITING IN PLAIN WORDS — the row as a sentence, the title as a door, no pager, and an overlay that keeps you in place — MOTIR-5997
+
+> **Landed by MOTIR-6214 from MOTIR-5997's approved design result** (evidence `cmucp2cd00019hwoi9dvnqzpe`,
+> published 2026-09-22), verbatim. The result was approved and never committed here, so § 29 and
+> `design/ai-planning/design-notes.md` Part XXII cited this section before it existed in this file. Its two
+> mocks are not mirrored in this tree: they are read from the design result (`get_design MOTIR-5997`), which is
+> the source of truth (`docs/decisions/design-result.md` AMENDMENT 5 Q1).
+
+**Assets (two NEW delta mocks, DATED 2026-09-22):**
+
+| Surface                         | Asset                                                         | Amends                                                                                                                                                                                                                                                       |
+| ------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The To-approve ROW and LIST     | **`design/workbench/approvals-row--plain-words.mock.html`**   | § 20 (`approvals-row.mock.html`) as amended by § 23, § 25 (`approvals-row--one-gate.mock.html`), § 26 (`workbench--live.mock.html`), § 27 (`approvals-row--decision.mock.html`), the choice row and MOTIR-5953's `approvals-row--decision-confirm.mock.html` |
+| The approval overlay's EXIT ROW | **`design/workbench/approval-overlay--quick-view.mock.html`** | § 22 _THE EXIT_ (`approval-overlay.mock.html`)                                                                                                                                                                                                               |
+
+Story [MOTIR-5996](motir:cmubvoqk400nuhwoij6vnpfcx), card MOTIR-5997. It is the layout source of truth for
+**MOTIR-5998** (the unpaged read), **MOTIR-5999** (the sentence), **MOTIR-6000** (the overlay) and
+**MOTIR-6001** (the row's title door), which carry it in `blocked_by`. **No existing mock is edited.**
+
+**Panels.** Row delta: 1 before / after · 2 one awaiting row per registered kind (en) · 3 the same in zh ·
+4 the two doors in one row · 5 every row state per kind · 6 unrenderable / subject gone / several documents ·
+7 the Approvals room · 8 narrow en + zh · 9 dark · 10 thirty rows, no pager · 11 the ceiling line.
+Overlay delta: 1 the exit row before / after · 2 its two doors pointed at · 3 the quick view stacked above
+the overlay, loaded · 4 loading · 5 not found · 6 narrow in zh · 7 the frameless arm's _Open work item_.
+
+### Rendered against shipped reality, not redrawn
+
+Rendered at `origin/main` `7a39bd03a` (MOTIR-5871's merge, so the decision-confirmation row is in the base)
+through the repo's own vitest + RTL setup:
+
+- `components/approvals/ApprovalRow.tsx` — the BEFORE rows of the row delta's Panel 1, and the markup every
+  AFTER row is edited from (the row container, the stretched door, the cells, the class strings);
+- `components/ui/Pill.tsx` / `components/ui/Button.tsx` — every pill and the _Review_ button, as they emit;
+- `IssueQuickViewPanel` inside `components/ui/Modal` `size="xl"`, exactly as `components/planning/WorkItemQuickView.tsx`
+  mounts it — the quick view in all three of its states, dumped from `document.body`;
+- § 22 Panel 1's frame bands and exit row, and Panel 4b's empty state, lifted verbatim from `approval-overlay.mock.html`.
+
+The stylesheet is Tailwind v4.3.0 compiled over exactly the classes on each board, with
+`packages/design-system/theme.css` and `packages/brand/brand.css`. Nothing is hand-written but the review chrome.
+
+### DECISION 1 — the row LEADS with what is asked, in one sentence around the work item's title
+
+Today the row leads with the plumbing: a kind label (_Design result_, _Pull requests_, _Decision_), then a meta line
+(`motir-core · #412`), then — in a second column — the work item. The reader has to translate. After this change
+the first cell is **glyph · SENTENCE · key**:
+
+| kind                    | en                                     | zh                          |
+| ----------------------- | -------------------------------------- | --------------------------- |
+| `design_result`         | Design for **{title}**                 | **{title}**的设计           |
+| `acceptance_result`     | Acceptance video for story **{title}** | 故事 **{title}** 的验收视频 |
+| `pull_request_approval` | **{title}** is finished                | **{title}**已完成           |
+| `decision_approval`     | Decision document for **{title}**      | **{title}**的决策文档       |
+| `decision_choice`       | Options for **{title}**                | **{title}**的选项           |
+| `decision_confirmation` | **{title}** is decided                 | **{title}**已作出决定       |
+| any other kind          | Approval for **{title}**               | **{title}**的审批           |
+
+- **Why these words.** Each is a NOUN PHRASE about the work item, or a statement of its state — never an
+  instruction — because the same row renders in the Approvals room's DECIDED section and in its full view, where
+  it is somebody else's approval: _"Confirm …"_ would be false once confirmed, and _"… needs your confirmation"_
+  is false for every reader but one. **`decision_confirmation` is title-FIRST** (_{title} is decided_,
+  parallel to _{title} is finished_) because decision cards are often titled _Decision: …_, and a prefix would
+  read _Decision … Decision: …_. **A choice reads _Options for {title}_** because a choice card's title is usually
+  its question (_Which export format?_), which an _Options for_ frame carries and an imperative does not.
+  **An unregistered kind** gets the neutral _Approval for_ — the build has no word for a kind it does not know.
+- **The glyph stays** (the kind's shipped mark and hue, `KindGlyph`). The KIND LABEL goes: the sentence says it.
+- **The key follows the sentence**, `font-mono text-xs text-(--el-text-secondary)`, `shrink-0`. It is not a door.
+- **Ink.** Frame words `--el-text-secondary`; the title `--el-text` `font-medium`, so the eye lands on WHAT, then
+  reads the kind around it. A settled / unrenderable row takes § 20's settled ink (`--el-text-secondary`) on both.
+- **Truncation happens INSIDE the title.** The frame words are `shrink-0` and never cut, so _… is finished_ is
+  always read; the title is `min-w-0 truncate`. Built as ONE ICU message per kind with a `<title>` tag
+  (`t.rich`), so the ORDER is the catalogue's — zh puts the title first in six of seven — and the code never
+  concatenates. Each frame segment renders as its own `shrink-0` span.
+- **No visible host vocabulary** — no _pull request_, _PR_, _merge request_ or `#<n>` in any row's visible text,
+  in either locale (the vocabulary check below).
+
+### DECISION 2 — the DETAILS move into the freed track, and the tracks are re-weighted
+
+The work item left its own column (it is the sentence's subject now), so the second track holds the **DETAILS**
+— what the kind already printed after its label. Column header _Work item_ → **Details** / **详情** on the tab and
+in both of the Approvals room's section bands.
+
+**The column COUNT is unchanged; the TRACKS are re-weighted**, because the sentence is now the row's main content
+and needs the width. At the tab's typical 896px content, 268px of details left _Acceptance video for story_ a
+six-character title.
+
+| template                            | before                                     | after                                          |
+| ----------------------------------- | ------------------------------------------ | ---------------------------------------------- |
+| `APPROVALS_GRID_TEMPLATE`           | `minmax(10rem,1fr) 268px 88px 132px`       | **`minmax(12rem,1fr) 220px 88px 132px`**       |
+| `APPROVALS_FULL_VIEW_GRID_TEMPLATE` | `minmax(10rem,1fr) 228px 88px 144px 132px` | **`minmax(12rem,1fr) 200px 88px 144px 132px`** |
+
+Per kind, what the details say — the shipped strings except where marked:
+
+| kind / case                                      | details (visible)                                                                                                                                        | `title` attribute (hover)                                                                               |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `design_result`                                  | _3 files · 9840d00e_ (shipped)                                                                                                                           | —                                                                                                       |
+| `acceptance_result`                              | _6 chapters · 1a2b3c4d_ (shipped)                                                                                                                        | —                                                                                                       |
+| `pull_request_approval`                          | **_In motir-core, motir-ai_** — the repositories' NAMES (the part after `owner/`), two in full, three or more the first two then _+n more_ (§ 23's rule) | **every member, `owner/name · #n`**, comma-separated — the numbers leave the visible text and live HERE |
+| `decision_approval`, one document                | _{heading} · {path}_ (shipped)                                                                                                                           | _{path} at blob {blob}_ (shipped)                                                                       |
+| `decision_approval`, none / several / unreadable | **_No decision document_ · _{count} decision documents_ · _Decision document not read yet_** — the `{pr}` is DROPPED                                     | **`owner/name · #n`**                                                                                   |
+| `decision_choice`                                | _{n} options · {question}_ (shipped)                                                                                                                     | the question (shipped)                                                                                  |
+| `decision_confirmation`                          | _{changes} · supersedes {n} · {decision}_ (shipped)                                                                                                      | the decision (shipped)                                                                                  |
+| a DECIDED record (the room)                      | shipped: _on 9840d00e_, the choice's stamp, the confirmation's outcome                                                                                   | shipped                                                                                                 |
+| unregistered kind                                | _Motir cannot show this kind yet_ (shipped)                                                                                                              | —                                                                                                       |
+| subject gone                                     | _The design this asked about is gone_ (shipped)                                                                                                          | —                                                                                                       |
+
+### DECISION 3 — the work item's TITLE is its own door: the QUICK VIEW
+
+- **The title is a second `<a href="/items/{key}">`** on `z-10`, above the row's stretched door (`z-0`), exactly
+  where the work-item cell's link sits today. **Plain primary click → the work item's QUICK VIEW** (`?peek={key}`,
+  `usePeekRowClick`'s contract — as a title behaves in `/items`, `/ready` and the board); **modified, middle or
+  secondary click → `/items/{key}` in a new tab** (the native `href`).
+- **Everywhere else on the row still opens the approval** full screen (§ 22), and _Review_ is still the labelled
+  door. The key and the details are NOT doors.
+- **Treatment: `hover:underline` and `focus-visible:underline`**, no fill, **no ring of its own** — the row
+  already draws `focus-within:ring-2`, and a ring inside a ring is two rings for one focus; the underline says
+  which door has it. This is the underline the work-item cell carries today, moved, not a new treatment.
+- **Tab order:** the row → the title → _Review_. The row keeps its accessible name (_Review {key} {title}_); the
+  title link's name is its text.
+- **The Approvals room mounts no quick-view controller today** (`app/(authed)/approvals/page.tsx`) — the title
+  door there needs one (MOTIR-6001). The tab's Workbench page has one.
+
+### DECISION 4 — every row state keeps its shipped treatment; only the words it leads with change
+
+Awaiting (_Review_) · see-but-not-decide (_Awaiting_) · settled after a decision in the overlay (§ 20: the
+kind's own pill — _Approved_, _Chosen_, _Confirmed_) · settled, sent back (_Changes requested_, _Overturned_) ·
+held (§ 26: _Decided elsewhere_, colourless) · arrived (§ 26: _New_, at the end of the sentence cell) · decided
+record (the room: decided time, person cell, pill). Row delta Panel 5 draws each, per kind.
+
+**The Decide cell's state pill NEVER WRAPS** (`whitespace-nowrap` on the `Pill`), added on review 2026-09-22.
+_Changes requested_ (the longest pill, ≈118px) fits the 132px track on one line. The shipped row lets the
+pill shrink inside its `min-w-0` flex cell, so it breaks onto two lines and doubles the row's height. That is
+visible today in the shipped tab and in the room. MOTIR-5999 builds it, because it touches that cell.
+
+**⚠️ ONE STATE IS CORRECTED ON THE RECORD — a subject that is gone.** The shipped row sets
+`renderable = false` for a null subject, so a gone subject's Decide cell reads **_Not built yet_** — reporting a
+SHIPPED kind as unbuilt, the exact collapse § 20 ruled out (_"look alike and are opposite"_). The target (Panel 6):
+the row keeps its KIND's sentence (the kind is known; only its subject is not), its details say _The design this
+asked about is gone_, and its Decide cell reads **Gone**, colourless (`Pill tone="archived"`). _Not built yet_ stays
+for an unregistered kind only. Both still open the overlay (§ 22 Panels 4a / 4b). Built by MOTIR-5999, which
+touches exactly this cell.
+
+### DECISION 5 — the To-approve list has NO PAGER, and says so in words if its ceiling is ever reached
+
+- **No `IssueListPager`** under the tab's list. The list ends at its last row (Panel 10: thirty rows). The column
+  header is already `sticky top-0`.
+- **The ceiling line** (Panel 11): the read keeps a defensive ceiling far above any real queue (its value is
+  MOTIR-5998's). When it is reached, ONE line sits inside the list's container under the last row:
+  `role="note"`, `border-t border-(--el-border) bg-(--el-surface-soft) px-4 py-2.5 text-xs text-(--el-text-secondary)`,
+  the link `font-medium text-(--el-link) hover:underline` to `/approvals`. A note, never an alert — nothing is wrong.
+  The strip's count stays the TRUE total, so under the ceiling the count and the rows differ, and the line is what
+  says why. **Below the ceiling the count and the rows agree**, as the story requires.
+- The Approvals room keeps its own pager (story boundary).
+
+### DECISION 6 — the overlay's EXIT ROW: the title opens the quick view ABOVE it, and _Open work item_ opens a new tab
+
+- **Key + title become ONE link** (`<a href="/items/{key}" aria-haspopup="dialog">`), same position and ink as
+  today; `hover:underline` / `focus-visible:underline`, no fill (a fill would make it read as a third exit
+  control). **Plain click → the quick view STACKED ABOVE the overlay**; modified click → new tab.
+- **The quick view is the NESTED, state-driven `WorkItemQuickView`** (the peek `PlanReviewCanvas` stacks over the
+  planning overlay, MOTIR-4185), not the page's `?peek=` controller: only a React-nested dialog layers above a
+  Radix modal, and the overlay opens on pages with no controller.
+- **⚠️ ITS SCRIM MUST BE RAISED to `z-50`.** The design-system `Modal` draws its scrim at `z-40` and its panel at
+  `z-50` (`packages/design-system/src/components/ui/Modal.tsx`), so a SECOND Modal's scrim paints beneath the open
+  approval's `z-50` panel and the approval stays at full ink behind the peek. The stacked peek passes
+  `overlayClassName="z-50"` (a prop `Modal` already takes; `WorkItemQuickView` needs to forward it). Later in
+  the DOM at the same `z`, the scrim covers the approval and sits under the peek's panel — drawn in Panels 3–5.
+- **Closing the quick view** (×, `Esc`, its scrim) returns to the approval exactly as it was — not closed, not
+  re-read, not scrolled — with focus back on the title link. `Esc` closes only the TOP dialog; a second `Esc`
+  closes the approval, as § 22 has it.
+- **_Open work item_ opens a NEW TAB** — `target="_blank" rel="noopener noreferrer"` — keeping its label and its
+  `ArrowUpRight` (the glyph already reads "this leaves"). **Accessible name: _Open work item in a new tab_** / 在新标签页中打开工作项.
+- **The frameless arms' _Open work item_** (§ 22 Panels 4a / 4b — today a `Button` calling `router.push`, which
+  navigates the whole tab away) becomes the same new-tab LINK, styled as the shipped secondary `sm` button, with
+  the `ArrowUpRight` glyph and the same accessible name — so every _Open work item_ in the overlay behaves one way.
+- **Narrow** (§ 22 Panel 7 hides the title below `md`): the door is the LINK, so at that width the KEY — its
+  visible content — is what a thumb presses. _Open work item_ is glyph-only there, as shipped.
+- **Unchanged:** band 1's kind label, and the dialog's accessible name (`approvalOverlay.dialogTitle`, _{kind} for
+  {key}_) — the story's boundary keeps them the frame's.
+
+### Copy — new and changed strings, `en` and `zh`
+
+| key                                                        | en                                                                              | zh                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `workbench.approvals.sentence.design_result`               | `Design for <title>{title}</title>`                                             | `<title>{title}</title>的设计`                                        |
+| `workbench.approvals.sentence.acceptance_result`           | `Acceptance video for story <title>{title}</title>`                             | `故事 <title>{title}</title> 的验收视频`                              |
+| `workbench.approvals.sentence.pull_request_approval`       | `<title>{title}</title> is finished`                                            | `<title>{title}</title>已完成`                                        |
+| `workbench.approvals.sentence.decision_approval`           | `Decision document for <title>{title}</title>`                                  | `<title>{title}</title>的决策文档`                                    |
+| `workbench.approvals.sentence.decision_choice`             | `Options for <title>{title}</title>`                                            | `<title>{title}</title>的选项`                                        |
+| `workbench.approvals.sentence.decision_confirmation`       | `<title>{title}</title> is decided`                                             | `<title>{title}</title>已作出决定`                                    |
+| `workbench.approvals.sentence.other`                       | `Approval for <title>{title}</title>`                                           | `<title>{title}</title>的审批`                                        |
+| `workbench.approvals.columns.details`                      | Details                                                                         | 详情                                                                  |
+| `approvalRecords.columns.details`                          | Details                                                                         | 详情                                                                  |
+| `workbench.approvals.pullRequest.repos`                    | In {repos}                                                                      | 位于 {repos}                                                          |
+| `workbench.approvals.pullRequest.more` (shipped)           | +{count} more                                                                   | 另有 {count} 个                                                       |
+| `workbench.approvals.decisionSubject.none` (changed)       | No decision document                                                            | 无决策文档                                                            |
+| `workbench.approvals.decisionSubject.several` (changed)    | {count} decision documents                                                      | {count} 份决策文档                                                    |
+| `workbench.approvals.decisionSubject.unreadable` (changed) | Decision document not read yet                                                  | 尚未读取决策文档                                                      |
+| `workbench.approvals.subjectGonePill`                      | Gone                                                                            | 已移除                                                                |
+| `workbench.approvals.ceiling`                              | `Showing the first {shown} of {total}. <link>Approvals</link> lists every one.` | `仅显示前 {shown} 项，共 {total} 项。<link>审批</link>中列出了全部。` |
+| `approvalOverlay.openWorkItemNewTab`                       | Open work item in a new tab                                                     | 在新标签页中打开工作项                                                |
+
+- The repositories list joins with `, ` in en and `、` in zh; _+n more_ joins with `, ` / `，`.
+- **The hover `title` strings are DATA** (`owner/name · #n`) and need no key.
+- **Retiring from the row** (MOTIR-5999 decides each by grep): `workbench.approvals.pullRequest.kindLabel`,
+  `workbench.approvals.rowKind.decision_approval`, and the row's use of `workbench.approvals.kind.*`.
+  **`workbench.approvals.kind.*` itself STAYS** — the overlay's `dialogTitle` reads it (_{kind} for {key}_).
+- The user doc `docs/approval-gates.md` names the rows by their old labels; its update is MOTIR-5999's.
+
+### Token map — the elements this delta adds
+
+| element                      | colour                                                                            | shape / type                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| sentence frame words         | `--el-text-secondary` (6.24:1 on the `--el-surface` hover fill)                   | `text-sm`, `shrink-0`                                                                  |
+| sentence title (the door)    | `--el-text`; settled `--el-text-secondary`                                        | `text-sm font-medium`, `min-w-0 truncate`, `hover:underline` `focus-visible:underline` |
+| key after the sentence       | `--el-text-secondary` (mono)                                                      | `font-mono text-xs`                                                                    |
+| details cell                 | `--el-text-secondary`                                                             | `text-xs`, `truncate`                                                                  |
+| _Gone_ pill                  | the shipped `Pill tone="archived"`                                                | —                                                                                      |
+| every Decide-cell state pill | the shipped `Pill` recipes, unchanged                                             | **`whitespace-nowrap`** — one line in the 132px track                                  |
+| ceiling line                 | `--el-text-secondary` on `--el-surface-soft`, top `--el-border`; link `--el-link` | `text-xs`, `px-4 py-2.5`                                                               |
+| exit-row title link          | unchanged inks; underline on hover / focus                                        | —                                                                                      |
+| stacked quick view's scrim   | `--el-overlay-scrim`                                                              | **`z-50`** (via `overlayClassName`)                                                    |
+
+No raw hex and no raw shape utility in either delta.
+
+### The vocabulary check — command and count
+
+Visible text = each mock with its `<style>` blocks, HTML comments and tags stripped; searched case-insensitively
+for `\b(pull requests?|PRs?|merge requests?|MRs?|issues?|cards?|tickets?)\b`:
+
+| asset                                    | hits | disposition                                                                                                                                                                                                                                                                          |
+| ---------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `approvals-row--plain-words.mock.html`   | 1    | Panel 1's **BEFORE** row — the shipped _Pull requests_ label, drawn as the text being RETIRED. Every AFTER row, every sentence and every annotation: **0**                                                                                                                           |
+| `approval-overlay--quick-view.mock.html` | 8    | all inside the COMPOSED shipped quick view (Panels 3 and 6): its Development empty state, _No linked pull request_ · _+ Link pull request_ · _PR_ ×2, twice. The quick view's contents are outside this story's boundary. The exit row, the new-tab name and every annotation: **0** |
+
+### What this asset does NOT decide
+
+- **The ceiling's VALUE** — MOTIR-5998's.
+- **The overlay's bands, ports, verbs and record bands**, band 1's kind label and the dialog's accessible name.
+- **The quick view's contents and its edit rail** — composed as shipped. **Its own _Open full page_ keeps
+  its shipped behaviour — the work item's page, in THIS tab — and that is DECIDED, not deferred:** the label
+  says it leaves, and leaving loses nothing, because the overlay's open state IS its address (§ 22 _THE
+  ADDRESS_, written with `shallowPush`): one Back returns to the tab with the same approval open. _Open work
+  item_ in the exit row is different because it sits beside the decision and reads as a glance, which is
+  why it, and not the peek's page link, opens a new tab.
+- **The Approvals room's structure** — its sections, person column and pager.
+
+### GIVES / TAKES — every card this asset names
+
+Scope: every `MOTIR-<n>` in this section and in both deltas' annotation prose. Fixture rows use `ACME-n` keys and
+link to nothing.
+
+| card                                                     | GIVES                                                                                                                                                                                                                        | TAKES                                                                                                                                                                          |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-5998** (the unpaged read)                        | DECISION 5: no pager on the tab, the ceiling line, its copy and tokens                                                                                                                                                       | Nothing — the ceiling's value stays its own                                                                                                                                    |
+| **MOTIR-5999** (the sentence)                            | DECISIONS 1, 2, 4: the sentence per kind, the details column and its per-kind strings, the re-weighted templates, the header rename in both lists, the _Gone_ correction, the copy table, the retirements, the user doc      | **ELEMENT:** the grid templates change (`APPROVALS_GRID_TEMPLATE` / `APPROVALS_FULL_VIEW_GRID_TEMPLATE`) — its card said "the row's column set"; this settles it               |
+| **MOTIR-6001** (the row's title door)                    | DECISION 3: the title link, its click contract, treatment and tab order; the room's missing controller                                                                                                                       | Nothing                                                                                                                                                                        |
+| **MOTIR-6000** (the overlay)                             | DECISION 6: the exit row's title door, the stacked nested quick view, **the `z-50` scrim** (a `WorkItemQuickView` prop to forward), the new-tab _Open work item_ in the exit row AND the frameless arms, the accessible name | **ELEMENT:** the scrim layering is a build obligation its card did not name                                                                                                    |
+| **MOTIR-6002 / MOTIR-6003** (the story's gates)          | The strings and states to assert: every sentence in en + zh, the details' host-free text, _Gone_, the ceiling, the new-tab name                                                                                              | Nothing                                                                                                                                                                        |
+| **MOTIR-5961** (the decision-confirmation row) · `done`  | Nothing                                                                                                                                                                                                                      | **ELEMENT:** its kind label _Confirm decision_ is superseded on the row by the sentence _{title} is decided_; its subject line survives as the details. `done` — not re-opened |
+| **MOTIR-5953 / 5147 / 5480 / 5612 / 5673 / 5888 / 5222** | Nothing                                                                                                                                                                                                                      | Nothing — composed; their mocks are records and are not edited                                                                                                                 |
+| **MOTIR-5302** (the one row)                             | Nothing                                                                                                                                                                                                                      | Nothing — the room inherits by rendering the same row, which is the point of the extraction                                                                                    |
+| **MOTIR-4185** (the nested peek)                         | Nothing                                                                                                                                                                                                                      | Nothing — its pattern is reused                                                                                                                                                |
+
+## 29 · The To-approve ROW for a PLAN — MOTIR-6033
+
+> **Landed by MOTIR-6214 from MOTIR-6033's approved design result** (evidence `cmueg6bue00kghwoikl5e6bxp`),
+> verbatim but for one reference: the result says Part XX, and the Part landed as **Part XXII** (MOTIR-6190;
+> that Part's head note records why). Its mock is not mirrored in this tree (`get_design MOTIR-6033`).
+
+**Asset:** `design/workbench/approvals-row--plan.mock.html`, a new delta mock. It amends
+`approvals-row.mock.html` (§ 20) as the shipped `ApprovalRow` renders it after § 28's sentence.
+Neither file is edited. **The rules, the states, the copy table (`approvalGate.planApproval.*`, en
+and zh) and the GIVES/TAKES are in `design/ai-planning/design-notes.md` Part XXII**, beside the
+decision surface the row opens. This section is only the pointer from this area.
+
+- **Panel 1:** the four leading-line forms. A plan is ABOUT its target (_Plan for {title}_ + key),
+  else its title (_Plan — {title}_), else its project (_Plan for {project}_), with lucide
+  `sparkles` in `--el-accent-on-surface`.
+- **Panel 2:** awaiting · **Being rewritten** (sky; the §11.5c hold, **not** § 26's _held_ row) ·
+  see but not decide · settled _Approved_ / **_Declined_** (peach).
+- **Panel 3:** Approvals-room records: declined with and without a reason, withdrawn
+  `plan_stale` / `plan_discarded`.
+- **Panel 4:** the access path. **This kind never opens the approval overlay**
+  (`approval-gates.md` §11.5b): the row returns the person to the planning surface
+  (`planSession`, `planVia=approvals`), or to `/plans/<id>` when the plan has no conversation.
+- **Panels 5–6:** narrow, zh, dark.
+
+Built by MOTIR-6037.
