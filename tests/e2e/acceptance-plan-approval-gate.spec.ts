@@ -135,7 +135,7 @@ async function closeSurface(page: Page): Promise<void> {
 
 async function openToApprove(page: Page): Promise<void> {
   await page.goto('/workbench?tab=approvals');
-  await expect(page.getByTestId('workbench-tab-approvals')).toBeVisible({
+  await expect(page.getByRole('link', { name: /To approve/ })).toBeVisible({
     timeout: FIRST_PAINT_MS,
   });
 }
@@ -269,7 +269,7 @@ test('a finished plan waits in To approve, is held while it is rewritten, and Ap
     rowTestId = (await row.getAttribute('data-testid'))!;
     await expect(row).toContainText(new RegExp(`Plan for\\s*${seed.storyTitle}`));
     await expect(row).toContainText('1 proposed item · written by Motir AI');
-    await expect(page.getByTestId('workbench-tab-approvals')).toContainText('1');
+    await expect(page.getByRole('link', { name: /To approve/ })).toContainText('1');
     await beat();
   });
 
@@ -296,7 +296,7 @@ test('a finished plan waits in To approve, is held while it is rewritten, and Ap
     await expect(row).toHaveAttribute('data-testid', rowTestId);
     await expect(row).toContainText(gate.row.rewriting);
     await expect(reviewButton(row)).toHaveCount(0);
-    await expect(page.getByTestId('workbench-tab-approvals')).toContainText('1');
+    await expect(page.getByRole('link', { name: /To approve/ })).toContainText('1');
     await beat();
 
     // The row still opens the surface — to watch, not to decide.
