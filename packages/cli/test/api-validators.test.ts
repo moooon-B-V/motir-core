@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { API_MAJOR, GENERATED_AGAINST, V1_OPERATIONS, validators } from '../src/api/index.js';
 
@@ -195,13 +196,63 @@ describe('a malformed response NAMES the field, rather than blanking a cell', ()
     );
   });
 
-  it('an unexpected EXTRA field is rejected too — the schemas are closed', () => {
-    // `additionalProperties: false` throughout, because the server's schemas are
-    // `.strict()`. Worth asserting: it is how a client learns that a server has
-    // grown a field it does not know about, which is the skew gate's trigger.
+  it('a MISSING field on a row inside the page is still named', () => {
+    // The other half of opening the schemas (MOTIR-6180): tolerating an extra
+    // field must not stop a missing one from being reported.
+    const { key: _dropped, ...withoutKey } = READY_SET.items[0]!;
     expect(
-      failingPaths(validators.operation_getProject, { ...PROJECT, surprise: true }),
-    ).toContainEqual('');
+      failingPaths(validators.operation_getProjectReadySet, { ...READY_SET, items: [withoutKey] }),
+    ).toContainEqual('/items/0');
+    const errors = (
+      validators.operation_getProjectReadySet as { errors?: { params: unknown }[] | null }
+    ).errors;
+    expect(JSON.stringify(errors)).toContain('"missingProperty":"key"');
+  });
+});
+
+// A server newer than this client may add fields (MOTIR-6180).
+// `public-api-conventions.md` §8 allows a new field on a response object within
+// `v1` and says a client MUST tolerate unknown fields. These validators used to be
+// compiled closed, so `@motir/cli@0.5.0` rejected every ready-set response once
+// `ReadyItem.difficulty` shipped.
+describe('a response carrying a field this client does not know is ACCEPTED', () => {
+  it('at the root of a resource — `getProject`', () => {
+    expect(validators.operation_getProject({ ...PROJECT, surprise: true })).toBe(true);
+  });
+
+  it('on a row INSIDE a page — the `getProjectReadySet` failure users hit', () => {
+    const grown = {
+      ...READY_SET,
+      items: [{ ...READY_SET.items[0], difficulty: null, surprise: 'later field' }],
+      surprise: 'on the envelope too',
+    };
+    expect(validators.operation_getProjectReadySet(grown)).toBe(true);
+  });
+
+  it('on nested objects at every depth — `getWorkItem`', () => {
+    const grown = {
+      ...WORK_ITEM_DETAIL,
+      surprise: 1,
+      readiness: { ...WORK_ITEM_DETAIL.readiness, surprise: 2 },
+      links: { ...WORK_ITEM_DETAIL.links, surprise: 3 },
+      targetRepositories: [{ ...WORK_ITEM_DETAIL.targetRepositories[0], surprise: 4 }],
+    };
+    expect(validators.operation_getWorkItem(grown)).toBe(true);
+  });
+
+  it('while a wrong TYPE on a known field is still rejected', () => {
+    expect(
+      failingPaths(validators.operation_getSprint, { ...SPRINT, surprise: true, sequence: 'one' }),
+    ).toContainEqual('/sequence');
+  });
+
+  it('because no generated validator can raise an unknown-field error at all', () => {
+    // A source-level guard, so a regenerate cannot quietly close the schemas
+    // again. Ajv's standalone code emits `keyword:"additionalProperties"` only for
+    // `additionalProperties: false`; a schema-valued one reports its inner
+    // keyword instead.
+    const source = readFileSync(new URL('../src/api/validators.js', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/keyword:\s*"additionalProperties"/);
   });
 });
 

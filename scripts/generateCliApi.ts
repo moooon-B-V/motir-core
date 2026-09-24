@@ -92,6 +92,36 @@ function absolutizeRefs(node: Json): Json {
   return out;
 }
 
+/**
+ * Drop every `additionalProperties: false`, so a validator accepts a field it
+ * does not know (MOTIR-6180).
+ *
+ * The emitter closes every object because the server's zod schemas are
+ * `.strict()`, which is right for what the SERVER promises to send. It is wrong
+ * for what a CLIENT built against an older document may receive:
+ * `public-api-conventions.md` §8 allows a new field on a response object within
+ * `v1` and obliges a client to tolerate unknown fields. Compiled closed, every
+ * published CLI rejected every response shape that had grown a field since it
+ * was generated. `@motir/cli@0.5.0` (contract `1.25.0`) failed on
+ * `getProjectReadySet` the day `ReadyItem.difficulty` shipped in `1.38.0`.
+ *
+ * Only the boolean `false` goes. A schema-valued `additionalProperties` (a
+ * record's value type) still validates, and required fields, types and enums
+ * are untouched, so a missing or renamed field is still the named failure the
+ * validators exist for. The document has no `oneOf`, which is the one keyword
+ * where opening a branch could make a valid body ambiguous.
+ */
+function openObjects(node: Json): Json {
+  if (Array.isArray(node)) return node.map(openObjects);
+  if (node === null || typeof node !== 'object') return node;
+  const out: JsonObject = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'additionalProperties' && value === false) continue;
+    out[key] = openObjects(value);
+  }
+  return out;
+}
+
 /** The HTTP methods an operation can be declared under. */
 const HTTP_METHODS = ['get', 'post', 'patch', 'put', 'delete'] as const;
 type HttpMethod = (typeof HTTP_METHODS)[number];
@@ -208,11 +238,16 @@ function compileValidators(
     formats: { 'date-time': true },
   });
 
+  // Every schema is registered OPEN (`openObjects`): these validators read
+  // responses, and a response may carry fields newer than this client.
   for (const [name, schema] of Object.entries(components)) {
-    ajv.addSchema({ ...(absolutizeRefs(schema) as JsonObject), $id: componentId(name) });
+    ajv.addSchema({
+      ...(openObjects(absolutizeRefs(schema)) as JsonObject),
+      $id: componentId(name),
+    });
   }
   for (const [id, schema] of successSchemas) {
-    ajv.addSchema({ ...(absolutizeRefs(schema) as JsonObject), $id: operationId(id) });
+    ajv.addSchema({ ...(openObjects(absolutizeRefs(schema)) as JsonObject), $id: operationId(id) });
   }
 
   // ⚠️ Only the OPERATION schemas are exported as validators, not the components
