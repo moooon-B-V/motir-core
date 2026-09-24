@@ -132,6 +132,166 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && python3 --version
 
+# ── A Postgres to DEBUG AGAINST (MOTIR-6204) ─────────────────────────────────
+#
+# WHY IT IS HERE AT ALL. The agent inside this container is unprivileged and
+# there is no `sudo`, so anything absent at BUILD time is absent for every run —
+# `apt-get install` answers `Could not open lock file /var/lib/dpkg/lock-frontend`
+# and there is no way around it from inside. A test that touches the database is
+# therefore unrunnable in this image today, and a coding agent that cannot run
+# the test it just changed is debugging blind.
+#
+# WHAT IT IS FOR, precisely: running the FEW tests around a failure while
+# debugging — never the suite, never CI parity. That scope is what settles the
+# three questions below, and it is why `fsync` is off: a cluster nobody is
+# recovering can trade durability for speed.
+#
+# WHY A SERVER AND NOT A CLIENT. A client would have nothing to connect to. A
+# compose SIDECAR was the other candidate and reaches neither recipe this image
+# documents — the `docker run` one-liner at the foot of this file, and the
+# devcontainer route, which is a single container by construction.
+#
+# ⚠️ WHY 16 AND NOT THE NEWEST — THIS ONE ENTRY IS A DELIBERATE CARVE-OUT FROM
+# "latest", AND IT IS NOT AN OVERSIGHT TO FIX. A debugging database has one job:
+# reproduce the failure being chased and manufacture none of its own. Three
+# properties decide that, and all three point away from `newest`:
+#
+#   Postgres 16  — motir-core `docker-compose.yml` + `.github/actions/postgres`
+#                  (`image-tag: pg16`), motir-ai `docker-compose.yml` + its
+#                  `ci.yml`, and nextjs-prisma-vercel-starter `docker-compose.yml`
+#                  + `ci.yml` all pin 16. Unanimous across four repositories, so
+#                  a newer major here debugs on an engine no CI ever runs.
+#   pgvector     — motir-core's `work_item_embedding` migration runs
+#                  `CREATE EXTENSION vector` (MOTIR-2696) and motir-ai's
+#                  `20260624000000_enable_pgvector` does the same. Both repos
+#                  moved OFF the official image to get it. Without it migrations
+#                  fail outright and NO database test runs.
+#   C.UTF-8      — `lib/workItems/positioning.ts` mints base-62 fractional keys
+#                  that mix cases, so `'Zz' < 'a0'` holds only under BYTE
+#                  ordering; production (Neon) is `datcollate = 'C.UTF-8'` and
+#                  `tests/db-collation.test.ts` asserts it at runtime. The last
+#                  cluster that drifted to glibc's `en_US.utf8` turned ELEVEN
+#                  ordering assertions red across three Vitest shards, naming no
+#                  cause. A debugging database that invents eleven failures is
+#                  worse than no database.
+#
+# Versions read from apt.postgresql.org's bookworm-pgdg Packages index on
+# 2026-09-24 and pinned exactly; both published architectures carry the same
+# two versions, so the arm64 leg cannot diverge:
+#   curl -fsSL https://apt.postgresql.org/pub/repos/apt/dists/bookworm-pgdg/main/binary-$arch/Packages.gz \
+#     | gunzip | awk '/^Package: (postgresql-16|postgresql-16-pgvector)$/{p=$2} /^Version:/{if(p){print p" "$2; p=""}}'
+ARG PG_MAJOR=16
+ARG PG_VERSION=16.15-1.pgdg12+2
+ARG PGVECTOR_VERSION=0.8.6-1.pgdg12+2
+# The cluster lives outside /var/lib/postgresql so it is plainly not Debian's —
+# `pg_dropcluster` below removes the one postgresql-common creates under the
+# SYSTEM locale, which is the collation this layer exists to avoid.
+ENV PGDATA=/var/lib/motir-postgres
+# The role, database and port every CI job in these repositories already sets,
+# so a test command runs AS TYPED rather than after a round of env wrangling.
+ENV DATABASE_URL=postgresql://prodect:prodect@localhost:5432/prodect
+ENV PATH=/usr/lib/postgresql/16/bin:$PATH
+RUN set -eux; \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        -o /etc/apt/keyrings/pgdg.asc; \
+    chmod go+r /etc/apt/keyrings/pgdg.asc; \
+    echo "deb [signed-by=/etc/apt/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        "postgresql-${PG_MAJOR}=${PG_VERSION}" \
+        "postgresql-client-${PG_MAJOR}=${PG_VERSION}" \
+        "postgresql-${PG_MAJOR}-pgvector=${PGVECTOR_VERSION}"; \
+    rm -rf /var/lib/apt/lists/*; \
+    pg_dropcluster --stop "${PG_MAJOR}" main; \
+    mkdir -p "$PGDATA"; \
+    chown node:node "$PGDATA"; \
+    chmod 700 "$PGDATA"
+
+# The cluster is initialised AS `node`, at build time, so the runtime user owns
+# every byte of it and needs no privilege to start it — the same reasoning as the
+# agent prefix below, one directory over. `su node -c` rather than a `USER` flip,
+# because the agent layer after this still has to run as root.
+#
+# Baking the initialised cluster rather than initialising on first boot is what
+# makes the locale and the extension PROPERTIES OF THE IMAGE: a first-boot initdb
+# would be a runtime step that can be skipped, mis-locale'd, or silently fail in a
+# container nobody is watching. The `'Zz' < 'a0'` probe fails the BUILD if the
+# collation is ever wrong, for the same stated reason `motir --version` does.
+RUN set -eux; \
+    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/initdb \
+        --pgdata=$PGDATA \
+        --username=prodect \
+        --encoding=UTF8 \
+        --locale=C.UTF-8 \
+        --auth-local=trust \
+        --auth-host=trust"; \
+    printf '%s\n' \
+        "listen_addresses = 'localhost'" \
+        'port = 5432' \
+        '# A debugging cluster is never recovered — see this layer header.' \
+        'fsync = off' \
+        'synchronous_commit = off' \
+        'full_page_writes = off' \
+        >> "$PGDATA/postgresql.conf"; \
+    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_ctl -D $PGDATA -w start"; \
+    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/createdb --username=prodect prodect"; \
+    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/psql --username=prodect --dbname=prodect \
+        -c \"ALTER ROLE prodect WITH PASSWORD 'prodect'\" \
+        -c 'CREATE EXTENSION IF NOT EXISTS vector'"; \
+    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/psql --username=prodect --dbname=prodect -tAc \"SELECT 'Zz' < 'a0'\"" \
+        | grep -qx 't'; \
+    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_ctl -D $PGDATA -w stop"
+
+# The server is NOT started by the entrypoint, and that is a decision rather than
+# an omission: `"overrideCommand": true` means the devcontainer route never runs
+# the entrypoint at all (the MOTIR-4956 note below), so an entrypoint start would
+# work on one of the two documented routes and silently not on the other. A named
+# command on PATH is the shape that reaches both — the same pattern MOTIR-4959
+# established for the agent-config setup.
+COPY --chmod=0755 packages/cli/sandbox/postgres.sh /usr/local/bin/motir-sandbox-postgres
+
+# ── A browser to RUN SPECS WITH (MOTIR-6204) ─────────────────────────────────
+#
+# Two halves, and only one of them could ever be added later:
+#
+#   the system LIBRARIES — root-only, so an unprivileged agent can NEVER install
+#     them. Without them a downloaded browser does not launch at all. This is the
+#     half that makes the other half possible, and the reason the layer exists.
+#   the BROWSER BINARY — a plain download into a user-writable path, so an agent
+#     could fetch it at run time. It is baked anyway, for the reason the sibling
+#     image gives for NOT baking one, read the other way round.
+#
+# ⚠️ `infra/ci-runner/Dockerfile` bakes the libraries and REFUSES the binary, and
+# this file disagrees with it ON PURPOSE. That image runs one job per container
+# and is pulled per job, so a baked browser there "trades a CDN download for an
+# equal-sized registry pull". THIS container is pulled once and then lived in for
+# days or weeks across many runs, so the same bytes are paid once instead of per
+# debugging session. Same evidence, opposite arithmetic, because the container
+# lifetimes are opposite. Neither file is wrong; see MOTIR-6204.
+#
+# The package list is ASKED FOR rather than asserted — `playwright install-deps`
+# emits the apt set for the detected distro — which is ci-runner's pattern and
+# keeps this layer tracking upstream instead of drifting from a list typed once.
+#
+# The VERSION is the consumer's, not the newest, for the same reason Postgres's
+# is: a browser exists here to run a repository's own specs, and the repositories
+# this image serves resolve 1.62.x (motir-marketing `^1.62.1`, motir-core
+# `^1.60.0`), while `infra/ci-runner/Dockerfile` already pins 1.62.1. npm's
+# `latest` was 1.63.0 on 2026-09-24 — known, and declined, because a build no
+# consumer asks for is a download nobody uses. A repo that needs another version
+# runs `playwright install` itself: the libraries are the part it could not add.
+ARG PLAYWRIGHT_VERSION=1.62.1
+# A shared, node-owned browser path — NOT the default ~/.cache/ms-playwright,
+# which a devcontainer's home mount can shadow and which a root-run install would
+# write to root's home rather than the runtime user's.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/motir-browsers
+RUN set -eux; \
+    mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"; \
+    npx --yes "playwright@${PLAYWRIGHT_VERSION}" install-deps chromium; \
+    npx --yes "playwright@${PLAYWRIGHT_VERSION}" install chromium; \
+    rm -rf /var/lib/apt/lists/* /root/.npm
+
 # The `motir` binary itself. Installed globally from the packed tarball so it is
 # on PATH for every user, and smoke-tested in the same layer — a base that
 # cannot run `motir --version` must fail the BUILD, not the first `motir auto`.
@@ -247,8 +407,14 @@ RUN printf '%s\n' \
 # The agent prefix is chowned for the same reason, one level out (MOTIR-6183):
 # it is what lets an agent update itself in a long-running container. The
 # mkdir makes it exist in `base`, which installs no agent into it.
-RUN mkdir -p /workspace /home/node/.config/motir /opt/motir-agents/bin \
-    && chown -R node:node /workspace /home/node /opt/motir-agents
+#
+# The BROWSER path is chowned on the same grounds (MOTIR-6204): a repository
+# pinned to a Playwright this image did not bake runs `playwright install`
+# itself, and that download has to land somewhere the runtime user can write.
+# The CLUSTER was chowned at its own layer — `initdb` had to run as `node` to
+# produce files it owns, so there is nothing left to do for it here.
+RUN mkdir -p /workspace /home/node/.config/motir /opt/motir-agents/bin /opt/motir-browsers \
+    && chown -R node:node /workspace /home/node /opt/motir-agents /opt/motir-browsers
 
 USER node
 # HOME is set explicitly because the CLI resolves its config dir from
