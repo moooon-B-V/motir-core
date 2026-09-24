@@ -75,15 +75,26 @@ describe('the two destinations (§19.2 change 2–3)', () => {
 });
 
 describe('the chip map is TOTAL (§19.3)', () => {
+  // ⚠️ AMENDED by Story MOTIR-6043 · MOTIR-6045 (design Part XXI §21.5), and the
+  // amendment is deliberately NARROW: what this block is FOR is that every plan
+  // status gets its own chip LABEL, and that is asserted unchanged below. What
+  // moved is whether the chip is also a LINK — it is now, and only, where the
+  // row's own door goes somewhere else. So the two decided statuses assert the
+  // label and the ABSENCE of the door, and the detector that used to live in
+  // this `getByRole('link')` is preserved inverted, here and in
+  // `plan-row-destination-agreement.test.tsx`'s own chip-rule block.
   it.each([
-    ['generating', 'Writing'],
-    ['planned', 'Waiting for approval'],
-    ['stale', 'Stale'],
-    ['approved', 'Approved'],
-    ['declined', 'Declined'],
-  ] as const)('%s → %s', (status, label) => {
+    ['generating', 'Writing', true],
+    ['planned', 'Waiting for approval', true],
+    ['stale', 'Stale', true],
+    ['approved', 'Approved', false],
+    ['declined', 'Declined', false],
+  ] as const)('%s → %s (chip is a door: %s)', (status, label, isDoor) => {
     renderWithIntl(<SessionRow view={view({ latestPlan: { id: 'p', status } })} />);
-    expect(screen.getByRole('link', { name: `Open the plan — ${label}` })).toBeTruthy();
+    expect(screen.getByText(label)).toBeTruthy();
+    const door = screen.queryByRole('link', { name: `Open the plan — ${label}` });
+    if (isDoor) expect(door).toBeTruthy();
+    else expect(door).toBeNull();
   });
 
   it('only `Waiting for approval` carries the accent border', () => {

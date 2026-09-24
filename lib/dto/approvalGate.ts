@@ -607,8 +607,16 @@ export interface PlanApprovalSubjectSummaryDTO {
   planId: string;
   /** The plan's conversation (the `planSession` address), or null when it has none. */
   sessionId: string | null;
-  /** Whether that conversation has any turns: the row opens the planning overlay when
-   *  it does, and the plan page (`/plans/<id>`) when it does not (§11.5b). */
+  /**
+   * Whether that conversation has any turns.
+   *
+   * ⚠️ IT DECIDES NO DESTINATION any more (Story MOTIR-6043 · MOTIR-6045). It used to:
+   * *"the row opens the planning overlay when it does, and the plan page when it does
+   * not"*. `docs/decisions/mcp-authored-plan-review.md` overturned that — an empty
+   * transcript is not an absent conversation — and §11.5b now keys on `sessionId`
+   * alone, for both this row and the Plans page's. Kept on the wire because it is a
+   * true fact about the session that another reader may want; nothing gates on it.
+   */
   sessionHasTurns: boolean;
   /** `Plan.title`, as written, or null. */
   title: string | null;

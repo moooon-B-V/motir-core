@@ -4643,9 +4643,45 @@ kind for which that is true.
   address, and it opens nowhere in the overlay. An overlay that is handed one
   anyway (a stale link) sends the person to the planning surface rather than
   rendering a frame with no port. That is MOTIR-6037's.
-- **A plan with NO conversation** (a backfilled plan, an agent-authored MCP plan
-  whose session has no turns, a cadence plan) opens its own plan page
-  (`/plans/<id>`), where the same two verbs sit.
+- **A plan with NO SESSION** — `Plan.sessionId` is null — opens its own plan page
+  (`/plans/<id>`), where the same two verbs sit, and the row says why before it
+  is clicked.
+
+  **⚠️ AMENDED 2026-09-24 by Story MOTIR-6043 (MOTIR-6045), and the earlier
+  wording is quoted here because it names three populations this now excludes.**
+  It read: _"A plan with NO conversation (a backfilled plan, an agent-authored
+  MCP plan whose session has no turns, a cadence plan) opens its own plan
+  page."_ **All three of those have sessions, and all three open the PLANNING
+  SURFACE.**
+  - An **agent-authored MCP** plan: `docs/decisions/mcp-authored-plan-review.md`
+    — _"An empty transcript is not an absent conversation … `has a session` and
+    `has turns` are different questions, and it is the first that says whether
+    there is a planning phase to watch."_ Its session exists from `create_plan`.
+  - A **`cadence`** plan: `agent-authored-plans.md` AMENDMENT 17 §4 gives it a
+    session of origin `cadence`.
+  - A **backfilled** plan: AMENDMENT 17 §5 plus the MOTIR-6020 backfill gives
+    every pre-existing plan one, of origin `legacy` unless its door is known.
+
+  **So the predicate is the session's EXISTENCE — never its ORIGIN, and never
+  whether it holds turns.** Keying on the origin is the same inference the
+  decision record overturned, one door over; keying on the column is total, and
+  it is how this section's own first paragraph already puts it (_"the planning
+  surface at the plan's conversation, or the plan page when it has none"_).
+
+  What is left is the rollout residue `prisma/schema.prisma` names on the column
+  itself: _"NULLABLE AT THE DATABASE only so a build predating this column can
+  still write a plan during a rollout."_ Deliberately near-empty, and the branch
+  stays because nothing at the database enforces the non-null.
+
+  **The rule is ONE function, `planRowDestination`
+  (`lib/planning/planDestination.ts`), called by BOTH the Plans page's session
+  row and this gate's To-approve row**, so the two lists cannot answer
+  differently. It is total over `PlanStatus` with no default arm. The row's
+  affordance, the retirement of
+  `approvalGate.planApproval.noConversation.agent` / `.cadence` / `.earlier`,
+  and the single `.none` cause this notice now carries are
+  `design/ai-planning/design-notes.md` **Part XXI**.
+
 - The row's words, the two verbs' placement and copy, and the hand-off message
   before generation are MOTIR-6033's to draw.
 
