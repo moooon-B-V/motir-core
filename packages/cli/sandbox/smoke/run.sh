@@ -9,6 +9,12 @@
 #   confinement.sh          — the blast radius (read-only credential mount,
 #                             unprivileged user, no docker socket, no
 #                             undocumented host bind);
+#   runtimes-smoke.sh       — Python, the debugging Postgres and the browser,
+#                             asserted AS `node` (MOTIR-6204). It needs no
+#                             credential and no stub, so it rides in run 1
+#                             rather than earning a fourth container; it runs
+#                             FIRST because a missing runtime explains any
+#                             later failure and nothing later explains it;
 #   loop-smoke.sh           — `motir ready` + `motir auto --agent <fake-agent>`
 #                             end to end, with no LLM;
 #   failure-smoke.sh        — the same loop with an agent that FAILS mid-run,
@@ -142,7 +148,7 @@ chmod 644 "$CREDENTIAL/config.json"
 # default is used here and the EGRESS question is left where the image header
 # leaves it: a docker-level decision, not something this image pretends to make.
 
-echo "== [1/3] the MOUNTED recipe — confinement, the loop, the failure path, the login refusal"
+echo "== [1/3] the MOUNTED recipe — the runtimes, confinement, the loop, the failure path, the login refusal"
 docker run --rm \
     -v "$FIXTURE:/workspace" \
     -v "$CREDENTIAL:/home/node/.config/motir:ro" \
@@ -150,7 +156,7 @@ docker run --rm \
     -e "MOTIR_SMOKE_PORT_FAILURE=$FAILURE_PORT" \
     -e "MOTIR_SMOKE_PORT_RO_LOGIN=$RO_LOGIN_PORT" \
     "$IMAGE" \
-    bash -c '/workspace/.smoke/confinement.sh && /workspace/.smoke/loop-smoke.sh && /workspace/.smoke/failure-smoke.sh && /workspace/.smoke/readonly-login-smoke.sh'
+    bash -c '/workspace/.smoke/runtimes-smoke.sh && /workspace/.smoke/confinement.sh && /workspace/.smoke/loop-smoke.sh && /workspace/.smoke/failure-smoke.sh && /workspace/.smoke/readonly-login-smoke.sh'
 
 # ── the mount-free recipes (MOTIR-1877) ─────────────────────────────────────
 # NO `-v …/.config/motir` here, deliberately and load-bearingly: each script
