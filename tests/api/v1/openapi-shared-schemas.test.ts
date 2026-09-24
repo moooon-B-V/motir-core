@@ -450,7 +450,7 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     expect(operation?.permission).toBe(TOOL_PERMISSIONS[tool as keyof typeof TOOL_PERMISSIONS]);
   });
 
-  it('every one of the 61 declarations names a GRANTABLE permission', () => {
+  it('every one of the 62 declarations names a GRANTABLE permission', () => {
     // 52: 41, plus MOTIR-2961's `POST …/work-items/{key}/claim`, MOTIR-3017's
     // `POST …/work-items/{key}/plan-approval`, MOTIR-3049's
     // `POST …/scope-claims`, MOTIR-3586's
@@ -466,7 +466,14 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // `origin/main` before merging, exactly as `V1_CONTRACT_VERSION` is.
     // 61 with MOTIR-5560's THREE design reads (`listWorkItemDesigns`,
     // `getWorkItemDesign`, `listProjectDesigns`), all on `project:browse`.
-    expect(V1_OPERATIONS.length).toBe(61);
+    // 62 with MOTIR-6191's `GET …/work-items/{key}/approval-gate`
+    // (`getWorkItemApprovalGate`), also `project:browse` — a READ of a decision a
+    // person made. It is NOT `approval:decide_any`, which no operation in this
+    // registry names and which no token can hold by derivation
+    // (`docs/decisions/approval-gates.md` §2); an operation that named it would
+    // fail the `isGrantable` loop below, which is the check standing between this
+    // registry and a decide door nobody argued for.
+    expect(V1_OPERATIONS.length).toBe(62);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

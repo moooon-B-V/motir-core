@@ -188,6 +188,8 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   get_work_item: 'read',
   get_design: 'read',
   list_designs: 'read',
+  // Bug MOTIR-6191's gate read — a read, under the legacy scope vocabulary too.
+  get_approval_gate: 'read',
   get_work_item_activity: 'read',
   list_ready: 'read',
   next_ready: 'read',

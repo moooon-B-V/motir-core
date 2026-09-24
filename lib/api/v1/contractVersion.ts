@@ -560,5 +560,28 @@
  *   `1.37.0` while this branch was open — renumbered twice), so this claims
  *   `1.38.0`. If a sibling has taken it since, RENUMBER this entry — it names
  *   the FIELD.
+ *
+ * - `1.39.0` — MOTIR-6191 adds `getWorkItemApprovalGate`:
+ *   `GET /api/v1/work-items/{key}/approval-gate?kind=…`, answering one gate's
+ *   DECISION RECORD — `state`, the `noteMd` the decider wrote, `decidedAt`,
+ *   `decidedByLabel`, `decidedUnderAuthority`, `decisionSource`,
+ *   `subjectVersion`, `supersededCause`, `outcomeRef` — plus the live
+ *   `routedToLabel`. The new `ApprovalGateDecision` component carries it, and
+ *   `gate: null` is an ANSWER (this card has no gate of that kind) rather than a
+ *   404. `INVALID_GATE_KIND` (422) is the refusal for a `kind` outside the
+ *   vocabulary.
+ *
+ *   Additive: a NEW operation and a NEW component (§8's allowed list); no
+ *   existing operation, field or code changes meaning. Gated on `project:browse`,
+ *   a key `CLI_TOKEN_GRANT` already carries, so the grant is NOT widened.
+ *
+ *   ⚠️ AND IT ADDS NO DECIDE DOOR. `approval:decide_any` is asserted by no v1
+ *   operation and no MCP tool, stays ungrantable to a token by derivation, and
+ *   there is still no programmatic path to approving a gate
+ *   (`docs/decisions/approval-gates.md` §1, §2). This bump names a READ.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.38.0` at `bfae2ec2b`, so this claims `1.39.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATION.
  */
-export const V1_CONTRACT_VERSION = '1.38.0';
+export const V1_CONTRACT_VERSION = '1.39.0';

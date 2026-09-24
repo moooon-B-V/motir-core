@@ -55,6 +55,7 @@ export declare const operation_getProjectReadySet: ValidateFunction;
 export declare const operation_getSprint: ValidateFunction;
 export declare const operation_getWorkItem: ValidateFunction;
 export declare const operation_getWorkItemActivity: ValidateFunction;
+export declare const operation_getWorkItemApprovalGate: ValidateFunction;
 export declare const operation_getWorkItemDesign: ValidateFunction;
 export declare const operation_getWorkItemDispatchPrompt: ValidateFunction;
 export declare const operation_getWorkItemHowToTest: ValidateFunction;
