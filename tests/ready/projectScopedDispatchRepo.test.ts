@@ -2,6 +2,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { GithubRepo } from '@/generated/prisma/client';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
 import { ArchivedTargetRepoError, UnknownTargetRepoError } from '@/lib/workItems/errors';
@@ -510,6 +512,52 @@ describe('a dispatch resolving to an ARCHIVED repository', () => {
     await expect(runClaimNextReady({ projectKey: fx.projectIdentifier }, fx.ctx)).rejects.toThrow(
       ArchivedTargetRepoError,
     );
+  });
+
+  // MOTIR-6243 — the test above asserts the REJECTION only, and never reads the
+  // item afterwards, which is how a refusal that arrived AFTER the claim
+  // committed went unnoticed: the card was left In Progress and assigned to a
+  // caller that was never told its key. A refused claim must have claimed
+  // NOTHING, so each case below reads the row back.
+  it('a refused `claim_next_ready` claims NOTHING — the item stays To Do and unassigned', async () => {
+    const fx = await makeWorkItemFixture();
+    await establishRepo(fx, 'acme-web', { archived: true });
+    const item = await makeReady(fx, 'unpinned');
+    const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(before).toMatchObject({ status: 'todo', assigneeId: null });
+
+    await expect(workItemsService.claimNextReady(fx.projectId, null, fx.ctx)).rejects.toThrow(
+      ArchivedTargetRepoError,
+    );
+
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(after).toMatchObject({ status: 'todo', assigneeId: null });
+    expect(after.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it('a refused claim of a PINNED item keeps the assignee it already had, and names the repository', async () => {
+    const fx = await makeWorkItemFixture();
+    await establishRepo(fx, 'acme-web', { archived: true });
+    await establishRepo(fx, 'acme-api', { role: 'api' });
+    const item = await makeReady(fx, 'pinned to the archived one', 'acme-web');
+    const holder = await usersService.createUser({
+      email: `holder+${randomToken()}@example.com`,
+      password: 'hunter2hunter2',
+      name: 'Previous Holder',
+    });
+    await workspacesService.addMember({ userId: holder.id, workspaceId: fx.workspaceId });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: holder.id } });
+    const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+
+    const refusal = await runClaimNextReady({ projectKey: fx.projectIdentifier }, fx.ctx).catch(
+      (err: unknown) => err,
+    );
+    expect(refusal).toBeInstanceOf(ArchivedTargetRepoError);
+    expect((refusal as ArchivedTargetRepoError).message).toContain('acme-web');
+
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(after).toMatchObject({ status: 'todo', assigneeId: holder.id });
+    expect(after.updatedAt).toEqual(before.updatedAt);
   });
 
   it('un-archiving the repository makes the item dispatchable again — no other repair needed', async () => {
