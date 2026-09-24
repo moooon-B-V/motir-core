@@ -3538,3 +3538,44 @@ change.
   arriving with their edges and motion (MOTIR-6158) are those stories'.
 - **Anything about DECIDING a plan.** The plan-approval gate, its verbs, its routing and its
   authority are `approval-gates.md` §11 and are untouched.
+
+### What "the same as the hosted planner" REQUIRES of the MCP surface — and what already ships
+
+The decision above is only keepable if an MCP planner can do, in the planning phase, what the hosted
+one does. It can, and the surface is **SIX tools, not the three-step pipeline a short reading of
+AMENDMENT 1 suggests.** Recorded here because a reader who takes
+`create_plan → add_plan_items → update_plan_item → final` as the whole surface will conclude two
+capabilities are missing that are not.
+
+| the planner wants to                       | the door                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------- |
+| open the plan                              | `create_plan` — and its session, origin `mcp` (§4–§5 of AMENDMENT 17)           |
+| lay a level's titles and edges             | `add_plan_items`                                                                |
+| author one card's bodies and sizing        | `update_plan_item` (AMENDMENT 3)                                                |
+| **revise the plan's own TITLE or SUMMARY** | **`update_plan`** (MOTIR-4637)                                                  |
+| correct or withdraw a proposal             | `update_plan_proposal` / `withdraw_plan_proposal` (AMENDMENT 8)                 |
+| **move the plan to PROPOSED**              | **`final: true` on `add_plan_items`**, which reaches `plansService.markPlanned` |
+
+**Two of those answer questions the short reading leaves open, and both matter to this decision:**
+
+- **The brief is NOT write-once.** `create_plan` describes `summary` as _"shown to the reviewer above
+  the tree"_, and a planner rarely knows the right sentence until the tree exists. `update_plan`
+  patches `title` and `summary` sparsely (omit = untouched, `null` = clear) and is refused only on a
+  FROZEN plan — `approved` / `declined` — so **an agent may correct the brief after the tree is
+  written and before it proposes**, which is exactly what the hosted planner does. Without this tool
+  the remedy was to withdraw every proposal and rebuild the plan.
+- **Closing does not require inventing a last proposal.** `final: true` rides on `add_plan_items`,
+  and **an EMPTY batch carrying it is legal**: the close is over what the plan ALREADY holds, so
+  `add_plan_items({ planId, proposals: [], final: true })` is the plain _submit_ door after the last
+  correction. **The one refusal to know:** `markPlanned` DISCARDS a plan holding **zero proposals in
+  total** — `declined` / `discarded`, never queued — because _"`planned` means somebody is being
+  asked to decide, and there is nothing here to decide"_ (MOTIR-4124). An empty CALL is fine; an
+  empty PLAN is not.
+
+**On the word _proposed_.** The enum is `generating → planned` (`PlanStatus`), and the surfaces label
+those _Writing_ and _Waiting for approval_; _Proposed_ is the review vocabulary for the same state. The
+status the agent moves the plan to by closing it is `planned`.
+
+**This section DECIDES nothing.** It records the shipped surface, because the decision above depends on
+it. Whether the close deserves a door of its own rather than a flag, and whether the three vocabularies
+for one state should be reconciled, are not settled here.
