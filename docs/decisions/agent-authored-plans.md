@@ -3489,3 +3489,52 @@ A reviewer sees an `add`'s proposed difficulty and a `modify`'s old → new, on 
 how hard a card is to reason about is one of the most consequential things a re-plan says about it.
 The review renderer is its own card (MOTIR-6137); until it lands the parity guards carry a named,
 self-expiring owed entry for it.
+
+---
+
+## AMENDMENT 20 — an MCP-authored plan is REVIEWED LIKE A HOSTED ONE: the planning phase does not distinguish by AUTHOR (task MOTIR-6157, 2026-09-24)
+
+**Decided by the requester (Yue, 2026-09-24).** In one sentence: **a plan an agent writes through
+the MCP is watched and decided in the PLANNING PHASE exactly as a Motir AI plan is.** The door the
+plan was written through changes who typed, not what the planning phase is.
+
+### The reasoning
+
+The agent held its conversation in its own CLI, so Motir never saw the turns. The conclusion drawn
+from that until now was that such a plan has _nobody to talk to_ — and that is a fact about the
+TRANSCRIPT, not about the plan. What the person wants to watch and decide is the planning phase
+itself: cards arriving as they are written, the proposed tree readable as a List or a Canvas, and
+Motir AI still there to change it. None of those depends on who wrote the plan.
+
+So an MCP plan is a first-class planning session, and the planning surface is where it is read while
+it is being made and once it is proposed.
+
+### The mechanism it rests on — a session exists from the FIRST PROPOSAL
+
+`create_plan` opens a session of origin `mcp` in the same call that opens the plan
+(`lib/mcp/tools/authorPlan.ts`, `session: { origin: 'mcp' }` — AMENDMENT 17 §4–§5). So there is a
+conversation surface to open from the plan's first proposal onward, before any turn exists.
+
+**An empty transcript is not an absent conversation, and no reader may treat the two as the same.**
+AMENDMENT 17 §5 already makes `Plan.sessionId` universal — every plan belongs to exactly one session,
+the backfill included — so _has a session_ and _has turns_ are different questions, and it is the
+first one that says whether there is a planning phase to watch.
+
+### What this AMENDS
+
+**`approval-gates.md` §11.5b's third bullet, insofar as it sends _"an agent-authored MCP plan whose
+session has no turns"_ to the plan page.** That clause is superseded by this decision. **The edit to
+that file belongs to Story MOTIR-6043**, which owns where a plan row opens, and is deliberately not
+made here: a decision record states the direction, and the surface that consumes it carries its own
+change.
+
+### What this does NOT decide
+
+- **Where a row opens for any OTHER plan** — a cadence plan, a backfilled plan, a plan with no
+  session row at all. This decision is about the MCP planner and says nothing about those; Story
+  MOTIR-6043 and `approval-gates.md` §11.5b own the destination rule in full.
+- **The copy** on any row or notice (MOTIR-6044).
+- **What the planning surface SHOWS once open** — the level it lands on (MOTIR-6154) and the cards
+  arriving with their edges and motion (MOTIR-6158) are those stories'.
+- **Anything about DECIDING a plan.** The plan-approval gate, its verbs, its routing and its
+  authority are `approval-gates.md` §11 and are untouched.
