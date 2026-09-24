@@ -26,8 +26,15 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **The grouped non-epic roots on a plan canvas** | **`plan-canvas-grouped-roots.mock.html`** + `.png`        | MOTIR-4773           | Part XVI   |
 | **A proposal FILED into a folder**              | **`plan-folder-placement.mock.html`** + `.png`            | MOTIR-5406           | Part XVII  |
 | **Folders as LEVELS on the planning canvases**  | **`plan-folder-levels.mock.html`**                        | MOTIR-5793           | Part XVIII |
+| **A card MOVED under a proposed parent**        | **`plan-review--surgical-edits.mock.html`**               | MOTIR-6053           | Part XIX   |
 | **A leaf's DIFFICULTY on the plan review**      | **`plan-review--difficulty.mock.html`**                   | MOTIR-6134           | Part XX    |
 | **The surface's List \| Canvas for a plan**     | **`plan-review--surface-views.mock.html`**                | MOTIR-6184           | Part XXI   |
+| **Approve or decline a plan, in place**         | `plan-review--decide.mock.html` (on the design result)    | MOTIR-6033           | Part XXII  |
+
+**A Part number is an address in THIS file.** Before taking the next number, check the area's
+published design results too (`list_designs` with `pathPrefix: design/ai-planning/`): a result that
+has been published but not landed here has already used its number. Part XXII records the one time
+that was missed.
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -5718,23 +5725,29 @@ the panels that change. No `.png` (AMENDMENT 4).
 
 ## 21.0 ⚠️ WHICH "Part XX" this Part cites, and why it never says the number
 
-This Part amends **two** designs, and one of them is not in this file.
+This Part amends **two** designs, and when it was written one of them was not in this file.
 
 - **MOTIR-3234's Part VIII** (`plan-detail-list-view.mock.html`) — the pane header and the switch.
   That one IS here, and is cited by number.
 - **MOTIR-6033's decide design** — the planning surface as a plan's DECISION surface, and the confirm
-  bar's verbs, consequence line, decline band, held reason and stale alert. It is **published only**:
-  evidence `cmueg6bue00kghwoikl5e6bxp`, approved 2026-09-23, carrying
-  `plan-review--decide.mock.html` and a note fragment of its own. **It is NOT committed to this
-  repository** — neither the mock nor its Part — so every citation of it here is by **card key and
-  evidence id**, never by a Part number.
+  bar's verbs, consequence line, decline band, held reason and stale alert. It was **published only**:
+  evidence `cmueg6bue00kghwoikl5e6bxp`, approved 2026-09-23, carrying `plan-review--decide.mock.html`
+  and a note fragment of its own.
 
-**Why that care is not pedantry.** That fragment numbers itself `Part XX`, and it says it lands after
-Part XIX. It never landed. `Part XX` in THIS file is MOTIR-6134's difficulty design (merged in the same
-merge-queue batch, `moooon-B-V/motir-core#3082`), so the number resolves to two different designs
-depending on which document a reader has open. Anything in this Part that said "Part XX §20.4" would
-point at difficulty chips for anyone reading the committed file. **Bug MOTIR-6190** carries the defect
-and the two candidate fixes; this Part simply refuses to use the ambiguous address.
+**✅ RESOLVED — it is now Part XXII of this file (MOTIR-6190, `#3101`).** While this story was in
+review, the bug this section was written to dodge was fixed: the decide design landed here, renumbered
+from the `Part XX` its own result claims to **Part XXII**, with its sections `§20.x` kept as published.
+So the ambiguous address is gone, and a citation of the decide design in this Part may now say
+**Part XXII** and mean exactly one thing.
+
+**Why the care was not pedantry, kept as the record of what went wrong.** That fragment numbered
+itself `Part XX` and said it lands after Part XIX. It never landed. `Part XX` in this file is
+MOTIR-6134's difficulty design (merged in the same merge-queue batch,
+`moooon-B-V/motir-core#3082`), so for a stretch the number resolved to two different designs depending
+on which document a reader had open — anything here that had said "Part XX §20.4" would have pointed
+at difficulty chips. This Part refused the ambiguous address rather than guessing, and the index
+table's own note above now carries the rule that prevents a repeat: **check the area's published
+design results before taking the next number.**
 
 ## 21.1 What this COMPOSES and must not redraw
 
@@ -5746,7 +5759,7 @@ Almost everything. This Part adds no element and changes nothing inside one:
 - `PlanReviewCanvas` — Parts IX and XIII, including `arrivalLevel()` and the decided treatments of
   Part VI;
 - `PlanChangeConfirmBar`, its decline band, its held reason and its stale alert — MOTIR-6033's design,
-  §20.4 and §20.5 of its own fragment;
+  Part XXII §20.4 and §20.5;
 - the surface's Close + project bar and the audit-coverage banner's seam — `PlanningWorkspaceHost` as
   shipped, **including their COPY**: `planningWorkspace.close` and `escKey`, resolved from the
   catalogue rather than typed (21.11).
@@ -5830,7 +5843,7 @@ criterion rather than left as an intention.
 ## 21.5 Decision 4 — the access path: no new door, and the switch APPEARS when the plan becomes proposed
 
 **The surface is reached exactly as it is today** — _Plan with AI_ on a work item, a Plans row, or a
-To-approve row (MOTIR-6033 §20.2). This Part adds no entrance.
+To-approve row (Part XXII §20.2). This Part adds no entrance.
 
 **What it adds is a moment.** The switch is not a control the reader goes looking for; it arrives with
 the plan:
@@ -5943,7 +5956,7 @@ decision is about the slot, not its content: where the bar sits, and what happen
 
 Nothing new. Every element in the asset is a shipped component's own markup or the surface's own
 chrome, so the roles are those components' — Part VIII §2's table for the header and the switch,
-MOTIR-6033's §20.8 for the bar and its bands.
+Part XXII §20.8 for the bar and its bands.
 
 The asset's two additions are its BOARD chrome, which paints only through `--el-*`
 (`--el-text-secondary` / `--el-text-strong` / `--el-text` for ink, `--el-canvas` / `--el-surface` /
@@ -6041,9 +6054,9 @@ Over every `MOTIR-<n>` the new mock and this Part name:
 - **MOTIR-6154 / MOTIR-6159 / MOTIR-6160** (the landing story) — neither. Where the canvas ARRIVES is
   theirs; this Part draws the canvas as a region and says nothing about its level.
 - **MOTIR-6134** (Part XX, difficulty) — neither, and 21.0 is the only reason it is named: its Part
-  number collides with the number MOTIR-6033's published fragment uses.
-- **MOTIR-6190** — the bug 21.0 raises. Neither gives nor takes; it records the defect this Part works
-  around.
+  number collided with the number MOTIR-6033's published fragment used.
+- **MOTIR-6190** — the bug 21.0 raised, now FIXED (`#3101`): it landed the decide design here as
+  Part XXII, so this Part cites it by number rather than by evidence id. Neither gives nor takes.
 - **MOTIR-4150 / MOTIR-4687** — neither. Named in 21.11 as the reason a dead rule is dropped.
 
 ## 21.13 What Part XXI does NOT draw
@@ -6059,3 +6072,410 @@ Over every `MOTIR-<n>` the new mock and this Part name:
   draft's survival (21.7) is a property of NOT touching them.
 - **The plan page.** It is unchanged, and its own suites are the assertion of that.
 - **Any new string**, in either catalogue.
+
+# Part XXII — The PLAN-APPROVAL gate: the To-approve row, the planning surface as its DECISION surface, and the hand-off before generation (MOTIR-6033 · Story MOTIR-6012, DATED 2026-09-23)
+
+> **Published as "Part XX" and renumbered on landing (MOTIR-6190).** This Part is MOTIR-6033's approved
+> design result, evidence `cmueg6bue00kghwoikl5e6bxp` (published 2026-09-23), landed here verbatim
+> except for its numbering. Its result calls it **Part XX** with sections **§20.0–§20.11**, but Part XX
+> of this file is MOTIR-6134's difficulty design and Part XXI is MOTIR-6184's published design, so it
+> lands as **Part XXII**. Every section keeps its number after the dot: the result's §20.N is §22.N
+> here, and its own cross-references are rewritten to match. References to `§ 20` (with a space) are
+> the workbench notes' § 20 and are unchanged.
+>
+> **Its two mocks are not mirrored in this tree.** `design/ai-planning/plan-review--decide.mock.html`
+> and `design/workbench/approvals-row--plan.mock.html` are read from the design result on MOTIR-6033
+> (`get_design MOTIR-6033`), which is the source of truth (`docs/decisions/design-result.md`
+> AMENDMENT 5 Q1). The same result carries the § 29 pointer text for `design/workbench/design-notes.md`,
+> which that file does not hold yet.
+
+**The assets:** two DELTA mocks, with no `.png`.
+
+- `design/workbench/approvals-row--plan.mock.html` is the row. It amends
+  `design/workbench/approvals-row.mock.html` (§ 20) as the shipped `ApprovalRow` renders it after
+  § 28's plain-words sentence.
+- `design/ai-planning/plan-review--decide.mock.html` is the decision surface and the hand-off.
+
+**This Part is the spec of record for both.** The story ships them together, and one reader should
+not need two files to review it. The workbench area's § 29 is a pointer back here.
+
+**What it amends, by path.** None of these files is edited:
+
+- `design/ai-chat/planning-workspace.mock.html`: the two-pane shell.
+- `design/ai-chat/plan-change-conversation.mock.html` sheet 4: the review as a diff on the canvas,
+  the confirm bar, and the rail's review block.
+- `design/ai-chat/planning-workspace--resume.mock.html` panel 5 (MOTIR-6019 §19.8): the reopened
+  line.
+- `plan-detail-refined.mock.html` (Part XIII): `PlanReviewRail` and its decision footer, which holds
+  the rail's existing approve CTA.
+
+**Contract:** `docs/decisions/approval-gates.md` §11 (MOTIR-6031): §11.3 the stamp, §11.4 the verbs,
+§11.5b the decision surface, §11.5c the hold, §11.6 routing and §11.7 raise and supersede. This Part
+decides only what §11.11 leaves to it: the row's words and the surface's words and layout.
+
+## 22.0 Drawn against SHIPPED reality
+
+Both mocks are composed from the components at base `91982c72a`. The class strings were copied from
+the source, not from older mocks:
+
+- `components/approvals/ApprovalRow.tsx`: the row, its sentence, details, waited and decide cells,
+  `StatePill` and the narrow stack.
+- `app/(authed)/workbench/_components/ApprovalsList.tsx`: the header band.
+- `components/planning/PlanChangeConfirmBar.tsx`: the canvas bar.
+- `components/planning/PlanChangeRail.tsx`: the header, bubbles, act rail, review block,
+  `planning-reopened-session` line and system marker.
+- The composer, exactly as MOTIR-6019's published mock emits it.
+- `components/planning/PlanReviewRail.tsx`: header, history and the pinned footer.
+- `components/approvals/ApprovalGateControl.tsx`: the `confirming` band.
+- The design-system `Button`, `Pill`, `FormField` and `Textarea` recipes.
+
+Each mock's first stylesheet is the project's real Tailwind v4.3.0 build (`tailwindcss` +
+`@motir/design-system/theme.css`), compiled over that mock's markup only. The token layer is
+generated, not hand-copied. The second stylesheet is board chrome, and it names colour only through
+`--el-*`. Glyphs come from `lucide-react` 1.16.0's icon nodes. **The plan-review canvas is not
+redrawn.** It is a labelled region, because nothing on it changes.
+
+## 22.1 ⚠️ THIS KIND RENDERS NO PORT — and it is not decided in the approval overlay
+
+**`plan_approval` renders NO port and is NOT decided in the approval overlay** (`approval-gates.md`
+§11.5b). Every other kind opens `?approval=<key>&approvalKind=<kind>` over the tab and is decided in
+the universal frame (`design/work-items/design-notes.md` ~6521, `design/workbench/design-notes.md`
+§ 22). A plan is decided on the PLANNING SURFACE instead. The reviewer needs the plan and the
+conversation that can change it, and a port can host the first but not the second.
+
+So neither mock draws the frame. **This is deliberate, and it is not a gap:**
+
+- Do not add a plan port.
+- Do not add a `plan_approval` arm to `withApprovalOverlay`.
+- Do not "fix" the missing frame.
+
+Routing, the record, the stamp and the one decide door are exactly the other kinds'. Only the
+surface differs.
+
+## 22.2 The ACCESS PATH (`approvals-row--plan` Panel 4 · `plan-review--decide` Panels 1 and 9)
+
+| from                                                 | how                                                                                                                                                                                                                                                                                                                                   | to                                                                                                                                                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **To approve → a plan row** (the plan has a session) | A plain primary click on the row or its **Review** button `shallowPush`es the **planning overlay's** address over the tab. With a target: `?tab=approvals&plan=contextual&planFrom=work-item&planItem=<target>&planSession=<id>&planVia=approvals`. Without one: `…&plan=project&planFrom=project&planSession=<id>&planVia=approvals` | The planning surface at that conversation, with the plan on the canvas and **Approve · Decline** in place (decide Panel 2). **Close** strips the overlay's parameters and lands on `/workbench?tab=approvals` exactly. |
+| **To approve → a plan row** (no conversation)        | A real navigation to `/plans/<id>`. No conversation means: backfilled, an agent-authored MCP plan whose session has no turns, or a `cadence` plan (§11.5b).                                                                                                                                                                           | The plan's own page, which says why, with the same two verbs (decide Panel 8).                                                                                                                                         |
+| a modified, middle or secondary click on the row     | The row's `href` is `/plans/<id>`: the shipped `usePeekRowClick` contract, with the plan page where other kinds have the card.                                                                                                                                                                                                        | The plan page, in a new tab.                                                                                                                                                                                           |
+| **the planning surface**                             | Approve or Decline, in place (Panels 2–3).                                                                                                                                                                                                                                                                                            | The same surface, decided (Panel 6). The row settles in To approve (§ 20's rule).                                                                                                                                      |
+| a stale `?approval=` link to a plan gate             | The overlay does not render a frame with no port. It sends the reader to the first row of this table (§11.5b, MOTIR-6037).                                                                                                                                                                                                            | The planning surface.                                                                                                                                                                                                  |
+
+**⚠️ ONE NEW ADDRESS PARAMETER, `planVia`.** Since MOTIR-6024, the shipped rail prints _Reopened
+from the Plans page · …_ whenever `planSession` is present (`PlanChangeRail`, `state.reopened`). A
+person arriving from To approve would read a false sentence. So the To-approve row adds
+**`planVia=approvals`**:
+
+- Its only reader is the reopened line's copy (22.5).
+- It is read only with `planSession`.
+- Absent, or any other value, means the Plans page, so every shipped link keeps its meaning.
+- **Close strips it with the other five.**
+
+It belongs in `design/ai-chat/design-notes.md`'s address table, which three files agree on. This
+publish carries one note file, so the row is specified here and the table row is owed by MOTIR-6037
+(22.11 flag 2):
+
+| parameter     | carries                                                                                                                                   | values                | read by                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------------------ |
+| **`planVia`** | The entrance a NAMED session was reopened from, so the reopened line tells the truth. Read only with `planSession`. Absent means `plans`. | `plans` · `approvals` | the rail's reopened line |
+
+## 22.3 The ROW (`approvals-row--plan.mock.html`)
+
+It is `ApprovalRow` with the shipped columns, `APPROVALS_GRID_TEMPLATE`, header band and narrow
+stack. What is new is one kind's glyph, sentence, details and two states.
+
+- **Glyph:** lucide `sparkles` in `--el-accent-on-surface`, `aria-hidden`. It is the Motir-AI mark
+  the Plans nav and _Plan with AI_ already carry, so a reader knows it. The words carry the meaning.
+- **The leading line (DECIDED, Panel 1).** It says what the plan is ABOUT and never leads with the
+  gate kind (§ 28):
+
+  | the plan has                       | the sentence                          | key cell                                     | title door                                                                        |
+  | ---------------------------------- | ------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------- |
+  | one target                         | _Plan for_ **{target title}**         | the target's key                             | the target's title is the shipped title door (its quick view, `usePeekRowClick`)  |
+  | several targets (`targetKeys` > 1) | _Plan for_ **{first target's title}** | `{first key} +{n}`, every key in its `title` | as above, on the first                                                            |
+  | no target, a title                 | _Plan —_ **{plan title}**             | none                                         | **none**: a plan has no quick view, so its title is plain text under the row door |
+  | no target, no title                | _Plan for_ **{project name}**         | none                                         | none                                                                              |
+
+  The row never shows a blank, never shows a bare plan id, and never names a card the plan does not
+  target. The target set is the plan's session's `targetKeys`, in stored order.
+
+- **Details:** `{n} proposed items · {author}`. The author is _written by Motir AI_, _written by
+  {harness}_ or _planned automatically_ (for a cadence plan). It shows the author rather than the
+  requester because the gate is routed to the requester (§11.6), so the requester is ordinarily the
+  person reading. The cell's `title` carries the plan title.
+- **Waited:** the gate's `createdAt`, as for every kind.
+- **Decide cell:** the shipped **Review** button, whose door is the planning surface (22.2).
+
+**States in To approve (Panel 2):**
+
+| state                | when                                                           | decide cell                                                                                              |
+| -------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| awaiting             | `awaiting`, `canDecide`, no lease                              | **Review**                                                                                               |
+| **being rewritten**  | `awaiting`, with `held.reason = 'revision_in_flight'` (§11.5c) | `Pill severity="info"` (sky) reading **Being rewritten**. No button, no verb. The whole row still opens. |
+| see but not decide   | `awaiting`, `!canDecide`: the requester lacks `ai:decide_plan` | the shipped **Awaiting** pill                                                                            |
+| settled approved     | decided here or in the surface                                 | `Approved` (mint). § 20's settle-in-place rule is unchanged.                                             |
+| settled **declined** | the NEW terminal state (§11.4)                                 | **`Declined`**: `Pill severity="warning"` (peach), like every refusal a person pressed                   |
+
+**⚠️ _Being rewritten_ is not § 26's _held_ row.** § 26's `section: 'held'` is a row that LEFT the
+awaiting set (_Decided elsewhere_). This one never left it: the gate stays `awaiting`, and only its
+verbs are refused. The code must not reuse `section: 'held'` for it. Sky is the tint the plan rail's
+in-flight band already spends, and no plan status spends it.
+
+**Decided records, in the Approvals room (Panel 3):**
+
+- **Declined with a reason:** the reason's first line replaces the details (MOTIR-6075's
+  `RefusalReasonCell`).
+- **Declined without one:** _Declined without a reason · on {version}_.
+- **Withdrawn**, with the shipped colourless pill, gets one sentence per cause (§11.7):
+  - `plan_stale`: _Work this plan changes was finished, so the plan went out of date and this
+    question was withdrawn._
+  - `plan_discarded`: _Every proposal in the plan was withdrawn, so the plan ended and this question
+    with it._
+
+  Neither may fall back to `withdrawn`'s or `pulled_back`'s words.
+
+**Which field each element reads.** This is what MOTIR-6034's DTO owes, because `workItem` is null
+for this kind:
+
+| element                            | field                                                                                               |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------- |
+| sentence form + title + key cell   | the plan's session's `targetKeys` (+ each target's title), else `Plan.title`, else the project name |
+| details                            | the plan's proposal count · `authorSource` / `authorHarness` / `origin`                             |
+| the door                           | `Plan.id` (href), `Plan.sessionId` + whether that session has turns (overlay vs page)               |
+| being rewritten                    | the gate DTO's `held` (§11.5c)                                                                      |
+| waited · state pill · record lines | unchanged: `waitingSince` · `state` · `refusalReason` / `supersedeCause`                            |
+
+**Code note for MOTIR-6037.** `ApprovalRow`'s `SENTENCE_KEY` is total over the kind. `plan_approval`
+cannot be one `workbench.approvals.sentence.*` key, because it has four forms. It takes its own
+branch that reads `approvalGate.planApproval.row.*`. The row's `href` and door are `/plans/<id>` and
+the planning overlay, never `/items/<key>` and `withApprovalOverlay`.
+
+**Narrow (Panel 5)** is § 20's reflow unchanged. The frame words _Plan for_ and _Plan —_ never
+truncate; the title does.
+
+## 22.4 The DECISION SURFACE (`plan-review--decide.mock.html` Panels 2–3, 8)
+
+**Where the two verbs sit (DECIDED).** They are the controls the surface already has, re-pointed at
+the one decide door (MOTIR-6038). **Nothing is added beside the existing Approve:**
+
+- **The planning surface** already decides a plan in two places. They stay:
+  - the canvas's **confirm bar** (`PlanChangeConfirmBar`), which is the gate;
+  - the rail's **review block** (`plan-change-review`), which mirrors it.
+
+  When the plan has an awaiting gate, both read **Decline** (ghost, left) and **Approve** (primary,
+  check, right), the order the bar already has. The shipped _Discard_ / _Approve changes_ (zh
+  _放弃_ / _确认变更_) are the words for a proposal nobody has been asked about. For a gated plan they
+  become the gate's verbs, so the planning surface and the plan page say the same two words.
+
+- **The plan page** (`PlanReviewRail`) needs nothing moved. Its existing CTA, _Approve — add {n}
+  items to your backlog_, IS the gate's Approve. Its ghost _Decline_ IS the gate's Decline.
+
+**The consequence line** replaces _Nothing is saved until you approve_ on the bar's second line, and
+it appears under _Nothing saved yet_ in the review block: _Approving adds these to your backlog.
+Declining ends the plan and changes nothing._
+
+**⚠️ There is NO _Request changes_, anywhere** (§11.4). A plan is changed by talking to the planner,
+which writes a new version of the same plan. A verb that recorded a refusal and then waited would
+wait for something only the conversation can cause. The composer is on the same surface, directly
+below. The door refuses `request_changes` on this kind by name, so no surface may offer it.
+
+**Decline confirms once (Panel 3).** It uses the approve language's own `confirming` band from
+`ApprovalGateControl`: an inline band over the verbs, never a modal.
+
+- On the bar, the band stacks above it and the bar's verb group steps aside. In the rail, the band
+  replaces the review block's verbs.
+- Title: _Declining this plan will:_. Three consequences: _End it — it cannot be approved
+  afterwards._ · _Leave your backlog exactly as it is._ · _Take it out of To approve._
+- The shipped `FormField` + `Textarea` asks _Why are you declining it?_, with the helper
+  **_Optional. It is kept with the decision._**
+- **The reason is OPTIONAL**, a stated departure from §10a (§11.4). _Yes, decline_ is live with the
+  field empty, and there is no required-error state. The note is stored as `noteMd` when given.
+
+**Approve asks nothing.** One press, as the plan's Approve always has; its consequence line sits
+beside it. The shipped stale-warning confirm for approving with stale proposals is unchanged.
+
+## 22.5 Every STATE of the surface
+
+| state                                | what the reader sees                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | panel |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **ready (reopened from To approve)** | MOTIR-6019's reopened line in its slot, naming THIS entrance: _Reopened from To approve · started by you · last active {when}_ (or _started by {name}_). The transcript opens at its latest turn (shipped). The plan is on the canvas; both verbs are live, with the consequence line.                                                                                                                                                                                                                | 2     |
+| Decline pressed                      | the confirm band (22.4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 3     |
+| **held**: the planner is rewriting   | Both verbs are **disabled, not removed**. They come back on this surface the moment the lease ends. The reason replaces the consequence line: _Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in To approve meanwhile._ The act rail streams, and the composer is disabled, as shipped.                                                                                                                                                    | 4     |
+| **refused as stale**                 | `APPROVAL_GATE_STALE_SUBJECT`. A `role="alert"` band directly above the verbs it refused, on `--el-tint-yellow` (the plan rail's _changed under you_ tint, not danger): **_This plan changed while you were reading it._** _Nothing was approved or declined. The canvas now shows the new version — look it over, then decide again._ The canvas and counts are re-read, and the verbs are live against the new stamp. The same sentence appears in the review block when the press came from there. | 5     |
+| decided: approved                    | the shipped after-approve turn (`planningWorkspace.conversation.approved`). The bar leaves with the proposal.                                                                                                                                                                                                                                                                                                                                                                                         | 6     |
+| decided: **declined**                | the shipped centred system marker: _You declined this plan. Nothing in your backlog changed, and it has left To approve._ It is not a planner turn and not an alert: a person ended the question.                                                                                                                                                                                                                                                                                                     | 6     |
+| decided by somebody else first       | `approvalGate.refusal.alreadyDecided`, verbatim                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 6     |
+| see but not decide                   | **No verbs at all**, not disabled ones (the frame's state-B rule). A lock glyph and _Waiting on {name} to approve or decline this plan. Deciding a plan needs permission to decide plans._                                                                                                                                                                                                                                                                                                            | 7     |
+| **no conversation → the plan page**  | `PlanReviewRail` gains one notice (the reopened line's shape, `message-square-text` glyph) naming the cause, then _Approve or decline it here — or ask Motir to change it below._ The page HAS a composer (Part XII), so the notice never says there is nothing to talk to, only that there is no conversation to return to. Same verbs, same confirm band.                                                                                                                                           | 8     |
+
+## 22.6 The HAND-OFF before generation (Panel 9)
+
+**The message.** When the conversation settles and the run starts writing, the planner says so in
+its own turn. It is a keyed assistant bubble, like the shipped `lockedNote`, so the words are the
+catalogue's and not the model's:
+
+> _I have what I need — I'm writing the plan now. You don't have to wait here: close this whenever you
+> like, and the plan will be waiting for you in **To approve**._
+
+**To approve** is a link to `/workbench?tab=approvals`. A revision gets its own form:
+
+> _I'm writing a new version of this plan. You can close this — it stays in **To approve**, and you
+> can decide once I'm done._
+
+The act rail follows it, as shipped.
+
+**Leaving.** Close, Esc or Back closes the overlay.
+
+- **No close guard opens while the plan is being written, or once it is `planned` with an awaiting
+  gate.** The run is a server job and continues. A `planned` plan is kept and waits in To approve.
+- The shipped guard's body (_"Nothing is saved until you confirm. Closing now discards them."_) is
+  false for a gated plan. It must not be shown for one (22.11 flag 1).
+
+**Coming back.** When the plan reaches `planned`, the row is raised and appears in To approve. § 26:
+a nudge ADDS rows. The row returns the person to the surface in its ready state, which carries the
+reopened line (22.5).
+
+## 22.7 Copy — `messages/en.json` and `zh.json`
+
+Every new string sits under **`approvalGate.planApproval`**, except three that belong to namespaces
+total over an enum: the state pill, the two withdrawal causes and the kind label. Those join their
+existing maps.
+
+| key                                                  | en                                                                                                                                                                         | zh                                                                                                          |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `approvalGate.planApproval.row.targeted`             | Plan for <title>{name}</title>                                                                                                                                             | <title>{name}</title>的计划                                                                                 |
+| `approvalGate.planApproval.row.untargeted`           | Plan — <title>{name}</title>                                                                                                                                               | 计划 — <title>{name}</title>                                                                                |
+| `approvalGate.planApproval.row.untitled`             | Plan for <title>{project}</title>                                                                                                                                          | <title>{project}</title>的计划                                                                              |
+| `approvalGate.planApproval.row.moreTargets`          | +{count}                                                                                                                                                                   | +{count}                                                                                                    |
+| `approvalGate.planApproval.row.details`              | {count, plural, one {# proposed item} other {# proposed items}} · {author}                                                                                                 | {count} 个建议工作项 · {author}                                                                             |
+| `approvalGate.planApproval.row.author.motir`         | written by Motir AI                                                                                                                                                        | 由 Motir AI 撰写                                                                                            |
+| `approvalGate.planApproval.row.author.harness`       | written by {harness}                                                                                                                                                       | 由 {harness} 撰写                                                                                           |
+| `approvalGate.planApproval.row.author.cadence`       | planned automatically                                                                                                                                                      | 自动规划                                                                                                    |
+| `approvalGate.planApproval.row.rewriting`            | Being rewritten                                                                                                                                                            | 正在改写                                                                                                    |
+| `approvalGate.planApproval.row.rewritingTitle`       | Motir AI is writing a new version of this plan. You can approve or decline it when it finishes.                                                                            | Motir AI 正在编写此计划的新版本。完成后即可批准或拒绝。                                                     |
+| `approvalGate.planApproval.row.reviewRow`            | Review plan — {sentence}                                                                                                                                                   | 审阅计划 — {sentence}                                                                                       |
+| `approvalGate.planApproval.row.declinedNoReason`     | Declined without a reason · on <mono>{version}</mono>                                                                                                                      | 未说明原因即拒绝 · 版本 <mono>{version}</mono>                                                              |
+| `approvalGate.state.declined`                        | Declined                                                                                                                                                                   | 已拒绝                                                                                                      |
+| `approvalGate.withdrawn.cause.plan_stale`            | Work this plan changes was finished, so the plan went out of date and this question was withdrawn.                                                                         | 此计划要改动的工作已经完成，计划因此过期，该问题已撤回。                                                    |
+| `approvalGate.withdrawn.cause.plan_discarded`        | Every proposal in the plan was withdrawn, so the plan ended and this question with it.                                                                                     | 计划中的所有建议都已撤回，计划随之结束，该问题也一并撤回。                                                  |
+| `workbench.approvals.kind.plan_approval`             | Plan approval                                                                                                                                                              | 计划审批                                                                                                    |
+| `approvalGate.planApproval.surface.approve`          | Approve                                                                                                                                                                    | 批准                                                                                                        |
+| `approvalGate.planApproval.surface.decline`          | Decline                                                                                                                                                                    | 拒绝                                                                                                        |
+| `approvalGate.planApproval.surface.consequence`      | Approving adds these to your backlog. Declining ends the plan and changes nothing.                                                                                         | 批准后，这些内容会加入你的待办列表。拒绝会结束此计划，不做任何改动。                                        |
+| `approvalGate.planApproval.surface.reopened`         | Reopened from To approve · started by {name} · last active {when}                                                                                                          | 从“待审批”重新打开 · 发起人 {name} · 最近活动 {when}                                                        |
+| `approvalGate.planApproval.surface.reopenedYours`    | Reopened from To approve · started by you · last active {when}                                                                                                             | 从“待审批”重新打开 · 由你发起 · 最近活动 {when}                                                             |
+| `approvalGate.planApproval.surface.held`             | Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in To approve meanwhile.                                         | Motir AI 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“待审批”中。                     |
+| `approvalGate.planApproval.surface.heldBy`           | {harness} is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in To approve meanwhile.                                        | {harness} 正在编写此计划的新版本。完成后即可批准或拒绝——在此期间它会一直留在“待审批”中。                    |
+| `approvalGate.planApproval.surface.stale.title`      | This plan changed while you were reading it.                                                                                                                               | 你阅读期间，此计划已被修改。                                                                                |
+| `approvalGate.planApproval.surface.stale.next`       | Nothing was approved or declined. The canvas now shows the new version — look it over, then decide again.                                                                  | 没有批准或拒绝任何内容。画布现在显示的是新版本——请查看后重新决定。                                          |
+| `approvalGate.planApproval.surface.seeOnly`          | Waiting on {name} to approve or decline this plan.                                                                                                                         | 等待 {name} 批准或拒绝此计划。                                                                              |
+| `approvalGate.planApproval.surface.seeOnlyWhy`       | Deciding a plan needs permission to decide plans.                                                                                                                          | 决定计划需要“决定计划”的权限。                                                                              |
+| `approvalGate.planApproval.surface.declined`         | You declined this plan. Nothing in your backlog changed, and it has left To approve.                                                                                       | 你拒绝了此计划。待办列表没有任何改动，它也已离开“待审批”。                                                  |
+| `approvalGate.planApproval.declineConfirm.title`     | Declining this plan will:                                                                                                                                                  | 拒绝此计划将会：                                                                                            |
+| `approvalGate.planApproval.declineConfirm.end`       | End it — it cannot be approved afterwards.                                                                                                                                 | 结束它——之后无法再批准。                                                                                    |
+| `approvalGate.planApproval.declineConfirm.untouched` | Leave your backlog exactly as it is.                                                                                                                                       | 你的待办列表保持原样。                                                                                      |
+| `approvalGate.planApproval.declineConfirm.leaves`    | Take it out of To approve.                                                                                                                                                 | 将它移出“待审批”。                                                                                          |
+| `approvalGate.planApproval.declineConfirm.label`     | Why are you declining it?                                                                                                                                                  | 为什么拒绝它？                                                                                              |
+| `approvalGate.planApproval.declineConfirm.helper`    | Optional. It is kept with the decision.                                                                                                                                    | 选填。会与这项决定一起保存。                                                                                |
+| `approvalGate.planApproval.declineConfirm.proceed`   | Yes, decline                                                                                                                                                               | 确认拒绝                                                                                                    |
+| `approvalGate.planApproval.noConversation.agent`     | {harness} wrote this plan outside a conversation, so it opened on its own page.                                                                                            | {harness} 在对话之外编写了此计划，因此它在自己的页面上打开。                                                |
+| `approvalGate.planApproval.noConversation.cadence`   | Motir planned this on its own when your ready work ran out, so there is no conversation behind it.                                                                         | 这是 Motir 在你的就绪工作用完时自动规划的，因此背后没有对话。                                               |
+| `approvalGate.planApproval.noConversation.earlier`   | This plan was written before Motir kept planning conversations.                                                                                                            | 此计划是在 Motir 开始保存规划对话之前编写的。                                                               |
+| `approvalGate.planApproval.noConversation.next`      | Approve or decline it here — or ask Motir to change it below.                                                                                                              | 可以在这里批准或拒绝它——也可以在下方请 Motir 修改它。                                                       |
+| `approvalGate.planApproval.handoff.writing`          | I have what I need — I'm writing the plan now. You don't have to wait here: close this whenever you like, and the plan will be waiting for you in <link>To approve</link>. | 信息已经足够——我现在开始编写计划。你不必在这里等待：随时可以关闭，计划完成后会在<link>待审批</link>中等你。 |
+| `approvalGate.planApproval.handoff.rewriting`        | I'm writing a new version of this plan. You can close this — it stays in <link>To approve</link>, and you can decide once I'm done.                                        | 我正在编写此计划的新版本。你可以关闭这里——它会一直留在<link>待审批</link>中，等我完成后你就可以决定。       |
+
+**Reused verbatim, with no new key:**
+
+- _Review_ / _查看_ (`workbench.approvals.review`)
+- _Awaiting_, _Approved_, _Withdrawn_ (`approvalGate.state.*`)
+- _Cancel_ (`approvalGate.confirm.cancel`)
+- _Nothing saved yet_, the bar counts, _Added {n} work items … Anything else?_
+  (`planningWorkspace.conversation.*`)
+- _Someone decided this a moment ago_ (`approvalGate.refusal.alreadyDecided.*`)
+- the plan page's `planReview.approveCta` / `declineCta`
+
+The zh words for the verbs are **批准 / 拒绝**. The workspace's _确认_ and _放弃_ stay for an ungated
+proposal only.
+
+## 22.8 Token and shape roles
+
+| element                                  | colour                                                                                                                                                                | shape                                                 |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| row glyph                                | `--el-accent-on-surface` (a graphic, ≥ 3:1)                                                                                                                           | `h-4 w-4`                                             |
+| row frame words · key · details · waited | `--el-text-secondary` (never muted: the hover fill is `--el-surface`)                                                                                                 | `text-sm` / `font-mono text-xs` / `text-xs`           |
+| _Being rewritten_ pill                   | `--el-tint-sky` + `--el-text-strong` (`Pill severity="info"`)                                                                                                         | `--radius-badge` · `--spacing-chip-x/y`               |
+| _Declined_ pill                          | `--el-tint-peach` + `--el-text-strong` (`severity="warning"`)                                                                                                         | as above                                              |
+| _Withdrawn_ pill                         | `--el-archived-pill-bg` / `-text` (`tone="archived"`, colourless)                                                                                                     | as above                                              |
+| confirm bar                              | `--el-surface`, `--el-border` top, ink `--el-text` / `--el-text-secondary`                                                                                            | `px-4 py-2.5`                                         |
+| Approve / Decline                        | `Button` primary (`--el-accent` / `--el-accent-text`) / ghost (`--el-text`)                                                                                           | `--radius-btn` · `--height-btn-sm` (plan page: `-md`) |
+| review block                             | `--el-accent` border, `--el-text-strong` heading, `--el-text-secondary` line                                                                                          | `--radius-card`                                       |
+| decline confirm band                     | `--el-surface-soft`, `--el-border-soft` top; title `--el-text`, list `--el-text-secondary`; textarea `--el-page-bg` / `--el-border-strong`; helper `--el-text-helper` | `--radius-input` · `--spacing-input-x/y`              |
+| stale band                               | `--el-tint-yellow` + `--el-text-strong`                                                                                                                               | `border-t` (bar) · `--radius-control` (rail)          |
+| reopened line · no-conversation notice   | `--el-page-bg`, `--el-border`, `--el-text-strong` (MOTIR-6019's shape)                                                                                                | `--radius-control` · `--spacing-control-x/y`          |
+| declined marker                          | `--el-text-secondary`, centred `text-xs` (shipped system marker)                                                                                                      | none                                                  |
+| see-only line                            | `--el-text-secondary`, lock glyph `aria-hidden`                                                                                                                       | none                                                  |
+
+There is no raw hex, no `--color-*` and no generic radius scale in either mock's authored markup or
+board chrome. The compiled token layer is the one place `--color-*` is wired, exactly as in
+`globals.css`.
+
+## 22.9 a11y
+
+- The row door's accessible name is _Review plan — {sentence}_.
+- The door keeps `aria-haspopup="dialog"`, because the planning overlay is a dialog.
+- _Being rewritten_ is a word, not only a tint. Its `title` explains it, and the row stays focusable.
+- The disabled verbs keep `disabled` and are described by the held line beside them.
+- The stale band is `role="alert"`.
+- The decline textarea is labelled and `aria-describedby` its helper. It never goes `aria-invalid`,
+  because it is optional.
+- The hand-off bubble is inside the rail's `role="log"`. Its link is a real anchor.
+
+## 22.10 GIVES / TAKES
+
+- **MOTIR-6037** (the row and the surface) is GIVEN all of 22.1–22.9:
+  - the row's four leading-line forms, glyph, details, _Being rewritten_ and _Declined_;
+  - the access path and `planVia`;
+  - the verbs' placement and labels, the consequence line and the decline confirm;
+  - the held, stale, decided, see-only and no-conversation states;
+  - the hand-off message and the no-guard close;
+  - the copy in both catalogues.
+
+  It TAKES one element the card did not name: the `planVia` address row and its entry in
+  `design/ai-chat/design-notes.md`'s address table (flag 2).
+
+- **MOTIR-6034** (the reads and the DTO) is GIVEN the field list in 22.3: target keys and titles,
+  plan title, project name, proposal count, author triple, session id and has-turns. Nothing is
+  TAKEN.
+- **MOTIR-6035** (the handler): the `held` DTO field and the stale refusal are read exactly as it
+  specifies. Nothing is TAKEN.
+- **MOTIR-6032** (schema): the `declined` state and the two supersede causes each get a pill or a
+  sentence here. Nothing is TAKEN.
+- **MOTIR-6038** (every door): the verbs drawn are the existing controls, so its re-pointing needs
+  no new control.
+- **MOTIR-6019 / MOTIR-6024:** the reopened line gains an entrance variant. The Plans-page wording is
+  unchanged.
+- **MOTIR-6043** (where a Plans row opens) consumes the no-conversation fallback in 22.5. Not here.
+
+## 22.11 ⚠️ Planning flags: what the card left open, and what contradicts shipped code
+
+1. **The shipped close guard contradicts the hand-off.** `PlanCloseGuard` says _"Nothing is saved
+   until you confirm. Closing now discards them."_ and offers Discard. Under this story a `planned`
+   plan with an awaiting gate is kept and waits in To approve, and the hand-off tells the person they
+   may leave. The design: **no guard opens for a gated plan, or while a plan is being written**
+   (22.6). No card in MOTIR-6012 names the guard. MOTIR-6037 should own it, or it needs its own
+   card. Also unverified: that the generation run continues after the overlay closes. The hand-off's
+   promise depends on it.
+2. **The shipped reopened line would lie.** It prints _Reopened from the Plans page_ for ANY
+   `planSession` address. The design adds `planVia=approvals` (22.2), and
+   `design/ai-chat/design-notes.md`'s address table owes the row. That area's notes are not part of
+   this publish.
+3. **Several targets.** The card decides the one-target and no-target forms only. This design leads
+   with the first target and puts `+{n}` in the key cell (22.3).
+4. **Relabelling the workspace verbs.** For a gated plan, _Discard_ / _Approve changes_ become
+   _Decline_ / _Approve_. This is a copy change on a shipped control that follows from §11.4's verb
+   and the one vocabulary. MOTIR-6037 builds it.
+5. **"The rail's existing approve CTA"** is read as `PlanReviewRail`'s _Approve — add {n} items_ (the
+   plan page) together with the workspace's mirrored review block. On both surfaces the gate's verbs
+   ARE the existing controls, and nothing is placed beside them.
