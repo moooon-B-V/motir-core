@@ -131,6 +131,7 @@ describe('the sandbox smoke harness', () => {
     'login-smoke.sh',
     'readonly-login-smoke.sh',
     'entrypoint-bypass-smoke.sh',
+    'agent-update-smoke.sh',
     'fake-agent.sh',
     'failing-agent.sh',
     'stub-server.mjs',
@@ -234,12 +235,16 @@ describe('the sandbox smoke harness', () => {
     expect(guard).toContain('EXPECTED_PREFIX=/home/node/.motir-sandbox/agent-config');
   });
 
-  it("asserts Claude Code's self-updater is OFF in the built image, with the entrypoint bypassed (MOTIR-6183)", () => {
-    // The Dockerfile line is checked in sandbox.test.ts; this is the BUILT
-    // image, as `node`, launched the way the devcontainer recipe launches it —
-    // the route the "Auto-update failed" warning was reported on.
-    const guard = read(join(SMOKE_DIR, 'entrypoint-bypass-smoke.sh'));
-    expect(guard).toContain('DISABLE_AUTOUPDATER');
+  it('runs the agent-update guard on EVERY profile leg (MOTIR-6183)', () => {
+    // The built image, as node: the agent resolves under the node-owned prefix
+    // and can be rewritten by its own updater; motir stays root-owned.
+    expect(images).toContain('packages/cli/sandbox/smoke/agent-update-smoke.sh');
+    expect(images).toContain('--liveness "${{ matrix.profile.liveness }}"');
+    const guard = read(join(SMOKE_DIR, 'agent-update-smoke.sh'));
+    expect(guard).toContain('--entrypoint /bin/bash');
+    expect(guard).toContain('AGENT_PREFIX=/opt/motir-agents');
+    expect(guard).toContain('/usr/local/bin/motir');
+    expect(guard).toContain('/usr/local/lib/node_modules/@motir/cli');
     expect(guard).toContain('MOTIR-6183');
   });
 

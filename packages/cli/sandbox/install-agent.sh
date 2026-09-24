@@ -19,11 +19,14 @@
 #
 # TWO INVARIANTS every arm upholds:
 #
-#   1. The binary lands on the GLOBAL PATH. This script runs as root, BEFORE the
-#      Dockerfile's `USER node`, so an installer that defaults to
-#      `$HOME/.local/bin` would drop the agent into /root — invisible to the
-#      user that actually runs it. Installers that hard-code $HOME are therefore
-#      pointed at $AGENT_PREFIX, or staged and relocated into it.
+#   1. The binary lands under the AGENT PREFIX, which is on PATH for every user.
+#      This script runs as root, BEFORE the Dockerfile's `USER node`, so an
+#      installer that defaults to `$HOME/.local/bin` would drop the agent into
+#      /root — invisible to the user that actually runs it. Installers that
+#      hard-code $HOME are therefore pointed at $AGENT_PREFIX, or staged and
+#      relocated into $AGENT_ROOT. The Dockerfile chowns the prefix to `node`
+#      afterwards, so the agent can UPDATE ITSELF in a long-running container
+#      (MOTIR-6183); npm agents land there through NPM_CONFIG_PREFIX.
 #   2. The arm SMOKE-TESTS the binary it just installed. A profile that claims
 #      an agent it cannot execute must fail the BUILD, not the first unattended
 #      `motir auto` run — the same rule the base applies to `motir --version`.
@@ -40,9 +43,14 @@ AGENT="${1:-base}"
 # agent to the CLI's profile table cannot silently skip this seam.
 KNOWN_PROFILES='claude codex opencode kimi antigravity cursor aider goose'
 
-# Where non-npm agents get installed. /usr/local/bin is on PATH for every user
-# in the node base image — root at build time, `node` at run time.
-AGENT_PREFIX=/usr/local/bin
+# Where every agent gets installed (MOTIR-6183). The Dockerfile sets
+# MOTIR_AGENT_PREFIX, points NPM_CONFIG_PREFIX at it and puts its `bin` first on
+# PATH — for root at build time and `node` at run time — then chowns it to
+# `node`, so an agent's own updater can write where it was installed. `motir`
+# and codegraph are NOT here: they stay root-owned in /usr/local.
+AGENT_ROOT="${MOTIR_AGENT_PREFIX:-/opt/motir-agents}"
+AGENT_PREFIX="$AGENT_ROOT/bin"
+mkdir -p "$AGENT_PREFIX"
 
 # Staging HOME for an installer that insists on writing under $HOME. Its payload
 # is relocated into a stable location afterwards and the staging tree is
@@ -230,16 +238,17 @@ case "$AGENT" in
 
     cursor)
         # Cursor CLI (Anysphere). Its installer hard-codes $HOME/.local, so it
-        # runs against a staging HOME and the payload is relocated to /opt; the
+        # runs against a staging HOME and the payload is relocated under
+        # $AGENT_ROOT; the
         # installer's own symlinks point back into the staging tree, so they are
         # re-created against the relocated copy rather than copied.
         # NOTE the binary is `agent` (with `cursor-agent` as the legacy alias),
         # NOT `cursor` — both names are linked so either command works.
         mkdir -p "$AGENT_STAGE"
         HOME="$AGENT_STAGE" bash -c 'curl https://cursor.com/install -fsS | bash'
-        mkdir -p /opt/cursor-agent
-        cp -a "$AGENT_STAGE/.local/share/cursor-agent/." /opt/cursor-agent/
-        cursor_bin="$(find /opt/cursor-agent/versions -maxdepth 2 -type f -name cursor-agent | head -1)"
+        mkdir -p "$AGENT_ROOT/cursor-agent"
+        cp -a "$AGENT_STAGE/.local/share/cursor-agent/." "$AGENT_ROOT/cursor-agent/"
+        cursor_bin="$(find "$AGENT_ROOT/cursor-agent/versions" -maxdepth 2 -type f -name cursor-agent | head -1)"
         if [ -z "$cursor_bin" ]; then
             echo "motir-sandbox: the Cursor installer produced no agent binary." >&2
             exit 1
@@ -259,10 +268,10 @@ case "$AGENT" in
         apt-get update
         apt-get install -y --no-install-recommends python3 python3-venv
         rm -rf /var/lib/apt/lists/*
-        python3 -m venv /opt/aider
-        /opt/aider/bin/pip install --no-cache-dir --upgrade pip
-        /opt/aider/bin/pip install --no-cache-dir aider-chat
-        ln -sf /opt/aider/bin/aider "$AGENT_PREFIX/aider"
+        python3 -m venv "$AGENT_ROOT/aider"
+        "$AGENT_ROOT"/aider/bin/pip install --no-cache-dir --upgrade pip
+        "$AGENT_ROOT"/aider/bin/pip install --no-cache-dir aider-chat
+        ln -sf "$AGENT_ROOT/aider/bin/aider" "$AGENT_PREFIX/aider"
         aider --version
         # Aider is not an MCP client and codegraph has no target for it.
         no_codegraph

@@ -159,17 +159,37 @@ RUN npm install -g --no-fund --no-audit @colbymchenry/codegraph \
 ARG AGENT=base
 ENV MOTIR_SANDBOX_AGENT=${AGENT}
 
-# The agent never updates ITSELF in here (MOTIR-6183). Every arm installs onto
-# the root-owned global prefix, and the container runs as `node`, so Claude
-# Code's self-updater can only fail — it did, on every session, with "Auto-update
-# failed: no write permission to npm prefix". That is by design, not a
-# permission to repair: the image is DISPOSABLE (MOTIR-4970), and a newer agent
-# arrives the same way a newer `motir` does — `docker pull` + a new container
-# (`--pull=always`, or the guide's Rebuild Container). Making the prefix
-# writable would only let an update land in a layer the next rebuild deletes.
-# Unconditional on purpose: only Claude Code reads it, and it is inert in
-# `base`. MOTIR-4973 is the `motir` CLI's own counterpart.
-ENV DISABLE_AUTOUPDATER=1
+# ── The agents live in a prefix the RUNTIME user owns (MOTIR-6183) ───────────
+# A sandbox may run for weeks, and a reader who wants a coding agent's update
+# should get it where they are: a rebuild keeps /workspace and the Motir sign-in
+# but loses the agent's own sign-in, anything installed in the container, shell
+# history and any running session. So every agent is installed under ONE prefix
+# that is chowned to `node` below, and its self-updater (Claude Code's is the one
+# reported: "Auto-update failed: no write permission to npm prefix") can write
+# there. An update lives as long as the container; a rebuild returns the image's
+# version, because nothing here is a volume that could shadow the image's copy.
+#
+# ⚠️ Set AFTER the `motir` and codegraph installs above, on purpose. Those stay
+# root-owned in /usr/local, so the agent can update itself but cannot rewrite the
+# `motir` binary that supervises it. `motir`'s own upgrade notice (MOTIR-4973)
+# derives writability from its execPath, so it is unaffected.
+#
+# NPM_CONFIG_PREFIX makes `npm install -g` — the arms' at build time, and an
+# updater's at run time — land here; PATH puts it ahead of /usr/local/bin.
+ENV MOTIR_AGENT_PREFIX=/opt/motir-agents
+ENV NPM_CONFIG_PREFIX=/opt/motir-agents
+ENV PATH=/opt/motir-agents/bin:$PATH
+# ⚠️ ENV PATH does NOT reach a LOGIN shell: Debian's /etc/profile REPLACES PATH
+# for a non-root user (`PATH="/usr/local/bin:/usr/bin:/bin:…"`) — and a login
+# shell is what this image's own `CMD ["bash", "-l"]` and any `sh -lc` start.
+# Built and measured: without this line `claude` was not on PATH as `node` in a
+# login shell. /etc/profile.d runs AFTER that reset, so it puts the prefix back,
+# first, once.
+RUN printf '%s\n' \
+    '# motir-sandbox: the node-owned agent prefix, first on PATH (MOTIR-6183).' \
+    'case ":$PATH:" in *:/opt/motir-agents/bin:*) ;; *) PATH="/opt/motir-agents/bin:$PATH" ;; esac' \
+    'export PATH' \
+    > /etc/profile.d/motir-agents-path.sh
 COPY --chmod=0755 packages/cli/sandbox/install-agent.sh /usr/local/lib/motir-sandbox/install-agent.sh
 RUN /usr/local/lib/motir-sandbox/install-agent.sh "${AGENT}"
 
@@ -211,8 +231,12 @@ RUN printf '%s\n' \
 # (~/.cursor/mcp.json, ~/.motir-sandbox/agent-config/…, …). Left
 # root-owned, an agent that rewrites its own config file at startup would fail
 # on a home it cannot write.
-RUN mkdir -p /workspace /home/node/.config/motir \
-    && chown -R node:node /workspace /home/node
+#
+# The agent prefix is chowned for the same reason, one level out (MOTIR-6183):
+# it is what lets an agent update itself in a long-running container. The
+# mkdir makes it exist in `base`, which installs no agent into it.
+RUN mkdir -p /workspace /home/node/.config/motir /opt/motir-agents/bin \
+    && chown -R node:node /workspace /home/node /opt/motir-agents
 
 USER node
 # HOME is set explicitly because the CLI resolves its config dir from
