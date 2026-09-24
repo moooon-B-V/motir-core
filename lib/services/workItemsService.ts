@@ -262,10 +262,17 @@ import {
   resolveAuthoredRepoPinsInProject,
   resolveAuthoredRepoRefsInProject,
   resolveAuthoredTargetRepoInProject,
+  listDispatchRepoNames,
   resolveDispatchRepoForItem,
+  resolveItemDispatchPin,
   type ResolvedRepoPins,
 } from '@/lib/workItems/dispatchRepo';
-import { assertSingleTargetRepoInput, primaryTargetRepo } from '@/lib/workItems/targetRepo';
+import {
+  assertSingleTargetRepoInput,
+  primaryTargetRepo,
+  resolveDispatchRepo,
+  type ResolvedDispatchRepo,
+} from '@/lib/workItems/targetRepo';
 import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import { ContainerRepoSetNotWritableError } from '@/lib/workItems/errors';
@@ -6883,10 +6890,25 @@ export const workItemsService = {
     const candidates = sprintId ? ready.filter((r) => r.sprintId === sprintId) : ready;
     if (candidates.length === 0) return null;
     const orderedIds = candidates.map((r) => r.id);
+    // ⚠️ THE DISPATCH REPOSITORY IS RESOLVED BEFORE THE CLAIM COMMITS (MOTIR-6243).
+    // It used to be resolved only by `buildReadyDispatchDto`, after the claim
+    // transaction had committed — and it THROWS `ArchivedTargetRepoError` when the
+    // item resolves to an archived repository (MOTIR-1959). So a refused dispatch
+    // left the card In Progress and assigned to a caller that received only the
+    // error and never the key it now held. The project's dispatch domain is read
+    // HERE, outside the transaction (the module's own rule); the item's pin is read
+    // under the lock, and the pure resolution throws inside the transaction, so a
+    // refusal rolls the claim back and has claimed nothing.
+    const dispatchDomain = await listDispatchRepoNames(projectId, ctx);
 
     const claimed = await withWorkspaceContext(ctx, async (tx) => {
       const locked = await workItemRepository.claimNextReadyCandidate(orderedIds, tx);
       if (!locked) return null;
+      const chosen = candidates.find((r) => r.id === locked.id)!;
+      const dispatchRepo = resolveDispatchRepo(
+        await resolveItemDispatchPin({ id: chosen.id, targetRepo: chosen.targetRepo }, tx),
+        dispatchDomain,
+      );
       // THE ASSIGNMENT (MOTIR-4996), inside the transaction the lock is held in
       // and before the flip — the shape `claimWorkItem` already uses, rather than
       // a second one invented here. The candidate row carries only its `id`, so
@@ -6906,7 +6928,13 @@ export const workItemsService = {
       // `in_progress` is the dispatch state (lib/workflows/defaultWorkflow.ts);
       // `applyStatusTransition` validates the todo|blocked → in_progress edge,
       // records the revision, and re-locks the row under the same tx.
-      return workItemsService.applyStatusTransition(locked.id, 'in_progress', ctx, tx);
+      const transitioned = await workItemsService.applyStatusTransition(
+        locked.id,
+        'in_progress',
+        ctx,
+        tx,
+      );
+      return { ...transitioned, chosen, dispatchRepo };
     });
     if (!claimed) return null;
 
@@ -6932,16 +6960,20 @@ export const workItemsService = {
     // the claim assigned report that it did not. ONE read, by primary key, for
     // the caller's own display fields; the id is `ctx.userId` whatever it returns.
     const [claimer] = await userRepository.findByIds([ctx.userId]);
-    const chosen = candidates.find((r) => r.id === claimed.dto.id)!;
     const dispatch = await buildReadyDispatchDto(
       {
-        ...chosen,
+        ...claimed.chosen,
         assigneeId: ctx.userId,
         assigneeName: claimer?.name ?? null,
         assigneeEmail: claimer?.email ?? null,
         assigneeImage: claimer?.image ?? null,
       },
       ctx,
+      // The repository the claim already resolved (MOTIR-6243). Resolving it a
+      // second time here, after the commit, would re-open the window this fix
+      // closes: an archive landing between the two reads would refuse a claim
+      // that has already been written.
+      claimed.dispatchRepo,
     );
     return { ...dispatch, status: { key: claimed.dto.status, category: 'in_progress' } };
   },
@@ -7524,6 +7556,9 @@ function rowReadyContext(row: ReadyCandidateRow): Omit<ReadyItemContext, 'inheri
 async function buildReadyDispatchDto(
   row: ReadyCandidateRow,
   ctx: ServiceContext,
+  /** The dispatch repository a CLAIM already resolved inside its own transaction
+   *  (MOTIR-6243) — `undefined` to resolve it here, as the read-only surfaces do. */
+  resolvedDispatchRepo?: ResolvedDispatchRepo | null,
 ): Promise<ReadyItemDispatchDto> {
   // ⚠️ `allSettledOrThrow`, NOT `Promise.all` (MOTIR-6235). MOTIR-3077 left this
   // fan-out on `Promise.all` believing no arm refuses — but the repo arm
@@ -7548,10 +7583,12 @@ async function buildReadyDispatchDto(
     // MOTIR-1775 · MOTIR-1783, narrowing MOTIR-1804's workspace-only scope).
     // Read here, alongside the other dispatch decorations, because it is only
     // needed for the ONE item being dispatched (never for the list read).
-    resolveDispatchRepoForItem(
-      { id: row.id, targetRepo: row.targetRepo, projectId: row.projectId },
-      ctx,
-    ),
+    resolvedDispatchRepo !== undefined
+      ? Promise.resolve(resolvedDispatchRepo)
+      : resolveDispatchRepoForItem(
+          { id: row.id, targetRepo: row.targetRepo, projectId: row.projectId },
+          ctx,
+        ),
   ]);
   const blockerRows = (
     await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>

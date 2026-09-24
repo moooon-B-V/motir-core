@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   ArrowRight,
@@ -13,8 +14,14 @@ import {
 } from 'lucide-react';
 
 import { Pill } from '@/components/ui/Pill';
+import { PlanDestinationTag } from '@/components/planning/PlanDestinationTag';
 import { cn } from '@/lib/utils/cn';
-import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
+import {
+  isPlainPrimaryClick,
+  useOpenPlanningWorkspace,
+} from '@/lib/hooks/useOpenPlanningWorkspace';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { planRowDestination, type PlanRowDestination } from '@/lib/planning/planDestination';
 import type { PlanningLaunchContext } from '@/lib/planning/launcher';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import type { PlanSessionStateDto } from '@/lib/dto/planSessions';
@@ -37,6 +44,25 @@ import type { SessionRowView } from './types';
 //      conversation opens over `/plans` and Close returns to the same filtered,
 //      scrolled list.
 //   4. Below `sm` the row wraps and the chip takes its own line.
+//
+// ⚠️ AND SINCE MOTIR-6045 THE ROW HAS TWO POSSIBLE DOORS, decided by
+// `planRowDestination` (Story MOTIR-6043, design Part XXI). An UNDECIDED plan's
+// row opens the conversation, as it always did; a DECIDED one opens the plan's
+// own page, because there is nothing left to decide and the record is what a
+// person came for. The To-approve row calls the SAME function, so the two lists
+// cannot drift apart. Two consequences here:
+//
+//   · The row carries a DESTINATION TAG in its meta line, so a reader knows
+//     which of the two it will do before pressing (§ 21.2).
+//   · The state chip is a LINK, with its `arrow-right`, exactly when the row's
+//     own door goes somewhere else (§ 21.5). On a decided row the two would land
+//     in the same place, so the chip becomes a plain `Pill` — one control, one
+//     tab stop, no arrow that changes nothing.
+//
+// ⚠️ THE NO-CONVERSATION STATE CANNOT OCCUR HERE, and that is structural rather
+// than lucky (§ 21.3): a row IS a session and its `latestPlan` is a plan ON that
+// session, so the session id below is never null. The rule stays TOTAL because
+// the To-approve row — whose subject is a PLAN — does reach it.
 //
 // ⚠️ A `No plan yet` row is a conversation, never an invitation to start one
 // (§19.3a): it opens exactly like every other row, and carries no chip link and
@@ -130,10 +156,31 @@ export function SessionRow({
   highlighted?: boolean;
 }) {
   const t = useTranslations('aiPlanning.sessions');
-  const { href, open } = useOpenPlanningWorkspace(launchContextFor(view));
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // A session with NO plan has nothing for the rule to answer about, so it keeps
+  // the shipped opener verbatim (§ 19.3a: it opens its conversation like any
+  // other row). Everything else goes through the one rule.
+  const { href: conversationHref, open: openConversation } = useOpenPlanningWorkspace(
+    launchContextFor(view),
+  );
+  const qs = searchParams.toString();
+  const destination: PlanRowDestination | null = view.latestPlan
+    ? planRowDestination({
+        planStatus: view.latestPlan.status,
+        planId: view.latestPlan.id,
+        // A Plans row IS a session, so this is never null (§ 21.3).
+        sessionId: view.id,
+        host: `${pathname}${qs ? `?${qs}` : ''}`,
+        anchorKey: view.targetKeys[0] ?? null,
+      })
+    : null;
+  const doorHref = destination?.href ?? conversationHref;
   const Icon = ORIGIN_ICON[view.origin];
   const state: PlanSessionStateDto = view.latestPlan?.status ?? 'none';
   const stateLabel = t(`planState.${state}`);
+  // THE CHIP RULE (§ 21.5): a second door only where it goes somewhere else.
+  const chipIsDoor = view.latestPlan !== null && destination?.kind === 'planning-surface';
   // `Waiting for approval` keeps the accent border — the retired row's
   // `awaitingReview` rule, same meaning: this one needs a decision.
   const awaitingReview = state === 'planned';
@@ -157,8 +204,19 @@ export function SessionRow({
 
       <div className="min-w-0 flex-1">
         <Link
-          href={href}
-          onClick={open}
+          href={doorHref}
+          // The overlay opens IN PLACE on a plain primary click; the plan page is
+          // a real navigation, and every modified click stays the browser's.
+          onClick={(event) => {
+            if (destination === null) {
+              openConversation(event);
+              return;
+            }
+            if (destination.kind !== 'planning-surface') return;
+            if (!isPlainPrimaryClick(event)) return;
+            event.preventDefault();
+            shallowPush(destination.href);
+          }}
           className="block truncate text-sm font-semibold text-(--el-text) after:absolute after:inset-0 after:rounded-(--radius-card) focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-(--focus-ring-color)"
         >
           {view.title || t('untitled')}
@@ -167,6 +225,11 @@ export function SessionRow({
           <Anchor keys={view.targetKeys} />
           <span>{t('lastActive', { when: view.activeLabel })}</span>
           <Starter view={view} />
+          {/* `shrink-0`: this line WRAPS rather than truncating, so the tag takes
+              its own line before it loses a word (§ 21.6). */}
+          {destination ? (
+            <PlanDestinationTag destination={destination} className="shrink-0" />
+          ) : null}
         </div>
       </div>
 
@@ -176,7 +239,7 @@ export function SessionRow({
             {t('earlierPlans', { count: view.planCount - 1 })}
           </span>
         ) : null}
-        {view.latestPlan ? (
+        {chipIsDoor && view.latestPlan ? (
           <Link
             href={`/plans/${view.latestPlan.id}`}
             aria-label={t('openPlanAria', { state: stateLabel })}

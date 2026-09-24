@@ -26,7 +26,8 @@ import {
 import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
-import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import { surfaceArrivalTrail } from '@/lib/planning/surfaceArrival';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import type { OnboardingSubstrate } from '@/lib/dto/onboardingSubstrate';
 import {
@@ -442,14 +443,27 @@ export function PlanningWorkspaceOverlay({
             title: found.anchor.title,
             kind: found.anchor.kind,
           },
-          // ANCESTORS ONLY (MOTIR-2070): the LAST crumb is the level the canvas
-          // loads, so the workspace opens on the anchor's OWN level with its
-          // siblings and dependency edges around it. Opening on the anchor's
-          // CHILDREN would hide the item the conversation is about.
-          trail: (found?.ancestors ?? []).map((a) => ({
-            id: a.id,
-            label: workItemCrumbLabel(a.identifier, a.title),
-          })),
+          // INSIDE THE TARGET (MOTIR-6160, Story MOTIR-6154) — the LAST crumb is
+          // the level the canvas loads, and for a container anchor that is the
+          // anchor ITSELF, so the workspace opens on the anchor's CHILDREN: the
+          // work the conversation is about, and where the plan's proposals land.
+          //
+          // ⚠️ THIS REVERSES MOTIR-2070, WHICH CHOSE THE ANCESTORS-ONLY TRAIL ON
+          // PURPOSE. Its reason was real — "Opening on the anchor's CHILDREN
+          // would hide the item the conversation is about" — and the answer is
+          // not to dismiss it but to move the target's mark to where the target
+          // now is: the LAST CRUMB, the level you are standing in, rather than a
+          // ring on a node that is no longer on screen. A `subtask` anchor has no
+          // inside, so it keeps MOTIR-2070's arrival and its ring.
+          //
+          // The rule itself is `lib/planning/surfaceArrival.ts`, because the same
+          // three entrances share it (Plan with AI, a Plans row, a To-approve
+          // row) and the follow-move card calls it for a target that becomes
+          // known later.
+          trail: surfaceArrivalTrail({
+            anchor: found?.anchor ?? null,
+            ancestors: found?.ancestors ?? [],
+          }),
         });
       } catch {
         if (controller.signal.aborted) return;

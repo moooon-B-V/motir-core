@@ -359,11 +359,32 @@ describe('the ANCHOR read', () => {
     const host = screen.getByTestId('host');
     expect(host.getAttribute('data-anchor-id')).toBe('wi_7');
     expect(host.getAttribute('data-target')).toBe('MOTIR-7');
-    // ANCESTORS ONLY — the last crumb is the level the canvas loads, so the
-    // workspace opens on the anchor's OWN level, not inside it.
+    // A `subtask` anchor is the LEAF case of the arrival rule (MOTIR-6160): it
+    // has no inside, so the trail stays the ancestors and the canvas opens on the
+    // anchor's OWN level with the anchor ringed. This is MOTIR-2070's arrival,
+    // still correct for exactly this kind — the container case below is the one
+    // that changed.
     expect(host.getAttribute('data-trail')).toBe('wi_1,wi_3');
     expect(fetchPlanningAnchor).toHaveBeenCalledTimes(1);
     expect(fetchPlanningAnchor.mock.calls[0]![0]).toBe('MOTIR-7');
+  });
+
+  it('a CONTAINER anchor opens INSIDE it — the trail ends at the anchor itself', async () => {
+    // The change MOTIR-6154 asks for, at the seam that produces it: the canvas
+    // loads the level named by the LAST crumb, so appending the anchor is what
+    // makes the workspace open on the STORY'S CHILDREN rather than beside it
+    // among its siblings.
+    fetchPlanningAnchor.mockResolvedValue({
+      anchor: { id: 'wi_3', identifier: 'MOTIR-3', title: 'The story', kind: 'story' as const },
+      ancestors: [{ id: 'wi_1', identifier: 'MOTIR-1', title: 'Epic 8' }],
+    });
+    openAt('plan=contextual&planFrom=work-item&planItem=MOTIR-3');
+    mount();
+    await act(async () => {});
+
+    const host = screen.getByTestId('host');
+    expect(host.getAttribute('data-anchor-id')).toBe('wi_3');
+    expect(host.getAttribute('data-trail')).toBe('wi_1,wi_3');
   });
 
   it('a 404 opens the PROJECT conversation at the root, with no error surface', async () => {

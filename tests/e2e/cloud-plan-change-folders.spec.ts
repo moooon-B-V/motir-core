@@ -148,15 +148,24 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   expect((await asked).status()).toBe(200);
   await expect(workspace(page).getByTestId('plan-change-confirm-bar')).toContainText('2 added');
 
-  // ── 1b. THE PANE SWAPPED, AND IT ARRIVED ON THE FOLDER ──────────────────────
-  // A proposed plan is read through the plan page's own List | Canvas component
-  // (MOTIR-6155), which ARRIVES at the container the plan most fills — and
-  // `fullestContainer` is folder-aware, so a proposal filed into one folder
-  // arrives ON that folder. Both proposals here are parentless, so the tie breaks
-  // on DEPTH and Archive wins over the root.
+  // ── 1b. THE PANE SWAPPED, AND THE CANVAS ARRIVED ON THE FOLDER ──────────────
+  // Two changes land on this one step, and they AGREE — which is why the step
+  // reads the same after both.
   //
-  // That is the behaviour this file most wants pinned: the reviewer lands where
-  // the filed work is, without drilling for it.
+  //  • THE FOLLOW-MOVE (MOTIR-6154/6161). This surface opened from the PROJECT
+  //    with no target, so it began at the root — and the moment the plan settled
+  //    it moved inside the level the plan fills, which for a plan that files work
+  //    into Archive is the Archive FOLDER.
+  //  • THE PANE SWAP (MOTIR-6155). A proposed plan is read through the plan
+  //    page's own List | Canvas component, and that component's `arrivalLevel`
+  //    asks `fullestContainer` the same question the follow-move asks. It is
+  //    folder-aware, and both proposals here are parentless, so the tie breaks on
+  //    DEPTH and Archive wins over the root — the same folder, by the same rule.
+  //
+  // So the canvas is no longer where step 1 left it, and the root assertions
+  // below are reached the way a person reaches them: through the crumb. That the
+  // reviewer LANDS where the filed work is, without drilling for it, is the
+  // behaviour this file most wants pinned.
   await expect(workspace(page).getByTestId('plan-proposal-views')).toBeVisible();
   await expect(crumbs(canvas).getByRole('button', { name: 'Folder: Archive' })).toHaveAttribute(
     'aria-current',
@@ -164,9 +173,20 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   );
   await expect(canvas.getByText(plan.filedTitle, { exact: true })).toBeVisible();
 
-  // ── 2. THE ROOT: folder cards, nothing filed loose, the badge (decisions 1–3) ─
-  // Reached by the ROOT CRUMB, because the arrival above is one level in.
+  // The ROOT read carries neither key — `folderLoad` above is the folder form.
+  const backToRoot = page.waitForResponse(
+    (r) =>
+      r.url().includes('/roadmap') &&
+      !r.url().includes('parentId=') &&
+      !r.url().includes('folderId=') &&
+      r.request().method() === 'GET' &&
+      r.ok(),
+  );
   await crumbs(canvas).getByRole('button', { name: 'Roadmap' }).click();
+  await backToRoot;
+
+  // ── 2. THE ROOT: folder cards, nothing filed loose, the badge (decisions 1–3) ─
+  // Reached by the ROOT CRUMB above, because the arrival is one level in.
   await expect(archive.getByTestId('folder-changes')).toHaveText('1 change');
   await expect(folderCard(canvas, seed.laterId)).toBeVisible();
   await expect(folderCard(canvas, seed.laterId).getByTestId('folder-changes')).toHaveCount(0);
@@ -176,10 +196,19 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   }
 
   // ── 3. DRILL THE FOLDER: its child folder, its items, the filed proposal ─────
-  const level = folderLoad(page, seed.archiveId);
+  // ⚠️ THE WAIT IS BACK, AND MOTIR-6155 IS WHY. This step carried a note saying a
+  // `folderLoad` wait here would hang for the full test budget, because the
+  // follow-move had already read this level and `PlanChangeCanvas` serves a level
+  // it has read from `cacheRef`. That was true of `PlanChangeCanvas` and is not
+  // true of the pane any more: a PROPOSED plan is drawn by `PlanReviewCanvas`,
+  // which keeps NO level cache — its `loadLevel` goes through `fetchRoadmapLevel`
+  // every time, deliberately, so a drilled level can never be served stale. So the
+  // GET does go out, and the repo's rule for a lazy-load applies again: await the
+  // fetch rather than letting the DOM assertions race it.
+  const archiveLevel = folderLoad(page, seed.archiveId);
   await archive.click();
   await canvas.getByTestId('drill-button').click();
-  await level;
+  await archiveLevel;
   await expect(folderCard(canvas, seed.importsId)).toBeVisible();
   for (const title of seed.archivedTitles) {
     await expect(canvas.getByText(title, { exact: true })).toBeVisible();
@@ -193,8 +222,11 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   await canvas.getByTestId('drill-button').click();
   await deeper;
   await expect(canvas.getByText(seed.deepBugTitle, { exact: true })).toBeVisible();
-  // Both levels below are served from the overlay's own level cache — the DOM is
-  // the signal.
+  // The two crumb re-visits below each issue their own GET too (same reason: no
+  // level cache behind a proposed plan). They keep the DOM as their signal rather
+  // than arming a wait, because each pair asserts the arriving level's own node
+  // visible BEFORE asserting the leaving level's node gone — so the assertion is
+  // the wait, and a `folderLoad` in front of it buys nothing.
   await crumbs(canvas).getByRole('button', { name: 'Folder: Archive' }).click();
   await expect(canvas.getByText(plan.filedTitle, { exact: true })).toBeVisible();
   await expect(canvas.getByText(seed.deepBugTitle, { exact: true })).toHaveCount(0);

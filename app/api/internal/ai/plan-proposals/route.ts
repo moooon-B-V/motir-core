@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import {
   DuplicatePlanTargetError,
@@ -16,6 +17,7 @@ import {
   PlanRefGraphError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
 import type { ProposalInput } from '@/lib/dto/plans';
 
 // POST /api/internal/ai/plan-proposals (Subtask 7.4.4 · MOTIR-846) — the INTERNAL
@@ -46,6 +48,14 @@ import type { ProposalInput } from '@/lib/dto/plans';
 //                                          instead of Prisma's own prose)
 //   PlanItemUnknownTargetRepoRoleError → 422 (a `targetRepoRole` outside the
 //                                          shared role vocabulary — MOTIR-1912)
+//   ConflictingTargetRepoInputError → 422 (an `add` naming more than one of
+//                                          targetRepo / targetRepos /
+//                                          targetRepositories — MOTIR-6215)
+//   ProjectNotFoundError / PermissionDeniedError
+//                                 → 404 / 403 naming the key — the plan gate
+//                                   (`ai:view_plan`), mapped by
+//                                   `aiPlanGateErrorResponse` exactly as the
+//                                   human route maps it (MOTIR-6215)
 //   ProjectAccessDeniedError      → 404 browse / 403 edit
 // GET /api/internal/ai/plan-proposals?jobId=… (Story MOTIR-3595 · Subtask
 // MOTIR-3598) — READ what the job's plan currently proposes.
@@ -170,6 +180,14 @@ export async function POST(req: Request): Promise<Response> {
     );
     return NextResponse.json(result);
   } catch (err) {
+    // The plan gate's two refusals (MOTIR-6215, the append's twin of MOTIR-6153
+    // on `[itemId]`). A job token acts as its user, so a VIEWER's token reaches
+    // `plansService.addProposals`' `ai:view_plan` assertion and is refused there
+    // — which this route answered with a 500 that motir-ai reads as a server
+    // fault and retries. One helper, so this door and the human one cannot
+    // disagree.
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof NoPlanForJobError || err instanceof PlanNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }
@@ -190,7 +208,13 @@ export async function POST(req: Request): Promise<Response> {
         { status: 409 },
       );
     }
-    if (err instanceof InvalidProposalError) {
+    if (
+      err instanceof InvalidProposalError ||
+      // More than one of `targetRepo` / `targetRepos` / `targetRepositories` on
+      // one `add` (MOTIR-6215) — the service refuses rather than picking a
+      // winner, and the refusal names the fields.
+      err instanceof ConflictingTargetRepoInputError
+    ) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
     }
     // A proposal set the plan gate refuses where it is written (MOTIR-5414) — an

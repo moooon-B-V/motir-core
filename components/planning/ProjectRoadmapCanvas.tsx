@@ -14,6 +14,7 @@ import {
   Minimize,
   RotateCcw,
   Search,
+  Target,
 } from 'lucide-react';
 import {
   PlanningCanvas,
@@ -215,6 +216,68 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   isFolderCrumb?: (crumb: CanvasCrumb) => boolean;
   /**
+   * Which crumb is the PLANNING TARGET (MOTIR-6160, Story MOTIR-6154).
+   *
+   * The planning surface opens INSIDE the node being planned, so the target is
+   * no longer a node on the level — it is the level. MOTIR-2070 objected to
+   * exactly this ("Opening on the anchor's CHILDREN would hide the item the
+   * conversation is about"), and this is the answer: the target keeps a mark,
+   * moved from the node ring to the crumb it became.
+   *
+   * Answered by the CONSUMER, for the same reason `isFolderCrumb` is — only the
+   * consumer knows what a crumb id means. `PlanChangeCanvas` answers it from the
+   * `targetIds` it already has, so a target that becomes known LATER marks its
+   * crumb with no further wiring. Absent ⇒ no crumb is one, which is every other
+   * consumer.
+   */
+  isTargetCrumb?: (crumb: CanvasCrumb) => boolean;
+  /**
+   * FOLLOW a target that became known AFTER the canvas opened (MOTIR-6161,
+   * Story MOTIR-6154) — a keyed, one-shot REQUEST the canvas may DECLINE.
+   *
+   * `initialTrail` is a mount-time seed and is right about that: where the canvas
+   * SITS is the user's. This is the narrow exception — a planning conversation
+   * that started with no target and then settled one, where leaving the reader at
+   * the root means the plan lands somewhere they are not looking.
+   *
+   * ⚠️ A REQUEST, NOT A CONTROLLED LEVEL, AND THE DIFFERENCE IS THE WHOLE DESIGN.
+   * `controlledTrail` makes the CONSUMER the owner of every move: while it is
+   * supplied the canvas adopts any value differing from where it is, so a
+   * consumer that holds it at one level UNDOES the reader's own drill on the next
+   * render. Measured while designing this (MOTIR-6159 § "What was RENDERED
+   * first"): with a held `controlledTrail`, a drill was reverted within 150ms and
+   * the breadcrumb disappeared. A request the canvas may decline keeps the
+   * reader's navigation authoritative, which is the rule the story states.
+   *
+   * ⚠️ AND IT IS WHY THIS IS NOT `controlledTrail` HERE SPECIFICALLY.
+   * `PlanChangeCanvas` — the one consumer that needs to follow — already passes
+   * `resolveHeldNode`, because approving a plan re-keys every proposal. Those two
+   * props are documented as not combinable, and the measured failure is not a
+   * subtle one: with an id the resolver remaps, they fight over `focusId` until
+   * React throws `Too many re-renders`. `followTo` writes once and then stops, so
+   * it cannot enter that loop.
+   *
+   * THE CONTRACT, and all three clauses are load-bearing:
+   * - **Keyed.** A given `key` is honoured AT MOST ONCE, so a re-render with the
+   *   same request is a no-op rather than a second move.
+   * - **At most one move per mount.** A second target settling later does not
+   *   move the canvas again — the reader has now seen where the plan is.
+   * - **Never after the reader has navigated.** A crumb click, a drill, Back or a
+   *   search jump makes every later request a decline. A deliberate navigation is
+   *   not overridden, and the consumer is told so through `onFollowDeclined` so it
+   *   can offer its own way there.
+   */
+  followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  /**
+   * The canvas DECLINED a `followTo` because the reader had already navigated.
+   *
+   * The consumer needs this to draw the design's quiet affordance — *"Plan is in
+   * {identifier} · Go there"* — because silence would strand the reader: the plan
+   * is landing somewhere they are not looking and nothing says so. Fired once per
+   * declined key, with that key.
+   */
+  onFollowDeclined?: (key: string) => void;
+  /**
    * ARRIVE ALREADY DRILLED (MOTIR-2070). The breadcrumb trail the canvas OPENS on,
    * root-ancestor first: the LAST crumb is the level it loads, and the whole array
    * becomes the breadcrumb. `[]` (the default) is the shipped behaviour — open at
@@ -407,6 +470,9 @@ export function ProjectRoadmapCanvas({
   emptyRoot,
   emptyDrilledFor,
   isFolderCrumb,
+  isTargetCrumb,
+  followTo = null,
+  onFollowDeclined,
   initialTrail,
   onLevelChange,
   controlledTrail,
@@ -416,6 +482,7 @@ export function ProjectRoadmapCanvas({
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tFolders = useTranslations('folders');
+  const tTarget = useTranslations('planningWorkspace.arrival');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
   // to the localized project-scope copy; a caller (e.g. the sprint-scoped roadmap)
   // overrides the warning row with its own "blocker not in sprint" copy (MOTIR-1379,
@@ -553,6 +620,108 @@ export function ProjectRoadmapCanvas({
   // during render. Its object identity is what re-arms the suppression effect below,
   // so adopting the same level twice (drilled away, then restored) suppresses twice.
   const [adoption, setAdoption] = useState<{ level: string | null } | null>(null);
+
+  const onFollowDeclinedRef = useRef(onFollowDeclined);
+  useEffect(() => {
+    onFollowDeclinedRef.current = onFollowDeclined;
+  }, [onFollowDeclined]);
+
+  // ── FOLLOW a newly settled target (MOTIR-6161) ──────────────────────────────
+  //
+  // ⚠️ EVERY DECISION HERE IS MADE DURING RENDER, and none of it in an effect.
+  // That is the same adjust-state-when-an-input-changes shape `remappedFocus` and
+  // the adoption above use, and for the same two reasons the CI lint rules state
+  // outright: `react-hooks/set-state-in-effect` forbids a synchronous `setState`
+  // in an effect body, and `react-hooks/refs` forbids reading a ref during render.
+  // So what the grant has to KNOW — has the reader navigated, have we already
+  // moved — is STATE, and what it has to WRITE afterwards is the only thing left
+  // to an effect.
+  //
+  // The reader's own navigation is recorded by the two movers themselves
+  // (`applyDrill` and `navigate`, which the crumbs and `goBack` funnel through)
+  // rather than inferred from the level, because an auto-descend moves the level
+  // too and it is not the reader.
+  const [navigated, setNavigated] = useState(false);
+  // The request last SEEN. It is held for a DECLINED key as well, which is what
+  // makes "honoured at most once" true of a decline too — a re-render cannot
+  // retry a request the reader already outran. `everGranted` is the separate
+  // "at most one move per mount" clause: a SECOND target settling later does not
+  // move the canvas again.
+  //
+  // ⚠️ It carries the LEVEL it granted, not just the key. Reading `crumbsRef` in
+  // the effect below looked equivalent and is not: that ref is synced by its own
+  // `useEffect`, which has not necessarily run when this one fires, so the
+  // announcement named the ROOT instead of the level it had just moved to.
+  const [followEvent, setFollowEvent] = useState<{
+    key: string;
+    granted: boolean;
+    everGranted: boolean;
+    levelId: string | null;
+  } | null>(null);
+  // The request the canvas DECLINED, kept so the breadcrumb bar can offer it.
+  // Held HERE rather than by the consumer because the design puts the affordance
+  // inside the bar, and because taking it is an explicit reader act — the one
+  // thing that may move a reader who has navigated.
+  const [declined, setDeclined] = useState<{ key: string; trail: readonly CanvasCrumb[] } | null>(
+    null,
+  );
+  const [followFade, setFollowFade] = useState(false);
+  const [followAnnouncement, setFollowAnnouncement] = useState<string | null>(null);
+  if (followTo !== null && followTo.key !== followEvent?.key) {
+    const everGranted = followEvent?.everGranted ?? false;
+    const grant = !navigated && !everGranted;
+    const last = followTo.trail[followTo.trail.length - 1] ?? null;
+    setFollowEvent({
+      key: followTo.key,
+      granted: grant,
+      everGranted: everGranted || grant,
+      levelId: last?.id ?? null,
+    });
+    if (grant) {
+      setFocusId(last?.id ?? null);
+      setCrumbs([...followTo.trail]);
+      // Exactly what a drill / a `navigate` clears — a followed level is a level
+      // change, so nothing per-level may survive it.
+      setLocalPositions({});
+      setSelectedId(null);
+      setHighlightId(null);
+      setShowChangesOverride(null);
+      // THE MOVE'S TWO VISIBLE HALVES (the design's arrival section). The
+      // TRANSITION is a 180ms opacity fade on the level, in the canvas's own
+      // vocabulary — `transition-opacity motion-reduce:transition-none`, the same
+      // idiom the emphasis layer uses — so reduced motion makes the move INSTANT
+      // declaratively, with no media query to keep in step with it.
+      setFollowFade(true);
+      // …and the ANNOUNCEMENT, because a canvas that moves under a reader who was
+      // not watching it has told them nothing. Polite, once, naming where it went.
+      setFollowAnnouncement(
+        tTarget('movedAnnouncement', { target: last?.label ?? resolvedRootLabel }),
+      );
+    } else {
+      setDeclined(followTo);
+    }
+  }
+  // What is LEFT to an effect: a ref write and a consumer callback, neither of
+  // which may happen during render.
+  useEffect(() => {
+    if (followEvent === null) return;
+    if (followEvent.granted) {
+      // A followed level is one the consumer asked the reader to SEE, so it must
+      // not be auto-descended past — the same rule `navigate` applies.
+      suppressedLevelRef.current = levelKey(followEvent.levelId);
+    } else {
+      onFollowDeclinedRef.current?.(followEvent.key);
+    }
+  }, [followEvent]);
+
+  // Release the fade once the followed level has painted, so it transitions IN
+  // rather than appearing already faded. A frame, not a timer: the class does the
+  // easing and this only flips the endpoint.
+  useEffect(() => {
+    if (!followFade) return;
+    const id = requestAnimationFrame(() => setFollowFade(false));
+    return () => cancelAnimationFrame(id);
+  }, [followFade]);
   if (controlledFocusId !== undefined && controlledFocusId !== focusId) {
     setFocusId(controlledFocusId);
     setCrumbs([...(controlledTrail ?? [])]);
@@ -668,6 +837,11 @@ export function ProjectRoadmapCanvas({
   // the breadcrumb, search, locate, zoom and full-screen all keep working with no
   // special case.
   const applyDrill = useCallback((node: ProjectCanvasNode) => {
+    // The reader moved (MOTIR-6161) — every later `followTo` is declined. An
+    // AUTO-DESCEND funnels through here too and is deliberately counted: it moves
+    // the reader somewhere they did not ask for, so following them afterwards
+    // would compound a move they never made.
+    setNavigated(true);
     const crumb: Crumb = {
       id: node.id,
       label: node.crumbLabel ?? node.searchText,
@@ -904,6 +1078,8 @@ export function ProjectRoadmapCanvas({
   );
 
   const navigate = useCallback((crumbId: string | null) => {
+    // The reader moved (MOTIR-6161) — a crumb click or Back disarms the follow.
+    setNavigated(true);
     // The user EXPLICITLY climbed to this level (a crumb click, or Back via `goBack`) —
     // never auto-descend out of it again, or the breadcrumb root becomes a trap.
     suppressedLevelRef.current = levelKey(crumbId);
@@ -1133,9 +1309,17 @@ export function ProjectRoadmapCanvas({
           both fit and gives each its own row on a narrow canvas. The wrapper is
           pointer-transparent so its empty band never masks the canvas; the two
           pieces opt back in. */}
+      {/* WHERE THE CANVAS WENT (MOTIR-6161) — a polite live region, the idiom
+          this surface already uses (`PlanChangeRail`, `PlanningHandOff`). It is
+          visually hidden because the move itself is the visible half; this is for
+          a reader who was not watching the canvas. Empty until a follow is
+          granted, so it announces nothing on an ordinary drill. */}
+      <div role="status" aria-live="polite" className="sr-only" data-testid="canvas-follow-live">
+        {followAnnouncement}
+      </div>
       <div className="pointer-events-none absolute top-3 right-3 left-3 z-10 flex min-w-0 flex-wrap items-start gap-2">
         {/* breadcrumb + Back overlay — only while drilled */}
-        {drilled && (
+        {(drilled || declined !== null) && (
           <nav
             aria-label={t('breadcrumb')}
             // Widened from 36rem with the `identifier · title` crumb label (MOTIR-1805
@@ -1189,12 +1373,66 @@ export function ProjectRoadmapCanvas({
                       active={seg.index === crumbs.length - 1}
                       onClick={() => navigate(c.id)}
                       folder={seg.folder}
-                      srPrefix={seg.folder ? tFolders('breadcrumbFolderLabel') : undefined}
+                      // THE TARGET CRUMB (MOTIR-6160) — the planning surface's
+                      // answer to MOTIR-2070. Standing INSIDE the target removes
+                      // the node its ring was drawn on, so the mark moves to the
+                      // crumb: this level IS the thing being planned. A folder
+                      // crumb wins the glyph slot if both ever applied, which
+                      // they cannot — a folder is not a work item.
+                      planningTarget={!seg.folder && (isTargetCrumb?.(c) ?? false)}
+                      srPrefix={
+                        seg.folder
+                          ? tFolders('breadcrumbFolderLabel')
+                          : (isTargetCrumb?.(c) ?? false)
+                            ? tTarget('crumbTargetPrefix')
+                            : undefined
+                      }
                     />
                   </li>
                 );
               })}
             </ol>
+            {/* ⚠️ THE READER NAVIGATED, SO THE CANVAS DID NOT MOVE (MOTIR-6161) —
+                and saying nothing would strand them: the plan is landing somewhere
+                they are not looking. A quiet affordance in the bar's own row, never
+                a toast and never a modal, and it never moves anything by itself.
+                Taking it IS an explicit reader act, which is the one thing allowed
+                to move a reader who has navigated. */}
+            {declined !== null && (
+              <button
+                type="button"
+                data-testid="canvas-follow-offer"
+                onClick={() => {
+                  const next = declined.trail;
+                  setDeclined(null);
+                  setCrumbs([...next]);
+                  setFocusId(next[next.length - 1]?.id ?? null);
+                  setLocalPositions({});
+                  setSelectedId(null);
+                  setHighlightId(null);
+                  setShowChangesOverride(null);
+                  suppressedLevelRef.current = levelKey(next[next.length - 1]?.id ?? null);
+                  setFollowFade(true);
+                  setFollowAnnouncement(
+                    tTarget('movedAnnouncement', {
+                      target: next[next.length - 1]?.label ?? resolvedRootLabel,
+                    }),
+                  );
+                }}
+                className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
+                />
+                {tTarget('goToTarget', {
+                  identifier:
+                    declined.trail[declined.trail.length - 1]?.crumbKey ??
+                    declined.trail[declined.trail.length - 1]?.label ??
+                    '',
+                })}
+              </button>
+            )}
           </nav>
         )}
 
@@ -1575,6 +1813,9 @@ export function ProjectRoadmapCanvas({
           // note on the `level` state above. The two differ for exactly one round
           // trip, and that window is where the arrival scale was being lost.
           key={`level:${level.focusId ?? 'root'}`}
+          className={`transition-opacity duration-[180ms] motion-reduce:transition-none ${
+            followFade ? 'opacity-0' : 'opacity-100'
+          }`}
           nodes={canvasNodes}
           edges={canvasEdges}
           renderNode={renderNode}
@@ -1601,6 +1842,7 @@ function Crumb({
   active,
   onClick,
   folder = false,
+  planningTarget = false,
   srPrefix,
   title,
   ariaLabel,
@@ -1611,6 +1853,12 @@ function Crumb({
   /** A FOLDER crumb (Bug MOTIR-5710 · MOTIR-5742): led by the 14px lucide `folder`
    *  glyph, so it reads as a folder without the reader reading it. */
   folder?: boolean;
+  /** The PLANNING-TARGET crumb (MOTIR-6160): led by the 14px lucide `target`
+   *  glyph — the same mark `PlanningTargetFrame`'s node pill carries, so "target"
+   *  means one thing on this surface whether it is a node or the level — plus a
+   *  2px accent underline at the node ring's own weight. NOT COLOUR ALONE: the
+   *  `srPrefix` carries the state in words, exactly as the folder crumb does. */
+  planningTarget?: boolean;
   /** A visually-hidden word ahead of the label — the folder crumb's `Folder:`. */
   srPrefix?: string;
   /** The native tooltip, when it should say more than the label (the `…` crumb's
@@ -1634,11 +1882,23 @@ function Crumb({
         active
           ? 'font-semibold text-(--el-text)'
           : 'text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)'
-      }${folder ? ' inline-flex items-center gap-1' : ''}`}
+      }${folder || planningTarget ? ' inline-flex items-center gap-1' : ''}`}
     >
       {folder ? <Folder className="size-3.5 shrink-0" aria-hidden="true" /> : null}
+      {planningTarget ? (
+        <Target className="size-3.5 shrink-0 text-(--el-accent-on-surface)" aria-hidden="true" />
+      ) : null}
       {srPrefix ? <span className="sr-only">{`${srPrefix} `}</span> : null}
-      {folder ? <span className="truncate">{label}</span> : label}
+      {folder ? (
+        <span className="truncate">{label}</span>
+      ) : planningTarget ? (
+        // The 2px accent underline, at the node ring's own weight — it marks
+        // without tinting the label, so the crumb keeps the shipped active-crumb
+        // ink and its AA contrast.
+        <span className="truncate shadow-[inset_0_-2px_0_0_var(--el-accent)]">{label}</span>
+      ) : (
+        label
+      )}
     </button>
   );
 }

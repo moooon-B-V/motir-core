@@ -6774,6 +6774,11 @@
       "reopenedYours": "Reopened from the Plans page · started by you · last active {when}",
       "readOnly": "You can read this conversation. Continuing it needs permission to plan with Motir AI.",
       "someone": "someone"
+    },
+    "arrival": {
+      "crumbTargetPrefix": "Planning target:",
+      "movedAnnouncement": "Showing work inside {target}",
+      "goToTarget": "Plan is in {identifier} · Go there"
     }
   },
   "codeHealth": {
@@ -8992,9 +8997,7 @@
         "proceed": "Yes, decline"
       },
       "noConversation": {
-        "agent": "{harness} wrote this plan outside a conversation, so it opened on its own page.",
-        "cadence": "Motir planned this on its own when your ready work ran out, so there is no conversation behind it.",
-        "earlier": "This plan was written before Motir kept planning conversations.",
+        "none": "There is no conversation on record for this plan.",
         "next": "Approve or decline it here — or ask Motir to change it below."
       },
       "handoff": {
@@ -9329,5 +9332,11 @@
       "copied": "Copied",
       "copyFailed": "Couldn't copy — select the ID instead."
     }
+  },
+  "planDestination": {
+    "conversation": "Opens the conversation",
+    "plan": "Opens the plan",
+    "noConversation": "no conversation",
+    "noConversationWhy": "There is no conversation on record for this plan."
   }
 }

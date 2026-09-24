@@ -41,6 +41,13 @@ import {
 } from '@/lib/planning/planningTargets';
 import type { PlanningLaunch } from '@/lib/planning/launcher';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
+import {
+  followFromPlan,
+  followFromTarget,
+  followRequest,
+  type FollowRequest,
+} from '@/lib/planning/surfaceFollow';
 
 // The client island of the established-project planning HOST (Subtask
 // MOTIR-1729; design `plan-change-conversation.mock.html` panel 2). It COMPOSES
@@ -194,6 +201,7 @@ export function PlanningWorkspaceHost({
   justReturnedFromOnboarding,
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
+  const tPlanReview = useTranslations('planReview');
   const router = useRouter();
 
   // The turn's TARGET SET (MOTIR-1491). It lives HERE, not in the rail, because
@@ -209,6 +217,49 @@ export function PlanningWorkspaceHost({
     (identifier: string) => setTargets((current) => removePlanningTarget(current, identifier)),
     [],
   );
+
+  // ── THE FOLLOW-MOVE (MOTIR-6161, Story MOTIR-6154) ─────────────────────────
+  //
+  // A conversation that opened with NO target sits at the root while the plan
+  // lands somewhere below it. This moves the canvas inside the target once it
+  // becomes known — and the canvas may DECLINE, which is the point: a reader who
+  // has navigated themselves is never pulled back.
+  //
+  // Armed only when the set was EMPTY AT OPEN. A surface launched from a work
+  // item already arrived inside it, and a second target must not move the canvas
+  // off the first (the story: with several targets, the canvas is inside the
+  // FIRST one).
+  // Read ONCE, at mount, and held as state rather than a ref because the render
+  // below reads it — `react-hooks/refs` forbids reading a ref during render, and
+  // a lazy `useState` is the idiom that gives "read once" without one.
+  const [startedWithNoTarget] = useState(initialTarget === null);
+  // Set from the async anchor read below. A `setState` inside an async callback
+  // is not the shape the effect lint rule forbids — that one is a SYNCHRONOUS
+  // write in an effect body, which this is not.
+  const [followFromTheTarget, setFollowFromTheTarget] = useState<FollowRequest | null>(null);
+
+  // TRIGGER 1 — the person added the first target. The trail needs the target's
+  // ANCESTORS, which only the anchor read has, so this is a fetch rather than a
+  // derivation from the chip.
+  const firstTarget = targets[0] ?? null;
+  const firstTargetKey = startedWithNoTarget ? (firstTarget?.identifier ?? null) : null;
+  useEffect(() => {
+    if (firstTargetKey === null) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const found = await fetchPlanningAnchor(firstTargetKey, controller.signal);
+        if (controller.signal.aborted) return;
+        // A target the viewer cannot see degrades to nothing at all, never an
+        // error and never a move — the same silent contract the arrival keeps.
+        const next = followFromTarget(found);
+        if (next !== null) setFollowFromTheTarget(next);
+      } catch {
+        // An outage is not a reason to move the canvas, or to say anything.
+      }
+    })();
+    return () => controller.abort();
+  }, [firstTargetKey]);
 
   // ── THE CLOSE, AND THE ONE QUESTION IT MAY ASK (MOTIR-4731) ───────────────
   //
@@ -268,6 +319,28 @@ export function PlanningWorkspaceHost({
   const targetIds = targets.map((target) => target.id);
 
   const index = useMemo(() => indexPlanReview(state.review), [state.review]);
+
+  // TRIGGER 2 — the plan's proposals first show WHERE the plan lands, answered by
+  // the plan page's own `arrivalLevel` (moved to `lib/planning/planArrival.ts` by
+  // this card, so the two surfaces cannot disagree about it — the story's "reused,
+  // not re-cut"). Today `state.review` arrives when the plan is PROPOSED; the
+  // live-drawing story feeds the same seam its in-flight reads, and then it fires
+  // on the first proposal instead. Nothing here changes for that.
+  //
+  // DERIVED, not stored: it is a pure function of the review, so computing it in
+  // render is both cheaper and the shape the lint rule asks for — an effect that
+  // only calls `setState` from props is the case `react-hooks/set-state-in-effect`
+  // exists to remove.
+  const proposedWord = tPlanReview('proposedCrumb');
+  const followFromThePlan = useMemo(
+    () => (startedWithNoTarget ? followFromPlan(state.review, proposedWord) : null),
+    [startedWithNoTarget, state.review, proposedWord],
+  );
+
+  // The FIRST trigger to fire wins: a target the person added is their own act,
+  // and the plan's landing place is an inference about it. The canvas honours at
+  // most one request per mount regardless, so this is belt and braces on purpose.
+  const followTo = followRequest(followFromTheTarget, followFromThePlan);
   // One key for "what the canvas is drawing": a new proposal, or a fresh commit.
   const diffKey = `${treeVersion}:${state.jobId ?? 'none'}:${state.decided ?? 'pending'}:${index.counts.added}-${index.counts.changed}-${index.counts.removed}`;
 
@@ -478,7 +551,7 @@ export function PlanningWorkspaceHost({
               bottom edge. Nothing resizes, in either direction, and the space is only
               ever drawn into when there is something to draw.
 
-              `--canvas-foot` is what keeps the clusters off the bar. It is set
+              `--canvas-foot-inset` is what keeps the clusters off the bar. It is set
               UNCONDITIONALLY — not only while the bar is up — because a value that
               came and went would move them exactly as the old sibling did. The
               canvases read it with a `0px` fallback, so every other surface
@@ -514,6 +587,12 @@ export function PlanningWorkspaceHost({
                 outcome={state.decided}
                 targetIds={targetIds}
                 initialTrail={initialCanvasTrail}
+                // MOTIR-6154/6161's follow-move. It stays on THIS branch of the
+                // swap and is not passed to the component above: the follow moves
+                // the roadmap canvas inside a target that settles while there is no
+                // plan yet, and once a plan is PROPOSED the pane is the plan page's
+                // component, which does its own arriving (`arrivalLevel`).
+                followTo={followTo}
                 ariaLabel={t('canvasAria', { project: projectName })}
                 loadingFallback={<PlanningCanvasSkeleton />}
                 emptyRoot={

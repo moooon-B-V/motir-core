@@ -224,7 +224,13 @@ export function PlanReviewRail({
   // with no conversation to return to says why it opened here.
   const asked = !decided && review.gate?.state === 'awaiting';
   const [declineConfirming, setDeclineConfirming] = useState(false);
-  const noConversation = asked && !review.conversation?.hasTurns;
+  // ⚠️ THE SESSION, NOT ITS TURNS (Story MOTIR-6043 · MOTIR-6045, design Part XXI
+  // §21.6). This read `!review.conversation?.hasTurns` until the settlement, which
+  // is why the notice below had three causes. An empty transcript is not an absent
+  // conversation, so an agent's plan, a cadence plan and a backfilled one all open
+  // the SURFACE and never reach this page for want of one. What is left is a plan
+  // with no session row at all — one population, one sentence.
+  const noConversation = asked && !review.conversation;
 
   return (
     <aside
@@ -321,7 +327,7 @@ export function PlanReviewRail({
           </p>
         </header>
 
-        {noConversation ? <NoConversationNotice review={review} /> : null}
+        {noConversation ? <NoConversationNotice /> : null}
 
         {/* HISTORY timeline */}
         <section className="flex flex-col gap-2">
@@ -770,19 +776,21 @@ function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof u
  * rendering as reviewed-and-rejected.
  */
 /**
- * A PLAN WITH NO CONVERSATION opened on its own page, and says why (MOTIR-6037; design
- * Part XX §20.5, Panel 8) — the reopened line's shape with a `message-square-text` glyph.
- * The page HAS a composer (Part XII), so it never says there is nothing to talk to; only
- * that there is no conversation to return to.
+ * A PLAN WITH NO SESSION opened on its own page, and says why (MOTIR-6037; design
+ * Part XX §20.5 Panel 8, narrowed by Part XXI §21.6) — the reopened line's shape with a
+ * `message-square-text` glyph. The page HAS a composer (Part XII), so it never says there
+ * is nothing to talk to; only that there is no conversation to return to.
+ *
+ * ⚠️ ONE CAUSE, where there were three. The three read the plan's AUTHOR and ORIGIN —
+ * an agent's plan, a cadence plan, an earlier plan — and all three of those populations
+ * HAVE sessions (`agent-authored-plans.md` AMENDMENT 17 §4–§5) and now open the planning
+ * surface instead. So `…noConversation.agent` / `.cadence` / `.earlier` are retired and
+ * `.none` replaces them: nothing reaches this notice except a plan whose `sessionId` is
+ * null, and inventing a reason for it from `authorSource` would be a guess.
  */
-function NoConversationNotice({ review }: { review: PlanReviewDto }) {
+function NoConversationNotice() {
   const t = useTranslations('approvalGate.planApproval.noConversation');
-  const cause =
-    review.authorSource === 'mcp' && review.authorHarness
-      ? t('agent', { harness: review.authorHarness })
-      : review.origin === 'cadence'
-        ? t('cadence')
-        : t('earlier');
+  const cause = t('none');
   return (
     <p
       data-testid="plan-no-conversation"

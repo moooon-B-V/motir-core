@@ -4,9 +4,13 @@ import { mintJobToken } from '@/lib/ai/jobToken';
 import { plansService } from '@/lib/services/plansService';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
-import { POST as proposalsPOST } from '@/app/api/internal/ai/plan-proposals/route';
+import { projectMembersService } from '@/lib/services/projectMembersService';
+import {
+  GET as proposalsGET,
+  POST as proposalsPOST,
+} from '@/app/api/internal/ai/plan-proposals/route';
 import { PATCH as proposalsPATCH } from '@/app/api/internal/ai/plan-proposals/[itemId]/route';
-import { makeWorkItemFixture as makeFixture } from '../../fixtures';
+import { createTestUser, makeWorkItemFixture as makeFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -305,6 +309,92 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
       proposalsReq({ bearer: SERVICE_SECRET, token: tokenFor(fx), body: { proposals: [] } }),
     );
     expect(res.status).toBe(400);
+  });
+});
+
+// MOTIR-6215 — the append's twin of MOTIR-6153. Two refusals the service raises
+// escaped this route unmapped and answered 500, which motir-ai reads as a server
+// fault and retries or dead-letters. A typed 4xx tells it the CALL was refused.
+describe('POST /api/internal/ai/plan-proposals — typed refusals, never a 500', () => {
+  /** A second workspace member holding `viewer` on the fixture's project. */
+  async function viewerOf(fx: Awaited<ReturnType<typeof makeFixture>>): Promise<string> {
+    const user = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+    });
+    await projectMembersService.addMember({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: user.id,
+      role: 'viewer',
+    });
+    return user.id;
+  }
+
+  it("a viewer's job token is refused with the gate's 403 naming the key — and the same token still READS the plan", async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_viewer_append';
+    const planId = await openPlan(fx, jobId);
+    const viewerId = await viewerOf(fx);
+    const viewerToken = mintJobToken({
+      userId: viewerId,
+      workspaceId: fx.ctx.workspaceId,
+      projectId: fx.projectId,
+    });
+
+    const res = await proposalsPOST(
+      proposalsReq({
+        bearer: SERVICE_SECRET,
+        token: viewerToken,
+        body: { jobId, proposals: [{ op: 'add', proposedFields: { title: 'x', kind: 'epic' } }] },
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({
+      code: 'PERMISSION_DENIED',
+      permission: 'ai:view_plan',
+    });
+    // Refused, so nothing was appended.
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
+
+    // Reading is `project:browse`, which a viewer holds.
+    const read = await proposalsGET(
+      new Request(`http://core/api/internal/ai/plan-proposals?jobId=${jobId}`, {
+        headers: { authorization: `Bearer ${SERVICE_SECRET}`, 'x-motir-job-token': viewerToken },
+      }),
+    );
+    expect(read.status).toBe(200);
+  });
+
+  it('an add naming more than one repository field is a typed 422 naming the conflict', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_two_repo_fields';
+    const planId = await openPlan(fx, jobId);
+
+    for (const repoKeys of [
+      { targetRepo: 'core', targetRepos: ['core'] },
+      { targetRepos: ['core'], targetRepositories: ['repo-row'] },
+      { targetRepo: 'core', targetRepositories: ['repo-row'] },
+    ]) {
+      const res = await proposalsPOST(
+        proposalsReq({
+          bearer: SERVICE_SECRET,
+          token: tokenFor(fx),
+          body: {
+            jobId,
+            proposals: [
+              { op: 'add', proposedFields: { title: 'Leaf', kind: 'task', ...repoKeys } },
+            ],
+          },
+        }),
+      );
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { code: string; error: string };
+      expect(body.code).toBe('CONFLICTING_TARGET_REPO_INPUT');
+      expect(body.error).toMatch(/exactly ONE of targetRepo, targetRepos or targetRepositories/);
+    }
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
   });
 });
 
