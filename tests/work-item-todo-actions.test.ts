@@ -398,6 +398,37 @@ describe('error translation', () => {
     await expect(addTodoAction({ workItemId: cardId, text: 'A' })).rejects.toThrow(boom);
     spy.mockRestore();
   });
+
+  it('EVERY action answers an unmapped typed REFUSAL in place rather than rethrowing it (MOTIR-6147)', async () => {
+    const { cardId } = await scenario();
+    const seeded = await addTodoAction({ workItemId: cardId, text: 'A step' });
+    if (!seeded.ok) throw new Error('setup failed');
+
+    // A typed domain 4xx (a code `classifyApiV1Error` answers with a 4xx) that
+    // `todoErrorMessage` does not map. A rethrow here would be a 500 and the
+    // generic Server Components crash; the person should read the reason.
+    const refusal = Object.assign(new Error('You are not a member of this workspace'), {
+      code: 'NOT_A_MEMBER',
+    });
+    const expected = enMessages.errors.actions.refused.replace('{reason}', refusal.message);
+    const cases: [keyof typeof workItemTodosService, () => Promise<unknown>][] = [
+      ['addTodo', () => addTodoAction({ workItemId: cardId, text: 'x' })],
+      ['updateTodo', () => updateTodoAction({ todoId: seeded.todo.id, text: 'x' })],
+      ['moveTodo', () => moveTodoAction({ todoId: seeded.todo.id, toIndex: 0 })],
+      ['setTodoDone', () => setTodoDoneAction({ todoId: seeded.todo.id, done: true })],
+      ['deleteTodo', () => deleteTodoAction({ todoId: seeded.todo.id })],
+    ];
+    for (const [method, call] of cases) {
+      const spy = vi
+        .spyOn(workItemTodosService, method as 'updateTodo')
+        .mockRejectedValueOnce(refusal);
+      expect(await call(), `${method} must answer in place`).toEqual({
+        ok: false,
+        error: expected,
+      });
+      spy.mockRestore();
+    }
+  });
 });
 
 // ── the permission (criterion 3) ────────────────────────────────────────────
