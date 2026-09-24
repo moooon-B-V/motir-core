@@ -309,10 +309,15 @@ const entrance = (page: Page) => itemPage(page).getByTestId('work-item-plan-entr
 const addFrames = (page: Page) => workspace(page).locator('[data-op="add"]');
 /** The shipped List | Canvas switch, inside the overlay (MOTIR-6155).
  *
- *  ⚠️ IT IS PRESSED BEFORE ANY CRUMB IS CLICKED on a plan that opens on the LIST.
- *  The canvas is kept mounted across a switch but `visibility: hidden` and
- *  `inert`, so its breadcrumb still answers `toHaveAttribute` while a `click()`
- *  on it would wait for visibility that never comes. */
+ *  ⚠️ IT IS PRESSED BEFORE THE CANVAS IS READ AT ALL on a plan that opens on the
+ *  LIST — not merely before it is clicked. The canvas stays MOUNTED across a
+ *  switch, in a keep-alive wrapper that is `inert`, `visibility: hidden` AND
+ *  `aria-hidden`. The first two only block interaction; the third takes the whole
+ *  subtree out of the accessibility tree, so every `getByRole` inside it matches
+ *  ZERO and a crumb read fails with `element(s) not found`. Measured, not
+ *  reasoned: an earlier revision of this file asserted the crumb before the
+ *  switch on the strength of "hidden still answers an attribute read", and the
+ *  `billing-cloud` leg went red on exactly that line. */
 const viewButton = (page: Page, name: 'List' | 'Canvas') =>
   workspace(page).getByRole('button', { name, exact: true });
 /** A BREADCRUMB crumb on the overlay's canvas, by its `KEY · Title` label. The
@@ -730,19 +735,24 @@ test('re-planning the PARENT goes through the same confirm', async ({ page, acce
   // consequence of that story, not a property worth asserting — it is filed as
   // MOTIR-6223. What this test rules on is that the rename is REVIEWABLE before
   // the confirm, so it goes where it is drawn: the root.
+  //
+  // ⚠️ THE VIEW IS CHOSEN FIRST, BEFORE THE CANVAS IS READ AT ALL. This plan
+  // STRADDLES two containers — the `add` under the epic, the `modify` on the epic
+  // itself — so `defaultPlanView` opens it on the LIST (MOTIR-3262's Part IX §3
+  // arm). That default is right, and while it holds the canvas sits in the
+  // keep-alive wrapper carrying `aria-hidden`, which takes its breadcrumb OUT OF
+  // THE ACCESSIBILITY TREE: every `getByRole` below it matches zero, so a crumb
+  // assertion here fails with `element(s) not found` rather than a wrong value.
+  // (Being `inert` and `visibility: hidden` would only have blocked a click; the
+  // `aria-hidden` is what defeats a role-based read, and it is why this switch
+  // cannot sit after the assertions it enables.)
+  await viewButton(page, 'Canvas').click();
+
   await expect(crumb(page, `${seed.authEpicKey} · Authentication`)).toHaveAttribute(
     'aria-current',
     'page',
   );
   await expect(canvasTitle(page, UNDER_PARENT)).toBeVisible();
-
-  // ⚠️ THE VIEW IS CHOSEN BEFORE THE CRUMB IS CLICKED, and it has to be. This plan
-  // STRADDLES two containers — the `add` under the epic, the `modify` on the epic
-  // itself — so `defaultPlanView` opens it on the LIST (MOTIR-3262's Part IX §3
-  // arm). That default is right, and it makes the breadcrumb `inert` and
-  // `visibility: hidden` inside the keep-alive wrapper: the assertions above still
-  // read it, but a `click()` on it would wait for visibility that never arrives.
-  await viewButton(page, 'Canvas').click();
 
   // The ROOT read is the one with NO `parentId` — a bare `/roadmap` predicate
   // would also match the level read the arrival itself issued.
