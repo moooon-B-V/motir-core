@@ -254,7 +254,18 @@ jobs:
             --image motir-sandbox:${{ matrix.profile.id }} \
             --profile ${{ matrix.profile.id }}
 
-      # ── Release lane only, and only after both checks above passed.
+      # MOTIR-6183. A sandbox may run for weeks, so an agent must be able to
+      # update itself in place: its binary resolves under the node-owned agent
+      # prefix and npm's global prefix is that prefix. And the other half — the
+      # agent cannot rewrite the root-owned `motir` that supervises it.
+      - name: Agent can update itself; motir stays root-owned
+        run: |
+          packages/cli/sandbox/smoke/agent-update-smoke.sh \
+            --image motir-sandbox:${{ matrix.profile.id }} \
+            --profile ${{ matrix.profile.id }} \
+            --liveness "${{ matrix.profile.liveness }}"
+
+      # ── Release lane only, and only after the checks above passed.
       - name: Resolve the @motir/cli version
         if: ${{ inputs.publish }}
         id: ver
