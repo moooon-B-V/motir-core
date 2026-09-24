@@ -88,7 +88,7 @@ async function openPeek(page: Page, title: string): Promise<Locator> {
     .getByTestId('plan-proposal-list')
     .getByRole('button', { name: new RegExp(escape(title)) })
     .click();
-  const peek = page.getByTestId('proposal-peek');
+  const peek = page.getByRole('dialog').getByTestId('proposal-peek');
   await expect(peek).toBeVisible();
   await expect(peek.getByRole('heading', { name: title })).toBeVisible();
   return peek;
@@ -96,7 +96,7 @@ async function openPeek(page: Page, title: string): Promise<Locator> {
 
 async function closePeek(page: Page): Promise<void> {
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('proposal-peek')).toBeHidden();
+  await expect(page.getByRole('dialog').getByTestId('proposal-peek')).toBeHidden();
 }
 
 /** The peek's rail caption: `Difficulty`, plus the changed mark's
@@ -178,9 +178,11 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
     await expect(row).toHaveAccessibleName('Open the plan — Waiting for approval');
     await row.click();
     await page.waitForURL(`**/plans/${authored.planId}`);
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+    await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
+      'Ready to review',
+    );
     // Two containers (the new story, the committed one) → it opens on the LIST.
-    await expect(page.getByTestId('plan-proposal-list')).toBeVisible();
+    await expect(page.getByRole('main').getByTestId('plan-proposal-list')).toBeVisible();
   });
 
   await chapter('Every leaf’s difficulty sits beside its size on the list', async () => {
@@ -274,7 +276,7 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
     );
     await approve.click();
     expect((await approved).status(), 'the approve').toBe(200);
-    await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
+    await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText('Approved');
   });
 
   await chapter('The created High subtask reads High, with its reason', async () => {
@@ -328,14 +330,16 @@ test('a plan whose leaves carry no difficulty renders the review without error, 
 
   // One container → the canvas.
   await page.goto(`/plans/${authored.planId}?view=canvas`);
-  await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+  await expect(page.getByRole('main').getByTestId('plan-status-pill')).toContainText(
+    'Ready to review',
+  );
   for (const title of authored.leafTitles) {
     await expect(page.locator('[data-node-id]').filter({ hasText: title })).toHaveCount(1);
   }
   await expect(page.getByTestId('plan-item-difficulty')).toHaveCount(0);
 
   await page.goto(`/plans/${authored.planId}?view=list`);
-  await expect(page.getByTestId('plan-proposal-list')).toBeVisible();
+  await expect(page.getByRole('main').getByTestId('plan-proposal-list')).toBeVisible();
   for (const title of authored.leafTitles) {
     await expect(proposalRow(page, title)).toBeVisible();
   }
