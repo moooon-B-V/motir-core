@@ -11,6 +11,7 @@ import {
   Clock,
   CornerDownRight,
   History,
+  Inbox,
   ListTree,
   Lock,
   MessageCircleQuestionMark,
@@ -30,6 +31,9 @@ import { MarkdownView } from '@/components/ui/MarkdownView';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
 import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip';
+import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
+import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
+import type { PlanGateView } from '@/lib/planning/planGateView';
 import {
   dispositionMarkerFor,
   pendingQuestion,
@@ -49,6 +53,7 @@ import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { BrandMark } from '@/components/brand/BrandMark';
+import { workbenchTabHref } from '@/lib/workbench/tab';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
@@ -148,6 +153,19 @@ export interface PlanChangeRailProps {
    * the rail is presentational and the host owns the conversation.
    */
   onStop?: () => void;
+  /**
+   * THE PLAN GATE'S STATE for the plan in hand (Story MOTIR-6012 · MOTIR-6037; design
+   * Part XX §20.4–§20.5) — the SAME derivation the canvas bar reads, so the review block
+   * mirrors the gate it sits beside. Absent → `ungated`: the shipped words.
+   */
+  gateView?: PlanGateView;
+  /** Decline was pressed in THIS block — its confirm band replaces the verbs. */
+  declining?: boolean;
+  onRequestDecline?: () => void;
+  onCancelDecline?: () => void;
+  onConfirmDecline?: (noteMd: string | null) => void;
+  /** A press from THIS block was refused as stale. */
+  staleRefused?: boolean;
 }
 
 export function PlanChangeRail({
@@ -165,8 +183,27 @@ export function PlanChangeRail({
   onApprove,
   onDiscard,
   onStop,
+  gateView = { kind: 'ungated' },
+  declining = false,
+  onRequestDecline,
+  onCancelDecline,
+  onConfirmDecline,
+  staleRefused = false,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
+  const tp = useTranslations('approvalGate.planApproval');
+  const tRefusal = useTranslations('approvalGate.refusal.alreadyDecided');
+  // An ASKED plan (MOTIR-6037): its gate is awaiting, so the review block is the gate's
+  // mirror and speaks the gate's words.
+  const gated = gateView.kind !== 'ungated';
+  // …and the plan it asked about was declined HERE: the conversation stays readable,
+  // and a marker says what happened (Panel 6).
+  const declinedHere = state.decided === 'declined' && Boolean(state.review?.gate);
+  // A PLAN RUN is writing (MOTIR-6037's hand-off, Panel 9): the planner has what it needs
+  // and the run is a server job, so the reader may leave. An ASK run carries no plan id.
+  const writing = state.phase === 'streaming' && state.planId !== null;
+  // …and it is REWRITING the plan in hand rather than writing a first one.
+  const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
   const ts = useTranslations('planningWorkspace.session');
   const format = useFormatter();
@@ -299,7 +336,27 @@ export function PlanChangeRail({
             reopened from the Plans page says where it came from; a FRESH start
             with an earlier conversation for this scope points to it — until this
             conversation has a turn, when the rail is about it instead. */}
-        {state.reopened ? (
+        {state.reopened && launch.via === 'approvals' ? (
+          // REOPENED FROM TO APPROVE (MOTIR-6037; design Part XX §20.2, §20.5): the
+          // row's address carries `planVia=approvals`, so this line names the entrance
+          // the reader actually used — MOTIR-6019's shape, its own glyph.
+          <p
+            data-testid="planning-reopened-from-approvals"
+            className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+          >
+            <Inbox className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>
+              {state.reopened.mine
+                ? tp('surface.reopenedYours', {
+                    when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                  })
+                : tp('surface.reopened', {
+                    name: state.reopened.startedBy?.name ?? ts('someone'),
+                    when: format.relativeTime(new Date(state.reopened.lastActivityAt)),
+                  })}
+            </span>
+          </p>
+        ) : state.reopened ? (
           <p
             data-testid="planning-reopened-session"
             className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
@@ -396,6 +453,28 @@ export function PlanChangeRail({
             It keeps the shipped `aria-live="polite"` region and its test id, so
             the newest act is still announced and nothing that addressed this
             surface has to change. */}
+        {/* THE HAND-OFF BEFORE GENERATION (Story MOTIR-6012 · MOTIR-6037; design
+            Part XX §20.6, Panel 9). The moment a PLAN run starts writing, the planner
+            says so in its own turn — a KEYED bubble, like `lockedNote`, so the words
+            are the catalogue's and never the model's — and that the reader may leave:
+            the run carries on server-side and the plan will be waiting in To approve.
+            A revision of the plan in hand gets its own form. The link is a real
+            anchor to the tab (§20.9). */}
+        {writing ? (
+          <Bubble role="assistant" testId="plan-handoff">
+            {tp.rich(rewritingPlan ? 'handoff.rewriting' : 'handoff.writing', {
+              link: (chunks) => (
+                <Link
+                  href={workbenchTabHref('approvals')}
+                  className="font-semibold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                >
+                  {chunks}
+                </Link>
+              ),
+            })}
+          </Bubble>
+        ) : null}
+
         <div aria-live="polite" data-testid="plan-change-progress">
           {acts.length > 0 ? (
             <ol
@@ -473,30 +552,46 @@ export function PlanChangeRail({
               })}
             </Bubble>
             <Bubble role="assistant">{tc('lockedNote')}</Bubble>
-            <div
-              data-testid="plan-change-review"
-              className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
-            >
-              <span className="text-xs font-semibold text-(--el-text-strong)">
-                {tc('nothingSavedYet')}
-              </span>
-              {/* The gate itself lives on the canvas bar; this MIRRORS it so the
+            {gated ? (
+              <GatedReviewBlock
+                view={gateView}
+                busy={busy}
+                declining={declining}
+                staleRefused={staleRefused}
+                decidedFirst={state.errorCode === 'decided'}
+                onApprove={onApprove}
+                onRequestDecline={onRequestDecline}
+                onCancelDecline={onCancelDecline}
+                onConfirmDecline={onConfirmDecline}
+                deciding={state.phase === 'deciding'}
+                decidedFirstLines={{ title: tRefusal('unattributed'), next: tRefusal('next') }}
+              />
+            ) : (
+              <div
+                data-testid="plan-change-review"
+                className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+              >
+                <span className="text-xs font-semibold text-(--el-text-strong)">
+                  {tc('nothingSavedYet')}
+                </span>
+                {/* The gate itself lives on the canvas bar; this MIRRORS it so the
                   decision is reachable from wherever the reader is looking. */}
-              <div className="flex items-center justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={onDiscard} disabled={busy}>
-                  {tc('discard')}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  leftIcon={<Check className="size-4" aria-hidden="true" />}
-                  onClick={onApprove}
-                  disabled={busy}
-                >
-                  {tc('approve')}
-                </Button>
+                <div className="flex items-center justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={onDiscard} disabled={busy}>
+                    {tc('discard')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<Check className="size-4" aria-hidden="true" />}
+                    onClick={onApprove}
+                    disabled={busy}
+                  >
+                    {tc('approve')}
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         ) : null}
 
@@ -519,6 +614,17 @@ export function PlanChangeRail({
               removed: state.approved.removed.length,
             })}
           </Bubble>
+        ) : null}
+
+        {/* DECLINED HERE (MOTIR-6037; Panel 6) — a MARKER in the shipped `system` line,
+            not a planner turn and not an alert: a person ended the question. */}
+        {declinedHere ? (
+          <p
+            className="text-center text-xs text-(--el-text-secondary)"
+            data-testid="plan-declined-marker"
+          >
+            {tp('surface.declined')}
+          </p>
         ) : null}
 
         {/* QUEUED — what the user typed while the run was working (MOTIR-4274).
@@ -559,7 +665,10 @@ export function PlanChangeRail({
           </div>
         ))}
 
-        {state.errorCode ? (
+        {/* An ASKED plan's STALE and DECIDED-FIRST refusals are said in the review block
+            itself, in the design's words (MOTIR-6037; Panels 5–6), not as a failure. */}
+        {state.errorCode &&
+        !(gated && (state.errorCode === 'stale' || state.errorCode === 'decided')) ? (
           <div className="flex flex-col items-start gap-2">
             <p
               role="alert"
@@ -667,6 +776,14 @@ function errorKey(code: string): string {
       return 'error.decided';
     case 'discard':
       return 'error.discard';
+    // The decide door's refusals of a plan (MOTIR-6038): a revision holds it, the
+    // reader's version moved, or nobody has been asked about it yet.
+    case 'held':
+      return 'error.held';
+    case 'stale':
+      return 'error.stale';
+    case 'notDecidable':
+      return 'error.notDecidable';
     case 'SESSION_UNAVAILABLE':
       return 'error.session';
     // The ask job ran and produced nothing at all. NOT the honest "I could not
@@ -1091,5 +1208,133 @@ function EarlierNotice({
       <History className="mt-px size-3.5 flex-none" aria-hidden />
       <span>{body}</span>
     </p>
+  );
+}
+
+/**
+ * THE REVIEW BLOCK OF AN ASKED PLAN (Story MOTIR-6012 · MOTIR-6037; design Part XX
+ * §20.4–§20.5, `plan-review--decide.mock.html` Panels 2–7, 10). The rail's mirror of the
+ * canvas bar, speaking the gate's words: *Nothing saved yet*, the consequence line (or
+ * the held reason in its place), and Decline · Approve. Decline confirms once in the
+ * approve language's band, which REPLACES the verbs here. A reader who may not decide
+ * sees the question and who it waits on, and no verbs at all.
+ */
+function GatedReviewBlock({
+  view,
+  busy,
+  deciding,
+  declining,
+  staleRefused,
+  decidedFirst,
+  decidedFirstLines,
+  onApprove,
+  onRequestDecline,
+  onCancelDecline,
+  onConfirmDecline,
+}: {
+  view: PlanGateView;
+  busy: boolean;
+  deciding: boolean;
+  declining: boolean;
+  staleRefused: boolean;
+  /** The door answered *already decided*: somebody else pressed first (Panel 6). */
+  decidedFirst: boolean;
+  decidedFirstLines: { title: string; next: string };
+  onApprove: () => void;
+  onRequestDecline?: () => void;
+  onCancelDecline?: () => void;
+  onConfirmDecline?: (noteMd: string | null) => void;
+}) {
+  const tc = useTranslations('planningWorkspace.conversation');
+  const tp = useTranslations('approvalGate.planApproval.surface');
+
+  if (decidedFirst) {
+    // SOMEBODY DECIDED FIRST — `approvalGate.refusal.alreadyDecided`, verbatim. The
+    // refusal names no decider, so the unattributed sentence is the honest one.
+    return (
+      <div
+        data-testid="plan-change-review"
+        className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) px-3 py-2"
+      >
+        <p role="alert" className="text-xs font-medium text-(--el-text)">
+          {decidedFirstLines.title}
+        </p>
+        <p className="text-xs text-(--el-text-secondary)">{decidedFirstLines.next}</p>
+      </div>
+    );
+  }
+
+  if (declining && onCancelDecline && onConfirmDecline) {
+    return (
+      <div
+        data-testid="plan-change-review"
+        className="flex shrink-0 flex-col overflow-hidden rounded-(--radius-card) border border-(--el-accent)"
+      >
+        <div className="px-3 py-2">
+          <span className="text-xs font-semibold text-(--el-text-strong)">
+            {tc('nothingSavedYet')}
+          </span>
+        </div>
+        <PlanDeclineConfirm
+          deciding={deciding}
+          onCancel={onCancelDecline}
+          onConfirm={onConfirmDecline}
+        />
+      </div>
+    );
+  }
+
+  const held = view.kind === 'held';
+  return (
+    <div
+      data-testid="plan-change-review"
+      className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-accent) px-3 py-2"
+    >
+      <span className="text-xs font-semibold text-(--el-text-strong)">{tc('nothingSavedYet')}</span>
+      {view.kind === 'seeOnly' ? (
+        <span
+          data-testid="plan-decide-see-only"
+          className="flex items-start gap-1.5 text-xs text-(--el-text-secondary)"
+        >
+          <Lock className="mt-px size-3.5 flex-none" aria-hidden="true" />
+          <SeeOnlyLine waitingOn={view.waitingOn} />
+        </span>
+      ) : (
+        <>
+          {staleRefused ? (
+            <PlanStaleBand place="rail" />
+          ) : (
+            <span id="plan-change-review-line" className="text-xs text-(--el-text-secondary)">
+              {view.kind === 'held'
+                ? view.heldBy
+                  ? tp('heldBy', { harness: view.heldBy })
+                  : tp('held')
+                : tp('consequence')}
+            </span>
+          )}
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRequestDecline}
+              disabled={busy || held}
+              aria-describedby={held ? 'plan-change-review-line' : undefined}
+            >
+              {tp('decline')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Check className="size-4" aria-hidden="true" />}
+              onClick={onApprove}
+              disabled={busy || held}
+              aria-describedby={held ? 'plan-change-review-line' : undefined}
+            >
+              {tp('approve')}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

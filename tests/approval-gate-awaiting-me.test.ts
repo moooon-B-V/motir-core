@@ -452,9 +452,9 @@ describe('approvalGatesService.listAwaitingMe — the subject summary', () => {
     for (const [i, row] of page.items.entries()) {
       expect(row.subject).toMatchObject({ kind: 'design_result', commitSha: `sha-${i}` });
       // Each row names the card it belongs to, so the reader can act from the list.
-      expect(row.workItem.identifier).toMatch(/^PROD-\d+$/);
-      expect(row.workItem.title).toBe(`Design ${i}`);
-      expect(row.workItem.kind).toBe('subtask');
+      expect(row.workItem?.identifier).toMatch(/^PROD-\d+$/);
+      expect(row.workItem?.title).toBe(`Design ${i}`);
+      expect(row.workItem?.kind).toBe('subtask');
     }
   });
 });

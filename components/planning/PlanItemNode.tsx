@@ -18,6 +18,8 @@ import {
   PlacementSide,
 } from '@/components/planning/FolderPlacement';
 import type { StaleReason } from '@/lib/dto/plans';
+import { DifficultyIndicator } from '@/components/issues/DifficultyPicker';
+import { changeCellText } from '@/components/planning/changeCellText';
 
 // The CONTENT of a proposed PlanItem node on the plan-detail canvas (Subtask
 // 7.4.5 / MOTIR-847). It draws the SAME compact card language as the shipped
@@ -131,6 +133,8 @@ export function PlanItemNode({
   const staleReasons = item.staleReasons.map((r) => staleReasonLabel(r, t));
   if (item.folderMissing) staleReasons.push(t('staleFolderRemoved'));
   const showStale = item.stale || item.folderMissing;
+  const showDifficulty =
+    item.op === 'add' && item.difficulty != null && kind !== 'epic' && kind !== 'story';
 
   // Op-specific frame. None reuses the cross-story red dashed/hatch language.
   const frame =
@@ -214,6 +218,22 @@ export function PlanItemNode({
               className="size-4 shrink-0 text-(--el-text-muted)"
               aria-hidden="true"
               data-testid="drill-affordance"
+            />
+          ) : null}
+          {/* A leaf `add`'s DIFFICULTY (story MOTIR-6095 · MOTIR-6137, design
+              Part XX §20.3) — at the right end of the top row, where an `add`
+              has nothing today, never in the bottom slot (spending it clamps the
+              title to one line). ONLY an `add`: a `modify` card says what
+              CHANGES (its diff line), and a container never carries one. None ⇒
+              nothing drawn — the card has no field labels to hang a `None` on. */}
+          {showDifficulty ? (
+            <DifficultyIndicator
+              difficulty={item.difficulty!}
+              compact={{
+                srLabel: t('field_difficulty'),
+                className: 'text-xs text-(--el-text-secondary)',
+                testId: 'plan-item-difficulty',
+              }}
             />
           ) : null}
         </div>
@@ -391,7 +411,9 @@ function DiffLine({
   const placement = isFolderPlacementChange(first) ? first.placement : undefined;
   // A move under a PROPOSED parent names it `New · <title>` (Part XIX §19.3); on
   // the 280px node it may ellipsize, so the full string rides `title`.
-  const to = changeToText(first, t('proposedCrumb'));
+  const tl = useTranslations('labels');
+  const from = changeCellText(first.field, first.from, tl);
+  const to = changeCellText(first.field, changeToText(first, t('proposedCrumb')), tl);
   return (
     <div
       data-testid="diff-line"
@@ -419,8 +441,8 @@ function DiffLine({
         </>
       ) : (
         <>
-          {first.from != null ? (
-            <span className="truncate text-(--el-text-secondary) line-through">{first.from}</span>
+          {from != null ? (
+            <span className="truncate text-(--el-text-secondary) line-through">{from}</span>
           ) : null}
           <ChevronRight className="size-3 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
           <span className="truncate font-medium text-(--el-text)" title={to ?? undefined}>

@@ -110,7 +110,9 @@ function proposedPayload(item: PlanReviewItemDto, projectIdentifier: string): Qu
     explanationMd: item.explanationMd,
     type: item.type as QuickViewData['type'],
     executor: item.executor as QuickViewData['executor'],
-    difficulty: null, // a proposal carries no difficulty yet (the planner story, MOTIR-6095)
+    // The proposal's own DIFFICULTY (story MOTIR-6095 · MOTIR-6137) — the value
+    // approve will write; `null` renders the quick view's own `None`.
+    difficulty: item.difficulty,
     priority: (item.priority ?? 'medium') as QuickViewData['priority'],
     storyPoints: item.storyPoints,
     estimateMinutes: item.estimateMinutes,
@@ -300,6 +302,11 @@ export function ProposalPeek({
           storyPoints: item.storyPoints,
           estimateMinutes: item.estimateMinutes,
           estimateLabel: item.estimateMinutes != null ? `${item.estimateMinutes}m` : null,
+          // The DIFFICULTY approve will write (MOTIR-6137, Part XX §20.5): the
+          // patch's value when it carries the key — an explicit `null` CLEARS it
+          // and reads `None` — else the target's, which the review model already
+          // resolved (`proposedValue`), exactly as `storyPoints` above.
+          difficulty: item.difficulty,
           // Only when the plan MOVES the pin: overlaying it unconditionally
           // would replace a delivered repository's real state with `awaiting`
           // on a `modify` that does not touch the repo at all.

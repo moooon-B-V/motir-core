@@ -76,6 +76,18 @@ export async function PATCH(
     ...('estimateMinutes' in b
       ? { estimateMinutes: typeof b.estimateMinutes === 'number' ? b.estimateMinutes : null }
       : {}),
+    // A leaf's DIFFICULTY (MOTIR-6136), read by PRESENCE exactly as the internal
+    // deepen route reads it: absent leaves it, `null` clears, a non-string
+    // becomes `null`. Membership and the container refusal are the service's
+    // (`validateProposedDifficulty`) — a typed `InvalidProposalError` → 422 below.
+    ...('difficulty' in b
+      ? {
+          difficulty:
+            typeof b.difficulty === 'string'
+              ? (b.difficulty as UpdateProposalInput['difficulty'])
+              : null,
+        }
+      : {}),
     // The card's ORDERED STEPS (MOTIR-4619 · AMENDMENT 14 D3), parsed exactly as
     // the internal deepen route parses it — the two edit paths accept the same
     // shape, which is what this route's shipped comment asks of them. Present

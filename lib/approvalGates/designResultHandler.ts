@@ -9,6 +9,7 @@ import { routingTargetId } from '@/lib/approvalGates/routing';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { requireArgsCard, requireGateCard } from './gateCard';
 
 // THE `design_result` HANDLER — the registry's first and, in this build, only
 // member (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
@@ -76,7 +77,8 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
    * asked about* and must never re-point at a newer version. This answers *what
    * would a gate raised NOW ask about*, which is exactly the current version.
    */
-  async currentSubject({ item, tx }: GateRoutingArgs): Promise<string | null> {
+  async currentSubject(args: GateRoutingArgs): Promise<string | null> {
+    const item = requireArgsCard(args, 'design_result', 'designResultHandler');
     // ⚠️ THE OPEN-PULL-REQUEST `null` IS GONE (Story MOTIR-5652 · Subtask
     // MOTIR-5662; AMENDMENT 6 Q1 reverses AMENDMENT 4 Q8). It returned null when
     // the card had an open delivering pull request, mirroring the publish path's
@@ -84,7 +86,7 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
     // that left a card with a published design and an open pull request holding
     // no question at all. Both ends are corrected together, for the same reason
     // they had to match.
-    const current = await designEvidenceRepository.findCurrentByWorkItem(item.id, tx);
+    const current = await designEvidenceRepository.findCurrentByWorkItem(item.id, args.tx);
     return current?.id ?? null;
   },
 
@@ -95,8 +97,8 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
    *  {@link GateRoutingArgs}, which is constructible before the gate row exists.
    *  It reads nothing but the item, which is exactly what §2's rule quantifies
    *  over. */
-  routeTo({ item }: GateRoutingArgs): string | null {
-    return routingTargetId(item);
+  routeTo(args: GateRoutingArgs): string | null {
+    return routingTargetId(requireArgsCard(args, 'design_result', 'designResultHandler'));
   },
 
   /**
@@ -174,7 +176,7 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
    */
   async approve({ gate, ctx, tx, resolvedStatusKey }: GateEffectArgs): Promise<GateEffect> {
     const openPullRequests = await workItemDeliveryRepository.countOpenByWorkItem(
-      gate.workItemId,
+      requireGateCard(gate, 'designResultHandler'),
       tx,
     );
     if (openPullRequests > 0) {
@@ -193,9 +195,15 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
     // decision AFTER the effect — so without it the approval-gate guard would
     // refuse the very move this approval exists to make (ADR §6d AMENDMENT,
     // rule 5). It exempts THIS gate only.
-    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
-      decidingGateId: gate.id,
-    });
+    await workItemsService.applyStatusTransition(
+      requireGateCard(gate, 'designResultHandler'),
+      resolvedStatusKey,
+      ctx,
+      tx,
+      {
+        decidingGateId: gate.id,
+      },
+    );
     return { statusWritten: resolvedStatusKey };
   },
 

@@ -20,8 +20,9 @@
 // no longer on the canvas once that item materialized; a real work-item ref
 // stays as-is.
 
+import type { ApprovalGateStateDTO, PlanGateHeldDTO } from '@/lib/dto/approvalGate';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import type { ExecutorDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import type {
   PlanItemOpDto,
   PlanItemPatch,
@@ -51,6 +52,11 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
   'type',
   'storyPoints',
   'estimateMinutes',
+  /** A leaf's DIFFICULTY (story MOTIR-6095 · MOTIR-6137) — the sizing group's
+   *  third member, emitted directly after `estimateMinutes` (design Part XX
+   *  §20.5). The row's values are the WIRE words; each surface renders them as
+   *  the item page's labels (`labels.difficulty.*`). */
+  'difficulty',
   'description',
   'explanation',
   'links',
@@ -92,7 +98,7 @@ export type PlanItemChangeField = (typeof PLAN_ITEM_CHANGE_FIELDS)[number];
  * from what a plan can actually do, silently, the first time the patch grows.
  *
  * **Two keys, one row.** `targetRepo` and `targetRepoRole` both move the
- * `Repositories` rail row, so the row set below de-duplicates to SIX.
+ * `Repositories` rail row, so the row set below de-duplicates to SEVEN.
  *
  * **`title` / `descriptionMd` / `explanationMd` are `null` here and that is not
  * an oversight** — they are patchable, and they are marked in the peek's MAIN
@@ -110,6 +116,9 @@ const PATCH_KEY_RAIL_ROW = {
   type: 'type',
   storyPoints: 'storyPoints',
   estimateMinutes: 'estimateMinutes',
+  // A leaf's DIFFICULTY (MOTIR-6133 carries it, MOTIR-6137 renders it) — the
+  // seventh settable rail row (design Part XX §20.5).
+  difficulty: 'difficulty',
   targetRepo: 'targetRepo',
   // The SET forms (bug MOTIR-4904) join the same row: `Repositories` is one rail
   // row about one axis, and `targetRepo` / `targetRepos` / `targetRepositories`
@@ -625,6 +634,14 @@ export interface PlanReviewItemDto {
   explanationSource: string | null;
   storyPoints: number | null;
   estimateMinutes: number | null;
+  /**
+   * A leaf's DIFFICULTY (story MOTIR-6095 · MOTIR-6137, design Part XX §20.8) —
+   * the value approve will WRITE, on EVERY op like `storyPoints`: an `add`'s
+   * proposed value, a `modify`'s patch when it carries the key (an explicit
+   * `null` CLEARS it) else the target's, a `remove`'s target's. Always `null`
+   * on a container, which cannot carry one (MOTIR-6133 refuses it).
+   */
+  difficulty: WorkItemDifficultyDto | null;
   targetRepo: string | null;
   /**
    * EVERY repository the card will ship in (bug MOTIR-4904) — the SET beside
@@ -849,6 +866,37 @@ export interface PlanRevisionStateDto {
   startedAt: string;
 }
 
+/** A plan's gate as the planning surface reads it (MOTIR-6038) — see
+ *  {@link PlanReviewDto.gate}. */
+export interface PlanReviewGateDto {
+  id: string;
+  state: ApprovalGateStateDTO;
+  /** The stamp a press hands back — null unless the gate is `awaiting`. */
+  stamp: string | null;
+  /** Why an `awaiting` gate refuses both verbs right now (a revision in flight). */
+  held: PlanGateHeldDTO | null;
+  /** Whether THIS reader holds the plan's decide permission (`ai:decide_plan`). */
+  canDecide: boolean;
+  /** WHO the gate was routed to — the see-but-not-decide line's *Waiting on {name}*
+   *  (MOTIR-6037; design Part XX §20.5). Null when nobody resolves. OPTIONAL on the
+   *  type for the same fixture reason as {@link PlanReviewDto.gate}. */
+  routedToName?: string | null;
+}
+
+/**
+ * THE PLAN'S CONVERSATION, as the decision surfaces read it (Story MOTIR-6012 ·
+ * MOTIR-6037; design Part XX §20.2, §20.5): whether the plan has a planning session with
+ * turns to return to, and what it targeted. A plan with none opens on its own page,
+ * which says why; one with a conversation is reopened on the planning surface.
+ */
+export interface PlanConversationDto {
+  sessionId: string;
+  /** The session has at least one turn — an agent-authored MCP plan's may have none. */
+  hasTurns: boolean;
+  /** The session's `targetKeys`, in stored order. */
+  targetKeys: string[];
+}
+
 export interface PlanReviewDto {
   id: string;
   projectId: string;
@@ -918,6 +966,27 @@ export interface PlanReviewDto {
    * held button needs to say.
    */
   revision: PlanRevisionStateDto | null;
+
+  /**
+   * THE PLAN'S QUESTION — its latest `plan_approval` gate, as the render read returns it
+   * (Story MOTIR-6012 · MOTIR-6038; ADR `approval-gates.md` §11.3, §11.5c, §11.8). Null
+   * when the plan has none: a `generating` plan, an empty close, or a `planned` plan
+   * from before the raise shipped — which every entrance refuses as *not decidable yet*.
+   *
+   * ⚠️ `stamp` IS WHAT A PRESS HANDS BACK. Approve and Decline send it with the press
+   * (`approvePlanRequest` / `declinePlanRequest`), and the decide door refuses a stamp
+   * taken before the proposals moved (a revision, a correction) as stale. It is null
+   * unless the gate is `awaiting`. OPTIONAL on the type only so hand-built review
+   * fixtures that predate it stay valid; `getPlanReview` always sets it.
+   */
+  gate?: PlanReviewGateDto | null;
+
+  /**
+   * THE PLAN'S CONVERSATION (MOTIR-6037) — null when the plan has no planning session.
+   * OPTIONAL on the type only so hand-built review fixtures stay valid;
+   * `getPlanReview` always sets it.
+   */
+  conversation?: PlanConversationDto | null;
 
   items: PlanReviewItemDto[];
   /** Roll-up: any item is stale (the plan-level "N may be out of date"). */

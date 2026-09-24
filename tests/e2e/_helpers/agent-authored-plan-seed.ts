@@ -27,6 +27,7 @@ import { plansService } from '@/lib/services/plansService';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { ADD_PLAN_ITEMS_TOOL_NAME, CREATE_PLAN_TOOL_NAME } from '@/lib/mcp/tools/authorPlan';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
+import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestPerson } from './testPerson';
 
@@ -155,10 +156,44 @@ const itemIds = (r: CallToolResult) =>
  * Returns the plan id and the proposed titles, so the spec can assert both that
  * they render as PROPOSALS and, later, that they became work items.
  */
+/**
+ * One proposed LEAF under the story. `difficulty` rides the `add`'s
+ * `proposedFields` exactly as a planner writes it (story MOTIR-6095 ·
+ * MOTIR-6142) — omit it for a leaf the planner left unjudged.
+ */
+export interface AuthoredLeaf {
+  title: string;
+  difficulty?: WorkItemDifficultyDto;
+  descriptionMd?: string;
+  storyPoints?: number;
+  estimateMinutes?: number;
+}
+
+/** A `modify` of a COMMITTED work item, riding the same final batch. */
+export interface AuthoredModify {
+  workItemId: string;
+  patch: Record<string, unknown>;
+}
+
+const DEFAULT_LEAVES: AuthoredLeaf[] = [
+  { title: 'Payout schedule', storyPoints: 3, estimateMinutes: 45 },
+  { title: 'Payout failure retries', storyPoints: 3, estimateMinutes: 45 },
+];
+
 export async function authorPlanOverMcp(
   client: Client,
   projectKey: string,
-  opts: { title: string; harness: string; model?: string },
+  opts: {
+    title: string;
+    harness: string;
+    model?: string;
+    /** The story's title. Defaults to the payouts story the MOTIR-2982 spec reads. */
+    storyTitle?: string;
+    /** The leaves under the story. Defaults to the two payouts subtasks. */
+    leaves?: AuthoredLeaf[];
+    /** `modify`s of committed cards, appended to the final batch. */
+    modifies?: AuthoredModify[];
+  },
 ): Promise<{ planId: string; storyTitle: string; leafTitles: string[] }> {
   const created = await client.callTool({
     name: CREATE_PLAN_TOOL_NAME,
@@ -172,7 +207,7 @@ export async function authorPlanOverMcp(
   });
   const planId = struct(created as CallToolResult).id;
 
-  const storyTitle = 'Seller payouts';
+  const storyTitle = opts.storyTitle ?? 'Seller payouts';
   const first = (await client.callTool({
     name: ADD_PLAN_ITEMS_TOOL_NAME,
     arguments: {
@@ -181,21 +216,34 @@ export async function authorPlanOverMcp(
     },
   })) as CallToolResult;
 
-  const leafTitles = ['Payout schedule', 'Payout failure retries'];
-  await client.callTool({
+  const leaves = opts.leaves ?? DEFAULT_LEAVES;
+  const leafTitles = leaves.map((leaf) => leaf.title);
+  const second = (await client.callTool({
     name: ADD_PLAN_ITEMS_TOOL_NAME,
     arguments: {
       planId,
       final: true,
-      proposals: leafTitles.map((title) => ({
-        op: 'add',
-        proposedFields: { title, kind: 'subtask', storyPoints: 3, estimateMinutes: 45 },
-        // The temp-ref contract: the id the FIRST call returned, naming a
-        // proposal that is not a work item and never will be until approve.
-        parentRef: `planItem:${itemIds(first)[0]}`,
-      })),
+      proposals: [
+        ...leaves.map((leaf) => ({
+          op: 'add',
+          proposedFields: { ...leaf, kind: 'subtask' },
+          // The temp-ref contract: the id the FIRST call returned, naming a
+          // proposal that is not a work item and never will be until approve.
+          parentRef: `planItem:${itemIds(first)[0]}`,
+        })),
+        ...(opts.modifies ?? []).map((m) => ({
+          op: 'modify',
+          workItemId: m.workItemId,
+          patch: m.patch,
+        })),
+      ],
     },
-  });
+  })) as CallToolResult;
+  // A refused batch comes back as a tool ERROR, not a throw — surface it here
+  // rather than as a missing card three chapters later.
+  if (second.isError) {
+    throw new Error(`add_plan_items refused: ${JSON.stringify(second.content)}`);
+  }
 
   return { planId, storyTitle, leafTitles };
 }

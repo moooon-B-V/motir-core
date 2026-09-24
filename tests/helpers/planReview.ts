@@ -43,6 +43,7 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     explanationSource: null,
     storyPoints: null,
     estimateMinutes: null,
+    difficulty: null,
     targetRepo: null,
     targetRepos: [],
     targetRepositories: null,

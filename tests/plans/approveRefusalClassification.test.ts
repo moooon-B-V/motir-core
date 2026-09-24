@@ -82,6 +82,12 @@ describe('the approve refusal set is derived, not listed', () => {
     // The arrays are compiler-proved total against their unions; this pins that
     // they are also NON-EMPTY, which the type system cannot say.
     expect(PLAN_GRAMMAR_VIOLATIONS).toContain('illegal_parent');
+    // MOTIR-6133 — a difficulty on a container. Plan-internal like its
+    // neighbours: `markPlanned` runs the same gate over the same target rows.
+    expect(PLAN_GRAMMAR_VIOLATIONS).toContain('difficulty_on_container');
+    expect(
+      APPROVE_REFUSALS[refusalId('PLAN_GRAMMAR_VIOLATION', 'difficulty_on_container')]?.cause,
+    ).toBe('plan-internal');
     expect(PLAN_REF_GRAPH_VIOLATIONS).toEqual(
       expect.arrayContaining(['dangling', 'duplicate', 'cycle']),
     );

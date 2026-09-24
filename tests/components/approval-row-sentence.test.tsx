@@ -19,6 +19,7 @@ import type {
 // text on it uses a git host's vocabulary.
 
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => '/workbench',
   useSearchParams: () => new URLSearchParams('tab=approvals'),
 }));
@@ -32,7 +33,8 @@ const TITLE = { en: 'Billing export runs nightly', zh: '账单导出每晚运行
 const HOST_VOCABULARY = /pull request|\bPR\b|merge request|#\d+|拉取请求|合并请求/i;
 
 const SUBJECTS: Record<
-  Exclude<ApprovalGateKindDTO, 'pull_request_merge'>,
+  // `plan_approval` has no subject summary yet — its row is MOTIR-6037's (Story MOTIR-6012).
+  Exclude<ApprovalGateKindDTO, 'pull_request_merge' | 'plan_approval'>,
   ApprovalGateSubjectSummaryDTO
 > = {
   design_result: {
@@ -216,5 +218,54 @@ describe('the approve-to-merge details carry the numbers in the TITLE, never the
     const line = screen.getByText('No decision document');
     expect(line.getAttribute('title')).toBe('moooon/motir-core · #440');
     expect(line.className).toMatch(/\brelative\b.*\bz-10\b/);
+  });
+});
+
+// A CARD-LESS row (Story MOTIR-6012 · MOTIR-6034; ADR `approval-gates.md` §11.1, §11.5b):
+// a `plan_approval` gate names no card and opens no overlay. Its row is the PLAN row
+// (MOTIR-6037; its own suite is `approval-row-plan.test.tsx`) — what is proved here is
+// that it reads its own plain-words line rather than a card sentence, and never writes
+// an approval-overlay address. A card-less row with no plan behind it draws nothing.
+describe('a CARD-LESS (`plan_approval`) row', () => {
+  it.each(['awaiting', 'decided'] as const)('a %s plan row reads the plan line', (section) => {
+    const row = {
+      // The REGISTERED plan summary (MOTIR-6035), drawn by MOTIR-6037's branch.
+      ...awaiting(
+        'plan_approval',
+        {
+          kind: 'plan_approval',
+          planId: 'plan-1',
+          sessionId: null,
+          sessionHasTurns: false,
+          title: 'A plan',
+          projectName: 'Project',
+          targets: [],
+          proposalCount: 2,
+          author: { source: 'mcp', harness: 'Claude Code', origin: 'user' },
+          held: null,
+        },
+        'en',
+      ),
+      workItem: null,
+      ...(section === 'decided'
+        ? { state: 'approved', decidedAt: new Date().toISOString(), refusalReason: null }
+        : {}),
+    };
+    const { container } = render(
+      section === 'decided'
+        ? { section, row: row as unknown as ApprovalRecordDecidedRowDto }
+        : { section, row: row as ApprovalQueueRowDto },
+      'en',
+    );
+    expect(container.textContent).toContain('Plan —');
+    expect(container.textContent).toContain('A plan');
+    expect(screen.getAllByRole('link')[0]!.getAttribute('href')).toBe('/plans/plan-1');
+    expect(container.innerHTML).not.toContain('approval=');
+  });
+
+  it('a card-less row whose subject is gone renders nothing', () => {
+    const row = { ...awaiting('plan_approval', null, 'en'), workItem: null };
+    const { container } = render({ section: 'awaiting', row: row as ApprovalQueueRowDto }, 'en');
+    expect(container.textContent).toBe('');
   });
 });

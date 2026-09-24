@@ -231,6 +231,133 @@ describe('the internal routes carry `todos` (MOTIR-4619)', () => {
   });
 });
 
+// ── MOTIR-6136 ─────────────────────────────────────────────────────────────────
+// A leaf's DIFFICULTY through the INTERNAL routes — the doors motir-ai's hosted
+// planner writes through (MOTIR-6139 sends it). The wire: `proposedFields.difficulty`
+// on the append, `patch.difficulty` on the deepen / correct content bag, and
+// `modifyPatch.difficulty` for a `modify`. Present → set, `null` → clear, absent →
+// untouched; a container answers 422 `INVALID_PROPOSAL`.
+describe('the internal routes carry `difficulty` (MOTIR-6136)', () => {
+  it('the APPEND route passes `proposedFields.difficulty` through to the proposal', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Appended with a difficulty', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: 'job-diff-add' } });
+
+    const res = await append(fx, {
+      jobId: 'job-diff-add',
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'A tricky leaf', kind: 'subtask', difficulty: 'high' },
+        },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const stored = await adminDb.planItem.findFirstOrThrow({ where: { planId: plan.id } });
+    expect(stored.proposedFields).toMatchObject({ difficulty: 'high' });
+  });
+
+  it('the DEEPEN mode SETS `patch.difficulty`, an absent key leaves it, and `null` clears it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { itemId } = await generatingPlan(fx, 'job-diff-deepen');
+    const read = async () =>
+      (
+        (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } })).proposedFields as {
+          difficulty?: string | null;
+        }
+      ).difficulty;
+
+    const set = await patch(fx, itemId, {
+      jobId: 'job-diff-deepen',
+      patch: { difficulty: 'trivial' },
+    });
+    expect(set.status).toBe(200);
+    expect(await read()).toBe('trivial');
+
+    const untouched = await patch(fx, itemId, {
+      jobId: 'job-diff-deepen',
+      patch: { descriptionMd: 'The body.' },
+    });
+    expect(untouched.status).toBe(200);
+    expect(await read()).toBe('trivial');
+
+    const cleared = await patch(fx, itemId, {
+      jobId: 'job-diff-deepen',
+      patch: { difficulty: null },
+    });
+    expect(cleared.status).toBe(200);
+    expect(await read()).toBeNull();
+  });
+
+  it('the CORRECT mode sets it, and a `modify` carries it on `modifyPatch`', async () => {
+    const fx = await makeWorkItemFixture();
+    const { secondId } = await plannedPlan(fx, 'job-diff-correct');
+    const res = await patch(fx, secondId, {
+      jobId: 'job-diff-correct',
+      mode: 'correct',
+      patch: { difficulty: 'medium' },
+    });
+    expect(res.status).toBe(200);
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: secondId } })).proposedFields,
+    ).toMatchObject({ difficulty: 'medium' });
+
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'A modify', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    const leaf = await createTestWorkItem(fx, { kind: 'task', title: 'A committed leaf' });
+    const appended = await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: leaf.id, patch: { priority: 'low' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: 'job-diff-mod' } });
+    const modifyId = appended.items[0]!.id;
+    const mod = await patch(fx, modifyId, {
+      jobId: 'job-diff-mod',
+      mode: 'correct',
+      modifyPatch: { difficulty: 'low' },
+    });
+    expect(mod.status).toBe(200);
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: modifyId } })).patch,
+    ).toMatchObject({ difficulty: 'low' });
+  });
+
+  it('a difficulty on a CONTAINER is a typed 422 INVALID_PROPOSAL naming the field, on BOTH modes', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const { itemId } = await generatingPlan(fx, 'job-diff-bad-deepen');
+    const deepen = await patch(fx, itemId, {
+      jobId: 'job-diff-bad-deepen',
+      patch: { kind: 'story', difficulty: 'low' },
+    });
+    expect(deepen.status).toBe(422);
+    const deepenBody = (await deepen.json()) as { code: string; error: string };
+    expect(deepenBody.code).toBe('INVALID_PROPOSAL');
+    expect(deepenBody.error).toContain('difficulty');
+
+    // `firstId` is a `story` — the correction is judged on the merged kind.
+    const { firstId } = await plannedPlan(fx, 'job-diff-bad-correct');
+    const correct = await patch(fx, firstId, {
+      jobId: 'job-diff-bad-correct',
+      mode: 'correct',
+      patch: { difficulty: 'high' },
+    });
+    expect(correct.status).toBe(422);
+    expect(((await correct.json()) as { code: string }).code).toBe('INVALID_PROPOSAL');
+    const stored = await adminDb.planItem.findUniqueOrThrow({ where: { id: firstId } });
+    expect((stored.proposedFields as { difficulty?: unknown }).difficulty ?? null).toBeNull();
+  });
+});
+
 describe('PATCH — `mode: "correct"` reaches the correction door', () => {
   it('carries the STRUCTURAL fields the deepen turn may not touch', async () => {
     const fx = await makeWorkItemFixture();
@@ -356,6 +483,9 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     priority: 'high',
     storyPoints: 3,
     estimateMinutes: 45,
+    // A leaf's DIFFICULTY (MOTIR-6133) — `kind: 'task'` above is a leaf, so the
+    // container refusal does not fire and the transport is what is asserted.
+    difficulty: 'high',
     explanationMd: 'The corrected WHY — the key this route never read.',
     executor: 'human',
     // The card's proposed STEPS (MOTIR-4616). Present here because the

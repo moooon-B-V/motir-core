@@ -520,6 +520,21 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
   // anywhere else, or two of them, leaves a gate nobody can approve and a merge
   // held — on a run that did everything else right. A `human` decision card never
   // reaches this lane: `isManualReadyItem` sends it to the manual steps.
+  //
+  // ⚠️ AND THE COUNT IS NOT THE SUBJECT, NOR THE SCOPE (MOTIR-6194). Clause 3 makes
+  // the FILE the gate's subject, so WHICH file is what the person is being asked to
+  // approve — and steps 3a/3b are the two rules this lane shipped without. The arm
+  // *"or modified if the decision amends an existing record"* said an existing
+  // record MAY be the target and never said which one, and *"Change no other file"*
+  // bounds the COUNT while leaving one file rewritable without limit. Both holes are
+  // satisfied completely by a run that does everything else right: MOTIR-6157's
+  // decision about MCP-authored plans was written into `approval-gates.md` — the
+  // record whose clause it CONTRADICTS — rather than `agent-authored-plans.md`, the
+  // record that OWNS its subject, and went on to settle a question the card never
+  // asked. Thirteen CI lanes were green and the one-file rule held, because it WAS
+  // one file. The runbook's own half of this rule is `motir-meta` `prompts/run.md`
+  // step 5b; the two are kept in step because neither side can detect the other's
+  // absence.
   decision: [
     '1. Read the card description above for the decision to be made and its',
     '   constraints, and verify each constraint against the shipped code.',
@@ -531,6 +546,30 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '   Context → Decision → Consequences), capturing the context, the choice, the',
     '   alternatives rejected, and the consequences. Change no other file under',
     '   docs/decisions/: the gate reads exactly one, and two cannot be approved.',
+    '   If this card pins NO repository, STOP and say so in a comment on it: the',
+    '   record has no home, and picking one is a planning decision, not yours.',
+    '3a. WHICH file — the record goes where its SUBJECT lives, and the file IS what',
+    '   the gate asks a person to approve. Name it from the thing being DECIDED, not',
+    '   from the text the decision contradicts. DEFAULT to a new',
+    '   docs/decisions/<kebab-slug>.md named for the decision; modify an EXISTING',
+    '   record only when that record already OWNS this subject — when a reader with',
+    '   this question would open that file to answer it — AND only when that file is',
+    '   small enough to be READ AS ONE QUESTION. The gate hands the reviewer the',
+    '   WHOLE file, not your diff: its subject is <owner/name>:<path>@<blobSha>, and',
+    '   a decision document has no publish call, so the pull request head is the',
+    '   only lever you have. A decision buried at line 3,495 of an ADR is reported',
+    '   as MISSING, because unreadable and absent look the same. A decision that',
+    '   contradicts a clause in some OTHER record does not belong in that record: it',
+    '   is written where it belongs, and the clause it falsifies is cited by name.',
+    "3b. HOW MUCH — the record is BOUNDED by this card's own decision. Write what",
+    '   this card decided and nothing else. Do not settle a neighbouring question,',
+    '   do not retire copy, keys or clauses the card did not name, and do not repair',
+    '   what is merely wrong AROUND the part you came to write. Every one of those',
+    '   reads as diligence, none of them was approved, and all of them are invisible',
+    '   to the one-file rule. Something else wrong in that file is a bug to log.',
+    '3c. End the record with a "What this does NOT decide" section naming the',
+    '   questions a reader could think it settled and it does not. That section is',
+    "   what makes the record's scope checkable at the gate instead of inferable.",
     '4. Open a pull request carrying that file and link it to this work item, as',
     '   every lane does. The pull request is REQUIRED — it is how the decision reaches',
     '   the person who accepts it.',

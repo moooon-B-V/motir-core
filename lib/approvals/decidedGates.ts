@@ -44,6 +44,8 @@ export interface DecidedGate {
 
 const listeners = new Set<() => void>();
 let decided: ReadonlyMap<string, DecidedGate> = new Map();
+/** The STATE each announced gate reached — written by both announcements below. */
+let decidedStates: ReadonlyMap<string, ApprovalGateStateDTO> = new Map();
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
@@ -58,6 +60,22 @@ export function announceGateDecided(decision: DecidedGate): void {
   // `awaiting` is not a decision; a repeat is not a change.
   if (gate.state === 'awaiting' || decided.get(gate.id)?.gate.state === gate.state) return;
   decided = new Map(decided).set(gate.id, decision);
+  decidedStates = new Map(decidedStates).set(gate.id, gate.state);
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Record ONLY the state a gate reached, for a surface that decided it without holding
+ * the decided row (Story MOTIR-6012 · MOTIR-6037). The planning rail decides a plan
+ * through the plan's own approve / decline routes, which answer with the PLAN — so it
+ * knows the gate's id and the state it reached, and none of the gate's audit columns.
+ * Announcing a whole {@link ApprovalGateDTO} would mean inventing them on the client;
+ * this wakes the rows that read the state (`useDecidedGateState`) and leaves
+ * `useDecidedGate` — whose readers need the whole decision — untouched.
+ */
+export function announceGateStateDecided(gateId: string, state: ApprovalGateStateDTO): void {
+  if (state === 'awaiting' || decidedStates.get(gateId) === state) return;
+  decidedStates = new Map(decidedStates).set(gateId, state);
   for (const listener of listeners) listener();
 }
 
@@ -65,7 +83,7 @@ export function announceGateDecided(decision: DecidedGate): void {
 export function useDecidedGateState(gateId: string): ApprovalGateStateDTO | null {
   return useSyncExternalStore(
     subscribe,
-    () => decided.get(gateId)?.gate.state ?? null,
+    () => decidedStates.get(gateId) ?? null,
     // The server render has seen no decision, and the page hydrates from it.
     () => null,
   );

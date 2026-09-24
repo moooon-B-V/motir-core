@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
   Bot,
   Check,
   LoaderCircle,
+  MessageSquareText,
   OctagonAlert,
   RotateCw,
   Sparkles,
@@ -15,6 +16,8 @@ import {
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
+import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
+import { PlanStaleBand } from '@/components/planning/PlanChangeConfirmBar';
 import type { PlanHistoryEventDto, PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanDecisionReasonDto } from '@/lib/dto/plans';
 import type { PlanStatusDto, StaleReason } from '@/lib/dto/plans';
@@ -84,7 +87,8 @@ export type PlanCodeOutcome = 'ready' | 'needs_access' | 'unfinished';
 export interface PlanReviewRailProps {
   review: PlanReviewDto;
   onApprove: () => void;
-  onDecline: () => void;
+  /** Decline — with the OPTIONAL reason an asked plan's confirm band collects (MOTIR-6037). */
+  onDecline: (noteMd?: string | null) => void;
   busy: boolean;
   errorCode: string | null;
   /** The proposal the refusal names, when it names one (MOTIR-5418). */
@@ -213,6 +217,15 @@ export function PlanReviewRail({
   // yet something to revise.
   const canRevise = Boolean(onRevise) && planned;
 
+  // ── THE PLAN GATE, on its own page (Story MOTIR-6012 · MOTIR-6037; design Part XX
+  // §20.4, §20.5, Panel 8). The existing CTA IS the gate's Approve and the ghost
+  // Decline IS the gate's Decline — nothing is moved. What an ASKED plan adds: Decline
+  // confirms once, in the approve language's band with an OPTIONAL reason, and a plan
+  // with no conversation to return to says why it opened here.
+  const asked = !decided && review.gate?.state === 'awaiting';
+  const [declineConfirming, setDeclineConfirming] = useState(false);
+  const noConversation = asked && !review.conversation?.hasTurns;
+
   return (
     <aside
       aria-label={t('reviewRailAria')}
@@ -307,6 +320,8 @@ export function PlanReviewRail({
             <ReviewAttribution review={review} t={t} />
           </p>
         </header>
+
+        {noConversation ? <NoConversationNotice review={review} /> : null}
 
         {/* HISTORY timeline */}
         <section className="flex flex-col gap-2">
@@ -428,7 +443,12 @@ export function PlanReviewRail({
           is the canvas's indirection for a SHARED component; this rail is not
           one. */}
       <div className="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]">
-        {errorCode ? (
+        {errorCode === 'APPROVAL_GATE_STALE_SUBJECT' ? (
+          // REFUSED AS STALE (MOTIR-6037; design Part XX §20.5): the plan moved under the
+          // reader, nothing was decided, and the re-read plan is what the verbs below
+          // now decide. The design's words, on the *changed under you* yellow.
+          <PlanStaleBand place="rail" />
+        ) : errorCode ? (
           <p role="alert" className="text-xs font-medium text-(--el-danger-on-surface)">
             {/* The REFUSAL that beats the optimistic hold gets its own sentence
                 (Part XII §C). A lease can be taken between the render and the
@@ -465,16 +485,30 @@ export function PlanReviewRail({
               <Button
                 variant="secondary"
                 data-testid="plan-discard"
-                onClick={onDecline}
+                onClick={() => onDecline()}
                 disabled={busy}
                 leftIcon={<X className="size-4" aria-hidden="true" />}
               >
                 {t('discardCta')}
               </Button>
+            ) : asked && declineConfirming ? (
+              // DECLINE ASKS ONCE (Panel 8) — the band takes the ghost Decline's place,
+              // bled to the footer's edges like the rail's other full-width bands.
+              <PlanDeclineConfirm
+                className="-mx-5"
+                deciding={busy}
+                onCancel={() => setDeclineConfirming(false)}
+                onConfirm={(noteMd) => {
+                  setDeclineConfirming(false);
+                  onDecline(noteMd);
+                }}
+              />
             ) : (
               <Button
                 variant="ghost"
-                onClick={onDecline}
+                // An ASKED plan's Decline confirms first (MOTIR-6037); every other
+                // decline — a `stale` plan's, an unasked one's — is the shipped press.
+                onClick={() => (asked ? setDeclineConfirming(true) : onDecline())}
                 // ⚠️ A `stale` PLAN CAN BE DECLINED, and the button must say so
                 // (MOTIR-3579, AMENDMENT 9 D4). Declining is one of a stale
                 // plan's only two exits — the other is waiting for the drift to
@@ -526,32 +560,35 @@ export function PlanReviewRail({
                 it in general; a revision holding it says what they may do RIGHT
                 NOW, and that answer outranks the others for as long as it lasts
                 (MOTIR-3598, AMENDMENT 10 D2). */}
-            <p className="text-center text-xs text-(--el-text-secondary)">
-              {held
-                ? t('approveHintRevising')
-                : // ⚠️ THE EMPTY ARM SITS DIRECTLY UNDER `held` AND ABOVE THE
-                  // STATUS CHAIN (MOTIR-4146). Every line below it describes
-                  // Approve — *Approve materializes the proposals*, *Approve is
-                  // unavailable*, *Review unlocks when generation completes* —
-                  // and on an empty plan there is no Approve for them to be
-                  // about. `generating` is the exception and keeps its own
-                  // hint: there, items are still arriving, so *Approve unlocks
-                  // when generation completes* is a true sentence about a
-                  // control that is coming.
-                  empty && !generating
-                  ? t('emptyHint')
-                  : planned
-                    ? folderMissingCount > 0
-                      ? t('approveHintFolderMissing', { n: folderMissingCount })
-                      : review.stale
-                        ? t('approveHintStale', { n: review.staleCount })
-                        : t('approveHint')
-                    : generating
-                      ? t('discardHint')
-                      : stalePlan
-                        ? t('staleReviewHint')
-                        : t('reviewLocked')}
-            </p>
+            {/* While Decline's band is up it IS the explanation (Panel 8 draws no hint). */}
+            {asked && declineConfirming ? null : (
+              <p className="text-center text-xs text-(--el-text-secondary)">
+                {held
+                  ? t('approveHintRevising')
+                  : // ⚠️ THE EMPTY ARM SITS DIRECTLY UNDER `held` AND ABOVE THE
+                    // STATUS CHAIN (MOTIR-4146). Every line below it describes
+                    // Approve — *Approve materializes the proposals*, *Approve is
+                    // unavailable*, *Review unlocks when generation completes* —
+                    // and on an empty plan there is no Approve for them to be
+                    // about. `generating` is the exception and keeps its own
+                    // hint: there, items are still arriving, so *Approve unlocks
+                    // when generation completes* is a true sentence about a
+                    // control that is coming.
+                    empty && !generating
+                    ? t('emptyHint')
+                    : planned
+                      ? folderMissingCount > 0
+                        ? t('approveHintFolderMissing', { n: folderMissingCount })
+                        : review.stale
+                          ? t('approveHintStale', { n: review.staleCount })
+                          : t('approveHint')
+                      : generating
+                        ? t('discardHint')
+                        : stalePlan
+                          ? t('staleReviewHint')
+                          : t('reviewLocked')}
+              </p>
+            )}
           </>
         )}
       </div>
@@ -732,6 +769,33 @@ function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof u
  * to `PlanDecisionReasonDto` is a type error here rather than a plan silently
  * rendering as reviewed-and-rejected.
  */
+/**
+ * A PLAN WITH NO CONVERSATION opened on its own page, and says why (MOTIR-6037; design
+ * Part XX §20.5, Panel 8) — the reopened line's shape with a `message-square-text` glyph.
+ * The page HAS a composer (Part XII), so it never says there is nothing to talk to; only
+ * that there is no conversation to return to.
+ */
+function NoConversationNotice({ review }: { review: PlanReviewDto }) {
+  const t = useTranslations('approvalGate.planApproval.noConversation');
+  const cause =
+    review.authorSource === 'mcp' && review.authorHarness
+      ? t('agent', { harness: review.authorHarness })
+      : review.origin === 'cadence'
+        ? t('cadence')
+        : t('earlier');
+  return (
+    <p
+      data-testid="plan-no-conversation"
+      className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+    >
+      <MessageSquareText className="mt-px size-3.5 flex-none" aria-hidden />
+      <span>
+        {cause} {t('next')}
+      </span>
+    </p>
+  );
+}
+
 function declinedOutcomeKey(reason: PlanDecisionReasonDto | null): string {
   switch (reason) {
     case 'discarded':

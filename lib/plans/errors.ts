@@ -480,7 +480,18 @@ export type PlanGrammarViolation =
    * refused one hop later, by the planner's own resolver. What this refuses is a
    * value that could not name a `subject-<name>.md` file at all.
    */
-  | 'malformed_subject';
+  | 'malformed_subject'
+  /**
+   * A non-null DIFFICULTY on a container kind (Story MOTIR-6095 · MOTIR-6133;
+   * `agent-authored-plans.md` AMENDMENT 19) — an `add` proposing an `epic` /
+   * `story` with one, or a `modify` whose `patch.difficulty` targets a work item
+   * that is a container NOW. The proposal doors refuse both with
+   * `INVALID_PROPOSAL`; this reason exists for the one path they cannot see, a
+   * committed target re-kinded to a container after the append. Without it,
+   * approve writes the column directly (it bypasses `workItemsService`) and a
+   * story ends up with the difficulty every other door refuses it.
+   */
+  | 'difficulty_on_container';
 
 /*
  * ⚠️ `subject_on_container` WAS A MEMBER AND IS RETIRED (MOTIR-5607).
@@ -517,6 +528,7 @@ const PLAN_GRAMMAR_VIOLATION_MEMBERS: Record<PlanGrammarViolation, true> = {
   parent_depth_limit: true,
   parent_terminal: true,
   malformed_subject: true,
+  difficulty_on_container: true,
 };
 
 /** {@link PlanGrammarViolation}'s members as an array — see the record above. */
@@ -863,5 +875,62 @@ export class InvalidPlanHistoryCursorError extends Error {
   constructor() {
     super('The plan history cursor is not valid. Request the first page again.');
     this.name = 'InvalidPlanHistoryCursorError';
+  }
+}
+
+/**
+ * A `planned` plan that has NO question asked about it yet — no `awaiting`
+ * `plan_approval` gate (Story MOTIR-6012 · MOTIR-6038; ADR `approval-gates.md`
+ * §11.8, §11.9). The pre-backfill state: the plan reached `planned` before its
+ * raise shipped, so there is no gate for the decide door to lock or record.
+ *
+ * ⚠️ A REFUSAL, NOT A FALLBACK. Deciding it around the door would write the one
+ * decision the record could never show, so every entrance says *not decidable
+ * yet* instead, and the backfill (MOTIR-6039) is what makes it decidable. → 409
+ */
+export class PlanNotDecidableYetError extends Error {
+  readonly code = 'PLAN_NOT_DECIDABLE_YET' as const;
+  constructor(readonly planId: string) {
+    super(
+      `Plan ${planId} cannot be decided yet: nobody has been asked to approve it. ` +
+        `Nothing has been changed; it becomes decidable once its approval is raised.`,
+    );
+    this.name = 'PlanNotDecidableYetError';
+  }
+}
+
+/**
+ * A PLAIN plan writer met an `awaiting` plan gate under the plan's lock
+ * (MOTIR-6038; ADR §11.8's converse). While a plan's question is asked, ONLY the
+ * decide door writes `approved` / `declined` onto it — `approvePlan` /
+ * `declinePlan`'s own bodies refuse, so a race that raised the gate between an
+ * entrance's read and its write cannot decide the plan around it. → 409
+ */
+export class PlanGateAwaitingError extends Error {
+  readonly code = 'PLAN_GATE_AWAITING' as const;
+  constructor(
+    readonly planId: string,
+    readonly gateId: string,
+  ) {
+    super(
+      `Plan ${planId} is waiting on its approval (${gateId}); it is decided through that approval. ` +
+        `Nothing has been changed — read the plan again and decide it there.`,
+    );
+    this.name = 'PlanGateAwaitingError';
+  }
+}
+
+/**
+ * A PERSON's decision of a plan whose question is asked arrived without the
+ * `stamp` its render read returned (MOTIR-6038; ADR §6b's MOTIR-5234 amendment,
+ * §11.3). The door never guesses what a reader saw. → 400
+ */
+export class PlanDecisionStampRequiredError extends Error {
+  readonly code = 'PLAN_DECISION_STAMP_REQUIRED' as const;
+  constructor(readonly planId: string) {
+    super(
+      `Deciding plan ${planId} needs the \`stamp\` its review read returned — pass the stamp you were shown.`,
+    );
+    this.name = 'PlanDecisionStampRequiredError';
   }
 }

@@ -199,6 +199,42 @@ describe('the VS Code route tells the reader how to stay current', () => {
     expect(text.indexOf('docker pull')).toBeGreaterThan(-1);
     expect(text.indexOf('docker pull')).toBeLessThan(text.indexOf('Rebuild Container'));
   });
+
+  // MOTIR-6181: the palette offers Rebuild Container only in a window already
+  // attached to the dev container (`remoteName == dev-container`), and a reader
+  // who has just run `docker pull` on the host is in a local window. The
+  // callout has to attach them first, unconditionally — Open Folder in
+  // Container is offered in an attached window too, so there is no case to skip.
+  it('attaches with Open Folder in Container before Rebuild Container, and says why', () => {
+    const callout = vscode?.blocks.find(
+      (block) =>
+        block.kind === 'callout' &&
+        block.tone === 'warning' &&
+        /Rebuild Container/.test(block.text),
+    );
+    const text = (callout as { text: string }).text;
+    const pull = text.indexOf('docker pull');
+    const attach = text.indexOf('Dev Containers: Open Folder in Container');
+    const rebuild = text.indexOf('Dev Containers: Rebuild Container');
+    expect(attach, 'the attach step').toBeGreaterThan(-1);
+    expect(pull).toBeLessThan(attach);
+    expect(attach).toBeLessThan(rebuild);
+    expect(text).toMatch(/only (appears|shows) in a window (that is )?attached to the container/);
+    expect(text).not.toMatch(/skip|if the window is already/i);
+  });
+
+  it('never presents Rebuild Container as available before the window is attached', () => {
+    const prose = vscode?.blocks.filter(
+      (block) => block.kind === 'prose' && /Rebuild Container/.test(block.text),
+    );
+    for (const block of prose ?? []) {
+      const text = (block as { text: string }).text;
+      expect(text.indexOf('Open Folder in Container')).toBeGreaterThan(-1);
+      expect(text.indexOf('Open Folder in Container')).toBeLessThan(
+        text.indexOf('Rebuild Container'),
+      );
+    }
+  });
 });
 
 describe('the sign-in precondition is true for Claude Code on macOS', () => {

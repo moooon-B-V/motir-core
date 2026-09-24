@@ -224,13 +224,16 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     }
 
     // …and no OTHER endpoint persists proposals: the only route that materializes
-    // a plan is the plans approve route the entrances share.
+    // a plan is the plans approve route the entrances share — which, since
+    // MOTIR-6038, decides the plan's gate through `planDecisionService`.
     const approveRoutes = SOURCE_FILES.filter((file) => {
       if (!relative(ROOT, file).startsWith(`app${sep}api`)) return false;
       const code = read(file)
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/[^\n]*$/gm, '');
-      return /plansService\.approvePlan\(|materializePlan\(/.test(code);
+      return /plansService\.approvePlan\(|planDecisionService\.approve\(|materializePlan\(/.test(
+        code,
+      );
     }).map((f) => relative(ROOT, f));
     expect(approveRoutes).toEqual([join('app', 'api', 'plans', '[id]', 'approve', 'route.ts')]);
   });

@@ -189,8 +189,9 @@ describe('the overlay address — the parameter NAMES are the design contract', 
   // it*. They are duplicated here ON PURPOSE: this is the assertion that fails
   // when either home is renamed without the other, which is the whole reason the
   // design records them rather than whichever file was written first.
-  // `planSession` joined with MOTIR-6024 (MOTIR-6019's design, §19.8).
-  const DESIGN_NAMES = ['plan', 'planFrom', 'planItem', 'planRepo', 'planSession'];
+  // `planSession` joined with MOTIR-6024 (MOTIR-6019's design, §19.8), and `planVia`
+  // with MOTIR-6037 (MOTIR-6033's design, Part XX §20.2).
+  const DESIGN_NAMES = ['plan', 'planFrom', 'planItem', 'planRepo', 'planSession', 'planVia'];
 
   it('emits exactly the names the design records, and no others', () => {
     expect(Object.values(OVERLAY_PARAM_NAMES).sort()).toEqual([...DESIGN_NAMES].sort());
@@ -367,5 +368,60 @@ describe('the ROUTE-era exports are GONE (MOTIR-4732)', () => {
     expect(source).not.toMatch(/from 'react'/);
     expect(source).not.toMatch(/from 'server-only'/);
     expect(source).not.toMatch(/'use client'/);
+  });
+});
+
+describe('planVia — the entrance a NAMED session was reopened from (MOTIR-6037, §20.2)', () => {
+  it('is written only WITH a named session', () => {
+    const withSession = planningOverlaySearch({
+      kind: 'work-item',
+      itemKey: 'MOTIR-6010',
+      sessionId: 's-1',
+      via: 'approvals',
+    });
+    expect(withSession.get('planSession')).toBe('s-1');
+    expect(withSession.get('planVia')).toBe('approvals');
+    expect(withSession.get('plan')).toBe('contextual');
+    // No session → no entrance: it says where THAT session came from.
+    const bare = planningOverlaySearch({ kind: 'project', via: 'approvals' });
+    expect(bare.has('planVia')).toBe(false);
+    expect(planningOverlaySearch({ kind: 'project', sessionId: 's-1' }).has('planVia')).toBe(false);
+  });
+
+  it('is read only with planSession, and only its one value', () => {
+    expect(
+      parsePlanningOverlay(
+        new URLSearchParams('plan=project&planFrom=project&planSession=s-1&planVia=approvals'),
+      ),
+    ).toMatchObject({ sessionId: 's-1', via: 'approvals' });
+    // Without a session it is ignored.
+    expect(
+      parsePlanningOverlay(new URLSearchParams('plan=project&planFrom=project&planVia=approvals')),
+    ).not.toHaveProperty('via');
+    // Any other value is the Plans page — absent.
+    expect(
+      parsePlanningOverlay(
+        new URLSearchParams('plan=project&planFrom=project&planSession=s-1&planVia=plans'),
+      ),
+    ).not.toHaveProperty('via');
+    // The server-side record form reads the same.
+    expect(
+      parsePlanningOverlay({
+        plan: 'project',
+        planFrom: 'project',
+        planSession: 's-1',
+        planVia: 'approvals',
+      }),
+    ).toMatchObject({ via: 'approvals' });
+  });
+
+  it('Close strips it with the others, and leaves the host query alone', () => {
+    const opened = withPlanningOverlay('/workbench?tab=approvals', {
+      kind: 'project',
+      sessionId: 's-1',
+      via: 'approvals',
+    });
+    expect(opened).toContain('planVia=approvals');
+    expect(withoutPlanningOverlay(opened)).toBe('/workbench?tab=approvals');
   });
 });

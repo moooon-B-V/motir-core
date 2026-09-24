@@ -35,6 +35,8 @@ import {
   presentMcpPlanAppend,
 } from '../payloads/workLoop';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
+import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import { isFolderRef, isTempRef } from '@/lib/plans/refs';
 import { resolveWorkItemIdsByKeys } from './workItemRef';
 import { projectKeyField } from './readyFilters';
@@ -266,6 +268,20 @@ const TODOS_DESCRIPTION =
   'carries it from birth. Leaf kinds only — a container’s steps are its children.';
 
 /**
+ * A leaf's DIFFICULTY (MOTIR-6136), described once for every plan door that
+ * carries it. The members come from `WORK_ITEM_DIFFICULTIES` — the field's single
+ * source of truth — so a new level reaches the schema enum and this sentence with
+ * no edit here. Membership is the schema's; leaf-only is the service's
+ * (`validateProposedDifficulty`), answered as a typed `INVALID_PROPOSAL`.
+ */
+const DIFFICULTY_DESCRIPTION =
+  'How hard the work is to REASON about, not how big it is (that is `storyPoints` / ' +
+  '`estimateMinutes`): ' +
+  WORK_ITEM_DIFFICULTIES.map((d) => `"${d}"`).join(', ') +
+  ', easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or ' +
+  'story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped.';
+
+/**
  * One proposed operation.
  *
  * A deliberate NARROWING of `ProposalInput`: `planningProvenance` is absent from
@@ -296,6 +312,10 @@ const proposedFieldsSchema = z
       .optional()
       .describe('Agile sizing. Validated at the boundary exactly as the create path validates it.'),
     estimateMinutes: z.number().int().optional().describe('Estimated minutes of work.'),
+    difficulty: z
+      .enum(WORK_ITEM_DIFFICULTIES)
+      .optional()
+      .describe(DIFFICULTY_DESCRIPTION + ' Omit it to leave the proposal without one.'),
     targetRepo: z
       .string()
       .optional()
@@ -407,6 +427,15 @@ const patchSchema = z
       .nullable()
       .optional()
       .describe('Re-scope the time estimate. An explicit `null` clears it.'),
+    difficulty: z
+      .enum(WORK_ITEM_DIFFICULTIES)
+      .nullable()
+      .optional()
+      .describe(
+        'Re-judge the target’s difficulty. ' +
+          DIFFICULTY_DESCRIPTION +
+          ' Judged on the target’s MERGED kind. An explicit `null` clears it.',
+      ),
     targetRepo: z
       .string()
       .nullable()
@@ -684,6 +713,14 @@ const updatePlanItemInputSchema = {
     .nullable()
     .optional()
     .describe('Estimated minutes of work; `null` clears it.'),
+  difficulty: z
+    .enum(WORK_ITEM_DIFFICULTIES)
+    .nullable()
+    .optional()
+    .describe(
+      DIFFICULTY_DESCRIPTION +
+        ' Judged on the MERGED kind. Send `null` to clear it; omit to leave it as it is.',
+    ),
   todos: z
     .array(proposedTodoSchema)
     .nullable()
@@ -919,6 +956,7 @@ interface UpdatePlanItemArgs {
   executor?: string | null;
   storyPoints?: number | null;
   estimateMinutes?: number | null;
+  difficulty?: WorkItemDifficultyDto | null;
   todos?: ProposedTodoInput[] | null;
 }
 
@@ -1514,6 +1552,7 @@ export async function runUpdatePlanItem(
     'executor',
     'storyPoints',
     'estimateMinutes',
+    'difficulty',
     'todos',
   ] as const satisfies readonly UpdateProposalKey[];
 
@@ -1564,6 +1603,7 @@ export async function runUpdatePlanProposal(
     'executor',
     'storyPoints',
     'estimateMinutes',
+    'difficulty',
     'todos',
     'parentRef',
     'blockedByRefs',

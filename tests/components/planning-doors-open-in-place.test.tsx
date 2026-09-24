@@ -284,3 +284,55 @@ describe('coverage · the opener called WITHOUT a click event', () => {
     expect(shallowPush).toHaveBeenCalledWith('/backlog?plan=project&planFrom=project');
   });
 });
+
+describe('coverage · a named session reopened from an entrance (MOTIR-6024 · MOTIR-6037)', () => {
+  type Ctx = Parameters<typeof useOpenPlanningWorkspace>[0];
+
+  function Probe({ context }: { context: Ctx }) {
+    const { href } = useOpenPlanningWorkspace(context);
+    return <a href={href}>reopen</a>;
+  }
+
+  function hrefOf() {
+    return screen.getByRole('link', { name: 'reopen' }).getAttribute('href');
+  }
+
+  it('re-derives the address when ONLY the entrance changes — `planVia` is part of the key', () => {
+    // The memo is keyed on the context's VALUE; a key that left `via` out would hand
+    // back the Plans-page address for a session reopened from To approve.
+    const { rerender } = renderWithIntl(
+      <Probe context={{ kind: 'project', hasPlan: true, sessionId: 'sess-1' }} />,
+    );
+    const plain = hrefOf();
+    expect(plain).toBe(
+      withPlanningOverlay('/backlog', { kind: 'project', hasPlan: true, sessionId: 'sess-1' }),
+    );
+    expect(plain).toContain('planSession=sess-1');
+    expect(plain).not.toContain('planVia');
+
+    rerender(
+      <Probe context={{ kind: 'project', hasPlan: true, sessionId: 'sess-1', via: 'approvals' }} />,
+    );
+    expect(hrefOf()).toContain('planSession=sess-1');
+    expect(hrefOf()).toContain('planVia=approvals');
+  });
+
+  it('a card’s session carries its key, its session and its entrance', () => {
+    const context: Ctx = {
+      kind: 'work-item',
+      itemKey: 'MOTIR-12',
+      hasPlan: false,
+      sessionId: 'sess-2',
+      via: 'approvals',
+    };
+    renderWithIntl(<Probe context={context} />);
+    expect(hrefOf()).toBe(withPlanningOverlay('/backlog', context));
+    expect(hrefOf()).toContain('planVia=approvals');
+  });
+
+  it('an explicitly EMPTY session or entrance reads as none', () => {
+    const context: Ctx = { kind: 'project', sessionId: undefined, via: undefined };
+    renderWithIntl(<Probe context={context} />);
+    expect(hrefOf()).toBe('/backlog?plan=project&planFrom=project');
+  });
+});

@@ -261,7 +261,12 @@ describe('the overlay is TOTAL over what the read can answer', () => {
 
   // Per member of the enum other than the one kind this build registers — the
   // address module's own suite ties that list to `UNREGISTERED_GATE_KINDS`.
-  for (const kind of APPROVAL_GATE_KINDS.filter((k) => k !== 'design_result')) {
+  // `plan_approval` is not here: the overlay renders NO frame for it and sends the reader
+  // to the planning surface instead (§11.5b, MOTIR-6037) — its own suite,
+  // `approval-overlay-plan-arm.test.tsx`.
+  for (const kind of APPROVAL_GATE_KINDS.filter(
+    (k) => k !== 'design_result' && k !== 'plan_approval',
+  )) {
     it(`draws "not built yet" for ${kind}, with no frame mounted`, async () => {
       openAt('GATE-1', kind);
       fetchApprovalGateOverlay.mockResolvedValue(

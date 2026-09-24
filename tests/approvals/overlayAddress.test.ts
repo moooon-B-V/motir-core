@@ -103,3 +103,24 @@ describe('the approval overlay address (MOTIR-5224)', () => {
     expect(withoutApprovalOverlay('/dashboard#x')).toBe('/dashboard#x');
   });
 });
+
+// THE ADDRESS IS NOT EXTENDED FOR A PLAN GATE (Story MOTIR-6012 · MOTIR-6034; ADR
+// `approval-gates.md` §11.5b). `plan_approval` is in the tuple only because the tuple is
+// total over the wire enum (`_KindsAreTotal`); a plan gate is decided on the planning
+// surface, so the address gains no card-less form — still exactly two parameters, and
+// still keyed by a work item's identifier.
+describe('the overlay address and the card-less `plan_approval` kind (MOTIR-6034)', () => {
+  it('spells the kind (the tuple is total over the enum) and adds no parameter for it', () => {
+    expect(APPROVAL_GATE_KINDS).toContain('plan_approval');
+    expect(Object.keys(APPROVAL_OVERLAY_PARAM_NAMES)).toEqual(['item', 'kind']);
+  });
+
+  it('an address naming the kind still carries a work item key, never a plan', () => {
+    expect(withApprovalOverlay('/workbench', { itemKey: 'MOTIR-1', kind: 'plan_approval' })).toBe(
+      '/workbench?approval=MOTIR-1&approvalKind=plan_approval',
+    );
+    expect(
+      parseApprovalOverlay(new URLSearchParams('approval=MOTIR-1&approvalKind=plan_approval')),
+    ).toEqual({ itemKey: 'MOTIR-1', kind: 'plan_approval' });
+  });
+});

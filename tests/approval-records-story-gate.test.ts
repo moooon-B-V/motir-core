@@ -157,8 +157,8 @@ async function titlesFor(userId: string) {
   const page = await approvalGatesService.listRecords(ctxOf(userId), { limit: 100 });
   return {
     fullView: page.fullView,
-    awaiting: page.sections.awaiting.items.map((r) => r.workItem.title),
-    decided: page.sections.decided.items.map((r) => r.workItem.title),
+    awaiting: page.sections.awaiting.items.map((r) => r.workItem?.title),
+    decided: page.sections.decided.items.map((r) => r.workItem?.title),
   };
 }
 

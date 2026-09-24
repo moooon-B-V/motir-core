@@ -164,6 +164,7 @@ const { POST: approvePlanRoute } = await import('@/app/api/plans/[id]/approve/ro
 const { POST: declinePlanRoute } = await import('@/app/api/plans/[id]/decline/route');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { plansService } = await import('@/lib/services/plansService');
+const { planReviewService } = await import('@/lib/services/planReviewService');
 const { planTargetLockSweep } = await import('@/lib/jobs/definitions/planTargetLockSweep');
 const { PLANNING_STATUS_KEY } = await import('@/lib/planChange/targetLock');
 
@@ -272,15 +273,26 @@ async function engineProposes(planId: string, title: string): Promise<void> {
   await plansService.markPlanned(planId, svcCtx());
 }
 
+/** A press, as the plan page makes it: the `stamp` the review read showed the reader,
+ *  handed back in the body (MOTIR-6038 — the routes refuse a press without it). */
+async function press(planId: string, verb: 'approve' | 'decline'): Promise<Request> {
+  const stamp = (await planReviewService.getPlanReview(planId, svcCtx())).gate?.stamp ?? null;
+  return new Request(`${BASE}/api/plans/${planId}/${verb}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stamp }),
+  });
+}
+
 async function approve(planId: string): Promise<void> {
-  const res = await approvePlanRoute(new Request(`${BASE}/api/plans/${planId}/approve`), {
+  const res = await approvePlanRoute(await press(planId, 'approve'), {
     params: Promise.resolve({ id: planId }),
   });
   expect(res.status, await res.text()).toBe(200);
 }
 
 async function decline(planId: string): Promise<void> {
-  const res = await declinePlanRoute(new Request(`${BASE}/api/plans/${planId}/decline`), {
+  const res = await declinePlanRoute(await press(planId, 'decline'), {
     params: Promise.resolve({ id: planId }),
   });
   expect(res.status).toBe(200);

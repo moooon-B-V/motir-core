@@ -289,6 +289,68 @@ describe('validatePlanProposals — the proposed `type` is a closed set (MOTIR-3
   });
 });
 
+describe('validatePlanProposals — a DIFFICULTY is refused on a container (MOTIR-6133)', () => {
+  function grammarReasonOf(run: () => void): string | null {
+    try {
+      run();
+      return null;
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      return (err as PlanGrammarError).reason;
+    }
+  }
+
+  it('refuses a modify whose LIVE target is a container — the re-kinded-after-append case', () => {
+    // The target was a task at the append; it is a story by approve.
+    const liveById = liveMap(live({ id: REAL_PARENT }), live({ id: REAL_TARGET, kind: 'story' }));
+    try {
+      validate([modify('m1', { patch: { difficulty: 'high' } })], { liveById });
+      expect.unreachable('a difficulty on a story must be refused');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      expect((err as PlanGrammarError).reason).toBe('difficulty_on_container');
+      expect((err as PlanGrammarError).planItemId).toBe('m1');
+      expect((err as PlanGrammarError).message).toContain('difficulty');
+      expect((err as PlanGrammarError).message).toContain('story');
+      expect((err as PlanGrammarError).message).toContain('MOTIR-wi_target');
+    }
+  });
+
+  it('accepts the same modify on a LEAF target, and a clear (`null`) on a container', () => {
+    for (const kind of ['task', 'subtask', 'bug'] as const) {
+      const liveById = liveMap(live({ id: REAL_PARENT }), live({ id: REAL_TARGET, kind }));
+      expect(
+        grammarReasonOf(() =>
+          validate([modify('m1', { patch: { difficulty: 'trivial' } })], { liveById }),
+        ),
+      ).toBeNull();
+    }
+    const liveById = liveMap(live({ id: REAL_PARENT }), live({ id: REAL_TARGET, kind: 'epic' }));
+    expect(
+      grammarReasonOf(() =>
+        validate([modify('m1', { patch: { difficulty: null } })], { liveById }),
+      ),
+    ).toBeNull();
+  });
+
+  it('refuses an add proposing a container kind with a difficulty, and its default kind is a leaf', () => {
+    expect(
+      grammarReasonOf(() =>
+        validate([add('p1', { proposedFields: { kind: 'epic', difficulty: 'low' } })]),
+      ),
+    ).toBe('difficulty_on_container');
+    expect(
+      grammarReasonOf(() =>
+        validate([add('p1', { proposedFields: { kind: 'story', difficulty: 'medium' } })]),
+      ),
+    ).toBe('difficulty_on_container');
+    // No `kind` → `DEFAULT_PROPOSED_KIND` (`task`), a leaf.
+    expect(
+      grammarReasonOf(() => validate([add('p1', { proposedFields: { difficulty: 'high' } })])),
+    ).toBeNull();
+  });
+});
+
 describe('validatePlanProposals — cross-project refs (MOTIR-3581)', () => {
   // The product supports a cross-PROJECT dependency and forbids a cross-project
   // PARENT, and the two are asserted TOGETHER because the bug was that one

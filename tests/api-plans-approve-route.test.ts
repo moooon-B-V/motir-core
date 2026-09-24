@@ -1,8 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  ApprovalGateAlreadyDecidedError,
+  ApprovalGateStaleSubjectError,
+  ApprovalGateSupersededError,
+} from '@/lib/approvalGates/errors';
+import {
   PlanApproveTimedOutError,
+  PlanDecisionStampRequiredError,
+  PlanGateAwaitingError,
   PlanHasNoProposalsError,
+  PlanNotDecidableYetError,
   PlanNotFoundError,
+  PlanRevisionInFlightError,
 } from '@/lib/plans/errors';
 
 // Route-level transport test for POST /api/plans/[id]/approve — the P2028 arm
@@ -39,16 +48,21 @@ vi.mock('next-intl/server', () => ({
   getTranslations: async () => (key: string) => key,
 }));
 
+// The route's ONE service call since MOTIR-6038: every plan decision goes through
+// `planDecisionService`, which decides the plan's gate at the decide door.
 const approvePlan = vi.fn();
-vi.mock('@/lib/services/plansService', () => ({
-  plansService: { approvePlan: (...args: unknown[]) => approvePlan(...args) },
+vi.mock('@/lib/services/planDecisionService', () => ({
+  planDecisionService: { approve: (...args: unknown[]) => approvePlan(...args) },
 }));
 
 const { POST } = await import('@/app/api/plans/[id]/approve/route');
 
-function callApprove(planId: string): Promise<Response> {
+function callApprove(planId: string, body?: unknown): Promise<Response> {
   return POST(
-    new Request(`http://localhost:3000/api/plans/${planId}/approve`, { method: 'POST' }),
+    new Request(`http://localhost:3000/api/plans/${planId}/approve`, {
+      method: 'POST',
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }),
     {
       params: Promise.resolve({ id: planId }),
     },
@@ -122,5 +136,98 @@ describe('POST /api/plans/[id]/approve — an EMPTY plan is a 409', () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.code).toBe('PLAN_HAS_NO_PROPOSALS');
     expect(body.planId).toBe('plan_empty');
+  });
+});
+
+// MOTIR-6038 — the approve DECIDES THE PLAN'S GATE, so it forwards what the reader was
+// shown and answers the decide door's refusals in the decide route's words.
+describe('POST /api/plans/[id]/approve — through the decide door', () => {
+  it('forwards the stamp the reader was shown, the note, and the onboarding placeholder', async () => {
+    ctx.current = { userId: 'u1', workspaceId: 'ws1' };
+    approvePlan.mockResolvedValue({ id: 'plan_1', items: [] });
+
+    const res = await callApprove('plan_1', { stamp: 'v1.abc', noteMd: 'ship it' });
+
+    expect(res.status).toBe(200);
+    expect(approvePlan).toHaveBeenCalledWith(
+      { planId: 'plan_1', stamp: 'v1.abc', noteMd: 'ship it', source: 'api' },
+      ctx.current,
+      { provisionalProjectName: 'project.untitled' },
+    );
+  });
+
+  it('an empty or unreadable body is a press with no stamp — the service decides if one was owed', async () => {
+    ctx.current = { userId: 'u1', workspaceId: 'ws1' };
+    approvePlan.mockResolvedValue({ id: 'plan_1', items: [] });
+    await callApprove('plan_1');
+    await callApprove('plan_1', '{not json');
+    for (const call of approvePlan.mock.calls) {
+      expect(call[0]).toMatchObject({ stamp: null, noteMd: null });
+    }
+  });
+
+  it('HELD while a revision is in flight → 409 naming who holds it and until when', async () => {
+    ctx.current = { userId: 'u1', workspaceId: 'ws1' };
+    const until = new Date('2026-09-23T12:00:00.000Z');
+    approvePlan.mockRejectedValue(new PlanRevisionInFlightError('plan_1', 'Claude Code', until));
+
+    const res = await callApprove('plan_1', { stamp: 's' });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: 'PLAN_REVISION_IN_FLIGHT',
+      heldBy: 'Claude Code',
+      expiresAt: until.toISOString(),
+    });
+  });
+
+  it('a STALE stamp → 409 saying what moved', async () => {
+    ctx.current = { userId: 'u1', workspaceId: 'ws1' };
+    approvePlan.mockRejectedValue(new ApprovalGateStaleSubjectError('gate_1', ['subject']));
+
+    const res = await callApprove('plan_1', { stamp: 'old' });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: 'APPROVAL_GATE_STALE_SUBJECT',
+      moved: ['subject'],
+    });
+  });
+
+  it('ALREADY DECIDED and WITHDRAWN → 409 in the door’s own words', async () => {
+    ctx.current = { userId: 'u1', workspaceId: 'ws1' };
+    approvePlan.mockRejectedValueOnce(
+      new ApprovalGateAlreadyDecidedError('gate_1', 'approved', 'u2', new Date()),
+    );
+    const decided = await callApprove('plan_1', { stamp: 's' });
+    expect(decided.status).toBe(409);
+    expect(((await decided.json()) as { code: string }).code).toBe('APPROVAL_GATE_ALREADY_DECIDED');
+
+    approvePlan.mockRejectedValueOnce(new ApprovalGateSupersededError('gate_1', 'plan_stale'));
+    const withdrawn = await callApprove('plan_1', { stamp: 's' });
+    expect(withdrawn.status).toBe(409);
+    expect(((await withdrawn.json()) as { code: string }).code).toBe('APPROVAL_GATE_SUPERSEDED');
+  });
+
+  it('NOT DECIDABLE YET (a `planned` plan with no gate) → 409, never a 500', async () => {
+    ctx.current = { userId: 'u1', workspaceId: 'ws1' };
+    approvePlan.mockRejectedValue(new PlanNotDecidableYetError('plan_1'));
+
+    const res = await callApprove('plan_1');
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'PLAN_NOT_DECIDABLE_YET', planId: 'plan_1' });
+  });
+
+  it('a question raised under a plain press → 409; an asked plan pressed without its stamp → 400', async () => {
+    ctx.current = { userId: 'u1', workspaceId: 'ws1' };
+    approvePlan.mockRejectedValueOnce(new PlanGateAwaitingError('plan_1', 'gate_1'));
+    const raced = await callApprove('plan_1');
+    expect(raced.status).toBe(409);
+    expect(await raced.json()).toMatchObject({ code: 'PLAN_GATE_AWAITING', gateId: 'gate_1' });
+
+    approvePlan.mockRejectedValueOnce(new PlanDecisionStampRequiredError('plan_1'));
+    const unstamped = await callApprove('plan_1');
+    expect(unstamped.status).toBe(400);
   });
 });

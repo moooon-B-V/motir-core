@@ -503,6 +503,11 @@ test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a pl
   });
 
   await page.getByRole('button', { name: 'Decline' }).click();
+  // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
+  await page
+    .getByTestId('plan-decline-confirm')
+    .getByRole('button', { name: 'Yes, decline' })
+    .click();
 
   // ⚠️ A 409 IS NOT AN ERROR ON THIS SURFACE (MOTIR-3240). The plan moved between
   // render and click and the decision was still made, so the rail shows the

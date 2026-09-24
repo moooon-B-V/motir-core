@@ -112,6 +112,7 @@ function modifiedItem(changes: PlanReviewItemDto['changes']): PlanReviewItemDto 
     explanationSource: null,
     storyPoints: null,
     estimateMinutes: null,
+    difficulty: null,
     targetRepo: null,
     targetRepos: [],
     targetRepositories: null,

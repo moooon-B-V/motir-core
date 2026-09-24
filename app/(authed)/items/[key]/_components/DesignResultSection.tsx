@@ -116,7 +116,10 @@ export function DesignResultSection({
   const decidedOnServer =
     gate?.state === 'approved' ||
     gate?.state === 'changes_requested' ||
-    gate?.state === 'overturned';
+    gate?.state === 'overturned' ||
+    // A DECLINE is a decision (MOTIR-6032; ADR §11.4) — offered on a `plan_approval`
+    // gate alone, so a design never carries one; listed for the same total-fold reason.
+    gate?.state === 'declined';
   const portEvidence = decidedOnServer ? (subject?.evidence ?? null) : evidence;
 
   if (!shown) return <DesignResultPanel evidence={evidence} isDesignCard={isDesignCard} />;

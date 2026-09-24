@@ -102,6 +102,16 @@ if (maj < 24 || (maj === 24 && min < 15)) { \
 # GIT WORKFLOW section runs git, and the session-branch/PR steps run gh.
 # ca-certificates/curl/gnupg are needed to add the GitHub CLI apt source;
 # openssh-client covers SSH git remotes; less is gh's pager.
+#
+# python3 is contract for the SAME reason, and it was missed because the list
+# above was reasoned entirely from the CLI DISPATCH path, which runs none
+# (MOTIR-6195). The RUNBOOK path does: the `motir-sweep-planning-bugs` and
+# `motir-fix-planning-bug` doors drive `prompts/sweep-planning-bugs.py` as their
+# loop driver — the FIRST call of each, with no degraded mode — and every corpus
+# guard in motir-meta (`DOORS.check.py`, `prompts/plan-rules/*.py`) is a Python
+# script, so without an interpreter a rules change cannot be checked before it is
+# pushed. `-minimal` is deliberate and sufficient: those scripts import stdlib
+# only, so no pip and no virtualenv is needed.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -110,6 +120,7 @@ RUN apt-get update \
         gnupg \
         less \
         openssh-client \
+        python3-minimal \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
         -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
@@ -118,7 +129,8 @@ RUN apt-get update \
         > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 --version
 
 # The `motir` binary itself. Installed globally from the packed tarball so it is
 # on PATH for every user, and smoke-tested in the same layer — a base that
@@ -158,6 +170,38 @@ RUN npm install -g --no-fund --no-audit @colbymchenry/codegraph \
 # installs onto the GLOBAL path rather than into a user's home.
 ARG AGENT=base
 ENV MOTIR_SANDBOX_AGENT=${AGENT}
+
+# ── The agents live in a prefix the RUNTIME user owns (MOTIR-6183) ───────────
+# A sandbox may run for weeks, and a reader who wants a coding agent's update
+# should get it where they are: a rebuild keeps /workspace and the Motir sign-in
+# but loses the agent's own sign-in, anything installed in the container, shell
+# history and any running session. So every agent is installed under ONE prefix
+# that is chowned to `node` below, and its self-updater (Claude Code's is the one
+# reported: "Auto-update failed: no write permission to npm prefix") can write
+# there. An update lives as long as the container; a rebuild returns the image's
+# version, because nothing here is a volume that could shadow the image's copy.
+#
+# ⚠️ Set AFTER the `motir` and codegraph installs above, on purpose. Those stay
+# root-owned in /usr/local, so the agent can update itself but cannot rewrite the
+# `motir` binary that supervises it. `motir`'s own upgrade notice (MOTIR-4973)
+# derives writability from its execPath, so it is unaffected.
+#
+# NPM_CONFIG_PREFIX makes `npm install -g` — the arms' at build time, and an
+# updater's at run time — land here; PATH puts it ahead of /usr/local/bin.
+ENV MOTIR_AGENT_PREFIX=/opt/motir-agents
+ENV NPM_CONFIG_PREFIX=/opt/motir-agents
+ENV PATH=/opt/motir-agents/bin:$PATH
+# ⚠️ ENV PATH does NOT reach a LOGIN shell: Debian's /etc/profile REPLACES PATH
+# for a non-root user (`PATH="/usr/local/bin:/usr/bin:/bin:…"`) — and a login
+# shell is what this image's own `CMD ["bash", "-l"]` and any `sh -lc` start.
+# Built and measured: without this line `claude` was not on PATH as `node` in a
+# login shell. /etc/profile.d runs AFTER that reset, so it puts the prefix back,
+# first, once.
+RUN printf '%s\n' \
+    '# motir-sandbox: the node-owned agent prefix, first on PATH (MOTIR-6183).' \
+    'case ":$PATH:" in *:/opt/motir-agents/bin:*) ;; *) PATH="/opt/motir-agents/bin:$PATH" ;; esac' \
+    'export PATH' \
+    > /etc/profile.d/motir-agents-path.sh
 COPY --chmod=0755 packages/cli/sandbox/install-agent.sh /usr/local/lib/motir-sandbox/install-agent.sh
 RUN /usr/local/lib/motir-sandbox/install-agent.sh "${AGENT}"
 
@@ -199,8 +243,12 @@ RUN printf '%s\n' \
 # (~/.cursor/mcp.json, ~/.motir-sandbox/agent-config/…, …). Left
 # root-owned, an agent that rewrites its own config file at startup would fail
 # on a home it cannot write.
-RUN mkdir -p /workspace /home/node/.config/motir \
-    && chown -R node:node /workspace /home/node
+#
+# The agent prefix is chowned for the same reason, one level out (MOTIR-6183):
+# it is what lets an agent update itself in a long-running container. The
+# mkdir makes it exist in `base`, which installs no agent into it.
+RUN mkdir -p /workspace /home/node/.config/motir /opt/motir-agents/bin \
+    && chown -R node:node /workspace /home/node /opt/motir-agents
 
 USER node
 # HOME is set explicitly because the CLI resolves its config dir from

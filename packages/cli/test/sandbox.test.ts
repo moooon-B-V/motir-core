@@ -171,6 +171,22 @@ describe('sandbox Dockerfile', () => {
     expect(aptPackages).toMatch(/install -y --no-install-recommends gh \\$/m);
   });
 
+  it('installs python3 and smoke-tests it — the RUNBOOK path needs an interpreter (MOTIR-6195)', () => {
+    // Read the DIRECTIVES: the block comment above this layer now explains why
+    // python3 is contract, so a prose match would pass on the explanation of the
+    // package rather than on the package.
+    const directives = directivesOf(dockerfile);
+    const aptPackages = directives.slice(
+      directives.indexOf('apt-get install'),
+      directives.indexOf('rm -rf /var/lib/apt/lists'),
+    );
+    expect(aptPackages).toMatch(/^\s+python3-minimal \\$/m);
+    // Same reasoning as `motir --version` below: a base that cannot run python3
+    // must fail the BUILD, not the first `motir sweep planning bugs`. The two
+    // doors that drive prompts/sweep-planning-bugs.py have no degraded mode.
+    expect(directives).toMatch(/&& python3 --version/);
+  });
+
   it('installs the motir binary and smoke-tests it in the same layer', () => {
     expect(dockerfile).toContain('npm install -g /tmp/motir-cli.tgz');
     // A base that cannot run `motir --version` must fail the BUILD.
@@ -191,6 +207,32 @@ describe('sandbox Dockerfile', () => {
     expect(packAt).toBeGreaterThan(-1);
     expect(mkdirAt).toBeGreaterThan(-1);
     expect(mkdirAt).toBeLessThan(packAt);
+  });
+
+  it('installs the agents into a prefix node owns, AFTER motir and codegraph (MOTIR-6183)', () => {
+    // A sandbox may run for weeks, and an agent must be able to update itself
+    // there: every one was installed as root into /usr/local, so every
+    // self-update failed ("Auto-update failed: no write permission to npm
+    // prefix"). The agents now go under one prefix chowned to `node`.
+    expect(dockerfile).toMatch(/^ENV MOTIR_AGENT_PREFIX=\/opt\/motir-agents$/m);
+    expect(dockerfile).toMatch(/^ENV NPM_CONFIG_PREFIX=\/opt\/motir-agents$/m);
+    expect(dockerfile).toMatch(/^ENV PATH=\/opt\/motir-agents\/bin:\$PATH$/m);
+    // …and again for a LOGIN shell, whose /etc/profile replaces PATH: the image's
+    // own `bash -l` would otherwise not find the agent at all.
+    expect(dockerfile).toContain('> /etc/profile.d/motir-agents-path.sh');
+    expect(dockerfile).toContain('PATH="/opt/motir-agents/bin:$PATH"');
+    const prefixAt = dockerfile.search(/^ENV NPM_CONFIG_PREFIX=/m);
+    // AFTER the motir and codegraph installs, so those stay root-owned in
+    // /usr/local — the agent updates itself, never the CLI that supervises it.
+    expect(dockerfile.indexOf('npm install -g /tmp/motir-cli.tgz')).toBeLessThan(prefixAt);
+    expect(dockerfile.indexOf('@colbymchenry/codegraph')).toBeLessThan(prefixAt);
+    // BEFORE the agent layer, so the arms install into it.
+    expect(prefixAt).toBeLessThan(dockerfile.indexOf('install-agent.sh "${AGENT}"'));
+    // And node owns it — created even in `base`, which installs nothing there.
+    expect(dockerfile).toMatch(/mkdir -p [^\n]*\/opt\/motir-agents\/bin/);
+    expect(dockerfile).toMatch(/chown -R node:node [^\n]*\/opt\/motir-agents$/m);
+    // The retired approach is gone: nothing turns an updater off.
+    expect(dockerfile).not.toContain('DISABLE_AUTOUPDATER');
   });
 
   it('exposes the AGENT selector with a base-only default and routes it through the seam', () => {
@@ -267,7 +309,11 @@ describe('the per-agent layer seam', () => {
       if (!arm.includes('curl ')) continue;
       expect(arm, `global install for ${id}`).toMatch(/AGENT_PREFIX/);
     }
-    expect(installAgent).toContain('AGENT_PREFIX=/usr/local/bin');
+    // Under the node-owned agent prefix (MOTIR-6183), never root-owned
+    // /usr/local — and every relocated payload with it.
+    expect(installAgent).toContain('AGENT_ROOT="${MOTIR_AGENT_PREFIX:-/opt/motir-agents}"');
+    expect(installAgent).toContain('AGENT_PREFIX="$AGENT_ROOT/bin"');
+    expect(installAgent).not.toMatch(/\/usr\/local\/bin|\/opt\/aider|\/opt\/cursor-agent/);
   });
 
   it('ships NO Gemini CLI profile — Antigravity replaces the retired tool', () => {

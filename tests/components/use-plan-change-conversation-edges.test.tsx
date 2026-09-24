@@ -92,6 +92,7 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
 import { usePlanChangeConversation, narrateFrame } from '@/lib/hooks/usePlanChangeConversation';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import { PlanRequestError } from '@/lib/planning/planReviewClient';
+import { useDecidedGateState } from '@/lib/approvals/decidedGates';
 import { planReview, planReviewItem } from '../helpers/planReview';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
@@ -753,6 +754,146 @@ describe('usePlanChangeConversation — approve edges', () => {
       removed: [],
     });
     expect(result.current.state.phase).toBe('idle');
+  });
+});
+
+describe('usePlanChangeConversation — an ASKED plan is decided through its gate (MOTIR-6037 · MOTIR-6038)', () => {
+  // The plan's question as the review read returns it: `awaiting`, with the stamp the
+  // press must hand back. Each case takes its own gate id — the decided-gates store is
+  // page-global, and a shared id would let one case's announcement answer another's.
+  function asked(gateId: string, stamp = `stamp-${gateId}`): PlanReviewDto {
+    return {
+      ...REVIEW,
+      gate: { id: gateId, state: 'awaiting', stamp, held: null, canDecide: true },
+    };
+  }
+
+  async function withProposal(review: PlanReviewDto) {
+    fetchReview.mockResolvedValue(review);
+    const hook = await mounted();
+    await act(async () => {
+      await hook.result.current.send('Add recurring invoices.');
+    });
+    expect(hook.result.current.state.review).toEqual(review);
+    return hook;
+  }
+
+  function decidedState(gateId: string) {
+    return renderHook(() => useDecidedGateState(gateId)).result.current;
+  }
+
+  it('APPROVE hands back the stamp the reader was shown, and settles the To-approve row', async () => {
+    const { result } = await withProposal(asked('gate-approve'));
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(approve).toHaveBeenCalledWith('plan-1', 'stamp-gate-approve');
+    expect(decidedState('gate-approve')).toBe('approved');
+  });
+
+  it('DECLINE with a reason carries the stamp AND the note, and settles the row as declined', async () => {
+    const { result } = await withProposal(asked('gate-decline'));
+    await act(async () => {
+      await result.current.discard('Not this quarter.');
+    });
+
+    expect(decline).toHaveBeenCalledWith('plan-1', 'stamp-gate-decline', 'Not this quarter.');
+    expect(result.current.state.decided).toBe('declined');
+    expect(decidedState('gate-decline')).toBe('declined');
+  });
+
+  it('a plan whose gate is NOT awaiting announces nothing — it was never asked here', async () => {
+    const review: PlanReviewDto = {
+      ...REVIEW,
+      gate: { id: 'gate-quiet', state: 'approved', stamp: null, held: null, canDecide: true },
+    };
+    const { result } = await withProposal(review);
+    await act(async () => {
+      await result.current.discard();
+    });
+
+    expect(decline).toHaveBeenCalledWith('plan-1', null);
+    expect(decidedState('gate-quiet')).toBeNull();
+  });
+
+  it('a STALE approve re-reads the review, so the next press carries the new stamp', async () => {
+    const { result } = await withProposal(asked('gate-stale', 'stamp-old'));
+    const fresh = asked('gate-stale', 'stamp-new');
+    fetchReview.mockResolvedValue(fresh);
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'APPROVAL_GATE_STALE_SUBJECT'));
+
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(result.current.state.errorCode).toBe('stale');
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.review).toEqual(fresh);
+
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(approve).toHaveBeenLastCalledWith('plan-1', 'stamp-new');
+  });
+
+  it('a STALE decline re-reads the review too', async () => {
+    const { result } = await withProposal(asked('gate-stale-decline', 'stamp-old'));
+    const fresh = asked('gate-stale-decline', 'stamp-new');
+    fetchReview.mockResolvedValue(fresh);
+    decline.mockRejectedValueOnce(new PlanRequestError(409, 'APPROVAL_GATE_STALE_SUBJECT'));
+
+    await act(async () => {
+      await result.current.discard();
+    });
+
+    expect(result.current.state.errorCode).toBe('stale');
+    expect(result.current.state.review).toEqual(fresh);
+    expect(decidedState('gate-stale-decline')).toBeNull();
+  });
+
+  it('a failed re-read after a stale refusal keeps the review in hand', async () => {
+    const review = asked('gate-stale-reread-fails', 'stamp-old');
+    const { result } = await withProposal(review);
+    fetchReview.mockRejectedValueOnce(new Error('network down'));
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'APPROVAL_GATE_STALE_SUBJECT'));
+
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(result.current.state.errorCode).toBe('stale');
+    expect(result.current.state.review).toEqual(review);
+  });
+
+  it('a re-read that lands after unmount writes nothing', async () => {
+    const { result, unmount } = await withProposal(asked('gate-stale-unmount', 'stamp-old'));
+    const reread = deferred<PlanReviewDto>();
+    fetchReview.mockReturnValueOnce(reread.promise);
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'APPROVAL_GATE_STALE_SUBJECT'));
+
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.approve();
+    });
+    await waitFor(() => expect(fetchReview).toHaveBeenCalledTimes(2));
+    unmount();
+    reread.resolve(asked('gate-stale-unmount', 'stamp-new'));
+    await pending;
+
+    expect(result.current.state.review?.gate?.stamp).toBe('stamp-old');
+  });
+
+  it('a HELD refusal (a revision in flight) does NOT re-read — the proposals have not moved', async () => {
+    const { result } = await withProposal(asked('gate-held'));
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_REVISION_IN_FLIGHT'));
+
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(result.current.state.errorCode).toBe('held');
+    expect(fetchReview).toHaveBeenCalledTimes(1);
   });
 });
 

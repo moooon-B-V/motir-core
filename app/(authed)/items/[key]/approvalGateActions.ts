@@ -19,6 +19,7 @@ import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
 import type { ApprovalGateDTO, ApproveAndMergeMemberOutcomeDTO } from '@/lib/dto/approvalGate';
+import { reportUnmappedActionRefusal } from '@/lib/actions/unmappedRefusal';
 
 // Server Action for the approval FRAME (Story MOTIR-4778 · Subtask MOTIR-4792),
 // beside the section that renders it — the shape `acceptanceActions.ts` ships,
@@ -140,6 +141,11 @@ export async function decideApprovalGateAction(input: {
   } catch (err) {
     const refusal = refusalOf(err);
     if (refusal) return { ok: false, refusal };
+    // A typed refusal no arm above maps is still a refusal, not a fault: the
+    // frame's unexpected arm in place of a 500, reported (MOTIR-6147).
+    if (reportUnmappedActionRefusal(err, 'decideApprovalGateAction')) {
+      return { ok: false, refusal: toGateRefusal('UNEXPECTED') };
+    }
     throw err;
   }
 }
@@ -218,6 +224,11 @@ export async function approveAndMergeAction(input: {
   } catch (err) {
     const refusal = refusalOf(err);
     if (refusal) return { ok: false, refusal };
+    // A typed refusal no arm above maps is still a refusal, not a fault: the
+    // frame's unexpected arm in place of a 500, reported (MOTIR-6147).
+    if (reportUnmappedActionRefusal(err, 'approveAndMergeAction')) {
+      return { ok: false, refusal: toGateRefusal('UNEXPECTED') };
+    }
     throw err;
   }
 }
@@ -258,6 +269,11 @@ export async function retryApproveAndMergeMemberAction(input: {
   } catch (err) {
     const refusal = refusalOf(err);
     if (refusal) return { ok: false, refusal };
+    // A typed refusal no arm above maps is still a refusal, not a fault: the
+    // frame's unexpected arm in place of a 500, reported (MOTIR-6147).
+    if (reportUnmappedActionRefusal(err, 'retryApproveAndMergeMemberAction')) {
+      return { ok: false, refusal: toGateRefusal('UNEXPECTED') };
+    }
     throw err;
   }
 }
@@ -290,6 +306,11 @@ export async function queueAgainAutoAction(input: {
     // Queue again's own refusals (wrong mode, a moved head, no standing exit) are
     // states the frame never offers the button in, so reaching one is a stale page.
     if (err instanceof QueueAgainRefusedError) return { ok: false, refusal: { tag: 'UNEXPECTED' } };
+    // A typed refusal no arm above maps is still a refusal, not a fault: the
+    // frame's unexpected arm in place of a 500, reported (MOTIR-6147).
+    if (reportUnmappedActionRefusal(err, 'queueAgainAutoAction')) {
+      return { ok: false, refusal: toGateRefusal('UNEXPECTED') };
+    }
     throw err;
   }
 }

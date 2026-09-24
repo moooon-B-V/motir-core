@@ -3413,3 +3413,79 @@ internal job route go through it.
 - **Readiness is still derived from `blocked_by` only.** A moved card's readiness follows its edges,
   not its new parent.
 - **`@@unique([planId, workItemId])` stays.** The merge is what keeps it true: two appends, one row.
+
+## AMENDMENT 19 — a plan proposal CARRIES a leaf's DIFFICULTY, on every op and every door (story MOTIR-6095 · MOTIR-6133, 2026-09-24)
+
+**The gap.** MOTIR-6016 gave a leaf a `difficulty` — `trivial · low · medium · high`, the
+`WorkItemDifficulty` enum whose single source of truth is `WORK_ITEM_DIFFICULTIES`
+(`lib/issues/difficulty.ts`) — and refused it on a container at the work-item service
+(`DifficultyNotAllowedOnKindError`). The plan wire carried nothing for it, and a plan is how most
+cards come into existence, so the planner's judgement of difficulty had nowhere to land. And approve
+does not go through `workItemsService`: `materialize` builds the create data and `applyModify` the
+update, so 6016's refusal never runs on the plan path. This amendment records the four decisions
+that close it.
+
+### §1 — `difficulty` is a CONTENT field on every op, deepenable and correctable
+
+It rides the route `storyPoints` rides: an `add`'s `proposedFields`, a `modify`'s `patch`, the
+deepen input (`UpdateProposalInput`, so `UPDATE_PROPOSAL_KEYS`) and the correction input
+(`CorrectProposalInput`, by inheritance, so `CORRECT_PROPOSAL_KEYS`). Sparse at every door: absent
+leaves the value alone, an explicit `null` clears it.
+
+AMENDMENT 4 D3's line decides it: _a deepen may change what a card SAYS and who ACTS on it; it may
+not change where the card SITS or SHIPS._ How hard the work is to reason about is what the card
+says — a property of the WORK — so a second pass and a correction may both change it.
+
+**It deliberately does NOT take `subject`'s narrower add-only route**
+(`docs/decisions/work-item-subject-write-door.md`). `subject` is pass PROVENANCE — which rule packs
+an authoring pass read, settled at the lay — and a later pass rewriting it would credit that pass
+with a coordinate an earlier one derived. Difficulty carries no such history: a re-plan that
+re-scopes a card is exactly the pass that must be able to re-judge it.
+
+### §2 — it is on the `modify` patch
+
+`PlanItemPatch.difficulty` joins `PLAN_ITEM_PATCH_KEYS`, beside `storyPoints`. `applyModify` writes
+it and records a `difficulty: { from, to }` revision cell — the same cell `workItemsService` records
+and 6016's activity renderer displays (`textField()`), so the item's history reads the same whichever
+door changed it. A materialized `add` records `difficulty: { from: null, to }` in its created
+revision (`buildAddDiff`), omitted when unset.
+
+It participates in AMENDMENT 18 §2's merge as a SCALAR key: a second `modify` of one card wins per
+key, an absent key keeps the earlier value, an explicit `null` clears. No code: `mergeModifyPatch`
+iterates `PLAN_ITEM_PATCH_KEYS`, which is why the key list is the one place it had to be added.
+
+### §3 — the plan path refuses it on a container, with `INVALID_PROPOSAL`, at every door
+
+Leaf-only is decided by KIND through `TYPEABLE_KINDS` — the predicate 6016's service door and
+`type` / `executor` use — never by childlessness, and it is judged on the proposal's EFFECTIVE kind:
+an `add`'s MERGED `proposedFields.kind ?? DEFAULT_PROPOSED_KIND`, a `modify`'s TARGET kind. Merged,
+because a deepen or correction can change `kind` after the append; a deepen that turns an `add`
+carrying a difficulty into a `story` without clearing it in the same patch is refused.
+
+| door                              | what is judged                                                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| append (`addProposals`)           | an `add`'s value on its kind; a `modify`'s membership (pure pass), then its container half against the target row        |
+| deepen (`editAddProposal`)        | the MERGED `add`                                                                                                         |
+| correct (`correctProposal`)       | the MERGED `add`; a `modify`'s replacement patch against the target row                                                  |
+| approve (`validatePlanProposals`) | grammar reason `difficulty_on_container` — an `add` on a container kind, and a `modify` whose LIVE target is a container |
+
+The three proposal doors share ONE module, `lib/plans/validateProposedDifficulty.ts`, modelled on
+`validateProposedTodos.ts`, and the approve gate asks the same module's predicate — so the rule
+cannot drift between doors. The approve arm exists for the one path the doors cannot see: a
+committed target re-kinded to a container after the append. It is classified plan-internal like
+every grammar reason (`markPlanned` runs the same gate over the same rows); a re-kind between the
+close and the button is refused at approve, before anything materializes.
+
+**Refusal family: `INVALID_PROPOSAL`**, the `todos` precedent (AMENDMENT 14 D4) — NOT the work-item
+family's `DIFFICULTY_NOT_ALLOWED_ON_KIND`. Every other proposal-content refusal is
+`INVALID_PROPOSAL`, so a plan caller handles one family; and a work-item error code from a proposal
+door would describe a row that does not exist yet. The message names the field, the value and the
+kind, because the caller correcting it is usually an agent.
+
+### §4 — it is EVERY-OP in review
+
+A reviewer sees an `add`'s proposed difficulty and a `modify`'s old → new, on every op — the
+`storyPoints` disposition (`tests/dto/planReviewFieldParity.test.ts`), for the same reason: re-judging
+how hard a card is to reason about is one of the most consequential things a re-plan says about it.
+The review renderer is its own card (MOTIR-6137); until it lands the parity guards carry a named,
+self-expiring owed entry for it.

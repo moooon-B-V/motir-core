@@ -61,14 +61,18 @@ const getPlanInputSchema = {
 /** The op markers the review surface uses: add / modify / remove. */
 const OP_MARKER: Record<PlanItemOpDto, string> = { add: '+', modify: '~', remove: '-' };
 
-/** ` (3 pts · 40m)` — the leaf sizing, when the proposal carries any. */
+/** ` (3 pts · 40m · high)` — the leaf sizing and its DIFFICULTY (MOTIR-6136),
+ *  when the proposal carries any. The difficulty rides beside the size because
+ *  it is the other half of how a reviewer judges a leaf: how big, how hard. */
 function sizing(
   storyPoints: number | null | undefined,
   estimateMinutes: number | null | undefined,
+  difficulty?: string | null,
 ) {
   const parts: string[] = [];
   if (storyPoints != null) parts.push(`${storyPoints} pts`);
   if (estimateMinutes != null) parts.push(`${estimateMinutes}m`);
+  if (difficulty != null) parts.push(difficulty);
   return parts.length > 0 ? ` (${parts.join(' · ')})` : '';
 }
 
@@ -136,7 +140,7 @@ function describeItem(item: PlanItemDto, placement?: ProposalPlacement): string 
     const title = fields?.title ?? '(untitled)';
     return (
       `${marker} [${kind}${type}] ${title}` +
-      sizing(fields?.storyPoints, fields?.estimateMinutes) +
+      sizing(fields?.storyPoints, fields?.estimateMinutes, fields?.difficulty) +
       repoPin(fields?.targetRepo) +
       steps(fields?.todos) +
       blockers(item.blockedByRefs)
@@ -373,7 +377,8 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'Read a plan WITH the proposals it bundles — what an AI planning pass actually ' +
         'proposed, not just how many items it produced. Returns the plan plus `items[]`: each ' +
         "proposal's `op` (add / modify / remove), the `proposedFields` of an `add` (title, " +
-        'kind, type, priority, executor, storyPoints, estimateMinutes, description, ' +
+        'kind, type, priority, executor, storyPoints, estimateMinutes, difficulty — how hard ' +
+        'the leaf is to reason about, rendered beside its size as `(3 pts · 40m · high)` — description, ' +
         "targetRepo — which repo of the project's set the item ships in — and `todos`, the " +
         'card’s ORDERED STEPS, which the one-line render summarises as `· N steps` and ' +
         '`structuredContent` carries in full), the ' +

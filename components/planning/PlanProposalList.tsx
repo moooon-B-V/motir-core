@@ -1,13 +1,15 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, FolderX, RotateCw } from 'lucide-react';
 
 import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { StatusPill } from '@/components/issues/StatusPill';
+import { DifficultyIndicator } from '@/components/issues/DifficultyPicker';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
+import { changeCellText } from '@/components/planning/changeCellText';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
@@ -180,6 +182,7 @@ function fieldLabel(t: ReturnType<typeof useTranslations>, field: string): strin
 
 function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
   const t = useTranslations('planReview');
+  const tl = useTranslations('labels');
   if (changes.length === 0) return null;
   return (
     <dl className="mt-1.5 grid gap-0.5 text-xs">
@@ -217,7 +220,9 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
             ) : (
               <>
                 {change.from ? (
-                  <span className="text-(--el-text-secondary) line-through">{change.from}</span>
+                  <span className="text-(--el-text-secondary) line-through">
+                    {changeCellText(change.field, change.from, tl)}
+                  </span>
                 ) : null}
                 {change.from ? (
                   <span className="px-1.5 text-(--el-text-secondary)" aria-hidden>
@@ -225,7 +230,8 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
                   </span>
                 ) : null}
                 <span className="font-semibold text-(--el-text-strong)">
-                  {changeToText(change, t('proposedCrumb')) ?? '—'}
+                  {changeCellText(change.field, changeToText(change, t('proposedCrumb')), tl) ??
+                    '—'}
                 </span>
               </>
             )}
@@ -263,13 +269,29 @@ function ProposalRow({
   onOpen: (item: PlanReviewItemDto, trigger: HTMLButtonElement) => void;
 }) {
   const t = useTranslations('planReview');
-  const facts = [
+  // The facts line is NODES joined by `·`, not one string (story MOTIR-6095 ·
+  // MOTIR-6137, design Part XX §20.7): a leaf's DIFFICULTY rides directly after
+  // the points — size beside hardness, read ACROSS siblings — as the compact
+  // glyph + label. A missing value is dropped like every other empty fact, and a
+  // container never carries one.
+  const isContainer = item.kind === 'epic' || item.kind === 'story';
+  const facts: ReactNode[] = [
     item.kind,
     item.type,
     item.storyPoints != null ? t('listPoints', { n: item.storyPoints }) : null,
+    item.difficulty != null && !isContainer ? (
+      <DifficultyIndicator
+        difficulty={item.difficulty}
+        compact={{
+          srLabel: t('field_difficulty'),
+          className: 'align-top',
+          testId: 'plan-list-difficulty',
+        }}
+      />
+    ) : null,
     item.estimateMinutes != null ? t('listMinutes', { n: item.estimateMinutes }) : null,
     item.targetRepo,
-  ].filter(Boolean) as string[];
+  ].filter((fact) => fact != null && fact !== '');
 
   // WHERE it lands. An INTRA-PLAN parent is marked, because that container does
   // not exist yet either and a reader deciding on this row should know.
@@ -332,7 +354,16 @@ function ProposalRow({
           </button>
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-(--el-text-secondary)">
-          {facts.length > 0 ? <span>{facts.join(' · ')}</span> : null}
+          {facts.length > 0 ? (
+            <span>
+              {facts.map((fact, i) => (
+                <Fragment key={i}>
+                  {i > 0 ? ' · ' : null}
+                  {fact}
+                </Fragment>
+              ))}
+            </span>
+          ) : null}
           {/* WHERE it is FILED, where `under {parent}` sits — a fact on the row,
               never a grouping (Part XVII §17.3); a deleted folder says so (§17.5). */}
           {item.folderMissing ? (

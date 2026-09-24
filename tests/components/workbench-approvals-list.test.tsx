@@ -416,7 +416,7 @@ describe('the Approvals list — a gate decided in the OVERLAY settles its row',
     const decided = designRow({ gateId: 'gate-settle-a' });
     const other = designRow({
       gateId: 'gate-settle-b',
-      workItem: { ...designRow().workItem, id: 'wi-2', identifier: 'MOTIR-9', title: 'Other' },
+      workItem: { ...designRow().workItem!, id: 'wi-2', identifier: 'MOTIR-9', title: 'Other' },
     });
     renderRows([decided, other]);
     expect(screen.getAllByRole('button', { name: 'Review' })).toHaveLength(2);
@@ -472,7 +472,7 @@ describe('the Approvals list — NO PAGER, and the CEILING line (MOTIR-5998, des
     const rows = Array.from({ length: 30 }, (_, i) =>
       designRow({
         gateId: `gate-${i}`,
-        workItem: { ...designRow().workItem, id: `wi-${i}`, identifier: `MOTIR-${9000 + i}` },
+        workItem: { ...designRow().workItem!, id: `wi-${i}`, identifier: `MOTIR-${9000 + i}` },
       }),
     );
     renderRows(rows);
@@ -531,7 +531,7 @@ describe('the Approvals list — the PULL-REQUEST row (MOTIR-5485, design-notes 
       gateId: `gate-pr-${count}`,
       kind: 'pull_request_approval',
       workItem: {
-        ...designRow().workItem,
+        ...designRow().workItem!,
         identifier: 'ACME-12',
         title: 'Throttle the public API',
         kind: 'story',

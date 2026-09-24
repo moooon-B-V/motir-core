@@ -89,7 +89,7 @@ describe('the choice gate in To approve and the Approvals room', () => {
 
     expect((await approvalGatesService.listAwaitingMe(meCtx)).total).toBe(0);
     const room = await approvalGatesService.listRecords(meCtx);
-    const decided = room.sections.decided.items.find((row) => row.workItem.id === item.id);
+    const decided = room.sections.decided.items.find((row) => row.workItem?.id === item.id);
     expect(decided).toMatchObject({
       kind: 'decision_choice',
       state: 'approved',

@@ -15,6 +15,7 @@ import {
 } from '@/lib/planChange/revisionLease';
 
 import { plansService } from '@/lib/services/plansService';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
@@ -28,7 +29,8 @@ import type {
   PlanWithItemsDto,
   StaleReason,
 } from '@/lib/dto/plans';
-import type { PlanRevision } from '@/generated/prisma/client';
+import type { PlanRevision, Prisma } from '@/generated/prisma/client';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
 import type {
   PlanBlockerStubDto,
@@ -40,6 +42,8 @@ import type {
   PlanParentCrumbDto,
   PlanPlacementSideDto,
   PlanReviewDto,
+  PlanConversationDto,
+  PlanReviewGateDto,
   PlanReviewItemDto,
   PlanReviewTodoDto,
 } from '@/lib/dto/planReview';
@@ -213,6 +217,7 @@ type PatchedFieldKey = Extract<
   | 'type'
   | 'storyPoints'
   | 'estimateMinutes'
+  | 'difficulty'
   | 'targetRepo'
   | 'targetRepos'
   | 'targetRepoRole'
@@ -266,6 +271,19 @@ function buildChanges(
       field: 'estimateMinutes',
       from: target?.estimateMinutes == null ? null : String(target.estimateMinutes),
       to: patch.estimateMinutes === null ? null : String(patch.estimateMinutes),
+    });
+  }
+  // A leaf's DIFFICULTY (story MOTIR-6095 · MOTIR-6137, design Part XX §20.5) —
+  // the sizing group's third member, so it follows `estimateMinutes`. The cells
+  // carry the WIRE words (`low`, `high`); every surface renders them as the item
+  // page's labels (`labels.difficulty.*`), so the reviewer reads `Low → High` in
+  // their own locale. Presence-triggered like its siblings: an explicit `null`
+  // CLEARS it and reads `Medium → —`.
+  if (patch.difficulty !== undefined && patch.difficulty !== (target?.difficulty ?? null)) {
+    changes.push({
+      field: 'difficulty',
+      from: target?.difficulty ?? null,
+      to: patch.difficulty ?? null,
     });
   }
   if (
@@ -583,6 +601,15 @@ export const planReviewService = {
     // that must hold Approve and the timeline that tells the reviewer WHY read
     // one fact from one place, and nothing needed a column.
     const lease = revisionLeaseOf(revisions, new Date());
+    // THE PLAN'S QUESTION (MOTIR-6038) — its gate and the stamp a press hands back, read
+    // on every poll so a reader's stamp follows the version they are looking at.
+    const gate = await readPlanGate(planId, ctx);
+    // THE PLAN'S CONVERSATION (MOTIR-6037) — the decision surfaces say whether there is
+    // one to return to. The gate row's own read, so the two agree on what "has a
+    // conversation" means.
+    const conversation = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      readPlanConversation(planId, tx),
+    );
     const revisionStartedAt = lastRevisionStartAt(revisions);
     // WHICH proposals the latest revision touched. Every trail row written at or
     // after that start names its `planItemId`, so the set falls out of rows this
@@ -1243,6 +1270,15 @@ export const planReviewService = {
           proposed?.estimateMinutes ?? null,
           target?.estimateMinutes ?? null,
         ),
+        // A leaf's DIFFICULTY (story MOTIR-6095 · MOTIR-6137) — patch-or-target on
+        // every op, as `storyPoints` is: the peek's rail and the card's top row
+        // read the value approve will WRITE. A container never carries one.
+        difficulty: proposedValue(
+          'difficulty',
+          item,
+          proposed?.difficulty ?? null,
+          target?.difficulty ?? null,
+        ),
         targetRepo: proposedValue(
           'targetRepo',
           item,
@@ -1521,6 +1557,8 @@ export const planReviewService = {
             startedAt: (revisionStartedAt ?? new Date()).toISOString(),
           }
         : null,
+      gate,
+      conversation,
       history,
       items,
       stale: staleCount > 0,
@@ -1530,3 +1568,36 @@ export const planReviewService = {
     };
   },
 };
+
+/** The plan's question as the planning surface reads it — the gate's render read,
+ *  narrowed to what a press needs (MOTIR-6038). */
+async function readPlanGate(
+  planId: string,
+  ctx: ServiceContext,
+): Promise<PlanReviewGateDto | null> {
+  const read = await approvalGatesService.getForPlan({ planId }, ctx);
+  if (!read.gate) return null;
+  return {
+    id: read.gate.id,
+    state: read.gate.state,
+    stamp: read.stamp,
+    held: read.gate.held ?? null,
+    canDecide: read.canDecide,
+    routedToName: read.routedToLabel,
+  };
+}
+
+/** The plan's planning session, as {@link PlanConversationDto} — or null when it has
+ *  none (MOTIR-6037). Reads through the plan gate row's own projection. */
+async function readPlanConversation(
+  planId: string,
+  tx: Prisma.TransactionClient,
+): Promise<PlanConversationDto | null> {
+  const [plan] = await planRepository.findManyForGateSummary([planId], tx);
+  if (!plan?.sessionId) return null;
+  return {
+    sessionId: plan.sessionId,
+    hasTurns: (plan.session?.turnCount ?? 0) > 0,
+    targetKeys: plan.session?.targetKeys ?? [],
+  };
+}

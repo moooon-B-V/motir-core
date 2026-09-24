@@ -135,6 +135,18 @@ export async function PATCH(
           estimateMinutes: typeof patch.estimateMinutes === 'number' ? patch.estimateMinutes : null,
         }
       : {}),
+    // A leaf's DIFFICULTY (MOTIR-6133) — by PRESENCE, like the sizes above it:
+    // absent leaves it, `null` clears, a non-string becomes `null`. MEMBERSHIP
+    // and the container refusal are the service's (`validateProposedDifficulty`),
+    // answered as a typed `InvalidProposalError` → 422 by the catch below.
+    ...('difficulty' in patch
+      ? {
+          difficulty:
+            typeof patch.difficulty === 'string'
+              ? (patch.difficulty as UpdateProposalInput['difficulty'])
+              : null,
+        }
+      : {}),
     // ⚠️ `explanationMd` and `executor` (MOTIR-3865) — the two keys
     // `UpdateProposalInput` has DECLARED all along and this parser never read, so
     // the service accepted them and the transport never supplied them. The

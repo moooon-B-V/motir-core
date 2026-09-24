@@ -207,6 +207,7 @@
     "field_type": "Type",
     "field_storyPoints": "Story points",
     "field_estimateMinutes": "Estimate",
+    "field_difficulty": "Difficulty",
     "field_description": "Description",
     "field_explanation": "Explanation",
     "field_links": "Dependencies",
@@ -627,7 +628,8 @@
       "unknownIssueType": "Unknown work item type.",
       "couldNotLink": "Could not link the selected work items.",
       "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings.",
-      "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings."
+      "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
+      "refused": "That didn’t go through: {reason}"
     },
     "links": {
       "notFound": "That work item no longer exists.",
@@ -6603,6 +6605,9 @@
         "immutable": "Some of those work items are already finished, so they can't be changed. The rest is still on the canvas.",
         "session": "This conversation couldn't be loaded. Try again — nothing in your plan has changed.",
         "decided": "This proposal was already decided — nothing was left to confirm, and nothing was written twice.",
+        "held": "Motir is still rewriting this plan, so it can’t be approved or declined yet. Nothing was changed — try again once the new version lands.",
+        "stale": "This plan changed since you read it. Nothing was written — the canvas now shows the current version; review it and decide again.",
+        "notDecidable": "This plan can’t be decided yet — nobody has been asked to approve it. Nothing was changed.",
         "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
         "askSilent": "Nothing came back. Try asking that a different way."
       },
@@ -6619,6 +6624,7 @@
           "description": "description",
           "explanation": "explanation",
           "points": "points",
+          "difficulty": "difficulty",
           "links": "dependencies",
           "parent": "parent",
           "repo": "repository",
@@ -7558,7 +7564,8 @@
         "pull_request_merge": "Pull-request merge",
         "acceptance_result": "Acceptance video",
         "decision_choice": "Choice",
-        "decision_confirmation": "Confirm decision"
+        "decision_confirmation": "Confirm decision",
+        "plan_approval": "Plan approval"
       },
       "reviewRow": "Review {key} — {sentence}",
       "pullRequest": {
@@ -8367,6 +8374,7 @@
       "approved": "Approved",
       "changesRequested": "Changes requested",
       "overturned": "Overturned",
+      "declined": "Declined",
       "withdrawn": "Withdrawn"
     },
     "verb": {
@@ -8421,6 +8429,8 @@
         "conflict": "A pull request conflicts with its base branch, so this question was withdrawn.",
         "set_changed": "The pull requests changed, so this question was withdrawn.",
         "pulled_back": "The work was pulled back out of review, so this question was withdrawn.",
+        "plan_stale": "Work this plan changes was finished, so the plan went out of date and this question was withdrawn.",
+        "plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
         "unknown": "This question was withdrawn. The reason was not recorded."
       },
       "causeByKind": {
@@ -8939,6 +8949,59 @@
       "row": {
         "noneOnGithub": "No reason given on GitHub",
         "on": "on {version}"
+      }
+    },
+    "planApproval": {
+      "row": {
+        "targeted": "Plan for <title>{name}</title>",
+        "untargeted": "Plan — <title>{name}</title>",
+        "untitled": "Plan for <title>{project}</title>",
+        "moreTargets": "+{count}",
+        "details": "{count, plural, one {# proposed item} other {# proposed items}} · {author}",
+        "author": {
+          "motir": "written by Motir AI",
+          "harness": "written by {harness}",
+          "cadence": "planned automatically"
+        },
+        "rewriting": "Being rewritten",
+        "rewritingTitle": "Motir AI is writing a new version of this plan. You can approve or decline it when it finishes.",
+        "reviewRow": "Review plan — {sentence}",
+        "declinedNoReason": "Declined without a reason · on <mono>{version}</mono>"
+      },
+      "surface": {
+        "approve": "Approve",
+        "decline": "Decline",
+        "consequence": "Approving adds these to your backlog. Declining ends the plan and changes nothing.",
+        "reopened": "Reopened from To approve · started by {name} · last active {when}",
+        "reopenedYours": "Reopened from To approve · started by you · last active {when}",
+        "held": "Motir AI is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in To approve meanwhile.",
+        "heldBy": "{harness} is writing a new version of this plan. Approve and Decline come back when it finishes — it stays in To approve meanwhile.",
+        "stale": {
+          "title": "This plan changed while you were reading it.",
+          "next": "Nothing was approved or declined. The canvas now shows the new version — look it over, then decide again."
+        },
+        "seeOnly": "Waiting on {name} to approve or decline this plan.",
+        "seeOnlyWhy": "Deciding a plan needs permission to decide plans.",
+        "declined": "You declined this plan. Nothing in your backlog changed, and it has left To approve."
+      },
+      "declineConfirm": {
+        "title": "Declining this plan will:",
+        "end": "End it — it cannot be approved afterwards.",
+        "untouched": "Leave your backlog exactly as it is.",
+        "leaves": "Take it out of To approve.",
+        "label": "Why are you declining it?",
+        "helper": "Optional. It is kept with the decision.",
+        "proceed": "Yes, decline"
+      },
+      "noConversation": {
+        "agent": "{harness} wrote this plan outside a conversation, so it opened on its own page.",
+        "cadence": "Motir planned this on its own when your ready work ran out, so there is no conversation behind it.",
+        "earlier": "This plan was written before Motir kept planning conversations.",
+        "next": "Approve or decline it here — or ask Motir to change it below."
+      },
+      "handoff": {
+        "writing": "I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in <link>To approve</link>.",
+        "rewriting": "I’m writing a new version of this plan. You can close this — it stays in <link>To approve</link>, and you can decide once I’m done."
       }
     }
   },

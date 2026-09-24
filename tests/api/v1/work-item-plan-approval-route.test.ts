@@ -21,6 +21,8 @@ import { WORK_LOOP_OPERATIONS } from '@/lib/api/v1/workLoop/operations';
 import { planSchema, workItemPlanSchema, type V1Plan } from '@/lib/api/v1/workLoop/schema';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { plansService } from '@/lib/services/plansService';
+import { planDecisionService } from '@/lib/services/planDecisionService';
+import { PlanRevisionInFlightError } from '@/lib/plans/errors';
 import { workItemsService } from '@/lib/services/workItemsService';
 import {
   createV1ProjectCaller,
@@ -383,7 +385,7 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
     // would tell an unattended run to sit patiently through an outage.
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { key } = await refusedCardWithPlan(caller);
-    vi.spyOn(plansService, 'approvePlanForWorkItem').mockRejectedValueOnce(
+    vi.spyOn(planDecisionService, 'approveForWorkItem').mockRejectedValueOnce(
       new Error('the database went away'),
     );
 
@@ -391,6 +393,40 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
 
     expect(res.status).toBe(500);
     expect(((await res.json()) as { code?: string }).code).not.toBe('PLAN_NOT_IN_EXPECTED_STATUS');
+  });
+
+  it('answers the DOOR’s refusal of a `planned` plan nobody was asked about — 409 NOT DECIDABLE YET, not a 500', async () => {
+    // MOTIR-6038. The approve decides the plan's GATE now, so a `planned` plan with no
+    // `plan_approval` gate (the pre-backfill shape) is refused by the door — in the one
+    // refusal language, and never as `PLAN_NOT_IN_EXPECTED_STATUS`, which a loop reads
+    // as "wait". Built for real: the gate the close opened, removed underneath it.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key, planId } = await refusedCardWithPlan(caller);
+    await adminDb.approvalGate.deleteMany({ where: { subjectId: planId } });
+
+    const res = await approve(caller, key);
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'PLAN_NOT_DECIDABLE_YET', planId });
+    expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('planned');
+  });
+
+  it('answers a plan HELD by a revision in flight as the door’s 409 — who holds it, until when', async () => {
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key, planId } = await refusedCardWithPlan(caller);
+    const until = new Date('2026-09-23T12:00:00.000Z');
+    vi.spyOn(planDecisionService, 'approveForWorkItem').mockRejectedValueOnce(
+      new PlanRevisionInFlightError(planId, 'Claude Code', until),
+    );
+
+    const res = await approve(caller, key);
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: 'PLAN_REVISION_IN_FLIGHT',
+      heldBy: 'Claude Code',
+      expiresAt: until.toISOString(),
+    });
   });
 
   it('is DECLARED in the operation registry, with the permission the route enforces', () => {

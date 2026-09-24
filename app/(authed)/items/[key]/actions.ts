@@ -36,6 +36,7 @@ import {
 } from '@/lib/monitors/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { HowToTestDraftDTO } from '@/lib/dto/testInstructions';
+import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 
 // Server Actions for the detail-page LINK MANAGEMENT surface (Subtask 2.4.9).
 // Transport only: resolve the session + active project, gate the CURRENT item
@@ -119,6 +120,8 @@ export async function listLinkCandidatesAction(
   } catch (err) {
     const msg = linkErrorMessage(err, t);
     if (msg) return { ok: false, error: msg };
+    const refused = await unmappedActionRefusalMessage(err, 'listLinkCandidatesAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -159,6 +162,8 @@ export async function createLinkAction(input: {
   } catch (err) {
     const msg = linkErrorMessage(err, t);
     if (msg) return { ok: false, error: msg };
+    const refused = await unmappedActionRefusalMessage(err, 'createLinkAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 
@@ -196,6 +201,8 @@ export async function removeLinkAction(input: {
   } catch (err) {
     const msg = linkErrorMessage(err, t);
     if (msg) return { ok: false, error: msg };
+    const refused = await unmappedActionRefusalMessage(err, 'removeLinkAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 
@@ -237,6 +244,8 @@ export async function listPullRequestCandidatesAction(
     const tg = await getGithubTranslator();
     const msg = prLinkErrorMessage(err, tg);
     if (msg) return { ok: false, error: msg };
+    const refused = await unmappedActionRefusalMessage(err, 'listPullRequestCandidatesAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -269,6 +278,8 @@ export async function linkPullRequestAction(input: {
   } catch (err) {
     const msg = prLinkErrorMessage(err, tg);
     if (msg) return { ok: false, error: msg };
+    const refused = await unmappedActionRefusalMessage(err, 'linkPullRequestAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 
@@ -322,6 +333,8 @@ export async function unlinkPullRequestAction(input: {
   } catch (err) {
     const msg = prLinkErrorMessage(err, tg);
     if (msg) return { ok: false, error: msg };
+    const refused = await unmappedActionRefusalMessage(err, 'unlinkPullRequestAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 
@@ -361,6 +374,8 @@ export async function loadHowToTestDraftAction(
     if (err instanceof PermissionDeniedError || err instanceof TestInstructionsError) {
       return { ok: false, error: err.message };
     }
+    const refused = await unmappedActionRefusalMessage(err, 'loadHowToTestDraftAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -413,6 +428,8 @@ export async function saveHowToTestAction(input: {
     if (err instanceof PermissionDeniedError || err instanceof TestInstructionsError) {
       return { ok: false, field: null, error: err.message };
     }
+    const refused = await unmappedActionRefusalMessage(err, 'saveHowToTestAction');
+    if (refused) return { ok: false, field: null, error: refused };
     throw err;
   }
 

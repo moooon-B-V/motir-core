@@ -115,6 +115,46 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The CARD-LESS form of {@link findAwaitingByWorkItem} (Story MOTIR-6012 ·
+   * MOTIR-6034; ADR `approval-gates.md` §11.1–11.2): the `awaiting` gate of one
+   * `kind` about one SUBJECT that belongs to no work item — a plan's approval, whose
+   * subject is the plan. Keyed on `(subjectId, kind)`, the column list of
+   * `approval_gate_one_awaiting_per_cardless_subject`, so there is at most one; it is
+   * returned as a list to keep the card form's shape. `workItemId: null` is part of
+   * the key: a card gate that happens to share a subject id is a different question.
+   */
+  /**
+   * The CARD-LESS gate a plan's surface renders, WHATEVER STATE IT IS IN (Story
+   * MOTIR-6012 · MOTIR-6035) — {@link findLatestByWorkItem}'s rule keyed on the SUBJECT:
+   * the oldest `awaiting` row wins (the live question), else the most recent decision
+   * or withdrawal. Null when the plan was never asked about.
+   */
+  async findLatestCardlessBySubject(
+    kind: ApprovalGateKind,
+    subjectId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ApprovalGate | null> {
+    const client = tx ?? dbRead;
+    const rows = await client.approvalGate.findMany({
+      where: { workItemId: null, kind, subjectId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.find((row) => row.state === 'awaiting') ?? rows[rows.length - 1] ?? null;
+  },
+
+  async findAwaitingCardlessBySubject(
+    kind: ApprovalGateKind,
+    subjectId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ApprovalGate[]> {
+    const client = tx ?? dbRead;
+    return client.approvalGate.findMany({
+      where: { workItemId: null, kind, subjectId, state: 'awaiting' },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
    * The gate the FRAME renders — whatever state it is in (Subtask MOTIR-5033).
    *
    * ⚠️ THIS IS NOT `findAwaitingByWorkItem` WITH THE FILTER DROPPED. The
@@ -294,7 +334,10 @@ export const approvalGateRepository = {
       orderBy: { decidedAt: 'desc' },
     });
     const head = new Map<string, ApprovalGate>();
-    for (const row of rows) if (!head.has(row.workItemId)) head.set(row.workItemId, row);
+    // Every row matched `workItemId IN (…)`, so none is card-less; the guard narrows the type.
+    for (const row of rows) {
+      if (row.workItemId !== null && !head.has(row.workItemId)) head.set(row.workItemId, row);
+    }
     return head;
   },
 
@@ -335,7 +378,8 @@ export const approvalGateRepository = {
     id: string;
     workspaceId: string;
     projectId: string;
-    workItemId: string;
+    /** NULL on a card-less (`plan_approval`) gate — ADR §11.1 (MOTIR-6034). */
+    workItemId: string | null;
     kind: ApprovalGateKind;
     subjectId: string;
     state: ApprovalGateState;
@@ -354,7 +398,7 @@ export const approvalGateRepository = {
         id: string;
         workspaceId: string;
         projectId: string;
-        workItemId: string;
+        workItemId: string | null;
         kind: ApprovalGateKind;
         subjectId: string;
         state: ApprovalGateState;
@@ -437,7 +481,10 @@ export const approvalGateRepository = {
   async decide(
     id: string,
     data: {
-      state: Extract<ApprovalGateState, 'approved' | 'changes_requested' | 'overturned'>;
+      state: Extract<
+        ApprovalGateState,
+        'approved' | 'changes_requested' | 'overturned' | 'declined'
+      >;
       /** WHO said yes. NULLABLE since MOTIR-5596: a decision synced out of GitHub
        *  may have been made by somebody with no Motir account at all, and the
        *  column has always been nullable for the neighbouring reason (`SetNull`
@@ -555,6 +602,26 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The CARD-LESS form of {@link supersedeAwaitingByWorkItem} (MOTIR-6034; ADR §11.7):
+   * withdraw the `awaiting` gate of one `kind` about one subject that belongs to no
+   * work item, keyed on `(subjectId, kind)` as the card-less index is. The card form's
+   * notes hold unchanged — the `state: 'awaiting'` equality is the whole guard, the
+   * immutability trigger is structurally unreachable, and `cause` is required.
+   */
+  async supersedeAwaitingCardlessBySubject(
+    kind: ApprovalGateKind,
+    subjectId: string,
+    cause: LiveSupersedeCause,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.approvalGate.updateMany({
+      where: { workItemId: null, kind, subjectId, state: 'awaiting' },
+      data: { state: 'superseded', supersededCause: cause },
+    });
+    return result.count;
+  },
+
+  /**
    * LOCK every `awaiting` gate row on one work item, in id order (Story MOTIR-4887
    * · Subtask MOTIR-5527; ADR `approval-gates.md` §6d AMENDMENT, rule 8).
    *
@@ -662,6 +729,22 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The CARD-LESS form of {@link hasLiveGateForSubject} (MOTIR-6034; ADR §11.2): a
+   * gate on `(subjectId, kind)` that belongs to no work item and is `awaiting` or
+   * `approved`. The same two states count, for the same reasons.
+   */
+  async hasLiveCardlessGateForSubject(
+    kind: ApprovalGateKind,
+    subjectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const count = await tx.approvalGate.count({
+      where: { workItemId: null, kind, subjectId, state: { in: ['awaiting', 'approved'] } },
+    });
+    return count > 0;
+  },
+
+  /**
    * RAISE an `awaiting` gate, or do nothing when one is already awaiting on the
    * same subject (Story MOTIR-4887 · Subtask MOTIR-5532; ADR §6d AMENDMENT,
    * rule 7). Returns whether a row was inserted.
@@ -690,6 +773,38 @@ export const approvalGateRepository = {
   ): Promise<boolean> {
     const result = await tx.approvalGate.createMany({
       data: [{ ...data, state: 'awaiting' }],
+      skipDuplicates: true,
+    });
+    return result.count > 0;
+  },
+
+  /**
+   * The CARD-LESS form of {@link createAwaitingIfAbsent} (MOTIR-6034; ADR §11.1–11.2):
+   * raise an `awaiting` gate that belongs to NO work item, or do nothing when one is
+   * already awaiting on `(subjectId, kind)`. `workItemId` is written NULL and cannot
+   * be passed — the CHECK `approval_gate_work_item_iff_not_plan` admits that only for
+   * `plan_approval`, and refuses any other kind here as a raw 23514, which is a defect
+   * in the caller rather than a race.
+   *
+   * ⚠️ THE RACE IS RESOLVED BY THE SECOND INDEX. The shipped
+   * `approval_gate_one_awaiting_per_subject` keys `work_item_id`, and two NULLs are
+   * distinct, so it would admit any number of these; `ON CONFLICT DO NOTHING` names no
+   * target, so it yields to `approval_gate_one_awaiting_per_cardless_subject` exactly
+   * as the card form yields to the shipped one. The raise itself is MOTIR-6036's.
+   */
+  async createCardlessAwaitingIfAbsent(
+    data: {
+      workspaceId: string;
+      projectId: string;
+      kind: ApprovalGateKind;
+      subjectId: string;
+      routedToId: string | null;
+      subjectVersion?: string | null;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.approvalGate.createMany({
+      data: [{ ...data, workItemId: null, state: 'awaiting' }],
       skipDuplicates: true,
     });
     return result.count > 0;
@@ -897,8 +1012,8 @@ export const approvalGateRepository = {
   },
 
   /**
-   * THE APPROVALS ROOM's DECIDED half (MOTIR-5301) — one project's `approved` and
-   * `changes_requested` gates as a window, most recently decided first:
+   * THE APPROVALS ROOM's DECIDED half (MOTIR-5301) — one project's decided gates
+   * (`approved`, `changes_requested`, `overturned`, a plan's `declined`) as a window, most recently decided first:
    * `decidedAt desc, id desc` (the notes' § The ORDER).
    *
    * ⚠️ `superseded` IS NOT A DECISION AND IS NOT HERE, IN EITHER VIEW. ADR §6b writes
@@ -965,9 +1080,20 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
   return {
     projectId: { in: scope.projectIds },
     state: 'awaiting',
-    workItem: {
-      OR: [{ assigneeId: scope.userId }, { assigneeId: null, reporterId: scope.userId }],
-    },
+    OR: [
+      {
+        workItem: {
+          OR: [{ assigneeId: scope.userId }, { assigneeId: null, reporterId: scope.userId }],
+        },
+      },
+      // ⚠️ THE CARD-LESS ARM (Story MOTIR-6012 · MOTIR-6034; ADR `approval-gates.md`
+      // §11.6). A gate with no work item has no assignee to re-derive routing from, so
+      // the relation arm above can never match it. Its recipient is the one written into
+      // `routed_to_id` at creation — the plan's requester, or the workspace owner for a
+      // cadence plan — and that is not frozen in the sense the note above warns about:
+      // nothing reassigns a plan's requester, so the creation answer IS the live one.
+      { workItemId: null, routedToId: scope.userId },
+    ],
     ...CARRIED_MERGE_GATE_EXCLUDED,
   };
 }
@@ -1078,8 +1204,9 @@ function recordsAwaitingWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateW
 function recordsDecidedWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWhereInput {
   return {
     projectId: { in: scope.projectIds },
-    // An OVERTURN is a decision a person made (MOTIR-5956) — the room lists it.
-    state: { in: ['approved', 'changes_requested', 'overturned'] },
+    // An OVERTURN is a decision a person made (MOTIR-5956) — the room lists it. So is a
+    // plan a person DECLINED (MOTIR-6037; design Part XX §20.3, Panel 3).
+    state: { in: ['approved', 'changes_requested', 'overturned', 'declined'] },
     ...(scope.fullView ? {} : { decidedById: scope.userId }),
   };
 }
@@ -1099,6 +1226,11 @@ const AWAITING_GATE_SELECT = {
   state: true,
   subjectId: true,
   createdAt: true,
+  // The CARD-LESS row's recipient (MOTIR-6034; ADR §11.6) — a gate with no work item
+  // names its *waiting on* from the column written at creation, since there is no
+  // `assigneeId ?? reporterId` to read. A card row still names it from the card.
+  routedToId: true,
+  // NULL on a card-less (`plan_approval`) row: what it is about is `subjectId`.
   workItem: {
     // ⚠️ `assigneeId` / `reporterId` are here for the ROW's *waiting on* line
     // (MOTIR-5191), not for the predicate — `awaitingRoutedToWhere` selects on
@@ -1187,6 +1319,12 @@ export type AwaitingGateRow = Prisma.ApprovalGateGetPayload<{
  */
 export function translateApprovalGateWriteError(err: unknown): never {
   const message = extractMessage(err);
+
+  // ⚠️ The CARD-OR-NO-CARD CHECK (MOTIR-6032, ADR §11.1) raises the same SQLSTATE
+  // 23514 as the immutability trigger. It is a DEFECT in the writer (a card-less row
+  // of a card kind, or a plan gate given a card), never "already decided", so it is
+  // rethrown as it stands — the message names the constraint.
+  if (message.includes('approval_gate_work_item_iff_not_plan')) throw err;
 
   if (message.includes('AG_DECIDED_IMMUTABLE') || sqlStateOf(err) === '23514') {
     throw new ApprovalGateDecidedImmutableError();

@@ -32,6 +32,16 @@ import { classifyApiV1Error } from '@/lib/api/v1/errors';
 // treats as unhandled. It earns its place on the paths where one escapes — a
 // Server Action, a route that rethrows an unmapped code, a service called
 // outside a wrapper — which are precisely the paths nobody enumerated.
+//
+// ⚠️ EXCEPT A SERVER ACTION (MOTIR-6147). A route handler answers a caught
+// domain error with its 4xx, so dropping one that also reached Sentry costs
+// nothing. A Server Action has no such translation: whatever it throws, the
+// browser receives a 500 and renders the generic "error occurred in the Server
+// Components render". An escaped typed refusal there IS the fault — an
+// unmapped refusal the user met as a crash — and dropping it hid every one:
+// 705 server events in 90 days, zero from any action, while two item-page
+// actions and one approval-overlay action were 500ing in production. So an
+// event that escaped a Server Action is always kept, whatever its error.
 
 /** The status range that means "the product refused, on purpose". */
 function isClientError(status: number): boolean {
@@ -39,29 +49,59 @@ function isClientError(status: number): boolean {
 }
 
 /**
- * True when `err` is a typed domain error the API answers with a 4xx.
+ * The typed domain error in `err`'s `cause` chain that the API answers with a
+ * 4xx — its code and message — or null when there is none.
  *
  * Walks the `cause` chain: a domain error re-thrown inside a wrapper arrives
  * as the cause of something generic, and a one-level check would report it.
  */
-export function isExpectedDomainError(err: unknown): boolean {
+export function findExpectedDomainError(err: unknown): { code: string; message: string } | null {
   let current = err;
   for (let depth = 0; depth < 5 && current != null; depth += 1) {
     const classified = classifyApiV1Error(current);
-    if (classified && isClientError(classified.status)) return true;
+    if (classified && isClientError(classified.status)) {
+      return { code: classified.body.code, message: classified.body.error };
+    }
     current = (current as { cause?: unknown }).cause;
   }
-  return false;
+  return null;
+}
+
+/** True when `err` is a typed domain error the API answers with a 4xx. */
+export function isExpectedDomainError(err: unknown): boolean {
+  return findExpectedDomainError(err) !== null;
+}
+
+/** The Sentry context an action's refusal helper stamps on the event it
+ *  reports for a refusal it converted rather than rethrew (MOTIR-6147). */
+export const SERVER_ACTION_CONTEXT = 'server_action';
+
+/**
+ * True when the event came out of a Server Action. Two sources: Next's
+ * `onRequestError` reports an action's throw with `routeType: 'action'`, which
+ * `captureRequestError` records as `contexts.nextjs.route_type`; and
+ * `reportUnmappedActionRefusal` stamps {@link SERVER_ACTION_CONTEXT} on the
+ * refusal it converts to a result.
+ */
+function escapedServerAction(event: ErrorEvent): boolean {
+  const contexts = event.contexts as
+    | Record<string, Record<string, unknown> | undefined>
+    | undefined;
+  return (
+    contexts?.['nextjs']?.['route_type'] === 'action' || contexts?.[SERVER_ACTION_CONTEXT] != null
+  );
 }
 
 /**
  * A Sentry `beforeSend` that drops expected typed domain 4xx and passes
- * everything else through untouched.
+ * everything else through untouched — and never drops an event that escaped a
+ * Server Action, where no 4xx was ever sent.
  *
  * Returning `null` drops the event; returning the event sends it. Nothing is
  * mutated — a filter that also edited events would make "why is this field
  * missing?" a question about this file.
  */
 export function dropExpectedDomainErrors(event: ErrorEvent, hint: EventHint): ErrorEvent | null {
+  if (escapedServerAction(event)) return event;
   return isExpectedDomainError(hint.originalException) ? null : event;
 }

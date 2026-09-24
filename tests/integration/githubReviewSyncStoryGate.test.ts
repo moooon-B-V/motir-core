@@ -380,11 +380,17 @@ describe('§3 guards — the ones coverage cannot see (MOTIR-5600)', () => {
       'none',
       'unknown',
     ]);
+    // `plan_permission` (Story MOTIR-6012 · MOTIR-6032; ADR `approval-gates.md` §11.6) —
+    // the `plan_approval` kind's decider, authorized by `ai:decide_plan` alone. No map in
+    // the product is keyed on this enum's values (the audit column is read as-is), so
+    // the new member leaves nothing partial; the list learns it so a THIRD addition
+    // still has to come through here.
     expect(await members('approval_gate_authority')).toEqual([
       'assignee',
       'reporter',
       'admin',
       'github_review',
+      'plan_permission',
     ]);
   });
 

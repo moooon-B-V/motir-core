@@ -228,6 +228,11 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
       r.request().method() === 'POST',
   );
   await page.getByRole('button', { name: 'Decline' }).click();
+  // An ASKED plan's Decline confirms once, with an OPTIONAL reason (MOTIR-6037).
+  await page
+    .getByTestId('plan-decline-confirm')
+    .getByRole('button', { name: 'Yes, decline' })
+    .click();
   expect((await declineResponse).status()).toBe(200);
 
   // Decline DROPS every proposed item, but a DECIDED plan still shows its outcome

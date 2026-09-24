@@ -45,6 +45,8 @@ vi.mock('@/lib/blob/uploader', () => ({
 const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
+const { plansService } = await import('@/lib/services/plansService');
+const { planDriftService } = await import('@/lib/services/planDriftService');
 
 let fx: WorkItemFixture;
 let card: WorkItem;
@@ -175,6 +177,48 @@ describe('MOTIR-5663 — a pull-back withdraws and raises NOTHING', () => {
         g.supersededCause,
       ]),
     ).toEqual([['superseded', 'pulled_back']]);
+  });
+});
+
+describe('the PLAN gate’s two causes (MOTIR-6036; approval-gates.md §11.7)', () => {
+  // A plan gate belongs to no work item, so it is read by its subject (the plan).
+  const planGates = (planId: string) =>
+    adminDb.approvalGate.findMany({ where: { kind: 'plan_approval', subjectId: planId } });
+
+  it('a plan going STALE marks its gate `plan_stale` — the plan drifted, nobody decided', async () => {
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Rework' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: card.id, patch: { title: 'New' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'done' } });
+
+    await planDriftService.markStaleForTerminalTarget(card.id, fx.workspaceId, {
+      fromStatusKey: 'in_review',
+      toStatusKey: 'done',
+    });
+
+    expect((await planGates(plan.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'plan_stale'],
+    ]);
+  });
+
+  it('the LAST proposal withdrawn marks it `plan_discarded` — NOT `withdrawn`, a design word', async () => {
+    const plan = await plansService.createPlan(fx.projectId, { title: 'One card' }, fx.ctx);
+    const after = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Only', kind: 'task' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    await plansService.withdrawProposal(plan.id, after.items[0]!.id, fx.ctx);
+
+    expect((await planGates(plan.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'plan_discarded'],
+    ]);
   });
 });
 

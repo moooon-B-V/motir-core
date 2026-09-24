@@ -170,7 +170,41 @@ describe('no plan mutation escapes the trail', () => {
   it('every derived mutation reaches a revision write — a SEVENTH one fails here', () => {
     const { bodies, mutations } = mutationDoors();
 
-    const untracked = mutations.filter((name) => !reaches(name, bodies).has('recordRevision'));
+    // ⚠️ PHASES OF ONE ACT ARE JUDGED AS THAT ACT (Story MOTIR-6012 · MOTIR-6035; ADR
+    // `approval-gates.md` §11.5). Approve is split into three named phases so the plan
+    // gate's handler can run them around the decide door's own transaction:
+    // `prepareApprovePlan` (before — its only write is the lazy `stale` backstop),
+    // `approvePlanWithin` (the body, which writes the `approved` revision) and
+    // `approveFailure` (after a rollback — the same `stale` backstop). The `stale` flip is
+    // a lifecycle status with no trail row by design (`planDriftService`, the eager
+    // mover, writes none either), so a before/after phase is tracked exactly when the
+    // BODY it brackets is. That is only true while each phase is composed with its body,
+    // so the pairing is asserted below, not assumed.
+    const PHASE_OF: Record<string, string> = {
+      prepareApprovePlan: 'approvePlanWithin',
+      approveFailure: 'approvePlanWithin',
+    };
+    const handler = readFileSync(
+      join(process.cwd(), 'lib/approvalGates/planApprovalHandler.ts'),
+      'utf8',
+    );
+    for (const [phase, act] of Object.entries(PHASE_OF)) {
+      // A stale entry (a phase that is no longer a mutation) fails, so the map cannot rot.
+      expect(mutations, `${phase} is no longer a derived mutation`).toContain(phase);
+      // The body runs inside the CALLER's transaction (it takes `tx`), so it is not a
+      // derived mutation door itself — but it must exist, and it must write the row.
+      expect(Object.keys(plansService)).toContain(act);
+      expect(reaches(act, bodies).has('recordRevision'), `${act} writes no revision`).toBe(true);
+      // …and the one caller that runs the phases runs the body with them.
+      expect(handler).toContain(`.${phase}(`);
+      expect(handler).toContain(`.${act}(`);
+    }
+
+    const untracked = mutations.filter(
+      (name) =>
+        !reaches(name, bodies).has('recordRevision') &&
+        !(name in PHASE_OF && reaches(PHASE_OF[name]!, bodies).has('recordRevision')),
+    );
 
     // The message is the point of the failure: whoever adds a plan mutation
     // without a trail row learns it here, by name, rather than by a reader

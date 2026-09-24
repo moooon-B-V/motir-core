@@ -210,7 +210,7 @@ describe('the SET decides, not one member (MOTIR-5597)', () => {
     const { gate, members } = await scenario({ withGate: true });
     await recordReview(members.web);
     await recordReview(members.api);
-    await evaluateForWorkItem((await gateRow(gate!.id)).workItemId, fx.workspaceId);
+    await evaluateForWorkItem((await gateRow(gate!.id)).workItemId!, fx.workspaceId);
 
     expect(mergeSpy).toHaveBeenCalledTimes(1);
     const request = mergeSpy.mock.calls[0]![0] as { gateId: string; members: unknown[] };
@@ -300,7 +300,7 @@ describe('WHICH gate a review decides (MOTIR-5597)', () => {
     await recordReview(members.web);
     await recordReview(members.api);
 
-    const workItemId = (await gateRow(gate!.id)).workItemId;
+    const workItemId = (await gateRow(gate!.id)).workItemId!;
     const { queries } = await countDelegateCalls('githubPullRequestReview', 'findMany', () =>
       evaluateForWorkItem(workItemId, fx.workspaceId),
     );
@@ -313,7 +313,7 @@ describe('FIRST DECISION STANDS, as an OUTCOME rather than a throw (MOTIR-5597)'
     const { gate, members } = await scenario({ withGate: true });
     await recordReview(members.web);
     await recordReview(members.api);
-    const workItemId = (await gateRow(gate!.id)).workItemId;
+    const workItemId = (await gateRow(gate!.id)).workItemId!;
     await evaluateForWorkItem(workItemId, fx.workspaceId);
     const before = await gateRow(gate!.id);
     mergeSpy.mockClear();
@@ -330,7 +330,7 @@ describe('FIRST DECISION STANDS, as an OUTCOME rather than a throw (MOTIR-5597)'
     const { gate, members } = await scenario({ withGate: true });
     await recordReview(members.web);
     await recordReview(members.api);
-    const workItemId = (await gateRow(gate!.id)).workItemId;
+    const workItemId = (await gateRow(gate!.id)).workItemId!;
     // The set changed under the question after the reviews were read.
     vi.spyOn(approvalGateRepository, 'findAwaitingByWorkItem');
     await adminDb.approvalGate.update({

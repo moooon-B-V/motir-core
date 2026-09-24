@@ -21,9 +21,36 @@ const DIFFICULTY_GLYPH: Record<WorkItemDifficultyDto, typeof SignalLow> = {
   high: Signal,
 };
 
-export function DifficultyIndicator({ difficulty }: { difficulty: WorkItemDifficultyDto }) {
+export function DifficultyIndicator({
+  difficulty,
+  compact,
+}: {
+  difficulty: WorkItemDifficultyDto;
+  /**
+   * The COMPACT form the plan review draws (story MOTIR-6095 · MOTIR-6137,
+   * `design/ai-planning/design-notes.md` Part XX §20.3 / §20.7): an INLINE value
+   * at the card's 12px glyph size, inheriting the host's text size and ink, and
+   * NAMED for a screen reader by a visually hidden `srLabel` (so it is announced
+   * as "Difficulty Medium", never a bare "Medium", which Priority also says). The
+   * same glyph map and label as the item page — never a second map.
+   */
+  compact?: { srLabel: string; className?: string; testId?: string };
+}) {
   const tl = useTranslations('labels');
   const Glyph = DIFFICULTY_GLYPH[difficulty];
+  if (compact) {
+    return (
+      <span
+        className={`inline-flex shrink-0 items-center gap-1 ${compact.className ?? ''}`.trim()}
+        data-difficulty={difficulty}
+        data-testid={compact.testId}
+      >
+        <span className="sr-only">{`${compact.srLabel} `}</span>
+        <Glyph className="h-3 w-3 shrink-0 text-(--el-text-faint)" aria-hidden />
+        {tl(`difficulty.${difficulty}`)}
+      </span>
+    );
+  }
   return (
     <span className="flex items-center gap-1.5" data-difficulty={difficulty}>
       <Glyph className="h-4 w-4 text-(--el-text-faint)" aria-hidden />

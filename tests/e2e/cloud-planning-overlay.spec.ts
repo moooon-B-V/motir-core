@@ -1,17 +1,31 @@
-// Acceptance E2E — the planning workspace is an OVERLAY (Subtask MOTIR-4734,
-// Story MOTIR-4725).
+// The planning workspace is an OVERLAY (Subtask MOTIR-4734, Story MOTIR-4725) —
+// PROMOTED out of the acceptance lane into the cloud-on regression lane
+// (MOTIR-6012; `docs/acceptance-lane-triage.md` § MOTIR-6012).
 //
-// Runs under playwright.acceptance.config.ts (MOTIR_CLOUD + video: 'on') so the
-// CI acceptance-video lane records a chaptered clip; `acceptanceStory()` pins the
-// recording to Story MOTIR-4725 regardless of the PR that triggered the run.
+// ⚠️ THIS WAS A RECEIPT. It recorded MOTIR-4725's clip in the acceptance lane;
+// that story is `done`, so the spec left the lane by the lifecycle rule
+// (`docs/decisions/acceptance-receipt-lifecycle.md` §3) rather than being edited
+// in place. It went RED on Story MOTIR-6012's branch because MOTIR-6037 made the
+// close-with-pending guard stay SHUT for an asked (gated) or generating plan
+// (ADR `approval-gates.md` §11; `design/ai-planning/design-notes.md` Part XX
+// §20.11): once every `planned` plan waits in To approve, closing discards
+// nothing, so the guard's *"Closing now discards them"* was false. The one
+// chapter that read the guard is restated below as that rule — Esc closes
+// straight through and the plan still waits in To approve. Every other
+// assertion is unchanged. The guard's own arms (asked · written · unasked) are
+// pinned in `tests/components/plan-approval-surface.test.tsx`; closing during
+// generation in `tests/e2e/acceptance-plan-approval-gate.spec.ts`.
 //
-// ⚠️ THIS STORY'S DELIVERABLE IS SOMETHING A PERSON WATCHES, and that shapes the
-// spec. Everything it promises — *open the planner, close it, and be looking at
-// exactly what you were looking at* — can be half-proved by a unit: the address
-// changed and changed back. What only a browser walking real pages can prove is
-// that the backlog UNDERNEATH kept its filter, its scroll position and the text
-// somebody left in a box. So each chapter closes on a `beat()`, long enough for a
-// reviewer to see that nothing moved.
+// Runs under playwright.cloud.config.ts (MOTIR_CLOUD + MOTIR_AI_URL), NOT the
+// main lane: the overlay mounts only where `isMotirAiConfigured()` is true — in
+// the main lane every assertion below would pass vacuously by finding nothing,
+// the MOTIR-2601 trap. `chapter()` / `beat()` / `acceptanceStory()` come from the
+// promoted shim, where they are a `test.step` and two no-ops.
+//
+// What only a browser walking real pages can prove — *open the planner, close
+// it, and be looking at exactly what you were looking at* — is that the backlog
+// UNDERNEATH kept its filter, its scroll position and the text somebody left in
+// a box.
 //
 // DETERMINISM (`motir-core/CLAUDE.md` § E2E waits on the authoritative signal):
 // every wait is a role / text landmark, a `waitForURL`, or a response to a
@@ -22,22 +36,12 @@
 // `page.route`). Sessions, the conversation thread, the plan rows, the approve
 // and the anchor read all run REAL against Postgres.
 //
-// ⚠️ AND THE LANE MATTERS. The overlay mounts only where `isMotirAiConfigured()`
-// is true, and the ACCEPTANCE lane is the lane that sets it — in a lane that does
-// not, every assertion below would pass vacuously by finding nothing. So chapter
-// 1 asserts the pill is MOUNTED before it asserts anything the pill opens.
+// Chapter 1 still asserts the pill is MOUNTED before it asserts anything the
+// pill opens — the lane check, kept.
 
-// ⚠️ `_helpers/acceptance-video`, NOT `_helpers/promoted-regression`. The two
-// export the same three fixture names by design, so the wrong one type-checks,
-// lints and goes green — and produces no receipt at all: in the promoted shim
-// `beat()` and `acceptanceStory()` are NO-OPS and `chapter()` writes no
-// `chapters.json`, which is the sidecar the publish call needs. Measured: the
-// first draft of this spec imported the shim, passed 4/4, and left an output
-// directory with a video and no chapters in it. The shim is for a spec that has
-// LEFT this lane (`docs/decisions/acceptance-receipt-lifecycle.md` §3).
-import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
+import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { persistAskTurn } from './_helpers/plan-session-turn';
 import {
@@ -329,32 +333,33 @@ test('the planner opens over your work, and closing puts you back exactly there'
     await beat();
   });
 
-  await chapter('Closing with an unconfirmed proposal asks first', async () => {
+  await chapter('Closing with an asked plan loses nothing, so nothing asks', async () => {
     await sendTurn(page, 'Add a billing epic.');
-    // The proposal is on the canvas and nothing is saved until Confirm.
+    // The proposal is on the canvas, and it is already a QUESTION: MOTIR-6036
+    // raised its `plan_approval` gate when the plan reached `planned`.
     await expect(page.getByTestId('plan-change-confirm-bar')).toBeVisible();
 
+    // ⚠️ RESTATED BY MOTIR-6037 (ADR `approval-gates.md` §11; design Part XX
+    // §20.11). The receipt asserted the close-with-pending guard here —
+    // *"Nothing is saved until you confirm. Closing now discards them."* — and
+    // walked its Keep planning / Discard. An asked plan waits in To approve, so
+    // closing discards nothing and the guard stays shut: Esc closes straight
+    // through.
     await page.keyboard.press('Escape');
-    // An alertdialog, not a dialog: assistive tech should interrupt here.
-    await expect(guard(page)).toBeVisible();
-    await expect(guard(page)).toContainText('1');
-
-    // KEEP PLANNING — still in the workspace, proposal intact.
-    await guard(page).getByRole('button', { name: 'Keep planning' }).click();
-    await expect(guard(page)).toHaveCount(0);
-    await expect(workspace(page)).toBeVisible();
-    await expect(page.getByTestId('plan-change-confirm-bar')).toBeVisible();
-    await beat();
-
-    // DISCARD — closed, and the backlog underneath gained nothing.
-    await page.keyboard.press('Escape');
-    await expect(guard(page)).toBeVisible();
-    await guard(page)
-      .getByRole('button', { name: /^Discard/ })
-      .click();
     await page.waitForURL(overlayClosed);
     await expect(workspace(page)).toHaveCount(0);
+    await expect(guard(page)).toHaveCount(0);
+    // …the backlog underneath gained nothing — nobody approved anything…
     await expect(page.getByText('Billing', { exact: true })).toHaveCount(0);
+    // …and the plan was NOT discarded: it is still `planned`, its question still
+    // awaiting in To approve.
+    const plan = await adminDb.plan.findUnique({ where: { id: planId }, select: { status: true } });
+    expect(plan?.status).toBe('planned');
+    expect(
+      await adminDb.approvalGate.count({
+        where: { kind: 'plan_approval', subjectId: planId, state: 'awaiting' },
+      }),
+    ).toBe(1);
     await beat();
   });
 

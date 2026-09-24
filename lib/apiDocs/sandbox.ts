@@ -416,12 +416,12 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
       },
       {
         kind: 'prose',
-        text: 'Swap `:claude` and the credential `mounts` entry for your row from step 1; the `motir-auth` volume stays as it is for every profile, because it is what keeps your Motir sign-in through a rebuild. **Dev Containers reuses a local image just as `docker run` does**, so step 2’s `docker pull` is still yours to run, in a terminal on your machine, and an existing container then needs the palette’s **Dev Containers: Rebuild Container** to pick the new image up — see the warning below. Pin the immutable `:<profile>-<version>` tag here instead if you would rather this folder stay on a known image.',
+        text: 'Swap `:claude` and the credential `mounts` entry for your row from step 1; the `motir-auth` volume stays as it is for every profile, because it is what keeps your Motir sign-in through a rebuild. **Dev Containers reuses a local image just as `docker run` does**, so step 2’s `docker pull` is still yours to run, in a terminal on your machine, and an existing container then picks the new image up only when you attach with **Dev Containers: Open Folder in Container…** and run **Dev Containers: Rebuild Container** — see the warning below. Pin the immutable `:<profile>-<version>` tag here instead if you would rather this folder stay on a known image.',
       },
       {
         kind: 'callout',
         tone: 'warning',
-        text: '**A dev container keeps the image it was created from — nothing refreshes it.** `--pull=always` belongs to the `docker run` route only. To move to the current image: run `docker pull` first, then **Dev Containers: Rebuild Container**. A rebuild deletes the container, so your Motir sign-in survives it (it lives on the `motir-auth` volume) but a Claude Code sign-in made inside the container does not — run `claude` and sign in again.',
+        text: '**A dev container keeps the image it was created from — nothing refreshes it.** `--pull=always` belongs to the `docker run` route only. To move to the current image and `motir` CLI: **1.** run `docker pull` in a terminal on your machine; **2.** **Dev Containers: Open Folder in Container…** on this folder, which attaches the window; **3.** **Dev Containers: Rebuild Container**, which recreates the container from the image you just pulled. Rebuild Container only appears in a window attached to the container, which is why step 2 comes first. A rebuild deletes the container, so your Motir sign-in survives it (it lives on the `motir-auth` volume) but a Claude Code sign-in made inside the container does not — run `claude` and sign in again.',
       },
       {
         kind: 'prose',

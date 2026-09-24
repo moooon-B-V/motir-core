@@ -9,6 +9,7 @@ import { isWatcherError, watcherErrorMessage } from '@/lib/watchers/errorMessage
 import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { WatcherDto } from '@/lib/dto/watchers';
+import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 
 // Server Actions for the detail header's watch control + watchers popover
 // (Story 5.4 · Subtask 5.4.9). One service call each; the success branch
@@ -49,6 +50,8 @@ async function watcherFailure(
     // no existence leak), so this is the only non-watcher error it surfaces.
     return { ok: false, error: workItemErrorMessage(err, t) };
   }
+  const refused = await unmappedActionRefusalMessage(err, 'watcherFailure');
+  if (refused) return { ok: false, error: refused };
   throw err;
 }
 
