@@ -270,14 +270,12 @@ test('the planner opens INSIDE the thing you are planning — from a card, from 
   await chapter('Name the epic you mean — the canvas moves inside it, and says so', async () => {
     const arrived = drilledLevelLoad(page);
     await rail(page).getByTestId('planning-target-trigger').click();
-    // ⚠️ Scoped to the RAIL, not to the page. The listbox renders inline in the
-    // composer (no portal), and the overlay leaves the host page mounted
-    // underneath it — a page-rooted lookup can match a node this spec never put
-    // there, which is the class `tests/e2e-page-rooted-locators.test.ts` exists
-    // to keep out of this directory.
-    const picker = rail(page).getByTestId('target-search-popup');
-    await picker.getByRole('textbox').fill(seed.epicKey);
-    await picker
+    // ⚠️ The composer's MESSAGE FIELD *is* the mention search — `triggerMention`
+    // inserts an `@` into it and opens the picker from the caret. So the query is
+    // TYPED after that `@`; `fill()` would replace it and close the picker with
+    // it. The listbox is the results, rendered below the field in the same rail.
+    await composer(page).pressSequentially(seed.epicKey, { delay: 20 });
+    await rail(page)
       .getByRole('listbox', { name: 'Work items to plan around' })
       .getByRole('option')
       .filter({ hasText: seed.epicKey })
