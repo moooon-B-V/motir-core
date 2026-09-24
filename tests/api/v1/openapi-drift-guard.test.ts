@@ -473,6 +473,18 @@ describe('every operation’s REAL response validates against its declared schem
       { projectKey: pk },
     );
 
+    // ── The approval-gate read (Bug MOTIR-6191) ─────────────────────────────
+    // Driven on a card with NO gate of the kind asked for, so what validates is
+    // the `gate: null` arm — an ANSWER rather than a 404, and the arm most
+    // likely to drift because it is the one an agent meets when the question it
+    // is asking about was never raised.
+    await drive(
+      'getWorkItemApprovalGate',
+      () => import('@/app/api/v1/work-items/[key]/approval-gate/route'),
+      get(`/api/v1/work-items/${key}/approval-gate?kind=decision_approval`),
+      { key },
+    );
+
     // ── Planning ────────────────────────────────────────────────────────────
     await drive(
       'getProjectBacklog',

@@ -134,7 +134,7 @@ describe('`get_approval_gate`', () => {
     expect(text).toMatch(/act on THAT/i);
   });
 
-  it('an APPROVED gate reports who approved it, when, and on which version', async () => {
+  it('an APPROVED gate reports who approved it, when, and under which authority', async () => {
     const { item, gate, stamp } = await cardWithGate('design_result');
     await approvalGatesService.decide(
       { gateId: gate.id, decision: 'approve', noteMd: 'Ship it.', source: 'ui', stamp },
@@ -158,8 +158,14 @@ describe('`get_approval_gate`', () => {
     expect(payload.gate.state).toBe('approved');
     expect(payload.gate.decidedByLabel).not.toBeNull();
     expect(payload.gate.decidedAt).not.toBeNull();
-    expect(payload.gate.subjectVersion).toBe('v1');
     expect(payload.gate.decidedUnderAuthority).not.toBeNull();
+    // ⚠️ `subjectVersion` IS NULL HERE, AND THAT IS THE FIXTURE, NOT THE TOOL.
+    // `decide` re-derives it under the lock from the KIND's own seam
+    // (`handler.subjectVersion`), so the `'v1'` seeded on the row is replaced by
+    // what that seam answers — and a synthetic `subjectId` resolves to no subject
+    // and so to no version. The awaiting arm below is where the column's journey
+    // through this read is proven.
+    expect(payload.gate.subjectVersion).toBeNull();
     expect(textOf(result)).toContain('Ship it.');
   });
 
@@ -174,10 +180,12 @@ describe('`get_approval_gate`', () => {
     );
 
     const payload = result.structuredContent as {
-      gate: { state: string; noteMd: string | null };
+      gate: { state: string; noteMd: string | null; subjectVersion: string | null };
       routedToLabel: string | null;
     };
-    expect(payload.gate).toMatchObject({ state: 'awaiting', noteMd: null });
+    // `subjectVersion` comes straight off the row while the question is open —
+    // the arm that proves the column reaches a caller at all.
+    expect(payload.gate).toMatchObject({ state: 'awaiting', noteMd: null, subjectVersion: 'v1' });
     expect(payload.routedToLabel).not.toBeNull();
     const text = textOf(result);
     expect(text).toMatch(/waiting on/i);

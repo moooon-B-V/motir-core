@@ -102,11 +102,18 @@ describe('GET /api/v1/work-items/{key}/approval-gate', () => {
         state: 'changes_requested',
         noteMd: 'The record does not say what happens when the session has no turns.',
         decisionSource: 'ui',
-        subjectVersion: 'v1',
       },
     });
     expect(body.gate.decidedByLabel).not.toBeNull();
     expect(Date.parse(body.gate.decidedAt)).toBeLessThanOrEqual(Date.now());
+    // ⚠️ `subjectVersion` IS NULL HERE, AND THAT IS THE FIXTURE, NOT THE DOOR.
+    // `decide` RE-DERIVES the version under the lock from the kind's own seam —
+    // `handler.subjectVersion(args)`, read before the effect runs — so the `'v1'`
+    // seeded on the row is overwritten by what that seam answers, and a synthetic
+    // `subjectId` resolves to no subject and therefore to no version. The column's
+    // journey through this read is proven on the AWAITING arm below, which no
+    // decision has touched.
+    expect(body.gate.subjectVersion).toBeNull();
   });
 
   it('the body is the DECLARED schema’s output, and carries no render machinery', async () => {
@@ -131,7 +138,14 @@ describe('GET /api/v1/work-items/{key}/approval-gate', () => {
 
     const body = await (await call(item.identifier, '?kind=design_result')).json();
 
-    expect(body.gate).toMatchObject({ state: 'awaiting', noteMd: null, decidedAt: null });
+    expect(body.gate).toMatchObject({
+      state: 'awaiting',
+      noteMd: null,
+      decidedAt: null,
+      // The version the question is ASKED about, served straight off the row —
+      // this is the arm that proves the column crosses the wire at all.
+      subjectVersion: 'v1',
+    });
     // A null here is *not yet decided*, never *decided by nobody* — which is why
     // the routed-to name is served beside it.
     expect(body.routedToLabel).not.toBeNull();

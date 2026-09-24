@@ -181,6 +181,17 @@ describe('approval_gate.outcome_ref keeps its ONE writer (MOTIR-5520)', () => {
     expect(assignments.sort()).toEqual(
       [
         'lib/mappers/approvalGateMappers.ts: outcomeRef: row.outcomeRef,',
+        // Bug MOTIR-6191's THREE new lines, and every one of them is a READER —
+        // which is the distinction this pin exists to keep visible. The
+        // agent-facing decision record carries the column onto `/api/v1` and the
+        // MCP surface, so it is projected from the wire DTO (the mapper line) and
+        // declared and re-emitted on the way out (the two schema lines). None of
+        // them computes a value: there is still exactly ONE writer, the service
+        // line below, and a second one would still show up here as a line nobody
+        // expected.
+        'lib/api/v1/workItems/schema.ts: outcomeRef: gate.outcomeRef,',
+        'lib/api/v1/workItems/schema.ts: outcomeRef: z.string().nullable(),',
+        'lib/mappers/approvalGateMappers.ts: outcomeRef: gate.outcomeRef,',
         // Still ONE writer. Its expression changed for ONE kind, by decision (Story
         // MOTIR-4914 · MOTIR-5893; `approval-gates.md` §1's MOTIR-5887 amendment, point
         // 7): a CHOICE records the OPTION it picked, because Workflow A always writes
