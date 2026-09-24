@@ -549,6 +549,24 @@ documents one.
 | `aider`       | 2    | PyPI `aider-chat` in a venv (Apache-2.0)                              | `aider`                        | `~/.aider.conf.yml` + a model key from the env         |
 | `goose`       | 2    | `curl -fsSL …/goose/releases/download/stable/download_cli.sh \| bash` | `goose`                        | `~/.config/goose`                                      |
 
+**Agents can update themselves in place (MOTIR-6183).** A sandbox may run for
+weeks, so every agent is installed under `/opt/motir-agents`, a prefix the
+container's `node` user owns — `NPM_CONFIG_PREFIX` points there and its `bin`
+comes first on `PATH`. An agent's own updater (Claude Code's auto-update, or
+`npm install -g <agent>@latest` by hand) can therefore write where the agent was
+installed, with no rebuild: `/workspace`, your Motir sign-in, the agent's
+sign-in and any running session are all kept.
+
+- **An update lasts as long as the container.** Rebuild Container (VS Code) or a
+  new `docker run` returns you to the image's version, which is the one CI built
+  and tested. Nothing is on a volume, so pulling a newer image always takes effect.
+- **`motir` is NOT in that prefix.** It and codegraph stay root-owned in
+  `/usr/local`, so an agent can update itself but cannot rewrite the CLI that
+  supervises it. `motir` itself updates by pulling the image.
+- **Tier-2 agents install there too, but their updaters are the vendor's.**
+  Whether `agy`, cursor's `agent`, `goose` or aider's pip write to the location
+  they were installed in is not verified here.
+
 ### Auto-approve flags — VERIFIED, not remembered
 
 An unattended run needs the agent to stop asking for approval, and **these flags
