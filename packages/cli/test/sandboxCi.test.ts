@@ -132,6 +132,7 @@ describe('the sandbox smoke harness', () => {
     'readonly-login-smoke.sh',
     'entrypoint-bypass-smoke.sh',
     'agent-update-smoke.sh',
+    'runtimes-smoke.sh',
     'fake-agent.sh',
     'failing-agent.sh',
     'stub-server.mjs',
@@ -165,6 +166,17 @@ describe('the sandbox smoke harness', () => {
     // …and so does the login REFUSAL, for the same reason: it is the read-only
     // mount that makes the write fail.
     expect(runSh).toContain('/workspace/.smoke/readonly-login-smoke.sh');
+    // The three runtimes, asserted as `node` (MOTIR-6204) — FIRST in the chain,
+    // because a missing runtime explains any later failure in it and nothing
+    // later explains a missing runtime. Read from the `bash -c` CHAIN rather
+    // than the file: this driver documents its suites in a header comment too,
+    // and an ordering assertion over the whole file would compare two mentions
+    // in prose and pass for the wrong reason.
+    const chain = runSh.slice(runSh.indexOf("bash -c '/workspace/.smoke/"));
+    expect(chain).toContain('/workspace/.smoke/runtimes-smoke.sh');
+    expect(chain.indexOf('/workspace/.smoke/runtimes-smoke.sh')).toBeLessThan(
+      chain.indexOf('/workspace/.smoke/confinement.sh'),
+    );
   });
 
   it('runs the MOUNT-FREE recipes as their own container runs (MOTIR-1877)', () => {

@@ -6,6 +6,7 @@ import zhMessages from '@/messages/zh.json';
 import type { WorkItemDto, WorkItemKindDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { QuickViewData } from '@/lib/dto/quickView';
+import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 
 // Story MOTIR-6016 · MOTIR-6101 — a leaf's DIFFICULTY on the item page's core
 // fields rail AND in the quick view, per
@@ -373,5 +374,82 @@ describe('quick view — the Difficulty rail field', () => {
   it('renders in zh', () => {
     renderQuickView({ difficulty: 'low' }, { messages: ZH, locale: 'zh' });
     expect(row('难度').querySelector('[data-difficulty]')!.textContent).toBe('低');
+  });
+});
+
+// ── MOTIR-6199 — the editor FITS its rail ───────────────────────────────────
+// The scale gained a fourth level (`trivial`) in the implementation pull request
+// itself, after MOTIR-6097's design was published, so the editor grew a fourth
+// segment that no drawing had ever sized. The shipped `Segmented` track is
+// `inline-flex` with no wrap, no `max-w-full` and no shrink — its width is
+// `max-content` — inside a FIXED rail (18rem on the item page, 300px in the
+// quick view), so the fourth segment painted over the card border.
+//
+// MOTIR-6200 settled the form: the track FILLS its rail and divides it evenly,
+// and the leading glyph is dropped in the EDITOR only.
+//
+// ⚠️ WHY THIS ASSERTS THE VARIANT AND NOT A PIXEL COUNT. The app ships a SYSTEM
+// font stack (`-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto`), so label
+// advance differs per platform — and happy-dom performs no layout at all, so a
+// width assertion here would measure nothing. The defect was never a particular
+// number: it was that the track's width was a function of its CONTENT inside a
+// container that could not grow. So the durable assertion is that the editor is
+// the fill variant, which is container-relative by construction and therefore
+// fits at any font, at any `--spacing-control-x`, and at a fifth level.
+describe('the Difficulty editor fits its rail (MOTIR-6199)', () => {
+  /** Open the item page's editor and hand back its Segmented track. */
+  function openEditor() {
+    renderPanel(makeItem({ difficulty: 'medium' }));
+    fireEvent.click(within(card('Difficulty')).getByRole('button', { name: 'Edit Difficulty' }));
+    return screen.getByRole('group', { name: 'Difficulty' });
+  }
+
+  it('renders one segment per member of the scale, so a fifth level needs no edit here', () => {
+    expect(within(openEditor()).getAllByRole('button')).toHaveLength(WORK_ITEM_DIFFICULTIES.length);
+  });
+
+  it('fills the rail instead of sizing to its content — the track is not `inline-flex`', () => {
+    const cls = openEditor().getAttribute('class') ?? '';
+    expect(cls).toContain('w-full');
+    expect(cls).not.toContain('inline-flex');
+  });
+
+  it('lets every segment shrink evenly, so no segment can push the track past the rail', () => {
+    for (const seg of within(openEditor()).getAllByRole('button')) {
+      const cls = seg.getAttribute('class') ?? '';
+      expect(cls).toContain('flex-1');
+      expect(cls).toContain('min-w-0');
+      // The per-style control padding is what made the track token-dependent:
+      // `--spacing-control-x` is 10px, 12px or 14px depending on the style, so
+      // at the widest one the content-sized track overran the rail by ~90px.
+      expect(cls).not.toContain('px-(--spacing-control-x)');
+    }
+  });
+
+  it('drops the leading glyph in the EDITOR — the labels alone carry the scale there', () => {
+    expect(openEditor().querySelectorAll('svg')).toHaveLength(0);
+  });
+
+  it('KEEPS the glyph in read mode, where a lone value must not read as a priority', () => {
+    renderPanel(makeItem({ difficulty: 'high' }));
+    const indicator = card('Difficulty').querySelector('[data-difficulty]')!;
+    expect(indicator.querySelector('svg')).toBeTruthy();
+    expect(indicator.textContent).toBe('High');
+  });
+
+  it('still reaches every value, and Clear is still there once one is set', async () => {
+    const group = openEditor();
+    for (const label of ['Trivial', 'Low', 'Medium', 'High']) {
+      expect(within(group).getByRole('button', { name: label })).toBeTruthy();
+    }
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: 'Trivial' }));
+    });
+    await waitFor(() =>
+      expect(updateIssueAction).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'wi_1', difficulty: 'trivial' }),
+      ),
+    );
   });
 });

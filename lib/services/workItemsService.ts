@@ -7525,11 +7525,15 @@ async function buildReadyDispatchDto(
   row: ReadyCandidateRow,
   ctx: ServiceContext,
 ): Promise<ReadyItemDispatchDto> {
-  // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
-  // The row comes from the ready query, so the item exists; none of the four
-  // arms refuses (`resolveDispatchRepoForItem` returns `null` rather than
-  // throwing).
-  const [parentRow, blockerLinks, readiness, dispatchRepo] = await Promise.all([
+  // ⚠️ `allSettledOrThrow`, NOT `Promise.all` (MOTIR-6235). MOTIR-3077 left this
+  // fan-out on `Promise.all` believing no arm refuses — but the repo arm
+  // (`resolveDispatchRepoForItem`) THROWS `ArchivedTargetRepoError` when the item
+  // resolves to an archived repository (MOTIR-1959, which predates that sweep).
+  // `Promise.all` rejects on it and returns while the other arms'
+  // `withWorkspaceServiceContext` transactions are still open, so a refused
+  // `next_ready` / `claim_next_ready` held locks after its refusal was sent — in
+  // the suite, what the next test's `TRUNCATE` reset deadlocked against (`40P01`).
+  const [parentRow, blockerLinks, readiness, dispatchRepo] = await allSettledOrThrow([
     row.parentId
       ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
           workItemRepository.findById(row.parentId as string, tx),

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import type { ProjectContext } from '@/lib/projects';
 import { plansService } from '@/lib/services/plansService';
+import { projectMembersService } from '@/lib/services/projectMembersService';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -72,11 +73,17 @@ function human(planId: string, itemId: string, raw: string): Promise<Response> {
   );
 }
 
+interface JobOpts {
+  token?: boolean;
+  /** The job token's user — the fixture's owner unless a test says otherwise. */
+  userId?: string;
+}
+
 function jobRequest(
   fx: WorkItemFixture,
   url: string,
   init: RequestInit,
-  { token = true }: { token?: boolean } = {},
+  { token = true, userId = fx.ctx.userId }: JobOpts = {},
 ): Request {
   const req = new Request(url, {
     ...init,
@@ -86,7 +93,7 @@ function jobRequest(
     req.headers.set(
       'x-motir-job-token',
       mintJobToken({
-        userId: fx.ctx.userId,
+        userId,
         workspaceId: fx.ctx.workspaceId,
         projectId: fx.projectId,
       }),
@@ -99,7 +106,7 @@ function internal(
   fx: WorkItemFixture,
   itemId: string,
   raw: string,
-  opts?: { token?: boolean },
+  opts?: JobOpts,
 ): Promise<Response> {
   return internalPATCH(
     jobRequest(
@@ -116,7 +123,7 @@ function withdraw(
   fx: WorkItemFixture,
   itemId: string,
   query: string,
-  opts?: { token?: boolean },
+  opts?: JobOpts,
 ): Promise<Response> {
   return internalDELETE(
     jobRequest(
@@ -146,6 +153,27 @@ async function planWithAdd(
   if (planned) await plansService.markPlanned(plan.id, fx.ctx);
   if (jobId) await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: jobId } });
   return { planId: plan.id, itemId: appended.items[0]!.id };
+}
+
+/**
+ * A second workspace member, holding `role` on the fixture's project — or no
+ * project membership at all when `role` is null.
+ */
+async function colleague(fx: WorkItemFixture, role: 'viewer' | null): Promise<string> {
+  const user = await createTestUser();
+  await adminDb.workspaceMembership.create({
+    data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+  });
+  if (role) {
+    await projectMembersService.addMember({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: user.id,
+      role,
+    });
+  }
+  return user.id;
 }
 
 async function fieldsOf(itemId: string): Promise<Record<string, unknown>> {
@@ -397,5 +425,63 @@ describe('DELETE /api/internal/ai/plan-proposals/[itemId] — the withdraw', () 
     const res = await withdraw(fx, itemId, '?jobId=job-floor-del');
     expect(res.status).toBe(409);
     expect(await adminDb.planItem.count({ where: { id: itemId } })).toBe(1);
+  });
+});
+
+// MOTIR-6153 — two refusals the service raises that this route let escape as a
+// 500. motir-ai reads a 500 as a server fault and retries it; a typed 4xx tells
+// it the CALL was refused. The human route has answered the gate's refusal as a
+// 403 naming the key since MOTIR-2291, and a viewer's job token must get the same.
+describe('/api/internal/ai/plan-proposals/[itemId] — typed refusals, never a 500', () => {
+  it("a viewer's job token is refused with the gate's 403 naming the key, on the deepen, the correction and the withdraw", async () => {
+    const fx = await makeWorkItemFixture();
+    const { itemId } = await planWithAdd(fx, { planned: false, jobId: 'job-viewer' });
+    const viewerId = await colleague(fx, 'viewer');
+
+    const responses = [
+      await internal(
+        fx,
+        itemId,
+        JSON.stringify({ jobId: 'job-viewer', patch: { difficulty: 'high' } }),
+        { userId: viewerId },
+      ),
+      await internal(
+        fx,
+        itemId,
+        JSON.stringify({ jobId: 'job-viewer', mode: 'correct', patch: { difficulty: 'high' } }),
+        { userId: viewerId },
+      ),
+      await withdraw(fx, itemId, '?jobId=job-viewer', { userId: viewerId }),
+    ];
+    for (const res of responses) {
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({
+        code: 'PERMISSION_DENIED',
+        permission: 'ai:view_plan',
+      });
+    }
+    // Refused, so nothing moved: the proposal is still on the plan as it was.
+    expect(await fieldsOf(itemId)).toMatchObject({ difficulty: 'low' });
+  });
+
+  it('a correction naming more than one repository field is a typed 422 naming the conflict', async () => {
+    const fx = await makeWorkItemFixture();
+    const { itemId } = await planWithAdd(fx, { planned: true, jobId: 'job-two-repos' });
+
+    for (const repoKeys of [
+      { targetRepo: 'core', targetRepos: ['core'] },
+      { targetRepos: ['core'], targetRepositories: ['repo-row'] },
+      { targetRepo: 'core', targetRepositories: ['repo-row'] },
+    ]) {
+      const res = await internal(
+        fx,
+        itemId,
+        JSON.stringify({ jobId: 'job-two-repos', mode: 'correct', ...repoKeys }),
+      );
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { code: string; error: string };
+      expect(body.code).toBe('CONFLICTING_TARGET_REPO_INPUT');
+      expect(body.error).toMatch(/exactly ONE of targetRepo, targetRepos or targetRepositories/);
+    }
   });
 });

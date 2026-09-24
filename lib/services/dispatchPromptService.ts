@@ -15,6 +15,7 @@ import { designAccessService } from '@/lib/services/designAccessService';
 import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import { readProject } from '@/lib/workspaces/tenantRead';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { parseDecisionRecord } from '@/lib/approvalGates/decisionRecord';
@@ -200,13 +201,16 @@ export const dispatchPromptService = {
     }
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
 
-    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
-    // The access gate (`getWorkItemByIdentifier`) is awaited above, and none
-    // of these arms has a refusal path — `resolveDispatchRepoForItem`
-    // returns `null` for an unresolvable repo instead of throwing, and
-    // `listRepoDelivery` classifies rather than refuses. (The archived refusal
-    // over the whole SET is raised AFTER this settles, in
-    // `resolveDispatchRepos`, so no arm is ever abandoned mid-flight.)
+    // ⚠️ `allSettledOrThrow`, NOT `Promise.all` (MOTIR-6235). The access gate
+    // (`getWorkItemByIdentifier`) is awaited above, but one of these arms DOES
+    // refuse: `resolveDispatchRepoForItem` returns `null` for an unresolvable
+    // repo and THROWS `ArchivedTargetRepoError` for an archived one (MOTIR-1959).
+    // MOTIR-3077 left this fan-out on `Promise.all` on the belief that it never
+    // throws, so a refused prompt returned while up to ten sibling transactions
+    // were still open — and the next test's `TRUNCATE` reset deadlocked against
+    // them (`40P01`). `listRepoDelivery` classifies rather than refuses, and the
+    // archived refusal over the whole SET is still raised AFTER this settles, in
+    // `resolveDispatchRepos`.
     const [
       parentRow,
       blockerKeys,
@@ -219,7 +223,7 @@ export const dispatchPromptService = {
       designReference,
       confirmedDecisions,
       errorEvidence,
-    ] = await Promise.all([
+    ] = await allSettledOrThrow([
       item.parentId
         ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
             workItemRepository.findById(item.parentId as string, tx),
