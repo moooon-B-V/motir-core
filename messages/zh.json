@@ -6772,6 +6772,11 @@
       "reopenedYours": "从计划页面重新打开 · 由你发起 · 最近活动 {when}",
       "readOnly": "你可以阅读此对话。继续对话需要使用 Motir AI 规划的权限。",
       "someone": "某人"
+    },
+    "arrival": {
+      "crumbTargetPrefix": "规划目标：",
+      "movedAnnouncement": "正在显示 {target} 内的工作",
+      "goToTarget": "方案在 {identifier} · 前往"
     }
   },
   "codeHealth": {

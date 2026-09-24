@@ -6776,6 +6776,11 @@
       "reopenedYours": "Reopened from the Plans page · started by you · last active {when}",
       "readOnly": "You can read this conversation. Continuing it needs permission to plan with Motir AI.",
       "someone": "someone"
+    },
+    "arrival": {
+      "crumbTargetPrefix": "Planning target:",
+      "movedAnnouncement": "Showing work inside {target}",
+      "goToTarget": "Plan is in {identifier} · Go there"
     }
   },
   "codeHealth": {

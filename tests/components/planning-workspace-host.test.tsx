@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { parsePlanningLaunch } from '@/lib/planning/launcher';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
@@ -29,6 +29,9 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh }) }));
 // composer. Stubbed so the picker can be driven without a debounce and a
 // endpoint — what is under test is that the HOST adds what the composer hands
 // it, not what the search returns. Inert unless a test types an `@` query.
+const { fetchPlanningAnchor } = vi.hoisted(() => ({ fetchPlanningAnchor: vi.fn() }));
+vi.mock('@/lib/planning/planningAnchorClient', () => ({ fetchPlanningAnchor }));
+
 vi.mock('@/lib/hooks/useWorkItemTargetSearch', () => ({
   useWorkItemTargetSearch: (query: string, enabled: boolean) => ({
     results:
@@ -48,6 +51,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     outcome,
     targetIds,
     initialTrail,
+    followTo,
     loadingFallback,
     emptyRoot,
   }: {
@@ -57,6 +61,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     outcome?: string | null;
     targetIds?: readonly string[];
     initialTrail?: readonly { id: string; label: string }[];
+    followTo?: { key: string; trail: readonly { id: string; label: string }[] } | null;
     loadingFallback?: ReactNode;
     emptyRoot?: ReactNode;
   }) => (
@@ -67,6 +72,10 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
       data-outcome={outcome ?? ''}
       data-targets={(targetIds ?? []).join(',')}
       data-trail={(initialTrail ?? []).map((c) => c.id).join(',')}
+      // THE FOLLOW-MOVE's request (MOTIR-6161) — the host DERIVES it; the canvas
+      // decides whether to honour it, and has its own suite for that.
+      data-follow-key={followTo?.key ?? ''}
+      data-follow-trail={(followTo?.trail ?? []).map((c) => c.id).join(',')}
       aria-label={ariaLabel}
     >
       {/* The two states the host DELEGATES to the canvas (MOTIR-2069). The real
@@ -743,5 +752,150 @@ describe('coverage · the TARGET SET the host owns (MOTIR-4733)', () => {
     // lock: the user can drop it and plan about something else.
     expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('');
     expect(screen.queryByTestId('planning-target-chip')).toBeNull();
+  });
+});
+
+// ── THE FOLLOW-MOVE's REQUEST (MOTIR-6161, Story MOTIR-6154) ─────────────────
+//
+// The host DERIVES it; the canvas decides whether to honour it and has its own
+// suite for that. What is ruled on here is only the deriving: which of the two
+// moments fires, which one wins, and — the clause that is easiest to get wrong —
+// that a surface which ALREADY arrived inside a target never asks to move again.
+describe('PlanningWorkspaceHost — the follow-move request', () => {
+  const canvas = () => screen.getByTestId('canvas-stub');
+
+  // The composer's `@` picker is the only producer of a target, so it is driven
+  // for real. ⚠️ `mouseDown`, not `click`: the option commits on POINTER DOWN so
+  // the input never loses focus to it (`TargetSearchListbox`) — a `click` adds
+  // nothing and the test passes on an empty target set.
+  async function addBillingTarget() {
+    const composer = screen.getByRole('textbox');
+    await act(async () => {
+      fireEvent.change(composer, { target: { value: '@Billing' } });
+    });
+    const option = screen.queryByRole('option', { name: /MOTIR-9/ });
+    expect(option, 'the mention listbox did not open').not.toBeNull();
+    await act(async () => {
+      fireEvent.mouseDown(option!);
+    });
+  }
+
+  function reviewLandingUnder(parentNodeId: string): PlanChangeConversationState {
+    return {
+      ...IDLE,
+      review: planReview([
+        planReviewItem({
+          op: 'add',
+          nodeId: 'p1',
+          parentNodeId,
+          parentIdentifier: 'MOTIR-1',
+          parentTitle: 'The epic',
+          parentTrail: [{ id: parentNodeId, identifier: 'MOTIR-1', title: 'The epic' }],
+        }),
+      ]),
+    };
+  }
+
+  it('asks for the level the PLAN lands in, when the surface opened with no target', () => {
+    renderHost({ mode: 'replan', from: 'project' }, { state: reviewLandingUnder('wi_e1') });
+
+    expect(canvas().getAttribute('data-follow-key')).toBe('plan:wi_e1');
+    expect(canvas().getAttribute('data-follow-trail')).toBe('wi_e1');
+  });
+
+  it('asks for NOTHING when the surface already arrived inside a target', () => {
+    // A work-item launch is already standing in the right place, and a second
+    // target must not move the canvas off the first (the story's rule: with
+    // several targets the canvas is inside the FIRST one).
+    renderHost(
+      { mode: 'replan', from: 'work-item', item: 'MOTIR-3' },
+      {
+        state: reviewLandingUnder('wi_e1'),
+        initialTarget: { id: 'wi_3', identifier: 'MOTIR-3', title: 'The story', kind: 'story' },
+      },
+    );
+
+    expect(canvas().getAttribute('data-follow-key')).toBe('');
+  });
+
+  it('asks for NOTHING while the plan proposes only roots', () => {
+    // A plan that names no container lands at the top level, which is where a
+    // target-less surface already is — so there is no move to ask for.
+    renderHost(
+      { mode: 'replan', from: 'project' },
+      {
+        state: {
+          ...IDLE,
+          review: planReview([planReviewItem({ op: 'add', nodeId: 'p1', parentNodeId: null })]),
+        },
+      },
+    );
+
+    expect(canvas().getAttribute('data-follow-key')).toBe('');
+  });
+
+  it('asks for NOTHING before there is a plan at all', () => {
+    renderHost({ mode: 'replan', from: 'project' });
+    expect(canvas().getAttribute('data-follow-key')).toBe('');
+  });
+
+  it('asks for the TARGET the person added, reading its ancestors from the anchor', async () => {
+    // Trigger 1. The trail needs the target's ANCESTORS, which only the anchor
+    // read has — hence a fetch rather than a derivation from the chip.
+    //
+    // ⚠️ Ruled on WITHOUT a competing plan on purpose. Which of the two triggers
+    // WINS is a property of `followRequest`, and it is ruled on directly in
+    // `tests/planning/surfaceFollow.test.ts`; asserting it again through two
+    // async arrivals in a component would be testing the scheduler, not the rule.
+    fetchPlanningAnchor.mockResolvedValue({
+      anchor: { id: 'wi_e1', identifier: 'MOTIR-1', title: 'The epic', kind: 'epic' },
+      ancestors: [],
+    });
+    renderHost({ mode: 'replan', from: 'project' });
+
+    await addBillingTarget();
+
+    // Asserted by ARGUMENT, not merely "was called": the effect asks for the
+    // target's KEY, and a bare `toHaveBeenCalled` would pass on a call another
+    // test left behind.
+    await waitFor(() =>
+      expect(fetchPlanningAnchor).toHaveBeenCalledWith('MOTIR-9', expect.anything()),
+    );
+    // The anchor read resolves in a microtask OUTSIDE an act scope, so its
+    // setState needs one to flush — the act-environment contract CLAUDE.md
+    // states, in the "an async action resolving after the last assertion" shape.
+    await act(async () => {});
+    expect(canvas().getAttribute('data-follow-key')).toBe('target:wi_e1');
+    expect(canvas().getAttribute('data-follow-trail')).toBe('wi_e1');
+  });
+
+  it('says NOTHING when the added target cannot be read — an outage is not a move', async () => {
+    fetchPlanningAnchor.mockRejectedValue(new Error('502'));
+    renderHost({ mode: 'replan', from: 'project' });
+
+    await addBillingTarget();
+
+    // Asserted by ARGUMENT, not merely "was called": the effect asks for the
+    // target's KEY, and a bare `toHaveBeenCalled` would pass on a call another
+    // test left behind.
+    await waitFor(() =>
+      expect(fetchPlanningAnchor).toHaveBeenCalledWith('MOTIR-9', expect.anything()),
+    );
+    expect(canvas().getAttribute('data-follow-key')).toBe('');
+  });
+
+  it('says NOTHING when the added target resolves to no level — a 404 is silent', async () => {
+    fetchPlanningAnchor.mockResolvedValue(null);
+    renderHost({ mode: 'replan', from: 'project' });
+
+    await addBillingTarget();
+
+    // Asserted by ARGUMENT, not merely "was called": the effect asks for the
+    // target's KEY, and a bare `toHaveBeenCalled` would pass on a call another
+    // test left behind.
+    await waitFor(() =>
+      expect(fetchPlanningAnchor).toHaveBeenCalledWith('MOTIR-9', expect.anything()),
+    );
+    expect(canvas().getAttribute('data-follow-key')).toBe('');
   });
 });

@@ -1849,6 +1849,26 @@ export default defineConfig({
         // gating them here would gate THIS story on OTHER stories' coverage, which
         // is the trade the block above already refuses once.
         'lib/planning/planShape.ts',
+        // Story MOTIR-6154 · Subtask MOTIR-6162 — the surface ARRIVAL. Where the
+        // planning canvas opens, and the one move it makes when a target settles
+        // later. MEASURED over this story's own specs (the two units, the canvas
+        // suite, the overlay and host suites and the integration gate):
+        //
+        //   surfaceArrival.ts   100 / 100 / 100 / 100   → GATED below
+        //   surfaceFollow.ts    100 / 100 / 100 / 100   → GATED below
+        //   planArrival.ts      93.7 / 80.8 / 88.9 / 100 → REPORT-ONLY
+        //
+        // `planArrival.ts` is REPORT-ONLY by the rule the two blocks above state.
+        // It is code this story MOVED rather than wrote (out of
+        // `components/planning/PlanReviewCanvas.tsx`, byte for byte), its residual
+        // branches are that function's pre-existing defensive arms, and the
+        // measurement above is over THIS story's specs alone — the plan page's own
+        // `plan-review-canvas*` suites exercise it too and will lift the number.
+        // Pinning it blind is what that rule exists to prevent; publishing it is
+        // the honest step, and the pin belongs to whoever reads the first CI run.
+        'lib/planning/surfaceArrival.ts',
+        'lib/planning/surfaceFollow.ts',
+        'lib/planning/planArrival.ts',
         'lib/planning/planView.ts',
         'components/planning/PlanProposalList.tsx',
         'app/**/plans/_components/PlanStatusTabs.tsx',
@@ -4778,6 +4798,12 @@ export default defineConfig({
         // Pinned at the 90 floor rather than at the measured number, so a later
         // refactor has room without anyone loosening a gate to make a build pass.
         'lib/planning/planShape.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-6162 — both measured 100 on every axis. Pinned at the project's
+        // 90 rather than at the measurement, so ordinary churn does not fail a
+        // build for a rounding error. `planArrival.ts` is deliberately absent:
+        // see the note beside its `include` entry.
+        'lib/planning/surfaceArrival.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/surfaceFollow.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/planning/planView.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/PlanProposalList.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/PlanStatusTabs.tsx': { branches: 90, functions: 90, lines: 90 },

@@ -444,6 +444,9 @@ test('a work-item launch opens scoped to that item, over its own page', async ({
 
   // The canvas opened on the anchor's OWN level: the anchor is ringed and its
   // SIBLING is on screen, which is only true of the level that contains it.
+  // ⚠️ That is the LEAF arrival, and it is what this anchor is — a `subtask` has
+  // no inside. A CONTAINER anchor opens INSIDE itself instead (MOTIR-6160); the
+  // two arrivals are ruled on side by side in `planning-anchor-level.spec.ts`.
   const target = page.getByTestId('planning-target-node');
   await expect(target).toBeVisible();
   await expect(target).toContainText(seed.subtaskTitle);

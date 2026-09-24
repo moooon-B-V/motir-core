@@ -148,6 +148,30 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   expect((await asked).status()).toBe(200);
   await expect(workspace(page).getByTestId('plan-change-confirm-bar')).toContainText('2 added');
 
+  // ── 1b. THE FOLLOW-MOVE (MOTIR-6154/6161) ───────────────────────────────────
+  // This surface opened from the PROJECT with no target, so it began at the root
+  // — and the moment the plan settled it moved inside the level the plan fills,
+  // which for a plan that files work into Archive is the Archive FOLDER. So the
+  // canvas is no longer where step 1 left it, and the root assertions below are
+  // reached the way a person reaches them: through the crumb.
+  await expect(crumbs(canvas).getByRole('button', { name: 'Folder: Archive' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(canvas.getByText(plan.filedTitle, { exact: true })).toBeVisible();
+
+  // The ROOT read carries neither key — `folderLoad` above is the folder form.
+  const backToRoot = page.waitForResponse(
+    (r) =>
+      r.url().includes('/roadmap') &&
+      !r.url().includes('parentId=') &&
+      !r.url().includes('folderId=') &&
+      r.request().method() === 'GET' &&
+      r.ok(),
+  );
+  await crumbs(canvas).getByRole('button', { name: 'Roadmap' }).click();
+  await backToRoot;
+
   // ── 2. THE ROOT: folder cards, nothing filed loose, the badge (decisions 1–3) ─
   await expect(archive.getByTestId('folder-changes')).toHaveText('1 change');
   await expect(folderCard(canvas, seed.laterId)).toBeVisible();
@@ -158,10 +182,14 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   }
 
   // ── 3. DRILL THE FOLDER: its child folder, its items, the filed proposal ─────
-  const level = folderLoad(page, seed.archiveId);
+  // ⚠️ NO NETWORK WAIT HERE, AND THAT IS THE FOLLOW-MOVE'S DOING (MOTIR-6154/6161).
+  // The move above already READ this folder's level, and `PlanChangeCanvas`'s
+  // `loadLevel` serves a level it has read from `cacheRef` — cleared only when the
+  // diff key changes, which it last did when the plan settled. So this drill issues
+  // no second GET and a `folderLoad` wait here hangs for the full test budget. Same
+  // treatment the re-visits in step 4 already carry: the DOM is the signal.
   await archive.click();
   await canvas.getByTestId('drill-button').click();
-  await level;
   await expect(folderCard(canvas, seed.importsId)).toBeVisible();
   for (const title of seed.archivedTitles) {
     await expect(canvas.getByText(title, { exact: true })).toBeVisible();
