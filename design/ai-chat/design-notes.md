@@ -3427,9 +3427,57 @@ tokens rather than new primitives.
    the citation resolves to the wrong section. Filed as its own bug; this section cites MOTIR-6033
    by card key for that reason.
 
+4. **The PROPOSAL card is a second drawing of the committed card, not a layer over it.** Rendered
+   side by side (the table in § _ONE CARD, THREE SURFACES_): the shell agrees on footprint, radius,
+   border weight and shadow, and differs on **padding** (`p-3.5` vs `p-3`), on a **`KIND_TINT`
+   declared twice**, and on a **state vocabulary `PlanItemNode` cannot express at all** (ready /
+   done / here / not-in-sprint / cross-blocked). Filed as MOTIR-6196; it is not this story's work.
+
+### ⭐ ONE CARD, THREE SURFACES (panel 9 — AMENDED 2026-09-24, on review)
+
+**Requested on review:** the card must look the same in the roadmap, on the planning surface, and
+after the plan is proposed. **It very nearly does, and the places it does not are drift rather than
+decisions** — measured by rendering the two real card components for the same work item through the
+shipped `renderWithIntl` harness and diffing their shells, the same method §0 uses.
+
+| shell property                  | committed card (`WorkItemNode`)                         | proposal card (`PlanItemNode`)              | verdict                   |
+| ------------------------------- | ------------------------------------------------------- | ------------------------------------------- | ------------------------- |
+| footprint                       | **280 × 124** (`NODE_W` / `NODE_H`)                     | identical                                   | **one**                   |
+| radius · border weight · shadow | `rounded-(--radius-card) border shadow-(--shadow-card)` | identical                                   | **one**                   |
+| **padding**                     | `p-3.5` — 14px                                          | `p-3` — 12px                                | **DRIFT**                 |
+| kind tint map                   | `KIND_TINT`                                             | `KIND_TINT` **declared again, identically** | **DRIFT**                 |
+| border style · colour · fill    | `--el-border` / `--el-surface`                          | dashed `--el-accent` / `--el-tint-lavender` | **KEEP** — this IS the op |
+| state vocabulary                | ready · done · here · not-in-sprint · cross-blocked     | **none of them**                            | **GAP**                   |
+
+**THE RULE.** There is ONE card shell — footprint, radius, border weight, padding, shadow, and the
+kind bar · identifier · title · status row — and it has ONE implementation. A proposal's op
+treatment, the target ring and the plan-change diff frame are **LAYERS OVER that shell, never second
+drawings of it.**
+
+**Two of the three layers already work exactly this way, and say so in their own source.**
+`PlanningTargetNode`: _"It WRAPS the shipped node — the same compose-don't-redraw seam
+`PlanChangeDiffFrame` uses … The work item keeps rendering as the real `WorkItemNode`; this adds a
+ring, a glow and a word on top."_ **The op layer is the one that does not**: `PlanItemNode` imports
+three sub-pieces from `WorkItemNode` (`WorkItemStatusPill`, `CrossBlockedFlag`, `GhostAnchor`) and
+then re-draws the card body around them, which is how a second `KIND_TINT` and a second padding got
+there. Its own header already states the intent — _"It draws the SAME compact card language as the
+shipped `WorkItemNode`"_ — so this is drift from a stated rule, not a disagreement about it.
+
+**What follows for THIS story, which is the part that binds MOTIR-6160 and MOTIR-6161.** Surfaces 1
+and 2 already draw the **identical component**: a committed card on the planning surface is the same
+`WorkItemNode` the roadmap draws, because both levels are built by `buildWorkItemLevel`. So _"the
+same in the roadmap and on the planning surface"_ is **true today**, and the constraint this design
+places on the arrival work is that it must stay true: **changing where the canvas STANDS may not
+change what a card LOOKS like.** Neither the arrival trail nor the follow-move touches a node
+renderer, so meeting this costs nothing — it is a thing not to break.
+
+**And the third surface's three differences are NOT this story's work.** They touch no arrival and no
+follow-move, and absorbing them would put a card-renderer refactor inside a story about which level
+the canvas opens on. They are filed as their own card — MOTIR-6196, flag 4 below — rather than deferred in prose.
+
 ### Deliverable
 
-`design/ai-chat/planning-workspace--arrival.mock.html` (eight panels, light + dark, narrow) · this
+`design/ai-chat/planning-workspace--arrival.mock.html` (NINE panels, light + dark, narrow) · this
 section. **A DELTA, per `CLAUDE.md`'s rule** — the base sheet is not edited, and there is no `.png`
 (AMENDMENT 4 retired the export). Published as MOTIR-6159's design result, which is what
 MOTIR-6160 and MOTIR-6161 are `blocked_by`.

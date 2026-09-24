@@ -475,14 +475,94 @@
         gap: 14px;
         align-items: flex-start;
       }
+      /* THE CARD — the shipped shell, at 0.67 scale (the real footprint is
+         NODE_W×NODE_H = 280×124 and does not fit a side-by-side board).
+         Every value is the component's own: a raised `--el-surface` tile on the
+         recessed `--el-canvas` board, `--radius-card`, a 1px `--el-border` and
+         `--shadow-card`. Padding 9px is the shipped 14px (`p-3.5`) at the same
+         scale. Panel 9 is where this shell is specified rather than merely used. */
       .node {
         position: relative;
         width: 188px;
         min-height: 76px;
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
-        background: var(--el-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
         padding: 9px 10px;
+      }
+      /* The OP layer — a proposal. The ONLY things it changes are the border
+         style/colour and the fill; everything else is the shell above. */
+      .node.op-add {
+        border-style: dashed;
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .node.op-modify {
+        box-shadow:
+          0 0 0 2px var(--el-info),
+          var(--shadow-card);
+      }
+      .node.st-ready {
+        background: var(--el-tint-mint);
+      }
+      .node.st-done {
+        background: var(--el-tint-sky);
+      }
+      .opbadge {
+        position: absolute;
+        top: -9px;
+        left: 9px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 1px var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .opbadge.info {
+        background: var(--el-info);
+        color: var(--el-accent-text);
+      }
+      .statepill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: 0 var(--spacing-chip-x);
+        font-size: 10px;
+        font-weight: 600;
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+      }
+      .statepill.ready {
+        background: var(--el-success);
+        color: var(--el-accent-text);
+      }
+      .surfacelabel {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .board {
+        background: var(--el-canvas);
+        background-image: radial-gradient(
+          color-mix(in srgb, var(--el-text) 8%, transparent) 1px,
+          transparent 1px
+        );
+        background-size: 16px 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px 14px 14px;
       }
       .node .kid {
         font-family: var(--font-mono);
@@ -1602,12 +1682,189 @@
       </p>
     </div>
 
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">9</span>
+        <h2>ONE CARD, THREE SURFACES — the shell is shared, the op is a LAYER</h2>
+      </div>
+      <p class="note">
+        <b>Requested on review:</b> the card must look the same in the roadmap, on the planning
+        surface, and after the plan is proposed. It very nearly does — and the places it does not
+        are drift rather than decisions. Measured by rendering the two real components for the same
+        work item and diffing their shells (the method §0 uses).
+      </p>
+
+      <div class="grid3">
+        <div>
+          <p class="surfacelabel">1 · Roadmap</p>
+          <div class="board">
+            <div class="level">
+              <div class="node">
+                <span class="kindbar k-story"></span>
+                <span class="kid">MOTIR-2</span>
+                <div class="ttl">The planning surface opens inside…</div>
+                <div style="margin-top: 6px"><span class="statepill">To Do</span></div>
+              </div>
+            </div>
+          </div>
+          <p class="cap"><code>WorkItemNode</code> — the committed card.</p>
+        </div>
+        <div>
+          <p class="surfacelabel">2 · Planning surface</p>
+          <div class="board">
+            <div class="level">
+              <div class="node st-ready">
+                <span class="kindbar k-story"></span>
+                <span class="kid">MOTIR-2</span>
+                <div class="ttl">The planning surface opens inside…</div>
+                <div style="margin-top: 6px"><span class="statepill ready">Ready</span></div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <code>WorkItemNode</code> again — <b>the same component</b>, with the canvas's own state
+            fills. Nothing about the planning surface changes the card.
+          </p>
+        </div>
+        <div>
+          <p class="surfacelabel">3 · After the plan is proposed</p>
+          <div class="board">
+            <div class="level">
+              <div class="node op-add">
+                <span class="opbadge">+ add</span>
+                <span class="kindbar k-subtask"></span>
+                <span class="kid">new</span>
+                <div class="ttl">Where the canvas ARRIVES — design</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <code>PlanItemNode</code> — a proposal. <b>The op is the only thing that may differ</b>:
+            border style, border colour, fill, plus the op badge.
+          </p>
+        </div>
+      </div>
+
+      <p class="surfacelabel" style="margin-top: 22px">
+        The GAP, drawn — one work item, already DONE, on the same level
+      </p>
+      <div class="board">
+        <div class="level">
+          <div class="node st-done">
+            <span class="kindbar k-story"></span>
+            <span class="kid">MOTIR-11</span>
+            <div class="ttl" style="text-decoration: line-through">The follow-move</div>
+            <div style="margin-top: 6px"><span class="statepill">Done</span></div>
+          </div>
+          <div class="node op-modify">
+            <span class="opbadge info">~ change</span>
+            <span class="kindbar k-story"></span>
+            <span class="kid">MOTIR-11</span>
+            <div class="ttl">The follow-move</div>
+            <div style="margin-top: 6px"><span class="statepill">To Do</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">
+        <b>The same card, twice, side by side.</b> Left: the committed card, which knows it is done
+        — <code>--el-tint-sky</code> fill and a struck title. Right: a <code>modify</code> proposal
+        over that same card, which cannot say so: <code>PlanItemNode</code> has no done treatment,
+        so it falls back to the default shell and a status pill resolved from the proposal envelope.
+        The <b>2px padding difference is visible here too</b>, between two cards one gap apart. The
+        <code>change</code> ring and badge are correct and stay — they are the op.
+      </p>
+
+      <p class="note" style="margin-top: 18px">
+        <b>THE RULE.</b> There is ONE card shell — footprint, radius, border weight, padding,
+        shadow, and the kind bar · identifier · title · status row — and it has ONE implementation.
+        A proposal's op treatment, the target ring and the plan-change diff frame are
+        <b>LAYERS OVER that shell</b>, never second drawings of it. Two of the three layers already
+        work this way and say so in their own source: <code>PlanningTargetFrame</code> —
+        <i
+          >"It WRAPS the shipped node — the same compose-don't-redraw seam
+          <code>PlanChangeDiffFrame</code> uses"</i
+        >. The op layer is the one that does not.
+      </p>
+
+      <table class="spec">
+        <tr>
+          <th style="width: 24%">Shell property</th>
+          <th style="width: 24%">Committed card</th>
+          <th style="width: 24%">Proposal card</th>
+          <th>Verdict</th>
+        </tr>
+        <tr>
+          <td>footprint</td>
+          <td colspan="2"><b>280 × 124</b>, both — <code>NODE_W</code> / <code>NODE_H</code></td>
+          <td><span class="tag now">one</span></td>
+        </tr>
+        <tr>
+          <td>radius · border weight · shadow</td>
+          <td colspan="2">
+            <code>rounded-(--radius-card) border shadow-(--shadow-card)</code>, both
+          </td>
+          <td><span class="tag now">one</span></td>
+        </tr>
+        <tr>
+          <td><b>padding</b></td>
+          <td><code>p-3.5</code> — 14px</td>
+          <td><code>p-3</code> — 12px</td>
+          <td>
+            <span class="tag was">DRIFT</span> Two cards on the SAME level are inset differently. No
+            op treatment needs it. <b>One value: <code>p-3.5</code></b
+            >, the committed card's, which is what the roadmap ships and what most cards on any
+            canvas are.
+          </td>
+        </tr>
+        <tr>
+          <td>kind tint map</td>
+          <td colspan="2">
+            <code>KIND_TINT</code> is declared <b>twice, identically</b> — once per component
+          </td>
+          <td>
+            <span class="tag was">DRIFT</span> One exported constant. The status vocabulary was
+            already collapsed this way, for this reason.
+          </td>
+        </tr>
+        <tr>
+          <td>border style · colour · fill</td>
+          <td><code>--el-border</code> / <code>--el-surface</code></td>
+          <td>dashed <code>--el-accent</code> / <code>--el-tint-lavender</code></td>
+          <td>
+            <span class="tag same">KEEP</span> This IS the op, and it is the layer's whole job.
+          </td>
+        </tr>
+        <tr>
+          <td><b>state vocabulary</b></td>
+          <td>ready · done · here · not-in-sprint · cross-blocked</td>
+          <td><b>none of them</b> — no such props</td>
+          <td>
+            <span class="tag was">GAP</span> After the plan is proposed, a committed sibling can say
+            <i>Ready</i> or <i>Done</i> and a proposal beside it never can. A <code>modify</code> of
+            a done card draws as if the card had no state.
+          </td>
+        </tr>
+      </table>
+
+      <p class="note">
+        <b>What follows for the three surfaces, and it is short:</b> surfaces 1 and 2 already draw
+        the identical component, so <i>"the same in the roadmap and on the planning surface"</i> is
+        true today — and that is the real constraint this design puts on MOTIR-6160: changing where
+        the canvas STANDS must not change what a card LOOKS like. Surface 3 differs by one padding
+        value, one duplicated constant and one missing state vocabulary.
+        <b>Fixing those is not this story's work</b> — it touches no arrival and no follow-move — so
+        it is filed as its own card rather than absorbed here.
+      </p>
+    </div>
+
     <div class="sheet" style="padding-bottom: 48px">
       <p class="cap">
         <b>Not drawn here, on purpose.</b> What the canvas DRAWS once it is on the level — a
         proposed plan's List | Canvas views, and cards arriving with their edges while the plan is
         written — belongs to the review story and the live-drawing story. This delta decides only
-        WHICH LEVEL the canvas stands on, and what the breadcrumb says about it.
+        WHICH LEVEL the canvas stands on, what the breadcrumb says about it, and (panel 9) that
+        moving the canvas may not change the card.
       </p>
     </div>
   </body>
