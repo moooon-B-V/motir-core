@@ -221,7 +221,7 @@ ENV PGDATA=/var/lib/motir-postgres
 # The role, database and port every CI job in these repositories already sets,
 # so a test command runs AS TYPED rather than after a round of env wrangling.
 ENV DATABASE_URL=postgresql://prodect:prodect@localhost:5432/prodect
-ENV PATH=/usr/lib/postgresql/16/bin:$PATH
+ENV PATH=/usr/lib/postgresql/${PG_MAJOR}/bin:$PATH
 RUN set -eux; \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
         -o /etc/apt/keyrings/pgdg.asc; \
@@ -238,6 +238,20 @@ RUN set -eux; \
     mkdir -p "$PGDATA"; \
     chown node:node "$PGDATA"; \
     chmod 700 "$PGDATA"
+
+# ⚠️ ENV PATH does NOT reach a LOGIN shell — the same fact the agent-prefix layer
+# below records, and it bites here for the same reason: Debian's /etc/profile
+# REPLACES PATH for a non-root user, and a login shell is exactly what this
+# image's own `CMD ["bash", "-l"]` starts. Without this, `psql` and `pg_ctl` are
+# missing from the shell a reader actually gets, while working perfectly under
+# `docker run … bash -c`, which is the shape the smoke suite uses. The helper
+# itself is unaffected (it lives on the default PATH and calls the binaries by
+# absolute path) — this is for the person who types `psql`.
+RUN printf '%s\n' \
+    '# motir-sandbox: the Postgres client binaries, for a LOGIN shell (MOTIR-6204).' \
+    'case ":$PATH:" in *:/usr/lib/postgresql/16/bin:*) ;; *) PATH="/usr/lib/postgresql/16/bin:$PATH" ;; esac' \
+    'export PATH' \
+    > /etc/profile.d/motir-postgres-path.sh
 
 # The cluster is initialised AS `node`, at build time, so the runtime user owns
 # every byte of it and needs no privilege to start it — the same reasoning as the

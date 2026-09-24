@@ -290,6 +290,13 @@ describe('sandbox Dockerfile', () => {
     // entrypoint start works on one documented route and silently not the other.
     expect(directives).toContain('/usr/local/bin/motir-sandbox-postgres');
     expect(directivesOf(entrypoint)).not.toContain('pg_ctl');
+    // The client binaries reach a LOGIN shell too. `ENV PATH` does not: Debian's
+    // /etc/profile replaces PATH for a non-root user, and `bash -l` is this
+    // image's own CMD — so `psql` would be missing from the shell a reader gets
+    // while working perfectly under the `bash -c` the smoke suite uses. That
+    // asymmetry is what made MOTIR-6183's agent PATH need the same hook.
+    expect(directives).toContain('> /etc/profile.d/motir-postgres-path.sh');
+    expect(directives).toMatch(/PATH="\/usr\/lib\/postgresql\/16\/bin:\$PATH"/);
   });
 
   it('ships a browser AND the libraries only root could install (MOTIR-6204)', () => {
