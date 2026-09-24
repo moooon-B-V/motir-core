@@ -124,6 +124,22 @@ async function stubAiAccess(page: Page): Promise<void> {
   );
 }
 
+/** Send a turn from a CARD. ⚠️ The anchored door APPENDS AND SUBMITS in one
+ *  call (MOTIR-909), so it posts to `/api/work-items/{key}/ai/plan` — NOT to
+ *  `/api/ai/ask`, which is the project-wide question. Its 200 is the
+ *  authoritative "the session holds this turn". */
+async function sendFromCard(page: Page, text: string): Promise<void> {
+  const sent = page.waitForResponse(
+    (r) =>
+      /\/api\/work-items\/[^/]+\/ai\/plan$/.test(new URL(r.url()).pathname) &&
+      r.request().method() === 'POST',
+  );
+  await composer(page).fill(text);
+  await rail(page).getByRole('button', { name: 'Send' }).click();
+  expect((await sent).status()).toBe(200);
+  await expect(rail(page).getByText(text)).toBeVisible();
+}
+
 async function closeOverlay(page: Page): Promise<void> {
   await page.keyboard.press('Escape');
   await page.waitForURL(overlayClosed);
@@ -154,7 +170,7 @@ test('the planner opens INSIDE the thing you are planning — from a card, from 
   await stubAiAccess(page);
   await signIn(page, email, PLANNING_ANCHOR_PASSWORD);
 
-  const ASK = 'What is left to do on this story?';
+  const ASK = 'Split this story so the canvas work can ship on its own.';
   let sessionId = '';
 
   // ── STEP 1 of the story's recipe ──────────────────────────────────────────
@@ -190,18 +206,13 @@ test('the planner opens INSIDE the thing you are planning — from a card, from 
     },
   );
 
-  await chapter('Ask the planner about it — the canvas stays on the story’s work', async () => {
+  await chapter('Ask the planner to change it — the canvas stays on the story’s work', async () => {
     // The phase the story cares about most: while you TALK, the canvas does not
     // wander back out to where it used to open.
-    const asked = page.waitForResponse(
-      (r) => new URL(r.url()).pathname === '/api/ai/ask' && r.request().method() === 'POST',
-    );
-    await composer(page).fill(ASK);
-    await rail(page).getByRole('button', { name: 'Send' }).click();
-    expect((await asked).status()).toBe(200);
-    await expect(rail(page).getByText('Nothing is blocked right now.')).toBeVisible();
+    await sendFromCard(page, ASK);
 
     await expect(canvasNode(page, seed.subtaskTitle)).toBeVisible();
+    await expect(canvasNode(page, seed.storyTitle)).toHaveCount(0);
     await expect(breadcrumb(page).locator('[aria-current="page"]')).toContainText(seed.storyKey);
     await beat();
 
@@ -236,11 +247,12 @@ test('the planner opens INSIDE the thing you are planning — from a card, from 
       `${seed.storyKey} · ${seed.storyTitle}`,
     );
     await beat();
-    await closeOverlay(page);
   });
 
   // ── STEP 4 of the story's recipe ──────────────────────────────────────────
   await chapter('Open the planner with no target — it waits at the top', async () => {
+    // Left by ADDRESS rather than Esc: the reopened conversation holds a plan,
+    // and Esc rightly asks before discarding one.
     await page.goto('/plans');
     await expect(sessionsList(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
     await page.getByRole('link', { name: 'Plan with AI', exact: true }).click();
