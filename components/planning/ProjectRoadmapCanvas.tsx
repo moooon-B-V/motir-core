@@ -1334,7 +1334,7 @@ export function ProjectRoadmapCanvas({
           bottom-left, just RIGHT of the engine's zoom + fit cluster (bottom-4 left-4,
           ~7rem wide), so it reads as part of the viewport-navigation controls. */}
       {locatable && (
-        <div className="absolute bottom-4 left-[8.25rem] z-10 flex items-center gap-2">
+        <div className="absolute bottom-[calc(var(--canvas-foot,0px)+--spacing(4))] left-[8.25rem] z-10 flex items-center gap-2">
           <button
             type="button"
             data-testid="locate-button"

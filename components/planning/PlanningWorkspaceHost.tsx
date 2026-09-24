@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Map, X } from 'lucide-react';
@@ -10,6 +18,7 @@ import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
 import { PlanningCanvasSkeleton } from '@/components/planning/PlanningWorkspaceSkeleton';
 import { PlanChangeConfirmBar } from '@/components/planning/PlanChangeConfirmBar';
+import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
 import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
@@ -20,6 +29,8 @@ import {
   pendingProposalCount,
 } from '@/lib/planning/planPending';
 import { planGateView, type PlanDecisionPlace } from '@/lib/planning/planGateView';
+import { isProposedReview } from '@/lib/planning/planReview';
+import { defaultPlanView, type PlanViewDto } from '@/lib/planning/planView';
 import {
   addPlanningTarget,
   removePlanningTarget,
@@ -278,6 +289,48 @@ export function PlanningWorkspaceHost({
     review: state.review,
     rewriting: state.phase === 'streaming' && state.planId !== null,
   });
+  // ── THE PLAN PAGE'S OWN List | Canvas, ON THIS SURFACE (Subtask MOTIR-6186) ────────
+  //
+  // Once the conversation holds a PROPOSED plan, the left pane renders the very
+  // component the plan page renders — `PlanProposalViews` — instead of the roadmap
+  // with the proposal decorated over it. What that page shows, this shows, and a
+  // change to one is a change to both: there is no second list, no second review
+  // canvas and no second edge computation anywhere on this surface.
+  //
+  // `state.decided` keeps it mounted after the decision, in Part VI's decided
+  // treatment (MOTIR-3162 keeps the review across approve and discard). A new turn
+  // clears the review, and the pane falls back to `PlanChangeCanvas` — which is the
+  // "no plan" state again, and correct.
+  //
+  // ⚠️ `generating` is NOT handled here. `isProposedReview` is false for it, so the
+  // pane stays on `PlanChangeCanvas` until MOTIR-6158 replaces that phase's pane.
+  // Do not add a generating read.
+  const review = state.review;
+  const showsProposalViews =
+    review !== null && (isProposedReview(review) || state.decided !== null);
+
+  // ⚠️ THE VIEW IS LOCAL, AND IT IS NEVER WRITTEN TO THE URL (`design-notes.md`
+  // Part XXI 21.4). The plan page keeps it in the URL and is right to; this is an
+  // OVERLAY over whichever page the reader is on, so the address bar belongs to
+  // that page — and `?view=` is not a free name, because the plan page itself uses
+  // it. Back already means one thing here (the overlay routes Close, Esc, the scrim
+  // and browser Back through one `requestClose()`, which the pending guard
+  // intercepts); a view switch that pushed history would make it mean two.
+  //
+  // ⚠️ PINNED PER PLAN, exactly as `PlanDetail` pins its own seed (MOTIR-3262). The
+  // default is DERIVED from the plan's shape, and a plan's item set can grow under a
+  // re-read, so recomputing it per render would yank a reader between views while
+  // they were reading. It is re-seeded when the plan in hand CHANGES — a new
+  // `planId` — and by nothing else: not by a stale refusal, not by a revision, not
+  // by a decision.
+  const [view, setView] = useState<PlanViewDto>('canvas');
+  const seededForPlanRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!review || seededForPlanRef.current === review.id) return;
+    seededForPlanRef.current = review.id;
+    setView(defaultPlanView(review));
+  }, [review]);
+
   // WHERE Decline's confirm band is up, and where the last press came from — the stale
   // refusal is said beside the verbs it refused (Panel 5). Local UI state: it describes
   // this surface, not the plan.
@@ -402,90 +455,96 @@ export function PlanningWorkspaceHost({
               connected repo has a report, and reserves no gap when absent. */}
           {canManage ? <AuditCoverageBanner /> : null}
 
-          {/* The canvas mounts UNCONDITIONALLY (MOTIR-2069). It reads its own
-              root level, so it — not the page — knows whether there is anything
-              to draw; it shows the workspace's skeleton while that read is in
-              flight and the workspace's own empty statement when it comes back
-              empty. Both fill the same flex-sized box as the drawn level, so
-              filling it shifts nothing. */}
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <PlanChangeCanvas
-              projectKey={projectKey}
-              index={index}
-              diffKey={diffKey}
-              outcome={state.decided}
-              targetIds={targetIds}
-              initialTrail={initialCanvasTrail}
-              ariaLabel={t('canvasAria', { project: projectName })}
-              loadingFallback={<PlanningCanvasSkeleton />}
-              emptyRoot={
-                <EmptyState
-                  icon={<Map className="h-12 w-12" aria-hidden />}
-                  title={t('emptyCanvasTitle')}
-                  description={t('emptyCanvasDescription')}
-                />
-              }
-            />
-          </div>
-
-          {/* ⭐ THE FOOTER SLOT — one box, two contents (MOTIR-1815 panel 3).
+          {/* ⭐ THE BODY AND THE BAR — one box, and the bar FLOATS OVER IT
+              (Subtask MOTIR-6186; `design/ai-planning/design-notes.md` Part XXI 21.8).
               ────────────────────────────────────────────────────────────────
-              The gate is still shown only while a proposal is PENDING (MOTIR-3162:
-              a review survives its decision so the canvas can keep drawing it, so
-              "there is a review" does not mean "there is a decision to take" —
-              `state.decided` is what does). What changed is that the predicate now
-              chooses the slot's CONTENT instead of whether the slot exists.
+              ⚠️ THIS REPLACES MOTIR-1815's FIX RATHER THAN REVERTING IT, and the
+              distinction is the whole of this block. That bug was: the bar was a
+              `shrink-0` SIBLING below this `min-h-0 flex-1` box, so a bar that
+              mounted and unmounted grew and shrank the box by its full height on
+              every proposal — and the canvas anchors three control clusters to the
+              bottom of the box (the engine's zoom + fit at `bottom-4 left-4`, LOCATE
+              at `bottom-4 left-[8.25rem]`, full-screen at `right-3 bottom-4`), so
+              all three slid. The fix that shipped was to keep a RESTING FOOTER in the
+              slot at all times, which held the box constant by always spending the
+              space.
 
-              WHY, and it is not tidiness. The bar used to mount and unmount, and
-              it is a `shrink-0` sibling BELOW the `min-h-0 flex-1` canvas box — so
-              the box grew and shrank by the bar's full height on every change. The
-              canvas anchors three control clusters to the bottom of that box (the
-              engine's zoom + fit at `bottom-4 left-4`, LOCATE at
-              `bottom-4 left-[8.25rem]`, full-screen at `right-3 bottom-4`), and
-              all three slid with it. Harmless when a proposal was a rare event;
-              not harmless now that alternating between a question and a change is
-              the rhythm the surface invites. The nodes never moved (there is no
-              `ResizeObserver` and no fit-on-resize), which is why holding the BOX
-              constant fixes it and costs nothing else.
+              The resting footer is gone: when there is nothing to show, the footer
+              hides. So the box is held constant a better way — it is ALWAYS the full
+              remainder of the pane, and the bar is absolutely positioned over its
+              bottom edge. Nothing resizes, in either direction, and the space is only
+              ever drawn into when there is something to draw.
 
-              The resting state is deliberately quiet — secondary ink, no controls —
-              so it never competes with the gate or reads as something to act on.
-              Its second line is the ask's own promise made visible: an ask writes
-              nothing, said at the one moment somebody might wonder. */}
-          {pending ? (
-            <PlanChangeConfirmBar
-              index={index}
-              deciding={state.phase === 'deciding'}
-              onApprove={() => approveFrom('bar')}
-              onDiscard={() => void discard()}
-              view={gateView}
-              declining={declineFrom === 'bar'}
-              onRequestDecline={() => setDeclineFrom('bar')}
-              onCancelDecline={() => setDeclineFrom(null)}
-              onConfirmDecline={confirmDecline}
-              staleRefused={staleRefusedAt === 'bar'}
-            />
-          ) : (
-            <div
-              data-testid="plan-change-canvas-footer"
-              // The SAME box as `PlanChangeConfirmBar`: same border, same
-              // surface, same `px-4 py-2.5`, and a two-line text column of the
-              // same two type sizes. The height therefore MATCHES structurally
-              // rather than by a pinned number — which is the point, because a
-              // magic `min-h` would drift the moment the bar's own content
-              // changed and re-introduce the jump this slot exists to remove.
-              className="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
-            >
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-semibold text-(--el-text-secondary)">
-                  {t('footerRestingTitle')}
-                </span>
-                <span className="truncate text-xs text-(--el-text-secondary)">
-                  {t('footerRestingBody')}
-                </span>
-              </span>
-            </div>
-          )}
+              `--canvas-foot` is what keeps the clusters off the bar. It is set
+              UNCONDITIONALLY — not only while the bar is up — because a value that
+              came and went would move them exactly as the old sibling did. The
+              canvases read it with a `0px` fallback, so every other surface
+              (`/roadmap`, the plan page) is untouched.
+
+              The canvas itself still mounts UNCONDITIONALLY (MOTIR-2069): it reads its
+              own root level, so it — not the page — knows whether there is anything to
+              draw, and its skeleton and empty statement fill the same box as a drawn
+              level. */}
+          <div
+            className="relative min-h-0 flex-1 overflow-hidden"
+            style={{ '--canvas-foot': 'var(--height-plan-confirm-bar)' } as CSSProperties}
+          >
+            {showsProposalViews ? (
+              <PlanProposalViews
+                items={review.items}
+                outcome={state.decided}
+                projectKey={projectKey}
+                version={treeVersion}
+                ariaLabel={t('canvasAria', { project: projectName })}
+                view={view}
+                onViewChange={setView}
+                // The surface opts IN, and the plan page does not (21.7). A reader
+                // who drills the canvas, reads the List and comes back is returned
+                // to the level they were on.
+                preserveCanvasLevel
+              />
+            ) : (
+              <PlanChangeCanvas
+                projectKey={projectKey}
+                index={index}
+                diffKey={diffKey}
+                outcome={state.decided}
+                targetIds={targetIds}
+                initialTrail={initialCanvasTrail}
+                ariaLabel={t('canvasAria', { project: projectName })}
+                loadingFallback={<PlanningCanvasSkeleton />}
+                emptyRoot={
+                  <EmptyState
+                    icon={<Map className="h-12 w-12" aria-hidden />}
+                    title={t('emptyCanvasTitle')}
+                    description={t('emptyCanvasDescription')}
+                  />
+                }
+              />
+            )}
+
+            {/* THE GATE, over the body's bottom edge. Shown only while a proposal is
+                PENDING (MOTIR-3162: a review survives its decision, so "there is a
+                review" does not mean "there is a decision to take" — `state.decided`
+                is what does). When there is nothing to decide there is NOTHING HERE:
+                the footer hides, and the body runs to the pane's edge. */}
+            {pending ? (
+              <div className="absolute inset-x-0 bottom-0 z-20">
+                <PlanChangeConfirmBar
+                  index={index}
+                  deciding={state.phase === 'deciding'}
+                  onApprove={() => approveFrom('bar')}
+                  onDiscard={() => void discard()}
+                  view={gateView}
+                  declining={declineFrom === 'bar'}
+                  onRequestDecline={() => setDeclineFrom('bar')}
+                  onCancelDecline={() => setDeclineFrom(null)}
+                  onConfirmDecline={confirmDecline}
+                  staleRefused={staleRefusedAt === 'bar'}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       }
       guard={

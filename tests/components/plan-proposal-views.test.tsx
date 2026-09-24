@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
@@ -141,6 +141,47 @@ describe('PlanProposalViews', () => {
     mount({ view: 'canvas', outcome });
 
     expect(screen.getByTestId('plan-review-canvas').getAttribute('data-outcome')).toBe(outcome);
+  });
+
+  // ── `preserveCanvasLevel` — the surface's opt-in (MOTIR-6186, Part XXI 21.7) ──
+  //
+  // The drilled level lives in the canvas's own state, so the only way it can
+  // survive Canvas → List → Canvas is for the canvas never to unmount. The plan
+  // page must NOT get this: its own suite asserts the canvas is absent under List,
+  // and the lift exists not to change that page.
+
+  it('keeps the canvas mounted, hidden and inert under List when asked to', () => {
+    mount({ view: 'list', preserveCanvasLevel: true });
+
+    const keepalive = screen.getByTestId('plan-review-canvas-keepalive');
+    expect(within(keepalive).getByTestId('plan-review-canvas')).toBeTruthy();
+    expect(keepalive.className).toContain('invisible');
+    expect(keepalive.className).toContain('pointer-events-none');
+    // `inert` is what takes it out of the tab order and the accessibility tree —
+    // `invisible` alone would leave a keyboard user able to land inside a canvas
+    // they cannot see.
+    expect(keepalive.hasAttribute('inert')).toBe(true);
+    expect(keepalive.getAttribute('aria-hidden')).toBe('true');
+    // The list is the visible body.
+    expect(screen.getByTestId('plan-proposal-list')).toBeTruthy();
+  });
+
+  it('shows that same canvas plainly on Canvas — not hidden, not inert', () => {
+    mount({ view: 'canvas', preserveCanvasLevel: true });
+
+    const keepalive = screen.getByTestId('plan-review-canvas-keepalive');
+    expect(keepalive.className).not.toContain('invisible');
+    expect(keepalive.hasAttribute('inert')).toBe(false);
+    expect(keepalive.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('⭐ does NOT keep it mounted by default — the plan page is unchanged', () => {
+    // The property `tests/components/plan-detail-view-switch.test.tsx` asserts,
+    // stated here from the component's side so the default cannot drift on.
+    mount({ view: 'list' });
+
+    expect(screen.queryByTestId('plan-review-canvas')).toBeNull();
+    expect(screen.queryByTestId('plan-review-canvas-keepalive')).toBeNull();
   });
 
   it('hands the items and the canvas aria-label straight through', () => {

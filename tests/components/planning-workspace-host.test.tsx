@@ -40,6 +40,15 @@ vi.mock('@/lib/hooks/useWorkItemTargetSearch', () => ({
   }),
 }));
 
+// MOTIR-6186 — the surface now mounts the plan page's own List | Canvas for a
+// proposed or decided plan, so this suite needs the review canvas stubbed for the
+// same reason the change canvas is: it reads its own level over the network.
+vi.mock('@/components/planning/PlanReviewCanvas', () => ({
+  PlanReviewCanvas: ({ outcome, ariaLabel }: { outcome?: string | null; ariaLabel?: string }) => (
+    <div data-testid="review-canvas-stub" data-outcome={outcome ?? ''} aria-label={ariaLabel} />
+  ),
+}));
+
 vi.mock('@/components/planning/PlanChangeCanvas', () => ({
   PlanChangeCanvas: ({
     projectKey,
@@ -338,16 +347,56 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
   });
 
-  it('hands the proposal to the canvas and raises the confirm-to-persist gate', () => {
+  it("hands the proposal to the PLAN PAGE'S OWN views and raises the confirm-to-persist gate", () => {
     renderHost({ mode: 'replan', from: 'project' }, { state: REVIEWING });
 
     const bar = screen.getByTestId('plan-change-confirm-bar');
     expect(bar.textContent).toContain('1 added, 1 changed');
     expect(bar.textContent).toContain('Nothing is saved until you approve.');
-    // The canvas is re-keyed on the proposal, so the level redraws with the diff.
-    const key = screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!;
-    expect(key).toContain('job-1');
-    expect(key).toContain('1-1-0');
+
+    // ⭐ MOTIR-6186 — the pane is the SHARED component now, not the roadmap with
+    // the proposal decorated over it. This is the story's central claim: what the
+    // plan's own page shows, the surface shows, through one component.
+    expect(screen.getByTestId('plan-proposal-views')).toBeTruthy();
+    expect(screen.queryByTestId('canvas-stub')).toBeNull();
+  });
+
+  it('mounts the shared component for a PROPOSED plan, and the roadmap otherwise', () => {
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' });
+    // No plan: the roadmap, exactly as before, and NO List | Canvas switch.
+    expect(screen.getByTestId('canvas-stub')).toBeTruthy();
+    expect(screen.queryByTestId('plan-proposal-views')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Plan view' })).toBeNull();
+
+    conversation.state = REVIEWING;
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+    expect(screen.getByTestId('plan-proposal-views')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Plan view' })).toBeTruthy();
+  });
+
+  it('keeps the canvas MOUNTED under List, so the drilled level survives a round trip', () => {
+    // The surface opts into `preserveCanvasLevel`; the plan page does not
+    // (Part XXI 21.7). Hidden and `inert`, never unmounted.
+    renderHost({ mode: 'replan', from: 'project' }, { state: REVIEWING });
+
+    fireEvent.click(screen.getByRole('button', { name: /List/ }));
+
+    const keepalive = screen.getByTestId('plan-review-canvas-keepalive');
+    expect(keepalive.className).toContain('invisible');
+    expect(keepalive.hasAttribute('inert')).toBe(true);
+    // …and it is still THERE, which is the whole point.
+    expect(within(keepalive).getByTestId('review-canvas-stub')).toBeTruthy();
+  });
+
+  it('never writes the view to the URL — the overlay does not own the address bar', () => {
+    // Part XXI 21.4. `push` is the spy that must stay silent: Back already means
+    // "close the workspace" here, through the pending guard.
+    renderHost({ mode: 'replan', from: 'project' }, { state: REVIEWING });
+
+    fireEvent.click(screen.getByRole('button', { name: /List/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Canvas/ }));
+
+    expect(push).not.toHaveBeenCalled();
   });
 
   // ── MOTIR-3162 (bug MOTIR-3154) — the overlay SURVIVES the decision ────────
@@ -364,11 +413,10 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
         { state: { ...REVIEWING, phase: 'idle', decided } },
       );
 
-      const canvas = screen.getByTestId('canvas-stub');
-      // Non-empty: the counts the index derives are still in the key, so there
-      // is something for the canvas to draw.
-      expect(canvas.getAttribute('data-diff-key')).toContain('1-1-0');
-      expect(canvas.getAttribute('data-outcome')).toBe(decided);
+      // A DECIDED plan keeps the shared component, in Part VI's decided
+      // treatment, and the outcome reaches its bodies (MOTIR-6186).
+      expect(screen.getByTestId('plan-proposal-views')).toBeTruthy();
+      expect(screen.getByTestId('review-canvas-stub').getAttribute('data-outcome')).toBe(decided);
     },
   );
 
@@ -381,35 +429,54 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
   // CONTENT changes, which is what makes alternating between a question and a
   // change feel like one surface rather than two.
 
-  it('keeps a footer slot when there is nothing to confirm, and says the canvas is SAVED', () => {
+  it('⭐ HIDES the footer when there is nothing to show', () => {
+    // MOTIR-6186 / Part XXI 21.8. The resting footer is gone: the pane's foot is
+    // not a quiet box, it is nothing at all, and the body runs to the edge.
     renderHost({ mode: 'replan', from: 'project' });
 
-    const footer = screen.getByTestId('plan-change-canvas-footer');
-    expect(footer.textContent).toContain('Roadmap — as saved');
-    // The ask's own promise, made visible at the one moment somebody might
-    // wonder whether their question moved something.
-    expect(footer.textContent).toContain('Nothing proposed. The conversation has changed nothing.');
-    // …and it carries NO control: there is nothing to decide.
-    expect(within(footer).queryByRole('button')).toBeNull();
+    expect(screen.queryByTestId('plan-change-canvas-footer')).toBeNull();
+    expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
   });
 
-  it('swaps the slot CONTENT for the gate — the two are never both present', () => {
-    const { rerender } = renderHost({ mode: 'replan', from: 'project' });
-    expect(screen.getByTestId('plan-change-canvas-footer')).toBeTruthy();
-    expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
+  it('⭐ the body box does NOT resize when the gate appears — the bar OVERLAYS it', () => {
+    // THE ASSERTION MOTIR-1815 NEVER HAD, and the reason its fix looked safe to
+    // remove. That bug was the bar being a `shrink-0` SIBLING of the body box: a
+    // bar that came and went resized the box and slid the three control clusters
+    // anchored to its bottom. The fix that shipped was an always-there resting
+    // footer, which held the box constant by always spending the space.
+    //
+    // The footer is gone now, so the box is held constant a different way: it is
+    // ALWAYS the full remainder, and the bar is absolutely positioned over it.
+    // What is pinned here is exactly that — the same box, with and without a
+    // proposal, and a bar that is positioned rather than stacked.
+    const { rerender, container } = renderHost({ mode: 'replan', from: 'project' });
+    const body = () => container.querySelector('[style*="--canvas-foot"]')!;
+
+    const resting = body();
+    expect(resting).toBeTruthy();
+    expect(resting.className).toContain('flex-1');
+    const restingChildren = resting.children.length;
 
     conversation.state = REVIEWING;
     rerender(hostElement({ mode: 'replan', from: 'project' }));
 
-    expect(screen.getByTestId('plan-change-confirm-bar')).toBeTruthy();
-    expect(screen.queryByTestId('plan-change-canvas-footer')).toBeNull();
+    const gated = body();
+    // The SAME box: still the full remainder, still carrying the inset.
+    expect(gated.className).toContain('flex-1');
+    expect(gated.getAttribute('style')).toContain('--canvas-foot');
+    // The bar is INSIDE it and absolutely positioned — not a sibling below it.
+    const bar = screen.getByTestId('plan-change-confirm-bar');
+    expect(gated.contains(bar)).toBe(true);
+    expect(bar.closest('[class*="absolute"]')).toBeTruthy();
+    // …and the box gained exactly the bar, not a layout row.
+    expect(gated.children.length).toBe(restingChildren + 1);
   });
 
   it('⭐ chrome follows the LATEST TURN across an alternating thread', () => {
     // ask → change → ask. The rail is the same rail throughout and the user
     // changed no mode; only what the last turn produced decides the footer.
     const { rerender } = renderHost({ mode: 'replan', from: 'project' });
-    expect(screen.getByTestId('plan-change-canvas-footer')).toBeTruthy();
+    expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
 
     conversation.state = REVIEWING;
     rerender(hostElement({ mode: 'replan', from: 'project' }));
@@ -421,10 +488,10 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     rerender(hostElement({ mode: 'replan', from: 'project' }));
     expect(screen.getByTestId('plan-change-confirm-bar')).toBeTruthy();
 
-    // …and once it is decided, the slot rests again.
+    // …and once it is decided, the foot goes with the bar (21.8).
     conversation.state = { ...REVIEWING, phase: 'idle', decided: 'accepted' };
     rerender(hostElement({ mode: 'replan', from: 'project' }));
-    expect(screen.getByTestId('plan-change-canvas-footer')).toBeTruthy();
+    expect(screen.queryByTestId('plan-change-canvas-footer')).toBeNull();
     expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
   });
 
@@ -436,8 +503,8 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
       { state: { ...REVIEWING, phase: 'idle', decided: 'accepted' } },
     );
     expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
-    // …and the canvas is still there, drawing what was accepted.
-    expect(screen.getByTestId('canvas-stub')).toBeTruthy();
+    // …and the component is still there, drawing what was accepted.
+    expect(screen.getByTestId('plan-proposal-views')).toBeTruthy();
   });
 
   it('routes Approve and Discard to the one conversation both panes share', () => {
@@ -450,9 +517,62 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     expect(conversation.discard).toHaveBeenCalledTimes(1);
   });
 
+  it('⭐ deciding from LIST is the same press as deciding from Canvas', () => {
+    // The story's own claim. The bar is the pane's gate, not either body's, so
+    // switching the body must not change what the verbs do — or where they are.
+    renderHost({ mode: 'replan', from: 'project' }, { state: REVIEWING });
+
+    fireEvent.click(screen.getByRole('button', { name: /List/ }));
+    expect(screen.getByTestId('plan-proposal-list')).toBeTruthy();
+    // Still there, still one bar.
+    expect(screen.getAllByTestId('plan-change-confirm-bar')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /Approve changes/ }));
+    expect(conversation.approve).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Discard' })[0]!);
+    expect(conversation.discard).toHaveBeenCalledTimes(1);
+  });
+
+  it('⭐ switching views leaves the rail’s composer draft alone', () => {
+    // The draft lives in the RAIL — the other pane — so a switch in the left pane
+    // cannot reach it (Part XXI 21.7). Asserted rather than assumed, because "it
+    // is in a different component" is exactly the kind of reasoning a later
+    // refactor invalidates silently.
+    renderHost({ mode: 'replan', from: 'project' }, { state: REVIEWING });
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'What about billing?' } });
+    fireEvent.click(screen.getByRole('button', { name: /List/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Canvas/ }));
+
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('What about billing?');
+  });
+
+  it('⭐ seeds the view from the plan’s own shape, and PINS it across a re-read', () => {
+    // `defaultPlanView` is the plan page's rule, unchanged (Part XXI 21.3): the
+    // canvas, and the LIST when the proposals straddle more than one container.
+    // Seeded ONCE per plan — a re-read must not move a reader between views.
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' }, { state: REVIEWING });
+    expect(screen.getByRole('button', { name: /Canvas/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+
+    // The reader moves to List…
+    fireEvent.click(screen.getByRole('button', { name: /List/ }));
+    expect(screen.getByRole('button', { name: /List/ }).getAttribute('aria-pressed')).toBe('true');
+
+    // …and a re-read of the SAME plan (a stale refusal, a revision landing) must
+    // leave them there.
+    conversation.state = {
+      ...REVIEWING,
+      review: { ...REVIEWING.review!, status: 'stale' },
+    };
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+    expect(screen.getByRole('button', { name: /List/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('page state after approve: the SERVER surfaces refresh AND the canvas island re-keys', () => {
     renderHost({ mode: 'replan', from: 'project' }, { state: REVIEWING });
-    const before = screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!;
 
     // What the hook calls once the commit lands.
     fireEvent.click(screen.getByRole('button', { name: /Approve changes/ }));
@@ -469,7 +589,16 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     // `router.refresh()` reaches the server-rendered surfaces behind the overlay…
     expect(refresh).toHaveBeenCalledTimes(1);
     // …and the canvas — a client island the refresh CANNOT reach — is re-keyed.
-    expect(screen.getByTestId('canvas-stub').getAttribute('data-diff-key')).not.toBe(before);
+    //
+    // ⚠️ The key is compared to the TREE VERSION rather than to a value captured
+    // before the press (MOTIR-6186). While a plan is proposed the pane is the
+    // shared component, so there is no `canvas-stub` at that moment to read a
+    // "before" from; the review is cleared by the approve and the roadmap comes
+    // back. `diffKey` opens with `treeVersion`, which `onApproved` bumps, so
+    // asserting the bump IS the re-key — and it says so more directly than an
+    // inequality against a string that happens to differ.
+    const key = screen.getByTestId('canvas-stub').getAttribute('data-diff-key')!;
+    expect(key.startsWith('1:')).toBe(true);
   });
 });
 

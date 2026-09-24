@@ -62,6 +62,22 @@ export interface PlanProposalViewsProps {
   onViewChange: (next: PlanViewDto) => void;
   /** Rendered between the header and the body (the plan page's establish band). */
   band?: ReactNode;
+  /**
+   * Keep `PlanReviewCanvas` MOUNTED while List shows, hidden and `inert`, so the
+   * level a reader drilled to survives Canvas → List → Canvas (Subtask
+   * MOTIR-6186; `design-notes.md` Part XXI 21.7).
+   *
+   * ⚠️ OFF BY DEFAULT, and the default is the point. The plan page's own suite
+   * asserts `plan-review-canvas` is ABSENT under List
+   * (`tests/components/plan-detail-view-switch.test.tsx`), so a default-on
+   * version would change that page — which the lift exists not to do. The
+   * planning surface opts in; the plan page does not.
+   *
+   * `inert` is what makes the hidden copy safe rather than merely invisible: it
+   * takes the subtree out of the tab order and out of the accessibility tree, so
+   * a keyboard user on List cannot land inside a canvas they cannot see.
+   */
+  preserveCanvasLevel?: boolean;
 }
 
 export function PlanProposalViews({
@@ -73,8 +89,19 @@ export function PlanProposalViews({
   view,
   onViewChange,
   band,
+  preserveCanvasLevel = false,
 }: PlanProposalViewsProps) {
   const t = useTranslations('planReview');
+  const showingList = view === 'list';
+  const canvas = (
+    <PlanReviewCanvas
+      items={items}
+      projectKey={projectKey}
+      version={version}
+      outcome={outcome}
+      ariaLabel={ariaLabel}
+    />
+  );
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col" data-testid="plan-proposal-views">
@@ -104,20 +131,33 @@ export function PlanProposalViews({
         />
       </div>
       {band}
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
         {/* A SECOND BODY in the same pane, never a re-drawing of the first. The
             canvas answers where a proposal LANDS; the list answers what exactly
             is being approved, which is a question about a SET. */}
-        {view === 'list' ? (
-          <PlanProposalList items={items} outcome={outcome} />
+        {showingList ? <PlanProposalList items={items} outcome={outcome} /> : null}
+        {preserveCanvasLevel ? (
+          // KEPT MOUNTED under List (21.7). The drilled level lives in the
+          // canvas's own state, so the only way it can survive a round trip is
+          // for the canvas never to unmount. `hidden` would not do: the engine
+          // measures its box, and a `display: none` subtree measures zero — so it
+          // is taken out of FLOW with `invisible` + `pointer-events-none` while
+          // keeping its size, and out of the tab and accessibility trees with
+          // `inert`.
+          <div
+            className={showingList ? 'pointer-events-none invisible absolute inset-0' : 'h-full'}
+            // React 19 renders `inert` as a real boolean attribute from a boolean
+            // prop; `false` removes it. It is what takes the hidden copy out of the
+            // tab order and the accessibility tree, so `aria-hidden` is not doing
+            // that job alone.
+            inert={showingList}
+            aria-hidden={showingList || undefined}
+            data-testid="plan-review-canvas-keepalive"
+          >
+            {canvas}
+          </div>
         ) : (
-          <PlanReviewCanvas
-            items={items}
-            projectKey={projectKey}
-            version={version}
-            outcome={outcome}
-            ariaLabel={ariaLabel}
-          />
+          !showingList && canvas
         )}
       </div>
     </div>
