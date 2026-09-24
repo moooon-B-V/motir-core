@@ -6,6 +6,7 @@ import type {
   DecisionChoiceSubjectSummaryDTO,
   DecisionConfirmationSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
+  PlanApprovalSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
   UnregisteredSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
@@ -23,6 +24,9 @@ import {
 } from '@/lib/repositories/workItemDeliveryRepository';
 import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import { decisionIdentityOf, titleFromDecisionPath } from '@/lib/approvalGates/decisionSubject';
+import { planGateHeldOf } from '@/lib/approvalGates/planApprovalHandler';
+import { planRepository } from '@/lib/repositories/planRepository';
+import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 
 // THE SUBJECT SUMMARY — what a QUEUE ROW says about the thing being decided,
 // resolved per KIND (Story MOTIR-4879 · Subtask MOTIR-4791; ADR
@@ -154,6 +158,59 @@ export function excerptNote(noteMd: string | null): string | null {
  * its loader — the same sentence the handler registry enforces, one layer over.
  */
 const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
+  // MOTIR-6035 — a PLAN row (design Part XX §20.3's field table). `subjectId` is the
+  // plan, and the row has no card, so everything it draws is read here: three queries
+  // for the whole page — the plans, their trails (for `held`), and the targets' titles
+  // per project. A plan that no longer exists is absent.
+  async plan_approval(subjectIds, tx) {
+    const plans = await planRepository.findManyForGateSummary(subjectIds, tx);
+    const trails = new Map<string, Parameters<typeof planGateHeldOf>[0][number][]>();
+    for (const row of await planRevisionRepository.listLeaseRowsByPlans(
+      plans.map((plan) => plan.id),
+      tx,
+    )) {
+      const trail = trails.get(row.planId);
+      if (trail) trail.push(row);
+      else trails.set(row.planId, [row]);
+    }
+    const keysByProject = new Map<string, Set<string>>();
+    for (const plan of plans) {
+      const keys = keysByProject.get(plan.projectId) ?? new Set<string>();
+      for (const key of plan.session?.targetKeys ?? []) keys.add(key);
+      keysByProject.set(plan.projectId, keys);
+    }
+    const titles = new Map<string, string>();
+    for (const [projectId, keys] of keysByProject) {
+      for (const item of await workItemRepository.findByIdentifiers(projectId, [...keys], tx)) {
+        titles.set(`${projectId}:${item.identifier}`, item.title);
+      }
+    }
+    const now = new Date();
+    const out = new Map<string, ApprovalGateSubjectSummaryDTO>();
+    for (const plan of plans) {
+      const summary: PlanApprovalSubjectSummaryDTO = {
+        kind: 'plan_approval',
+        planId: plan.id,
+        sessionId: plan.sessionId,
+        sessionHasTurns: (plan.session?.turnCount ?? 0) > 0,
+        title: plan.title,
+        projectName: plan.project.name,
+        targets: (plan.session?.targetKeys ?? []).map((key) => ({
+          key,
+          title: titles.get(`${plan.projectId}:${key}`) ?? null,
+        })),
+        proposalCount: plan._count.items,
+        author: {
+          source: plan.authorSource,
+          harness: plan.authorHarness,
+          origin: plan.origin,
+        },
+        held: planGateHeldOf(trails.get(plan.id) ?? [], now),
+      };
+      out.set(plan.id, summary);
+    }
+    return out;
+  },
   // MOTIR-5891 — a choice row names the QUESTION and how many options it offers,
   // parsed from the work item's own body (`subjectId` is the work item). A body
   // that no longer parses is absent, and the row says the subject no longer resolves.

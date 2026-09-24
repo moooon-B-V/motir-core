@@ -273,12 +273,12 @@ describe('`yours` EQUALS the To-approve tab, over one fixture', () => {
 
     const meCtx: HomeActorContext = { ...fx.ctx, projectId: fx.projectId };
     const tab = await approvalGatesService.listAwaitingMe(meCtx);
-    const tabDecidable = tab.items.filter((row) => row.canDecide).map((row) => row.workItem.id);
+    const tabDecidable = tab.items.filter((row) => row.canDecide).map((row) => row.workItem?.id);
 
     expect(yours.sort()).toEqual(tabDecidable.sort());
     expect(yours.sort()).toEqual([mine.id, reportedByMe.id, carried.id].sort());
     // …and the tab lists each of those cards ONCE, as the marker marks each once.
-    expect(tab.items.map((r) => r.workItem.id).sort()).toEqual(tabDecidable.sort());
+    expect(tab.items.map((r) => r.workItem?.id).sort()).toEqual(tabDecidable.sort());
   });
 
   it('for a reader BELOW the floor, the tab lists the gate it cannot press and the marker calls it `others`', async () => {
@@ -293,7 +293,7 @@ describe('`yours` EQUALS the To-approve tab, over one fixture', () => {
     });
     const map = await pendingFor([item.id], viewerCtx);
 
-    expect(tab.items.map((r) => [r.workItem.id, r.canDecide])).toEqual([[item.id, false]]);
+    expect(tab.items.map((r) => [r.workItem?.id, r.canDecide])).toEqual([[item.id, false]]);
     expect(map.get(item.id)?.state).toBe('others');
   });
 });

@@ -2,14 +2,23 @@
 
 import { Children, useCallback, type MouseEvent, type ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
-import { CircleDashed, GitPullRequest, Pencil, Scale, Signpost, Video } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import {
+  CircleDashed,
+  GitPullRequest,
+  Pencil,
+  Scale,
+  Signpost,
+  Sparkles,
+  Video,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
+import { withPlanningOverlay, type PlanningLaunchContext } from '@/lib/planning/launcher';
 import { usePeekRowClick } from '@/app/(authed)/items/_components/IssueQuickView';
 import { useDecidedGateState } from '@/lib/approvals/decidedGates';
 import { RefusalReasonCell, showsRefusalReason } from './RefusalReason';
@@ -23,6 +32,7 @@ import type {
   ConfirmedRecordDTO,
   DecisionApprovalSubjectSummaryDTO,
   DesignResultSubjectSummaryDTO,
+  PlanApprovalSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
 
@@ -95,6 +105,9 @@ const SENTENCE_KEY: Record<ApprovalGateKindDTO, SentenceKey> = {
   decision_confirmation: 'decision_confirmation',
   // Superseded everywhere (MOTIR-5614): a row reached by URL is one this build does not draw.
   pull_request_merge: 'other',
+  // Not raised by this build yet (MOTIR-6032 ships the kind UNREGISTERED); its row is
+  // MOTIR-6037's to draw, from MOTIR-6033's design.
+  plan_approval: 'other',
 };
 
 type SentenceKey =
@@ -548,6 +561,15 @@ function StatePill({ state, kind }: { state: ApprovalGateStateDTO; kind: Approva
           {t('overturned')}
         </Pill>
       );
+    // A plan ENDED by a person (Story MOTIR-6012 · MOTIR-6032; ADR §11.4) — its own
+    // pill, never *Changes requested* (nothing will be revised) nor *Overturned* (no
+    // re-plan is owed). A person's decision, so the frame's decided warning tint.
+    case 'declined':
+      return (
+        <Pill severity="warning" className={DECIDE_PILL}>
+          {t('declined')}
+        </Pill>
+      );
     // ⚠️ COLOURLESS, and that is the design's decision rather than a fallback.
     // `superseded` is written by the PRODUCT, never by a person, so a tinted
     // pill would let the audit read a withdrawn question as somebody's answer.
@@ -597,6 +619,27 @@ export function ApprovalRow({
   const { row } = record;
   const announcedState = useDecidedGateState(row.gateId);
 
+  // ⚠️ A CARD-LESS ROW IS A PLAN'S (Story MOTIR-6012 · MOTIR-6037; design
+  // `design/ai-planning/design-notes.md` Part XX §20.3). A `plan_approval` gate belongs to
+  // no work item (ADR `approval-gates.md` §11.1): it has no key to name and NO overlay
+  // address (§11.5b) — its row returns the reader to the PLANNING SURFACE. Any other
+  // card-less row (a plan gate whose plan is gone) still draws nothing: there is nothing
+  // to name and nowhere to go.
+  if (row.workItem === null) {
+    if (row.subject?.kind !== 'plan_approval') return null;
+    return (
+      <PlanApprovalRow
+        record={record}
+        subject={row.subject}
+        gridTemplate={gridTemplate}
+        person={person}
+        arrived={arrived}
+        announcedState={announcedState}
+      />
+    );
+  }
+  const card = row.workItem;
+
   // A kind with no renderer, or a subject that is gone, still HAS the door — the
   // overlay draws both (§ 22 Panels 4a / 4b). What they lack is anything to
   // decide, so their Decide cell says why in a colourless pill.
@@ -605,7 +648,7 @@ export function ApprovalRow({
   const sentenceKey = gone ? SENTENCE_KEY[row.kind] : sentenceKeyOf(row.kind);
   // The sentence as plain text — the row door's accessible name reads it (MOTIR-5999).
   const sentenceText = tSentence.markup(sentenceKey, {
-    name: row.workItem.title,
+    name: card.title,
     title: (chunks: string) => chunks,
   });
   const settledState: ApprovalGateStateDTO | null =
@@ -622,7 +665,7 @@ export function ApprovalRow({
     // dispatches a primary click, so it takes this same path.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();
-    openApproval(row);
+    openApproval({ workItem: card, kind: row.kind });
   }
 
   return (
@@ -646,23 +689,23 @@ export function ApprovalRow({
             them apart — the same reason `WorkbenchList`'s row link is labelled
             with the item. */}
         <Link
-          href={`/items/${row.workItem.identifier}`}
+          href={`/items/${card.identifier}`}
           aria-haspopup="dialog"
-          aria-label={t('reviewRow', { key: row.workItem.identifier, sentence: sentenceText })}
+          aria-label={t('reviewRow', { key: card.identifier, sentence: sentenceText })}
           onClick={onRowClick}
           className="absolute inset-0 z-0 focus:outline-none"
         />
         <KindGlyph kind={row.kind} />
         <Sentence
           sentenceKey={sentenceKey}
-          title={row.workItem.title}
-          identifier={row.workItem.identifier}
+          title={card.title}
+          identifier={card.identifier}
           quiet={settled || !renderable}
         />
         {/* The key FOLLOWS the sentence (§ 28, DECISION 1) — `--el-text-secondary`,
             not muted: this row's hover fill is `--el-surface`, where muted is 4.17:1. */}
         <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
-          {row.workItem.identifier}
+          {card.identifier}
         </span>
         {/* It ARRIVED while the reader was looking (§ 26, Panel 1) — at the END
             of the sentence cell, which at `< md` is the end of the row's first
@@ -760,7 +803,285 @@ export function ApprovalRow({
               size="sm"
               aria-haspopup="dialog"
               className="relative z-10"
-              onClick={() => openApproval(row)}
+              onClick={() => openApproval({ workItem: card, kind: row.kind })}
+            >
+              {t('review')}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * THE PLAN's LEADING LINE (design Part XX §20.3, DECIDED): what the plan is ABOUT, never
+ * the gate kind. Four forms, one ICU message each, so the ORDER is the catalogue's (zh puts
+ * the title first):
+ *   · a target → *Plan for {target title}* — the title is the shipped quick-view door;
+ *   · no target, a title → *Plan — {plan title}* — plain text, a plan has no quick view;
+ *   · neither → *Plan for {project name}*.
+ * A target whose title no longer resolves (the key is gone from the project) cannot be
+ * named, and the row never shows a bare key as a title — so it FALLS to the next form
+ * (the plan's title, then its project) rather than printing a blank. The key cell still
+ * names the keys the plan targets.
+ */
+type PlanSentence =
+  | { form: 'targeted'; name: string; key: string }
+  | { form: 'untargeted'; name: string }
+  | { form: 'untitled'; name: string };
+
+function planSentenceOf(subject: PlanApprovalSubjectSummaryDTO): PlanSentence {
+  const first = subject.targets[0];
+  if (first && first.title) return { form: 'targeted', name: first.title, key: first.key };
+  if (subject.title) return { form: 'untargeted', name: subject.title };
+  return { form: 'untitled', name: subject.projectName };
+}
+
+/** The address a plan row opens: the planning surface at its conversation, or null when
+ *  it has none to return to (§11.5b — backfilled, an MCP plan with no turns, cadence). */
+function planDoorContext(subject: PlanApprovalSubjectSummaryDTO): PlanningLaunchContext | null {
+  if (!subject.sessionId || !subject.sessionHasTurns) return null;
+  const first = subject.targets[0];
+  // `planVia=approvals` (§20.2): the reopened line says *Reopened from To approve*.
+  return first
+    ? { kind: 'work-item', itemKey: first.key, sessionId: subject.sessionId, via: 'approvals' }
+    : { kind: 'project', sessionId: subject.sessionId, via: 'approvals' };
+}
+
+/** The version a declined plan record names: the digest after `plan.v1.`, 8 characters. */
+function planVersionLabel(version: string): string {
+  return version.replace(/^plan\.v\d+\./, '').slice(0, 8);
+}
+
+function PlanApprovalRow({
+  record,
+  subject,
+  gridTemplate,
+  person,
+  arrived,
+  announcedState,
+}: {
+  record: ApprovalRowRecord;
+  subject: PlanApprovalSubjectSummaryDTO;
+  gridTemplate: string;
+  person?: { label: string; value: string };
+  arrived: boolean;
+  announcedState: ApprovalGateStateDTO | null;
+}) {
+  const t = useTranslations('workbench.approvals');
+  const tPlan = useTranslations('approvalGate.planApproval.row');
+  const tGate = useTranslations('approvalGate');
+  const relativeLabel = useRelativeLabel();
+  const peekRowClick = usePeekRowClick();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { row } = record;
+
+  const sentence = planSentenceOf(subject);
+  const sentenceText = tPlan.markup(sentence.form, {
+    name: sentence.name,
+    project: sentence.name,
+    title: (chunks: string) => chunks,
+  });
+  const settledState: ApprovalGateStateDTO | null =
+    record.section === 'decided' ? record.row.state : announcedState;
+  const settled = settledState !== null || record.section === 'held';
+  const timeIso = record.section === 'decided' ? record.row.decidedAt : record.row.waitingSince;
+  const planHref = `/plans/${encodeURIComponent(subject.planId)}`;
+  const door = planDoorContext(subject);
+
+  /** Open the planning surface over the page the list is on — `shallowPush`, so Close
+   *  lands back on exactly this list (§20.2). */
+  function openPlanningSurface(context: PlanningLaunchContext) {
+    const qs = searchParams.toString();
+    shallowPush(withPlanningOverlay(`${pathname}${qs ? `?${qs}` : ''}`, context));
+  }
+
+  function onRowClick(e: MouseEvent<HTMLAnchorElement>) {
+    // `usePeekRowClick`'s condition: a modified or non-primary click keeps the real
+    // `href` — the plan page, in a new tab.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    // NO CONVERSATION → the real navigation to `/plans/<id>` goes ahead (§20.2).
+    if (!door) return;
+    e.preventDefault();
+    openPlanningSurface(door);
+  }
+
+  const author =
+    subject.author.origin === 'cadence'
+      ? tPlan('author.cadence')
+      : subject.author.source === 'mcp' && subject.author.harness
+        ? tPlan('author.harness', { harness: subject.author.harness })
+        : tPlan('author.motir');
+  const details = (
+    <span
+      className={cn('truncate text-xs text-(--el-text-secondary)', HOVER_DETAIL)}
+      title={subject.title ?? undefined}
+    >
+      {tPlan('details', { count: subject.proposalCount, author })}
+    </span>
+  );
+
+  const titleInk = settled ? 'text-(--el-text-secondary)' : 'text-(--el-text)';
+  const parts: ReactNode = tPlan.rich(sentence.form, {
+    name: sentence.name,
+    project: sentence.name,
+    title: (chunks) =>
+      sentence.form === 'targeted' ? (
+        // THE TITLE IS THE TARGET'S QUICK-VIEW DOOR — the shipped contract, above the
+        // stretched row door on `z-10`.
+        <Link
+          key="title"
+          href={`/items/${sentence.key}`}
+          onClick={(e) => peekRowClick(e, sentence.key)}
+          className={cn(
+            'relative z-10 min-w-0 truncate font-medium hover:underline focus-visible:underline focus-visible:outline-none',
+            titleInk,
+          )}
+        >
+          {chunks}
+        </Link>
+      ) : (
+        // A plan has no quick view: its title is plain text under the row door.
+        <span key="title" className={cn('min-w-0 truncate font-medium', titleInk)}>
+          {chunks}
+        </span>
+      ),
+  });
+
+  const keys = subject.targets.map((target) => target.key);
+
+  return (
+    <div
+      role="row"
+      data-testid={`approval-row-${row.gateId}`}
+      className={cn(
+        'group relative flex flex-col gap-1 border-b border-(--el-border) px-4 py-2.5 last:border-b-0',
+        'hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2',
+        'md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0 md:py-0 md:pr-4 md:pl-4',
+      )}
+      style={{ gridTemplateColumns: gridTemplate }}
+    >
+      <div role="cell" className="flex min-w-0 items-center gap-2">
+        {/* THE DOOR (§20.2): `/plans/<id>` is the real href — a new tab opens the plan
+            page — and a plain primary click returns to the planning surface. The
+            planning overlay is a dialog, hence `aria-haspopup`. */}
+        <Link
+          href={planHref}
+          aria-haspopup="dialog"
+          aria-label={tPlan('reviewRow', { sentence: sentenceText })}
+          onClick={onRowClick}
+          className="absolute inset-0 z-0 focus:outline-none"
+        />
+        {/* The Motir-AI mark the Plans nav already carries (§20.3); the words carry the
+            meaning, so it is hidden. */}
+        <Sparkles className="h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
+        <span className="flex min-w-0 items-center gap-1 text-sm">
+          {Children.toArray(parts).map((part, index) =>
+            typeof part === 'string' ? (
+              part.trim() === '' ? null : (
+                <span key={`frame-${index}`} className="shrink-0 text-(--el-text-secondary)">
+                  {part}
+                </span>
+              )
+            ) : (
+              part
+            ),
+          )}
+        </span>
+        {/* The KEY cell names the targets: the first, `+{n}` for the rest, every key in
+            its `title` (§20.3, the multi-target form). No target, no key cell. */}
+        {keys.length > 0 ? (
+          <span
+            className="shrink-0 font-mono text-xs text-(--el-text-secondary)"
+            title={keys.length > 1 ? keys.join(', ') : undefined}
+          >
+            {keys.length > 1
+              ? `${keys[0]} ${tPlan('moreTargets', { count: keys.length - 1 })}`
+              : keys[0]}
+          </span>
+        ) : null}
+        {arrived ? <Pill tone="neutral">{t('live.new')}</Pill> : null}
+      </div>
+
+      <div role="presentation" className="flex flex-wrap items-center gap-2 pl-6 md:contents">
+        <div role="cell" className="flex min-w-0 items-center">
+          {record.section === 'decided' && record.row.state === 'declined' ? (
+            // A DECLINE's reason is OPTIONAL (§11.4): with one, its first line (as every
+            // refusal's); without one, *Declined without a reason · on {version}*.
+            showsRefusalReason(
+              record.row.state,
+              record.row.refusalReason,
+              record.row.decisionSource,
+            ) ? (
+              <RefusalReasonCell
+                reason={record.row.refusalReason}
+                version={record.row.subjectVersion}
+              />
+            ) : (
+              <span
+                className={cn('truncate text-xs text-(--el-text-secondary)', HOVER_DETAIL)}
+                title={record.row.subjectVersion ?? undefined}
+              >
+                {tPlan.rich('declinedNoReason', {
+                  version: record.row.subjectVersion
+                    ? planVersionLabel(record.row.subjectVersion)
+                    : t('noVersion'),
+                  mono: (chunks) => <span className="font-mono">{chunks}</span>,
+                })}
+              </span>
+            )
+          ) : (
+            details
+          )}
+        </div>
+        <div role="cell" className="flex min-w-0 items-center">
+          <span
+            className="truncate text-xs text-(--el-text-secondary)"
+            title={new Date(timeIso).toLocaleString()}
+          >
+            {relativeLabel(timeIso)}
+          </span>
+        </div>
+        {person === undefined ? null : (
+          <div role="cell" className="flex min-w-0 items-center">
+            <span className="truncate text-xs text-(--el-text-secondary)" title={person.value}>
+              <span className="md:sr-only">{person.label}: </span>
+              {person.value}
+            </span>
+          </div>
+        )}
+        <div role="cell" className="flex min-w-0 items-center md:justify-end">
+          {settled ? (
+            settledState !== null ? (
+              <StatePill state={settledState} kind={row.kind} />
+            ) : (
+              <Pill tone="neutral" className={DECIDE_PILL}>
+                {t('live.decidedElsewhere')}
+              </Pill>
+            )
+          ) : subject.held ? (
+            /* BEING REWRITTEN (§11.5c): the gate is still `awaiting` and the row stays
+               listed — ⚠️ NOT § 26's `held` section, which is a row that LEFT the set.
+               A word in the sky tint the plan rail's in-flight band spends; no verb. The
+               row door still opens (you can go and watch). */
+            <Pill severity="info" className={DECIDE_PILL} title={tPlan('rewritingTitle')}>
+              {tPlan('rewriting')}
+            </Pill>
+          ) : record.section === 'awaiting' && !record.row.canDecide ? (
+            <Pill tone="awaiting" className={DECIDE_PILL}>
+              {tGate('state.awaiting')}
+            </Pill>
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              aria-haspopup="dialog"
+              className="relative z-10"
+              onClick={() => (door ? openPlanningSurface(door) : router.push(planHref))}
             >
               {t('review')}
             </Button>

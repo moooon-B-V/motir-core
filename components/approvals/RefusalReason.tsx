@@ -151,5 +151,8 @@ export function showsRefusalReason(
   reason: string | null,
   decisionSource: ApprovalGateDecisionSourceDTO | null,
 ): boolean {
+  // A DECLINED plan (MOTIR-6037) quotes its reason when one was given — it is optional
+  // there (ADR §11.4), and its absence has its own line on the plan row.
+  if (state === 'declined') return Boolean(reason?.trim());
   return state === 'changes_requested' && (Boolean(reason?.trim()) || decisionSource === 'github');
 }

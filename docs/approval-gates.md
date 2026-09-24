@@ -126,6 +126,45 @@ after a decision, the code is what the product does. A description that is not
 complete asks nothing; the section says what is missing, and the work item can still
 be moved to Done by hand.
 
+### When a plan asks you to approve it
+
+When you ask Motir AI to plan something, the planner tells you when it starts
+writing the plan and that you can leave. **When the plan is ready, Motir asks you
+to approve it**: a row appears in **To approve**, naming the plan and what it
+proposes. You are the one asked because you asked for the plan. A plan the
+auto-planner started on its own asks the workspace owner.
+
+**Opening the row does not open the full-screen view.** It takes you back to the
+planning surface, to the conversation that produced the plan, with the plan shown
+for review. A plan with no conversation opens its own plan page instead. There
+you can do one of three things:
+
+- **Approve** turns the plan into work items, exactly as the plan's approve
+  button always has.
+- **Decline** ends the plan. Nothing is created. You can add a note saying why;
+  it is not required.
+- **Keep talking to the planner** to change the plan. The planner writes a new
+  version of the same plan.
+
+**There is no _Request changes_.** A plan is changed by talking to the planner,
+so a request to change it would only wait for a conversation.
+
+**While the planner is rewriting the plan, the question waits.** The row stays in
+To approve, but **Approve** and **Decline** are refused until the planner
+finishes, and the page says so. When it finishes, the same question can be
+answered, about the new version. If you read the plan before the rewrite and
+press Approve afterwards, Motir refuses and asks you to look at the new version
+first.
+
+A plan that becomes out of date because work it changes was finished or
+cancelled elsewhere stops asking. Its row leaves To approve, and the plan page
+says why.
+
+Plans that were already waiting for approval before this shipped were given their
+question once, when it was deployed. `pnpm db:backfill:plan-gates --dry-run`
+confirms none was missed, and the same command without `--dry-run` repairs any
+that were.
+
 ## What you see
 
 The gate always renders as the same three bands, in the same order, and the order
@@ -339,5 +378,9 @@ guessing about the rest:
   request; outside a gate, merging still happens on GitHub.
 - **There is no per-project setting** that turns any of this on or off.
 - **No email and no bell notification** is sent when a gate is raised.
+- **Approving a plan through To approve is decided but not built yet.** Its rules
+  are in the decision record's §11. Until it ships, a plan is still approved or
+  declined only from its own plan page and the planning surface, and it does not
+  appear in To approve.
 
 Each is a separate piece of work, and this page will grow as they land.

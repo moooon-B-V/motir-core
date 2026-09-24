@@ -34,6 +34,7 @@ import {
   retryApproveAndMergeMemberAction,
 } from '@/app/(authed)/items/[key]/approvalGateActions';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { usePlanGateForward } from './usePlanGateForward';
 import { parseApprovalOverlay, withoutApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { fetchApprovalGateOverlay } from '@/lib/approvals/approvalOverlayClient';
 import { useWorkbenchLiveSignal } from '@/app/(authed)/workbench/_components/useWorkbenchLive';
@@ -432,8 +433,14 @@ export function ApprovalOverlay() {
     shallowPush(withoutApprovalOverlay(`${pathname}?${searchParams.toString()}`));
   }, [pathname, searchParams]);
 
+  // ⚠️ A PLAN GATE IS NEVER DECIDED HERE (ADR `approval-gates.md` §11.5b; MOTIR-6037):
+  // the overlay renders no frame for it and FORWARDS the reader to the planning surface
+  // — `usePlanGateForward`, a forward rather than a close, kept out of this file's one
+  // close seam.
+  usePlanGateForward(kind === 'plan_approval' ? itemKey : null);
+
   useEffect(() => {
-    if (itemKey === null || kind === null) return;
+    if (itemKey === null || kind === null || kind === 'plan_approval') return;
     const controller = new AbortController();
     const forToken = tokenOf(itemKey, kind);
     void (async () => {
@@ -584,6 +591,8 @@ export function ApprovalOverlay() {
   }
 
   if (!open) return null;
+  // The plan arm above is sending the reader on — never an empty frame (§11.5b).
+  if (kind === 'plan_approval') return null;
 
   // The stacked quick view belongs to THIS address: a different approval, or none,
   // shows none (§ 28, DECISION 6).

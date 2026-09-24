@@ -130,7 +130,7 @@ describe('ExpansionNudgeBanner', () => {
     await expandAndPoll();
     await click('Approve');
 
-    await waitFor(() => expect(approve).toHaveBeenCalledWith('plan_3'));
+    await waitFor(() => expect(approve).toHaveBeenCalledWith('plan_3', null));
     expect(await screen.findByText('1 child created')).toBeTruthy();
   });
 
@@ -145,7 +145,7 @@ describe('ExpansionNudgeBanner', () => {
     await expandAndPoll();
     await click('Decline');
 
-    await waitFor(() => expect(decline).toHaveBeenCalledWith('plan_4'));
+    await waitFor(() => expect(decline).toHaveBeenCalledWith('plan_4', null));
     expect(approve).not.toHaveBeenCalled();
   });
 

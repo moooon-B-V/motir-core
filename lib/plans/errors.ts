@@ -877,3 +877,60 @@ export class InvalidPlanHistoryCursorError extends Error {
     this.name = 'InvalidPlanHistoryCursorError';
   }
 }
+
+/**
+ * A `planned` plan that has NO question asked about it yet — no `awaiting`
+ * `plan_approval` gate (Story MOTIR-6012 · MOTIR-6038; ADR `approval-gates.md`
+ * §11.8, §11.9). The pre-backfill state: the plan reached `planned` before its
+ * raise shipped, so there is no gate for the decide door to lock or record.
+ *
+ * ⚠️ A REFUSAL, NOT A FALLBACK. Deciding it around the door would write the one
+ * decision the record could never show, so every entrance says *not decidable
+ * yet* instead, and the backfill (MOTIR-6039) is what makes it decidable. → 409
+ */
+export class PlanNotDecidableYetError extends Error {
+  readonly code = 'PLAN_NOT_DECIDABLE_YET' as const;
+  constructor(readonly planId: string) {
+    super(
+      `Plan ${planId} cannot be decided yet: nobody has been asked to approve it. ` +
+        `Nothing has been changed; it becomes decidable once its approval is raised.`,
+    );
+    this.name = 'PlanNotDecidableYetError';
+  }
+}
+
+/**
+ * A PLAIN plan writer met an `awaiting` plan gate under the plan's lock
+ * (MOTIR-6038; ADR §11.8's converse). While a plan's question is asked, ONLY the
+ * decide door writes `approved` / `declined` onto it — `approvePlan` /
+ * `declinePlan`'s own bodies refuse, so a race that raised the gate between an
+ * entrance's read and its write cannot decide the plan around it. → 409
+ */
+export class PlanGateAwaitingError extends Error {
+  readonly code = 'PLAN_GATE_AWAITING' as const;
+  constructor(
+    readonly planId: string,
+    readonly gateId: string,
+  ) {
+    super(
+      `Plan ${planId} is waiting on its approval (${gateId}); it is decided through that approval. ` +
+        `Nothing has been changed — read the plan again and decide it there.`,
+    );
+    this.name = 'PlanGateAwaitingError';
+  }
+}
+
+/**
+ * A PERSON's decision of a plan whose question is asked arrived without the
+ * `stamp` its render read returned (MOTIR-6038; ADR §6b's MOTIR-5234 amendment,
+ * §11.3). The door never guesses what a reader saw. → 400
+ */
+export class PlanDecisionStampRequiredError extends Error {
+  readonly code = 'PLAN_DECISION_STAMP_REQUIRED' as const;
+  constructor(readonly planId: string) {
+    super(
+      `Deciding plan ${planId} needs the \`stamp\` its review read returned — pass the stamp you were shown.`,
+    );
+    this.name = 'PlanDecisionStampRequiredError';
+  }
+}

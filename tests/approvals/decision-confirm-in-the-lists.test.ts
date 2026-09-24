@@ -105,11 +105,11 @@ describe('the confirm gate in To approve and the Approvals room', () => {
 
     const room = await approvalGatesService.listRecords(meCtx, { limit: 100 });
     const decided = room.sections.decided.items;
-    expect(decided.map((row) => [row.workItem.title, row.state]).sort()).toEqual([
+    expect(decided.map((row) => [row.workItem?.title, row.state]).sort()).toEqual([
       ['Confirm me', 'approved'],
       ['Overturn me', 'overturned'],
     ]);
-    const confirmedRow = decided.find((row) => row.workItem.title === 'Confirm me')!;
+    const confirmedRow = decided.find((row) => row.workItem?.title === 'Confirm me')!;
     expect(confirmedRow.confirmedRecord).toEqual({ kind: 'none' });
     expect(confirmedRow.decidedByLabel).toBeTruthy();
   });

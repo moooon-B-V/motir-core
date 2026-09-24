@@ -10,8 +10,11 @@ import { decisionApprovalGateHandler } from '@/lib/approvalGates/decisionApprova
 import { decisionChoiceGateHandler } from '@/lib/approvalGates/decisionChoiceHandler';
 import { decisionConfirmationGateHandler } from '@/lib/approvalGates/decisionConfirmationHandler';
 import { designResultGateHandler } from '@/lib/approvalGates/designResultHandler';
+import { planApprovalGateHandler } from '@/lib/approvalGates/planApprovalHandler';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
 import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
+import type { GateDecision } from '@/lib/dto/approvalGate';
+import type { TransactionBudget } from '@/lib/workspaces/context';
 
 // THE APPROVAL-GATE REGISTRY (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md §1).
@@ -79,13 +82,18 @@ import type { GateSettingsDoor } from '@/lib/approvalGates/settingsDoor';
 // MOTIR-5954 registers `decision_confirmation`: a person confirms — or overturns — a
 // decision the planner settled WITH them, on a `decision` + `human` work item (Story
 // MOTIR-5871; §1's MOTIR-5952 amendment).
+//
+// MOTIR-6035 registers `plan_approval`: a PLAN, on a gate that belongs to NO work item
+// (Story MOTIR-6012; ADR §11). Its verbs are Approve and a NEW Decline — no Request
+// changes — and it writes a plan's status, never a work item's.
 export type RegisteredGateKind =
   | 'design_result'
   | 'decision_approval'
   | 'acceptance_result'
   | 'pull_request_approval'
   | 'decision_choice'
-  | 'decision_confirmation';
+  | 'decision_confirmation'
+  | 'plan_approval';
 
 /**
  * The kinds that are deliberately NOT registered yet — the registry's
@@ -94,6 +102,8 @@ export type RegisteredGateKind =
  * | kind                    | owner                                              |
  * | ----------------------- | -------------------------------------------------- |
  * | `pull_request_merge`    | nobody — RETIRED (MOTIR-5616)                      |
+ *
+ * (`plan_approval` was a NOT-YET here from MOTIR-6032 until MOTIR-6035 built it.)
  *
  * ⚠️ THE ONE HOLE LEFT IS NOT A NOT-YET. `decision_approval` was the other, a kind
  * NOT BUILT YET with a card that would build it — and MOTIR-5676 built it.
@@ -155,7 +165,11 @@ export interface GateEffect {
      *  `approval-gates.md` §1's MOTIR-5787 amendment, point 7). */
     | 'rollup_writes_done'
     | 'request_changes_moves_nothing'
-    | 'no_status_in_target_category';
+    | 'no_status_in_target_category'
+    /** A `plan_approval` decision (ADR §11.5): what approve and decline change is the
+     *  PLAN's status. Approve's materialize writes work-item statuses on each item's own
+     *  history, and those are the plan's effects, never this gate's `outcomeRef`. */
+    | 'plan_decision_writes_no_work_item';
   /** WHAT A CHOICE PICKED (MOTIR-5893) — returned by the `decision_choice` handler's
    *  approve and written by the door onto the deciding row, which then records the
    *  option's id as `outcomeRef`. Absent on every other kind's effect. */
@@ -165,6 +179,15 @@ export interface GateEffect {
    *  deciding row: the counting markdown attachment's identity, or `none`. Absent on
    *  every other kind's effect. */
   confirmedRecord?: ConfirmedRecord;
+  /**
+   * WHAT MAY ONLY HAPPEN AFTER THE DOOR COMMITS (MOTIR-6035; ADR §11.5) — events,
+   * triggers and anything that opens its own transaction. The door awaits it once its
+   * transaction has committed and strips it from the result, so it never crosses the
+   * wire and a rolled-back decision never announces anything. Absent on every kind but
+   * `plan_approval`, whose approve and decline keep `approvePlan` / `declinePlan`'s
+   * post-commit work exactly where those methods put it.
+   */
+  afterCommit?: () => Promise<void>;
 }
 
 /**
@@ -185,8 +208,15 @@ export interface GateEffect {
  * make the creation-time call impossible again.
  */
 export interface GateRoutingArgs {
-  /** The work item the gate hangs off, read in the creating transaction. */
-  item: WorkItem;
+  /**
+   * The work item the gate hangs off, read in the creating transaction — or NULL for a
+   * kind whose gate belongs to NO work item (Story MOTIR-6012 · MOTIR-6034; ADR
+   * `approval-gates.md` §11.1). Only `plan_approval` is card-less (the CHECK
+   * `approval_gate_work_item_iff_not_plan`), and what its gate is about is its
+   * `subjectId`, the plan. A handler for a card-bearing kind narrows through
+   * `requireArgsCard` (`lib/approvalGates/gateCard.ts`): it is never handed a null.
+   */
+  item: WorkItem | null;
   ctx: ServiceContext;
   /** The CREATING path's transaction — routing is resolved inside the same
    *  transaction that inserts the row, so the answer and the row commit together
@@ -223,6 +253,33 @@ export interface GateEffectArgs extends GateRoutingArgs {
    * hold, so an absent or stale one can never record a pick.
    */
   choice?: { optionId: string };
+  /**
+   * What the kind's {@link GateHandler.beforeTransaction} read before the door's
+   * transaction opened (MOTIR-6035), passed back untouched. Absent for a kind without
+   * that seam, and for a gate the pre-read already found decided.
+   */
+  prepared?: unknown;
+  /**
+   * What a composing SERVICE handed the door for the kind's effect alone, opaque to the
+   * door (MOTIR-6038 — a plan's approve takes the onboarding placeholder name its rename
+   * compares against, resolved by the route because i18n stays out of the service
+   * layer). Never read from a request body: only `DecideGateOptions.effectOptions`
+   * carries it, and no route, server action or MCP tool accepts that.
+   */
+  effectOptions?: Readonly<Record<string, unknown>>;
+}
+
+/** What {@link GateHandler.beforeTransaction} and {@link GateHandler.afterRollback} are
+ *  told: the gate's immutable subject, the verb, and the actor. Never the row itself —
+ *  neither runs under the gate's lock. */
+export interface GateOutsideTransactionArgs {
+  subjectId: string;
+  decision: GateDecision;
+  ctx: ServiceContext;
+  /** `afterRollback` only: what `beforeTransaction` returned. */
+  prepared?: unknown;
+  /** See {@link GateEffectArgs.effectOptions}. */
+  effectOptions?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -353,6 +410,59 @@ export interface GateHandler<TSubject = unknown> {
    * KEY, or null — never the category fallback, which would write `done`.
    */
   overturn?(args: GateEffectArgs): Promise<GateEffect>;
+
+  /**
+   * What `decline` DOES, beyond recording the decision (MOTIR-6035; ADR §11.4) —
+   * offered ONLY by `plan_approval`, so optional on the pattern `overturn?` set: the
+   * door refuses the verb on any kind that does not supply it
+   * (`decline_on_other_kind`). The gate goes to the terminal state `declined`, and its
+   * note is OPTIONAL (§11.4's stated departure from §10a).
+   */
+  decline?(args: GateEffectArgs): Promise<GateEffect>;
+
+  /**
+   * LOCK THE SUBJECT'S OWN ROW BEFORE THE DOOR LOCKS THE GATE (MOTIR-6035; ADR §11.5).
+   * A kind whose subject's writers already hold the subject's lock when they reach the
+   * gate supplies this, and the door calls it in its transaction BEFORE
+   * `approvalGateRepository.lockById`: two transactions taking the same two rows in
+   * opposite orders deadlock. `subjectId` is immutable, so the door reads it unlocked
+   * first. Absent: the door's generic gate-then-effect order.
+   */
+  lockSubjectBeforeGate?(subjectId: string, tx: Prisma.TransactionClient): Promise<void>;
+
+  /**
+   * THE SUBJECT'S VERSION MOVES IN PLACE (MOTIR-6035; ADR §11.3, §11.5c). A kind whose
+   * subject is revised WITHOUT its gate being superseded (a plan: same plan, same
+   * question) sets this, and the door stamps the version {@link subjectVersion} answers
+   * UNDER THE LOCK rather than the one the row was raised with — or a stamp taken
+   * before a revision would never be refused as stale. Absent: the row's own
+   * `subjectVersion`, which a supersede-and-re-raise keeps current.
+   */
+  stampsLiveVersion?: true;
+
+  /**
+   * WORK THE EFFECT NEEDS THAT CANNOT RUN INSIDE A TRANSACTION (MOTIR-6035) — reads
+   * that open their own context, best-effort writes that must not ride the decision.
+   * The door calls it BEFORE its transaction (beside `resolvedStatusKey`, and for the
+   * same reason), only for a gate its pre-read found `awaiting`, and hands the result
+   * to the verb as `args.prepared`. It must assert whatever permission its own side
+   * effects need: it runs before the door's floor.
+   */
+  beforeTransaction?(args: GateOutsideTransactionArgs): Promise<unknown>;
+
+  /**
+   * WHAT A FAILED DECISION BECOMES AFTER THE DOOR'S TRANSACTION ROLLED BACK
+   * (MOTIR-6035) — a best-effort repair that must not ride the rolled-back write, and
+   * the error to throw in its place. Never swallows a refusal.
+   */
+  afterRollback?(err: unknown, args: GateOutsideTransactionArgs): Promise<unknown>;
+
+  /**
+   * The interactive-transaction budget the door opens with for this kind, when the
+   * default is too small (MOTIR-6035: a plan's approve materializes a subtree —
+   * `APPROVE_TX_BUDGET`). Absent: Prisma's defaults.
+   */
+  transactionBudget?: TransactionBudget;
 }
 
 /**
@@ -366,6 +476,7 @@ export const APPROVAL_GATE_HANDLERS: Record<RegisteredGateKind, GateHandler> = {
   acceptance_result: acceptanceResultGateHandler,
   decision_choice: decisionChoiceGateHandler,
   decision_confirmation: decisionConfirmationGateHandler,
+  plan_approval: planApprovalGateHandler,
 };
 
 /** Narrow a gate's kind to one this build can dispatch. */

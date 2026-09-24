@@ -113,8 +113,8 @@ async function gate(opts: {
 }
 
 const titles = (page: Awaited<ReturnType<typeof approvalGatesService.listRecords>>) => ({
-  awaiting: page.sections.awaiting.items.map((r) => r.workItem.title),
-  decided: page.sections.decided.items.map((r) => r.workItem.title),
+  awaiting: page.sections.awaiting.items.map((r) => r.workItem?.title),
+  decided: page.sections.decided.items.map((r) => r.workItem?.title),
 });
 
 /** Every shape a record can take, from both readers' side. */
@@ -228,7 +228,7 @@ describe('a reader HOLDING `approval:view_any` — every record of the project',
   it('a decided row carries the record — who, when, and on which bytes', async () => {
     await seedPopulation();
     const page = await approvalGatesService.listRecords(ownerCtx);
-    const row = page.sections.decided.items.find((r) => r.workItem.title === 'approved-by-other');
+    const row = page.sections.decided.items.find((r) => r.workItem?.title === 'approved-by-other');
     expect(row).toMatchObject({
       state: 'approved',
       decidedByLabel: `label-of-${otherId}`,
@@ -357,8 +357,8 @@ describe('the repository reads take `tx` and hold under RLS', () => {
       await approvalGateRepository.findRecordsAwaiting(scope, { skip: 0, take: 50 }, tx),
       await approvalGateRepository.findRecordsDecided(scope, { skip: 0, take: 50 }, tx),
     ]);
-    expect(awaiting.map((r) => r.workItem.title)).toEqual(['awaiting-me']);
-    expect(decided.map((r) => r.workItem.title)).toEqual(['changes-by-me', 'approved-by-me']);
+    expect(awaiting.map((r) => r.workItem!.title)).toEqual(['awaiting-me']);
+    expect(decided.map((r) => r.workItem!.title)).toEqual(['changes-by-me', 'approved-by-me']);
   });
 
   it('as `motir_app` bound to ANOTHER workspace, a full-view read of this project returns nothing', async () => {

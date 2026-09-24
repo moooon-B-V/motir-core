@@ -447,7 +447,7 @@ describe('decision_source accepts `github` with an UNRESOLVABLE actor', () => {
     expect(values.map((v) => v.enumlabel)).toEqual(['ui', 'api', 'mcp', 'github']);
   });
 
-  it('the authority enum holds §2’s three rungs, plus the ONE value that is not a rung', async () => {
+  it('the authority enum holds §2’s three rungs, plus the TWO values that are not rungs', async () => {
     const values = await adminDb.$queryRaw<Array<{ enumlabel: string }>>`
       SELECT e."enumlabel"
       FROM pg_enum e
@@ -463,11 +463,19 @@ describe('decision_source accepts `github` with an UNRESOLVABLE actor', () => {
     // authority conferred by the HOST's review permission, written only by the synced
     // decision: `resolveGateAuthority` never returns it, and no route, press or MCP tool
     // can reach it. §2 itself is unchanged for every Motir surface.
+    //
+    // ⚠️ `plan_permission` IS NOT A §2 RUNG EITHER, and the title changed again rather
+    // than the list growing quietly (Story MOTIR-6012 · MOTIR-6032; ADR §11.6). A
+    // `plan_approval` gate has no work item, so there is no assignee or reporter to be,
+    // and `admin` (`approval:decide_any`) would claim an override of a routing that does
+    // not exist. Its decider's authority is the permission `ai:decide_plan` ALONE, and
+    // the row says so rather than borrowing a rung that is not true of them.
     expect(values.map((v) => v.enumlabel)).toEqual([
       'assignee',
       'reporter',
       'admin',
       'github_review',
+      'plan_permission',
     ]);
   });
 });

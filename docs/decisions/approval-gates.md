@@ -202,20 +202,22 @@ half-wired.
 **The registry** is `Record<ApprovalGateKind, GateHandler>`. **What a third kind
 must supply to register — the table this record exists to make re-usable:**
 
-| a handler supplies                                                                                                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 | for `decision_choice` — §1's MOTIR-5887 AMENDMENT                                                                                                                                                                 | for `decision_confirmation` — §1's MOTIR-5952 AMENDMENT                                                                                                                                                                                                                                             |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **how to resolve the SUBJECT** from the gate row                                                                                   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) | the `## Why this is a choice`, `## Options` and `## What this choice gates` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 1–2) | the `## Decision`, `## What changed`, `## Supersedes` and `## Resulting direction` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 2–3). The optional record is resolved beside it, never as the subject (point 8) |
-| **who it ROUTES to**                                                                                                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    | the same                                                                                                                                                                                                          | the same                                                                                                                                                                                                                                                                                            |
-| **which PERMISSION authorises a decision**                                                                                         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            | `work_item:edit`, under §2's AUTHORITY rule in force (point 4)                                                                                                                                                    | `work_item:edit`, under §2's AUTHORITY rule in force (point 5)                                                                                                                                                                                                                                      |
-| **which STATUS TRANSITION the gate owns**, or none                                                                                 | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  | the move into the project's `done` category — a choice never has a pull request (point 6)                                                                                                                         | the move into the project's `done` category on Confirm, and into `cancelled` on Overturn — a `human` decision never has a pull request (point 7)                                                                                                                                                    |
-| **what `approve` DOES**                                                                                                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  | there is no `approve`: each OPTION is a verb, `choose(optionId)`, which records the pick and writes `done` (points 5–6)                                                                                           | **Confirm**: records the decision, stamps the record or its absence, writes `done` (points 7–8)                                                                                                                                                                                                     |
-| **what `request_changes` DOES** — ⚠️ §10 (MOTIR-6072) makes its reason REQUIRED on every kind and decides what FOLLOWS it per kind | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 | **None of these — revise the options**: records `changes_requested`, moves nothing (point 5)                                                                                                                      | **not offered — OVERTURN instead**: records `overturned` with its REQUIRED note, writes `cancelled`, touches no other work item; the re-plan it owes is derived from `## Supersedes` (points 6–7)                                                                                                   |
-| **what to RETAIN on approval**, or nothing                                                                                         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              | nothing to pin — the chosen option is SNAPSHOTTED onto the immutable gate row (point 7)                                                                                                                           | nothing to pin — the record's IDENTITY is snapshotted onto the immutable gate row; the body is the subject (point 8)                                                                                                                                                                                |
+| a handler supplies                                                                                                                 | for `design_result`                              | for `pull_request_merge`                          | for `decision_approval` — §8's FIFTH AMENDMENT (MOTIR-5672)                                                                 | for `decision_choice` — §1's MOTIR-5887 AMENDMENT                                                                                                                                                                 | for `decision_confirmation` — §1's MOTIR-5952 AMENDMENT                                                                                                                                                                                                                                             | for `plan_approval` — §11 (MOTIR-6031)                                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **how to resolve the SUBJECT** from the gate row                                                                                   | the current `DesignEvidence` for the work item   | the linked pull-request delivery                  | the ONE `docs/decisions/*.md` file at the pull request's head, through a resolver; UNRESOLVABLE otherwise (clauses 1, 3, 8) | the `## Why this is a choice`, `## Options` and `## What this choice gates` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 1–2) | the `## Decision`, `## What changed`, `## Supersedes` and `## Resulting direction` sections PARSED from the work item's own `descriptionMd`; a body that does not parse raises NO gate and names its defect (points 2–3). The optional record is resolved beside it, never as the subject (point 8) | the PLAN `subjectId` names; its version is the proposal-set digest (§11.3). The gate belongs to NO work item (§11.1–11.2) |
+| **who it ROUTES to**                                                                                                               | §2's rule (`assigneeId ?? reporterId`)           | the same                                          | the same                                                                                                                    | the same                                                                                                                                                                                                          | the same                                                                                                                                                                                                                                                                                            | `Plan.createdById`, else the workspace owner (§11.6)                                                                      |
+| **which PERMISSION authorises a decision**                                                                                         | `work_item:edit`                                 | `work_item:merge_pull_request`                    | `work_item:edit`                                                                                                            | `work_item:edit`, under §2's AUTHORITY rule in force (point 4)                                                                                                                                                    | `work_item:edit`, under §2's AUTHORITY rule in force (point 5)                                                                                                                                                                                                                                      | `ai:decide_plan` — no relationship rung (§11.6)                                                                           |
+| **which STATUS TRANSITION the gate owns**, or none                                                                                 | the move into the project's `done` category      | none — the webhook moves the card (§4)            | none — `approved` is the companion merge gate's, `done` the merge webhook's (clauses 2, 5)                                  | the move into the project's `done` category — a choice never has a pull request (point 6)                                                                                                                         | the move into the project's `done` category on Confirm, and into `cancelled` on Overturn — a `human` decision never has a pull request (point 7)                                                                                                                                                    | none on a work item — the PLAN's status, in the effect (§11.5)                                                            |
+| **what `approve` DOES**                                                                                                            | §3                                               | §4                                                | records the decision and carries the merge ONCE; refused while UNRESOLVABLE (clauses 3, 5)                                  | there is no `approve`: each OPTION is a verb, `choose(optionId)`, which records the pick and writes `done` (points 5–6)                                                                                           | **Confirm**: records the decision, stamps the record or its absence, writes `done` (points 7–8)                                                                                                                                                                                                     | materializes the plan, as `approvePlan` does; refused while a revision is in flight (§11.4, §11.5c)                       |
+| **what `request_changes` DOES** — ⚠️ §10 (MOTIR-6072) makes its reason REQUIRED on every kind and decides what FOLLOWS it per kind | records the decision, moves nothing              | records the decision, moves nothing               | records the decision, moves nothing — allowed while UNRESOLVABLE (clause 3)                                                 | **None of these — revise the options**: records `changes_requested`, moves nothing (point 5)                                                                                                                      | **not offered — OVERTURN instead**: records `overturned` with its REQUIRED note, writes `cancelled`, touches no other work item; the re-plan it owes is derived from `## Supersedes` (points 6–7)                                                                                                   | **not offered — DECLINE instead**: records `declined`, writes the plan `declined` / `reviewed`, reason optional (§11.4)   |
+| **what to RETAIN on approval**, or nothing                                                                                         | pin the approved `DesignEvidence`'s assets (§6c) | nothing — the merge commit is durable on the host | nothing — the blob sha and the merge commit are durable on the host (clause 9)                                              | nothing to pin — the chosen option is SNAPSHOTTED onto the immutable gate row (point 7)                                                                                                                           | nothing to pin — the record's IDENTITY is snapshotted onto the immutable gate row; the body is the subject (point 8)                                                                                                                                                                                | nothing — the proposals and the cards they became are durable rows                                                        |
 
 _The third column is added by §8's FIFTH AMENDMENT (MOTIR-5672, 2026-09-19); the
 first two are unchanged. The fourth is added by §1's MOTIR-5887 amendment
 (2026-09-21), below, whose points it cites. The fifth is added by §1's MOTIR-5952
 amendment (2026-09-21), below the MOTIR-5887 one, whose points it cites._
+
+_The sixth — `plan_approval` — is added by §11 (MOTIR-6031, 2026-09-23), whose points it cites; it is the first kind whose gate belongs to NO work item._
 
 A third kind is then a row in the enum, a handler, and a renderer for its
 subject body. **No second vocabulary, no second control, no second decide door.**
@@ -4369,17 +4371,17 @@ hand-back, which is this epic's.
 is what the refusal's own handler writes; every other effect named in the rows
 above this section is unchanged.
 
-| kind · case                                                  | refusal verb(s), reason REQUIRED (10a)     | verdict at the press (10d)                 | status written by the refusal                                                                                                                                                                | planner opens (10f) — anchor                                                                                                             | built by                     |
-| ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `design_result`                                              | Request changes                            | **Revise** · **Re-plan**                   | **Revise**: the DESIGN CARD → To do (10c). **Re-plan**: none                                                                                                                                 | **Re-plan** only — anchored on the design card's PARENT (the cards planned after the design), seeded with the design card and the reason | MOTIR-6070                   |
-| `acceptance_result` · STORY run (the gate on the run target) | Request changes                            | **Re-run** (stored `revise`) · **Re-plan** | **Re-run**: the STORY and EVERY not-`done` child → To do (10c) — a story re-run's scope claim re-asserts the to-do category on every member (`scopeClaimService`, step 5). **Re-plan**: none | **Re-plan** only — anchored on the STORY; it may re-plan ALL its subtasks                                                                | MOTIR-6071                   |
-| `acceptance_result` · SUBTASK runs, last one finished        | Request changes                            | none — Re-plan is the only answer          | none — nothing under the story is open to re-run                                                                                                                                             | **always** — anchored on the STORY, seeded to PLAN A REMEDY                                                                              | MOTIR-6071                   |
-| `decision_approval`                                          | Request changes                            | none                                       | none (unchanged: the pull request stays open, the merge stays HELD — §8's FIFTH AMENDMENT clause 5)                                                                                          | **always** — anchored on the decision card, seeded to re-plan from the reason                                                            | MOTIR-6068                   |
-| `decision_confirmation`                                      | Overturn (note already required)           | none                                       | `cancelled` (unchanged, §1's MOTIR-5952 amendment point 7)                                                                                                                                   | **always** — anchored on the decision card; the seed also names the keys `replanOwed` derives from `## Supersedes`                       | MOTIR-6068                   |
-| `decision_choice` · None of these                            | None of these — revise the options         | none                                       | none (unchanged)                                                                                                                                                                             | **always** — anchored on the choice card, seeded to re-plan from the reason                                                              | MOTIR-6068                   |
-| `decision_choice` · an option chosen                         | — (not a refusal; its note stays optional) | none                                       | `done` (unchanged, §1's MOTIR-5887 amendment point 6)                                                                                                                                        | **offered** — anchored on the choice card, seeded to plan `## What this choice gates` with the chosen option                             | MOTIR-6069                   |
-| `pull_request_approval`                                      | Request changes                            | none                                       | none (unchanged)                                                                                                                                                                             | **none** — the author reads the reason on the card and the pull request, as today                                                        | MOTIR-6067 (the reason only) |
-| `plan_approval` (MOTIR-6012)                                 | — no refusal verb                          | —                                          | —                                                                                                                                                                                            | —                                                                                                                                        | out                          |
+| kind · case                                                  | refusal verb(s), reason REQUIRED (10a)                                      | verdict at the press (10d)                 | status written by the refusal                                                                                                                                                                | planner opens (10f) — anchor                                                                                                             | built by                     |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `design_result`                                              | Request changes                                                             | **Revise** · **Re-plan**                   | **Revise**: the DESIGN CARD → To do (10c). **Re-plan**: none                                                                                                                                 | **Re-plan** only — anchored on the design card's PARENT (the cards planned after the design), seeded with the design card and the reason | MOTIR-6070                   |
+| `acceptance_result` · STORY run (the gate on the run target) | Request changes                                                             | **Re-run** (stored `revise`) · **Re-plan** | **Re-run**: the STORY and EVERY not-`done` child → To do (10c) — a story re-run's scope claim re-asserts the to-do category on every member (`scopeClaimService`, step 5). **Re-plan**: none | **Re-plan** only — anchored on the STORY; it may re-plan ALL its subtasks                                                                | MOTIR-6071                   |
+| `acceptance_result` · SUBTASK runs, last one finished        | Request changes                                                             | none — Re-plan is the only answer          | none — nothing under the story is open to re-run                                                                                                                                             | **always** — anchored on the STORY, seeded to PLAN A REMEDY                                                                              | MOTIR-6071                   |
+| `decision_approval`                                          | Request changes                                                             | none                                       | none (unchanged: the pull request stays open, the merge stays HELD — §8's FIFTH AMENDMENT clause 5)                                                                                          | **always** — anchored on the decision card, seeded to re-plan from the reason                                                            | MOTIR-6068                   |
+| `decision_confirmation`                                      | Overturn (note already required)                                            | none                                       | `cancelled` (unchanged, §1's MOTIR-5952 amendment point 7)                                                                                                                                   | **always** — anchored on the decision card; the seed also names the keys `replanOwed` derives from `## Supersedes`                       | MOTIR-6068                   |
+| `decision_choice` · None of these                            | None of these — revise the options                                          | none                                       | none (unchanged)                                                                                                                                                                             | **always** — anchored on the choice card, seeded to re-plan from the reason                                                              | MOTIR-6068                   |
+| `decision_choice` · an option chosen                         | — (not a refusal; its note stays optional)                                  | none                                       | `done` (unchanged, §1's MOTIR-5887 amendment point 6)                                                                                                                                        | **offered** — anchored on the choice card, seeded to plan `## What this choice gates` with the chosen option                             | MOTIR-6069                   |
+| `pull_request_approval`                                      | Request changes                                                             | none                                       | none (unchanged)                                                                                                                                                                             | **none** — the author reads the reason on the card and the pull request, as today                                                        | MOTIR-6067 (the reason only) |
+| `plan_approval` (MOTIR-6012)                                 | ~~— no refusal verb~~ **Decline**, reason OPTIONAL — §11.10 amends this row | —                                          | —                                                                                                                                                                                            | —                                                                                                                                        | MOTIR-6035                   |
 
 **Four notes on the table:**
 
@@ -4401,9 +4403,440 @@ above this section is unchanged.
 #### 10i. What this section does NOT decide
 
 The HOSTED automatic re-dispatch (9.2, 10g); a refusal verb on the plan gate
-(MOTIR-6012 has none); posting anything back to GitHub (§8's FOURTH AMENDMENT
+(MOTIR-6012 has none — **read as _no `request_changes`_: its one refusal, `decline`, is decided in §11.4**); posting anything back to GitHub (§8's FOURTH AMENDMENT
 decision 9); and the copy and layout of the reason field and the verdict pair,
 which are MOTIR-6073's to draw.
+
+### 11. The PLAN-APPROVAL kind — a gate whose subject is a PLAN and which belongs to NO work item — NEW (MOTIR-6031 for Story MOTIR-6012, 2026-09-23), DECIDED BY THE PLANNER on the story's settled shape
+
+**What was MISSING.** Every kind above hangs off a work item: the row's
+`workItemId` is NOT NULL with a cascading foreign key (`prisma/schema.prisma`,
+`model ApprovalGate`), the queue reaches the routing half of its predicate
+through that card, and the overlay is addressed by the card's key. **A PLAN is
+decided outside all of it.** `plansService.approvePlan` / `declinePlan` sit
+behind `ai:decide_plan` and are pressed from the plan page, the planning rail,
+`ExpansionNudgeBanner` and the v1 route
+`app/api/v1/work-items/[key]/plan-approval` (the `motir auto
+--auto-approve-replan` caller). No list collects a waiting plan, and no gate row
+records who approved which version of it.
+
+**Read at base `983af7117`.** This section is the contract Story MOTIR-6012's
+children build to. Each of them cites the numbered point it implements rather
+than re-reading the story. **No behaviour ships in this section.**
+
+| point                                                                  | built by                                                            |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 1–2 — the kind, the card-less row, the index, the constraint           | MOTIR-6032 (schema) · MOTIR-6034 (every read that assumed a card)   |
+| 3–6 — the subject, the stamp, the verbs, the effect, the hold, routing | MOTIR-6035 (the handler and its registry promotion)                 |
+| 5b — the decision surface                                              | MOTIR-6033 (design) · MOTIR-6037 (the row and the planning surface) |
+| 7 — raise and supersede                                                | MOTIR-6036                                                          |
+| 8 — every decision through the door                                    | MOTIR-6038                                                          |
+| 9 — the backfill                                                       | MOTIR-6039                                                          |
+
+#### 11.1 The kind is `plan_approval`, and it is the FIRST kind whose gate may belong to NO work item
+
+A plan that proposes a new epic has no card to hang on, and a re-plan of one
+story is still not ABOUT that story: it is about the proposal set, which can
+reach cards in other epics (`agent-authored-plans.md` AMENDMENT 18's `modify`
+of any committed card). So **a `plan_approval` gate ALWAYS carries a NULL
+`workItemId`, and every other kind ALWAYS carries one.** It is a biconditional,
+not "may":
+
+- **Enforced by a CHECK constraint**,
+  `approval_gate_work_item_iff_not_plan`:
+  `("kind" = 'plan_approval') = ("work_item_id" IS NULL)`. A constraint rather
+  than an application check because the row is the audit artefact (§6a), and a
+  card-less design gate written by a buggy path would be a question nobody can
+  reach — no routing card, no item page, no overlay address.
+- **`workItemId` becomes nullable in the datamodel.** The relation keeps
+  `onDelete: Cascade` for every row that has a card. No other column changes
+  meaning.
+- **Every read that assumed a card must handle a gate without one** — and "every"
+  is measured by the type, not by a list: once `workItemId` is `string | null`,
+  the compiler names each site. The ones known at this base are
+  `GateRoutingArgs.item` (`lib/approvalGates/registry.ts` — `routeTo` and
+  `currentSubject` take a `WorkItem`), the decide door's pre-read
+  (`approvalGatesService.decide`, which loads the card to resolve authority and
+  the status intent), `listAwaitingMe` / `countAwaitingMe` (which join the card
+  for routing), the Approvals room's record reads, the gate DTO, and
+  `lib/approvals/overlayAddress.ts`. Handling them is MOTIR-6034's.
+
+#### 11.2 The SUBJECT says what it is about — no second owner column, no foreign key to `Plan`
+
+**`subjectId` is the `Plan.id`.** §1's MOTIR-4911 amendment already made the
+subject an opaque id with a per-kind resolver, precisely so a kind whose subject
+is not a work-item artefact needs no migration on this table. **No `plan_id`
+column is added**: it would be a second polymorphic owner beside `subjectId`,
+and a reader would have to learn which of the two a kind uses.
+
+**Why no foreign key to `Plan` is owed.**
+
+1. The row's own `workspaceId` and `projectId` already cascade, which is the
+   only way a plan is deleted: **no code path deletes a `Plan` on its own**
+   (measured: no `plan.delete` / `plan.deleteMany` outside tests at this base).
+   A plan is declined, never removed.
+2. A vanished subject is already a shipped answer for every kind:
+   `resolveSubject` returns null, and the surfaces read that as the subject
+   being gone. A plan gate uses the same answer.
+3. §1's reasoning holds here unchanged: a polymorphic FK is worse than none, and
+   an FK on one kind's subject would make this the one kind whose subject the
+   schema knows.
+
+**The awaiting-uniqueness index cannot key a NULL.**
+`approval_gate_one_awaiting_per_subject` is `(work_item_id, kind, subject_id)
+WHERE state = 'awaiting'` (`prisma/migrations/20260908210000_add_approval_gate`),
+and in a unique index two NULLs are distinct, so it would admit any number of
+awaiting plan gates for one plan. **A SECOND partial unique index is added**,
+`approval_gate_one_awaiting_per_cardless_subject`, over `(subject_id, kind)
+WHERE state = 'awaiting' AND work_item_id IS NULL`. The existing index is left
+exactly as it is. Re-creating the existing index `NULLS NOT DISTINCT` (Postgres
+15+, which the project's Postgres 16 supports) was considered and rejected. It
+would rebuild the one index every write path of every kind relies on to key a
+question only this kind asks. The new index covers the card-less rows alone, so
+it is small, and the shipped index keeps its byte-identical definition. **Check the column list against every `@@index` on the model before
+naming it** (CLAUDE.md's partial-index rule): `(subject_id, kind)` must not be
+the column list of any datamodel index, or the differ will report a permanent
+rename.
+
+#### 11.3 The subject's VERSION is a digest of the PROPOSAL SET — enumerated here so two implementers compute the same one
+
+`Plan` has no version column and `subjectVersion` is opaque text (§6a), so this
+kind's version is a digest. **Its inputs are every `PlanItem` row of the plan,
+and nothing else:**
+
+```
+subjectVersion = "plan.v1." + hex(sha256(canonicalJson({
+  proposals: <every PlanItem where planId = the plan, sorted by id ascending,
+              comparing the ids as byte strings>
+             .map(item => ({
+               id, op, workItemId, parentRef, blockedByRefs,
+               proposedFields, patch, baseRevision,
+             })),
+})))
+```
+
+- **`canonicalJson`** is `JSON.stringify` over a copy in which every OBJECT's
+  keys are sorted by UTF-16 code unit order, recursively, with no whitespace. A
+  database NULL is JSON `null`, never an omitted key. Array order is kept as
+  stored (`blockedByRefs` order is the author's, and a re-ordered list is a
+  different proposal). The full digest is the 64-character hex string.
+- **Excluded, deliberately:** `createdAt`, `workspaceId` and `planId` (they
+  cannot change or say nothing about what is decided), and the plan's `title`,
+  `summary` and `status`.
+- **DEVIATION from the card, with its reason.** The card asked for _"each
+  proposal's id and revision, plus the plan's status"_. **`PlanItem` has no
+  revision column.** `baseRevision` is the revision of the TARGET work item a
+  `modify` was written against, not of the proposal, and a deepen
+  (`update_plan_item`) or a correction (`update_plan_proposal`) rewrites
+  `proposedFields` / `patch` / `parentRef` / `blockedByRefs` IN PLACE. An
+  id-only digest would stay the same over a corrected proposal, which is exactly
+  the case the stamp exists to catch. So the CONTENT is hashed. **The status is
+  left out** because it is a precondition, not content: the handler refuses
+  anything but `planned` whatever the digest says (11.4), so including it adds
+  no refusal and would make a digest mean two things.
+- **The stamp is the shipped one** (`lib/approvalGates/stamp.ts`,
+  `computeGateStamp`): `subjectVersion` is this digest,
+  `companionSubjectVersion` is null (a plan gate has no companion merge gate),
+  and `descriptionMd` is null (there is no card body). **A digest that moves is
+  reported as `subject`.** That is how _"approving against a version read before
+  the planner rewrote it is refused as stale"_ holds:
+  `APPROVAL_GATE_STALE_SUBJECT` (MOTIR-5232), with no new refusal minted. The
+  reader's words for it are MOTIR-6033's to draw.
+- **The digest is ONE function** in `lib/approvalGates/`, beside `stamp.ts`, and
+  the render read and the decide door both call it. The stamp's own header says
+  why: two implementations would be two answers to _did this change?_.
+
+#### 11.4 The VERBS — `approve`, a NEW `decline`, and NO `request_changes`
+
+| verb                  | offered                                   | what it does beyond recording the decision                                                                                                   |
+| --------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`approve`**         | yes                                       | materializes the plan exactly as `plansService.approvePlan` does today — the proposals become work items, the targets are released (point 5) |
+| **`request_changes`** | **NO**                                    | refused by the door with `ApprovalGateVerbNotOfferedError(gateId, 'request_changes_on_plan')`                                                |
+| **`decline`**         | yes — **offered ONLY by `plan_approval`** | writes the plan `declined` with `decisionReason: 'reviewed'`, exactly as `plansService.declinePlan` does from `planned`                      |
+
+- **Why no `request_changes`.** A plan is changed by TALKING to the planner,
+  which writes a new version of the SAME plan (Story MOTIR-3595 — a revision
+  appends to the `planned` plan where it stands, `agent-authored-plans.md`
+  AMENDMENT 10). A _Request changes_ verb would record a refusal and then wait
+  for a revision that only a conversation can produce, so it would leave the
+  question looking open for something it cannot cause. The door refuses it the
+  way it refuses `request_changes` on `decision_confirmation`.
+- **Why a `decline` verb, and not the `request_changes` slot.** Without it a plan
+  a person has changed their mind about waits in To approve for ever. **A decline
+  ENDS the question**; changes-requested keeps it open and puts the ball in the
+  author's court, which here is a conversation rather than a verb. It follows the
+  optional-verb pattern `overturn?` established on `GateHandler`
+  (`lib/approvalGates/registry.ts`): **`GateHandler.decline?`** is optional,
+  `GateDecision` (`lib/dto/approvalGate.ts`) gains `'decline'` on the route, the
+  server action and the service, and the door refuses it on any kind that does
+  not supply it with `ApprovalGateVerbNotOfferedError(gateId,
+'decline_on_other_kind')`.
+- **It writes a NEW terminal state, `declined`** — not `changes_requested`
+  (non-terminal on every kind that has it) and not `overturned` (which means _a
+  direction was refused_, with a re-plan owed). A reader counting refusals must
+  be able to tell a plan ended by a person from a decision sent back.
+  `ApprovalGateState` gains the member, and **`enforce_approval_gate_decided_immutable`
+  must list it**: the trigger names its decided states explicitly
+  (`20260922000300_approval_gate_decided_immutable_overturned`), so a
+  `declined` row it did not list would stay editable. Both are MOTIR-6032's.
+- **Its reason is OPTIONAL — a DELIBERATE departure from §10a, stated so a later
+  reader does not "fix" it.** §10a requires a reason on every refusal a person
+  presses, because _"a no is the feedback somebody has to act on"_. A decline
+  hands nothing to anybody: no run picks the plan up afterwards, no planner opens
+  (11.4's row in §10h, below), and the gate is routed to the person who asked for
+  the plan (11.6), so in the ordinary case the decider is declining their own
+  request. The requester's rule 1 in §10 is that a person _must be able to_ give
+  a reason, and they can: `noteMd` is stored when given, under the decided-row
+  trigger like every note. **§10h's `plan_approval` row is amended below to say
+  so.**
+- **Approve and decline are decided under the SAME permission and the SAME
+  hold** (points 5c and 6).
+
+#### 11.5 `statusIntent` is NULL — the handler writes a PLAN's status, never a work item's
+
+A plan gate owns no work-item transition, so `statusIntent: null` and
+`resolvedStatusKey` is always null. **What approve and decline change is
+`Plan.status`**, inside the handler's effect, in the door's transaction. The
+effect reports `statusWritten: null` with a new `statusDeferredReason`,
+`'plan_decision_writes_no_work_item'`, so the record never reads as a decision
+that failed to move a card. Approve's materialize DOES write work-item statuses:
+approve derives `blocked` from the proposals' edges, and the parked targets are
+restored. Those are the plan's effects, recorded on each work item's own history
+exactly as today. They are not the gate's `outcomeRef`, which stays null.
+
+**THE LOCK ORDER — the PLAN row first, then the gate row.** Every plan-side
+writer that touches a plan gate already holds the plan lock
+(`planRepository.lockById`) when it gets there: markPlanned, the drift writers,
+the last-withdrawal discard, and approve and decline themselves. The door's
+generic order is the opposite: it locks the GATE (`SELECT … FOR UPDATE`) and then
+calls the handler. Two transactions taking the same two rows in opposite orders
+deadlock. **So for this kind the door takes the plan lock BEFORE the gate
+lock.** `subjectId` is immutable, so it is read unlocked first, the plan is
+locked, and then the gate is locked and re-read. This is a precondition of
+MOTIR-6035's handler, and the supersede writers of MOTIR-6036 must keep the
+plan-then-gate order. Any other order is a deadlock waiting for a busy project.
+
+**The materialize runs in the door's transaction.** `approvePlan` and
+`declinePlan` open their own today. The handler calls their bodies through a
+`…Within(tx)` seam that takes the caller's transaction. The post-commit side
+effects (events, the provisional-project rename) stay after the commit, exactly
+where `approvePlan` puts them now.
+
+#### 11.5b The DECISION SURFACE is the PLANNING SURFACE — a stated departure from _one control_
+
+**This kind renders NO port, and the approval overlay is not where it is
+decided.** Opening its To-approve row returns the person to the planning surface
+at the plan's own conversation (the `planSession` address, Story MOTIR-6011),
+where the plan is already rendered for review and where they can keep talking to
+the planner. **Approve** and **Decline** sit there.
+
+**What is unchanged, and why this is not a second vocabulary:** the routing
+(11.6), the record (§6a, every column), the stamp (11.3) and the ONE decide door.
+**What differs is only the surface.** Deciding a plan means reading it beside the
+conversation that can change it, and a port inside the overlay can host the plan
+but not the conversation. §1's _"No second vocabulary, no second control, no
+second decide door"_ keeps its first and third clauses in full. Its second is
+satisfied by the verbs and their copy, not by the frame, and this is the one
+kind for which that is true.
+
+- **The overlay ADDRESS is not extended.** A plan gate carries no card key to
+  address, and it opens nowhere in the overlay. An overlay that is handed one
+  anyway (a stale link) sends the person to the planning surface rather than
+  rendering a frame with no port. That is MOTIR-6037's.
+- **A plan with NO conversation** (a backfilled plan, an agent-authored MCP plan
+  whose session has no turns, a cadence plan) opens its own plan page
+  (`/plans/<id>`), where the same two verbs sit.
+- The row's words, the two verbs' placement and copy, and the hand-off message
+  before generation are MOTIR-6033's to draw.
+
+#### 11.5c HELD while the planner rewrites — NOT superseded, NOT re-raised
+
+While a new version of the plan is being written, **the gate stays `awaiting`
+and BOTH verbs are refused**, with a reason a person can read. It is the same
+plan and the same question.
+
+- **What "being rewritten" is, in code: the REVISION LEASE**, not the plan's
+  status. A revision leaves the plan `planned` from start to finish (AMENDMENT
+  10 D1). The lease lives on the plan's own trail, a `revision_started` with no
+  `revision_ended` after it inside the window (`revisionLeaseOf`,
+  `lib/planChange/revisionLease.ts`). **Decidability is DERIVED from it and never
+  stored.** No column and no state record "held", so nothing can forget to clear
+  it. _(A correction to the card, which said "derived from the plan's status":
+  the status does not move during a revision, so there is nothing there to
+  derive from.)_
+- **The refusal already ships for both verbs.** `approvePlan` and `declinePlan`
+  each call `assertNoRevisionInFlight` under the plan lock and throw
+  `PlanRevisionInFlightError(planId, heldBy, expiresAt)`. `declinePlan` records
+  why a decline is refused too: a revision finishing into a declined plan leaves
+  proposals nobody will read. The handler inherits that refusal through the
+  `…Within(tx)` seam. The gate DTO carries it as `held: { reason:
+'revision_in_flight', heldBy, expiresAt } | null`, so the row and the surface
+  can say so before anyone presses.
+- **When the lease ends, the SAME gate is decidable again**, against the new
+  version. Its `subjectVersion` is computed at decision time, and a reader
+  holding a stamp from before the revision is refused stale (11.3).
+- **Why supersede-and-re-raise is WRONG here, although other kinds do it on a
+  moving subject.** A `republished` design or a `head_moved` delivery is a
+  DIFFERENT subject, so the old question is withdrawn and a new one asked. A
+  revised plan is the SAME plan. Superseding it would drop the row out of To
+  approve while the person is mid-conversation about it, and the fresh gate would
+  land a moment later as a new question. That is two rows in the record for one
+  question.
+- **The same holds for the correction doors outside a lease.**
+  `update_plan_proposal`, `withdraw_plan_proposal` (short of the LAST proposal —
+  11.7) and a `revision: true` append on a `planned` plan each move the digest,
+  and none of them supersedes. The stamp is the only mechanism that answers
+  _this changed since you read it_.
+
+#### 11.6 Routing and authority
+
+- **ROUTED to `Plan.createdById`**, the person who asked for the plan
+  (MOTIR-2986), written into `routedToId` at creation as §6a requires.
+- **`createdById` is NULL on a `cadence` plan** by design: nobody asked, so the
+  schema will not attribute the request to anyone. Routing is not attribution:
+  `routedToId` records who was ASKED, not who requested it. **A null requester
+  routes to the workspace OWNER**
+  (`workspaceMembershipRepository.findOwnerByWorkspace`), the identity the
+  cadence watcher already acts as (`autoPlanCadenceService`). A gate routed to
+  nobody would appear in no To approve at all, which is the exact failure this
+  story exists to end. A workspace with no owner row (an invariant violation the
+  cadence path already logs) routes to nobody, and the gate is still decidable
+  from the planning surface.
+- **AUTHORITY is the permission `ai:decide_plan`, and nothing else.** §2's
+  relationship rule (assignee, reporter, `approval:decide_any`) is a rule about a
+  WORK ITEM, and a plan gate has none. Today any holder of `ai:decide_plan` may
+  approve or decline any plan in the project, and this kind keeps exactly that.
+  **The door records it under a NEW `ApprovalGateAuthority` member,
+  `plan_permission`**: none of the four existing members is true of the decider.
+  Recording `assignee` or `admin` would be a claim about a relationship or a key
+  that does not exist, which is the reasoning `github_review` already records
+  for itself. The member is MOTIR-6032's.
+
+#### 11.7 RAISED, HELD, SUPERSEDED
+
+| when                                                                                                                                                                 | what the gate does                                                      | where                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------- |
+| a plan reaches `planned` with at least one proposal — the close (`markPlanned`), and a drift restore (`planDriftService.restoreForRevivedTarget`, `stale → planned`) | **RAISED `awaiting`** — at most one per plan (11.2's index), idempotent | the plan's own transaction    |
+| a revision lease is held                                                                                                                                             | **HELD** — still `awaiting`, both verbs refused (11.5c)                 | derived, never written        |
+| the digest moves outside a lease (a correction)                                                                                                                      | **nothing** — the stamp refuses stale readers (11.3)                    | —                             |
+| the plan goes `stale` — `planDriftService.markStaleForTerminalTarget`, and `approvePlan`'s lazy backstop on `PlanTargetImmutableError`                               | **SUPERSEDED**, cause **`plan_stale`** (NEW)                            | the stale write's transaction |
+| the LAST proposal is withdrawn, so the plan is discarded (`withdrawProposal` → `declined` / `discarded`)                                                             | **SUPERSEDED**, cause **`plan_discarded`** (NEW)                        | the withdraw's transaction    |
+| a person approves or declines                                                                                                                                        | **DECIDED** through the door                                            | the door                      |
+
+- **Why two NEW causes.** `ApprovalGateSupersedeCause`'s own header requires
+  _"ONE MEMBER PER WRITING PATH, AND NO MEMBER MEANING UNSAID"_. `withdrawn` is
+  documented as _"the design result was withdrawn"_, and `pulled_back` is a work
+  item leaving review. Neither is true of a plan that drifted or emptied, and a
+  surface rendering one of them would be telling the person something false. The
+  two members are MOTIR-6032's.
+- **An EMPTY close raises nothing.** `markPlanned` over zero proposals writes
+  `declined` / `discarded` (MOTIR-4124), so there was never a question.
+- **The abandoned-plan sweep supersedes nothing.** `abandonedPlanService`
+  selects only `generating` plans (its discovery predicate and its re-check under
+  the lock), and a `generating` plan has no gate. The card named it as a
+  supersede cause, and at this base it cannot meet one. If the sweep ever widens
+  to `planned`, it owes a cause of its own under the enum's rule.
+- **Drift that REVERSES re-raises.** `stale → planned` is a raise trigger, so a
+  plan that drifted and recovered is asked again: a fresh gate, because the old
+  one was superseded while nobody could approve it.
+- **The HELD case is explicitly NOT a supersede** (11.5c).
+
+#### 11.8 What stays a PLAIN status write — OUT of the door
+
+The door owns the decision of **a plan whose question is ASKED**, meaning an
+`awaiting` gate exists. These writers change `Plan.status` with no gate
+decision, and they are not routed through the door:
+
+1. **`markPlanned`** — `generating → planned` (it RAISES the gate, 11.7), and the
+   empty-close `declined` / `discarded`.
+2. **`planDriftService`** — `planned → stale` and `stale → planned`, and
+   `approvePlan`'s lazy `stale` backstop.
+3. **The last-withdrawal discard** in `withdrawProposal`.
+4. **`abandonedPlanService.reconcileAbandoned`** — `generating → declined` /
+   `abandoned`, decided by nobody.
+5. **A person declining a plan nobody is being asked about** — `declinePlan` from
+   `generating` (a discard: the plan never finished) or from `stale` (its
+   question was superseded, 11.7). There is no `awaiting` gate to decide, so
+   there is nothing for the door to record. The plan's own row and trail record
+   the ending, as they do today. **Story MOTIR-6012's criterion _"no other path
+   writes a decided plan status"_ is read over the four ENTRANCES that decide a
+   `planned` plan** (the plan page, the planning rail, the nudge and the v1 route,
+   MOTIR-6038). That reading is recorded here so a later pass does not route
+   these two through a door that has no gate to lock.
+
+**And the converse, which MOTIR-6038 makes true:** while an `awaiting` plan gate
+exists, **no path but the door** writes `approved` or `declined` onto that plan.
+`plansService.approvePlan` / `declinePlan` stop being public deciding doors and
+become the handler's `…Within(tx)` effects.
+
+#### 11.9 The BACKFILL
+
+> **⚠️ AMENDED 2026-09-23 (MOTIR-6039), by the requester's decision: the backfill
+> RUNS AS A DATA MIGRATION, WITH THE DEPLOY.** The original text below is struck.
+> Any gap between the deploy and a manual run leaves every already-`planned` plan
+> missing from To approve and answering _not decidable yet_ at every approve door
+> (11.8). The reasons given for "never through raw SQL" do not survive a check:
+>
+> - **routing** (11.6) is `COALESCE(plan.created_by_id, <the workspace's earliest
+owner membership>)`, exactly `resolvePlanGateRoute`;
+> - **uniqueness** (11.2) is `NOT EXISTS (awaiting gate)`, backed by
+>   `approval_gate_one_awaiting_per_cardless_subject`;
+> - the **digest** (11.3) cannot be reproduced in SQL, and it does not need to be.
+>   The decide door stamps a `plan_approval` gate against the LIVE digest
+>   (`stampsLiveVersion`) and records the version at decision time, so a
+>   backfilled row carries a NULL `subject_version`.
+>
+> **What ships:**
+>
+> - `20260923200200_backfill_plan_approval_gates`: one `INSERT … SELECT` that
+>   raises an `awaiting`, card-less gate for every `planned` plan with at least
+>   one proposal and none awaiting. It is idempotent and cross-tenant (it runs as
+>   the migration owner).
+> - `pnpm db:backfill:plan-gates` stays as the tool that VERIFIES and REPAIRS.
+>   It goes through the shipped raise, one transaction per plan, with a
+>   `--dry-run`. After the deploy its dry-run reports 0 to raise.
+>
+> **The accepted cost** is that the population and routing rules exist a second
+> time, in SQL, frozen at this deploy. A migration runs once, so it only has to
+> match the rules as they stand at that deploy. A test proves the two copies agree
+> by checking that the script's dry-run predicts exactly the migration's rows.
+> **No operator step is owed after the deploy.**
+
+~~Every plan already `planned`, with at least one proposal and no `awaiting` gate,
+gets one **through the shipped raise** (MOTIR-6036's function, the same one
+`markPlanned` calls), never through raw SQL, so the routing (11.6), the index
+(11.2) and `routedToId` are exactly what a live raise writes. Idempotent by the
+index. One transaction per plan, so one failure does not roll back the rest. A
+`--dry-run` that reports what the real run would raise and routes nothing. The
+script is MOTIR-6039's. **Running it on production is NOT this story's**: that is
+an operator step after the deploy, owed as its own `manual` card.~~
+
+#### 11.10 §10's plan row, and the KIND table's row
+
+**§10h's `plan_approval` row is amended** — ~~_— no refusal verb_ · — · — · — ·
+out~~:
+
+| kind · case                  | refusal verb(s), reason (10a)                                          | verdict at the press (10d) | status written by the refusal                               | planner opens (10f)                                                                                                                       | built by   |
+| ---------------------------- | ---------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `plan_approval` (MOTIR-6012) | **Decline** — reason OPTIONAL (11.4); _Request changes_ is not offered | none                       | none on a work item — the PLAN goes `declined` / `reviewed` | **none** — a decline ends the question; changing a plan is a conversation, and the planning surface is already where the decision is made | MOTIR-6035 |
+
+**§10i's _"a refusal verb on the plan gate (MOTIR-6012 has none)"_** is read as
+_"no `request_changes` on the plan gate"_. The gate's one refusal, `decline`, is
+decided here.
+
+**The KIND table's row:**
+
+| kind            | the port shows                                                                                           | fires when                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `plan_approval` | **no port** — the planning surface at the plan's conversation, or the plan page when it has none (11.5b) | a plan reaches `planned` with at least one proposal (11.7) — **never** a work item's review |
+
+#### 11.11 What this section does NOT decide
+
+The row's and the surface's words and layout (MOTIR-6033). The hand-off message
+before generation (MOTIR-6033 draws it; MOTIR-6037 builds it). Refusing a manual
+move of a plan's cards out of Planning, which is Story MOTIR-6017, the consumer of
+this gate. Notifications. Where a plans row opens (Story MOTIR-6043, which
+consumes 11.5b's fallback). ~~Running the backfill on production (11.9).~~ The backfill now runs with the deploy (11.9, amended).
 
 ---
 

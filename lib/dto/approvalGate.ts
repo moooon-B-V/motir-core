@@ -22,6 +22,7 @@ import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { PlanAuthorSourceDto, PlanOriginDto } from '@/lib/dto/plans';
 import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 
 // Wire DTOs for the approval-gate record (Story MOTIR-4778 · Subtask
@@ -54,7 +55,9 @@ export type ApprovalGateKindDTO =
   | 'pull_request_merge'
   | 'acceptance_result'
   | 'decision_choice'
-  | 'decision_confirmation';
+  | 'decision_confirmation'
+  /** A PLAN, on a gate that belongs to NO work item (ADR §11, MOTIR-6032). */
+  | 'plan_approval';
 
 /**
  * WHETHER A DECISION IS WAITING ON A WORK ITEM, AND ON WHOM — the one answer the
@@ -141,7 +144,9 @@ export type ApprovalGateStateDTO =
   | 'changes_requested'
   | 'superseded'
   /** A person refused a `decision_confirmation` gate's direction (MOTIR-5956) — terminal. */
-  | 'overturned';
+  | 'overturned'
+  /** A person ended the plan a `plan_approval` gate asked about (ADR §11.4) — terminal. */
+  | 'declined';
 
 /**
  * WHY a `superseded` gate was withdrawn — mirrors the `ApprovalGateSupersedeCause`
@@ -158,7 +163,11 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'conflict'
   | 'set_changed'
   | 'pulled_back'
-  | 'unknown';
+  | 'unknown'
+  /** The plan went `stale` (ADR §11.7). */
+  | 'plan_stale'
+  /** The plan's last proposal was withdrawn, so it was discarded (ADR §11.7). */
+  | 'plan_discarded';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can
@@ -169,7 +178,14 @@ export type ApprovalGateSupersedeCauseDTO =
  *  decision 4): it is authority conferred by the HOST's review permission, and it
  *  is written only by the synced decision. `resolveGateAuthority` never returns
  *  it, so no Motir surface can produce one. */
-export type ApprovalGateAuthorityDTO = 'assignee' | 'reporter' | 'admin' | 'github_review';
+export type ApprovalGateAuthorityDTO =
+  | 'assignee'
+  | 'reporter'
+  | 'admin'
+  | 'github_review'
+  /** `ai:decide_plan` alone — the `plan_approval` kind has no work item, so no §2
+   *  relationship rung is true of its decider (ADR §11.6). */
+  | 'plan_permission';
 
 /** Through which surface the decision arrived (ADR §6a, with `github` added by
  *  §6b's amendment). Mirrors the `ApprovalGateDecisionSource` Prisma enum. A
@@ -194,8 +210,11 @@ export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
  * A kind may later carry a verb SET rather than this pair (ADR §1's amendment,
  * `decision_choice`), which is why the door takes a decision rather than
  * exposing `approve()` / `requestChanges()` as separate methods.
+ *
+ * `decline` (MOTIR-6035; ADR §11.4) is offered ONLY by `plan_approval`: it ends the
+ * plan, writes the terminal state `declined`, and its note is OPTIONAL.
  */
-export type GateDecision = 'approve' | 'request_changes' | 'choose' | 'overturn';
+export type GateDecision = 'approve' | 'request_changes' | 'choose' | 'overturn' | 'decline';
 
 /** WHAT A CHOICE'S DECISION PICKED — see {@link ChosenOption} (MOTIR-5893). */
 export type ChosenOptionDTO = ChosenOption;
@@ -208,8 +227,10 @@ export type ChosenOptionDTO = ChosenOption;
  */
 export interface ApprovalGateDTO {
   id: string;
-  /** The card the gate hangs off. */
-  workItemId: string;
+  /** The card the gate hangs off — NULL on a `plan_approval` gate, and on no other
+   *  kind (ADR `approval-gates.md` §11.1): a plan gate belongs to no work item, and
+   *  what it is about is its `subjectId`, the plan. */
+  workItemId: string | null;
   kind: ApprovalGateKindDTO;
   /** The row being decided — resolved by the registry handler for `kind`. */
   subjectId: string;
@@ -278,6 +299,13 @@ export interface ApprovalGateDTO {
    * them: re-planning is a planning act a person starts.
    */
   replanOwed: { keys: string[] } | null;
+  /**
+   * WHY THIS GATE CANNOT BE DECIDED RIGHT NOW although it is `awaiting` (MOTIR-6035;
+   * ADR §11.5c) — set by the plan gate's render read (`approvalGatesService.getForPlan`)
+   * and absent from every other read. DERIVED from the plan's revision lease, never
+   * stored: when the lease ends, the same gate is decidable against the new version.
+   */
+  held?: PlanGateHeldDTO | null;
 
   createdAt: string;
   updatedAt: string;
@@ -552,7 +580,54 @@ export interface UnregisteredSubjectSummaryDTO {
     | 'pull_request_approval'
     | 'decision_choice'
     | 'decision_confirmation'
+    | 'plan_approval'
   >;
+}
+
+/**
+ * A PLAN GATE IS HELD while the planner rewrites the plan (MOTIR-6035; ADR §11.5c):
+ * the gate stays `awaiting` and both verbs are refused with `PlanRevisionInFlightError`
+ * until the revision lease ends. `heldBy` is the revising agent's harness, or null.
+ */
+export interface PlanGateHeldDTO {
+  reason: 'revision_in_flight';
+  heldBy: string | null;
+  /** ISO-8601 — when the lease lapses if the revision writes nothing more. */
+  expiresAt: string;
+}
+
+/**
+ * WHICH PLAN is waiting, at row scale (Story MOTIR-6012 · MOTIR-6035; design
+ * `design/ai-planning/design-notes.md` Part XX §20.3's field table). A plan gate has no
+ * card (`workItem` is null on its row), so everything the row draws is here.
+ */
+export interface PlanApprovalSubjectSummaryDTO {
+  kind: 'plan_approval';
+  /** The plan — the gate's `subjectId`; the row's `href` is `/plans/<planId>`. */
+  planId: string;
+  /** The plan's conversation (the `planSession` address), or null when it has none. */
+  sessionId: string | null;
+  /** Whether that conversation has any turns: the row opens the planning overlay when
+   *  it does, and the plan page (`/plans/<id>`) when it does not (§11.5b). */
+  sessionHasTurns: boolean;
+  /** `Plan.title`, as written, or null. */
+  title: string | null;
+  /** The project's name — the leading line's last fallback. */
+  projectName: string;
+  /** What the plan re-plans: the session's `targetKeys` in stored order, each with the
+   *  target's title (null when the key no longer resolves in the project). */
+  targets: { key: string; title: string | null }[];
+  /** How many proposals the plan holds. */
+  proposalCount: number;
+  /** Who WROTE the plan — the details cell's author (`written by …` / `planned
+   *  automatically`). Never the requester: the gate is routed to them. */
+  author: {
+    source: PlanAuthorSourceDto | null;
+    harness: string | null;
+    origin: PlanOriginDto;
+  };
+  /** Being rewritten — the row's `Being rewritten` pill (§11.5c), or null. */
+  held: PlanGateHeldDTO | null;
 }
 
 /**
@@ -572,6 +647,7 @@ export type ApprovalGateSubjectSummaryDTO =
   | AcceptanceResultSubjectSummaryDTO
   | DecisionChoiceSubjectSummaryDTO
   | DecisionConfirmationSubjectSummaryDTO
+  | PlanApprovalSubjectSummaryDTO
   | UnregisteredSubjectSummaryDTO;
 
 /** The card a gate hangs off, as a queue row identifies it. */
@@ -628,7 +704,13 @@ export interface ApprovalQueueRowDto {
   routedToName: string | null;
   /** ISO-8601 — when the question was asked. The row renders how long ago. */
   waitingSince: string;
-  workItem: ApprovalQueueWorkItemRefDto;
+  /**
+   * The card the gate hangs off — NULL for a gate that belongs to NO work item, a
+   * `plan_approval` (Story MOTIR-6012 · MOTIR-6034; ADR `approval-gates.md` §11.1).
+   * What such a row is about is its `subject`; it opens the planning surface, never
+   * the overlay (§11.5b), and drawing it is MOTIR-6037's.
+   */
+  workItem: ApprovalQueueWorkItemRefDto | null;
   /**
    * What is being decided — or NULL when the gate's subject no longer resolves.
    *
@@ -680,7 +762,12 @@ export interface ApprovalQueueDto {
 export interface ApprovalRecordDecidedRowDto {
   gateId: string;
   kind: ApprovalGateKindDTO;
-  state: Extract<ApprovalGateStateDTO, 'approved' | 'changes_requested' | 'overturned'>;
+  /** `declined` joined with MOTIR-6037: a plan a person ENDED is a decision the room
+   *  lists (design `design/ai-planning/design-notes.md` Part XX §20.3, Panel 3). */
+  state: Extract<
+    ApprovalGateStateDTO,
+    'approved' | 'changes_requested' | 'overturned' | 'declined'
+  >;
   /** ISO-8601 — when the decision was recorded. The section's sort key. */
   decidedAt: string;
   /**
@@ -702,7 +789,8 @@ export interface ApprovalRecordDecidedRowDto {
   subjectVersion: string | null;
   /** ISO-8601 — when the question was asked. */
   waitingSince: string;
-  workItem: ApprovalQueueWorkItemRefDto;
+  /** The card — NULL on a card-less (`plan_approval`) record (ADR §11.1, MOTIR-6034). */
+  workItem: ApprovalQueueWorkItemRefDto | null;
   /** What was decided, or NULL when the gate's subject no longer resolves. */
   subject: ApprovalGateSubjectSummaryDTO | null;
   /**
@@ -719,7 +807,8 @@ export interface ApprovalRecordDecidedRowDto {
   confirmedRecord: ConfirmedRecordDTO | null;
   /**
    * WHAT A REFUSAL ASKED FOR (Story MOTIR-6067 · MOTIR-6075; ADR `approval-gates.md` §10a–b)
-   * — the gate's `noteMd`, on a `changes_requested` row ONLY. Null on every other state:
+   * — the gate's `noteMd`, on a `changes_requested` row, and on a `declined` plan row
+   * (MOTIR-6037; its reason is OPTIONAL, ADR §11.4). Null on every other state:
    * an approval's note (a synced approval's review list) and an overturn's note are not a
    * refusal's reason, and the row does not quote them. With `decisionSource` it says where
    * the reason came from — a GitHub review with no body is null here.

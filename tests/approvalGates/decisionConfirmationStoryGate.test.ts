@@ -235,10 +235,13 @@ describe('every ApprovalGateState is handled by the decided-row fold', () => {
       .filter((line) => /^[a-z_]+$/.test(line));
   }
 
-  it('reads a non-empty enum including overturned, and maps exactly the DECIDED members', () => {
+  it('reads a non-empty enum including overturned and declined, and maps exactly the DECIDED members', () => {
     const states = gateStates();
     expect(states).toContain('overturned');
-    const decided = new Set(['approved', 'changes_requested', 'overturned']);
+    expect(states).toContain('declined');
+    // `declined` is a plan gate's decision (Story MOTIR-6012 · MOTIR-6037; ADR §11.4) —
+    // the plan's decline ends the question, so the decided-row fold draws it.
+    const decided = new Set(['approved', 'changes_requested', 'overturned', 'declined']);
     for (const state of states) {
       const row = {
         id: 'g',

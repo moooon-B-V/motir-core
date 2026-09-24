@@ -41,8 +41,14 @@ export type PlanningMode = 'project' | 'generation' | 'replan' | 'contextual' | 
  *   (MOTIR-1663: the Code-health page's "Refine with Motir" entry).
  */
 export type PlanningLaunchContext =
-  | { kind: 'project'; hasPlan?: boolean; sessionId?: string }
-  | { kind: 'work-item'; itemKey: string; hasPlan?: boolean; sessionId?: string }
+  | { kind: 'project'; hasPlan?: boolean; sessionId?: string; via?: PlanningEntrance }
+  | {
+      kind: 'work-item';
+      itemKey: string;
+      hasPlan?: boolean;
+      sessionId?: string;
+      via?: PlanningEntrance;
+    }
   | { kind: 'roadmap' }
   | { kind: 'convention-refine'; repoKey: string };
 
@@ -79,6 +85,15 @@ export type PlanningLaunchContext =
  * The return MAPPING survives in one place, because an old link still needs a
  * page to land on: `app/(authed)/planning/page.tsx`, the forward, inlines it.
  */
+
+/**
+ * WHERE A NAMED SESSION WAS REOPENED FROM (`planVia`, Story MOTIR-6012 · MOTIR-6037;
+ * `design/ai-planning/design-notes.md` Part XX §20.2). Only the To-approve row writes
+ * it, and only its reopened line reads it: *Reopened from To approve* rather than the
+ * Plans-page line every `planSession` address printed before. Absent means the Plans
+ * page, so every shipped link keeps its meaning.
+ */
+export type PlanningEntrance = 'approvals';
 
 /** Resolve the originating context to the planning mode the workspace opens in. */
 export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMode {
@@ -143,6 +158,9 @@ export interface PlanningLaunch {
   repoKey: string | null;
   /** A named session to reopen (`planSession`), when carried (MOTIR-6024). */
   sessionId?: string | null;
+  /** Where that named session was reopened FROM (`planVia`, MOTIR-6037) — present only
+   *  with `sessionId`, and only for an entrance other than the Plans page. */
+  via?: PlanningEntrance;
 }
 
 /** The default a missing / unknown `?mode=` falls back to (never an error). */
@@ -235,6 +253,13 @@ export const OVERLAY_PARAM_NAMES = {
    * bypasses the resume window: a named conversation opens whatever its age.
    */
   session: 'planSession',
+  /**
+   * The ENTRANCE a named session was reopened from (MOTIR-6037; design Part XX
+   * §20.2) — `approvals` from a To-approve row. Read only with `planSession`; absent
+   * or any other value means the Plans page. Its one reader is the rail's reopened
+   * line.
+   */
+  via: 'planVia',
 } as const;
 
 /**
@@ -279,6 +304,9 @@ export function planningOverlaySearch(context: PlanningLaunchContext): URLSearch
   if (context.kind === 'convention-refine') params.set(OVERLAY_PARAM_NAMES.repo, context.repoKey);
   if ((context.kind === 'project' || context.kind === 'work-item') && context.sessionId) {
     params.set(OVERLAY_PARAM_NAMES.session, context.sessionId);
+    // The entrance rides ONLY with a named session: it says where THAT session was
+    // reopened from, and means nothing without one (MOTIR-6037).
+    if (context.via) params.set(OVERLAY_PARAM_NAMES.via, context.via);
   }
   return params;
 }
@@ -405,6 +433,11 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     from === 'project' || from === 'work-item'
       ? first(readParam(params, OVERLAY_PARAM_NAMES.session))
       : null;
+  // Read only WITH a named session; anything but `approvals` is the Plans page.
+  const via =
+    sessionId && first(readParam(params, OVERLAY_PARAM_NAMES.via)) === 'approvals'
+      ? ('approvals' as const)
+      : null;
   return {
     mode: parsePlanningMode(readParam(params, OVERLAY_PARAM_NAMES.mode)),
     from,
@@ -414,5 +447,6 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     // Only the two origins a Plans row writes may carry a named session, and the
     // key is present only when it does — every other launch reads as before.
     ...(sessionId ? { sessionId } : {}),
+    ...(via ? { via } : {}),
   };
 }

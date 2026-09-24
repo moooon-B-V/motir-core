@@ -516,7 +516,7 @@ describe('usePlanChangeConversation — approve / discard', () => {
     });
 
     // The PLAN is what gets confirmed — the same operation `/plans/[id]` performs.
-    expect(approve).toHaveBeenCalledWith('plan-1');
+    expect(approve).toHaveBeenCalledWith('plan-1', null);
     // ⚠️ AMENDED by MOTIR-3162 (bug MOTIR-3154). This asserted `review` was
     // NULLED. `PlanningWorkspaceHost` derives its entire diff index from that
     // field, so nulling it erased the overlay in the same tick the decision
@@ -658,7 +658,7 @@ describe('usePlanChangeConversation — approve / discard', () => {
 
     // Declining DECIDES the plan (`planned → declined`) instead of abandoning it
     // at `planned` forever — and it is the only write a discard makes.
-    expect(decline).toHaveBeenCalledWith('plan-1');
+    expect(decline).toHaveBeenCalledWith('plan-1', null);
     expect(approve).not.toHaveBeenCalled();
     // ⚠️ AMENDED by MOTIR-3162. This is the case where NOTHING survived: a
     // discarded plan left the workspace with no trace, the conversation that
@@ -818,7 +818,7 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
     await act(async () => {
       await result.current.discard();
     });
-    expect(decline).toHaveBeenCalledWith('plan_fresh');
+    expect(decline).toHaveBeenCalledWith('plan_fresh', null);
     expect(result.current.state.planId).toBeNull();
     expect(result.current.state.jobId).toBeNull();
   });
@@ -902,10 +902,89 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
       await result.current.approve();
     });
 
-    expect(approve).toHaveBeenCalledWith('plan-anchored-1');
+    expect(approve).toHaveBeenCalledWith('plan-anchored-1', null);
     // ⚠️ AMENDED by MOTIR-3162: the review SURVIVES the decision on this path
     // too — the anchor changes the thread, not what the canvas keeps.
     expect(result.current.state.review).not.toBeNull();
     expect(result.current.state.decided).toBe('accepted');
+  });
+});
+
+describe('usePlanChangeConversation — an ASKED plan (Story MOTIR-6012 · MOTIR-6037)', () => {
+  const GATED = planReview(
+    [planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', kind: 'story', title: 'Recurring' })],
+    {
+      gate: {
+        id: 'gate-6037',
+        state: 'awaiting',
+        stamp: 'stamp-6037',
+        held: null,
+        canDecide: true,
+        routedToName: null,
+      },
+    },
+  );
+
+  it('a decline carries its OPTIONAL reason, and the stamp the reader was shown', async () => {
+    fetchReview.mockResolvedValue(GATED);
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    await act(async () => {
+      await result.current.discard('Not this quarter');
+    });
+
+    expect(decline).toHaveBeenCalledWith('plan-1', 'stamp-6037', 'Not this quarter');
+    expect(result.current.state.decided).toBe('declined');
+  });
+
+  it('the decision SETTLES the To-approve row underneath, through the decided-gates store', async () => {
+    const { useDecidedGateState } = await import('@/lib/approvals/decidedGates');
+    // The store lives for the page, so each case decides a gate of its own.
+    fetchReview.mockResolvedValue({ ...GATED, gate: { ...GATED.gate!, id: 'gate-6037-a' } });
+    const { result } = await mounted();
+    const row = renderHook(() => useDecidedGateState('gate-6037-a'));
+    expect(row.result.current).toBeNull();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(row.result.current).toBe('approved');
+  });
+
+  it('a declined asked plan settles its row as declined', async () => {
+    const { useDecidedGateState } = await import('@/lib/approvals/decidedGates');
+    const declined = { ...GATED, gate: { ...GATED.gate!, id: 'gate-6037-d' } };
+    fetchReview.mockResolvedValue(declined);
+    const { result } = await mounted();
+    const row = renderHook(() => useDecidedGateState('gate-6037-d'));
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await result.current.discard();
+    });
+
+    expect(row.result.current).toBe('declined');
+  });
+
+  it('an UNASKED plan announces nothing — there is no row to settle', async () => {
+    const { useDecidedGateState } = await import('@/lib/approvals/decidedGates');
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await result.current.approve();
+    });
+    const row = renderHook(() => useDecidedGateState('gate-never'));
+    expect(row.result.current).toBeNull();
   });
 });

@@ -275,7 +275,12 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
     await sendTurn(page, 'Then split the notifications story into email and in-app.');
 
     await expect(confirmBar(page)).toContainText('1 added, 1 changed', { timeout: 30_000 });
-    await expect(confirmBar(page)).toContainText('Nothing is saved until you approve.');
+    // The plan this turn wrote is ASKED — it waits in To approve — so the bar
+    // states the decision's consequence rather than "Nothing is saved until you
+    // approve." (Story MOTIR-6012 · MOTIR-6037; ADR `approval-gates.md` §11.5b).
+    await expect(confirmBar(page)).toContainText(
+      'Approving adds these to your backlog. Declining ends the plan and changes nothing.',
+    );
     await expect(page.locator('[data-diff-state="add"]')).toHaveCount(1);
 
     // BOTH turn kinds are on the one thread, in order — the answer above, the

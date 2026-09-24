@@ -225,7 +225,7 @@ describe('PlanDetail — approving from the canvas (bug MOTIR-3439)', () => {
 
     materialized = true;
     fireEvent.click(screen.getByRole('button', { name: /Approve — add 3 items/ }));
-    await waitFor(() => expect(approvePlanRequest).toHaveBeenCalledWith('plan_1'));
+    await waitFor(() => expect(approvePlanRequest).toHaveBeenCalledWith('plan_1', null));
 
     // The same level, now the RECORD Part VI says this pane becomes: the real
     // work items, with the keys they were given.

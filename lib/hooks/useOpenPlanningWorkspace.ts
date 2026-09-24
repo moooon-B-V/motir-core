@@ -104,5 +104,7 @@ function contextValueKey(context: PlanningLaunchContext): string {
   const hasPlan = 'hasPlan' in context ? String(context.hasPlan) : '';
   // `sessionId` changes the address too — `planSession=<id>` (MOTIR-6024).
   const session = 'sessionId' in context ? (context.sessionId ?? '') : '';
-  return `${context.kind}|${target}|${hasPlan}|${session}`;
+  // …and so does the entrance it was reopened from — `planVia` (MOTIR-6037).
+  const via = 'via' in context ? (context.via ?? '') : '';
+  return `${context.kind}|${target}|${hasPlan}|${session}|${via}`;
 }

@@ -12,6 +12,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { requireArgsCard, requireGateCard } from './gateCard';
 
 // THE `acceptance_result` HANDLER — a story's acceptance receipt, decided through
 // the one gate contract (Story MOTIR-4949 · Subtask MOTIR-4950; ADR
@@ -64,18 +65,26 @@ async function nothingLeftForTheCascade(
 ): Promise<
   { terminal: true } | { terminal: false; reason: 'merge_writes_done' | 'rollup_writes_done' }
 > {
-  const { gate, item, tx } = args;
-  const openOwn = await workItemDeliveryRepository.countOpenByWorkItem(gate.workItemId, tx);
+  const { gate, tx } = args;
+  const item = requireArgsCard(args, 'acceptance_result', 'acceptanceResultHandler');
+  const openOwn = await workItemDeliveryRepository.countOpenByWorkItem(
+    requireGateCard(gate, 'acceptanceResultHandler'),
+    tx,
+  );
   if (openOwn > 0) return { terminal: false, reason: 'merge_writes_done' };
 
   const [members, terminalByProject] = await Promise.all([
-    workItemRepository.findSubtreeMembersForValidity(gate.workItemId, item.workspaceId, tx),
+    workItemRepository.findSubtreeMembersForValidity(
+      requireGateCard(gate, 'acceptanceResultHandler'),
+      item.workspaceId,
+      tx,
+    ),
     workflowsService.getTerminalStatusKeysByProjects([item.projectId], item.workspaceId, tx),
   ]);
   // Parent ↔ child is same-project, so the root's terminal set judges every member.
   const openDescendant = members.some(
     (member) =>
-      member.id !== gate.workItemId &&
+      member.id !== requireGateCard(gate, 'acceptanceResultHandler') &&
       !isTerminalStatus({ status: member.status, projectId: item.projectId }, terminalByProject),
   );
   return openDescendant ? { terminal: false, reason: 'rollup_writes_done' } : { terminal: true };
@@ -102,7 +111,10 @@ async function stampReceipt(
   status: 'approved' | 'changes_requested',
 ): Promise<void> {
   const { gate, ctx, tx } = args;
-  await acceptanceEvidenceRepository.lockCurrentStatusByWorkItem(gate.workItemId, tx);
+  await acceptanceEvidenceRepository.lockCurrentStatusByWorkItem(
+    requireGateCard(gate, 'acceptanceResultHandler'),
+    tx,
+  );
   const approved = status === 'approved';
   await acceptanceEvidenceRepository.updateStatus(
     gate.subjectId,
@@ -140,15 +152,16 @@ export const acceptanceResultGateHandler: GateHandler<AcceptanceEvidence> = {
    * supersedes this one and keeps its bytes (`acceptance-receipt-lifecycle.md`
    * AMENDMENT 1, MOTIR-5872).
    */
-  async currentSubject({ item, tx }: GateRoutingArgs): Promise<string | null> {
-    const current = await acceptanceEvidenceRepository.findCurrentByWorkItem(item.id, tx);
+  async currentSubject(args: GateRoutingArgs): Promise<string | null> {
+    const item = requireArgsCard(args, 'acceptance_result', 'acceptanceResultHandler');
+    const current = await acceptanceEvidenceRepository.findCurrentByWorkItem(item.id, args.tx);
     if (!current || current.status === 'approved') return null;
     return current.id;
   },
 
   /** ADR §2: `assigneeId ?? reporterId` — the story's. */
-  routeTo({ item }: GateRoutingArgs): string | null {
-    return routingTargetId(item);
+  routeTo(args: GateRoutingArgs): string | null {
+    return routingTargetId(requireArgsCard(args, 'acceptance_result', 'acceptanceResultHandler'));
   },
 
   /**
@@ -177,7 +190,7 @@ export const acceptanceResultGateHandler: GateHandler<AcceptanceEvidence> = {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
     await workItemsService.applyStatusTransition(
-      args.gate.workItemId,
+      requireGateCard(args.gate, 'acceptanceResultHandler'),
       args.resolvedStatusKey,
       args.ctx,
       args.tx,

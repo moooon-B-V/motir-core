@@ -162,6 +162,23 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       'Another write to this plan is in flight. A property of concurrency, not of the plan.',
   },
+  // The decide door's entrance refusals (MOTIR-6038) — none is a property of the
+  // proposal set, so none is checked at the close.
+  PLAN_NOT_DECIDABLE_YET: {
+    cause: 'tree-caused',
+    justification:
+      'The plan reached `planned` before its approval gate was raised (the pre-backfill state). A property of when the plan closed, not of what it proposes.',
+  },
+  PLAN_GATE_AWAITING: {
+    cause: 'tree-caused',
+    justification:
+      "A plain approve / decline body met an awaiting plan gate under the plan lock — a question raised between an entrance's read and its write. A property of concurrency, not of the plan.",
+  },
+  PLAN_DECISION_STAMP_REQUIRED: {
+    cause: 'tree-caused',
+    justification:
+      'A press of an asked plan arrived without the stamp its reader was shown. A property of the REQUEST, not of the plan; the close has nothing to check.',
+  },
   WORK_ITEM_LINK_CYCLE: {
     cause: 'tree-caused',
     justification:

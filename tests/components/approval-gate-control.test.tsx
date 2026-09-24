@@ -248,6 +248,12 @@ describe('H · refused — every member of the union renders in place, with a ne
     },
     { refusal: { tag: 'APPROVAL_GATE_ALREADY_AWAITING' }, expect: /already waiting/ },
     { refusal: { tag: 'APPROVAL_GATE_DECIDED_IMMUTABLE' }, expect: /cannot be changed/ },
+    // A card path that met a card-less (plan) gate (MOTIR-6032) — a defect, never a
+    // refusal a person can act on, so it reads as the unexpected refusal does.
+    {
+      refusal: { tag: 'APPROVAL_GATE_HAS_NO_CARD' },
+      expect: /could not be recorded\..*Check your connection and try again/,
+    },
     // The MERGE refusals (MOTIR-5512) — each asserted by its title AND its next
     // action, because the next action is the half that differs per refusal.
     {

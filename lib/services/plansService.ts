@@ -103,6 +103,7 @@ import {
   PlanItemFieldRejectedError,
   PlanNotInExpectedStatusError,
   PlanPersistenceError,
+  PlanGateAwaitingError,
   PlanRevisionInFlightError,
   PlanRefGraphError,
   PlanTargetImmutableError,
@@ -174,6 +175,15 @@ import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessio
 import { buildScope } from '@/lib/planChange/scope';
 import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
+import { planGateService } from '@/lib/services/planGateService';
+import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
+import {
+  asPlanStatusRefusal,
+  decideThroughDoor,
+  planAndGate,
+  refuseUngated,
+  type DecidePlanInput,
+} from '@/lib/services/planGateDoor';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
@@ -3354,7 +3364,7 @@ async function releasePlanTargetLocks(
  * around the result. If a plan ever exhausts 30 s, the answer is again to do
  * less work in the transaction — not to raise this.
  */
-const APPROVE_TX_BUDGET = { timeoutMs: 30_000, maxWaitMs: 10_000 } as const;
+export const APPROVE_TX_BUDGET = { timeoutMs: 30_000, maxWaitMs: 10_000 } as const;
 
 /**
  * The field name Prisma's validation message points its `~~~~` marker at, or
@@ -4289,6 +4299,10 @@ export const plansService = {
           tx,
         );
         const n = await planItemRepository.countByPlan(planId, tx);
+        // THE QUESTION IS ASKED WITH THE STATUS (MOTIR-6036; ADR approval-gates.md
+        // §11.7): the plan's `awaiting` gate, in this transaction and under the
+        // plan lock taken above, so a plan is never `planned` without it.
+        await planGateService.raise(updated, tx);
         // The close, on the trail (MOTIR-3535) — the moment the plan stopped
         // moving and became something a person is asked to read. The count is
         // what that person is being asked to approve.
@@ -5173,6 +5187,11 @@ export const plansService = {
             },
             tx,
           );
+          // The question ends with the plan (MOTIR-6036; §11.7): its awaiting gate
+          // is withdrawn as `plan_discarded`, under the plan lock this transaction
+          // already holds. A withdrawal SHORT of the last supersedes nothing — the
+          // stamp refuses a reader of the old set (§11.5c).
+          await planGateService.supersede(planId, 'plan_discarded', tx);
           await planRevisionsService.recordRevision(
             {
               planId,
@@ -5200,55 +5219,10 @@ export const plansService = {
     return toPlanWithItemsDto(row, items);
   },
 
-  /**
-   * Approve THE PLAN A CARD PRODUCED — the bounded entrance an unattended run
-   * drives (MOTIR-3021 / MOTIR-3023,
-   * `docs/decisions/run-findings-protocol.md` Q2).
-   *
-   * ⚠️ IT IS ADDRESSED BY THE CARD, NOT BY A PLAN ID, and that is not
-   * convenience — it is what makes the bound structural. The caller is a loop
-   * whose AGENT submitted the plan in a sandbox — `submit_plan_session` anchored
-   * at `targetKeys: [<KEY>]` (MOTIR-4083; before that, `motir plan --detach
-   * <KEY>`); the plan id came back in that agent's tool result, which the loop
-   * never sees. So a plan-addressed entrance would have forced either a
-   * second read to discover the id or a scrape of the agent's output, and the
-   * anchoring check would have been a check on caller-supplied data. Addressed
-   * by the card, there is no way to NAME a plan that is not the card's.
-   *
-   * ⚠️ ANCHORING IS DERIVED, and every hop is a shipped one:
-   *
-   *   the card's key → `buildScope([key])` → the plan-change session for that
-   *   anchor set → its `lastJobId` → the plan that job produced.
-   *
-   * A thread anchored at `targetKeys: [<KEY>]` — which is what the prompt tells
-   * the agent to submit on — sits at exactly that scope, so this resolves the
-   * plan that card's refusal caused and nothing else.
-   *
-   * ⚠️ NO CONVERSATION MEANS NO. A cadence plan, an onboarding generation and a
-   * plan submitted from the project-wide panel all have no session at this
-   * scope — and every one of them is a plan a person is expected to decide on.
-   * Treating "no anchor" as "no restriction" would invert the bound at exactly
-   * the plans it most protects.
-   *
-   * ⚠️ IT ADDS A BOUND, NEVER A SECOND APPROVAL. Everything that decides whether
-   * a proposal may become a row — the confirmation gate, the `ai:view_plan`
-   * assertion, the one-shot status guard, the re-validation — happens in
-   * {@link plansService.approvePlan}, which this delegates to unchanged.
-   */
-  async approvePlanForWorkItem(
-    projectId: string,
-    workItemKey: string,
-    ctx: ServiceContext,
-  ): Promise<PlanWithItemsDto> {
-    // The AUTHOR key, kept exactly where it was: this method asserted
-    // `ai:view_plan` before the walk was extracted, and `approvePlan` then
-    // asserts `ai:decide_plan` on top. Moving it out of the shared walk is what
-    // lets the READ beside it be browse-gated without either caller inheriting
-    // the other's key by accident.
-    await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
-    const planId = await plansService.resolvePlanIdForWorkItem(projectId, workItemKey, ctx);
-    return plansService.approvePlan(planId, ctx);
-  },
+  // `approvePlanForWorkItem` — the v1 plan-approval route's entrance — moved to
+  // `planDecisionService.approveForWorkItem` (MOTIR-6038): it decides the plan's gate
+  // through the door now, and the anchoring walk it shares with `readPlanForWorkItem`
+  // stays here as `resolvePlanIdForWorkItem`.
 
   /**
    * READ the plan a card produced, WITHOUT deciding it (MOTIR-4085).
@@ -5542,463 +5516,98 @@ export const plansService = {
     ctx: ServiceContext,
     opts: { provisionalProjectName?: string | null } = {},
   ): Promise<PlanWithItemsDto> {
-    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      planRepository.findById(planId, ctx.workspaceId, tx),
-    );
-    if (!plan) throw new PlanNotFoundError(planId);
-    // `ai:decide_plan` (MOTIR-3188) — the DECIDE half, split out of
-    // `ai:view_plan`. This is the only path from a proposal to a row and it can
-    // create a whole subtree at once, so it is gated by the key whose name says
-    // so rather than by the one whose name says "can look at a plan". Behaviour
-    // is unchanged for every built-in role: both keys sit at `admin` and
-    // `member` and at neither `viewer` nor the implicit workspace-member grant.
-    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:decide_plan');
-
-    // ⚠️ THE LAZY BACKSTOP (MOTIR-3579, AMENDMENT 9 D5). The eager mover is
-    // `planDriftService` on `work-item/transitioned`; this is what catches the
-    // race it can lose. `PlanTargetImmutableError` means a `modify`/`remove`
-    // target reached a terminal status while the plan waited — the one Class B
-    // rejection no close-time gate can foresee — and BEFORE this the plan was
-    // left sitting at `planned`, unapprovable, with the reviewer told only that
-    // their click failed. One button press now never leaves the plan in a worse
-    // state than it found it.
-    //
-    // ⚠️ THE CALLER STILL GETS THE REFUSAL. The error is re-thrown unchanged, so
-    // the route still answers 409: what changed is what the plan row READS
-    // afterwards, never what the API returns.
-    //
-    // It wraps BOTH gate passes deliberately. The pre-transaction one is a
-    // snapshot and the in-transaction one runs under the target row locks — the
-    // reason `runPersistGate` is called twice at all — and drift is exactly the
-    // thing that can arrive between them, so a backstop on one pass would leave
-    // the other stranding the plan.
-    try {
-      // The project's TERMINAL statuses — every `category = 'done'` key, never a
-      // hardcoded `'done'`, so `cancelled` is terminal too. Workflow statuses are
-      // project CONFIG (not a row a concurrent approve moves), so this one read
-      // serves both the pre-transaction and the in-transaction gate pass.
-      const terminalStatusKeys = await workflowsService.getTerminalStatusKeys(
-        plan.projectId,
-        ctx.workspaceId,
-      );
-
-      // Pass 1 — reject BEFORE the transaction opens (the card's atomicity point:
-      // a malformed proposal never even starts a write). Pass 2 runs inside, under
-      // the target row locks, and is the verdict that actually gates materialize.
-      const preItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-        planItemRepository.findByPlan(planId, tx),
-      );
-      // ⚠️ THERE IS NOTHING TO APPROVE (MOTIR-4146). Every gate below is a gate
-      // over a proposal SET, and over the EMPTY set each of them passes
-      // vacuously — which is exactly why the count is read here rather than
-      // trusted to them. It is `markPlanned`'s own reasoning at the other door:
-      // the emptiness rule was established where a plan is WRITTEN, and an
-      // invariant enforced at one door is a habit, not an invariant.
-      //
-      // Refused rather than discarded: an empty `planned` plan is a legacy row
-      // in front of a reviewer, and Decline is the ending they already have —
-      // deciding it for them from inside their own Approve click would be a
-      // different act than the one they asked for.
-      //
-      // ⚠️ IT ONLY SPEAKS FOR A PLAN THAT IS OTHERWISE APPROVABLE, and the
-      // `status` read is what keeps it from stealing the STATUS refusal. This
-      // pass runs BEFORE the transaction, and the status guard runs inside it —
-      // so an unguarded check here answers "holds no proposals" for a plan whose
-      // real problem is that it is still `generating`, which is the answer a
-      // caller branches on (`PlanNotInExpectedStatusError.actual` carries it as
-      // DATA for exactly that reason, MOTIR-3025) and the one the CLI prints
-      // while it waits for a planner. Emptiness is the second question; the
-      // status is the first, and the in-transaction check below asks this one
-      // again in the right order anyway.
-      if (plan.status === 'planned') assertPlanHasProposals(planId, preItems);
-      await runPersistGate(preItems, ctx, terminalStatusKeys, plan.projectId);
-
-      // The proposed repo PINS (MOTIR-1884), normalized + validated against this
-      // PROJECT's repository set. Out here because the domain read opens its own
-      // workspace context and cannot nest inside the approve transaction (the same
-      // hazard `lib/workItems/targetRepo.ts` documents and the direct-write path
-      // obeys) — and because an unknown repo should be rejected while the tree is
-      // still byte-identical.
-      //
-      // ⚠️ RESOLVED FROM A SNAPSHOT, AND THE TRANSACTION RE-CHECKS IT
-      // (MOTIR-3604, AMENDMENT 9 D4). This map is read outside the transaction and
-      // written inside it, so what makes it safe is a PROPERTY rather than a
-      // promise: `assertRepoPinsUnmoved` compares, under the plan lock, the pins
-      // the FRESH proposal set authors against the ones resolved here, and refuses
-      // the approve when they disagree.
-      //
-      // It states a property because the alternative decays silently. This comment
-      // used to enumerate the doors that could not move a `planned` plan's pins —
-      // correctly, on the day it was written — and warned about the one widening
-      // its author expected (`mergeProposedFields`). AMENDMENT 8's correction door
-      // (`plansService.correctProposal`, MOTIR-3533) arrived through
-      // `CorrectProposalInput` instead, eight days later, and walked straight past
-      // an enumeration that still read exactly as true as it had before. A list of
-      // the ways something cannot happen goes stale with no signal that it has;
-      // a re-check does not.
-      const repoPins = await resolveProposedTargetRepos(preItems, plan.projectId, ctx);
-      const snapshotPins = collectAuthoredTargetRepos(preItems);
-      // …and the proposed repository SETS (bug MOTIR-4904), under exactly the
-      // same contract: resolved out here against the same project domain by the
-      // direct path's own resolvers, re-checked under the plan lock by the same
-      // `assertRepoPinsUnmoved`. The two maps are disjoint by construction —
-      // `assertSingleTargetRepoInput` refuses a proposal describing the axis more
-      // than once — so no proposal appears in both.
-      const repoSets = await resolveProposedRepoSets(preItems, plan.projectId, ctx);
-      const snapshotRepoSets = collectAuthoredRepoSets(preItems);
-
-      // The proposed repo ROLES (MOTIR-1912) — validated against the vocabulary and
-      // collected from the SAME pre-transaction snapshot, so an unknown role is
-      // rejected while the tree is still byte-identical. Pure — unlike the name
-      // pin, this needs no domain read, because a role's domain is a closed enum.
-      //
-      // ⚠️ IT DOES *NOT* REST ON THE FROZEN-SET CLAIM THE PIN'S COMMENT ABOVE JUST
-      // LOST (MOTIR-3604). A role needs no in-transaction re-check for a stronger
-      // reason: nothing STALE is written from this pass. `materialize` and
-      // `applyModify` both read `targetRepoRole` off the FRESH row and resolve it
-      // there (`proposalRepoRef`), so a role corrected inside approve's window is
-      // HONOURED, not dropped — asserted in `approvePlanTargetRepo.test.ts`. And
-      // the vocabulary assertion here has no reachable window either, because
-      // every door a role can arrive or move through asserts it at its OWN
-      // boundary: `validateProposal` at the append, `correctProposal` on a
-      // `modify`'s patch, and `CorrectProposalInput` carries no `targetRepoRole`
-      // for an `add` at all. What remains is defence in depth, which is what it
-      // was always for.
-      //
-      // The list is ALSO §0.1.1's derivation signal, handed to `proposeRepositorySet`
-      // after the commit below.
-      const repoRoles = resolveProposedRepoRoles(preItems);
-
-      // PROPOSE the project's repository set BEFORE the tree is materialized (Story
-      // MOTIR-2732 · MOTIR-3033, ADR `work-item-repository-set.md` "Amendment
-      // 2026-08-18" §A3, answer (b)).
-      //
-      // It used to run AFTER the commit, and §5.3 of `project-repository-set.md`
-      // recorded that ordering as forced. The reading that settled it: this call's
-      // ONLY derivation input is `repoRoles`, computed from the pre-transaction
-      // proposal snapshot three lines above — nothing in it reads a created work
-      // item. So the rows CAN exist first, and once they do a materialized card can
-      // point at one from birth instead of carrying a role for a later pass to
-      // resolve.
-      //
-      // ⚠️ It does NOT move INSIDE the transaction, and that is the other half of
-      // §A3: `proposeRepositorySet` makes a `server-only` cross-boundary read and
-      // writes each row in its OWN transaction (ADR `project-repository-set.md`
-      // §4.2's "rows are INDEPENDENT and nothing is rolled back"). Before, not
-      // within.
-      //
-      // Still BEST-EFFORT, for the reason §4.3 gives: establishing repositories is
-      // not worth failing a plan approval over. A failure leaves the items with no
-      // reference — honestly unrouted, the same signal §5.3's second outcome emits —
-      // and the role→item mapping survives on the plan (`plan_item.workItemId` plus
-      // its `proposedFields.targetRepoRole`), so a repair is reconstructable.
-      //
-      // The cost §A3 accepts, stated here because this is where it happens: a
-      // rolled-back approve (the in-transaction status re-read rejecting) now leaves
-      // `proposed` rows behind. They are editable, the proposer refuses to touch a
-      // set that already has rows, and the approve that wins the race writes the
-      // same set from the same plan.
-      await import('@/lib/services/projectRepoProposalService')
-        .then(({ projectRepoProposalService }) =>
-          projectRepoProposalService.proposeRepositorySet(plan.projectId, ctx, {
-            itemRoles: repoRoles,
-          }),
-        )
-        .catch((err: unknown) => {
-          console.warn(
-            `[plansService.approvePlan] repository-set proposal failed for project ${plan.projectId}; skipping (the set stays empty and editable)`,
-            err,
-          );
-        });
-
-      // The project's repository ROWS, read AFTER the propose so a first-onboarding
-      // plan sees the rows it just caused. This is what turns a proposal's pin — a
-      // NAME (§5.4's settled case) or a ROLE (§5.2's portable one) — into the
-      // reference a materialized card stores.
-      const repoRefs = await resolveProposalRepoRefs(plan.projectId, ctx);
-
-      const {
-        row,
-        items,
-        firstOnboarding,
-        projectKey,
-        touchedWorkItemIds,
-        reparented,
-        restingMoves,
-      } = await withWorkspaceContext(
-        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-        async (tx) => {
-          const locked = await planRepository.lockById(planId, tx);
-          if (!locked) throw new PlanNotFoundError(planId);
-          const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
-          if (!fresh) throw new PlanNotFoundError(planId);
-          if (fresh.status !== 'planned') {
-            throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
-          }
-          // ⚠️ AND REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
-          // under the lock, before a single row is materialized. Approve is
-          // one-shot, so the only safe answer to "a revision is halfway through
-          // rewriting this set" is not to materialize it. The reviewer waits,
-          // reads what changed, and approves the plan they asked for.
-          await assertNoRevisionInFlight(planId, tx);
-          const proposals = await planItemRepository.findByPlan(planId, tx);
-          // …AND THE EMPTINESS CHECK AGAIN, ON THE FRESH SET UNDER THE LOCK
-          // (MOTIR-4146). Same placement and same reason as `assertRepoPins
-          // Unmoved` below: the pre-transaction pass is a SNAPSHOT, and a
-          // withdrawal committed between it and this lock would otherwise
-          // materialize nothing while recording an approval. The pre-pass is
-          // the courtesy; this one is the guarantee.
-          assertPlanHasProposals(planId, proposals);
-          // THE GATE, under the plan lock + the targets' row locks, on the FRESH
-          // proposal set — nothing has been written yet, so a rejection here rolls
-          // back a transaction that touched no work-item row.
-          await assertProposalsPersistable(proposals, ctx, terminalStatusKeys, plan.projectId, tx);
-          // …AND THE PINS THE SNAPSHOT RESOLVED ARE STILL THE PINS THESE ROWS
-          // AUTHOR (MOTIR-3604). Same placement, same reason: on the fresh set,
-          // under the lock, before a single row is materialized.
-          assertRepoPinsUnmoved(snapshotPins, proposals, snapshotRepoSets);
-          const { touchedWorkItemIds, reparented, restingMoves } = await materialize(
-            proposals,
-            fresh,
-            ctx,
-            tx,
-            repoPins,
-            repoRefs,
-            repoSets,
-          );
-          // Read the project ONCE, before `markOnboardingRan` writes: its
-          // pre-write `onboardingRanAt` gates the rename below, and its
-          // `identifier` (the tenant projectKey) + the first-onboarding signal both
-          // feed the fresh-establish convention trigger fired after the tx commits.
-          const project = await projectRepository.findById(fresh.projectId, tx);
-          // Name the onboarded project from the AI plan (MOTIR-1551). The onboarding
-          // generation (MOTIR-1554) stamped a suggested `productName` on the Plan;
-          // apply it here — but ONLY on the FIRST onboarding approve of a draft the
-          // user hasn't already named. Read BEFORE `markOnboardingRan` below (which
-          // sets `onboardingRanAt`), so `onboardingRanAt == null` is the "first
-          // onboarding" gate; the `name === provisionalProjectName` check (the
-          // caller passes the current-locale "Untitled project" placeholder) means a
-          // user rename during review is never clobbered. A reconciliation re-plan
-          // carries no `productName`, so it never reaches here. Best-effort: rename
-          // failure would abort the tx, so keep it a plain guarded write. Done via
-          // the repo in-tx — `renameProject` opens its own workspace context.
-          if (
-            fresh.productName &&
-            fresh.productName.trim().length > 0 &&
-            opts.provisionalProjectName
-          ) {
-            if (
-              project &&
-              project.onboardingRanAt == null &&
-              project.name === opts.provisionalProjectName
-            ) {
-              await projectRepository.update(project.id, { name: fresh.productName.trim() }, tx);
-            }
-          }
-          // Stamp the immutable onboarding-ran marker the FIRST time this project's
-          // plan is approved + materialized (Subtask 7.4 / MOTIR-1264). The repo's
-          // null-guarded write makes it set-once, so calling it on every approve is
-          // safe — only the first materialized tree writes it. This is the single
-          // source of truth the /onboarding redirect AND the roadmap planning-origin
-          // cluster (MOTIR-1013) read. Its return count (1 on the first approve, 0
-          // after) IS the onboarding-completion signal the convention trigger fires on.
-          const firstOnboarding =
-            (await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx)) === 1;
-          const updated = await planRepository.update(
-            planId,
-            { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
-            tx,
-          );
-          // The approval, on the plan's content trail (MOTIR-3535), inside the
-          // very transaction that materialized the tree — so a rolled-back
-          // approve (the in-transaction status re-read rejecting, or the budget
-          // expiring) leaves no row claiming it happened.
-          //
-          // A decision is always a PERSON's: `ai:decide_plan` has no machine
-          // path, so the row records the decider and NO agent triple, however the
-          // plan itself was written. `touchedWorkItemCount` is what the approve
-          // actually did to the tree, which is the fact `itemCount` alone cannot
-          // give (a plan of `remove`s materializes none).
-          await planRevisionsService.recordRevision(
-            {
-              planId,
-              changeKind: 'approved',
-              changedById: ctx.userId,
-              diff: {
-                itemCount: proposals.length,
-                touchedWorkItemCount: touchedWorkItemIds.length,
-              },
-            },
-            tx,
-          );
-          // Re-read so the returned items carry the written-back work-item ids.
-          const finalItems = await planItemRepository.findByPlan(planId, tx);
-          return {
-            row: updated,
-            items: finalItems,
-            firstOnboarding,
-            projectKey: project?.identifier ?? null,
-            touchedWorkItemIds,
-            reparented,
-            restingMoves,
-          };
-        },
-        // The raised budget, argued at {@link APPROVE_TX_BUDGET}. Second of the
-        // two fixes, not the first: the edge pass above was batched before this
-        // number was touched (MOTIR-3396).
-        APPROVE_TX_BUDGET,
-      ).catch((err: unknown) => translateApproveTimeout(err, planId, preItems.length));
-
-      // Plan-tree embedding, MATERIALIZE trigger (Story MOTIR-2694 · MOTIR-2696,
-      // ADR §6.3.1). AFTER the commit, for the same two reasons the create path
-      // emits post-commit: the embedding is an external call that must never sit
-      // inside a write transaction (§6.3.2), and a rolled-back approve must not
-      // leave jobs embedding rows that do not exist. `sendEvent` is best-effort by
-      // construction — a dropped enqueue leaves an item "not yet a candidate",
-      // which the backfill later fills and which is never an error (§6.3.5) — so
-      // it cannot turn a materialized tree into a failed approve.
-      for (const workItemId of touchedWorkItemIds) {
-        await sendEvent('work-item/embedding.requested', {
-          workspaceId: ctx.workspaceId,
-          workItemId,
-        });
-      }
-
-      // STATUS DERIVATION, for the re-parents this approve performed (MOTIR-3859 ·
-      // `docs/decisions/status-derivation.md` §3a). A move changes TWO direct child
-      // sets in opposite directions — the parent left may now be finished, the one
-      // joined may need to come back — and `work-item/transitioned` fires on
-      // neither, which is the whole reason this event exists. `moveWorkItem` emits
-      // exactly this for exactly this edit; a re-parent through the plan door is
-      // the same edit and owes the same signal, or an approve would be invisible to
-      // every job in the system the way `move_to_parent` once was.
-      //
-      // POST-COMMIT and best-effort, like the embedding trigger above and for the
-      // same two reasons: a job must never run inside the write transaction, and a
-      // rolled-back approve must not announce a move that did not happen.
-      for (const move of reparented) {
-        const parentIds = [move.previousParentId, move.newParentId].filter(
-          (p): p is string => p !== null,
-        );
-        // At least one end is non-null by construction — `applyModify` records a
-        // move only when the two DIFFER — but a top-level-to-top-level move is not
-        // expressible, so the guard is about the type, not about a real case.
-        if (parentIds.length === 0) continue;
-        await sendEvent('work-item/child-set.changed', {
-          workspaceId: ctx.workspaceId,
-          parentIds,
-          workItemId: move.workItemId,
-          reason: 'reparented',
-          // The approve's own instant: the row has LEFT its old aggregate, so
-          // nothing it can read dates the change (MOTIR-2965, the same argument
-          // `moveWorkItem` makes).
-          occurredAt: new Date().toISOString(),
-        });
-      }
-
-      // THE RESTING STATUSES' TRANSITIONS (bug MOTIR-5640 · MOTIR-5646, which
-      // supersedes MOTIR-5359's re-scope resets and inherits this loop). Every
-      // other status write in the product announces itself with
-      // `work-item/transitioned` after its transaction commits — the watcher
-      // email, the bell, automation's `transitioned` trigger and status
-      // derivation all ride it — and a card the approve returned from `planning`
-      // to To Do or Blocked is a status change like any other: its parent's
-      // derived status can move with it. POST-COMMIT and best-effort, for the two
-      // reasons the events above give. `revisionId` is the one revision
-      // `restPlanTargets` recorded, which carries the `status` cell.
-      for (const move of restingMoves) {
-        await sendEvent('work-item/transitioned', {
-          workspaceId: ctx.workspaceId,
-          workItemId: move.workItemId,
-          actorId: ctx.userId,
-          fromStatusKey: move.fromStatusKey,
-          toStatusKey: move.toStatusKey,
-          revisionId: move.revisionId,
-        });
-      }
-
-      // Fresh-establish the coding convention at onboarding completion (7.3.10 ·
-      // MOTIR-839). The FIRST time a project's onboarding plan is approved +
-      // materialized, trigger the fresh `propose_convention` job so a `proposed`
-      // convention exists for the user to adopt (the 7.14.5/MOTIR-926 surface). The
-      // service applies the FRESH gate itself (a repo-backed project's convention is
-      // the migrate/audit path's job, MOTIR-931) and reads the pinned stack over the
-      // 7.1 boundary. Fired BEST-EFFORT and AFTER the tx commits: the `server-only`
-      // client call cannot run inside the DB transaction, and a motir-ai hiccup must
-      // never fail an approve that already materialized the tree (the convention can
-      // be re-established later; the approve is the durable, user-visible effect).
-      // Imported LAZILY (dynamic import) so the `server-only` motir-ai client stays
-      // OUT of plansService's static import graph — the E2E plan seeds import
-      // plansService in the Playwright Node process, where `server-only` does not
-      // resolve; the client loads only when the trigger actually fires on the server.
-      if (firstOnboarding && projectKey) {
-        await import('@/lib/services/conventionEstablishService')
-          .then(({ conventionEstablishService }) =>
-            conventionEstablishService.establishForFreshProject({
-              userId: ctx.userId,
-              workspaceId: ctx.workspaceId,
-              projectId: plan.projectId,
-              projectKey,
-            }),
-          )
-          .catch((err: unknown) => {
-            console.warn(
-              `[plansService.approvePlan] fresh-establish convention trigger failed for project ${plan.projectId}; skipping (a proposal can be re-established later)`,
-              err,
-            );
-          });
-      }
-
-      // Give the conversation its targets back — the epic's stories now exist, so
-      // the level the lock was held at is finished (MOTIR-2787).
-      await releasePlanTargetLocks(plan, ctx);
-
-      // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
-      // approved plan is what the set's cardinality is derived from, so this is the
-      // moment it can be proposed at all. Writes `proposed` rows the establish step
-      // then shows as editable (ADR §0.2: Motir proposes, the user decides); it
-      // creates nothing on GitHub.
-      //
-      // Fired on EVERY approve, not only the first onboarding: the proposer's own
-      // guard is "a project whose set has any row is left completely alone", so a
-      // re-plan approve of an established project is one cheap read, while a project
-      // whose first attempt lost to a motir-ai hiccup gets another chance instead of
-      // being permanently setless.
-      //
-      // BEST-EFFORT and AFTER the tx commits, for both of the reasons the convention
-      // trigger above is: the pre-plan read is a `server-only` client call that
-      // cannot run inside the DB transaction, and establishing repos — important as
-      // it is — is not worth failing a plan approval over (ADR §4.3 is the same
-      // judgement one level down). A failure leaves the user an empty-but-editable
-      // set, which MOTIR-1782 can complete later (ADR §4.4: approval is not the last
-      // chance to establish a repo). Imported LAZILY for the same reason: the E2E
-      // plan seeds import plansService in the Playwright Node process, where
-      // `server-only` does not resolve.
-      return toPlanWithItemsDto(row, items);
-    } catch (err) {
-      if (err instanceof PlanTargetImmutableError) {
-        // BEST-EFFORT, and it must not mask the refusal. If this write fails the
-        // caller still gets its 409 and the eager listener remains the primary
-        // mover — so a swallowed error here costs a status flip, never the
-        // verdict. Lock-then-re-read, the same guard `markPlanned` /
-        // `declinePlan` use: a plan somebody decided under us is a no-op.
-        try {
-          await withWorkspaceContext(
-            { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-            async (tx) => {
-              const locked = await planRepository.lockById(planId, tx);
-              if (!locked) return;
-              const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
-              if (!fresh || fresh.status !== 'planned') return;
-              await planRepository.update(planId, { status: 'stale' }, tx);
-            },
-          );
-        } catch {
-          // Swallowed on purpose — see above.
-        }
-      }
-      throw err;
+    // ⚠️ NOT AN ENTRANCE (MOTIR-6038; ADR §11.8). No route, action, hook or tool calls
+    // this — every surface decides through `planDecisionService`, with the stamp its
+    // reader was shown, and `tests/approvalGates/planDecisionEntrances.test.ts` fails the
+    // build on a new production caller. It remains a server-side composer for a caller
+    // that rendered nothing: while the plan's question is asked it decides the gate
+    // THROUGH THE DOOR, without a reader, so it never writes `approved` around the gate.
+    if (await hasAwaitingPlanGate(planId, ctx)) {
+      return decideAskedPlanWithoutAReader(planId, 'approve', ctx, opts);
     }
+    return plansService.approveUnaskedPlan(planId, ctx, opts);
+  },
+
+  /**
+   * APPROVE'S PLAIN BODY, for a plan nobody is being asked about (MOTIR-6038) — refused
+   * under the plan lock with `PlanGateAwaitingError` while an `awaiting` gate exists, so
+   * it can never decide a plan around its question. Reachable only through
+   * {@link approvePlan}; the entrances never approve an unasked plan (§11.8: a `planned`
+   * plan with no gate is *not decidable yet*).
+   */
+  async approveUnaskedPlan(
+    planId: string,
+    ctx: ServiceContext,
+    opts: { provisionalProjectName?: string | null } = {},
+  ): Promise<PlanWithItemsDto> {
+    // THREE PHASES, one per side of the transaction (Story MOTIR-6012 · MOTIR-6035; ADR
+    // `approval-gates.md` §11.5): what must be read BEFORE it opens, the body that
+    // materializes inside it, and what may only happen AFTER it commits. They are named
+    // so the plan gate's handler can run the SAME three around the decide door's own
+    // transaction (`approvePlanWithin`) — one home for materialize, never a copy.
+    const prep = await prepareApprove(planId, ctx);
+    const done = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: prep.plan.projectId },
+      (tx) => approveWithin(tx, planId, ctx, prep, { ...opts, viaGate: false }),
+      // The raised budget, argued at {@link APPROVE_TX_BUDGET}. Second of the
+      // two fixes, not the first: the edge pass above was batched before this
+      // number was touched (MOTIR-3396).
+      APPROVE_TX_BUDGET,
+    ).catch(async (err: unknown) => {
+      throw await approveFailure(err, prep, ctx);
+    });
+    await afterApproveCommit(prep.plan, ctx, done);
+    return toPlanWithItemsDto(done.row, done.items);
+  },
+
+  /**
+   * APPROVE'S PRE-TRANSACTION PHASE, for a caller that owns the transaction — the plan
+   * gate's handler, through the decide door's `beforeTransaction` seam (MOTIR-6035; ADR
+   * §11.5). Asserts `ai:decide_plan`, runs the first persist-gate pass and resolves the
+   * repository pins and references, exactly as {@link approvePlan} does before its own
+   * transaction opens. Hand the result to {@link approvePlanWithin}.
+   */
+  async prepareApprovePlan(planId: string, ctx: ServiceContext): Promise<ApprovePlanPreparation> {
+    return prepareApprove(planId, ctx);
+  },
+
+  /**
+   * APPROVE'S BODY INSIDE THE CALLER'S TRANSACTION (MOTIR-6035; ADR §11.5) — the plan
+   * lock, the status and revision-lease refusals, materialize, the `approved` write and
+   * its trail row, exactly as {@link approvePlan} runs them. The caller commits, then
+   * calls `afterCommit` (the events, the convention trigger, the lock release); on a
+   * failure it hands the error to {@link approveFailure} after the rollback.
+   *
+   * ⚠️ `tx` MUST BE ABLE TO TAKE THE PLAN'S ROW LOCK and should carry
+   * {@link APPROVE_TX_BUDGET}: a large plan materializes past Prisma's default budget.
+   */
+  async approvePlanWithin(
+    tx: Prisma.TransactionClient,
+    planId: string,
+    ctx: ServiceContext,
+    prep: ApprovePlanPreparation,
+    opts: { provisionalProjectName?: string | null } = {},
+  ): Promise<{ plan: PlanWithItemsDto; afterCommit: () => Promise<void> }> {
+    // The handler's seam: THE door's effect, so the asked-question refusal is waived.
+    const done = await approveWithin(tx, planId, ctx, prep, { ...opts, viaGate: true });
+    return {
+      plan: toPlanWithItemsDto(done.row, done.items),
+      afterCommit: () => afterApproveCommit(prep.plan, ctx, done),
+    };
+  },
+
+  /**
+   * What an approve's failure becomes AFTER its transaction rolled back (MOTIR-6035) —
+   * the lazy `stale` backstop on `PlanTargetImmutableError` (MOTIR-3579) and the
+   * timeout's typed refusal (MOTIR-3396), exactly as {@link approvePlan} applies them.
+   * Returns the error to throw; never swallows the refusal.
+   */
+  async approveFailure(
+    err: unknown,
+    prep: ApprovePlanPreparation,
+    ctx: ServiceContext,
+  ): Promise<unknown> {
+    return approveFailure(err, prep, ctx);
   },
 
   /**
@@ -6198,6 +5807,22 @@ export const plansService = {
   },
 
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
+    // ⚠️ NOT AN ENTRANCE (MOTIR-6038) — see {@link approvePlan}. An asked plan is
+    // declined through the door; an unasked one through the plain body below.
+    if (await hasAwaitingPlanGate(planId, ctx)) {
+      return decideAskedPlanWithoutAReader(planId, 'decline', ctx, {});
+    }
+    return plansService.declineUnaskedPlan(planId, ctx);
+  },
+
+  /**
+   * DECLINE A PLAN NOBODY IS BEING ASKED ABOUT — the one plain decision an entrance
+   * makes (ADR §11.8 item 5): a `generating` plan's discard, or a `stale` plan whose
+   * question was superseded. There is no gate to decide, so none is recorded; the plan's
+   * row and trail record the ending as they always have. Refused under the plan lock
+   * with `PlanGateAwaitingError` if a question is asked by the time it runs.
+   */
+  async declineUnaskedPlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
@@ -6210,73 +5835,7 @@ export const plansService = {
 
     const { row, count } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-      async (tx) => {
-        const locked = await planRepository.lockById(planId, tx);
-        if (!locked) throw new PlanNotFoundError(planId);
-        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
-        if (!fresh) throw new PlanNotFoundError(planId);
-        if (
-          fresh.status !== 'planned' &&
-          fresh.status !== 'generating' &&
-          fresh.status !== 'stale'
-        ) {
-          // `approved` / `declined` — already decided. The message names both
-          // legal origins so the 409 says what would have worked, and `actual`
-          // still rides the field for a caller that has to branch on it
-          // (MOTIR-3025).
-          throw new PlanNotInExpectedStatusError(
-            planId,
-            fresh.status,
-            'planned, stale or generating',
-          );
-        }
-        // A DECLINE is refused under the lease too, and for a reason of its own:
-        // `declined` is a closed decision, so a revision that finishes writing
-        // into a declined plan leaves proposals on a plan nobody will ever read.
-        await assertNoRevisionInFlight(planId, tx);
-        const updated = await planRepository.update(
-          planId,
-          {
-            status: 'declined',
-            decidedAt: new Date(),
-            decidedById: ctx.userId,
-            // The FROM-status is the reason, and it is read under the lock
-            // rather than from the pre-lock `plan` — a plan that reached
-            // `planned` while this call was in flight was reviewed, not
-            // discarded, and the record should say so.
-            // ⚠️ `stale` RECORDS `reviewed`, WITH `planned` (MOTIR-3579,
-            // AMENDMENT 9 D4). The reason names the HISTORY, and a stale plan's
-            // history is that it reached a reviewer and was read — the drift is
-            // why they gave up, not a different kind of ending. `discarded` is
-            // for a plan that never finished being written, which this one did.
-            decisionReason:
-              fresh.status === 'planned' || fresh.status === 'stale' ? 'reviewed' : 'discarded',
-          },
-          tx,
-        );
-        // The real count, read inside the same transaction — `markPlanned` above
-        // does exactly this. The return used to be `toPlanDto(row, 0)`, a
-        // hardcoded zero that was true only while the delete above existed; with
-        // the rows retained it would tell the caller that just declined a plan it
-        // has no items while `listPlans` (which counts through
-        // `countByPlanIds`) says otherwise (MOTIR-3160).
-        const n = await planItemRepository.countByPlan(planId, tx);
-        // The ending, on the trail (MOTIR-3535). A decision is always a PERSON's
-        // — `ai:decide_plan` has no machine path — so it records the decider and
-        // no agent triple, however the plan itself was written. The reason is the
-        // same one the row stores, so the timeline can tell the three histories
-        // `declined` covers apart without re-deriving them (MOTIR-3189).
-        await planRevisionsService.recordRevision(
-          {
-            planId,
-            changeKind: 'declined',
-            changedById: ctx.userId,
-            diff: { itemCount: n, decisionReason: updated.decisionReason },
-          },
-          tx,
-        );
-        return { row: updated, count: n };
-      },
+      (tx) => declineWithin(tx, planId, ctx, { viaGate: false }),
     );
     // Declining is as terminal for the lock as approving: the output will never
     // exist, so continuing to hold the targets blocks a colleague for nothing
@@ -6284,8 +5843,678 @@ export const plansService = {
     await releasePlanTargetLocks(plan, ctx);
     return toPlanDto(row, count);
   },
+
+  /**
+   * DECLINE'S BODY INSIDE THE CALLER'S TRANSACTION (Story MOTIR-6012 · MOTIR-6035; ADR
+   * `approval-gates.md` §11.4–§11.5) — the plan lock, the status and revision-lease
+   * refusals, the `declined` write with its reason and its trail row, exactly as
+   * {@link declinePlan} runs them. The caller has asserted `ai:decide_plan` (the decide
+   * door's floor) and commits, then calls `afterCommit` to release the plan's target
+   * locks — which opens its own transaction, so it may never run inside this one.
+   */
+  async declinePlanWithin(
+    tx: Prisma.TransactionClient,
+    planId: string,
+    ctx: ServiceContext,
+  ): Promise<{ plan: PlanDto; afterCommit: () => Promise<void> }> {
+    const { row, count } = await declineWithin(tx, planId, ctx, { viaGate: true });
+    return { plan: toPlanDto(row, count), afterCommit: () => releasePlanTargetLocks(row, ctx) };
+  },
 };
 
 // Re-export the DTO `toPlanItemDto` use so the unused-import linter doesn't trip
 // when a caller only needs the item mapper through the service module surface.
 export { toPlanItemDto };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APPROVE, IN ITS THREE PHASES (Story MOTIR-6012 · MOTIR-6035; ADR
+// `approval-gates.md` §11.5). `plansService.approvePlan` composes them around its own
+// transaction; the plan gate's handler composes them around the decide door's. The
+// bodies are the ones `approvePlan` has always run, moved rather than rewritten.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Whether the plan's question is asked right now — an `awaiting` plan gate (§11.8). A
+ *  lock-free courtesy read: the plain bodies re-check it under the plan lock. */
+async function hasAwaitingPlanGate(planId: string, ctx: ServiceContext): Promise<boolean> {
+  const gate = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    planGateService.awaitingFor(planId, tx),
+  );
+  return gate !== null;
+}
+
+/**
+ * {@link plansService.approvePlan} / `declinePlan` on an ASKED plan: the door decides it,
+ * with no reader (nobody rendered a stamp for this server-side composer), and the gate's
+ * state refusals keep the methods' documented contract — a plan somebody already decided
+ * is `PlanNotInExpectedStatusError`, carrying the status it is in.
+ */
+async function decideAskedPlanWithoutAReader(
+  planId: string,
+  decision: 'approve',
+  ctx: ServiceContext,
+  opts: { provisionalProjectName?: string | null },
+): Promise<PlanWithItemsDto>;
+async function decideAskedPlanWithoutAReader(
+  planId: string,
+  decision: 'decline',
+  ctx: ServiceContext,
+  opts: { provisionalProjectName?: string | null },
+): Promise<PlanDto>;
+async function decideAskedPlanWithoutAReader(
+  planId: string,
+  decision: 'approve' | 'decline',
+  ctx: ServiceContext,
+  opts: { provisionalProjectName?: string | null },
+): Promise<PlanWithItemsDto | PlanDto> {
+  // Through `planGateDoor`, NOT `planDecisionService`: that service imports this module,
+  // and reaching back into it needed a lazy `await import(...)` the Playwright seed
+  // runtime cannot load. The door steps are the same ones `planDecisionService` composes.
+  const input: DecidePlanInput = { planId, stamp: DECIDED_WITHOUT_A_READER, source: 'api' };
+  try {
+    const { plan, gate } = await planAndGate(planId, ctx);
+    if (!gate) refuseUngated(plan, decision);
+    await decideThroughDoor(gate, decision, input, ctx, opts);
+  } catch (err) {
+    throw await asPlanStatusRefusal(err, planId, ctx);
+  }
+  return plansService.getPlan(planId, ctx);
+}
+
+/** Approve's PRE-TRANSACTION phase: the plan, the permission, the first gate pass and
+ *  every read that opens its own context (so cannot run inside the transaction). */
+async function prepareApprove(planId: string, ctx: ServiceContext) {
+  const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    planRepository.findById(planId, ctx.workspaceId, tx),
+  );
+  if (!plan) throw new PlanNotFoundError(planId);
+  // `ai:decide_plan` (MOTIR-3188) — the DECIDE half, split out of
+  // `ai:view_plan`. This is the only path from a proposal to a row and it can
+  // create a whole subtree at once, so it is gated by the key whose name says
+  // so rather than by the one whose name says "can look at a plan". Behaviour
+  // is unchanged for every built-in role: both keys sit at `admin` and
+  // `member` and at neither `viewer` nor the implicit workspace-member grant.
+  await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:decide_plan');
+
+  // ⚠️ THE LAZY BACKSTOP (MOTIR-3579, AMENDMENT 9 D5). The eager mover is
+  // `planDriftService` on `work-item/transitioned`; this is what catches the
+  // race it can lose. `PlanTargetImmutableError` means a `modify`/`remove`
+  // target reached a terminal status while the plan waited — the one Class B
+  // rejection no close-time gate can foresee — and BEFORE this the plan was
+  // left sitting at `planned`, unapprovable, with the reviewer told only that
+  // their click failed. One button press now never leaves the plan in a worse
+  // state than it found it.
+  //
+  // ⚠️ THE CALLER STILL GETS THE REFUSAL. The error is re-thrown unchanged, so
+  // the route still answers 409: what changed is what the plan row READS
+  // afterwards, never what the API returns.
+  //
+  // It wraps BOTH gate passes deliberately. The pre-transaction one is a
+  // snapshot and the in-transaction one runs under the target row locks — the
+  // reason `runPersistGate` is called twice at all — and drift is exactly the
+  // thing that can arrive between them, so a backstop on one pass would leave
+  // the other stranding the plan.
+
+  try {
+    // The project's TERMINAL statuses — every `category = 'done'` key, never a
+    // hardcoded `'done'`, so `cancelled` is terminal too. Workflow statuses are
+    // project CONFIG (not a row a concurrent approve moves), so this one read
+    // serves both the pre-transaction and the in-transaction gate pass.
+    const terminalStatusKeys = await workflowsService.getTerminalStatusKeys(
+      plan.projectId,
+      ctx.workspaceId,
+    );
+
+    // Pass 1 — reject BEFORE the transaction opens (the card's atomicity point:
+    // a malformed proposal never even starts a write). Pass 2 runs inside, under
+    // the target row locks, and is the verdict that actually gates materialize.
+    const preItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planId, tx),
+    );
+    // ⚠️ THERE IS NOTHING TO APPROVE (MOTIR-4146). Every gate below is a gate
+    // over a proposal SET, and over the EMPTY set each of them passes
+    // vacuously — which is exactly why the count is read here rather than
+    // trusted to them. It is `markPlanned`'s own reasoning at the other door:
+    // the emptiness rule was established where a plan is WRITTEN, and an
+    // invariant enforced at one door is a habit, not an invariant.
+    //
+    // Refused rather than discarded: an empty `planned` plan is a legacy row
+    // in front of a reviewer, and Decline is the ending they already have —
+    // deciding it for them from inside their own Approve click would be a
+    // different act than the one they asked for.
+    //
+    // ⚠️ IT ONLY SPEAKS FOR A PLAN THAT IS OTHERWISE APPROVABLE, and the
+    // `status` read is what keeps it from stealing the STATUS refusal. This
+    // pass runs BEFORE the transaction, and the status guard runs inside it —
+    // so an unguarded check here answers "holds no proposals" for a plan whose
+    // real problem is that it is still `generating`, which is the answer a
+    // caller branches on (`PlanNotInExpectedStatusError.actual` carries it as
+    // DATA for exactly that reason, MOTIR-3025) and the one the CLI prints
+    // while it waits for a planner. Emptiness is the second question; the
+    // status is the first, and the in-transaction check below asks this one
+    // again in the right order anyway.
+    if (plan.status === 'planned') assertPlanHasProposals(planId, preItems);
+    await runPersistGate(preItems, ctx, terminalStatusKeys, plan.projectId);
+
+    // The proposed repo PINS (MOTIR-1884), normalized + validated against this
+    // PROJECT's repository set. Out here because the domain read opens its own
+    // workspace context and cannot nest inside the approve transaction (the same
+    // hazard `lib/workItems/targetRepo.ts` documents and the direct-write path
+    // obeys) — and because an unknown repo should be rejected while the tree is
+    // still byte-identical.
+    //
+    // ⚠️ RESOLVED FROM A SNAPSHOT, AND THE TRANSACTION RE-CHECKS IT
+    // (MOTIR-3604, AMENDMENT 9 D4). This map is read outside the transaction and
+    // written inside it, so what makes it safe is a PROPERTY rather than a
+    // promise: `assertRepoPinsUnmoved` compares, under the plan lock, the pins
+    // the FRESH proposal set authors against the ones resolved here, and refuses
+    // the approve when they disagree.
+    //
+    // It states a property because the alternative decays silently. This comment
+    // used to enumerate the doors that could not move a `planned` plan's pins —
+    // correctly, on the day it was written — and warned about the one widening
+    // its author expected (`mergeProposedFields`). AMENDMENT 8's correction door
+    // (`plansService.correctProposal`, MOTIR-3533) arrived through
+    // `CorrectProposalInput` instead, eight days later, and walked straight past
+    // an enumeration that still read exactly as true as it had before. A list of
+    // the ways something cannot happen goes stale with no signal that it has;
+    // a re-check does not.
+    const repoPins = await resolveProposedTargetRepos(preItems, plan.projectId, ctx);
+    const snapshotPins = collectAuthoredTargetRepos(preItems);
+    // …and the proposed repository SETS (bug MOTIR-4904), under exactly the
+    // same contract: resolved out here against the same project domain by the
+    // direct path's own resolvers, re-checked under the plan lock by the same
+    // `assertRepoPinsUnmoved`. The two maps are disjoint by construction —
+    // `assertSingleTargetRepoInput` refuses a proposal describing the axis more
+    // than once — so no proposal appears in both.
+    const repoSets = await resolveProposedRepoSets(preItems, plan.projectId, ctx);
+    const snapshotRepoSets = collectAuthoredRepoSets(preItems);
+
+    // The proposed repo ROLES (MOTIR-1912) — validated against the vocabulary and
+    // collected from the SAME pre-transaction snapshot, so an unknown role is
+    // rejected while the tree is still byte-identical. Pure — unlike the name
+    // pin, this needs no domain read, because a role's domain is a closed enum.
+    //
+    // ⚠️ IT DOES *NOT* REST ON THE FROZEN-SET CLAIM THE PIN'S COMMENT ABOVE JUST
+    // LOST (MOTIR-3604). A role needs no in-transaction re-check for a stronger
+    // reason: nothing STALE is written from this pass. `materialize` and
+    // `applyModify` both read `targetRepoRole` off the FRESH row and resolve it
+    // there (`proposalRepoRef`), so a role corrected inside approve's window is
+    // HONOURED, not dropped — asserted in `approvePlanTargetRepo.test.ts`. And
+    // the vocabulary assertion here has no reachable window either, because
+    // every door a role can arrive or move through asserts it at its OWN
+    // boundary: `validateProposal` at the append, `correctProposal` on a
+    // `modify`'s patch, and `CorrectProposalInput` carries no `targetRepoRole`
+    // for an `add` at all. What remains is defence in depth, which is what it
+    // was always for.
+    //
+    // The list is ALSO §0.1.1's derivation signal, handed to `proposeRepositorySet`
+    // after the commit below.
+    const repoRoles = resolveProposedRepoRoles(preItems);
+
+    // PROPOSE the project's repository set BEFORE the tree is materialized (Story
+    // MOTIR-2732 · MOTIR-3033, ADR `work-item-repository-set.md` "Amendment
+    // 2026-08-18" §A3, answer (b)).
+    //
+    // It used to run AFTER the commit, and §5.3 of `project-repository-set.md`
+    // recorded that ordering as forced. The reading that settled it: this call's
+    // ONLY derivation input is `repoRoles`, computed from the pre-transaction
+    // proposal snapshot three lines above — nothing in it reads a created work
+    // item. So the rows CAN exist first, and once they do a materialized card can
+    // point at one from birth instead of carrying a role for a later pass to
+    // resolve.
+    //
+    // ⚠️ It does NOT move INSIDE the transaction, and that is the other half of
+    // §A3: `proposeRepositorySet` makes a `server-only` cross-boundary read and
+    // writes each row in its OWN transaction (ADR `project-repository-set.md`
+    // §4.2's "rows are INDEPENDENT and nothing is rolled back"). Before, not
+    // within.
+    //
+    // Still BEST-EFFORT, for the reason §4.3 gives: establishing repositories is
+    // not worth failing a plan approval over. A failure leaves the items with no
+    // reference — honestly unrouted, the same signal §5.3's second outcome emits —
+    // and the role→item mapping survives on the plan (`plan_item.workItemId` plus
+    // its `proposedFields.targetRepoRole`), so a repair is reconstructable.
+    //
+    // The cost §A3 accepts, stated here because this is where it happens: a
+    // rolled-back approve (the in-transaction status re-read rejecting) now leaves
+    // `proposed` rows behind. They are editable, the proposer refuses to touch a
+    // set that already has rows, and the approve that wins the race writes the
+    // same set from the same plan.
+    await import('@/lib/services/projectRepoProposalService')
+      .then(({ projectRepoProposalService }) =>
+        projectRepoProposalService.proposeRepositorySet(plan.projectId, ctx, {
+          itemRoles: repoRoles,
+        }),
+      )
+      .catch((err: unknown) => {
+        console.warn(
+          `[plansService.approvePlan] repository-set proposal failed for project ${plan.projectId}; skipping (the set stays empty and editable)`,
+          err,
+        );
+      });
+
+    // The project's repository ROWS, read AFTER the propose so a first-onboarding
+    // plan sees the rows it just caused. This is what turns a proposal's pin — a
+    // NAME (§5.4's settled case) or a ROLE (§5.2's portable one) — into the
+    // reference a materialized card stores.
+    const repoRefs = await resolveProposalRepoRefs(plan.projectId, ctx);
+
+    return {
+      plan,
+      preItems,
+      terminalStatusKeys,
+      repoPins,
+      snapshotPins,
+      repoSets,
+      snapshotRepoSets,
+      repoRefs,
+    };
+  } catch (err) {
+    await markStaleOnImmutableTarget(err, plan, ctx);
+    throw err;
+  }
+}
+
+/** What {@link prepareApprove} read — handed to the in-transaction body. */
+export type ApprovePlanPreparation = Awaited<ReturnType<typeof prepareApprove>>;
+
+/**
+ * WHO is running a decision body (MOTIR-6038). `viaGate: true` is the plan gate's
+ * handler, inside the decide door's transaction — the ONE writer §11.8 allows while a
+ * plan's question is asked. Every other caller is a PLAIN writer and is refused while
+ * an `awaiting` gate exists.
+ */
+interface PlanDecisionBodyOptions {
+  viaGate: boolean;
+}
+
+/** Refuse a plain decision of a plan whose question is asked — read under the plan
+ *  lock the caller already holds, so it races nothing (ADR §11.8's converse). */
+async function assertNoAwaitingGateUnlessDeciding(
+  planId: string,
+  opts: PlanDecisionBodyOptions,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (opts.viaGate) return;
+  const awaiting = await planGateService.awaitingFor(planId, tx);
+  if (awaiting) throw new PlanGateAwaitingError(planId, awaiting.id);
+}
+
+/** Approve's IN-TRANSACTION body, on the caller's `tx`. */
+async function approveWithin(
+  tx: Prisma.TransactionClient,
+  planId: string,
+  ctx: ServiceContext,
+  prep: ApprovePlanPreparation,
+  opts: PlanDecisionBodyOptions & { provisionalProjectName?: string | null },
+) {
+  const { plan, terminalStatusKeys, repoPins, snapshotPins, repoSets, snapshotRepoSets, repoRefs } =
+    prep;
+  const locked = await planRepository.lockById(planId, tx);
+  if (!locked) throw new PlanNotFoundError(planId);
+  const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+  if (!fresh) throw new PlanNotFoundError(planId);
+  if (fresh.status !== 'planned') {
+    throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
+  }
+  // ⚠️ WHILE A QUESTION IS ASKED, ONLY THE DOOR DECIDES (MOTIR-6038; ADR §11.8's
+  // converse) — under the plan lock, which the raise takes too, so no gate can land
+  // between this read and the `approved` write.
+  await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
+  // ⚠️ AND REFUSE IF A REVISION HOLDS IT (MOTIR-3598, AMENDMENT 10 D2) —
+  // under the lock, before a single row is materialized. Approve is
+  // one-shot, so the only safe answer to "a revision is halfway through
+  // rewriting this set" is not to materialize it. The reviewer waits,
+  // reads what changed, and approves the plan they asked for.
+  await assertNoRevisionInFlight(planId, tx);
+  const proposals = await planItemRepository.findByPlan(planId, tx);
+  // …AND THE EMPTINESS CHECK AGAIN, ON THE FRESH SET UNDER THE LOCK
+  // (MOTIR-4146). Same placement and same reason as `assertRepoPins
+  // Unmoved` below: the pre-transaction pass is a SNAPSHOT, and a
+  // withdrawal committed between it and this lock would otherwise
+  // materialize nothing while recording an approval. The pre-pass is
+  // the courtesy; this one is the guarantee.
+  assertPlanHasProposals(planId, proposals);
+  // THE GATE, under the plan lock + the targets' row locks, on the FRESH
+  // proposal set — nothing has been written yet, so a rejection here rolls
+  // back a transaction that touched no work-item row.
+  await assertProposalsPersistable(proposals, ctx, terminalStatusKeys, plan.projectId, tx);
+  // …AND THE PINS THE SNAPSHOT RESOLVED ARE STILL THE PINS THESE ROWS
+  // AUTHOR (MOTIR-3604). Same placement, same reason: on the fresh set,
+  // under the lock, before a single row is materialized.
+  assertRepoPinsUnmoved(snapshotPins, proposals, snapshotRepoSets);
+  const { touchedWorkItemIds, reparented, restingMoves } = await materialize(
+    proposals,
+    fresh,
+    ctx,
+    tx,
+    repoPins,
+    repoRefs,
+    repoSets,
+  );
+  // Read the project ONCE, before `markOnboardingRan` writes: its
+  // pre-write `onboardingRanAt` gates the rename below, and its
+  // `identifier` (the tenant projectKey) + the first-onboarding signal both
+  // feed the fresh-establish convention trigger fired after the tx commits.
+  const project = await projectRepository.findById(fresh.projectId, tx);
+  // Name the onboarded project from the AI plan (MOTIR-1551). The onboarding
+  // generation (MOTIR-1554) stamped a suggested `productName` on the Plan;
+  // apply it here — but ONLY on the FIRST onboarding approve of a draft the
+  // user hasn't already named. Read BEFORE `markOnboardingRan` below (which
+  // sets `onboardingRanAt`), so `onboardingRanAt == null` is the "first
+  // onboarding" gate; the `name === provisionalProjectName` check (the
+  // caller passes the current-locale "Untitled project" placeholder) means a
+  // user rename during review is never clobbered. A reconciliation re-plan
+  // carries no `productName`, so it never reaches here. Best-effort: rename
+  // failure would abort the tx, so keep it a plain guarded write. Done via
+  // the repo in-tx — `renameProject` opens its own workspace context.
+  if (fresh.productName && fresh.productName.trim().length > 0 && opts.provisionalProjectName) {
+    if (
+      project &&
+      project.onboardingRanAt == null &&
+      project.name === opts.provisionalProjectName
+    ) {
+      await projectRepository.update(project.id, { name: fresh.productName.trim() }, tx);
+    }
+  }
+  // Stamp the immutable onboarding-ran marker the FIRST time this project's
+  // plan is approved + materialized (Subtask 7.4 / MOTIR-1264). The repo's
+  // null-guarded write makes it set-once, so calling it on every approve is
+  // safe — only the first materialized tree writes it. This is the single
+  // source of truth the /onboarding redirect AND the roadmap planning-origin
+  // cluster (MOTIR-1013) read. Its return count (1 on the first approve, 0
+  // after) IS the onboarding-completion signal the convention trigger fires on.
+  const firstOnboarding =
+    (await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx)) === 1;
+  const updated = await planRepository.update(
+    planId,
+    { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
+    tx,
+  );
+  // The approval, on the plan's content trail (MOTIR-3535), inside the
+  // very transaction that materialized the tree — so a rolled-back
+  // approve (the in-transaction status re-read rejecting, or the budget
+  // expiring) leaves no row claiming it happened.
+  //
+  // A decision is always a PERSON's: `ai:decide_plan` has no machine
+  // path, so the row records the decider and NO agent triple, however the
+  // plan itself was written. `touchedWorkItemCount` is what the approve
+  // actually did to the tree, which is the fact `itemCount` alone cannot
+  // give (a plan of `remove`s materializes none).
+  await planRevisionsService.recordRevision(
+    {
+      planId,
+      changeKind: 'approved',
+      changedById: ctx.userId,
+      diff: {
+        itemCount: proposals.length,
+        touchedWorkItemCount: touchedWorkItemIds.length,
+      },
+    },
+    tx,
+  );
+  // Re-read so the returned items carry the written-back work-item ids.
+  const finalItems = await planItemRepository.findByPlan(planId, tx);
+  return {
+    row: updated,
+    items: finalItems,
+    firstOnboarding,
+    projectKey: project?.identifier ?? null,
+    touchedWorkItemIds,
+    reparented,
+    restingMoves,
+  };
+}
+
+/** Approve's POST-COMMIT phase — best-effort events and triggers, never inside a
+ *  transaction, never announcing a rolled-back approve. */
+async function afterApproveCommit(
+  plan: Plan,
+  ctx: ServiceContext,
+  done: Awaited<ReturnType<typeof approveWithin>>,
+): Promise<void> {
+  const { touchedWorkItemIds, reparented, restingMoves, firstOnboarding, projectKey } = done;
+  // Plan-tree embedding, MATERIALIZE trigger (Story MOTIR-2694 · MOTIR-2696,
+  // ADR §6.3.1). AFTER the commit, for the same two reasons the create path
+  // emits post-commit: the embedding is an external call that must never sit
+  // inside a write transaction (§6.3.2), and a rolled-back approve must not
+  // leave jobs embedding rows that do not exist. `sendEvent` is best-effort by
+  // construction — a dropped enqueue leaves an item "not yet a candidate",
+  // which the backfill later fills and which is never an error (§6.3.5) — so
+  // it cannot turn a materialized tree into a failed approve.
+  for (const workItemId of touchedWorkItemIds) {
+    await sendEvent('work-item/embedding.requested', {
+      workspaceId: ctx.workspaceId,
+      workItemId,
+    });
+  }
+
+  // STATUS DERIVATION, for the re-parents this approve performed (MOTIR-3859 ·
+  // `docs/decisions/status-derivation.md` §3a). A move changes TWO direct child
+  // sets in opposite directions — the parent left may now be finished, the one
+  // joined may need to come back — and `work-item/transitioned` fires on
+  // neither, which is the whole reason this event exists. `moveWorkItem` emits
+  // exactly this for exactly this edit; a re-parent through the plan door is
+  // the same edit and owes the same signal, or an approve would be invisible to
+  // every job in the system the way `move_to_parent` once was.
+  //
+  // POST-COMMIT and best-effort, like the embedding trigger above and for the
+  // same two reasons: a job must never run inside the write transaction, and a
+  // rolled-back approve must not announce a move that did not happen.
+  for (const move of reparented) {
+    const parentIds = [move.previousParentId, move.newParentId].filter(
+      (p): p is string => p !== null,
+    );
+    // At least one end is non-null by construction — `applyModify` records a
+    // move only when the two DIFFER — but a top-level-to-top-level move is not
+    // expressible, so the guard is about the type, not about a real case.
+    if (parentIds.length === 0) continue;
+    await sendEvent('work-item/child-set.changed', {
+      workspaceId: ctx.workspaceId,
+      parentIds,
+      workItemId: move.workItemId,
+      reason: 'reparented',
+      // The approve's own instant: the row has LEFT its old aggregate, so
+      // nothing it can read dates the change (MOTIR-2965, the same argument
+      // `moveWorkItem` makes).
+      occurredAt: new Date().toISOString(),
+    });
+  }
+
+  // THE RESTING STATUSES' TRANSITIONS (bug MOTIR-5640 · MOTIR-5646, which
+  // supersedes MOTIR-5359's re-scope resets and inherits this loop). Every
+  // other status write in the product announces itself with
+  // `work-item/transitioned` after its transaction commits — the watcher
+  // email, the bell, automation's `transitioned` trigger and status
+  // derivation all ride it — and a card the approve returned from `planning`
+  // to To Do or Blocked is a status change like any other: its parent's
+  // derived status can move with it. POST-COMMIT and best-effort, for the two
+  // reasons the events above give. `revisionId` is the one revision
+  // `restPlanTargets` recorded, which carries the `status` cell.
+  for (const move of restingMoves) {
+    await sendEvent('work-item/transitioned', {
+      workspaceId: ctx.workspaceId,
+      workItemId: move.workItemId,
+      actorId: ctx.userId,
+      fromStatusKey: move.fromStatusKey,
+      toStatusKey: move.toStatusKey,
+      revisionId: move.revisionId,
+    });
+  }
+
+  // Fresh-establish the coding convention at onboarding completion (7.3.10 ·
+  // MOTIR-839). The FIRST time a project's onboarding plan is approved +
+  // materialized, trigger the fresh `propose_convention` job so a `proposed`
+  // convention exists for the user to adopt (the 7.14.5/MOTIR-926 surface). The
+  // service applies the FRESH gate itself (a repo-backed project's convention is
+  // the migrate/audit path's job, MOTIR-931) and reads the pinned stack over the
+  // 7.1 boundary. Fired BEST-EFFORT and AFTER the tx commits: the `server-only`
+  // client call cannot run inside the DB transaction, and a motir-ai hiccup must
+  // never fail an approve that already materialized the tree (the convention can
+  // be re-established later; the approve is the durable, user-visible effect).
+  // Imported LAZILY (dynamic import) so the `server-only` motir-ai client stays
+  // OUT of plansService's static import graph — the E2E plan seeds import
+  // plansService in the Playwright Node process, where `server-only` does not
+  // resolve; the client loads only when the trigger actually fires on the server.
+  if (firstOnboarding && projectKey) {
+    await import('@/lib/services/conventionEstablishService')
+      .then(({ conventionEstablishService }) =>
+        conventionEstablishService.establishForFreshProject({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+          projectId: plan.projectId,
+          projectKey,
+        }),
+      )
+      .catch((err: unknown) => {
+        console.warn(
+          `[plansService.approvePlan] fresh-establish convention trigger failed for project ${plan.projectId}; skipping (a proposal can be re-established later)`,
+          err,
+        );
+      });
+  }
+
+  // Give the conversation its targets back — the epic's stories now exist, so
+  // the level the lock was held at is finished (MOTIR-2787).
+  await releasePlanTargetLocks(plan, ctx);
+
+  // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
+  // approved plan is what the set's cardinality is derived from, so this is the
+  // moment it can be proposed at all. Writes `proposed` rows the establish step
+  // then shows as editable (ADR §0.2: Motir proposes, the user decides); it
+  // creates nothing on GitHub.
+  //
+  // Fired on EVERY approve, not only the first onboarding: the proposer's own
+  // guard is "a project whose set has any row is left completely alone", so a
+  // re-plan approve of an established project is one cheap read, while a project
+  // whose first attempt lost to a motir-ai hiccup gets another chance instead of
+  // being permanently setless.
+  //
+  // BEST-EFFORT and AFTER the tx commits, for both of the reasons the convention
+  // trigger above is: the pre-plan read is a `server-only` client call that
+  // cannot run inside the DB transaction, and establishing repos — important as
+  // it is — is not worth failing a plan approval over (ADR §4.3 is the same
+  // judgement one level down). A failure leaves the user an empty-but-editable
+  // set, which MOTIR-1782 can complete later (ADR §4.4: approval is not the last
+  // chance to establish a repo). Imported LAZILY for the same reason: the E2E
+  // plan seeds import plansService in the Playwright Node process, where
+  // `server-only` does not resolve.
+}
+
+/** The error an approve's failure becomes after its rollback: the lazy `stale` backstop
+ *  runs, and a transaction timeout reads as its typed refusal. */
+async function approveFailure(
+  err: unknown,
+  prep: ApprovePlanPreparation,
+  ctx: ServiceContext,
+): Promise<unknown> {
+  await markStaleOnImmutableTarget(err, prep.plan, ctx);
+  try {
+    translateApproveTimeout(err, prep.plan.id, prep.preItems.length);
+  } catch (translated) {
+    return translated;
+  }
+}
+
+/** THE LAZY BACKSTOP (MOTIR-3579, AMENDMENT 9 D5) — see `approvePlan`'s note on it. */
+async function markStaleOnImmutableTarget(
+  err: unknown,
+  plan: { id: string; projectId: string },
+  ctx: ServiceContext,
+): Promise<void> {
+  const planId = plan.id;
+  if (err instanceof PlanTargetImmutableError) {
+    // BEST-EFFORT, and it must not mask the refusal. If this write fails the
+    // caller still gets its 409 and the eager listener remains the primary
+    // mover — so a swallowed error here costs a status flip, never the
+    // verdict. Lock-then-re-read, the same guard `markPlanned` /
+    // `declinePlan` use: a plan somebody decided under us is a no-op.
+    try {
+      await withWorkspaceContext(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+        async (tx) => {
+          const locked = await planRepository.lockById(planId, tx);
+          if (!locked) return;
+          const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+          if (!fresh || fresh.status !== 'planned') return;
+          await planRepository.update(planId, { status: 'stale' }, tx);
+          // A stale plan cannot be approved, so its question is withdrawn in the
+          // same write (MOTIR-6036; §11.7) — plan lock first, then the gate.
+          await planGateService.supersede(planId, 'plan_stale', tx);
+        },
+      );
+    } catch {
+      // Swallowed on purpose — see above.
+    }
+  }
+}
+
+/** Decline's IN-TRANSACTION body (MOTIR-6035) — `declinePlan` and the plan gate's
+ *  handler both run it; see `declinePlan` for every rule it keeps. */
+async function declineWithin(
+  tx: Prisma.TransactionClient,
+  planId: string,
+  ctx: ServiceContext,
+  opts: PlanDecisionBodyOptions,
+) {
+  const locked = await planRepository.lockById(planId, tx);
+  if (!locked) throw new PlanNotFoundError(planId);
+  const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+  if (!fresh) throw new PlanNotFoundError(planId);
+  if (fresh.status !== 'planned' && fresh.status !== 'generating' && fresh.status !== 'stale') {
+    // `approved` / `declined` — already decided. The message names both
+    // legal origins so the 409 says what would have worked, and `actual`
+    // still rides the field for a caller that has to branch on it
+    // (MOTIR-3025).
+    throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned, stale or generating');
+  }
+  // The PLAIN decline is for a plan nobody is being asked about (§11.8 item 5 — a
+  // `generating` or `stale` plan); an asked one is declined through the door.
+  await assertNoAwaitingGateUnlessDeciding(planId, opts, tx);
+  // A DECLINE is refused under the lease too, and for a reason of its own:
+  // `declined` is a closed decision, so a revision that finishes writing
+  // into a declined plan leaves proposals on a plan nobody will ever read.
+  await assertNoRevisionInFlight(planId, tx);
+  const updated = await planRepository.update(
+    planId,
+    {
+      status: 'declined',
+      decidedAt: new Date(),
+      decidedById: ctx.userId,
+      // The FROM-status is the reason, and it is read under the lock
+      // rather than from the pre-lock `plan` — a plan that reached
+      // `planned` while this call was in flight was reviewed, not
+      // discarded, and the record should say so.
+      // ⚠️ `stale` RECORDS `reviewed`, WITH `planned` (MOTIR-3579,
+      // AMENDMENT 9 D4). The reason names the HISTORY, and a stale plan's
+      // history is that it reached a reviewer and was read — the drift is
+      // why they gave up, not a different kind of ending. `discarded` is
+      // for a plan that never finished being written, which this one did.
+      decisionReason:
+        fresh.status === 'planned' || fresh.status === 'stale' ? 'reviewed' : 'discarded',
+    },
+    tx,
+  );
+  // The real count, read inside the same transaction — `markPlanned` above
+  // does exactly this. The return used to be `toPlanDto(row, 0)`, a
+  // hardcoded zero that was true only while the delete above existed; with
+  // the rows retained it would tell the caller that just declined a plan it
+  // has no items while `listPlans` (which counts through
+  // `countByPlanIds`) says otherwise (MOTIR-3160).
+  const n = await planItemRepository.countByPlan(planId, tx);
+  // The ending, on the trail (MOTIR-3535). A decision is always a PERSON's
+  // — `ai:decide_plan` has no machine path — so it records the decider and
+  // no agent triple, however the plan itself was written. The reason is the
+  // same one the row stores, so the timeline can tell the three histories
+  // `declined` covers apart without re-deriving them (MOTIR-3189).
+  await planRevisionsService.recordRevision(
+    {
+      planId,
+      changeKind: 'declined',
+      changedById: ctx.userId,
+      diff: { itemCount: n, decisionReason: updated.decisionReason },
+    },
+    tx,
+  );
+  return { row: updated, count: n };
+}

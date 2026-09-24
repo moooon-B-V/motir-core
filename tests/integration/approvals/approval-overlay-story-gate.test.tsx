@@ -354,6 +354,9 @@ describe('GUARD · TOTAL over `ApprovalGateKind`, enumerated FROM the constant',
   // changes by itself — it fails a test rather than changing behaviour silently.
   expect(UNREGISTERED_GATE_KINDS.length).toBeGreaterThan(0);
 
+  // `plan_approval` used to be filtered out of this loop (its gate belongs to NO work item,
+  // ADR `approval-gates.md` §11.5b); MOTIR-6035 registered it, so the constant no longer
+  // holds it and the filter went with it.
   for (const kind of UNREGISTERED_GATE_KINDS) {
     it(`${kind}: the route answers and the overlay draws "not built yet", with no frame`, async () => {
       const card = await designCard();
@@ -435,6 +438,16 @@ describe('GUARD · ONE close seam', () => {
 
   it('has no second way to leave the address — no replace, no history walk', () => {
     expect(code).not.toMatch(/shallowReplace|router\.(back|replace)\(|history\.(back|go)\(/);
+  });
+
+  // The ONE exception, and it is not a close: a stale `?approval=` link to a PLAN gate is
+  // FORWARDED to the planning surface (§11.5b, MOTIR-6037). It lives in its own module,
+  // runs only for `plan_approval`, and is a replace so Back does not bounce again.
+  it('forwards a plan gate from its own module, and only for `plan_approval`', () => {
+    expect(code).toMatch(/usePlanGateForward\(kind === 'plan_approval' \? itemKey : null\)/);
+    const forward = codeOf('components/approvals/usePlanGateForward.ts');
+    expect(forward).toContain('withPlanningOverlay(');
+    expect(forward).not.toMatch(/shallowPush\(/);
   });
 });
 

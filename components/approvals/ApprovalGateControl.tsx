@@ -709,6 +709,11 @@ export function useRefusalCopy(
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
       headline = t('syncedActorMismatch.title');
       break;
+    // A card path met a card-less gate (MOTIR-6032) — a defect, never a refusal a
+    // person can act on, so it reads as the unexpected refusal does.
+    case 'APPROVAL_GATE_HAS_NO_CARD':
+      headline = t('unexpected.title');
+      break;
     case 'MERGE_CHECKS_NOT_GREEN':
       headline = t('mergeChecksNotGreen.title');
       break;
@@ -881,6 +886,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'decidedImmutable';
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
       return 'syncedActorMismatch';
+    case 'APPROVAL_GATE_HAS_NO_CARD':
+      return 'unexpected';
     case 'MERGE_CHECKS_NOT_GREEN':
       return 'mergeChecksNotGreen';
     case 'MERGE_CONFLICT':
@@ -956,9 +963,15 @@ export function ApprovalGateControl({
   const { reporter, status: portStatus } = usePortRenderStatus();
 
   // An OVERTURN is a decision too (MOTIR-5956) — a person refused the direction, with
-  // a note — so it takes the verb-less, decided treatment, never the awaiting arm.
+  // a note — so it takes the verb-less, decided treatment, never the awaiting arm. So is
+  // a DECLINE (Story MOTIR-6012 · MOTIR-6032; ADR `approval-gates.md` §11.4): a person
+  // ended the plan a `plan_approval` gate asked about — terminal, and a fold that left
+  // it out would draw live verbs over a question already answered.
   const decided =
-    gate.state === 'approved' || gate.state === 'changes_requested' || gate.state === 'overturned';
+    gate.state === 'approved' ||
+    gate.state === 'changes_requested' ||
+    gate.state === 'overturned' ||
+    gate.state === 'declined';
   // ⚠️ `withdrawn` IS NOT A KIND OF `decided`, and the whole of state `G` is
   // that distinction. `superseded` is written by the PRODUCT when a newer
   // version is published (ADR §6b) — no actor, no authority, no note — so it
@@ -1052,7 +1065,9 @@ export function ApprovalGateControl({
         ? (approvedStateLabel ?? t('state.approved'))
         : gate.state === 'overturned'
           ? t('state.overturned')
-          : t('state.changesRequested')
+          : gate.state === 'declined'
+            ? t('state.declined')
+            : t('state.changesRequested')
       : phase.kind === 'pending'
         ? t('state.recording')
         : canDecide

@@ -9,6 +9,7 @@ import { parseDecisionRecord, type ParsedDecision } from '@/lib/approvalGates/de
 import { ApprovalGateStaleSubjectError } from '@/lib/approvalGates/errors';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { requireArgsCard, requireGateCard } from './gateCard';
 
 // THE `decision_confirmation` HANDLER (Story MOTIR-5871 · Subtask MOTIR-5954; ADR
 // `docs/decisions/approval-gates.md` §1's MOTIR-5952 amendment, the handler row).
@@ -56,13 +57,16 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
 
   // The subject IS the work item — but only while it is a `human` decision whose
   // body still parses. Anything else has nothing to be asked about.
-  async currentSubject({ item }: GateRoutingArgs): Promise<string | null> {
+  async currentSubject(args: GateRoutingArgs): Promise<string | null> {
+    const item = requireArgsCard(args, 'decision_confirmation', 'decisionConfirmationHandler');
     if (!asksTheConfirmQuestion(item)) return null;
     return parseDecisionRecord(item.descriptionMd).ok ? item.id : null;
   },
 
-  routeTo({ item }: GateRoutingArgs): string | null {
-    return routingTargetId(item);
+  routeTo(args: GateRoutingArgs): string | null {
+    return routingTargetId(
+      requireArgsCard(args, 'decision_confirmation', 'decisionConfirmationHandler'),
+    );
   },
 
   permission: 'work_item:edit',
@@ -81,7 +85,10 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
     const { gate, ctx, tx, resolvedStatusKey } = args;
     const subject = await this.resolveSubject(args);
     if (!subject) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
-    const confirmedRecord = await resolveDecisionRecord(gate.workItemId, tx);
+    const confirmedRecord = await resolveDecisionRecord(
+      requireGateCard(gate, 'decisionConfirmationHandler'),
+      tx,
+    );
     if (resolvedStatusKey === null) {
       return {
         statusWritten: null,
@@ -92,9 +99,15 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
     // ⚠️ IMPORTED HERE, NOT AT THE TOP — the `workItemsService` → `approvalGatesService`
     // → registry → handler cycle; the same lazy import `decisionChoiceHandler` makes.
     const { workItemsService } = await import('@/lib/services/workItemsService');
-    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
-      decidingGateId: gate.id,
-    });
+    await workItemsService.applyStatusTransition(
+      requireGateCard(gate, 'decisionConfirmationHandler'),
+      resolvedStatusKey,
+      ctx,
+      tx,
+      {
+        decidingGateId: gate.id,
+      },
+    );
     return { statusWritten: resolvedStatusKey, confirmedRecord };
   },
 
@@ -117,9 +130,15 @@ export const decisionConfirmationGateHandler: GateHandler<ParsedDecision> = {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
     const { workItemsService } = await import('@/lib/services/workItemsService');
-    await workItemsService.applyStatusTransition(gate.workItemId, resolvedStatusKey, ctx, tx, {
-      decidingGateId: gate.id,
-    });
+    await workItemsService.applyStatusTransition(
+      requireGateCard(gate, 'decisionConfirmationHandler'),
+      resolvedStatusKey,
+      ctx,
+      tx,
+      {
+        decidingGateId: gate.id,
+      },
+    );
     return { statusWritten: resolvedStatusKey };
   },
 

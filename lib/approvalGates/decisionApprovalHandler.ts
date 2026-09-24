@@ -1,4 +1,5 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
+import { requireArgsCard } from '@/lib/approvalGates/gateCard';
 import type {
   GateEffect,
   GateEffectArgs,
@@ -131,14 +132,15 @@ export const decisionApprovalGateHandler: GateHandler<DecisionIdentity> = {
    * `decision_choice`, never this gate — and so does every card whose TYPE is not
    * `decision`, whatever files its pull request touches.
    */
-  async currentSubject({ item, tx }: GateRoutingArgs): Promise<string | null> {
+  async currentSubject(args: GateRoutingArgs): Promise<string | null> {
+    const item = requireArgsCard(args, 'decision_approval', 'decisionApprovalHandler');
     if (!asksTheDecisionQuestion(item)) return null;
-    return (await loadDecisionIdentity(item.id, tx)) ? item.id : null;
+    return (await loadDecisionIdentity(item.id, args.tx)) ? item.id : null;
   },
 
   /** ADR §2: `assigneeId ?? reporterId` — the routing rule every kind shares. */
-  routeTo({ item }: GateRoutingArgs): string | null {
-    return routingTargetId(item);
+  routeTo(args: GateRoutingArgs): string | null {
+    return routingTargetId(requireArgsCard(args, 'decision_approval', 'decisionApprovalHandler'));
   },
 
   /** The design gate's floor. Who may press on top of it is the door's §2 rule. */

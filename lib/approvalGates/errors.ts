@@ -62,6 +62,9 @@ export type ApprovalGateErrorTag =
   | 'APPROVAL_GATE_NOT_AUTHORISED'
   | 'APPROVAL_GATE_KIND_UNREGISTERED'
   | 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH'
+  // A path that reads a gate's CARD met a gate with none — only a `plan_approval`
+  // gate may be card-less (ADR §11.1, MOTIR-6032), so this is a DEFECT in the caller.
+  | 'APPROVAL_GATE_HAS_NO_CARD'
   // A DECISION gate whose card's pull requests carry no single decision document —
   // none, several, or one the host could not name (Story MOTIR-4907 · MOTIR-5676;
   // `approval-gates.md` §8's FIFTH AMENDMENT, clause 3). Approve is refused;
@@ -206,7 +209,7 @@ export class ApprovalGateAlreadyDecidedError extends ApprovalGateError {
   readonly code = 'APPROVAL_GATE_ALREADY_DECIDED' as const;
   constructor(
     readonly gateId: string,
-    readonly state: 'approved' | 'changes_requested' | 'overturned',
+    readonly state: 'approved' | 'changes_requested' | 'overturned' | 'declined',
     readonly decidedById: string | null,
     readonly decidedAt: Date | null,
     /**
@@ -330,7 +333,13 @@ export type VerbNotOfferedReason =
   | 'overturn_needs_a_note'
   /** `request_changes` pressed with no reason — a refusal SAYS WHY (ADR §10a, MOTIR-6074).
    *  Every kind that offers the verb, *None of these* on a choice included. */
-  | 'request_changes_needs_a_note';
+  | 'request_changes_needs_a_note'
+  /** `request_changes` sent to a `plan_approval` gate (ADR §11.4, MOTIR-6035): a plan is
+   *  changed by TALKING to the planner, never by a gate verb. */
+  | 'request_changes_on_plan'
+  /** `decline` sent to any kind but `plan_approval`, the one kind that offers it
+   *  (ADR §11.4, MOTIR-6035). */
+  | 'decline_on_other_kind';
 
 /**
  * A decision whose VERB this gate does not offer (Story MOTIR-4914 · Subtask
@@ -348,6 +357,9 @@ export type VerbNotOfferedReason =
  *     request-shape refusal like the others, and nothing is written.
  *   · `request_changes_needs_a_note` — `request_changes` PRESSED with an empty
  *     reason (MOTIR-6074, ADR §10a). Never raised for `source: github`.
+ *   · `request_changes_on_plan` — `request_changes` sent to a `plan_approval` gate
+ *     (MOTIR-6035, ADR §11.4): a plan is changed by a conversation, not a verb;
+ *   · `decline_on_other_kind` — `decline` sent to any kind but `plan_approval`.
  *
  * ⚠️ NOT THE STALE REFUSAL, even for `unknown_option`. The stamp check runs first,
  * so by the time an option is looked up the options are exactly the ones the
@@ -552,5 +564,30 @@ export class ApprovalGateKindUnregisteredError extends ApprovalGateError {
   constructor(readonly kind: string) {
     super(`No approval-gate handler is registered for kind \`${kind}\` in this build.`);
     this.name = 'ApprovalGateKindUnregisteredError';
+  }
+}
+
+/**
+ * A path that needs the gate's WORK ITEM met a gate that has none (Story MOTIR-6012 ·
+ * MOTIR-6032; ADR `approval-gates.md` §11.1).
+ *
+ * Only a `plan_approval` gate may be card-less — the CHECK
+ * `approval_gate_work_item_iff_not_plan` holds that at the database — so meeting one
+ * on a path written for a card-bearing kind is a DEFECT in the caller, never a
+ * refusal to render. The path that should have handled the card-less shape is
+ * named in the message so the defect is findable.
+ */
+export class ApprovalGateHasNoCardError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_HAS_NO_CARD' as const;
+  readonly code = 'APPROVAL_GATE_HAS_NO_CARD' as const;
+  constructor(
+    readonly gateId: string,
+    readonly kind: string,
+    readonly where: string,
+  ) {
+    super(
+      `Approval gate ${gateId} (kind \`${kind}\`) belongs to no work item, and ${where} reads its card. Only a \`plan_approval\` gate is card-less.`,
+    );
+    this.name = 'ApprovalGateHasNoCardError';
   }
 }

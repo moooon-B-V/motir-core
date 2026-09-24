@@ -224,7 +224,7 @@ describe('deciding the gate', () => {
     const resolved = await withWorkspaceContext(fx.ctx, async (tx) => {
       const args = {
         gate,
-        item: await adminDb.workItem.findUniqueOrThrow({ where: { id: gate.workItemId } }),
+        item: await adminDb.workItem.findUniqueOrThrow({ where: { id: gate.workItemId! } }),
         ctx: fx.ctx,
         tx,
         resolvedStatusKey: 'approved',

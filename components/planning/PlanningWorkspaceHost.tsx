@@ -14,7 +14,12 @@ import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
 import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
-import { isProposalPending, pendingProposalCount } from '@/lib/planning/planPending';
+import {
+  closeLosesProposal,
+  isProposalPending,
+  pendingProposalCount,
+} from '@/lib/planning/planPending';
+import { planGateView, type PlanDecisionPlace } from '@/lib/planning/planGateView';
 import {
   addPlanningTarget,
   removePlanningTarget,
@@ -258,6 +263,45 @@ export function PlanningWorkspaceHost({
   const pending = isProposalPending(state, index);
   const pendingCount = pendingProposalCount(index);
   const deciding = state.phase === 'deciding';
+  // ⚠️ THE GUARD'S OWN PREDICATE IS NARROWER THAN `pending` (MOTIR-6037; design Part XX
+  // §20.6, §20.11 flag 1): an ASKED plan and a plan being WRITTEN lose nothing on close —
+  // the first waits in To approve, the second is a server job — so the guard, whose copy
+  // says closing discards them, does not open for either. `pending` still chooses the
+  // footer slot's content.
+  const guarded = closeLosesProposal(state, index);
+
+  // ── THE PLAN GATE'S DECISION, on this surface (Story MOTIR-6012 · MOTIR-6037) ──────
+  // One derivation for the bar and the rail's review block, so the gate and its mirror
+  // cannot disagree. A plan run streaming into the plan in hand holds its verbs before
+  // the review read can say so.
+  const gateView = planGateView({
+    review: state.review,
+    rewriting: state.phase === 'streaming' && state.planId !== null,
+  });
+  // WHERE Decline's confirm band is up, and where the last press came from — the stale
+  // refusal is said beside the verbs it refused (Panel 5). Local UI state: it describes
+  // this surface, not the plan.
+  const [declineFrom, setDeclineFrom] = useState<PlanDecisionPlace | null>(null);
+  const [pressFrom, setPressFrom] = useState<PlanDecisionPlace>('bar');
+  const approveFrom = useCallback(
+    (place: PlanDecisionPlace) => {
+      setPressFrom(place);
+      setDeclineFrom(null);
+      void approve();
+    },
+    [approve],
+  );
+  const confirmDecline = useCallback(
+    (noteMd: string | null) => {
+      setPressFrom(declineFrom ?? 'bar');
+      void (async () => {
+        await discard(noteMd);
+        setDeclineFrom(null);
+      })();
+    },
+    [discard, declineFrom],
+  );
+  const staleRefusedAt = state.errorCode === 'stale' ? pressFrom : null;
 
   // The VETO the overlay consults. Writing it into a ref rather than passing a
   // boolean up keeps the decision here, next to the state it reads, and keeps
@@ -266,14 +310,14 @@ export function PlanningWorkspaceHost({
     if (!closeGuardRef) return;
     closeGuardRef.current = () => {
       if (bypassRef.current) return true;
-      if (!pending) return true;
+      if (!guarded) return true;
       setGuardOpen(true);
       return false;
     };
     return () => {
       closeGuardRef.current = null;
     };
-  }, [closeGuardRef, pending]);
+  }, [closeGuardRef, guarded]);
 
   // ⚠️ TWO VECTORS ARE DELIBERATELY NOT GUARDED, and the design says why
   // (`design/ai-chat/design-notes.md` § *Opening & exiting* → *The
@@ -412,8 +456,14 @@ export function PlanningWorkspaceHost({
             <PlanChangeConfirmBar
               index={index}
               deciding={state.phase === 'deciding'}
-              onApprove={approve}
-              onDiscard={discard}
+              onApprove={() => approveFrom('bar')}
+              onDiscard={() => void discard()}
+              view={gateView}
+              declining={declineFrom === 'bar'}
+              onRequestDecline={() => setDeclineFrom('bar')}
+              onCancelDecline={() => setDeclineFrom(null)}
+              onConfirmDecline={confirmDecline}
+              staleRefused={staleRefusedAt === 'bar'}
             />
           ) : (
             <div
@@ -464,9 +514,15 @@ export function PlanningWorkspaceHost({
           onSend={sendTargeted}
           onRetry={retry}
           onCorrectTurn={correctTurn}
-          onApprove={approve}
-          onDiscard={discard}
+          onApprove={() => approveFrom('rail')}
+          onDiscard={() => void discard()}
           onStop={stop}
+          gateView={gateView}
+          declining={declineFrom === 'rail'}
+          onRequestDecline={() => setDeclineFrom('rail')}
+          onCancelDecline={() => setDeclineFrom(null)}
+          onConfirmDecline={confirmDecline}
+          staleRefused={staleRefusedAt === 'rail'}
         />
       }
     />
