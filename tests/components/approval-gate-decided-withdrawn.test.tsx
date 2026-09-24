@@ -157,6 +157,31 @@ describe('state E — approved', () => {
   });
 });
 
+describe('a DECLINED plan gate (Story MOTIR-6012 · MOTIR-6032)', () => {
+  // A person ended the plan a `plan_approval` gate asked about — terminal, and a
+  // decision, so it takes the decided treatment: who, when, the state, and no verbs.
+  const DECLINED: ApprovalGateDTO = {
+    ...APPROVED,
+    kind: 'plan_approval',
+    workItemId: null,
+    subjectId: 'plan-1',
+    state: 'declined',
+    outcomeRef: null,
+  };
+
+  it('names the state Declined, and who decided it', () => {
+    render({ gate: DECLINED });
+    expect(screen.getByText('Declined')).toBeTruthy();
+    expect(screen.getByText('Zhu Yue')).toBeTruthy();
+    expect(screen.queryByText('Changes requested')).toBeNull();
+  });
+
+  it('carries NO VERBS — a declined plan is not asked again', () => {
+    render({ gate: DECLINED });
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+});
+
 describe('state G — superseded', () => {
   it('says the question was withdrawn', () => {
     const { container } = render({ gate: WITHDRAWN });

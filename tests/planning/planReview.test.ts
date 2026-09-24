@@ -102,6 +102,28 @@ describe('planDecisionErrorCode', () => {
     expect(planDecisionErrorCode(new PlanRequestError(404, null))).toBe('decided');
   });
 
+  it('answers a decided or withdrawn gate the same as a decided plan', () => {
+    expect(planDecisionErrorCode(new PlanRequestError(409, 'APPROVAL_GATE_ALREADY_DECIDED'))).toBe(
+      'decided',
+    );
+    expect(planDecisionErrorCode(new PlanRequestError(409, 'APPROVAL_GATE_SUPERSEDED'))).toBe(
+      'decided',
+    );
+  });
+
+  it("names the decide door's plan refusals: held, stale and not decidable yet", () => {
+    expect(planDecisionErrorCode(new PlanRequestError(409, 'PLAN_REVISION_IN_FLIGHT'))).toBe(
+      'held',
+    );
+    expect(planDecisionErrorCode(new PlanRequestError(409, 'APPROVAL_GATE_STALE_SUBJECT'))).toBe(
+      'stale',
+    );
+    expect(planDecisionErrorCode(new PlanRequestError(409, 'PLAN_GATE_AWAITING'))).toBe('stale');
+    expect(planDecisionErrorCode(new PlanRequestError(409, 'PLAN_NOT_DECIDABLE_YET'))).toBe(
+      'notDecidable',
+    );
+  });
+
   it('falls back for anything else, so no raw server code reaches the screen', () => {
     expect(planDecisionErrorCode(new PlanRequestError(500, 'BOOM'))).toBe('APPROVE_ERROR');
     expect(planDecisionErrorCode(new Error('network'))).toBe('APPROVE_ERROR');
