@@ -8706,3 +8706,66 @@ Already in both catalogues (MOTIR-6096): `activity.fields.difficulty` _Difficult
 | the activity entry — nothing to build; MOTIR-6096 already registered the field and its label                                                                                                     | —              |
 
 **Not drawn, and owed by nobody:** a List column or a Board-card badge (the story asks for a filter), the plan review's rendering of a proposed difficulty (the sibling planner story, MOTIR-6095), and any model-choice UI.
+
+## ⭐ The DIFFICULTY editor at FOUR segments — the track fills its rail and the editor drops its glyph (MOTIR-6200, fixing MOTIR-6199 — `core-fields--difficulty--four-segments.mock.html`, DATED 2026-09-24)
+
+**What this amends, and what it does not.** A delta on `core-fields--difficulty.mock.html` (MOTIR-6097, above), whose editor panels draw **three** segments — Low · Medium · High. That mock is a record of 2026-09-23 and is **not edited**. Only the **editor** is redrawn here. Read mode, the field chrome, the unset affordance, the activity entry, the filter row and the quick view's rail grammar are all unchanged and are not redrawn.
+
+**Why it exists.** The scale gained a fourth level, `trivial`, in the implementation pull request itself (`b22dc0a09`, PR #3063) — _after_ the design was published. `DifficultyPicker` reads `WORK_ITEM_DIFFICULTIES` and so grew a fourth segment automatically and correctly, but no drawing of four segments in a 288px rail was ever produced. The result is MOTIR-6199: the track paints over the `FieldCard`'s right border and **High** is clipped at the panel edge.
+
+### The decision
+
+**The editor's track FILLS its rail and divides it evenly, and the leading glyph is dropped IN THE EDITOR ONLY.**
+
+- `Segmented` gains an opt-in **`fill`** variant: the track becomes `width: 100%` and each segment `flex: 1 1 0; min-width: 0; justify-content: center`, with a compact horizontal padding that replaces `--spacing-control-x` _in that variant only_. Every other call site is untouched — the variant is off by default.
+- `DifficultyPicker` passes `fill` and omits `icon` on its options. **`DifficultyIndicator` keeps its glyph**, so a value read on its own still says _difficulty_ and not _priority_, which is the reason the glyph exists (the component's own note, `DifficultyPicker.tsx:9-15`).
+
+### Why fill, and not the two cheaper alternatives
+
+The budget is **258px** on the item page (`288px` grid track − `FieldCard`'s `px-3.5` − its border) and **260px** in the quick view (`300px` track − the column's `px-5`). The shipped four-segment control needs roughly 316px at the default style.
+
+| candidate                      | what it does                | why not                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **drop the glyph only**        | −20px per segment           | Leaves the width **content-sized** — still a function of the labels and of `--spacing-control-x`, which is `10px`, `12px` or **`14px`** depending on the style. It fits at the default and has to be re-argued at every other style, in every locale, and again at a fifth level.                                                                                             |
+| **wrap the track to two rows** | a `flex-wrap` track         | A segmented control that reflows is a different control, and `Segmented` has 20+ call sites (`BoardContainer`, `NotificationDrawer`, `StartSprintDialog`, `WidgetConfigModal`, `DataSourceField`, `CommentsSection`, `AttachmentsPanel`, `ActivitySection`, `PlanStatusTabs`, the reports). Two rows in a pill track also reads as a broken row rather than a deliberate one. |
+| **fill the rail** ✅           | `w-full` + `flex-1 min-w-0` | The width stops being a function of anything that varies. It is the rail's width in every font, at every style, and a fifth level makes the segments narrower rather than the control wider.                                                                                                                                                                                  |
+
+**The property being bought is width-independence, not pixels.** The app ships a _system_ font stack (`-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`), so label advance differs by platform and no content-sized fix can be verified once and trusted everywhere. The fill variant removes the question instead of answering it.
+
+### What MOTIR-6199 builds
+
+1. `packages/design-system/src/components/ui/Segmented.tsx` — an opt-in `fill` prop. Default behaviour byte-identical for every existing call site.
+2. `components/issues/DifficultyPicker.tsx` — pass `fill`, drop `icon` from the options it builds. Do **not** touch `DIFFICULTY_GLYPH` or `DifficultyIndicator`.
+3. A test that pins the fit, so a fifth level or a wider token re-breaks it loudly. The assertion worth pinning is the **variant**, not a pixel count: a content-sized track in a fixed rail is the defect, so assert that the editor's track is the fill variant and that its segments carry `min-width: 0` — a measurement that does not depend on the runner's fonts.
+4. **No change** to `WORK_ITEM_DIFFICULTIES`, to the scale's members or order, or to what read mode renders.
+
+### Composed primitives
+
+`Segmented` (amended additively), the item page's `FieldCard`, the quick view's `EditableRailField`, and the shipped `Clear` text button — all unchanged apart from the variant. Colour only through `--el-*`; shape through the radius / spacing / height tokens. `grep -- '--color-'` over the delta returns nothing.
+
+### Access path
+
+**Unchanged, and deliberately so.** This delta adds no surface and no entry affordance: the editor is reached exactly as MOTIR-6097 drew it — open `/items/<KEY>` and press the Difficulty card's chevron, or open the quick view from a List row or a Board card and press the same chevron in its rail.
+
+### Strings
+
+**None new.** `labels.difficulty.{trivial,low,medium,high}` and `ui.difficultyPicker.{label,clear}` already ship in both catalogues. Dropping the glyph removes no text, and the labels the segments carry are the ones already translated.
+
+### GIVES / TAKES — who builds what
+
+`grep -o 'MOTIR-[0-9]*'` over this delta names **MOTIR-6199**, **MOTIR-6200**, **MOTIR-6097** and **MOTIR-6096**; the sweep below is over the subtree, not only that list.
+
+- **MOTIR-6199 — GIVES.** It gains the settled form and loses its open question. Its own acceptance criteria are unchanged and remain correct: all four segments inside the card, both rails, every value reachable, the widest `--spacing-control-x`, a pinning test, and no change to the scale or to read mode. **Nothing is TAKEN from it.**
+- **MOTIR-6199 — SIZE.** Re-run against this asset: the build is one opt-in prop on one primitive, two lines in one picker, and one test. That is _at or under_ the 2 points / 40 minutes it carries, so **no re-estimate is owed**. Stated explicitly because a GIVES is normally where an estimate goes stale silently.
+- **MOTIR-6097 — TAKES a STRUCTURE, and it is recorded rather than edited.** Its section above says the editor is _"a **three**-option `Segmented`"_ with a leading glyph per option. This delta supersedes that sentence for the EDITOR: four options, no glyph, full-width. MOTIR-6097 stays `done` and its mock stays as drawn — it is the record of what was decided on 2026-09-23, and the row in the index table below points a reader here.
+- **MOTIR-6096 — untouched.** It owns the scale and its strings; this delta changes neither.
+- **The 20+ other `Segmented` call sites — neither GIVES nor TAKES.** The variant is opt-in and off by default, so no existing card's criteria are affected. Had the wrap candidate been chosen, every one of them would have needed a disposition, which is part of why it was not.
+
+### ⚠️ One check this asset could NOT run, stated rather than skipped
+
+_Design against shipped reality_ asks the designer to RENDER the shipped surface before drawing it. **No browser could be launched in the sandbox this was drawn in** — Playwright's bundled Chromium is present but its system libraries (`libglib-2.0.so.0` and the rest) are not, and the box has no root to install them. So the panels here are composed from the shipped component's **verbatim geometry**, transcribed from `Segmented.tsx:59,82`, `FieldCard.tsx:46`, `page.tsx`'s `md:grid-cols-[1fr_18rem]` and `QuickViewSurface.tsx`'s `300px` track — not from a screenshot.
+
+Two things make that recoverable rather than a hole, and a reviewer should know both:
+
+1. **The asset measures itself.** Every panel prints its own budget, its own track width and a FITS / OVERFLOWS verdict, computed by _the reader's_ browser at open time. The numbers in this asset are therefore never transcribed, and opening the file _is_ the render that could not be performed here.
+2. **The decision does not rest on a measurement.** The fill variant's track is `width: 100%` — it is its container's width by construction, at any font and any style. That is the property the drawing is claiming, and it is the one property a pixel render could not have falsified.
