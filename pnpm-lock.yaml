@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  mcp-handler@1.1.0: f850508be03dc8c500bf3bcd26ef36a8f24b0fc2c7153bfed49f29986fe89b6b
   next@16.2.6: ef4c46d83679ade871ca4df2fdc5faaaac6440e89fb0c4879ae733e8a3ff27ae
 
 importers:
@@ -130,7 +131,7 @@ importers:
         version: 1.16.0(react@19.2.4)
       mcp-handler:
         specifier: ^1.1.0
-        version: 1.1.0(@modelcontextprotocol/sdk@1.26.0(zod@3.25.76))(next@16.2.6(patch_hash=ef4c46d83679ade871ca4df2fdc5faaaac6440e89fb0c4879ae733e8a3ff27ae)(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
+        version: 1.1.0(patch_hash=f850508be03dc8c500bf3bcd26ef36a8f24b0fc2c7153bfed49f29986fe89b6b)(@modelcontextprotocol/sdk@1.26.0(zod@3.25.76))(next@16.2.6(patch_hash=ef4c46d83679ade871ca4df2fdc5faaaac6440e89fb0c4879ae733e8a3ff27ae)(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       next:
         specifier: 16.2.6
         version: 16.2.6(patch_hash=ef4c46d83679ade871ca4df2fdc5faaaac6440e89fb0c4879ae733e8a3ff27ae)(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -12103,7 +12104,7 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-handler@1.1.0(@modelcontextprotocol/sdk@1.26.0(zod@3.25.76))(next@16.2.6(patch_hash=ef4c46d83679ade871ca4df2fdc5faaaac6440e89fb0c4879ae733e8a3ff27ae)(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
+  mcp-handler@1.1.0(patch_hash=f850508be03dc8c500bf3bcd26ef36a8f24b0fc2c7153bfed49f29986fe89b6b)(@modelcontextprotocol/sdk@1.26.0(zod@3.25.76))(next@16.2.6(patch_hash=ef4c46d83679ade871ca4df2fdc5faaaac6440e89fb0c4879ae733e8a3ff27ae)(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)):
     dependencies:
       '@modelcontextprotocol/sdk': 1.26.0(zod@3.25.76)
       chalk: 5.6.2

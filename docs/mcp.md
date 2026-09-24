@@ -822,10 +822,10 @@ root-first) — the same two fields `/api/v1`'s work-item detail
 publishes. Both are `null` for an unfiled item **and** for a child of a filed
 item: only a root is ever filed, and a child's ancestry already travels as keys.
 
-The item carries its **`difficulty`** (Story MOTIR-6016) — `low` / `medium` /
-`high`, how hard the work is to reason about, or `null` when unset and always
-`null` on an epic or story. Every tool returning a `WorkItemDto`, and every ready
-row (`list_ready`, `next_ready`, `claim_next_ready`), carries it too.
+The item carries its **`difficulty`** (Story MOTIR-6016) — `trivial` / `low` /
+`medium` / `high`, how hard the work is to reason about, or `null` when unset
+and always `null` on an epic or story. Every tool returning a `WorkItemDto`, and
+every ready row (`list_ready`, `next_ready`, `claim_next_ready`), carries it too.
 They are the ONLY folder fields on the payload, and the text summary prints a
 `Folder: Parked ▸ 2025` line beside `Parent:` when one is set.
 
@@ -1070,7 +1070,7 @@ epics included, so the agent surface can create one).
 | `estimateMinutes`    | number \| null                                      | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                                                                                                         |
 | `type`               | type enum \| null                                   | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped.                                                                                       |
 | `executor`           | `"coding_agent" \| "human"` \| null                 | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                                                                                                                     |
-| `difficulty`         | `"low" \| "medium" \| "high"` \| null               | no       | How hard the work is to REASON about (not how big) — leaf kinds only; a non-null value on an epic/story is `DIFFICULTY_NOT_ALLOWED_ON_KIND`. Omit/`null` → unset.                                                                                                   |
+| `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null  | no       | How hard the work is to REASON about (not how big) — leaf kinds only; a non-null value on an epic/story is `DIFFICULTY_NOT_ALLOWED_ON_KIND`. Omit/`null` → unset.                                                                                                   |
 | `targetRepo`         | string \| null                                      | no       | WHICH repo the item ships in — bare repo name (`"motir-core"`) or `"owner/name"`. Must name a repo in **this project's** repository set (else `UNKNOWN_TARGET_REPO`). Omit/`null` → unpinned.                                                                       |
 | `targetRepos`        | string[]                                            | no       | EVERY repo the item ships in, ORDERED — element 0 is the PRIMARY dispatch routes to. Same validation per element. MUTUALLY EXCLUSIVE with `targetRepo` (else `CONFLICTING_TARGET_REPO_INPUT`). Omit → the set comes from `targetRepo`; `[]` → the empty set.        |
 | `targetRepositories` | string[]                                            | no       | The same set as REFERENCES — the project's repository ROW IDS, ORDERED, element 0 the primary. Survives a rename, and can name one of two rows sharing a role. MUTUALLY EXCLUSIVE with BOTH fields above; an id outside this project is `UNKNOWN_PROJECT_REPO_REF`. |
@@ -1977,23 +1977,23 @@ The leaf-only `type`/`executor` rule (setting them on an epic/story is rejected)
 the type→executor seed, and the assignee-membership check all apply exactly as in
 the UI; the same Story-6.4 edit gate gates the call.
 
-| Input                | Type                                  | Required | Notes                                                                                                                                 |
-| -------------------- | ------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `key`                | string                                | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                |
-| `title`              | string                                | no       | New title.                                                                                                                            |
-| `descriptionMd`      | string \| null                        | no       | New description; `null` clears it.                                                                                                    |
-| `explanationMd`      | string \| null                        | no       | New explanation ("why"); `null` clears it.                                                                                            |
-| `priority`           | `lowest…highest`                      | no       | New priority.                                                                                                                         |
-| `type`               | work type \| null                     | no       | Leaf items only; `null` clears it. First set seeds the executor.                                                                      |
-| `executor`           | `"coding_agent" \| "human"` \| null   | no       | Leaf items only; `null` clears it.                                                                                                    |
-| `difficulty`         | `"low" \| "medium" \| "high"` \| null | no       | Leaf items only; `null` clears it. A re-kind onto a container that keeps one is refused.                                              |
-| `estimateMinutes`    | number \| null                        | no       | Estimated minutes (time); `null` clears it.                                                                                           |
-| `storyPoints`        | number \| null                        | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.                                        |
-| `targetRepo`         | string \| null                        | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears.                              |
-| `targetRepos`        | string[]                              | no       | Replace the repo SET wholesale, ORDERED, element 0 the primary; `[]` clears it. Mutually exclusive with `targetRepo`.                 |
-| `targetRepositories` | string[]                              | no       | Replace the set as REFERENCES — the project's repository row ids, ORDERED; `[]` clears it. Mutually exclusive with BOTH fields above. |
-| `assigneeId`         | string \| null                        | no       | Assignee user id (must be a workspace member); `null` unassigns.                                                                      |
-| `dueDate`            | string (ISO-8601) \| null             | no       | Due date; `null` clears it.                                                                                                           |
+| Input                | Type                                               | Required | Notes                                                                                                                                 |
+| -------------------- | -------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`                | string                                             | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                |
+| `title`              | string                                             | no       | New title.                                                                                                                            |
+| `descriptionMd`      | string \| null                                     | no       | New description; `null` clears it.                                                                                                    |
+| `explanationMd`      | string \| null                                     | no       | New explanation ("why"); `null` clears it.                                                                                            |
+| `priority`           | `lowest…highest`                                   | no       | New priority.                                                                                                                         |
+| `type`               | work type \| null                                  | no       | Leaf items only; `null` clears it. First set seeds the executor.                                                                      |
+| `executor`           | `"coding_agent" \| "human"` \| null                | no       | Leaf items only; `null` clears it.                                                                                                    |
+| `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null | no       | Leaf items only; `null` clears it. A re-kind onto a container that keeps one is refused.                                              |
+| `estimateMinutes`    | number \| null                                     | no       | Estimated minutes (time); `null` clears it.                                                                                           |
+| `storyPoints`        | number \| null                                     | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.                                        |
+| `targetRepo`         | string \| null                                     | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears.                              |
+| `targetRepos`        | string[]                                           | no       | Replace the repo SET wholesale, ORDERED, element 0 the primary; `[]` clears it. Mutually exclusive with `targetRepo`.                 |
+| `targetRepositories` | string[]                                           | no       | Replace the set as REFERENCES — the project's repository row ids, ORDERED; `[]` clears it. Mutually exclusive with BOTH fields above. |
+| `assigneeId`         | string \| null                                     | no       | Assignee user id (must be a workspace member); `null` unassigns.                                                                      |
+| `dueDate`            | string (ISO-8601) \| null                          | no       | Due date; `null` clears it.                                                                                                           |
 
 **Output** — `structuredContent`: the updated `WorkItemDto`. A non-member
 assignee, a `type`/`executor` on a non-leaf, a `difficulty` on a non-leaf
