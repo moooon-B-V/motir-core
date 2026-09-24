@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   ARRIVAL_LEVEL_MAX_NODES,
@@ -212,5 +214,41 @@ describe('the ARRIVAL LEVEL’s size decides the default too (MOTIR-4024)', () =
 
   it('is unchanged for a small, single-container plan — the case that must stay a canvas', () => {
     expect(defaultPlanView(level(3))).toBe('canvas');
+  });
+});
+
+describe('the PREMISE the legibility arm is justified against (MOTIR-6250)', () => {
+  // `ARRIVAL_LEVEL_MAX_NODES`'s derivation reasons from a canvas width, and that
+  // width comes from the frame: *"the plan detail's canvas is the `1fr` of a
+  // `grid-cols-[1fr_22rem]`, so the rail takes 352px and the canvas is 782px wide
+  // at 1440x900"*. MOTIR-6250 made the planning WORKSPACE's frame a resizable
+  // split, so that premise is now true of one host and false of the other.
+  //
+  // It still holds where it is READ, because `defaultPlanView`'s only production
+  // caller is `PlanDetail` and `PlanDetail` keeps the FIXED frame. This test is
+  // what stops that becoming accidental: opt the plan page into the split and the
+  // number below is justified against a width its frame no longer has, and this
+  // fails NAMING the derivation rather than letting a stale comment stand.
+  const read = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
+
+  it('has exactly ONE production caller, and it is the plan detail', () => {
+    const callers = ['components/planning/PlanDetail.tsx'];
+    for (const c of callers) expect(read(c)).toMatch(/defaultPlanView/);
+    // Any NEW production caller has to re-ask which frame it is reasoning about.
+    const host = read('components/planning/PlanningWorkspaceHost.tsx');
+    expect(host).not.toMatch(/defaultPlanView/);
+  });
+
+  it('the plan detail does NOT opt into the resizable split', () => {
+    const planDetail = read('components/planning/PlanDetail.tsx');
+    // Both cards say so in terms — MOTIR-6250's *"Does NOT change: … the plan
+    // page's rail"* and MOTIR-6236's *"This host is NOT a split"*.
+    expect(planDetail).not.toMatch(/\bresizable\b/);
+  });
+
+  it('the resizable frame is opt-in, so every other consumer keeps the fixed column', () => {
+    const frame = read('components/planning/PlanningWorkspace.tsx');
+    expect(frame).toMatch(/resizable = false/);
+    expect(frame).toMatch(/md:grid-cols-\[1fr_22rem\]/);
   });
 });

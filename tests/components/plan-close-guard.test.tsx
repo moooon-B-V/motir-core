@@ -343,14 +343,21 @@ describe('the two vectors the design deliberately does NOT guard', () => {
     // fires whether or not anything is at stake. The design chose against it;
     // this is what says the absence was chosen rather than missed.
     const added: string[] = [];
+    // ⚠️ PASS THROUGH THE ORIGINAL, BOUND — not `EventTarget.prototype`
+    // (MOTIR-6250). happy-dom keeps its listener bookkeeping on the INSTANCE, so
+    // `EventTarget.prototype.addEventListener.call(window, …)` throws
+    // `Cannot read properties of undefined (reading 'bubbling')`. That was latent
+    // for as long as nothing registered a window listener during this render; the
+    // resizable split's persisted-width hook subscribes to `storage`, so it became
+    // the first caller — and because the throw skipped `mockRestore()`, the leaked
+    // spy took three later tests in this file with it.
+    const passThrough = window.addEventListener.bind(window);
     const spy = vi.spyOn(window, 'addEventListener').mockImplementation(((
       type: string,
       ...rest: unknown[]
     ) => {
       added.push(type);
-      return (
-        EventTarget.prototype.addEventListener as unknown as (t: string, ...r: unknown[]) => void
-      ).call(window, type, ...rest);
+      return (passThrough as unknown as (t: string, ...r: unknown[]) => void)(type, ...rest);
     }) as typeof window.addEventListener);
 
     conversation.state = stateWith({ review: REVIEW });

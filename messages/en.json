@@ -6781,7 +6781,8 @@
       "crumbTargetPrefix": "Planning target:",
       "movedAnnouncement": "Showing work inside {target}",
       "goToTarget": "Plan is in {identifier} · Go there"
-    }
+    },
+    "dividerAria": "Resize the conversation"
   },
   "codeHealth": {
     "title": "Code health",
