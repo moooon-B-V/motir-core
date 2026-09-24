@@ -1,0 +1,1614 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The planning surface's canvas ARRIVES inside the target — delta (MOTIR-6159)</title>
+
+    <!--
+      ══════════════════════════════════════════════════════════════════════════
+      A DELTA MOCK. It holds ONLY the panels that CHANGE.
+      ══════════════════════════════════════════════════════════════════════════
+
+      WHAT IT AMENDS, by path:
+        · design/ai-chat/planning-workspace.mock.html      — sheet 6, the frame
+        · design/ai-chat/design-notes.md
+            § "⚠️ Opening & exiting — a full-screen overlay ON TOP of the app
+              (sheet 6)", and its ADDRESS table
+        · the MOTIR-2070 anchor rule, stated in code at
+          components/planning/PlanningWorkspaceOverlay.tsx (the ANCHOR READ
+          block: "ANCESTORS ONLY (MOTIR-2070) … Opening on the anchor's CHILDREN
+          would hide the item the conversation is about")
+
+      Everything the base sheet decides is INHERITED and NOT redrawn: the
+      `Modal size="full"` frame edge to edge, the 0px radius / 0px border, the
+      scrim, the `grid-cols-[1fr_22rem]` canvas·rail split, the host's own
+      exit-chrome bar, the four exits, the close-with-pending guard, the audit
+      banner slot and the footer slot. This delta changes ONE thing: WHICH LEVEL
+      the canvas on the left stands on, and what the breadcrumb says about it.
+
+      The token block below is copied VERBATIM from the base sheet so the delta
+      cannot drift from it. No token is invented here.
+
+      ⚠️ A NOTE ON WHAT THIS STYLESHEET IS. It is a hand-written rendering of the
+      shipped components, not their CSS. Where a panel below makes a claim about
+      what the PRODUCT does, that claim was measured against the real component
+      (see § "What was RENDERED first" in the notes) — never read off this file.
+    -->
+
+    <style>
+      /* ═══════════════════════════════════════════════════════════════════════
+         TOKENS — copied verbatim from `planning-workspace.mock.html`, the sheet
+         this delta amends. Roles only; no invented hue.
+         `--el-text-muted` / `--el-text-faint` are DECLARED so the ink scanners
+         resolve them by name, and used only where the measured table allows:
+         muted never on a tinted surface, faint only on `aria-hidden`
+         decoration (CLAUDE.md's table, MOTIR-2455).
+         ═══════════════════════════════════════════════════════════════════════ */
+      :root {
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+
+        --el-page-bg: var(--color-background);
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        --el-overlay-scrim: #00000066;
+        --el-canvas: #ecebe7;
+        --el-danger-text: #ffffff;
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+
+        --radius-card: 12px;
+        --radius-modal: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --height-control: 28px;
+        --spacing-control-x: 8px;
+        --spacing-control-y: 4px;
+        --spacing-chip-x: 6px;
+        --spacing-card-padding: 16px;
+        --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+
+        --el-success: #1aae39;
+        --el-warning: #dd5b00;
+        --el-info: #0075de;
+        --el-danger: #e03131;
+
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-peach: #ffe8d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-yellow: #fef7d6;
+
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-bug: #e03131;
+        --el-type-subtask: #2a9d99;
+
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      :root {
+        --color-background: #ffffff;
+        --color-primary-fill: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-accent: #ff64c8;
+        --color-link: #0070d2;
+      }
+      :root,
+      [data-palette] {
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-link: var(--color-link);
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --el-accent-on-surface: var(--color-primary-fill);
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 8%, var(--el-card));
+      }
+      /* ⚠️ BEFORE the dark block, for the reason the base sheet states: a custom
+         property's `var()` substitutes where it is DECLARED, so the Tier-3
+         binding is re-emitted on `[data-theme]` (MOTIR-3592). */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-foreground: #ffffff;
+        --color-accent: #ff64c8;
+        --el-text: #f3f4f6;
+        --el-text-strong: #e5e5e5;
+        --el-text-secondary: #a4a097;
+        --el-text-muted: #8b8880;
+        --el-text-faint: #6b6862;
+        --el-page-bg: var(--color-background);
+        --el-card: #0f0f0f;
+        --el-surface: #1a1a1a;
+        --el-surface-soft: #161616;
+        --el-muted: #1f1f1f;
+        --el-canvas: #141414;
+        --el-border: #2a2a2a;
+        --el-border-soft: #1f1f1f;
+        --el-border-strong: #3a3a3a;
+        --el-accent: #6c5cdd;
+        --el-accent-text: #ffffff;
+        --el-accent-pressed: #5645d4;
+        --el-highlight: #ff64c8;
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 14%, var(--el-page-bg));
+      }
+
+      /* ═══ BOARD CHROME ═══════════════════════════════════════════════════
+         Its annotations owe AA too (docs/decisions/design-board-chrome-aa.md),
+         so every caption is `--el-text-secondary` — 6.18–6.80:1 on every
+         surface in both themes — never `--el-text-muted`. */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        -webkit-font-smoothing: antialiased;
+      }
+      .page-head {
+        padding: 40px 40px 8px;
+        max-width: 1500px;
+        margin: 0 auto;
+      }
+      .page-head h1 {
+        margin: 0 0 8px;
+        font-size: 26px;
+        letter-spacing: -0.015em;
+        color: var(--el-text);
+      }
+      .page-head p {
+        margin: 0 0 6px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 108ch;
+      }
+      .ref {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-accent-on-surface);
+      }
+      .sheet {
+        max-width: 1500px;
+        margin: 0 auto 28px;
+        padding: 0 40px;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 26px 0 10px;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border);
+      }
+      .sheethead .n {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border-radius: var(--radius-badge);
+        padding: 2px 9px;
+        flex: none;
+      }
+      .sheethead h2 {
+        margin: 0;
+        font-size: 17px;
+        letter-spacing: -0.01em;
+        color: var(--el-text);
+      }
+      .note {
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+        margin: 8px 0 14px;
+        max-width: 112ch;
+      }
+      .note b {
+        color: var(--el-text);
+      }
+      .note code,
+      .sheethead code,
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+        background: var(--el-muted);
+        border-radius: var(--radius-kbd);
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+      .cap {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        margin: 7px 0 0;
+      }
+      .cap b {
+        color: var(--el-text);
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        border-radius: var(--radius-badge);
+        padding: 2px var(--spacing-chip-x);
+        font-family: var(--font-mono);
+      }
+      .tag.was {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .tag.now {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .tag.same {
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+      }
+
+      /* ═══ THE SURFACE — composed, never redrawn ═══════════════════════════
+         The frame, the split and the exit bar are sheet 6's. They appear here
+         only so the canvas has the box it really sits in. */
+      .surface {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
+      }
+      .exitbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        padding: 6px 16px;
+        height: 49px; /* sheet 6's measured exit-chrome bar */
+      }
+      .exitbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: none;
+        border: 0;
+      }
+      .kbd {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        padding: 0 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .projname {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .panes {
+        display: grid;
+        grid-template-columns: 1fr 260px;
+        min-height: 316px;
+      }
+      .panes.narrow {
+        grid-template-columns: 1fr;
+      }
+      .rail {
+        border-left: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 12px;
+      }
+      .railline {
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .railbubble {
+        margin-top: 10px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 9px 11px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+
+      /* ═══ THE CANVAS PANE ═════════════════════════════════════════════════ */
+      .canvas {
+        position: relative;
+        background: var(--el-canvas);
+        background-image: radial-gradient(
+          color-mix(in srgb, var(--el-text) 8%, transparent) 1px,
+          transparent 1px
+        );
+        background-size: 16px 16px;
+        padding: 52px 16px 16px;
+        min-height: 316px;
+      }
+
+      /* The BREADCRUMB — the shipped `nav` the canvas anchors top-left.
+         Mirrors ProjectRoadmapCanvas's real markup: a Back control, then an
+         `<ol>` of crumbs separated by an aria-hidden chevron; the last crumb
+         carries `aria-current="page"` and is `font-semibold text-(--el-text)`,
+         the rest are `--el-text-secondary`. */
+      .crumbbar {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 44rem;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        padding: 4px 8px;
+        box-shadow: var(--shadow-card);
+      }
+      .backbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        flex: none;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        border: 0;
+        background: none;
+      }
+      .crumbs {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin: 0;
+        padding: 0;
+        font-size: 13px;
+        min-width: 0;
+      }
+      .crumbs li {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      .chev {
+        flex: none;
+        color: var(--el-text-faint); /* aria-hidden decoration — the shipped value */
+      }
+      .crumb {
+        border: 0;
+        background: none;
+        max-width: 18rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .crumb.here {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      /* ★ THE ONE NEW CRUMB KIND — the TARGET crumb.
+         It reuses the seam the FOLDER crumb already established (a leading
+         14px lucide glyph + an sr-only prefix, `isFolderCrumb`), so nothing
+         about the breadcrumb's shape is new: only which glyph and which word. */
+      .crumb.target {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .crumb.target .tglyph {
+        flex: none;
+        color: var(--el-accent-on-surface);
+      }
+      .crumb.target .tunder {
+        box-shadow: inset 0 -2px 0 0 var(--el-accent);
+      }
+      .sronly {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      /* NODES — the shipped WorkItemNode footprint, in outline. */
+      .level {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        align-items: flex-start;
+      }
+      .node {
+        position: relative;
+        width: 188px;
+        min-height: 76px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        padding: 9px 10px;
+      }
+      .node .kid {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-secondary);
+      }
+      .node .ttl {
+        margin-top: 3px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text);
+      }
+      .node .kindbar {
+        position: absolute;
+        left: 0;
+        top: 10px;
+        bottom: 10px;
+        width: 3px;
+        border-radius: var(--radius-badge);
+      }
+      .k-epic {
+        background: var(--el-type-epic);
+      }
+      .k-story {
+        background: var(--el-type-story);
+      }
+      .k-subtask {
+        background: var(--el-type-subtask);
+      }
+      /* The shipped `PlanningTargetFrame`: a 2px accent ring + a palette-derived
+         glow + the "Target" pill. Copied by ROLE from the component. */
+      .node.ringed::after {
+        content: '';
+        position: absolute;
+        inset: -2px;
+        border: 2px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        box-shadow:
+          0 0 14px color-mix(in srgb, var(--el-accent) 24%, transparent),
+          0 0 28px -4px color-mix(in srgb, var(--el-highlight) 30%, transparent);
+        pointer-events: none;
+      }
+      .node .targetpill {
+        position: absolute;
+        top: -9px;
+        right: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        padding: 1px var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .emptylevel {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 22px;
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: color-mix(in srgb, var(--el-card) 60%, transparent);
+      }
+      .skel {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        width: 188px;
+        height: 76px;
+      }
+
+      /* The FOLLOW-MOVE's live region + its quiet affordance. */
+      .liveregion {
+        margin-top: 10px;
+        border: 1px dashed var(--el-accent);
+        border-radius: var(--radius-control);
+        padding: 7px 10px;
+        font-size: 12px;
+        color: var(--el-text);
+        background: var(--el-accent-wash);
+      }
+      .liveregion .lbl {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-accent-on-surface);
+        display: block;
+        margin-bottom: 2px;
+      }
+      /* ★ THE QUIET AFFORDANCE — the ONLY new control this design adds.
+         It sits in the breadcrumb bar's own row, after the crumbs. Not a toast,
+         not a modal, and it never moves the canvas by itself. */
+      .goto {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .goto .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        flex: none;
+      }
+
+      .frames {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        align-items: start;
+      }
+      .miniframe {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-card);
+      }
+      .miniframe .canvas {
+        min-height: 188px;
+        padding: 48px 12px 12px;
+      }
+      .miniframe .node {
+        width: 128px;
+        min-height: 58px;
+      }
+      .miniframe .crumbbar {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+      }
+      .stepno {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-text-secondary);
+        padding: 6px 10px 0;
+        display: block;
+      }
+
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        margin: 6px 0 4px;
+      }
+      table.spec th,
+      table.spec td {
+        border: 1px solid var(--el-border);
+        padding: 7px 9px;
+        text-align: left;
+        vertical-align: top;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+      }
+      table.spec th {
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      table.spec td b {
+        color: var(--el-text);
+      }
+      .themepair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .darkwrap {
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        padding: 10px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page-head">
+      <h1>The planning surface's canvas opens INSIDE the node being planned</h1>
+      <p>
+        A <b>delta</b> on
+        <span class="ref">design/ai-chat/planning-workspace.mock.html</span> (sheet 6) and its notes
+        section <b>Opening &amp; exiting</b>. Only the panels that change are drawn. The frame, the
+        scrim, the canvas·rail split, the exit chrome and the footer slot are sheet 6's and are
+        inherited unchanged.
+      </p>
+      <p>
+        <b>What is overturned:</b> the rule that the workspace opens on the anchor's
+        <b>own</b> level among its siblings — stated in code at
+        <span class="ref">components/planning/PlanningWorkspaceOverlay.tsx</span>, the
+        <b>ANCHOR READ</b> block, as
+        <i
+          >“ANCESTORS ONLY (MOTIR-2070) … Opening on the anchor's CHILDREN would hide the item the
+          conversation is about.”</i
+        >
+        This design answers that objection rather than ignoring it: panel 2 is the answer.
+      </p>
+      <p class="ref">MOTIR-6159 · story MOTIR-6154 · epic MOTIR-6010</p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>A CONTAINER target — was “beside it”, is now “inside it”</h2>
+      </div>
+      <p class="note">
+        <b>Plan with AI</b> on story <code>MOTIR-2</code>. Left: what ships. Right: what this design
+        specifies. Both breadcrumbs are the real component's — a Back control, then an
+        <code>&lt;ol&gt;</code> whose last crumb carries <code>aria-current="page"</code>. The only
+        difference is that the trail is one crumb longer.
+      </p>
+
+      <div class="grid2">
+        <div>
+          <div class="surface">
+            <div class="exitbar">
+              <button class="exitbtn" type="button">✕ Close <span class="kbd">Esc</span></button>
+              <span class="projname">Motir</span>
+            </div>
+            <div class="panes">
+              <div class="canvas">
+                <nav class="crumbbar" aria-label="Breadcrumb">
+                  <button class="backbtn" type="button" aria-label="Back">‹</button>
+                  <ol class="crumbs">
+                    <li><button class="crumb" type="button">Roadmap</button></li>
+                    <li>
+                      <span class="chev" aria-hidden="true">›</span>
+                      <button class="crumb here" type="button" aria-current="page">
+                        MOTIR-1 · Refine AI planning
+                      </button>
+                    </li>
+                  </ol>
+                </nav>
+                <div class="level">
+                  <div class="node ringed">
+                    <span class="kindbar k-story"></span>
+                    <span class="targetpill">◎ Target</span>
+                    <span class="kid">MOTIR-2</span>
+                    <div class="ttl">The planning surface opens inside the node being planned</div>
+                  </div>
+                  <div class="node">
+                    <span class="kindbar k-story"></span>
+                    <span class="kid">MOTIR-3</span>
+                    <div class="ttl">A proposed plan is shown with the plan page's own views</div>
+                  </div>
+                  <div class="node">
+                    <span class="kindbar k-story"></span>
+                    <span class="kid">MOTIR-4</span>
+                    <div class="ttl">Talking to Motir AI takes a paragraph</div>
+                  </div>
+                </div>
+              </div>
+              <div class="rail">
+                <p class="railline">Planning · started just now</p>
+                <div class="railbubble">
+                  What should change about the planning surface's arrival?
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <span class="tag was">was</span> <b>Beside the target.</b> The trail is the anchor's
+            ANCESTORS, so the canvas loads the epic's level and the story is one node among its
+            siblings, wearing the ring. The breadcrumb ends at the <i>epic</i> — a level nobody
+            asked about.
+          </p>
+        </div>
+
+        <div>
+          <div class="surface">
+            <div class="exitbar">
+              <button class="exitbtn" type="button">✕ Close <span class="kbd">Esc</span></button>
+              <span class="projname">Motir</span>
+            </div>
+            <div class="panes">
+              <div class="canvas">
+                <nav class="crumbbar" aria-label="Breadcrumb">
+                  <button class="backbtn" type="button" aria-label="Back">‹</button>
+                  <ol class="crumbs">
+                    <li><button class="crumb" type="button">Roadmap</button></li>
+                    <li>
+                      <span class="chev" aria-hidden="true">›</span>
+                      <button class="crumb" type="button">MOTIR-1 · Refine AI planning</button>
+                    </li>
+                    <li>
+                      <span class="chev" aria-hidden="true">›</span>
+                      <button class="crumb here target" type="button" aria-current="page">
+                        <span class="tglyph" aria-hidden="true">◎</span>
+                        <span class="sronly">Planning target:</span>
+                        <span class="tunder">MOTIR-2 · The planning surface opens inside…</span>
+                      </button>
+                    </li>
+                  </ol>
+                </nav>
+                <div class="level">
+                  <div class="node">
+                    <span class="kindbar k-subtask"></span>
+                    <span class="kid">MOTIR-9</span>
+                    <div class="ttl">Where the canvas ARRIVES — design</div>
+                  </div>
+                  <div class="node">
+                    <span class="kindbar k-subtask"></span>
+                    <span class="kid">MOTIR-10</span>
+                    <div class="ttl">The canvas OPENS INSIDE its target</div>
+                  </div>
+                  <div class="node">
+                    <span class="kindbar k-subtask"></span>
+                    <span class="kid">MOTIR-11</span>
+                    <div class="ttl">The canvas FOLLOWS a newly settled target</div>
+                  </div>
+                </div>
+              </div>
+              <div class="rail">
+                <p class="railline">Planning · started just now</p>
+                <div class="railbubble">
+                  What should change about the planning surface's arrival?
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <span class="tag now">now</span> <b>Inside the target.</b> The trail is
+            <code>ancestors ++ [target]</code>, so the canvas loads the story's CHILDREN — the work
+            the conversation is about, and where its proposals will land. The target is still named,
+            as the level you are standing in.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>The TARGET CRUMB — the answer to MOTIR-2070's objection</h2>
+      </div>
+      <p class="note">
+        MOTIR-2070 was right that standing inside the item removes the thing the ring was for. The
+        answer is not to keep the ring: it is to move the mark to where the target now <i>is</i> —
+        the last crumb. <b>It reuses the FOLDER crumb's shipped seam</b> (a leading 14px lucide
+        glyph plus a visually-hidden prefix, the <code>folder</code> / <code>srPrefix</code> props
+        on the canvas's own <code>Crumb</code>), so the breadcrumb grows no new shape — only a
+        second crumb KIND. Glyph: lucide <code>target</code>, the same mark the node pill already
+        carries, in <code>--el-accent-on-surface</code>.
+      </p>
+
+      <div class="themepair">
+        <div>
+          <div class="surface" style="padding: 18px">
+            <nav
+              class="crumbbar"
+              aria-label="Breadcrumb"
+              style="position: static; max-width: none; margin-bottom: 12px"
+            >
+              <button class="backbtn" type="button" aria-label="Back">‹</button>
+              <ol class="crumbs">
+                <li><button class="crumb" type="button">Roadmap</button></li>
+                <li>
+                  <span class="chev" aria-hidden="true">›</span>
+                  <button class="crumb" type="button">MOTIR-1 · Refine AI planning</button>
+                </li>
+                <li>
+                  <span class="chev" aria-hidden="true">›</span>
+                  <button class="crumb here target" type="button" aria-current="page">
+                    <span class="tglyph" aria-hidden="true">◎</span>
+                    <span class="sronly">Planning target:</span>
+                    <span class="tunder">MOTIR-2 · The planning surface opens inside…</span>
+                  </button>
+                </li>
+              </ol>
+            </nav>
+            <p class="cap" style="margin: 0">
+              <b>Light.</b> Ink is the shipped active-crumb pair — <code>--el-text</code> at
+              <code>font-semibold</code>. The accent appears only in the glyph and the 2px
+              underline, so the crumb is never accent-on-accent and the label keeps body contrast.
+            </p>
+          </div>
+        </div>
+        <div class="darkwrap" data-theme="dark">
+          <div class="surface" style="padding: 18px">
+            <nav
+              class="crumbbar"
+              aria-label="Breadcrumb"
+              style="position: static; max-width: none; margin-bottom: 12px"
+            >
+              <button class="backbtn" type="button" aria-label="Back">‹</button>
+              <ol class="crumbs">
+                <li><button class="crumb" type="button">Roadmap</button></li>
+                <li>
+                  <span class="chev" aria-hidden="true">›</span>
+                  <button class="crumb" type="button">MOTIR-1 · Refine AI planning</button>
+                </li>
+                <li>
+                  <span class="chev" aria-hidden="true">›</span>
+                  <button class="crumb here target" type="button" aria-current="page">
+                    <span class="tglyph" aria-hidden="true">◎</span>
+                    <span class="sronly">Planning target:</span>
+                    <span class="tunder">MOTIR-2 · The planning surface opens inside…</span>
+                  </button>
+                </li>
+              </ol>
+            </nav>
+            <p class="cap" style="margin: 0">
+              <b>Dark.</b> Both marks are token-derived, so the pair flips with the theme and
+              re-tints with <code>data-palette</code>. Nothing here is a fixed hue.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <table class="spec">
+        <tr>
+          <th style="width: 20%">Element</th>
+          <th style="width: 30%">Token / primitive</th>
+          <th>Why</th>
+        </tr>
+        <tr>
+          <td><b>Target glyph</b></td>
+          <td><code>--el-accent-on-surface</code>, lucide <code>target</code>, 14px</td>
+          <td>
+            The accent AS ink on a surface. The same glyph the shipped
+            <code>PlanningTargetFrame</code> pill uses, so “target” means one thing on this surface
+            whether the target is a node or the level.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Underline</b></td>
+          <td><code>inset 0 -2px 0 0 var(--el-accent)</code></td>
+          <td>
+            Carries the mark at a glance without tinting the label. 2px matches the node ring's
+            weight, which is what makes the two read as the same state.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Label</b></td>
+          <td><code>--el-text</code>, <code>font-semibold</code>, <code>max-w-[18rem]</code></td>
+          <td>
+            Unchanged from the shipped active crumb, including the truncation and its native
+            <code>title</code> tooltip. A long title ellipsises; it does not wrap.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Screen-reader prefix</b></td>
+          <td><code>sr-only</code> “Planning target: ”</td>
+          <td>
+            NOT COLOUR ALONE — the same discipline the node pill states. The folder crumb's
+            <code>Folder:</code> prefix is the precedent and the mechanism.
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">3</span>
+        <h2>A LEAF target — the one case that stays BESIDE</h2>
+      </div>
+      <p class="note">
+        A <code>subtask</code> is the single structural leaf in the kind matrix (<span class="ref"
+          >lib/issues/parentRules.ts</span
+        >: <code>subtask → []</code>, everything else may parent). So the discriminator is the
+        <b>kind the anchor read already returns</b> — no second read, no child count. A leaf has no
+        inside, so the canvas opens on its own level and the target keeps the RING; the breadcrumb
+        ends at the parent.
+      </p>
+      <div class="grid2">
+        <div>
+          <div class="surface">
+            <div class="panes">
+              <div class="canvas">
+                <nav class="crumbbar" aria-label="Breadcrumb">
+                  <button class="backbtn" type="button" aria-label="Back">‹</button>
+                  <ol class="crumbs">
+                    <li><button class="crumb" type="button">Roadmap</button></li>
+                    <li>
+                      <span class="chev" aria-hidden="true">›</span>
+                      <button class="crumb" type="button">MOTIR-1 · Refine AI planning</button>
+                    </li>
+                    <li>
+                      <span class="chev" aria-hidden="true">›</span>
+                      <button class="crumb here" type="button" aria-current="page">
+                        MOTIR-2 · The planning surface opens inside…
+                      </button>
+                    </li>
+                  </ol>
+                </nav>
+                <div class="level">
+                  <div class="node ringed">
+                    <span class="kindbar k-subtask"></span>
+                    <span class="targetpill">◎ Target</span>
+                    <span class="kid">MOTIR-10</span>
+                    <div class="ttl">The canvas OPENS INSIDE its target</div>
+                  </div>
+                  <div class="node">
+                    <span class="kindbar k-subtask"></span>
+                    <span class="kid">MOTIR-11</span>
+                    <div class="ttl">The canvas FOLLOWS a newly settled target</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <span class="tag same">unchanged</span> <b>A leaf keeps today's arrival.</b> The ring is
+            on a level the reader is looking at, which is exactly what MOTIR-2070 asked for — and
+            here it is still the right answer.
+          </p>
+        </div>
+        <div>
+          <table class="spec">
+            <tr>
+              <th>Target kind</th>
+              <th>Trail</th>
+              <th>The target is marked by</th>
+            </tr>
+            <tr>
+              <td><code>epic</code> · <code>story</code> · <code>task</code> · <code>bug</code></td>
+              <td><b>ancestors ++ [target]</b></td>
+              <td>the TARGET CRUMB (panel 2)</td>
+            </tr>
+            <tr>
+              <td><code>subtask</code></td>
+              <td><b>ancestors</b></td>
+              <td>the shipped node RING + “Target” pill</td>
+            </tr>
+          </table>
+          <p class="cap">
+            <b>An empty container is still a container.</b> A story with no children yet opens
+            inside, on an empty level, and the canvas's own shipped statement (<code
+              >roadmap.canvas.emptyDrilled</code
+            >
+            — “No items at this level”) says so. That is correct: it is where the plan's cards are
+            about to arrive, and Back is one control away. Drawn in panel 7.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">4</span>
+        <h2>The FOLLOW-MOVE — no target yet, then one settles</h2>
+      </div>
+      <p class="note">
+        A project launch or ⌘K opens at the root, as today.
+        <b>At the root the canvas draws no breadcrumb at all</b> — measured on the real component,
+        not assumed — so there is nothing to name a target in until the move happens. The move fires
+        <b>once</b>, when a target first becomes known: the person adds one to the composer's target
+        set, or the plan's proposals first show where the plan lands.
+      </p>
+
+      <div class="frames">
+        <div class="miniframe">
+          <span class="stepno">1 · no target yet</span>
+          <div class="canvas">
+            <div class="level">
+              <div class="node">
+                <span class="kindbar k-epic"></span>
+                <span class="kid">MOTIR-1</span>
+                <div class="ttl">Refine AI planning</div>
+              </div>
+              <div class="node">
+                <span class="kindbar k-epic"></span>
+                <span class="kid">MOTIR-5</span>
+                <div class="ttl">Reporting</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap" style="padding: 0 10px 10px">
+            The project root. <b>No breadcrumb</b> — the canvas renders one only when drilled.
+          </p>
+        </div>
+
+        <div class="miniframe">
+          <span class="stepno">2 · the target settles</span>
+          <div class="canvas">
+            <nav class="crumbbar" aria-label="Breadcrumb" style="opacity: 0.55">
+              <button class="backbtn" type="button" aria-label="Back">‹</button>
+              <ol class="crumbs">
+                <li><button class="crumb" type="button">Roadmap</button></li>
+                <li>
+                  <span class="chev" aria-hidden="true">›</span>
+                  <button class="crumb here target" type="button" aria-current="page">
+                    <span class="tglyph" aria-hidden="true">◎</span>
+                    <span class="tunder">MOTIR-1 · Refine AI planning</span>
+                  </button>
+                </li>
+              </ol>
+            </nav>
+            <div class="level" style="opacity: 0.45">
+              <div class="node">
+                <span class="kindbar k-story"></span>
+                <span class="kid">MOTIR-2</span>
+                <div class="ttl">The planning surface opens inside…</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap" style="padding: 0 10px 10px">
+            <b>180ms, one crossfade</b> — the level fades out and the new level fades in as the
+            crumb appends. No slide, no zoom: the canvas already resets its scale per level.
+          </p>
+        </div>
+
+        <div class="miniframe">
+          <span class="stepno">3 · inside it</span>
+          <div class="canvas">
+            <nav class="crumbbar" aria-label="Breadcrumb">
+              <button class="backbtn" type="button" aria-label="Back">‹</button>
+              <ol class="crumbs">
+                <li><button class="crumb" type="button">Roadmap</button></li>
+                <li>
+                  <span class="chev" aria-hidden="true">›</span>
+                  <button class="crumb here target" type="button" aria-current="page">
+                    <span class="tglyph" aria-hidden="true">◎</span>
+                    <span class="sronly">Planning target:</span>
+                    <span class="tunder">MOTIR-1 · Refine AI planning</span>
+                  </button>
+                </li>
+              </ol>
+            </nav>
+            <div class="level">
+              <div class="node">
+                <span class="kindbar k-story"></span>
+                <span class="kid">MOTIR-2</span>
+                <div class="ttl">The planning surface opens inside…</div>
+              </div>
+              <div class="node">
+                <span class="kindbar k-story"></span>
+                <span class="kid">MOTIR-3</span>
+                <div class="ttl">A proposed plan is shown with the plan page's views</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap" style="padding: 0 10px 10px">
+            The breadcrumb now names where the plan is going, and the cards land in view.
+          </p>
+        </div>
+      </div>
+
+      <div class="liveregion" role="status" aria-live="polite">
+        <span class="lbl">aria-live="polite" · announced once, on the move</span>
+        Showing work inside MOTIR-1 · Refine AI planning
+      </div>
+
+      <table class="spec">
+        <tr>
+          <th style="width: 24%">Axis</th>
+          <th>Specification</th>
+        </tr>
+        <tr>
+          <td><b>Transition</b></td>
+          <td>
+            A <b>180ms opacity crossfade</b> on the level, built from the canvas's own shipped
+            vocabulary — <code>transition-opacity motion-reduce:transition-none</code>, the exact
+            idiom <span class="ref">components/planning/ProjectRoadmapCanvas.tsx</span> already uses
+            for its emphasis layer. The breadcrumb appends without animation.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Reduced motion</b></td>
+          <td>
+            <code>motion-reduce:transition-none</code> — the move is <b>instant</b>, and nothing
+            else changes. The announcement still fires, because it is the part that carries the
+            meaning.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Announcement</b></td>
+          <td>
+            A polite live region in the canvas pane — the shipped
+            <code>aria-live="polite"</code> idiom this surface already uses
+            (<code>PlanChangeRail</code>, <code>PlanningHandOff</code>). One sentence, once per
+            move: <b>“Showing work inside {target}”</b> · <code>zh</code>:
+            <b>“正在显示 {target} 内的工作”</b>.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Fires</b></td>
+          <td>
+            <b>Once per session.</b> A second target settling does not move the canvas again — panel
+            6's rule covers the rest.
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">5</span>
+        <h2>The person NAVIGATED FIRST — the canvas does not move</h2>
+      </div>
+      <p class="note">
+        A deliberate navigation outranks the follow-move, always. But saying nothing strands them:
+        the plan is landing somewhere they are not looking. So the breadcrumb bar gains a
+        <b>quiet affordance</b> on its own row — <b>not a toast and not a modal</b> — that takes
+        them there in one click and disappears once they are inside.
+      </p>
+      <div class="surface">
+        <div class="panes">
+          <div class="canvas">
+            <nav class="crumbbar" aria-label="Breadcrumb">
+              <button class="backbtn" type="button" aria-label="Back">‹</button>
+              <ol class="crumbs">
+                <li><button class="crumb" type="button">Roadmap</button></li>
+                <li>
+                  <span class="chev" aria-hidden="true">›</span>
+                  <button class="crumb here" type="button" aria-current="page">
+                    MOTIR-5 · Reporting
+                  </button>
+                </li>
+              </ol>
+              <button class="goto" type="button">
+                <span class="dot" aria-hidden="true"></span>
+                Plan is in MOTIR-1 · Go there
+              </button>
+            </nav>
+            <div class="level">
+              <div class="node">
+                <span class="kindbar k-story"></span>
+                <span class="kid">MOTIR-6</span>
+                <div class="ttl">Dashboards</div>
+              </div>
+              <div class="node">
+                <span class="kindbar k-story"></span>
+                <span class="kid">MOTIR-7</span>
+                <div class="ttl">Burndown</div>
+              </div>
+            </div>
+          </div>
+          <div class="rail">
+            <p class="railline">Planning · the planner is writing</p>
+            <div class="railbubble">Adding three subtasks under MOTIR-1…</div>
+          </div>
+        </div>
+      </div>
+      <table class="spec">
+        <tr>
+          <th style="width: 24%">Axis</th>
+          <th>Specification</th>
+        </tr>
+        <tr>
+          <td><b>Copy</b></td>
+          <td>
+            <b>“Plan is in {identifier} · Go there”</b> · <code>zh</code>:
+            <b>“方案在 {identifier} · 前往”</b>. It names the identifier, never the full title — the
+            bar is already the truncating surface.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Placement</b></td>
+          <td>
+            Inside the breadcrumb bar, pushed right (<code>margin-left: auto</code>), so it shares
+            the bar's existing box rather than adding chrome to the canvas. At the ROOT there is no
+            bar, so the affordance brings one: the bar renders with the root crumb alone.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Tokens</b></td>
+          <td>
+            <code>--el-card</code> on <code>--el-border</code>, label
+            <code>--el-text-secondary</code>, a 6px <code>--el-accent</code> dot. Quiet by
+            construction: it is the only non-crumb thing in the bar and it still reads as chrome.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Behaviour</b></td>
+          <td>
+            Clicking it performs the move <b>as if it were the follow-move</b> — same crossfade,
+            same announcement — and the affordance then disappears. It reappears only if the person
+            navigates away again while the target still differs.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Never</b></td>
+          <td>
+            No toast, no modal, no auto-dismiss timer, and it never moves the canvas by itself. A
+            deliberate navigation is not overridden.
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">6</span>
+        <h2>SEVERAL targets — inside the first, the rest one crumb-click away</h2>
+      </div>
+      <p class="note">
+        One conversation can settle more than one target (MOTIR-6014). The canvas stands inside the
+        <b>first</b>; the composer's target tray is already the surface that lists the others, so
+        nothing new is drawn for them — the tray's chips are the door, and a chip click moves the
+        canvas exactly as the affordance in panel 5 does.
+      </p>
+      <div class="surface">
+        <div class="panes">
+          <div class="canvas">
+            <nav class="crumbbar" aria-label="Breadcrumb">
+              <button class="backbtn" type="button" aria-label="Back">‹</button>
+              <ol class="crumbs">
+                <li><button class="crumb" type="button">Roadmap</button></li>
+                <li>
+                  <span class="chev" aria-hidden="true">›</span>
+                  <button class="crumb here target" type="button" aria-current="page">
+                    <span class="tglyph" aria-hidden="true">◎</span>
+                    <span class="sronly">Planning target:</span>
+                    <span class="tunder">MOTIR-1 · Refine AI planning</span>
+                  </button>
+                </li>
+              </ol>
+            </nav>
+            <div class="level">
+              <div class="node">
+                <span class="kindbar k-story"></span>
+                <span class="kid">MOTIR-2</span>
+                <div class="ttl">The planning surface opens inside…</div>
+              </div>
+              <div class="node">
+                <span class="kindbar k-story"></span>
+                <span class="kid">MOTIR-3</span>
+                <div class="ttl">A proposed plan is shown with the plan page's views</div>
+              </div>
+            </div>
+          </div>
+          <div class="rail">
+            <p class="railline">Targeting 2 items</p>
+            <div class="railbubble" style="display: flex; gap: 6px; flex-wrap: wrap">
+              <span
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 4px;
+                  border: 1px solid var(--el-accent);
+                  border-radius: var(--radius-badge);
+                  padding: 1px 7px;
+                  font-size: 11px;
+                  color: var(--el-text);
+                "
+                >◎ MOTIR-1</span
+              >
+              <span
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 4px;
+                  border: 1px solid var(--el-border);
+                  border-radius: var(--radius-badge);
+                  padding: 1px 7px;
+                  font-size: 11px;
+                  color: var(--el-text-secondary);
+                "
+                >MOTIR-5</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">
+        The FIRST target's chip carries the same <code>--el-accent</code> ring the crumb's glyph
+        does, so “which one am I standing in” is answerable from either pane. The second chip is
+        ordinary; clicking it moves the canvas and the marks swap.
+      </p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">7</span>
+        <h2>Every other state — loading, empty, unreachable target, narrow</h2>
+      </div>
+      <div class="grid3">
+        <div>
+          <div class="surface">
+            <div class="canvas" style="min-height: 196px">
+              <nav class="crumbbar" aria-label="Breadcrumb">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span>
+                    <button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span>
+                      <span class="tunder">MOTIR-2 · The planning surface…</span>
+                    </button>
+                  </li>
+                </ol>
+              </nav>
+              <div class="level">
+                <div class="skel"></div>
+                <div class="skel"></div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <b>Loading.</b> The crumb is up on the first frame — the trail is known before the level
+            is read — and the shipped level skeleton fills the box. Unchanged from sheet 6 except
+            that the crumb now ends at the target.
+          </p>
+        </div>
+
+        <div>
+          <div class="surface">
+            <div class="canvas" style="min-height: 196px">
+              <nav class="crumbbar" aria-label="Breadcrumb">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span>
+                    <button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span>
+                      <span class="tunder">MOTIR-4 · Talking takes a paragraph</span>
+                    </button>
+                  </li>
+                </ol>
+              </nav>
+              <div class="emptylevel">No items at this level</div>
+            </div>
+          </div>
+          <p class="cap">
+            <b>Empty container.</b> The canvas's own shipped
+            <code>roadmap.canvas.emptyDrilled</code> statement, unchanged. This is the state a
+            planning conversation most often opens in — the story whose work is about to be proposed
+            — so it must read as <i>ready</i>, not as an error.
+          </p>
+        </div>
+
+        <div>
+          <div class="surface">
+            <div class="canvas" style="min-height: 196px">
+              <div class="level">
+                <div class="node">
+                  <span class="kindbar k-epic"></span>
+                  <span class="kid">MOTIR-1</span>
+                  <div class="ttl">Refine AI planning</div>
+                </div>
+                <div class="node">
+                  <span class="kindbar k-epic"></span>
+                  <span class="kid">MOTIR-5</span>
+                  <div class="ttl">Reporting</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <b>A target the viewer cannot see</b> — stale, deleted, foreign, or not browsable. The
+            root, <b>silently</b>, with no breadcrumb and no error surface. This is sheet 6's
+            existing <i>“Anchor won't resolve”</i> row and the no-existence-leak contract; the
+            arrival rule adds nothing to it.
+          </p>
+        </div>
+      </div>
+
+      <div class="sheethead" style="border: 0; padding-top: 6px">
+        <span class="n">7b</span>
+        <h2>Narrow width, and dark</h2>
+      </div>
+      <div class="themepair">
+        <div>
+          <div class="surface" style="max-width: 420px">
+            <div class="exitbar">
+              <button class="exitbtn" type="button">✕ Close</button>
+              <span class="projname">Motir</span>
+            </div>
+            <div class="panes narrow">
+              <div class="canvas" style="min-height: 180px">
+                <nav class="crumbbar" aria-label="Breadcrumb">
+                  <button class="backbtn" type="button" aria-label="Back">‹</button>
+                  <ol class="crumbs">
+                    <li><button class="crumb" type="button">Roadmap</button></li>
+                    <li>
+                      <span class="chev" aria-hidden="true">›</span>
+                      <button class="crumb here target" type="button" aria-current="page">
+                        <span class="tglyph" aria-hidden="true">◎</span>
+                        <span class="tunder">MOTIR-2 · The planning surfac…</span>
+                      </button>
+                    </li>
+                  </ol>
+                </nav>
+                <div class="level">
+                  <div class="node" style="width: 160px">
+                    <span class="kindbar k-subtask"></span>
+                    <span class="kid">MOTIR-9</span>
+                    <div class="ttl">Where the canvas ARRIVES</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <b>Narrow.</b> The bar's existing <code>max-w-[44rem]</code> and the crumb's
+            <code>max-w-[18rem] truncate</code> do the work; the label ellipsises and keeps its
+            native tooltip. The glyph and underline never truncate, so the target mark survives at
+            any width — which is why the mark is a glyph and not a longer word.
+          </p>
+        </div>
+        <div class="darkwrap" data-theme="dark">
+          <div class="surface">
+            <div class="exitbar">
+              <button class="exitbtn" type="button">✕ Close</button>
+              <span class="projname">Motir</span>
+            </div>
+            <div class="panes narrow">
+              <div class="canvas" style="min-height: 180px">
+                <nav class="crumbbar" aria-label="Breadcrumb">
+                  <button class="backbtn" type="button" aria-label="Back">‹</button>
+                  <ol class="crumbs">
+                    <li><button class="crumb" type="button">Roadmap</button></li>
+                    <li>
+                      <span class="chev" aria-hidden="true">›</span>
+                      <button class="crumb here target" type="button" aria-current="page">
+                        <span class="tglyph" aria-hidden="true">◎</span>
+                        <span class="tunder">MOTIR-2 · The planning surface opens inside…</span>
+                      </button>
+                    </li>
+                  </ol>
+                  <button class="goto" type="button">
+                    <span class="dot" aria-hidden="true"></span>
+                    Plan is in MOTIR-1 · Go there
+                  </button>
+                </nav>
+                <div class="level">
+                  <div class="node">
+                    <span class="kindbar k-subtask"></span>
+                    <span class="kid">MOTIR-9</span>
+                    <div class="ttl">Where the canvas ARRIVES</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <b>Dark, with the affordance.</b> Every value flips through the token layer; nothing in
+            this delta declares a hue of its own.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">8</span>
+        <h2>The ACCESS PATH — five entrances, one arrival rule</h2>
+      </div>
+      <p class="note">
+        Every door opens the overlay on the page it sits on; none navigates (sheet 6). What this
+        design changes is what the canvas does once it is open — and it is <b>one rule</b>, reached
+        the same way from all five.
+      </p>
+      <table class="spec">
+        <tr>
+          <th style="width: 20%">Entrance</th>
+          <th style="width: 30%">What the address carries</th>
+          <th>Where the canvas arrives</th>
+        </tr>
+        <tr>
+          <td><b>Plan with AI</b> on a work item</td>
+          <td><code>planFrom=work-item</code> + <code>planItem=&lt;key&gt;</code></td>
+          <td>
+            Inside that item (panel 1) — or on its own level, ringed, if it is a
+            <code>subtask</code> (panel 3).
+          </td>
+        </tr>
+        <tr>
+          <td>A <b>Plans</b> row</td>
+          <td>
+            <code>planSession=&lt;id&gt;</code> + <code>planVia=plans</code>, with
+            <code>planItem=</code> when that session has a target
+          </td>
+          <td>The same arrival as Plan with AI for that session's target.</td>
+        </tr>
+        <tr>
+          <td>A <b>To approve</b> row</td>
+          <td>
+            <code>planSession=&lt;id&gt;</code> + <code>planVia=approvals</code>, with
+            <code>planItem=</code> when the plan has a target
+          </td>
+          <td>
+            The same arrival again — which is the point: a plan you are being asked to decide opens
+            where its cards are.
+          </td>
+        </tr>
+        <tr>
+          <td><b>⌘K</b> / the global launcher</td>
+          <td><code>planFrom=project</code>, no item</td>
+          <td>The root — then the follow-move when a target settles (panel 4).</td>
+        </tr>
+        <tr>
+          <td>The <b>project launcher</b> / roadmap empty state</td>
+          <td><code>planFrom=project</code> or <code>roadmap</code>, no item</td>
+          <td>The root, then the same follow-move.</td>
+        </tr>
+      </table>
+      <p class="cap">
+        <b>No new address parameter.</b> The To-approve row already writes
+        <code>planItem=</code> when its plan has a target (MOTIR-6033's published design, §20.2), so
+        all three targeted entrances hand the arrival rule the same key. That is what makes “one
+        arrival rule” true rather than aspirational.
+      </p>
+    </div>
+
+    <div class="sheet" style="padding-bottom: 48px">
+      <p class="cap">
+        <b>Not drawn here, on purpose.</b> What the canvas DRAWS once it is on the level — a
+        proposed plan's List | Canvas views, and cards arriving with their edges while the plan is
+        written — belongs to the review story and the live-drawing story. This delta decides only
+        WHICH LEVEL the canvas stands on, and what the breadcrumb says about it.
+      </p>
+    </div>
+  </body>
+</html>

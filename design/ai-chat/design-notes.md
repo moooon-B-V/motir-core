@@ -3217,3 +3217,219 @@ existing tokens rather than a new primitive.
 committed export) · this section. It AMENDS `MOTIR-4766`'s asset rather than opening a new one:
 this is one more state of the same screen — the plan window reading a project — and a separate file
 would leave a reader to work out that they are the same surface.
+
+---
+
+## ⭐ The canvas ARRIVES INSIDE the node being planned — the target's children, in both phases (MOTIR-6159, 2026-09-24)
+
+**Asset:** `planning-workspace--arrival.mock.html` — a **DELTA**, eight panels, holding only what
+changes.
+**Story:** MOTIR-6154 — _the planning surface OPENS INSIDE the node being planned_.
+
+### What this amends, by path
+
+| amended                                                                                 | how                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `design/ai-chat/planning-workspace.mock.html` (sheet 6)                                 | the canvas pane's ARRIVAL LEVEL and its breadcrumb. The frame, scrim, `grid-cols-[1fr_22rem]` split, exit chrome, audit slot and footer slot are INHERITED and not redrawn                                                                                                    |
+| this file, § _⚠️ Opening & exiting — a full-screen overlay ON TOP of the app (sheet 6)_ | its _Every state_ table gains nothing; its ADDRESS table gains nothing. Only where the canvas STANDS changes                                                                                                                                                                  |
+| `components/planning/PlanningWorkspaceOverlay.tsx`, the **ANCHOR READ** block           | **SUPERSEDED.** Its comment reads _"ANCESTORS ONLY (MOTIR-2070): … Opening on the anchor's CHILDREN would hide the item the conversation is about."_ The requester has overturned it, and §_The answer to MOTIR-2070_ below is how the objection is met rather than dismissed |
+
+### 0. What was RENDERED first, and what it settled
+
+Per the design-against-shipped-reality rule. The **real `ProjectRoadmapCanvas`** was mounted at
+`origin/main` `d0976c0ab` through the shipped `renderWithIntl` harness, in happy-dom, and its
+breadcrumb `outerHTML` dumped per case. Nothing here is read off this delta's own stylesheet.
+
+| what was rendered                                                          | what it settled                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `initialTrail={[]}`                                                        | the root level, and **NO breadcrumb node at all** — the canvas renders one only when drilled. So at the root there is nothing to name a target in, which is why panel 5's affordance brings the bar with it            |
+| `initialTrail={[E1]}` (today's story anchor)                               | level = the story's SIBLINGS; crumb `Roadmap › MOTIR-1 · Epic one`, the epic `aria-current="page"`                                                                                                                     |
+| `initialTrail={[E1,S1]}` (this design)                                     | level = the story's CHILDREN; crumb `Roadmap › MOTIR-1 · Epic one › MOTIR-2 · Story one`, the **story** `aria-current="page"`, `font-semibold text-(--el-text)`. **The arrival this story asks for needs no new prop** |
+| `controlledTrail` moved `[] → [E1]` on a MOUNTED canvas                    | the level moves with **no remount**, and a re-render with the same value is a true no-op. This is the follow-move's seam, and it already exists (MOTIR-3835)                                                           |
+| `controlledTrail` **held** at `[]` while the reader drilled                | the drill was **UNDONE within 150ms** — nodes back at the root, breadcrumb gone. ⚠️ A held controlled trail PINS the canvas                                                                                            |
+| `controlledTrail` + `onLevelChange` syncing it (the `RoadmapView` pattern) | the reader drills normally. **This is the composition the follow-move must use**                                                                                                                                       |
+| `controlledTrail` + `resolveHeldNode` with an id the resolver remaps       | **`Error: Too many re-renders. React limits the number of renders to prevent an infinite loop.`** The prop's own _"not combinable"_ warning is a crash, not a caution — see flag 1                                     |
+
+### The RULE — one sentence, three entrances
+
+**The canvas's arrival trail is `ancestors ++ [target]` when the target may have children, and
+`ancestors` when it cannot.** The last crumb is the level the canvas loads, which is the shipped
+`initialTrail` contract; nothing else changes.
+
+| target kind                       | trail                       | the target is marked by                          |
+| --------------------------------- | --------------------------- | ------------------------------------------------ |
+| `epic` · `story` · `task` · `bug` | **`ancestors ++ [target]`** | the TARGET CRUMB (below)                         |
+| `subtask`                         | **`ancestors`**             | the shipped node RING + `Target` pill, unchanged |
+| none / unresolvable               | `[]` — the root, silently   | nothing                                          |
+
+**The discriminator is the KIND the anchor read already returns, and it needs no second read.**
+`lib/issues/parentRules.ts` is the single source of truth for the kind matrix and it makes
+`subtask → []` — the one structural leaf; every other kind may parent. So "has an inside" is a
+property of the kind, answerable from `PlanningAnchor.anchor.kind`, which
+`GET /api/work-items/planning-anchor` already returns. **A container that happens to be empty still
+opens inside it**: that is where the plan's cards are about to land, and the canvas's own
+`roadmap.canvas.emptyDrilled` statement already says "No items at this level" (panel 7).
+
+**This rule is not new to the codebase — it is the ROADMAP's, hoisted.**
+`app/(authed)/roadmap/page.tsx`'s `resolveArrivalTrail` already builds `[...ancestors, item]` from
+this same route, and its comment names the surface it is deliberately deeper than:
+_"Deliberately one crumb deeper than the planning overlay's own `planItem=` anchor, which opens on
+the anchor's OWN level so the anchor is visible; the two surfaces want different things and keep the
+same param name."_ **That sentence is what this story retires**: the two surfaces now want the same
+thing. The anchor route's own body comment already anticipates both readings — _"the workspace opens
+on the anchor's OWN level (ancestors only); the roadmap opens INSIDE the item (ancestors plus the
+item). One body serves both."_
+
+**⚠️ AND THE ROADMAP'S VERSION CARRIES A FOLDER CHAIN THIS ONE MUST TOO.** `resolveArrivalTrail`
+prepends the item's placement-folder crumbs, because a filed item sits behind its folder's door and
+a trail without them is a level the reader could not have reached by hand. The planning canvases
+draw folder levels (Part XVIII of `design/ai-planning/design-notes.md`), and `PlanChangeCanvas`
+already imports `folderIdFromNodeId` and `FolderEmptyLevel` — so **a filed target's arrival trail is
+`folderChain ++ ancestors ++ [target]`**, with the shipped folder-crumb treatment
+(`isFolderCrumb`, the `Folder:` prefix, the >3 run collapse) untouched. The card did not name this;
+it falls out of hoisting the rule rather than re-deriving it.
+
+### The answer to MOTIR-2070 — the target stays NAMED, as the level you stand in
+
+MOTIR-2070's objection is correct and this design does not wave it away: standing inside the item
+removes the node the ring was drawn on. The answer is to move the mark to where the target now IS —
+the last crumb — rather than to keep the reader outside.
+
+**It reuses a seam the breadcrumb already has.** The FOLDER crumb (bug MOTIR-5710 · MOTIR-5742)
+established that a crumb may be led by a 14px lucide glyph and carry a visually-hidden prefix: the
+`folder` and `srPrefix` props on the canvas's own `Crumb`. The TARGET crumb is a **second crumb
+kind** through that same seam — no new shape, no new primitive.
+
+| element              | token / primitive                                                       | why                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| glyph                | lucide `target`, 14px (`size-3.5`), `--el-accent-on-surface`            | the same mark `PlanningTargetFrame`'s pill carries, so "target" means one thing on this surface whether it is a node or the level |
+| underline            | `inset 0 -2px 0 0 var(--el-accent)`                                     | 2px matches the node ring's weight, which is what makes the two read as one state; it marks without tinting the label             |
+| label                | `--el-text`, `font-semibold`, `max-w-[18rem] truncate` + native `title` | the shipped active-crumb pair, unchanged, including the ellipsis-the-last-crumb rule                                              |
+| screen-reader prefix | `sr-only` `"Planning target: "`                                         | NOT COLOUR ALONE — the discipline the node pill already states, through the prop that already exists                              |
+
+**The glyph and the underline never truncate**, which is why the mark is a glyph rather than a
+longer word: at 420px the label ellipsises and the state survives (panel 7b).
+
+### The FOLLOW-MOVE
+
+Fires **once**, when a target first becomes known: the person adds one to the composer's target set,
+or the plan's proposals first show where the plan lands. The composition is the shipped one.
+
+| axis           | specification                                                                                                                                                                                                                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| seam           | `controlledTrail` (MOTIR-3835) — it adopts DURING RENDER, clears exactly what a drill clears, suppresses auto-descend for the adopted level, and does **not** remount, so the level cache, the canvas chrome and the breadcrumb machinery survive                                                                             |
+| composition    | **the `RoadmapView` pattern**: the host HOLDS the level, seeds it from the arrival trail, and follows the reader through `onLevelChange`. ⚠️ A `controlledTrail` held at a fixed value PINS the canvas — measured: a drill is undone within 150ms — so the sync is not optional polish, it is what keeps the canvas navigable |
+| transition     | a **180ms opacity crossfade** on the level, built from this canvas's own vocabulary — `transition-opacity motion-reduce:transition-none`, the exact idiom `ProjectRoadmapCanvas` already uses for its emphasis layer. The breadcrumb appends without animation. No slide, no zoom: the canvas already resets scale per level  |
+| reduced motion | `motion-reduce:transition-none` — the move is INSTANT and nothing else changes. The announcement still fires, because it carries the meaning                                                                                                                                                                                  |
+| announcement   | a polite live region in the canvas pane — the `aria-live="polite"` idiom this surface already uses (`PlanChangeRail`, `PlanningHandOff`). One sentence, once per move                                                                                                                                                         |
+
+### The person who NAVIGATED FIRST
+
+**A deliberate navigation is never overridden.** `RoadmapView` already reasons this out for the same
+canvas — _"A stale URL and a genuine Back are indistinguishable from the params alone — they differ
+only in the EVENT — so this listens for the event"_ — and the same holds here: the host disarms the
+follow-move on the first `onLevelChange`, not on a comparison.
+
+Saying nothing would strand them, so the breadcrumb bar gains the **one new control in this design**:
+a quiet affordance on the bar's own row, pushed right, reading **"Plan is in {identifier} · Go
+there"**. `--el-card` on `--el-border`, label `--el-text-secondary`, a 6px `--el-accent` dot.
+Clicking it performs the move as if it were the follow-move — same crossfade, same announcement —
+and it then disappears, reappearing only if they navigate away again while the target still differs.
+**Not a toast, not a modal, no auto-dismiss timer, and it never moves the canvas by itself.** At the
+root there is no bar, so the affordance brings one: the bar renders with the root crumb alone.
+
+### SEVERAL targets
+
+Inside the **first** (MOTIR-6014). The composer's target tray already lists the others, so nothing
+new is drawn for them: the first target's chip takes the same `--el-accent` ring the crumb's glyph
+carries, so _which one am I standing in_ is answerable from either pane, and a chip click moves the
+canvas exactly as the affordance does.
+
+### Copy — `messages/en.json` and `messages/zh.json`
+
+Three new keys, all under the existing `planningWorkspace` namespace.
+
+| key                                           | `en`                                 | `zh`                         |
+| --------------------------------------------- | ------------------------------------ | ---------------------------- |
+| `planningWorkspace.arrival.crumbTargetPrefix` | `Planning target: `                  | `规划目标：`                 |
+| `planningWorkspace.arrival.movedAnnouncement` | `Showing work inside {target}`       | `正在显示 {target} 内的工作` |
+| `planningWorkspace.arrival.goToTarget`        | `Plan is in {identifier} · Go there` | `方案在 {identifier} · 前往` |
+
+Every other string on these panels is already in the catalogue and is **reused, not re-keyed**:
+`roadmap.canvas.breadcrumbRoot`, `roadmap.canvas.back`, `roadmap.canvas.emptyDrilled`,
+`planningWorkspace.targets.nodePill`, `planningWorkspace.close`, `planningWorkspace.canvasAria`.
+
+### The ACCESS PATH — five entrances, one rule
+
+| entrance                                       | what the address carries                                                              | where the canvas arrives                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Plan with AI** on a work item                | `planFrom=work-item` + `planItem=<key>`                                               | inside that item; or its own level, ringed, for a `subtask`                 |
+| a **Plans** row                                | `planSession=<id>` + `planVia=plans`, with `planItem=` when that session has a target | the same arrival as Plan with AI for that target                            |
+| a **To approve** row                           | `planSession=<id>` + `planVia=approvals`, with `planItem=` when the plan has a target | the same arrival — a plan you are asked to decide opens where its cards are |
+| **⌘K** / global launcher                       | `planFrom=project`, no item                                                           | the root, then the follow-move                                              |
+| the **project launcher** / roadmap empty state | `planFrom=project` or `roadmap`, no item                                              | the root, then the follow-move                                              |
+
+**No new address parameter.** The To-approve row already writes `planItem=` when its plan has a
+target — MOTIR-6033's published design, § _20.2 The ACCESS PATH_ — so all three targeted entrances
+hand the arrival rule the same key. That is what makes "one arrival rule" a fact rather than an
+aspiration. (⚠️ That design is **published only** and is not committed to this repository; cite it
+by its card key, not by a Part number — see flag 3.)
+
+### What is INHERITED and not redrawn
+
+Sheet 6's `Modal size="full"` frame edge to edge (0px radius, 0px border), the scrim, the
+`grid-cols-[1fr_22rem]` canvas·rail split, the host's own exit-chrome bar, the four exits, the
+close-with-pending guard, the audit-banner slot and the footer slot. From
+`design/ai-planning/design-notes.md`: **Part IX**'s `arrivalLevel()` — _the level the plan most
+fills_ — which is the plan page's own rule and is **reused, not re-cut**; it is what answers "where
+do the proposals land" for the follow-move's second trigger. Part V is the plan-review DETAIL
+surface and is NOT this asset's reference (see flag 3).
+
+### Primitives composed (no hand-rolling)
+
+`ProjectRoadmapCanvas`'s breadcrumb `nav` / `ol` / `Crumb` / Back control, `PlanChangeCanvas`,
+`PlanningTargetFrame`'s ring + pill, the level skeleton, `roadmap.canvas.emptyDrilled`. **The only
+new elements are a crumb KIND and the go-there affordance**, and both are compositions of existing
+tokens rather than new primitives.
+
+### GIVES / TAKES
+
+| card                                                   | GIVES / TAKES                    | what                                                                                                                                                                                                                                               |
+| ------------------------------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-6160 — the canvas OPENS INSIDE its target        | **GIVES · STRUCTURE**            | the arrival rule and its kind discriminator; the folder-chain limb; the target crumb; that the trail is `initialTrail` and needs no new prop. **Hoist `resolveArrivalTrail`'s logic rather than writing a second copy**                            |
+| MOTIR-6161 — the canvas FOLLOWS a newly settled target | **GIVES · STRUCTURE + a HAZARD** | the `controlledTrail` seam, the `onLevelChange` sync that keeps the canvas navigable, the crossfade + reduced-motion + announcement, the disarm-on-navigate rule, the go-there affordance — **and flag 1, which is a crash it must design around** |
+| MOTIR-6162 / MOTIR-6163 — the test cards               | **GIVES · PREMISE**              | the five entrances, the leaf/container split, the follow-once-never-after-navigation seam, and the measured behaviours in §0 as the assertions' shape                                                                                              |
+| MOTIR-6033 — the decide surface                        | **TAKES · PREMISE**              | that a To-approve row carries `planItem=` when its plan has a target. Nothing here changes it                                                                                                                                                      |
+| MOTIR-2070                                             | **TAKES · SUPERSEDED**           | its own-level rule, overturned above. The card stays `done`: it is the record of what was decided then                                                                                                                                             |
+
+### ⚠️ Planning flags — what contradicts shipped code
+
+1. **`controlledTrail` and `resolveHeldNode` are not combinable, and the planning surface's canvas
+   passes the second one.** `PlanChangeCanvas` supplies `resolveHeldNode` because approving a plan
+   re-keys every proposal to the work item it became. The prop doc says the two _"would fight over
+   `focusId`"_; the render in §0 shows the fight is **`Too many re-renders`**, an outright crash,
+   when the host's controlled trail holds an id the resolver remaps. **The rule for MOTIR-6161:**
+   the host's trail must live in the **committed** id space — the space `resolveHeldNode` resolves
+   TO — and never carry a proposed node id. Measured: with the two agreeing, the canvas settles
+   normally. This is a design constraint on the follow-move, not a defect to fix in the canvas.
+2. **The cards point at the canvas under a `roadmap` directory, and there is no such directory
+   under `components/`.** MOTIR-6154's and MOTIR-6159's Context refs name it there; the component is
+   at
+   **`components/planning/ProjectRoadmapCanvas.tsx`**. Verified with `git ls-tree` on `origin/main`
+   — a path typo in the cards, not a missing prerequisite. (The bad path is described rather than
+   quoted here, because `tests/design-asset-addresses.test.ts` rules on every repo path an asset
+   names, and it is right to.) The same refs say a follow-move _"needs this seam"_; **the seam
+   already shipped** as `controlledTrail` (MOTIR-3835).
+3. **`design/ai-planning/design-notes.md` Part XX is NOT the decide surface.** This file's ADDRESS
+   table cites _"`design/ai-planning/design-notes.md` Part XX §20.2"_ for `planVia`. In the
+   repository that number now resolves to **MOTIR-6134's difficulty section** (merged 2026-09-24
+   08:30, PR #3082); MOTIR-6033's Part XX was published as a design result and never committed, so
+   the citation resolves to the wrong section. Filed as its own bug; this section cites MOTIR-6033
+   by card key for that reason.
+
+### Deliverable
+
+`design/ai-chat/planning-workspace--arrival.mock.html` (eight panels, light + dark, narrow) · this
+section. **A DELTA, per `CLAUDE.md`'s rule** — the base sheet is not edited, and there is no `.png`
+(AMENDMENT 4 retired the export). Published as MOTIR-6159's design result, which is what
+MOTIR-6160 and MOTIR-6161 are `blocked_by`.
