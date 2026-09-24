@@ -18,7 +18,8 @@ import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
-import { withPlanningOverlay, type PlanningLaunchContext } from '@/lib/planning/launcher';
+import { planRowDestination } from '@/lib/planning/planDestination';
+import { PlanDestinationTag } from '@/components/planning/PlanDestinationTag';
 import { usePeekRowClick } from '@/app/(authed)/items/_components/IssueQuickView';
 import { useDecidedGateState } from '@/lib/approvals/decidedGates';
 import { RefusalReasonCell, showsRefusalReason } from './RefusalReason';
@@ -838,16 +839,21 @@ function planSentenceOf(subject: PlanApprovalSubjectSummaryDTO): PlanSentence {
   return { form: 'untitled', name: subject.projectName };
 }
 
-/** The address a plan row opens: the planning surface at its conversation, or null when
- *  it has none to return to (§11.5b — backfilled, an MCP plan with no turns, cadence). */
-function planDoorContext(subject: PlanApprovalSubjectSummaryDTO): PlanningLaunchContext | null {
-  if (!subject.sessionId || !subject.sessionHasTurns) return null;
-  const first = subject.targets[0];
-  // `planVia=approvals` (§20.2): the reopened line says *Reopened from To approve*.
-  return first
-    ? { kind: 'work-item', itemKey: first.key, sessionId: subject.sessionId, via: 'approvals' }
-    : { kind: 'project', sessionId: subject.sessionId, via: 'approvals' };
-}
+/* ⚠️ `planDoorContext` IS GONE (Story MOTIR-6043 · MOTIR-6045), and this note is
+ * what a reader meeting the old name lands on. It decided this row's destination
+ * inline — *"the planning surface at its conversation, or null when it has none
+ * to return to"* — and the Plans page's session row decided the same sentence for
+ * itself, which is the drift the story exists to remove. Both now call
+ * `planRowDestination` (`lib/planning/planDestination.ts`), so one change of rule
+ * moves both lists.
+ *
+ * Its test also changed on the way, and by DECISION rather than by refactor: it
+ * read `!subject.sessionId || !subject.sessionHasTurns`, and the turn count no
+ * longer decides anything. `docs/decisions/mcp-authored-plan-review.md` overturned
+ * it for an agent's plan, and Story MOTIR-6043 settled the rest: a `cadence` and a
+ * backfilled `legacy` session are the same shape, so the whole remaining test is
+ * whether a session EXISTS. `sessionHasTurns` stays on the DTO for other readers
+ * and gates no door. */
 
 /** The version a declined plan record names: the digest after `plan.v1.`, 8 characters. */
 function planVersionLabel(version: string): string {
@@ -890,13 +896,26 @@ function PlanApprovalRow({
   const settled = settledState !== null || record.section === 'held';
   const timeIso = record.section === 'decided' ? record.row.decidedAt : record.row.waitingSince;
   const planHref = `/plans/${encodeURIComponent(subject.planId)}`;
-  const door = planDoorContext(subject);
+  const qs = searchParams.toString();
+  // THE ONE DESTINATION RULE, shared with the Plans page's session row
+  // (design Part XXI). A To-approve row's subject is a PLAN and this list holds
+  // only `awaiting` gates, so the arm this row can reach is *undecided*: the
+  // surface when the plan has a session, the page when it has none (§21.3).
+  const destination = planRowDestination({
+    planStatus: 'planned',
+    planId: subject.planId,
+    sessionId: subject.sessionId,
+    host: `${pathname}${qs ? `?${qs}` : ''}`,
+    anchorKey: subject.targets[0]?.key ?? null,
+    // `planVia=approvals` (§20.2): the reopened line says *Reopened from To approve*.
+    via: 'approvals',
+  });
+  const opensSurface = destination.kind === 'planning-surface';
 
   /** Open the planning surface over the page the list is on — `shallowPush`, so Close
    *  lands back on exactly this list (§20.2). */
-  function openPlanningSurface(context: PlanningLaunchContext) {
-    const qs = searchParams.toString();
-    shallowPush(withPlanningOverlay(`${pathname}${qs ? `?${qs}` : ''}`, context));
+  function openPlanningSurface() {
+    shallowPush(destination.href);
   }
 
   function onRowClick(e: MouseEvent<HTMLAnchorElement>) {
@@ -904,9 +923,9 @@ function PlanApprovalRow({
     // `href` — the plan page, in a new tab.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     // NO CONVERSATION → the real navigation to `/plans/<id>` goes ahead (§20.2).
-    if (!door) return;
+    if (!opensSurface) return;
     e.preventDefault();
-    openPlanningSurface(door);
+    openPlanningSurface();
   }
 
   const author =
@@ -1003,6 +1022,11 @@ function PlanApprovalRow({
               : keys[0]}
           </span>
         ) : null}
+        {/* THE DESTINATION TAG (§21.6): the FIRST column, after the key cell — the
+            slot this row already keeps for a per-row mark, and the one column that
+            FLEXES. `shrink` + `truncate` because that is how this column gives way;
+            the details cell beside it is a fixed 220px that would eat the tag whole. */}
+        <PlanDestinationTag destination={destination} className="shrink text-xs" />
         {arrived ? <Pill tone="neutral">{t('live.new')}</Pill> : null}
       </div>
 
@@ -1081,7 +1105,7 @@ function PlanApprovalRow({
               size="sm"
               aria-haspopup="dialog"
               className="relative z-10"
-              onClick={() => (door ? openPlanningSurface(door) : router.push(planHref))}
+              onClick={() => (opensSurface ? openPlanningSurface() : router.push(planHref))}
             >
               {t('review')}
             </Button>

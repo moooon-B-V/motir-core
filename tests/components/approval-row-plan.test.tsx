@@ -361,15 +361,35 @@ describe('the DOOR — the planning surface, never the approval overlay (§20.2)
     expect(href.searchParams.get('planVia')).toBe('approvals');
   });
 
-  it.each([
-    ['no conversation', { sessionId: null, sessionHasTurns: false }],
-    ['a conversation with no turns', { sessionId: 'session-41', sessionHasTurns: false }],
-  ])('%s: the row lets the real navigation to /plans/<id> happen; Review pushes it', (_l, over) => {
-    renderWithIntl(<ApprovalRow record={{ section: 'awaiting', row: waiting(over) }} />);
+  it('NO SESSION: the row lets the real navigation to /plans/<id> happen; Review pushes it', () => {
+    renderWithIntl(
+      <ApprovalRow
+        record={{ section: 'awaiting', row: waiting({ sessionId: null, sessionHasTurns: false }) }}
+      />,
+    );
     expect(fireEvent.click(door())).toBe(true);
     expect(shallowPush).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
     expect(push).toHaveBeenCalledWith('/plans/plan-41');
+  });
+
+  // ⚠️ AMENDED by Story MOTIR-6043 · MOTIR-6045, and it is a BEHAVIOUR CHANGE rather
+  // than a rewritten assertion: this case used to sit in the row above, asserting the
+  // plan page. `docs/decisions/mcp-authored-plan-review.md` decided that an agent's
+  // plan is reviewed in the planning phase *"turns or no turns"*, so a session with an
+  // empty transcript now opens the SURFACE like any other.
+  it('a session with NO TURNS still opens the conversation (mcp-authored-plan-review.md)', () => {
+    renderWithIntl(
+      <ApprovalRow
+        record={{
+          section: 'awaiting',
+          row: waiting({ sessionId: 'session-41', sessionHasTurns: false }),
+        }}
+      />,
+    );
+    fireEvent.click(door());
+    expect(openedAddress().searchParams.get('planSession')).toBe('session-41');
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('the target’s title is its QUICK VIEW, not the planning surface', () => {

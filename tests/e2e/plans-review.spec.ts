@@ -75,9 +75,16 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
 
   // …and the approved plan's conversation sits in the same list, with its own
   // state. The `Approved` filter holds it too.
-  await expect(page.locator(`a[href="/plans/${seed.approvedPlan.id}"]`)).toHaveAccessibleName(
-    'Open the plan — Approved',
-  );
+  //
+  // ⚠️ AMENDED by Story MOTIR-6043 · MOTIR-6045 (design Part XXI § 21.5): a DECIDED
+  // row's chip is a plain label, because the ROW itself now opens `/plans/<id>` and a
+  // chip link would be a second door to the same place. So the `a[href]` below is the
+  // row's own door, and what it is named is the conversation, not the chip's sentence.
+  const approvedRow = page
+    .getByRole('listitem')
+    .filter({ has: page.locator(`a[href="/plans/${seed.approvedPlan.id}"]`) });
+  await expect(approvedRow).toContainText('Approved');
+  await expect(approvedRow.getByTestId('plan-destination')).toContainText('Opens the plan');
   await page.goto('/plans?planState=approved');
   await expect(page.locator(`a[href="/plans/${seed.approvedPlan.id}"]`)).toBeVisible();
 
@@ -257,10 +264,14 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   // It never became anything, so it has no key to show and none is invented.
   await expect(declinedCard).toContainText('New');
 
-  // The list also reflects the declined status on its chip.
+  // The list also reflects the declined status on its chip — a plain label now, with
+  // the row's own door going to the plan page (Story MOTIR-6043 · MOTIR-6045, § 21.5).
   await page.goto('/plans?planState=declined');
-  const declinedRow = page.locator(`a[href="/plans/${seed.declinePlan.id}"]`);
-  await expect(declinedRow).toHaveAccessibleName('Open the plan — Declined');
+  const declinedRow = page
+    .getByRole('listitem')
+    .filter({ has: page.locator(`a[href="/plans/${seed.declinePlan.id}"]`) });
+  await expect(declinedRow).toContainText('Declined');
+  await expect(declinedRow.getByTestId('plan-destination')).toContainText('Opens the plan');
 
   // Declining a bundle of proposed adds leaves the tree untouched — the proposed
   // item was never materialized, so it's absent from the ready set.

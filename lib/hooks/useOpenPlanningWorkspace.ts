@@ -45,8 +45,14 @@ export interface OpenPlanningWorkspace {
  * A modified click belongs to the BROWSER. Meta / ctrl / shift / alt, and any
  * button that is not the primary one, all mean "open this somewhere else" — so
  * the handler must not `preventDefault` them.
+ *
+ * ⚠️ EXPORTED since MOTIR-6045, for the door that has TWO destinations. A Plans
+ * row opens the overlay for an undecided plan and navigates to the plan page for
+ * a decided one (`lib/planning/planDestination.ts`), so it cannot hand its whole
+ * click to `open` below — but the rule about which clicks are ours is the same
+ * rule, and a second copy of it is how one door starts swallowing ⌘-clicks.
  */
-function isPlainPrimaryClick(event: MouseEvent<HTMLElement>): boolean {
+export function isPlainPrimaryClick(event: MouseEvent<HTMLElement>): boolean {
   return (
     event.button === 0 &&
     !event.metaKey &&

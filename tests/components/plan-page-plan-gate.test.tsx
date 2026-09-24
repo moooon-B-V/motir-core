@@ -153,10 +153,37 @@ describe('REFUSED AS STALE — in the design’s words (§20.5)', () => {
   });
 });
 
-describe('NO CONVERSATION — the page says why it opened here (Panel 8)', () => {
+// ⚠️ AMENDED by Story MOTIR-6043 · MOTIR-6045 (design Part XXI §21.6), and this is a
+// BEHAVIOUR CHANGE rather than a rewrite. The notice had THREE causes, keyed on the
+// plan's author and origin — an agent's plan, a cadence plan, an earlier plan — and all
+// three of those populations HAVE sessions (`agent-authored-plans.md` AMENDMENT 17
+// §4–§5) and now open the planning surface instead. So they can no longer reach this
+// page for want of a conversation, the three keys are retired, and what remains is one
+// population — a plan whose `sessionId` is null — with one sentence.
+//
+// The detector that block carried is kept rather than deleted: the harness case is now
+// asserted to open the SURFACE, in `approval-row-plan.test.tsx` and
+// `plan-row-destination-agreement.test.tsx`.
+describe('NO SESSION — the page says why it opened here (Panel 8, narrowed by §21.6)', () => {
   const next = 'Approve or decline it here — or ask Motir to change it below.';
 
-  it('an agent-written plan names its harness', () => {
+  it('a plan with NO session carries the one cause, whatever wrote it', () => {
+    for (const over of [
+      { conversation: null },
+      { conversation: null, authorSource: 'mcp' as const, authorHarness: 'Claude Code' },
+      { conversation: null, origin: 'cadence' as const },
+    ]) {
+      const { unmount } = renderWithIntl(
+        <PlanDetail initialReview={asked(over)} projectKey="ACME" />,
+      );
+      expect(screen.getByTestId('plan-no-conversation').textContent).toBe(
+        `There is no conversation on record for this plan. ${next}`,
+      );
+      unmount();
+    }
+  });
+
+  it('a session with NO TURNS is NOT this case — it opens the surface, so the page never says it', () => {
     renderWithIntl(
       <PlanDetail
         initialReview={asked({
@@ -167,28 +194,7 @@ describe('NO CONVERSATION — the page says why it opened here (Panel 8)', () =>
         projectKey="ACME"
       />,
     );
-    expect(screen.getByTestId('plan-no-conversation').textContent).toBe(
-      `Claude Code wrote this plan outside a conversation, so it opened on its own page. ${next}`,
-    );
-  });
-
-  it('a cadence plan says Motir planned it on its own', () => {
-    renderWithIntl(
-      <PlanDetail
-        initialReview={asked({ conversation: null, origin: 'cadence' })}
-        projectKey="ACME"
-      />,
-    );
-    expect(screen.getByTestId('plan-no-conversation').textContent).toContain(
-      'Motir planned this on its own when your ready work ran out',
-    );
-  });
-
-  it('an older plan says it predates planning conversations', () => {
-    renderWithIntl(<PlanDetail initialReview={asked({ conversation: null })} projectKey="ACME" />);
-    expect(screen.getByTestId('plan-no-conversation').textContent).toContain(
-      'This plan was written before Motir kept planning conversations.',
-    );
+    expect(screen.queryByTestId('plan-no-conversation')).toBeNull();
   });
 
   it('is absent when there IS a conversation, and when nobody has been asked', () => {

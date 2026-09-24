@@ -1863,6 +1863,18 @@ export default defineConfig({
         'app/**/plans/_components/SessionRow.tsx',
         'app/**/plans/_components/SessionsList.tsx',
 
+        // Story MOTIR-6043 · Subtask MOTIR-6045 — WHERE a plans row opens. The
+        // rule is the reason to gate it: ONE function answers for the Plans row
+        // above and the To-approve row in `components/approvals/`, so a branch
+        // of it that nothing exercises is a branch on which the two surfaces can
+        // silently disagree — which is the whole defect the story removes. Both
+        // files are new here and both are GATED in `thresholds` below, measured
+        // first, as this block prescribes throughout. `ApprovalRow.tsx` keeps its
+        // existing report-only place (see the approvals block below); it is a
+        // CALLER of the rule, not the rule.
+        'lib/planning/planDestination.ts',
+        'components/planning/PlanDestinationTag.tsx',
+
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle.
         // The story's decision code, in one place: what a pull request delivers
         // (`changeRequestWorkItems`), what a green build promotes (`ciPromotion`),
@@ -4777,6 +4789,15 @@ export default defineConfig({
         'app/**/plans/sessionRowView.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/SessionRow.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/SessionsList.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-6043 · Subtask MOTIR-6045 — the destination rule and its
+        // affordance, pinned at the 90 floor after being MEASURED on this branch
+        // (both 100 / 100 / 100 / 100 over `tests/planning/planDestination`,
+        // `tests/components/plan-row-destination-agreement` and
+        // `tests/integration/planning/planRowDestinationGate`; `SessionRow.tsx`
+        // re-measured at 93.44 branches / 100 functions / 94.87 lines, still
+        // clear of the pin it already carried).
+        'lib/planning/planDestination.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/PlanDestinationTag.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle
         // (see the `include` note above for why these five and not the three
         // pre-existing files the story also widened). MEASURED on this branch

@@ -308,7 +308,15 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
     // chip carries the plan's state. The DECIDER is the plan page's to name.
     await expect(decided).toContainText(seed.requesterName);
     await expect(decided).toContainText('Generated plan');
-    await expect(rowFor(page, seed.decidedPlanId)).toHaveAccessibleName('Open the plan — Approved');
+    // ⚠️ AMENDED by Story MOTIR-6043 · MOTIR-6045 (design Part XXI § 21.5). The chip
+    // used to be a second LINK here, named *Open the plan — Approved*. On a DECIDED
+    // row the row's own door now goes to `/plans/<id>`, so a chip link would be a
+    // second control to the place you are already going: it is a plain label, and the
+    // `a[href="/plans/<id>"]` this locator finds IS the row. The state is still said,
+    // and the destination is now said too.
+    await expect(decided).toContainText('Approved');
+    await expect(decided.getByTestId('plan-destination')).toContainText('Opens the plan');
+    await expect(rowFor(page, seed.decidedPlanId)).toBeVisible();
     await beat();
 
     // …and the UNDECIDED row names its starter too, with its own state.
