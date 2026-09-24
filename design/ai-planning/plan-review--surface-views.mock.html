@@ -4301,6 +4301,17 @@
         font-weight: 600;
         color: var(--el-text-secondary);
       }
+      /* THE RESTING FOOT — present, and empty (21.8). It holds the confirm bar's
+         height so the canvas box never changes size, and draws nothing: no border,
+         no fill of its own, no copy. The canvas colour runs to the pane's edge.
+         The height here is the bar's MEASURED height and is a drawing convenience;
+         21.8 requires the build to derive it structurally from the bar's own box,
+         never to pin this number. */
+      .restfoot {
+        flex: none;
+        height: 57px;
+        background: var(--el-canvas);
+      }
       .regionCap {
         font-size: 11.5px;
         color: var(--el-text-secondary);
@@ -4359,9 +4370,10 @@
             >The surface already has a top bar the plan page does not:
             <span class="hl">Close · Esc · the project name</span>, the overlay's own chrome. The
             component's 44px pane header sits <span class="hl">beneath</span> it, as a second bar,
-            and it appears only once a plan is PROPOSED. With no plan there is no switch and the
-            pane is <code>PlanChangeCanvas</code> exactly as shipped — so the resting surface is
-            unchanged and the 45px is paid only while there is a plan to read.</span
+            and it appears only once a plan is PROPOSED. With no plan there is no switch, the pane
+            is <code>PlanChangeCanvas</code> exactly as shipped, and
+            <span class="hl">the foot is empty</span> — so the resting surface reads as canvas edge
+            to edge.</span
           >
         </div>
         <div class="row">
@@ -4409,25 +4421,15 @@
                     </div>
                   </div>
 
-                  <div
-                    class="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
-                  >
-                    <span class="flex min-w-0 flex-col">
-                      <span class="truncate text-sm font-semibold text-(--el-text-secondary)"
-                        >Roadmap — as saved</span
-                      >
-                      <span class="truncate text-xs text-(--el-text-secondary)"
-                        >Nothing proposed. The conversation has changed nothing.</span
-                      >
-                    </span>
-                  </div>
+                  <div class="restfoot" aria-hidden="true"></div>
                 </div>
               </div>
             </div>
             <span class="hostcap"
-              >The conversation only. There is nothing to list, so the pane header does not render
-              and the pane is the roadmap with nothing decorated over it. The footer slot is the
-              resting footer.</span
+              >The conversation only. There is nothing to list, so the pane header does not render,
+              the pane is the roadmap with nothing decorated over it, and <b>the foot is empty</b> —
+              the rail on the right is where the planner says where the plan has got to. The slot
+              keeps the bar's height so the canvas box never resizes (21.8).</span
             >
           </div>
 
@@ -6845,7 +6847,8 @@
           ><span class="cap"
             >After approve or decline the pane stays on the component and on the SAME view, in Part
             VI's decided treatment, reading the three-valued <code>outcome</code>. The bar leaves
-            with the proposal and the resting footer takes the slot back.</span
+            with the proposal and <b>the foot goes empty</b> — it keeps its height, so nothing under
+            the canvas moves when the decision lands.</span
           >
         </div>
         <div class="row">
@@ -7188,18 +7191,7 @@
                     </div>
                   </div>
 
-                  <div
-                    class="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
-                  >
-                    <span class="flex min-w-0 flex-col">
-                      <span class="truncate text-sm font-semibold text-(--el-text-secondary)"
-                        >Roadmap — as saved</span
-                      >
-                      <span class="truncate text-xs text-(--el-text-secondary)"
-                        >Nothing proposed. The conversation has changed nothing.</span
-                      >
-                    </span>
-                  </div>
+                  <div class="restfoot" aria-hidden="true"></div>
                 </div>
               </div>
             </div>
@@ -7317,18 +7309,7 @@
                     </div>
                   </div>
 
-                  <div
-                    class="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
-                  >
-                    <span class="flex min-w-0 flex-col">
-                      <span class="truncate text-sm font-semibold text-(--el-text-secondary)"
-                        >Roadmap — as saved</span
-                      >
-                      <span class="truncate text-xs text-(--el-text-secondary)"
-                        >Nothing proposed. The conversation has changed nothing.</span
-                      >
-                    </span>
-                  </div>
+                  <div class="restfoot" aria-hidden="true"></div>
                 </div>
               </div>
             </div>

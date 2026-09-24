@@ -56,7 +56,25 @@ const MESSAGES = join(ROOT, 'messages/en.json');
 const INVENTED = ['Ask for a change', 'Asking writes nothing'] as const;
 
 /** The `planningWorkspace` keys whose text the surface's own chrome renders. */
-const CHROME_KEYS = ['close', 'escKey', 'footerRestingTitle', 'footerRestingBody'] as const;
+const CHROME_KEYS = ['close', 'escKey'] as const;
+
+/**
+ * ⚠️ `footerRestingTitle` / `footerRestingBody` are NOT in `CHROME_KEYS`, and
+ * their ABSENCE is asserted instead (Part XXI 21.8).
+ *
+ * They were, until the same review round that found the invented copy. The
+ * decision that followed is that the resting foot says NOTHING: the rail on the
+ * right already makes the planning status plain before a plan is proposed, so a
+ * line in the foot repeating it is a second voice for one fact. The slot keeps
+ * its HEIGHT — the confirm bar is a `shrink-0` sibling below the `min-h-0 flex-1`
+ * canvas box and the canvas anchors three control clusters to that box's bottom,
+ * so a collapsing slot slides all three (bug MOTIR-1815) — and draws nothing.
+ *
+ * Asserting the absence rather than simply dropping the keys is the point: an
+ * un-asserted removal and an accidental re-add look identical in a later diff,
+ * and the obvious "fix" for a foot that looks empty is to put the old line back.
+ */
+const REMOVED_KEYS = ['footerRestingTitle', 'footerRestingBody'] as const;
 
 const mock = readFileSync(MOCK, 'utf8');
 const messages = JSON.parse(readFileSync(MESSAGES, 'utf8')) as {
@@ -82,6 +100,39 @@ describe("the surface-views asset's chrome copy comes from the catalogue (MOTIR-
       `${MOCK} does not draw planningWorkspace.${key} (${JSON.stringify(value)}). ` +
         'The surface chrome in this asset is the shipped chrome: resolve its text from ' +
         'messages/en.json rather than typing it.',
+    ).toBe(true);
+  });
+
+  it.each(REMOVED_KEYS)('draws NOTHING from `planningWorkspace.%s` — the foot is empty', (key) => {
+    const value = messages.planningWorkspace[key];
+
+    // The key still exists in the catalogue while the shipped host still renders
+    // it; MOTIR-6186 is what removes both. If it has already gone, this assertion
+    // is vacuously satisfied and the next line says so rather than passing quietly.
+    if (typeof value !== 'string' || value.length === 0) {
+      expect(
+        mock.includes('class="restfoot"'),
+        `planningWorkspace.${key} is gone from the catalogue, so this spec can no longer ` +
+          'check the foot by its old copy — assert the empty foot directly instead.',
+      ).toBe(true);
+      return;
+    }
+
+    expect(
+      mock.includes(asRendered(value)),
+      `${MOCK} draws planningWorkspace.${key} (${JSON.stringify(value)}) in the foot. ` +
+        'Part XXI 21.8 empties the resting foot: the rail already says where the plan has ' +
+        'got to. The slot keeps its height and draws nothing.',
+    ).toBe(false);
+  });
+
+  it('keeps the foot present-but-empty, so the canvas box never resizes', () => {
+    // The height is the whole reason the slot survives at all (MOTIR-1815).
+    expect(
+      mock.includes('class="restfoot"'),
+      `${MOCK} draws no resting foot at all. It must stay PRESENT and empty: the confirm ` +
+        'bar is a shrink-0 sibling below the canvas box, and a slot that collapses when ' +
+        'resting slides the canvas’s three bottom-anchored control clusters.',
     ).toBe(true);
   });
 

@@ -5738,7 +5738,7 @@ and the two candidate fixes; this Part simply refuses to use the ambiguous addre
 
 ## 21.1 What this COMPOSES and must not redraw
 
-Everything. This Part adds no element and changes nothing inside one:
+Almost everything. This Part adds no element and changes nothing inside one:
 
 - the pane header and its `Segmented` **List | Canvas** switch — Part VIII §2, unchanged, including
   its `--el-surface` fill, its bottom hairline, its 44px height and `planReview.viewSwitchAria`;
@@ -5747,11 +5747,14 @@ Everything. This Part adds no element and changes nothing inside one:
   Part VI;
 - `PlanChangeConfirmBar`, its decline band, its held reason and its stale alert — MOTIR-6033's design,
   §20.4 and §20.5 of its own fragment;
-- the surface's Close + project bar, the audit-coverage banner's seam and the resting footer —
-  `PlanningWorkspaceHost` as shipped, **including their COPY**: the footer says
-  `planningWorkspace.footerRestingTitle` / `footerRestingBody` (_"Roadmap — as saved"_ /
-  _"Nothing proposed. The conversation has changed nothing."_), which is a quiet statement of fact and
-  not an invitation to act. Nothing in this Part re-words it (21.10).
+- the surface's Close + project bar and the audit-coverage banner's seam — `PlanningWorkspaceHost` as
+  shipped, **including their COPY**: `planningWorkspace.close` and `escKey`, resolved from the
+  catalogue rather than typed (21.11).
+
+**The ONE thing it does not compose — and the one change this Part makes to a shipped surface — is the
+footer slot's RESTING content.** The shipped host draws a two-line statement there; **21.8 empties
+it**, keeping the slot's height and nothing else. That is a decision about the pane this Part owns,
+not a re-drawing of anything inside the confirm bar, whose every state is composed unchanged (21.6).
 
 **The canvas is a LABELLED REGION in the asset, not a redrawing** — the same treatment MOTIR-6033's
 own mock gives it, and for the same reason: nothing inside it changes. This Part decides where the
@@ -5870,7 +5873,50 @@ and the level survives because the component never unmounted.
 **The composer draft is untouched by all of this.** It lives in the RAIL, which is the other pane; a
 switch in the left pane cannot reach it. Drawn nowhere, asserted everywhere.
 
-## 21.8 Token and shape roles
+## 21.8 The RESTING FOOT is EMPTY — present, and silent
+
+**Yue's decision, this review round.** With no proposal in hand the footer slot says **nothing**. No
+border, no fill of its own, no copy: the canvas colour runs to the pane's edge.
+
+**Why.** The rail on the right IS the planner. Before a plan is proposed it is where the conversation
+is happening and where the planner says where it has got to — so a line in the foot restating that is
+a second voice for one fact, and the two can only ever agree less well than one of them. The shipped
+line (`planningWorkspace.footerRestingTitle` / `footerRestingBody` — _"Roadmap — as saved"_ /
+_"Nothing proposed. The conversation has changed nothing."_) is answering a question the rail has
+already answered, at the far side of the surface from where the reader is looking.
+
+**⚠️ THE SLOT STAYS. ONLY ITS CONTENT GOES — and the reason is a shipped bug, not tidiness.**
+
+The confirm bar is a `shrink-0` sibling BELOW the `min-h-0 flex-1` canvas box, and the canvas anchors
+three control clusters to the bottom of that box: the engine's zoom + fit (`bottom-4 left-4`,
+`PlanningCanvas.tsx`), LOCATE (`bottom-4 left-[8.25rem]`, `ProjectRoadmapCanvas.tsx`) and full-screen
+(`right-3 bottom-4`). A slot that mounts and unmounts therefore grows and shrinks the box by the bar's
+full height on every proposal, and all three clusters slide with it — **bug MOTIR-1815**, whose fix was
+to stop the box changing size at all. The resting footer's copy was the visible part of that fix; the
+BOX was the fix.
+
+So the foot keeps the bar's height and loses everything else. A build that deletes the box instead of
+emptying it reintroduces MOTIR-1815, and nothing in the design lane would catch it.
+
+**Two obligations this puts on [the mount card](motir-ref:cmufauqe10011hvoizre3i5ik):**
+
+1. **DERIVE the height, never pin it.** The empty foot's height is the confirm bar's own, matched
+   structurally — the same discipline the shipped resting footer already keeps, and for the same
+   reason: _"a magic `min-h` would drift the moment the bar's own content changed and re-introduce
+   the jump this slot exists to remove."_ The `57px` in this asset's board chrome is a drawing
+   convenience and is **not** the specification. If matching structurally with no content proves
+   impossible, the fallback is a reserved strip whose height is read from the bar, never a literal.
+2. **Retire the two catalogue keys with their only consumer.** `footerRestingTitle` and
+   `footerRestingBody` are rendered in exactly one place, `PlanningWorkspaceHost.tsx`
+   (`git grep -n "footerRestingTitle" -- components app` → one file). Removing the copy orphans both,
+   in `messages/en.json` **and** `messages/zh.json`. They go in the same change; a dead key that still
+   reads as live copy is how a later card puts the line back.
+
+**What this does NOT change.** The confirm bar itself, in every one of its states — the verbs, the
+consequence line, the decline band, the held reason, the stale alert — is untouched (21.6). This
+decision is only about what the slot holds when there is **no** decision to take.
+
+## 21.9 Token and shape roles
 
 Nothing new. Every element in the asset is a shipped component's own markup or the surface's own
 chrome, so the roles are those components' — Part VIII §2's table for the header and the switch,
@@ -5886,7 +5932,7 @@ it — and it is declared here only because this asset carries the real markup a
 declaring selector. The `.seg button .seg-ic` rules in older assets are shims for hand-drawn
 segmented controls this asset does not have.
 
-## 21.9 a11y
+## 21.10 a11y
 
 Inherited, and worth stating because the switch is the one control this Part places:
 
@@ -5898,7 +5944,7 @@ Inherited, and worth stating because the switch is the one control this Part pla
 - the held state DISABLES the verbs rather than removing them, so their absence is never silent — and
   the switch is deliberately left enabled, because nothing about reading is held.
 
-## 21.10 How the asset was produced
+## 21.11 How the asset was produced
 
 Stated because criterion 2 asks for it, and because a claim to compose shipped markup is worth being
 checkable:
@@ -5945,7 +5991,7 @@ checkable:
   happy-dom — `design-dark-parity`, `design-state-ink-contrast`, `design-ink-contrast` and
   `design-mock-utility-correspondence` — and all 228 specs in the design lane are green over it.
 
-## 21.11 GIVES / TAKES
+## 21.12 GIVES / TAKES
 
 Over every `MOTIR-<n>` the new mock and this Part name:
 
@@ -5975,9 +6021,9 @@ Over every `MOTIR-<n>` the new mock and this Part name:
   number collides with the number MOTIR-6033's published fragment uses.
 - **MOTIR-6190** — the bug 21.0 raises. Neither gives nor takes; it records the defect this Part works
   around.
-- **MOTIR-4150 / MOTIR-4687** — neither. Named in 21.10 as the reason a dead rule is dropped.
+- **MOTIR-4150 / MOTIR-4687** — neither. Named in 21.11 as the reason a dead rule is dropped.
 
-## 21.12 What Part XXI does NOT draw
+## 21.13 What Part XXI does NOT draw
 
 - **Anything inside the list, the canvas, the confirm bar or the decline band.** All approved and
   shipped; composed only.
