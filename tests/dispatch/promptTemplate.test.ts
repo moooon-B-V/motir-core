@@ -290,6 +290,22 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
         expect(prompt).toContain('does not belong in that record');
       });
 
+      // The gate's subject is `<owner/name>:<path>@<blobSha>` (§8's FIFTH AMENDMENT
+      // clause 4) — the WHOLE file, not the diff. There is no publish call for a
+      // decision document, so the pull-request head is the only lever. MOTIR-6157's
+      // second rewrite put the decision in the ADR that genuinely owns it and made
+      // the subject a 3,581-line file with the amendment at line 3,495; the review
+      // came back "did you republish?". Unreadable is indistinguishable from absent.
+      it('requires an amended record to be READABLE AS ONE QUESTION, not merely correct', () => {
+        const prompt = agentPrompt();
+        expect(prompt).toContain('small enough to be READ AS ONE QUESTION');
+        expect(prompt).toContain('The gate hands the reviewer the');
+        expect(prompt).toContain('WHOLE file, not your diff');
+        expect(prompt).toContain('<owner/name>:<path>@<blobSha>');
+        expect(prompt).toContain('a decision document has no publish call');
+        expect(prompt).toContain('unreadable and absent look the same');
+      });
+
       it('bounds the record to the card’s own decision — the count rule does not', () => {
         const prompt = agentPrompt();
         expect(prompt).toContain(
