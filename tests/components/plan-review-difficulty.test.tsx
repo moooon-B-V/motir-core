@@ -433,3 +433,35 @@ describe('the change frame chip', () => {
     expect(zhMessages.planningWorkspace.conversation.diff.field.difficulty).toBe('难度');
   });
 });
+
+describe('the DifficultyIndicator itself (the compact form the review composes)', () => {
+  it('draws the compact form with no host class, named for a screen reader', async () => {
+    const { DifficultyIndicator } = await import('@/components/issues/DifficultyPicker');
+    render(<DifficultyIndicator difficulty="high" compact={{ srLabel: 'Difficulty' }} />);
+    const node = document.querySelector('[data-difficulty="high"]')!;
+    expect(node.getAttribute('class')).toBe('inline-flex shrink-0 items-center gap-1');
+    expect(node.getAttribute('data-testid')).toBeNull();
+    expect(node.textContent).toBe(`Difficulty ${EN_LABEL.high}`);
+  });
+
+  it('appends the host class and test id when the caller gives them', async () => {
+    const { DifficultyIndicator } = await import('@/components/issues/DifficultyPicker');
+    render(
+      <DifficultyIndicator
+        difficulty="trivial"
+        compact={{ srLabel: 'Difficulty', className: 'align-top', testId: 'probe' }}
+      />,
+    );
+    const node = screen.getByTestId('probe');
+    expect(node.className).toBe('inline-flex shrink-0 items-center gap-1 align-top');
+    expect(node.getAttribute('data-difficulty')).toBe('trivial');
+  });
+
+  it('keeps the full item-page form when not compact — no screen-reader prefix', async () => {
+    const { DifficultyIndicator } = await import('@/components/issues/DifficultyPicker');
+    render(<DifficultyIndicator difficulty="low" />);
+    const node = document.querySelector('[data-difficulty="low"]')!;
+    expect(node.className).toBe('flex items-center gap-1.5');
+    expect(node.textContent).toBe(EN_LABEL.low);
+  });
+});
