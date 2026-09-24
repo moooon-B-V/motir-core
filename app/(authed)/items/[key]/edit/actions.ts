@@ -28,6 +28,7 @@ import type {
   WorkItemExplanationSourceDto,
   WorkItemPlacementDto,
 } from '@/lib/dto/workItems';
+import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 
 // Server Actions for the issue edit form (Subtask 2.3.6). Two DISTINCT paths —
 // the whole point of closing finding #46: non-status fields go through
@@ -138,6 +139,8 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
     if (err instanceof IllegalParentTypeError)
       return { ok: false, error: workItemErrorMessage(err, t), field: 'parent' };
     if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };
+    const refused = await unmappedActionRefusalMessage(err, 'updateIssueAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -175,6 +178,8 @@ export async function fileWorkItemAction(input: {
       const t = await getErrorsTranslator();
       return { ok: false, error: workItemErrorMessage(err, t) };
     }
+    const refused = await unmappedActionRefusalMessage(err, 'fileWorkItemAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -210,6 +215,8 @@ export async function getWorkItemPlacementAction(
       const t = await getErrorsTranslator();
       return { ok: false, error: workItemErrorMessage(err, t) };
     }
+    const refused = await unmappedActionRefusalMessage(err, 'getWorkItemPlacementAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -246,6 +253,8 @@ export async function changeStatusAction(input: {
     if (err instanceof IllegalTransitionError || err instanceof UnknownStatusError)
       return { ok: false, error: workItemErrorMessage(err, t), field: 'status' };
     if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };
+    const refused = await unmappedActionRefusalMessage(err, 'changeStatusAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }

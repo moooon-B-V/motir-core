@@ -627,7 +627,8 @@
       "unknownIssueType": "Unknown work item type.",
       "couldNotLink": "Could not link the selected work items.",
       "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings.",
-      "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings."
+      "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
+      "refused": "That didn’t go through: {reason}"
     },
     "links": {
       "notFound": "That work item no longer exists.",

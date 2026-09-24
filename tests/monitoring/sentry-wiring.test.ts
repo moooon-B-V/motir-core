@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { MONITORING_TUNNEL_ROUTE } from '@/lib/monitoring/config';
 import {
   dropExpectedDomainErrors,
+  findExpectedDomainError,
   isExpectedDomainError,
 } from '@/lib/monitoring/expectedDomainErrors';
 import { ApiV1Error, DOMAIN_ERROR_STATUS } from '@/lib/api/v1/errors';
@@ -208,6 +209,40 @@ describe('expected typed domain 4xx are not reported as errors', () => {
     const event = { event_id: 'abc' } as ErrorEvent;
     const hint: EventHint = { originalException: new Error('boom') };
     expect(dropExpectedDomainErrors(event, hint)).toBe(event);
+  });
+
+  // MOTIR-6147: a Server Action answers a thrown refusal with a 500, never a
+  // 4xx, so dropping it hid every action failure in production.
+  it('KEEPS a domain 4xx that escaped a Server Action (Next routeType action)', () => {
+    const err = Object.assign(new Error('no access'), { code: 'PROJECT_ACCESS_DENIED' });
+    expect(isExpectedDomainError(err)).toBe(true);
+    const event = { contexts: { nextjs: { route_type: 'action' } } } as unknown as ErrorEvent;
+    expect(dropExpectedDomainErrors(event, { originalException: err })).toBe(event);
+  });
+
+  it('KEEPS a converted refusal an action reported under the server_action context', () => {
+    const err = Object.assign(new Error('no access'), { code: 'PROJECT_ACCESS_DENIED' });
+    const event = {
+      contexts: { server_action: { action: 'updateIssueAction', code: 'PROJECT_ACCESS_DENIED' } },
+    } as unknown as ErrorEvent;
+    expect(dropExpectedDomainErrors(event, { originalException: err })).toBe(event);
+  });
+
+  it('still drops a domain 4xx from a page render or a route handler', () => {
+    const err = Object.assign(new Error('no such work item'), { code: 'WORK_ITEM_NOT_FOUND' });
+    for (const routeType of ['render', 'route']) {
+      const event = { contexts: { nextjs: { route_type: routeType } } } as unknown as ErrorEvent;
+      expect(dropExpectedDomainErrors(event, { originalException: err })).toBeNull();
+    }
+  });
+
+  it('finds the refusal code and message through a cause chain', () => {
+    const inner = Object.assign(new Error('not a member'), { code: 'NOT_A_MEMBER' });
+    expect(findExpectedDomainError(new Error('wrapped', { cause: inner }))).toEqual({
+      code: 'NOT_A_MEMBER',
+      message: 'not a member',
+    });
+    expect(findExpectedDomainError(new Error('boom'))).toBeNull();
   });
 
   it('terminates on a self-referential cause chain', () => {

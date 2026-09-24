@@ -14,6 +14,7 @@ import {
   ReplyDepthExceededError,
 } from '@/lib/comments/errors';
 import type { CommentDTO } from '@/lib/dto/comments';
+import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 
 // Server Actions for the issue detail page's comments section (Subtask 5.1.5).
 // Thin transports over `commentsService` (the 5.1.2 business-logic core): one
@@ -66,6 +67,8 @@ export async function addCommentAction(input: {
   } catch (err) {
     const message = await commentErrorMessage(err);
     if (message) return { ok: false, error: message };
+    const refused = await unmappedActionRefusalMessage(err, 'addCommentAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -87,6 +90,8 @@ export async function editCommentAction(input: {
   } catch (err) {
     const message = await commentErrorMessage(err);
     if (message) return { ok: false, error: message };
+    const refused = await unmappedActionRefusalMessage(err, 'editCommentAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -103,6 +108,8 @@ export async function deleteCommentAction(input: {
   } catch (err) {
     const message = await commentErrorMessage(err);
     if (message) return { ok: false, error: message };
+    const refused = await unmappedActionRefusalMessage(err, 'deleteCommentAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
