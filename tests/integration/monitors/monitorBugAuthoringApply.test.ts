@@ -326,6 +326,26 @@ describe('the DIFFICULTY rides the same gated write (MOTIR-6135)', () => {
     expect(Number(bug.storyPoints)).toBe(3);
   });
 
+  // Story gate MOTIR-6141: the ABSENT key (not only `null`) must also keep a
+  // value a person set before the answer arrived.
+  it('an answer WITHOUT the key leaves a person-set difficulty untouched', async () => {
+    const { fx, target } = await seed();
+    const { workItemId, event } = await fileAndDispatch(target, 'difficulty-absent-kept');
+    await workItemsService.updateWorkItem(workItemId, { difficulty: 'medium' }, fx.ctx);
+    const { difficulty: _omit, ...legacy } = ANSWER;
+    void _omit;
+    succeeds(legacy);
+
+    await expect(
+      monitorBugEnrichmentService.applyAuthoredBug(event, 'job_author_1'),
+    ).resolves.toEqual({ status: 'applied' });
+
+    const bug = await read(workItemId);
+    expect(bug.difficulty).toBe('medium');
+    expect(bug.explanationSource).toBe('ai_draft');
+    expect(await difficultyRevisions(workItemId)).toEqual([{ from: null, to: 'medium' }]);
+  });
+
   it("an unknown difficulty ('extreme') aborts the whole apply and writes nothing", async () => {
     const { target } = await seed();
     const { workItemId, event } = await fileAndDispatch(target, 'difficulty-bad');
