@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **68 tools**.
+`initialize` handshake and registers **69 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1043,6 +1043,54 @@ answer rather than an error, and it is still the design that was approved.
 
 Both tools are read-scoped on `project:browse` — a key `CLI_TOKEN_GRANT` already
 carries, so a dispatched agent reaches them without the grant being widened.
+
+#### `get_approval_gate`
+
+**The decision a person MADE on one approval gate — including the note they wrote
+when they sent your work back.**
+
+| Input  | Type      | Required | Notes                                                                                                                                                                                           |
+| ------ | --------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`  | string    | yes      | The work item the gate hangs off, e.g. `"ACME-7"`. Case-insensitive.                                                                                                                            |
+| `kind` | kind enum | yes      | Which decision to read — `decision_approval`, `design_result`, `acceptance_result`, `pull_request_approval`, `decision_choice`, `decision_confirmation`, `plan_approval`, `pull_request_merge`. |
+
+**Output** — `structuredContent`:
+`{ workItemKey, workItemTitle, kind, gate, routedToLabel }`. The `gate` is an
+`ApprovalGateDecision`, derived from the `/api/v1` component its twin
+`GET /api/v1/work-items/{key}/approval-gate` returns, so the two surfaces cannot
+drift: `state`, `noteMd`, `decidedAt`, `decidedByLabel`,
+`decidedUnderAuthority`, `decisionSource`, `subjectVersion`, `supersededCause`,
+`outcomeRef` and the two timestamps.
+
+**⚠️ THIS IS HOW YOU READ A _REQUEST CHANGES_ NOTE.** When a reviewer sends work
+back — a decision record, a published design, a run's pull requests — the reason
+they gave is this gate's `noteMd`. It is not a comment, so
+[`get_work_item`](#get_work_item) and
+[`get_work_item_activity`](#get_work_item_activity) do not carry it, and neither
+do the comment threads. Read it before you change anything: acting on what you
+expect the reviewer objected to is how a confident second wrong version gets
+produced.
+
+**`gate: null` is an ANSWER, not a miss** — this card has no gate of that kind,
+so nothing is waiting and nothing was decided. A key that does not resolve, or a
+project the token may not browse, is the indistinguishable not-found instead.
+
+**Read `state` before the audit fields.** Five of them are written BY the
+decision, so a null means _not yet decided_ and never _decided by nobody_:
+
+| `state`             | what it means                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `awaiting`          | The question is open. `routedToLabel` says who it is waiting on; there is no note yet because there is no decision. |
+| `approved`          | A person approved it. `noteMd` is why, where they wrote one.                                                        |
+| `changes_requested` | A person sent it back, and `noteMd` is what to change. It moves no status — the card is yours again as it was.      |
+| `superseded`        | Withdrawn before anyone answered. `supersededCause` says what happened to the SUBJECT — never somebody's judgement. |
+| `overturned`        | A person refused a `decision_confirmation`'s direction. Terminal, and it names a re-plan a person starts.           |
+| `declined`          | A person ended the plan a `plan_approval` asked about. Terminal.                                                    |
+
+Read-scoped on `project:browse`, like the design reads above. **There is no tool
+that DECIDES a gate, deliberately** — an approval is a person's act, and the gate
+table is the record that it was one
+(`docs/decisions/approval-gates.md` §1, §2).
 
 ### Work-item writes
 
