@@ -264,9 +264,13 @@ describe('sandbox Dockerfile', () => {
     expect(directives).toContain('"postgresql-${PG_MAJOR}=${PG_VERSION}"');
     expect(directives).toContain('"postgresql-${PG_MAJOR}-pgvector=${PGVECTOR_VERSION}"');
     // Debian's postgresql-common creates a cluster under the SYSTEM locale on
-    // install. Leaving it would ship exactly the collation this layer exists to
-    // avoid, beside the one it wants.
-    expect(directives).toContain('pg_dropcluster --stop "${PG_MAJOR}" main');
+    // install. Shipping it would put exactly the collation this layer exists to
+    // avoid beside the one it wants, so it is never created.
+    expect(directives).toContain("'create_main_cluster = false'");
+    // The socket directory is load-bearing: the compiled-in default is
+    // /var/run/postgresql, owned by postgres:postgres, so a server run by `node`
+    // cannot create its lock file there and refuses to start.
+    expect(directives).toContain("unix_socket_directories = '/tmp'");
     // The collation the fractional-index ordering depends on, and the extension
     // two repositories' migrations run on their first apply.
     expect(directives).toContain('--locale=C.UTF-8');

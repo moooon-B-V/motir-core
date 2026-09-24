@@ -214,9 +214,12 @@ RUN apt-get update \
 ARG PG_MAJOR=16
 ARG PG_VERSION=16.15-1.pgdg12+2
 ARG PGVECTOR_VERSION=0.8.6-1.pgdg12+2
-# The cluster lives outside /var/lib/postgresql so it is plainly not Debian's —
-# `pg_dropcluster` below removes the one postgresql-common creates under the
-# SYSTEM locale, which is the collation this layer exists to avoid.
+# The cluster lives outside /var/lib/postgresql so it is plainly not Debian's.
+# `create_main_cluster = false` below stops postgresql-common making one at all:
+# its cluster is initialised under the SYSTEM locale, which is exactly the
+# collation this layer exists to avoid, and not creating it beats creating and
+# then dropping it — a drop is a step that can fail, and a build that fails to
+# remove a cluster nobody wanted would still be shipping the right one beside it.
 ENV PGDATA=/var/lib/motir-postgres
 # The role, database and port every CI job in these repositories already sets,
 # so a test command runs AS TYPED rather than after a round of env wrangling.
@@ -228,13 +231,14 @@ RUN set -eux; \
     chmod go+r /etc/apt/keyrings/pgdg.asc; \
     echo "deb [signed-by=/etc/apt/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list; \
+    mkdir -p /etc/postgresql-common; \
+    echo 'create_main_cluster = false' > /etc/postgresql-common/createcluster.conf; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         "postgresql-${PG_MAJOR}=${PG_VERSION}" \
         "postgresql-client-${PG_MAJOR}=${PG_VERSION}" \
         "postgresql-${PG_MAJOR}-pgvector=${PGVECTOR_VERSION}"; \
     rm -rf /var/lib/apt/lists/*; \
-    pg_dropcluster --stop "${PG_MAJOR}" main; \
     mkdir -p "$PGDATA"; \
     chown node:node "$PGDATA"; \
     chmod 700 "$PGDATA"
@@ -263,6 +267,14 @@ RUN printf '%s\n' \
 # would be a runtime step that can be skipped, mis-locale'd, or silently fail in a
 # container nobody is watching. The `'Zz' < 'a0'` probe fails the BUILD if the
 # collation is ever wrong, for the same stated reason `motir --version` does.
+#
+# ⚠️ `unix_socket_directories = '/tmp'` IS LOAD-BEARING, not tidiness. The
+# compiled-in default is /var/run/postgresql, which the postgres PACKAGE creates
+# owned by postgres:postgres — so a server run by `node` cannot create its lock
+# file there and refuses to start with a permission error that names a directory
+# nobody chose. Everything below therefore also connects over `-h localhost`
+# rather than the socket, because libpq's own default socket path is the
+# compiled-in one and would look where the server is not.
 RUN set -eux; \
     su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/initdb \
         --pgdata=$PGDATA \
@@ -274,17 +286,18 @@ RUN set -eux; \
     printf '%s\n' \
         "listen_addresses = 'localhost'" \
         'port = 5432' \
+        "unix_socket_directories = '/tmp'" \
         '# A debugging cluster is never recovered — see this layer header.' \
         'fsync = off' \
         'synchronous_commit = off' \
         'full_page_writes = off' \
         >> "$PGDATA/postgresql.conf"; \
     su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_ctl -D $PGDATA -w start"; \
-    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/createdb --username=prodect prodect"; \
-    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/psql --username=prodect --dbname=prodect \
+    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/createdb -h localhost --username=prodect prodect"; \
+    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/psql -h localhost --username=prodect --dbname=prodect \
         -c \"ALTER ROLE prodect WITH PASSWORD 'prodect'\" \
         -c 'CREATE EXTENSION IF NOT EXISTS vector'"; \
-    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/psql --username=prodect --dbname=prodect -tAc \"SELECT 'Zz' < 'a0'\"" \
+    su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/psql -h localhost --username=prodect --dbname=prodect -tAc \"SELECT 'Zz' < 'a0'\"" \
         | grep -qx 't'; \
     su node -c "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_ctl -D $PGDATA -w stop"
 
