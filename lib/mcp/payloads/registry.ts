@@ -20,6 +20,7 @@ import {
   workItemWritePayload,
 } from './workItems';
 import { getDesignPayload, listDesignsPayload } from './designs';
+import { getApprovalGatePayload } from './approvalGates';
 import {
   listProjectsPayload,
   listSprintsPayload,
@@ -72,6 +73,10 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // MOTIR-5561 — the design reads, deriving from MOTIR-5560's v1 components
   get_design: getDesignPayload as unknown as PayloadDefinition<never>,
   list_designs: listDesignsPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-6191 — the gate read, deriving from the `ApprovalGateDecision` component
+  // its v1 twin returns, so an agent's ability to read a reviewer's note does not
+  // depend on which surface it reaches for.
+  get_approval_gate: getApprovalGatePayload as unknown as PayloadDefinition<never>,
   // 11.6.3 — the work-item family
   search_work_items: searchWorkItemsPayload as unknown as PayloadDefinition<never>,
   list_ready: listReadyPayload as unknown as PayloadDefinition<never>,

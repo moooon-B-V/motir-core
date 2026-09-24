@@ -4,6 +4,9 @@ import { v1CursorSchema } from '@/lib/api/v1/openapi/envelopes';
 import { defineOperation, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import {
+  approvalGateDecisionSchema,
+  approvalGateKindSchema,
+  approvalGateRecordSchema,
   approvedDesignSchema,
   attachmentSchema,
   commentThreadSchema,
@@ -506,6 +509,33 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [404, 422],
   }),
   defineOperation({
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/approval-gate',
+    operationId: 'getWorkItemApprovalGate',
+    summary: 'One gate’s decision record on a work item',
+    description:
+      'The DECISION a person made on one approval gate — its `state`, the `noteMd` they wrote, who wrote it, when, on which `subjectVersion`, under which authority and through which surface (`docs/decisions/approval-gates.md` §6a’s audit set). This is how an agent reads the answer to a question it raised: **Request changes** records its reason in `noteMd`, and before this read every door onto that column was session-authed, so the one gate kind whose author is always an agent — `decision_approval`, raised only on a `type: decision` + `executor: coding_agent` card — was the one kind whose refusal an agent could not read. ⚠️ `gate: null` is an ANSWER, not a miss: the card has no gate of that kind, so nothing is waiting and nothing was decided; a key that does not resolve is the 404 instead. Read `state` BEFORE the audit fields — five of them are written by the decision, so a null means *not yet decided* and never *decided by nobody*. ⚠️ A READ ONLY: nothing on this API decides a gate, and nothing here asserts `approval:decide_any` — deciding stays session-authed, deliberately (§1, §2).',
+    permission: 'project:browse',
+    parameters: [
+      keyParameter,
+      {
+        name: 'kind',
+        in: 'query' as const,
+        required: true,
+        description:
+          'Which gate to read. A card carries at most one LIVE gate per kind, and this answers the one the approval frame shows: a live question wins over a decided one, and among decided ones the newest.',
+        schema: approvalGateKindSchema,
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: approvalGateRecordSchema },
+      description:
+        'The gate’s decision record, or `gate: null` when the card has none of that kind.',
+    },
+    errorStatuses: [404, 422],
+  }),
+  defineOperation({
     method: 'POST',
     path: '/api/v1/work-items/{key}/restore',
     operationId: 'restoreWorkItem',
@@ -544,6 +574,13 @@ export const WORK_ITEM_COMPONENTS: Readonly<Record<string, z.ZodType>> = {
   DesignAsset: designAssetSchema,
   ApprovedDesign: approvedDesignSchema,
   DesignVerdict: designVerdictSchema,
+  // Bug MOTIR-6191's gate read. A NAMED component for the design reads' reason
+  // one line up — `get_approval_gate` derives its payload from this schema
+  // (`lib/mcp/payloads/approvalGates.ts`), and an inline shape has nothing to
+  // resolve against. The ENVELOPE around it (`approvalGateRecordSchema`, the
+  // `{ workItemKey, kind, gate, routedToLabel }` body) is deliberately NOT a
+  // component, for the reason the `WorkItemDesigns` note below gives.
+  ApprovalGateDecision: approvalGateDecisionSchema,
   // ⚠️ `WorkItemDesigns` — the `{ designs: [...] }` body of `…/designs` — is
   // deliberately NOT a component. It is an ENVELOPE, and the payload seam's own
   // doctrine is that an envelope stays each surface's own (ADR Amendment 7 Q6):

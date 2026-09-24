@@ -2156,6 +2156,65 @@ there, so it carries:
 **A decided gate is IMMUTABLE.** There is no update path for a decided row —
 audit evidence that can be edited is not evidence.
 
+> **⚠️ AMENDED 2026-09-24 (Bug MOTIR-6191): THE RECORD IS READABLE BY A TOKEN.
+> `GET /api/v1/work-items/{key}/approval-gate` and the `get_approval_gate` MCP
+> tool answer one `(work item, gate kind)` pair with this audit set, gated on
+> `project:browse`.**
+>
+> **The defect.** Every door onto `noteMd` was SESSION-authed — the overlay's
+> `GET /api/work-items/approval-gate` resolves `getActiveProject()` on its first
+> line, the item page's read is a server component inside `(authed)`, `/api/v1`
+> had no gate route and MCP had no gate tool — and a gate decision is not a
+> comment, so `get_work_item`, `get_work_item_activity` and the comment threads
+> did not carry it either. So an agent holding a workspace PAT, or the narrower
+> CLI grant, could not read the answer to a question it had raised. **The
+> asymmetry landed on the one kind whose author is ALWAYS an agent**:
+> §8's FIFTH AMENDMENT makes `decision_approval` the gate of a `type: decision` +
+> `executor: coding_agent` card, so _"I pressed Request changes — read my note"_
+> was an instruction the only possible recipient could not follow.
+>
+> **Why it was worth a door rather than a workaround.** The failure is silent, not
+> loud. An agent that cannot read WHY changes were requested acts on what it
+> EXPECTS the reviewer objected to, and on a decision record or a design that
+> produces a confident second wrong version with nothing anywhere going red. The
+> manual alternative — a person re-typing the note into the agent's chat — is the
+> hand-carrying epic MOTIR-6010 exists to remove.
+>
+> **⚠️ AND IT CHANGES NOTHING ABOUT DECIDING. §2's _"the decide route is
+> session-authed and no MCP tool or `/api/v1` operation asserts the key"_ stays
+> true word for word**, and §1's _"there is no agent path to approving … and
+> there is not meant to be"_ stands: `approval:decide_any` is still ungrantable to
+> an API token by derivation, still asserted by no tool and no v1 operation, and
+> an agent-written approval would still put a decision nobody made into the one
+> table an audit trusts. **The two questions are opposites and §11.5b's wording
+> invites merging them** — one is _may a machine DECIDE_, the other is _may a
+> machine READ a decision a person already made_. The second leaks no authority,
+> which is why `project:browse` is the whole of its gate: reading a decision about
+> the card you are working on is browsing the project. That key is already in
+> `CLI_TOKEN_GRANT`, so the fix reaches a dispatched agent with **no widening of
+> any grant**.
+>
+> **What it returns, and what it deliberately does not.** The audit set in the
+> table above — `state`, `noteMd`, `decidedAt`, `decidedByLabel`,
+> `decidedUnderAuthority`, `decisionSource`, `subjectVersion`, `supersededCause`,
+> `outcomeRef` — plus the live `routedToLabel` so a caller that cannot act can at
+> least say who can. NOT the render machinery: no `canDecide` (an agent may never
+> decide, so the flag could only mislead), no stamp pair (a stamp is handed back
+> with a PRESS), no port. The two doors project the SAME service read the approval
+> frame uses (`approvalGatesService.getForWorkItem`), so the record an agent reads
+> and the record a person is looking at cannot disagree — including about WHICH
+> gate wins when a card holds several of one kind.
+>
+> **`gate: null` is an answer, not a 404**: the card has no gate of that kind, so
+> nothing is waiting and nothing was decided. A key that does not resolve, or a
+> project the caller may not browse, is the indistinguishable not-found, as
+> everywhere else.
+>
+> **What would reverse this.** Nothing about the read; it is the minimum that makes
+> §10's _a refusal says why_ reach the actor it is addressed to. What would need
+> re-deciding is the OPPOSITE move — a decide door for a token — and the argument
+> against that is §1's and is untouched by this amendment.
+
 #### 6b. The state set
 
 | state               | written by                                             | is it a decision?                   |

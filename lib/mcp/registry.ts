@@ -6,6 +6,7 @@ import { strictInputServer } from './strictInput';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import { GET_DESIGN_TOOL_NAME, registerGetDesign } from './tools/getDesign';
 import { LIST_DESIGNS_TOOL_NAME, registerListDesigns } from './tools/listDesigns';
+import { GET_APPROVAL_GATE_TOOL_NAME, registerGetApprovalGate } from './tools/getApprovalGate';
 import {
   GET_WORK_ITEM_ACTIVITY_TOOL_NAME,
   registerGetWorkItemActivity,
@@ -123,6 +124,7 @@ export const MCP_TOOL_NAMES = [
   GET_WORK_ITEM_TOOL_NAME,
   GET_DESIGN_TOOL_NAME,
   LIST_DESIGNS_TOOL_NAME,
+  GET_APPROVAL_GATE_TOOL_NAME,
   GET_WORK_ITEM_ACTIVITY_TOOL_NAME,
   LIST_READY_TOOL_NAME,
   NEXT_READY_TOOL_NAME,
@@ -240,6 +242,12 @@ export function registerMcpTools(
   registerGetWorkItem(target, resolveContext);
   registerGetDesign(target, resolveContext);
   registerListDesigns(target, resolveContext);
+  // The GATE read (Bug MOTIR-6191) — the decision a person made on one approval
+  // gate, including the note they wrote when they sent the work back. Every other
+  // door onto that note is session-authed, so the agent that raised the question
+  // could not read its answer. It DECIDES nothing: there is no such tool, on
+  // purpose (`approval-gates.md` §1).
+  registerGetApprovalGate(target, resolveContext);
   // The DISCUSSION read (MOTIR-1999) — a card's comments + change trail, the
   // read half `add_comment` never had. Deliberately NOT folded into
   // get_work_item: that aggregate is one round-trip and must stay one, so the

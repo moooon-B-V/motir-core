@@ -522,6 +522,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Pinned from the LIVE handshake, never hand-computed.
     descriptionFingerprint: '88b29f21f0bd',
   },
+  get_approval_gate: {
+    // Bug MOTIR-6191.
+    summary:
+      'The decision a person made on one approval gate — the note they wrote when they sent your work back, who wrote it, when, and on which version.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '4b42310f54d3',
+  },
   list_designs: {
     // Story MOTIR-5553 · MOTIR-5561.
     summary:

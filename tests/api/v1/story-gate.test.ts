@@ -494,6 +494,22 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
       );
     };
 
+    /**
+     * A MANDATORY query parameter, for the routes that have one — the same shape
+     * as `paramValue` one level out, for the axis a path segment cannot express.
+     *
+     * ⚠️ AND AN ABSENT ENTRY IS STILL LOUD. A route that grows a required query
+     * and is not named here answers 422 rather than 200, which the assertion
+     * below names by pathname — so this map does not reintroduce the silent-skip
+     * hole the `paramValue` throw exists to prevent. It only has to be ADDED to.
+     */
+    const REQUIRED_QUERY: Record<string, string> = {
+      // MOTIR-6191 — the gate read is addressed by (work item, gate KIND), and
+      // the kind has no default on purpose: guessing one would answer about a
+      // decision the caller did not ask about.
+      '/api/v1/work-items/[key]/approval-gate': 'kind=decision_approval',
+    };
+
     const modules = await loadV1RouteModules();
     expect(modules.size, 'the tree really was discovered').toBeGreaterThanOrEqual(3);
 
@@ -507,8 +523,10 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
         return encodeURIComponent(value);
       });
 
+      const required = REQUIRED_QUERY[pathname];
+      const query = `?limit=100${required ? `&${required}` : ''}`;
       const res = await mod.GET(
-        new Request(`http://localhost:3000${url}?limit=100`, { headers: mine.headers }),
+        new Request(`http://localhost:3000${url}${query}`, { headers: mine.headers }),
         { params: Promise.resolve(params) },
       );
       expect(res.status, `${pathname} answers the owning tenant`).toBe(200);

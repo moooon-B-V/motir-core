@@ -1130,3 +1130,92 @@ export type ApproveAndMergeMemberOutcomeDTO =
        *  is kept until MOTIR-5615 renames it with the frame's copy. */
       outcome: 'no_merge_gate';
     };
+
+// ── THE DECISION RECORD, FOR A PROGRAMMATIC READER (Bug MOTIR-6191) ─────────
+//
+// Every door onto `ApprovalGate.noteMd` used to be session-authed, so an agent
+// holding a workspace PAT — or a CLI-minted token — could not read the answer to
+// the question it had been asked. The gate kind that hurt most is
+// `decision_approval`, raised ONLY on a `type: decision` + `executor:
+// coding_agent` card (§8's FIFTH AMENDMENT): the one kind whose author is always
+// an agent was the one kind whose refusal an agent could not read.
+//
+// ⚠️ IT IS A READ AND ONLY A READ. Nothing here widens who may DECIDE a gate:
+// deciding stays session-authed behind `approval:decide_any`, and §2's
+// ungrantable-by-derivation paragraph is untouched — an agent-written approval
+// would put a decision nobody made into the one table an audit trusts. Reading a
+// decision a PERSON already made is the opposite question and leaks no authority.
+//
+// ⚠️ AND IT IS A PROJECTION OF {@link ApprovalGateDTO}, NOT A SECOND SHAPE.
+// The fields are §6a's audit set — what was decided (`subjectVersion`), by whom
+// (`decidedByLabel`), when, under which permission, through which surface, what
+// it caused, and THE NOTE — so the record an auditor reads on the item page and
+// the record an agent reads over the wire cannot disagree about a column. What is
+// deliberately dropped is the render machinery a surface needs and a caller
+// cannot act on: `canDecide` (an agent may never decide), the stamp pair, the
+// port's `subjectId`, `held`.
+
+/**
+ * ONE gate's decision record, as a token-authed caller reads it.
+ *
+ * @see ApprovalGateDTO — the full render shape this projects.
+ */
+export interface ApprovalGateDecisionDTO {
+  id: string;
+  kind: ApprovalGateKindDTO;
+  state: ApprovalGateStateDTO;
+  /** ⚠️ THE FIELD THIS DOOR EXISTS FOR — why they said yes, or WHAT THEY SENT
+   *  BACK. Null while `awaiting`, and on a `superseded` row, which carries no
+   *  decision at all (§6b). */
+  noteMd: string | null;
+  /** ISO-8601, or null while `awaiting` / `superseded`. */
+  decidedAt: string | null;
+  /** WHO decided, surviving their departure. */
+  decidedByLabel: string | null;
+  /** UNDER WHICH permission they acted. */
+  decidedUnderAuthority: ApprovalGateAuthorityDTO | null;
+  /** THROUGH WHICH surface the decision arrived — `ui` is a human at a browser. */
+  decisionSource: ApprovalGateDecisionSourceDTO | null;
+  /** WHAT was decided, immutably: the subject's version at decision time. */
+  subjectVersion: string | null;
+  /** WHY the question was withdrawn — `superseded` rows only, and never an actor. */
+  supersededCause: ApprovalGateSupersedeCauseDTO | null;
+  /**
+   * WHAT it caused — a merge commit sha, the status key applied, or, on an
+   * approved `decision_choice`, the id of the option that was picked.
+   *
+   * ⚠️ THE RICHER PER-KIND PAYLOADS ARE DELIBERATELY NOT HERE. `chosenOption`
+   * and `replanOwed` are on {@link ApprovalGateDTO} and are read by the surface
+   * that renders that kind's frame; this record is the audit set §6a enumerates,
+   * which every kind carries. A caller that needs a choice's LABEL reads the
+   * card's own body — the option list is in it, and `outcomeRef` says which one.
+   */
+  outcomeRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * What the token-authed gate read answers for one `(work item, kind)` pair.
+ *
+ * ⚠️ `gate: null` IS AN ANSWER, NOT A MISS: this card has no gate of that kind,
+ * so there is nothing to decide and nothing was decided. A key that does not
+ * resolve, or a project the caller may not browse, is the 404 instead — the same
+ * no-existence-leak answer every other work-item read gives.
+ */
+export interface ApprovalGateRecordDTO {
+  workItemKey: string;
+  workItemTitle: string;
+  kind: ApprovalGateKindDTO;
+  gate: ApprovalGateDecisionDTO | null;
+  /**
+   * WHOSE DECISION THIS IS WAITING ON, as a name — so a caller that cannot act
+   * on the gate can at least say who can.
+   *
+   * ⚠️ THE LIVE ROUTING ANSWER, NOT THE GATE'S FROZEN `routedToId` (§2, and
+   * `WorkItemGateRead.routedToLabel`'s own note). The frozen column is the audit
+   * record of who was ASKED; this sentence is present tense, so on a reassigned
+   * card the two name different people and both are right.
+   */
+  routedToLabel: string | null;
+}
