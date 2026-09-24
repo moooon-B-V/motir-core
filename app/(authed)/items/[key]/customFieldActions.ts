@@ -11,6 +11,7 @@ import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { SetCustomFieldValueInput } from '@/lib/dto/customFieldValues';
+import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 
 // Server Action for the detail rail's custom-field editors (Story 5.3 ·
 // Subtask 5.3.3) — the rail pattern: action → ONE service call →
@@ -52,6 +53,8 @@ export async function setCustomFieldValueAction(input: {
     if (err instanceof ProjectAccessDeniedError) {
       return { ok: false, error: t('customFields.READ_ONLY') };
     }
+    const refused = await unmappedActionRefusalMessage(err, 'setCustomFieldValueAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }

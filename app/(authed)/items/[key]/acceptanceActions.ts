@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
 import { getErrorsTranslator, getServerTranslator } from '@/lib/i18n/errorsTranslator';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 
 // Server Actions for the acceptance panel (Story MOTIR-1627 · Subtask
 // MOTIR-1634). One service call each; the success branch returns the new state
@@ -155,6 +156,8 @@ export async function turnOnAcceptanceVideoAction(input: {
       const t = await getServerTranslator('acceptance');
       return { ok: false, error: t('off.turnOnForbidden') };
     }
+    const refused = await unmappedActionRefusalMessage(err, 'turnOnAcceptanceVideoAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }

@@ -627,7 +627,8 @@
       "unknownIssueType": "未知的工作项类型。",
       "couldNotLink": "无法关联所选工作项。",
       "orgSecurityForbidden": "只有组织的所有者或管理员才能更改其安全设置。",
-      "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。"
+      "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。",
+      "refused": "操作未完成：{reason}"
     },
     "links": {
       "notFound": "该工作项已不存在。",

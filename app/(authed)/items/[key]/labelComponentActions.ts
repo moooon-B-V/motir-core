@@ -13,6 +13,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { ComponentDto } from '@/lib/dto/components';
+import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 
 // Server Actions for the detail rail's Labels / Components cards (Story 5.4 ·
 // Subtask 5.4.8). One service call each; the success branch returns the
@@ -45,6 +46,8 @@ async function labelFailure(err: unknown, typedName: string): Promise<LabelsActi
   // The forged-request backstop — read-only actors get the quiet permission
   // line (the card renders read-only chips anyway).
   if (err instanceof ProjectAccessDeniedError) return { ok: false, error: t('labels.READ_ONLY') };
+  const refused = await unmappedActionRefusalMessage(err, 'labelFailure');
+  if (refused) return { ok: false, error: refused };
   throw err;
 }
 
@@ -83,6 +86,8 @@ async function componentFailure(err: unknown): Promise<ComponentsActionResult> {
   if (err instanceof ProjectAccessDeniedError) {
     return { ok: false, error: t('components.READ_ONLY') };
   }
+  const refused = await unmappedActionRefusalMessage(err, 'componentFailure');
+  if (refused) return { ok: false, error: refused };
   throw err;
 }
 

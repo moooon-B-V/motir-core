@@ -16,6 +16,7 @@ import {
 } from '@/lib/workItemTodos/errors';
 import type { ExecutorDto } from '@/lib/dto/workItems';
 import type { TodoProgressDto, WorkItemTodoDto } from '@/lib/dto/workItemTodos';
+import { unmappedActionRefusalMessage } from '@/lib/actions/unmappedRefusal';
 
 // Server Actions for the work item page's To-do list section (Story
 // MOTIR-3808 · MOTIR-3814). Thin transports over `workItemTodosService` (the
@@ -112,6 +113,8 @@ export async function addTodoAction(input: {
   } catch (err) {
     const message = await todoErrorMessage(err);
     if (message) return { ok: false, error: message };
+    const refused = await unmappedActionRefusalMessage(err, 'addTodoAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -145,6 +148,8 @@ export async function updateTodoAction(input: {
   } catch (err) {
     const message = await todoErrorMessage(err);
     if (message) return { ok: false, error: message };
+    const refused = await unmappedActionRefusalMessage(err, 'updateTodoAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -166,6 +171,8 @@ export async function moveTodoAction(input: {
   } catch (err) {
     const message = await todoErrorMessage(err);
     if (message) return { ok: false, error: message };
+    const refused = await unmappedActionRefusalMessage(err, 'moveTodoAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -187,6 +194,8 @@ export async function setTodoDoneAction(input: {
   } catch (err) {
     const message = await todoErrorMessage(err);
     if (message) return { ok: false, error: message };
+    const refused = await unmappedActionRefusalMessage(err, 'setTodoDoneAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
@@ -201,6 +210,8 @@ export async function deleteTodoAction(input: { todoId: string }): Promise<Delet
   } catch (err) {
     const message = await todoErrorMessage(err);
     if (message) return { ok: false, error: message };
+    const refused = await unmappedActionRefusalMessage(err, 'deleteTodoAction');
+    if (refused) return { ok: false, error: refused };
     throw err;
   }
 }
