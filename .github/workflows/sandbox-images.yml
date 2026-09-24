@@ -125,18 +125,46 @@ jobs:
       # tenth runtime should be able to read what the ninth cost, so the number
       # is emitted where the build already happens rather than pasted by hand
       # into a body that then goes stale.
+      # ⚠️ IT REPORTS A DELTA, NOT A NUMBER, and the two have to be the SAME
+      # METRIC or the comparison is worthless. `docker image inspect .Size` is
+      # the UNCOMPRESSED on-disk size; a registry manifest's layer total is the
+      # COMPRESSED download. Those differ by several times, so reading one
+      # against the other reads as a huge regression (or a huge saving) that is
+      # purely the unit. The published `:base` is therefore PULLED and measured
+      # with the same command, rather than read from its manifest.
+      #
+      # Only this job pays that pull: the profile legs below report their own
+      # absolute size, because nine more pulls of the published tags would cost
+      # more than the comparison is worth.
       - name: Record the image size
         run: |
           size="$(docker image inspect motir-sandbox:smoke --format '{{.Size}}')"
           human="$(numfmt --to=iec --suffix=B "$size")"
+
+          # The published base is the BEFORE. It is public (see the README's
+          # "Public, and asserted to be"), so this needs no credential — and a
+          # pull that fails must not fail the build, since the delta is a
+          # courtesy and the absolute number is the deliverable.
+          before=''
+          if docker pull --quiet ghcr.io/moooon-b-v/motir-sandbox:base >/dev/null 2>&1; then
+            before="$(docker image inspect ghcr.io/moooon-b-v/motir-sandbox:base --format '{{.Size}}')"
+          fi
+
           {
-            echo '### Image size'
+            echo '### Image size — `base`'
             echo
-            echo '| profile | size |'
+            echo '| | uncompressed |'
             echo '| --- | --- |'
-            echo "| \`base\` | $human |"
+            if [ -n "$before" ]; then
+              echo "| published \`:base\` (before) | $(numfmt --to=iec --suffix=B "$before") |"
+              echo "| this build (after) | $human |"
+              echo "| **delta** | **$(numfmt --to=iec --suffix=B "$((size - before))")** |"
+            else
+              echo "| this build | $human |"
+              echo "| published \`:base\` | could not pull — delta not computed |"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "motir-sandbox:base — $human ($size bytes)"
+          echo "motir-sandbox:base — $human ($size bytes); published before: ${before:-unavailable}"
 
       # ── Everything below only runs on the release lane, and only now that the
       # image above has been built AND proven. This ordering IS the publish gate.
