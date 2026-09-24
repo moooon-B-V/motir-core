@@ -148,7 +148,25 @@ test('the plan-change overlay draws folders: the root, a folder, the filed propo
   expect((await asked).status()).toBe(200);
   await expect(workspace(page).getByTestId('plan-change-confirm-bar')).toContainText('2 added');
 
+  // ── 1b. THE PANE SWAPPED, AND IT ARRIVED ON THE FOLDER ──────────────────────
+  // A proposed plan is read through the plan page's own List | Canvas component
+  // (MOTIR-6155), which ARRIVES at the container the plan most fills — and
+  // `fullestContainer` is folder-aware, so a proposal filed into one folder
+  // arrives ON that folder. Both proposals here are parentless, so the tie breaks
+  // on DEPTH and Archive wins over the root.
+  //
+  // That is the behaviour this file most wants pinned: the reviewer lands where
+  // the filed work is, without drilling for it.
+  await expect(workspace(page).getByTestId('plan-proposal-views')).toBeVisible();
+  await expect(crumbs(canvas).getByRole('button', { name: 'Folder: Archive' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(canvas.getByText(plan.filedTitle, { exact: true })).toBeVisible();
+
   // ── 2. THE ROOT: folder cards, nothing filed loose, the badge (decisions 1–3) ─
+  // Reached by the ROOT CRUMB, because the arrival above is one level in.
+  await crumbs(canvas).getByRole('button', { name: 'Roadmap' }).click();
   await expect(archive.getByTestId('folder-changes')).toHaveText('1 change');
   await expect(folderCard(canvas, seed.laterId)).toBeVisible();
   await expect(folderCard(canvas, seed.laterId).getByTestId('folder-changes')).toHaveCount(0);

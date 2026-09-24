@@ -298,7 +298,24 @@ const itemPage = (page: Page) => page.getByRole('main');
  *  with the overlay open. It keeps its id rather than taking its `link` role,
  *  because its accessible name is what two of the assertions below MEASURE. */
 const entrance = (page: Page) => itemPage(page).getByTestId('work-item-plan-entrance');
-const addFrames = (page: Page) => workspace(page).locator('[data-diff-state="add"]');
+/** A PROPOSED `add`, as the PLAN PAGE draws it.
+ *
+ *  ⚠️ `PlanItemNode`'s `data-op`, NOT `PlanChangeDiffFrame`'s `data-diff-state`
+ *  (MOTIR-6155). Once a plan is proposed the left pane mounts the plan page's own
+ *  List | Canvas component, so a proposal here is the same node `/plans/<id>`
+ *  draws. The diff frames remain the UNDECORATED roadmap's language, which is
+ *  what this surface shows with no plan — asserted as an absence at the empty
+ *  state below. */
+const addFrames = (page: Page) => workspace(page).locator('[data-op="add"]');
+/** The shipped List | Canvas switch, inside the overlay. */
+const viewButton = (page: Page, name: 'List' | 'Canvas') =>
+  workspace(page).getByRole('button', { name, exact: true });
+/** The canvas breadcrumb. It is the AUTHORITATIVE arrival signal — the canvas
+ *  publishes a trail only for a level it has actually loaded — and since
+ *  MOTIR-6155 it is also how a level OTHER than the arrival is reached, because
+ *  the plan page's component opens on the container the plan most fills rather
+ *  than at the root. */
+const crumbs = (page: Page) => workspace(page).getByRole('navigation', { name: 'Breadcrumb' });
 /** A committed or proposed CARD on the canvas, by its title. */
 const canvasTitle = (page: Page, title: string) =>
   workspace(page).getByText(title, { exact: true });
@@ -345,15 +362,10 @@ async function sendTurn(page: Page, text: string): Promise<void> {
   await submitted;
 }
 
-/** Select a node on the canvas and drill into it, awaiting its level fetch. */
-async function drillInto(page: Page, title: string, parentId: string): Promise<void> {
-  await workspace(page).locator('[data-node-id]').filter({ hasText: title }).first().click();
-  const openButton = workspace(page).getByTestId('drill-button');
-  await expect(openButton).toBeVisible();
-  const loaded = levelLoad(page, parentId);
-  await openButton.click();
-  await loaded;
-}
+// ⚠️ `drillInto` IS DELETED, not left unused (MOTIR-6155). It selected a node and
+// pressed Open to reach the level a proposal sat on. The pane now mounts the plan
+// page's component, which ARRIVES on that level, so its one caller was drilling
+// PAST its own subject. A breadcrumb assertion at the arrival replaces it.
 
 /** Approve the pending proposal, waiting on the approve's 200 before any re-read
  *  (never on the optimistic UI — `motir-core/CLAUDE.md` § authoritative signal). */
@@ -498,10 +510,21 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
   await dwell(page);
 
   await chapter('Nothing is written until you confirm', async () => {
-    // The proposal is reviewable ON THE CANVAS, one level down — the anchor was
-    // childless, so it became drillable precisely because the run proposed work
-    // under it.
-    await drillInto(page, 'Notifications', seed.notifId);
+    // The proposal is reviewable ON THE CANVAS, and the canvas is ALREADY THERE.
+    //
+    // ⚠️ THE DRILL IS GONE, and its absence is the assertion (MOTIR-6155). The
+    // pane now mounts the plan page's own component, which ARRIVES at the
+    // container the plan most fills (`arrivalLevel` → `fullestContainer`) — both
+    // subtasks are proposed under the anchor, so that container IS the anchor.
+    // Drilling from here would hunt for a `Notifications` card the arrival has
+    // already left behind, which is the same reasoning the SIBLING test below
+    // records for its own arrival (MOTIR-2070).
+    //
+    // The breadcrumb is the AUTHORITATIVE signal, not the node count: the canvas
+    // publishes a trail only for a level it has actually loaded.
+    await expect(
+      crumbs(page).getByRole('button', { name: `${seed.notifKey} · Notifications` }),
+    ).toHaveAttribute('aria-current', 'page');
     await expect(addFrames(page)).toHaveCount(2);
     await expect(canvasTitle(page, DIGEST)).toBeVisible();
     await expect(canvasTitle(page, TOASTS)).toBeVisible();
@@ -550,7 +573,7 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     await expect(confirmBar(page)).toHaveCount(0);
     await expect(addFrames(page)).toHaveCount(2);
     await expect(addFrames(page).first()).toHaveAttribute('data-outcome', 'accepted');
-    await expect(workspace(page).getByTestId('plan-change-outcome').first()).toHaveText('accepted');
+    await expect(workspace(page).getByTestId('plan-item-outcome').first()).toHaveText('accepted');
     await expect(canvasTitle(page, DIGEST)).toBeVisible();
 
     // The real substrate: both landed UNDER the anchor, as subtasks, and the Plan
@@ -622,9 +645,7 @@ test('a SIBLING under the anchor’s parent goes through the same confirm', asyn
   // step drilled down by hand; keeping the drill after it would hunt for an
   // `Authentication` card that the arrival has already left behind.)
   await expect(
-    page
-      .getByRole('navigation', { name: 'Breadcrumb' })
-      .getByRole('button', { name: `${seed.authEpicKey} · Authentication` }),
+    crumbs(page).getByRole('button', { name: `${seed.authEpicKey} · Authentication` }),
   ).toHaveAttribute('aria-current', 'page');
   await expect(addFrames(page)).toHaveCount(1);
   // ON THE CANVAS — the file's own helper, scoped to the overlay.
@@ -673,8 +694,23 @@ test('re-planning the PARENT goes through the same confirm', async ({ page, acce
   await expect(confirmBar(page)).toContainText('1 added, 1 changed');
   await expect(rail(page).getByRole('alert')).toHaveCount(0);
 
-  // The epic is a ROOT node, so its `change` frame is on the level already shown.
-  await expect(page.locator('[data-diff-state="change"]')).toHaveCount(1);
+  // THE EPIC WEARS ITS `modify` AMONG ITS SIBLINGS — one crumb up from where the
+  // pane opened. Two things moved under MOTIR-6155 and this line depended on both:
+  //
+  //  • THE VIEW. The plan STRADDLES two containers — the `add` sits under the
+  //    epic, the `modify` on the epic itself — so `defaultPlanView` opens it on
+  //    the LIST (MOTIR-3262's Part IX §3 arm). That is the right default and not
+  //    what this assertion is about, so Canvas is chosen explicitly rather than
+  //    assumed.
+  //  • THE LEVEL. The plan page's component ARRIVES at the container the plan
+  //    most fills, which is the EPIC. A `modify`'s `proposalLevelKey` is its
+  //    target's parent, so the epic's own modify belongs to the ROOT level — the
+  //    one the arrival just left. The old comment here read *"the epic is a ROOT
+  //    node, so its frame is on the level already shown"*, which was true of the
+  //    roadmap canvas because that opened at the root; it is the crumb away now.
+  await viewButton(page, 'Canvas').click();
+  await crumbs(page).getByRole('button', { name: 'Roadmap' }).click();
+  await expect(page.locator('[data-op="modify"]')).toHaveCount(1);
 
   // Nothing written yet — the rename has not touched the item.
   const before = await db.workItem.findUniqueOrThrow({ where: { id: authEpicId } });
