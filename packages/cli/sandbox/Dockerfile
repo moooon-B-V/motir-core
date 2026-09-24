@@ -102,6 +102,16 @@ if (maj < 24 || (maj === 24 && min < 15)) { \
 # GIT WORKFLOW section runs git, and the session-branch/PR steps run gh.
 # ca-certificates/curl/gnupg are needed to add the GitHub CLI apt source;
 # openssh-client covers SSH git remotes; less is gh's pager.
+#
+# python3 is contract for the SAME reason, and it was missed because the list
+# above was reasoned entirely from the CLI DISPATCH path, which runs none
+# (MOTIR-6195). The RUNBOOK path does: the `motir-sweep-planning-bugs` and
+# `motir-fix-planning-bug` doors drive `prompts/sweep-planning-bugs.py` as their
+# loop driver — the FIRST call of each, with no degraded mode — and every corpus
+# guard in motir-meta (`DOORS.check.py`, `prompts/plan-rules/*.py`) is a Python
+# script, so without an interpreter a rules change cannot be checked before it is
+# pushed. `-minimal` is deliberate and sufficient: those scripts import stdlib
+# only, so no pip and no virtualenv is needed.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -110,6 +120,7 @@ RUN apt-get update \
         gnupg \
         less \
         openssh-client \
+        python3-minimal \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
         -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
@@ -118,7 +129,8 @@ RUN apt-get update \
         > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 --version
 
 # The `motir` binary itself. Installed globally from the packed tarball so it is
 # on PATH for every user, and smoke-tested in the same layer — a base that
