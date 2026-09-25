@@ -424,6 +424,17 @@ interface ProjectRoadmapCanvasBaseProps {
    * nothing else on this surface, and must not be read as a failed load.
    */
   levelCaption?: ReactNode;
+  /**
+   * MOTION — threaded to `PlanningCanvas`'s opt-in (MOTIR-6297, Part XXIII
+   * §23.3–§23.5): a level whose nodes / edges change under a mounted canvas plays
+   * the change instead of snapping to it, and a node's `changeKey` drives the
+   * deepen cue. OFF by default and deliberately so: the roadmap, runs, work-item
+   * roadmaps, onboarding and the plan page redraw on navigation, where motion
+   * would animate a level change nobody asked to see. Only the planning surface's
+   * live pane opts in (MOTIR-6300). A drill still remounts the canvas per level,
+   * so arriving on a level plays nothing.
+   */
+  motion?: boolean;
 }
 
 /**
@@ -497,6 +508,7 @@ export function ProjectRoadmapCanvas({
   arriveAtReadableScale = false,
   resolveHeldNode,
   levelCaption,
+  motion = false,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tFolders = useTranslations('folders');
@@ -1061,6 +1073,7 @@ export function ProjectRoadmapCanvas({
     ...positionOf(n),
     width: n.width ?? NODE_W,
     height: n.height ?? NODE_H,
+    ...(n.changeKey !== undefined ? { changeKey: n.changeKey } : {}),
   }));
   const canvasEdges: CanvasEdge[] = deps.map((d) => ({
     from: d.from,
@@ -1854,6 +1867,7 @@ export function ProjectRoadmapCanvas({
           focusNonce={focusNonce}
           focusScale={focusScale}
           ariaLabel={resolvedAriaLabel}
+          motion={motion}
         />
       )}
     </div>
