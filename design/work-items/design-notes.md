@@ -8706,3 +8706,103 @@ Already in both catalogues (MOTIR-6096): `activity.fields.difficulty` _Difficult
 | the activity entry — nothing to build; MOTIR-6096 already registered the field and its label                                                                                                     | —              |
 
 **Not drawn, and owed by nobody:** a List column or a Board-card badge (the story asks for a filter), the plan review's rendering of a proposed difficulty (the sibling planner story, MOTIR-6095), and any model-choice UI.
+
+## ⭐ The RE-PLAN WITH AI door on the three decided record bands (Story MOTIR-6068 · MOTIR-6206 — `approval-control--replan-door.mock.html`, DATED 2026-09-25)
+
+**Asset:** `design/work-items/approval-control--replan-door.mock.html`, a **DELTA** in five panels (en and
+zh, light and dark). It amends MOTIR-6073's published
+`work-items/approval-control--refusal-reason.mock.html`, which quotes the reason on a decided record.
+It also amends the decision-confirm record, `OverturnedBand` in
+`components/approvals/DecisionConfirmGate.tsx:351-400`. **Neither is edited.** Only the decided band
+changes. The planner the door opens is drawn in `design/ai-chat/planning-workspace--refusal-seed.mock.html`,
+whose notes hold the first-turn contract.
+
+**The contract.** `docs/decisions/approval-gates.md` §10f: _"a decided record keeps a door to it: the
+record band of a refused gate that offers the planner shows **Re-plan with AI**, which opens the same
+seeded turn."_ The door appears on the three §10h rows that open the planner always:
+
+- `decision_approval` · `changes_requested`
+- `decision_choice` · `changes_requested` (None of these)
+- `decision_confirmation` · `overturned`
+
+MOTIR-6211 builds it.
+
+Paths to published results that are not in this checkout are given relative to `design/` (for example `ai-chat/planning-workspace--resume.mock.html`). They are the results' `sourcePath`s and have not landed here.
+
+**Composed from.** The stylesheet is lifted verbatim from MOTIR-6073's published
+`approval-control--refusal-reason.mock.html`. The frame head, the port note, the record strip and the
+quoted reason are that asset's panel 4 markup. The overturned record mirrors `OverturnedBand` class for
+class: the note, the **Re-plan owed** chip and its detail, and the `SupersededChip`s. The door is
+`WorkItemPlanEntrance`'s re-plan face (`components/planning/WorkItemPlanEntrance.tsx`). The overlay
+band is the same `RecordStrip`, un-sectioned, following MOTIR-6073's
+`workbench/approval-overlay--refusal-reason.mock.html`. The styles use `--el-*` tokens only, plus
+`--spacing-btn-x-sm` as `packages/design-system/theme.css` defines it, because the lifted sheet scopes it
+to a style preset.
+
+### The panels
+
+1. **The item page.** Each of the three kinds shows its decided band with the reason quoted as before
+   and **Re-plan with AI** at the foot. For the overturn, the band as it ships today is drawn beside
+   it, with the plain epic `WorkItemPlanEntrance` line struck through. That line is what this card
+   removes.
+2. **Inside the approval overlay.** The same three bands, un-sectioned, with the same door.
+3. **Where the door is not drawn:** a `pull_request_approval` Request changes, a viewer who may not
+   plan, and an approved decision.
+4. **One label with two outcomes.** The door writes the address, and the seed read decides between a
+   new conversation and a resumed one.
+5. **zh, and dark.**
+
+### The decisions
+
+- **ONE label, _Re-plan with AI_, in every case. The planner decided this, and this section records
+  it.** The band never reads whether a seeded session exists. The overlay the door opens resumes the
+  viewer's recent seeded session by itself, through the seed read's `seededSessionId` (MOTIR-6208). If
+  there is none, it seeds a new conversation. This keeps any per-render session read out of the band,
+  leaves one label to test, and means the band cannot say _Continue_ for a session that expired after
+  the page rendered.
+- **The door is the Re-plan entrance's own face.** It has the badge radius, `--el-border-strong`,
+  `--el-text-secondary` ink, the `Sparkles` glyph, `h-(--height-btn-sm)` and `px-(--spacing-btn-x-sm)`,
+  as `WorkItemPlanEntrance` draws `data-mode="replan"`. It does not use the accent outline of **Plan**,
+  because it edits work that already exists. It sits on its own line, `basis-full`, after the quote, in
+  the band's `recordDetail` slot. On the overturn it goes after the supersedes chips.
+- **Overturned: the plain epic entrance is REMOVED, and nothing else changes.** The
+  `WorkItemPlanEntrance itemKey={epic.key}` line and its `{epic.title} ({epic.key})` caption
+  (`DecisionConfirmGate.tsx:382-396`) are replaced by the door. The **Re-plan owed** chip, its
+  _"for the work this decision superseded — nothing has changed yet"_ line and every supersedes chip
+  stay exactly as they are. The door opens the planner on the **decision work item, seeded**, with the
+  supersedes keys already in the turn. The old entrance opened it on the epic, blank.
+- **The same door on the item page and in the approval overlay.** The overlay renders the same
+  `ApprovalGateControl` in its fill layout, so nothing overlay-specific is drawn. When the door is
+  pressed in the overlay, it strips the approval address and opens the planner in one replace, the same
+  hand-off as the refusal press (the `refusal-seed` delta, sheet 1). The approval overlay does not
+  stay underneath.
+- **Absent means absent.** The door does not render on `approved`, `awaiting` or `superseded`, or for
+  `pull_request_approval`, `design_result` or `acceptance_result`. The last two get their own verdicts
+  in MOTIR-6070 and MOTIR-6071. It also does not render where `WorkItemPlanEntrance` would not
+  (`canPlan`, archived). There is no disabled door and no explanation.
+
+### Copy
+
+| key (suggested; MOTIR-6211 owns the namespace) | en                                         | zh                                  |
+| ---------------------------------------------- | ------------------------------------------ | ----------------------------------- |
+| `approvalGate.replanDoor.label`                | `Re-plan with AI`                          | `用 AI 重新规划`                    |
+| `approvalGate.replanDoor.aria`                 | `Re-plan {item} with AI from this refusal` | `根据这次拒绝用 AI 重新规划 {item}` |
+
+The zh label joins `planWithAI`'s _用 AI_ with the entrance's _重新规划_, so it reads as the Re-plan entrance
+it replaces. The accessible name names the work item and contains the visible text (WCAG 2.5.3), as the
+entrance's `replanAria` does.
+
+### GIVES / TAKES
+
+- **MOTIR-6211** gets the door's face, label, placement and absence rules on all three bands, on both
+  hosts, and the overturned band's entrance swap. Its criteria match this delta, and nothing is taken
+  away from them.
+- **MOTIR-6210** is not affected by the band. The one-label rule relies on its seed read resolving
+  `seededSessionId`, which its criteria already cover.
+- **MOTIR-6208** gets nothing and loses nothing. It supplies `seededSessionId`, which the one-label
+  rule depends on.
+- **MOTIR-6209** is not affected.
+
+Referenced for provenance only: MOTIR-5956 (Overturn and the owed re-plan), MOTIR-6067, MOTIR-6069,
+MOTIR-6070, MOTIR-6071, MOTIR-6072, MOTIR-6073. `ACME-30`, `ACME-38`, `ACME-39`, `ACME-41`, `ACME-42`,
+`ACME-44`, `ACME-47` and `ACME-51` are sample keys.

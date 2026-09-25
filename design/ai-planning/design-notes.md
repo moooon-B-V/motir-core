@@ -30,6 +30,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **A leaf's DIFFICULTY on the plan review**      | **`plan-review--difficulty.mock.html`**                   | MOTIR-6134           | Part XX    |
 | **The surface's List \| Canvas for a plan**     | **`plan-review--surface-views.mock.html`**                | MOTIR-6184           | Part XXI   |
 | **Approve or decline a plan, in place**         | `plan-review--decide.mock.html` (on the design result)    | MOTIR-6033           | Part XXII  |
+| **A Plans row NAMES its refused work item**     | **`plans-sessions--seeded.mock.html`**                    | MOTIR-6206           | § at end   |
 
 **A Part number is an address in THIS file.** Before taking the next number, check the area's
 published design results too (`list_designs` with `pathPrefix: design/ai-planning/`): a result that
@@ -6514,3 +6515,72 @@ board chrome. The compiled token layer is the one place `--color-*` is wired, ex
 5. **"The rail's existing approve CTA"** is read as `PlanReviewRail`'s _Approve — add {n} items_ (the
    plan page) together with the workspace's mirrored review block. On both surfaces the gate's verbs
    ARE the existing controls, and nothing is placed beside them.
+
+## A Plans row names the refused work item its conversation was seeded from (MOTIR-6206 · Story MOTIR-6068 — `plans-sessions--seeded.mock.html`, DATED 2026-09-25)
+
+**This section has no Part number, on purpose.** It amends MOTIR-6019's published
+`ai-planning/plans-sessions--list.mock.html`. That design is published but has not landed in
+this file, and its result calls itself _Part XIX_, a number this file has since given to MOTIR-6053.
+Under the rule at the top of this file, this section cites it as _MOTIR-6019's published design
+result_, never by a number. The index row above points here.
+
+Paths to published results that are not in this checkout are given relative to `design/` (for example `ai-chat/planning-workspace--resume.mock.html`). They are the results' `sourcePath`s and have not landed here.
+
+**Asset:** `design/ai-planning/plans-sessions--seeded.mock.html`, a **DELTA** in four panels (en and
+zh, light and dark, and a 375px page). It holds only the session rows that change. **The base is not
+edited.** The stylesheet is lifted verbatim from the base, and every row mirrors
+`app/(authed)/plans/_components/SessionRow.tsx` class for class.
+
+**What it draws.** A conversation started by a refusal's seeded first turn
+(`PlanChangeSession.seedGateId`, MOTIR-6207) says where it came from. The row's meta line gains
+**Re-plan of {KEY} · {verb}** as its last item, a link to `/items/{KEY}`. This is the Plans half of
+MOTIR-6068's _"the session records which gate seeded it, so the Plans row and the record band can
+point at each other"_. The record band's half is **Re-plan with AI**
+(`design/work-items/approval-control--replan-door.mock.html`).
+
+### The decisions
+
+- **The verb is the refusal's own button word.** The three verbs are _Request changes_
+  (`decision_approval`), _Overturn_ (`decision_confirmation`) and _None of these_ (`decision_choice`).
+  In zh they are _要求修改_, _推翻_ and _都不合适_, matching `approvalGate.verb.requestChanges`,
+  `approvalGate.decisionConfirm.verb.overturn` and the choice's _都不合适_. The lookup is total over
+  the three kinds that `PlanSessionRowDto.seed.gateKind` carries.
+- **Two doors on one row, and they do not collide.** The row is still one stretched link (the title's
+  `after:absolute after:inset-0`), and it still reopens the conversation. The seed link is raised above
+  it with `relative z-10`, as the state chip already is. Pressing **Re-plan of ACME-44** opens the work
+  item. Pressing anywhere else on the row reopens the conversation.
+- **The link's face.** It is secondary ink with a `--el-border-strong` underline (`underline-offset-2`)
+  that turns `--el-text` on hover. The key is in `font-mono`, like the anchor. It has its own focus
+  ring and one tab stop. Its accessible name is _"Open {KEY}, the work item this conversation
+  re-plans"_ / _"打开 {KEY}，即此对话重新规划的工作项"_. It is **never truncated**. On a narrow page the
+  meta line wraps (`flex-wrap`, unchanged), and the link moves to its own line as one unit.
+- **Unresolvable means nothing extra.** The seed can be `null` because the gate row was deleted
+  (`SetNull`) or because the viewer can no longer browse the refused work item. In either case the row
+  looks exactly like an unseeded row. It is not dimmed, the link is not struck through, and there is no
+  "unavailable" label. Saying that a link is hidden would confirm that it exists.
+- **The anchor stays.** The anchor slot is the conversation's scope, which can grow to `{first} +N`.
+  The seed link is its provenance. For a seeded row both name the same key when the row is created,
+  but they are different facts, and the anchor slot keeps working as it always has.
+
+### Copy (MOTIR-6209 owns the keys; suggested under `aiPlanning.sessions.seed`)
+
+| key           | en                                                     | zh                                     |
+| ------------- | ------------------------------------------------------ | -------------------------------------- |
+| `seed.label`  | `Re-plan of {key}`                                     | `{key} 的重新规划`                     |
+| `seed.verb.*` | `Request changes` · `Overturn` · `None of these`       | `要求修改` · `推翻` · `都不合适`       |
+| `seed.aria`   | `Open {key}, the work item this conversation re-plans` | `打开 {key}，即此对话重新规划的工作项` |
+
+### GIVES / TAKES
+
+- **MOTIR-6209** gets the row: its placement, face, two-door stacking, copy and the null case. This
+  matches its criteria. Nothing is taken away.
+- **MOTIR-6208 / MOTIR-6209 — ⚠️ one flag.** A seeded row's TITLE is its first turn, and the seed's
+  first line is `{key} · {title}`. If a member who cannot browse the refused work item can still see
+  the session row on the Plans list, the row's title shows that work item's key and title, even
+  though the seed link is correctly `null`. This is not new. Every row already shows its first turn
+  under the list's access scope (MOTIR-6025). But the seed makes it certain that a work item's title
+  is in that text. MOTIR-6209's scope check covers the link, not the title.
+- **MOTIR-6210 and MOTIR-6211** are not affected by this surface.
+
+Referenced for provenance only: MOTIR-6011, MOTIR-6019, MOTIR-6025, MOTIR-6053, MOTIR-6070,
+MOTIR-6071. `ACME-42`, `ACME-44`, `ACME-47` and `ACME-60` are sample keys.

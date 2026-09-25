@@ -3734,3 +3734,181 @@ pointer in `design/ai-planning/design-notes.md` Part XII. **A DELTA, per `CLAUDE
 base assets it amends are records of their own moment and are not edited, and there is no `.png`
 (AMENDMENT 4 retired the export). Published as MOTIR-6236's design result, which is what MOTIR-6238 is
 `blocked_by`.
+
+## ⭐ The SEEDED re-plan — a refusal opens the planner with the first turn written, and unsent (MOTIR-6206, 2026-09-25)
+
+**Asset:** `design/ai-chat/planning-workspace--refusal-seed.mock.html` — a **DELTA**, ten sheets,
+en + zh, light + dark, the conversation at MOTIR-6236's 480px (`defaultRailWidth(1440)`). It amends
+`planning-workspace.mock.html` (the overlay, the rail and the composer) and MOTIR-6019's published
+`ai-chat/planning-workspace--resume.mock.html` (the resumed state). **Neither is edited.** The
+record band's door is drawn in `design/work-items/approval-control--replan-door.mock.html`, and the
+Plans row in `design/ai-planning/plans-sessions--seeded.mock.html` (their own sections, in those
+areas' notes).
+
+**Story MOTIR-6068.** Contract: `docs/decisions/approval-gates.md` §10f and the three §10h rows for
+`decision_approval` (Request changes), `decision_confirmation` (Overturn) and `decision_choice` (None
+of these). Every one of them reads _"opens the planner: **always** — anchored on the decision/choice
+card, seeded to re-plan from the reason"_.
+
+Paths to published results that are not in this checkout are given relative to `design/` (for example `ai-chat/planning-workspace--resume.mock.html`). They are the results' `sourcePath`s and have not landed here.
+
+**Composed from, not redrawn.** The stylesheet is lifted verbatim from MOTIR-6236's published
+`design/ai-chat/planning-workspace--multiline-composer.mock.html`. The utilities that sheet never
+needed are copied verbatim from MOTIR-6073's `work-items/approval-control--refusal-reason.mock.html`
+and MOTIR-6019's `ai-planning/plans-sessions--list.mock.html`. The rail, the opener, the bubbles
+and the composer mirror `components/planning/PlanChangeRail.tsx` and `PlanChangeComposer.tsx` class
+for class. The loading frame is `components/planning/PlanningWorkspaceSkeleton.tsx` as it ships. The
+confirm band in sheet 1 is MOTIR-6073's panel 2b. The decided band and its door are the
+`approval-control--replan-door` delta's. `components/ui/*` primitives and `--el-*` tokens only.
+
+### The sheets
+
+1. **The hand-off**, in four stages with the address under each: A, the refusal pressed in the
+   approval overlay; B, the decision commits and ONE `shallowReplace` swaps the approval address for
+   the planning address, with the seed read in flight; C, the seeded planner over the same host page;
+   D, Close lands on the host page (not in the approval overlay), whose decided band now carries
+   **Re-plan with AI**.
+2. **`decision_approval` · Request changes**, seeded, en and zh.
+3. **`decision_confirmation` · Overturn**, with three supersedes keys and with none, en and zh.
+4. **`decision_choice` · None of these**, en and zh.
+5. **A long reason** at the 8-row cap: as it opens (caret at the end, the tail showing) and scrolled up
+   (the quote whole).
+6. **Loading**: the whole-frame skeleton.
+7. **Returning to the seeded session**: the resumed transcript, with no draft.
+8. **The unseeded fall-back**: a plain project launch.
+9. **Dark parity.**
+10. **The first-turn contract** as a table, for all three kinds in both languages.
+
+### The decisions
+
+- **The hand-off is ONE address REPLACE, and the approval overlay is never underneath.**
+  `useOpenRefusalReplan().open(gateId)` (MOTIR-6211) does what `usePlanGateForward.ts` already does:
+  it strips `approval` / `approvalKind`, writes `plan=replan&planFrom=refused-gate&planGate=<id>`, and
+  replaces the history entry. The approval overlay's question has been answered, so there is nothing
+  to go Back to. Close strips the planning params and lands on the host page as it was. On the item
+  page's Development block, where `decision_approval` can also be refused, stage A is the band in
+  place and B–D are identical. **The address carries the gate id and nothing else.** No reason text
+  and no card title go in the URL (§10f).
+- **The turn is in the COMPOSER, unsent.** The transcript is empty. The opener bubble is not a turn,
+  and it reads _"Opened in the context of {item}."_ because the launch resolves to a `work-item`
+  re-plan on `anchorKey`. The mode chip reads **plan change**. The field is focused, sized to its
+  content (to the cap), with the caret at the END, so what shows first is the tail and the ask.
+  **Send is enabled.** The person can send, edit or clear it. Nothing is billed and no session exists
+  until they press Send.
+- **No starter chips while the rail holds a seed.** A starter `setDraft`s its own text, so pressing
+  one would silently throw the seed away. The seed is the start. If the person clears the field, the
+  rail is an ordinary item re-plan again, placeholder included.
+- **The placeholder.** `planningWorkspace.conversation.composerPlaceholderReplan` (_"What's wrong? What
+  should change?"_ / _"哪里有问题？想怎么改？"_) is unchanged and still passed. The seeded turn takes its
+  place as the field's CONTENT, so it is seen only after the draft is cleared. The turn's copy lives in
+  `planningWorkspace.refusalSeed.*` (MOTIR-6208), composed on the server in the viewer's locale.
+- **Loading is the anchor read's skeleton, extended.** The seed read
+  (`GET /api/approval-gates/{id}/planning-seed`) runs first and the anchor read second, inside the one
+  `PlanningWorkspaceSkeleton` window a `work-item` launch already shows. No live composer exists while
+  the seed is read. The rail is a skeleton block with no text, so the empty re-plan placeholder
+  cannot flash. The host then mounts once, with `initialDraft` already in its first render.
+- **A long reason is quoted whole.** Line breaks are kept and nothing is clipped on the server. The
+  field stops at MOTIR-6236's 8-row / 184px cap and scrolls inside itself.
+- **Returning within the window is MOTIR-6019's RESUMED state.** The seed read's `seededSessionId`
+  names the viewer's own recent seeded session, and the overlay opens that transcript. The first turn
+  is the seeded text as sent, the composer is ordinary and empty, and **no draft is added** (a second
+  seed would repeat the question). **The rail draws no "Reopened from the Plans page" line.** The
+  conversation was resumed, not picked from a list (MOTIR-6019 panel 2).
+- **The unseeded fall-back is silent.** An unknown, unreadable, foreign, not-refused or
+  kind-without-composer gate, and any failure of the read, all open the overlay as a plain `project`
+  launch: the **plan** chip, _"Opened on {project}."_, the starter chips, and the ordinary
+  placeholder. There is no toast, no error, and no gate id or reason anywhere in the DOM. Saying "that
+  refusal isn't available" would confirm to someone who cannot see it that the gate exists.
+- **No close guard for an unsent seed.** The draft can be rebuilt by pressing the door again, so
+  closing with it unsent discards nothing that cannot be had back. The shipped close guard still
+  covers proposed work items only.
+
+### The FIRST-TURN CONTRACT — what MOTIR-6208 composes
+
+**The seed card MOTIR-6208 builds this contract, and the drawn text above is exactly its output.** The
+turn is composed on the server from the decided gate row, in the request's locale, as **five parts in
+this order, joined by one blank line (`\n\n`)**:
+
+1. the work item's key and title: `{key} · {title}`;
+2. the verb, in plain words (one line per kind, below);
+3. the reason, **quoted verbatim with its line breaks kept**, under a label;
+4. **overturn only:** the keys `replanOwedOf` derives from `## Supersedes`, as plain keys. The part
+   is **omitted entirely** when there are none, and no empty line is left in its place;
+5. one sentence asking the planner to re-plan from the reason.
+
+**Catalogue keys, namespace `planningWorkspace.refusalSeed`.**
+
+| part                               | en                                               | zh                                   |
+| ---------------------------------- | ------------------------------------------------ | ------------------------------------ |
+| 1 · heading                        | `{key} · {title}`                                | `{key} · {title}`                    |
+| 2 · verb, `decision_approval`      | `Changes were requested on this decision.`       | `这个决策被要求修改。`               |
+| 2 · verb, `decision_confirmation`  | `This decision was overturned.`                  | `这个决策已被推翻。`                 |
+| 2 · verb, `decision_choice`        | `None of the options on this choice was picked.` | `这个选择的选项都没有被选中。`       |
+| 3 · reason                         | `The reason given:\n“{reason}”`                  | `给出的理由：\n“{reason}”`           |
+| 4 · supersedes (overturn, ≥ 1 key) | `The work items it superseded: {keys}`           | `它曾取代的工作项：{keys}`           |
+| 4 · key separator                  | `, `                                             | `、`                                 |
+| 5 · the ask                        | `Re-plan this work item from that reason.`       | `请根据这个理由重新规划这个工作项。` |
+
+**The whole turn, en** (overturn with keys; the other two kinds drop part 4 and swap part 2):
+
+```text
+{key} · {title}
+
+This decision was overturned.
+
+The reason given:
+“{reason}”
+
+The work items it superseded: {key1}, {key2}, {key3}
+
+Re-plan this work item from that reason.
+```
+
+**The whole turn, zh:**
+
+```text
+{key} · {title}
+
+这个决策已被推翻。
+
+给出的理由：
+“{reason}”
+
+它曾取代的工作项：{key1}、{key2}、{key3}
+
+请根据这个理由重新规划这个工作项。
+```
+
+The quote marks are the typographic `“ ”` in both languages, matching the decided record's quote
+(MOTIR-6073 panel 4). `{reason}` is `ApprovalGate.noteMd` as stored, and a multi-line reason stays
+multi-line inside the quotes. The key and title are the anchor's, which for all three kinds is the
+refused work item itself.
+
+### The ADDRESS
+
+`plan=replan&planFrom=refused-gate&planGate=<gate id>`. `planGate` is the eighth owned name, and
+MOTIR-6210 adds its row to §"The ADDRESS" above together with `launcher.test.ts`. This section does not
+edit that table. The address is **kept** while the seeded planner is open, so a reload before Send
+seeds the draft again and a reload after Send resumes the session through `seededSessionId`. Close
+strips it with the other seven.
+
+### GIVES / TAKES
+
+- **MOTIR-6208 (the seed read)** — GIVES the contract above as the drawn text, already implemented in
+  its catalogue. TAKES nothing.
+- **MOTIR-6210 (the overlay)** — GIVES the loading shape (the seed read inside the existing
+  `PlanningWorkspaceSkeleton` window, so there is no live composer to disable), the seeded rail, the
+  resumed return and the silent fall-back. It also asks for **two things its criteria do not yet
+  name.** (1) The starter chips are hidden while an `initialDraft` is present. (2) A session opened
+  through the seed's `seededSessionId` is a RESUME: `state.reopened` stays `null`, so the rail does
+  not claim _"Reopened from the Plans page"_. Its criterion _"while the seed loads, the composer is
+  disabled"_ is met by the skeleton, where no enabled composer exists. A component test can assert
+  that no textbox and no re-plan placeholder render while the fetch is pending.
+- **MOTIR-6211 (the hand-off and the door)** — GIVES stages A–D: one replace, and Close to the host
+  page. TAKES nothing.
+- **MOTIR-6209 (the Plans row)** — nothing on this surface. See `design/ai-planning/design-notes.md`.
+
+Referenced for provenance only: MOTIR-6011, MOTIR-6019, MOTIR-6024, MOTIR-6067, MOTIR-6072,
+MOTIR-6073, MOTIR-6154, MOTIR-6156, MOTIR-6159, MOTIR-6207, MOTIR-6236, MOTIR-6238. `ACME-38`,
+`ACME-39`, `ACME-41`, `ACME-42`, `ACME-44` and `ACME-47` are sample keys. `cmg7k2q0` is a sample
+gate id.
