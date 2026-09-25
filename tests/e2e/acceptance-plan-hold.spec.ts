@@ -77,11 +77,14 @@ async function seedTenant(email: string): Promise<Tenant> {
   });
   // `/boards` and `/items` are active-project scoped; the onboarding marker keeps
   // the planning surface from forwarding to `/onboarding`.
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });
-  await db.project.update({ where: { id: project.id }, data: { onboardingRanAt: new Date() } });
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { onboardingRanAt: new Date() },
+  });
   return {
     email,
     ctx: { userId: owner.id, workspaceId: workspace.id },
@@ -417,7 +420,7 @@ test('an inline status edit on the /items row is refused in place, with the plan
 
   await signIn(page, t.email, PASSWORD);
   await page.goto('/items?view=list');
-  const row = page.getByTestId(`issue-row-${card.key}`);
+  const row = page.getByRole('main').getByTestId(`issue-row-${card.key}`);
   await expect(row).toBeVisible({ timeout: FIRST_PAINT_MS });
   await row.getByRole('button', { name: `Edit ${en.issueViews.status}` }).click();
   const moved = page.waitForResponse(

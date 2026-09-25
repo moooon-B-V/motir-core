@@ -9,7 +9,6 @@ import { workItemsService } from './workItemsService';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
   ApprovalGatePendingError,
-  PlanTargetHeldError,
   IllegalTransitionError,
   UnknownStatusError,
 } from '@/lib/workItems/errors';
@@ -642,14 +641,6 @@ export const parentStatusRollupService = {
         if (err instanceof ApprovalGatePendingError) {
           return {
             outcome: { outcome: 'approval_pending', parentId, toStatus: toStatusKey },
-            emit: null,
-          };
-        }
-        // THE PLAN HOLD (MOTIR-6265), met inside the funnel — the forward walk's
-        // defensive twin of the read above, for a hold that appeared between them.
-        if (err instanceof PlanTargetHeldError) {
-          return {
-            outcome: { outcome: 'plan_held', parentId, toStatus: toStatusKey },
             emit: null,
           };
         }

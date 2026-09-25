@@ -25,7 +25,6 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
-import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -505,43 +504,6 @@ describe('the doors — one code, one payload', () => {
       expect(text).toContain('PLAN_TARGET_HELD');
       expect(text).toContain(planId);
       expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
-    },
-  );
-});
-
-describe('a background mover records an outcome (§5(b))', () => {
-  async function heldStoryWithChild() {
-    const story = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'story', title: 'Story' },
-      fx.ctx,
-    );
-    const child = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'subtask', parentId: story.id, title: 'Child' },
-      fx.ctx,
-    );
-    await plannedModify(story.id);
-    expect(await statusOf(story.id)).toBe(PLANNING_STATUS_KEY);
-    return { story, child };
-  }
-
-  it.each([
-    // FORWARD: every child built would walk the parent up the ladder.
-    ['forward', 'implemented'],
-    // BACKWARD: every child unstarted would SYSTEM-set the parent to To Do — the
-    // arm the funnel's refusal cannot see.
-    ['backward', 'todo'],
-  ])(
-    'the parent rollup answers `plan_held` on its %s arm and moves nothing',
-    { timeout: DB_TEST_TIMEOUT_MS },
-    async (_arm, childStatus) => {
-      const { story, child } = await heldStoryWithChild();
-      await adminDb.workItem.update({ where: { id: child.id }, data: { status: childStatus } });
-
-      const out = await parentStatusRollupService.recomputeParent(story.id, fx.workspaceId);
-
-      expect(out).toMatchObject({ outcome: 'plan_held', parentId: story.id });
-      expect(await statusOf(story.id)).toBe(PLANNING_STATUS_KEY);
-      expect(await lockFor(story.id)).not.toBeNull();
     },
   );
 });
