@@ -383,8 +383,9 @@ export async function LateUpperSections({
               manualLinkable={canEdit}
               // The per-row REMOVE control (Story MOTIR-4878 · MOTIR-5005,
               // design Panels 5d–5f). Gated on the SAME `work_item:edit` the
-              // header door is — the key `unlinkPullRequestAction` and the MCP
-              // tool both assert — and passed only from THIS host: the read-only
+              // header door is — `PULL_REQUEST_LINK_PERMISSION`, which the service
+              // behind `unlinkPullRequestAction` and the MCP tool both assert
+              // (MOTIR-6318; until then only the tool did) — and passed only from THIS host: the read-only
               // peek omits it, so its rows keep no trailing control at all rather
               // than a disabled one (design Q1 / Q4).
               rowAction={
