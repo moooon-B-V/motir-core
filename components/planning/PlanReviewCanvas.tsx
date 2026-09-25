@@ -79,6 +79,25 @@ export interface PlanReviewCanvasProps {
    *  nodes, never on the committed neighbours it decided nothing about. */
   outcome?: PlanItemOutcome | null;
   ariaLabel?: string;
+  /**
+   * WHERE THE READER ALREADY WAS, when a host swapped this canvas in underneath
+   * them (MOTIR-6155). The plan page passes nothing and keeps ARRIVING at the
+   * level the plan fills, which is right for a page opened on a plan.
+   *
+   * The planning surface is the case this exists for: it replaces
+   * `PlanChangeCanvas` with this component the moment a plan is proposed, and a
+   * reader who had drilled somewhere must not be moved off it (MOTIR-6161's rule).
+   * Given a held trail, this canvas opens THERE instead of at `arrivalLevel`, and
+   * the `followTo` below is what then offers the trip they did not take.
+   */
+  heldTrail?: readonly CanvasCrumb[] | null;
+  /** Forwarded verbatim to the foundation — see its own contract. Together with
+   *  `readerHasNavigated` this is how a swapped-in canvas declines a follow rather
+   *  than yanking the reader, and how the bar comes to offer it. */
+  followTo?: { key: string; trail: readonly CanvasCrumb[] } | null;
+  onFollowDeclined?: (key: string) => void;
+  readerHasNavigated?: boolean;
+  onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
 }
 
 export function PlanReviewCanvas({
@@ -87,6 +106,11 @@ export function PlanReviewCanvas({
   version,
   outcome = null,
   ariaLabel,
+  heldTrail = null,
+  followTo = null,
+  onFollowDeclined,
+  readerHasNavigated = false,
+  onLevelChange,
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tPlan = useTranslations('planReview');
@@ -114,9 +138,12 @@ export function PlanReviewCanvas({
   // How many proposals sit behind each folder, DEEP (decision 3) — the badge on a
   // closed folder card, and the folders Show changes rings.
   const folderChanges = useMemo(() => folderChangeCounts(items), [items]);
-  const initialTrail = useMemo<CanvasCrumb[] | undefined>(
-    () => arrival?.trail ?? undefined,
-    [arrival],
+  // A HELD trail wins over the arrival, and only a host that swapped this canvas
+  // in has one (MOTIR-6155). `arrivalLevel` still decides for every other mount —
+  // the plan page's, and the surface's when the reader had not moved.
+  const initialTrail = useMemo<readonly CanvasCrumb[] | undefined>(
+    () => (heldTrail && heldTrail.length > 0 ? heldTrail : (arrival?.trail ?? undefined)),
+    [heldTrail, arrival],
   );
 
   // The DOOR (MOTIR-1351/1352): select a node → View → a peek. On every op.
@@ -442,6 +469,10 @@ export function PlanReviewCanvas({
         onSelect={handleSelect}
         reloadKey={`${version}:${proposalsAtLevel(items, null).length}:${showAllTick}`}
         initialTrail={initialTrail}
+        followTo={followTo}
+        onFollowDeclined={onFollowDeclined}
+        readerHasNavigated={readerHasNavigated}
+        onLevelChange={onLevelChange}
         // The level the reviewer is standing on FOLLOWS its container through
         // approve, rather than being left addressed by an id that has stopped
         // naming anything (bug MOTIR-3439).

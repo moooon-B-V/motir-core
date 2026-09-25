@@ -2250,7 +2250,8 @@ has several open pull requests and therefore several simultaneous awaiting gates
 > **A `superseded` row now carries a CAUSE**, from a closed vocabulary with one
 > value per writing path and **no value meaning _unsaid_**: `republished` ·
 > `withdrawn` · `head_moved` · `member_closed` · `member_drafted` · `set_changed` ·
-> `pulled_back` (`member_drafted` added by MOTIR-5699).
+> `pulled_back` (`member_drafted` added by MOTIR-5699; **`ci_failed` by MOTIR-6271** —
+> a terminal CI failure at the commits the gate asked about, §8's SIXTH AMENDMENT).
 > The full table, with which path writes each, is `design-result.md`
 > AMENDMENT 6 Q5. (A seventh, `reopened_by_hand`, was named here when the
 > amendment was written and removed before it shipped — MOTIR-5661 found that a
@@ -4072,6 +4073,81 @@ Motir-hosted deploy, where Motir stands up the preview itself, is epic
 MOTIR-4527 (_Hosting what the agent builds — tenant applications on
 motir.site_)** and is not decided here. Until it lands, a project whose
 repositories produce no preview has two paths rather than three, and says so.
+
+> ### §8 — SIXTH AMENDMENT (MOTIR-6271, 2026-09-24): a RED BUILD withdraws the question — `ci_failed` joins the cause vocabulary, and the card is HELD at Implemented
+>
+> **This amendment ADDS NO RULE. It adds the writing path a rule that already
+> shipped has always required.** §1's MOTIR-5903 amendment, decision 2, states
+> the principle over every event:
+>
+> > _The question rides on the green set, so **every event that takes the set out
+> > of green withdraws it** … an unanswered question about a set that is no
+> > longer green is not a question anybody can act on._
+>
+> It then enumerates the events that do so — a head move (`head_moved`), a close
+> (`member_closed`), a draft (`member_drafted`), a set change (`set_changed`),
+> joined later by a conflict (`conflict`, MOTIR-5914) — and **the enumeration
+> omits the most direct way a set stops being green: CI reporting a failure at
+> the very commits the gate asked about.** `pullRequestApprovalGates.ts`
+> implemented the enumeration faithfully, so a red build retired nothing.
+>
+> **What that cost, observed.** On `moooon-B-V/motir-core#3112` @ `88508fb2`
+> (2026-09-24) the gate was raised at `22:45:19.033` and routed to a person.
+> `Vitest (3/12)` and `(6/12)` concluded `failure` at `22:58`, `CI complete` at
+> `23:02:17`. The feedback consumer did everything except the one thing that
+> mattered: it re-rendered its comment as _"❌ CI failed — 4 of 43 checks did not
+> pass … marked **not-ready**"_ and recomputed `ciState` to `failing` — and left
+> the card at In Review with an `awaiting` gate over the commit that had just
+> failed. A yes on that gate is what merges it.
+>
+> #### 1 — the cause: `ci_failed`
+>
+> §6b's vocabulary is CLOSED, with **one value per writing path and no value
+> meaning _unsaid_**, so a new path owes a new value rather than borrowing one.
+> `head_moved` was the nearest available lie — nothing moved; the build spoke.
+> `ci_failed` joins `republished` · `withdrawn` · `head_moved` ·
+> `member_closed` · `member_drafted` · `conflict` · `set_changed` ·
+> `pulled_back` · `unknown`, and every surface that renders a cause carries its
+> sentence.
+>
+> #### 2 — it is the CAN'T-LAND class, so it takes the CONFLICT's shape exactly
+>
+> A red set and a conflicted set are the same class (§4's FOURTH AMENDMENT, § 28's
+> class table) reached from two directions — one from the base, one from the
+> build — so the composer mirrors
+> `pullRequestMergeabilityService.withdrawForConflict`: the same lock order
+> (each card's awaiting gates, then the card), the same `settleUnlandedOutcome`
+> with `cant_land`, and the same rule that **ONLY a card at `in_review` moves**.
+> A card already at Implemented, Approved mid-merge, or in a terminal status is
+> left where it is; the gate is withdrawn either way, which is the part that
+> matters for _To approve_.
+>
+> It lives in `ciPromotion.ts`, beside the promotion, because that module is the
+> one place a CI verdict may move a card between `implemented` and `in_review`.
+> Splitting the two directions would give the pair two homes to drift between.
+>
+> #### 3 — what it does NOT touch
+>
+> - **A DECIDED gate.** §8's decision 5 stands unchanged: a failure after an
+>   approval re-opens the merge question through its own doors (_Queue again_, a
+>   push), and never rewrites the answer a person gave.
+> - **The RAISE.** This amendment does not claim the raise can be made exact, and
+>   `ci-verdict-expected-check-set.md` records why it cannot: a host read sees
+>   only the runs GitHub has CREATED (its failure mode 1), and an unreachable host
+>   answers `null` and falls back to the recorded set (its failure mode 3). **Both
+>   leave a window in which a verdict is formed over a partial set, and the
+>   withdrawal is the correction this ADR's own principle prescribes for it.** On
+>   `#3112` the failing lanes — `Vitest (3/12)` and `(6/12)` — were CREATED by
+>   GitHub at `22:45:27/28`, eight seconds AFTER the gate was raised, so no read
+>   of the host at raise time could have seen them.
+> - **The re-ask.** The next green raises a FRESH gate over the commits that fixed
+>   the build, through the ordinary predicate. Withdrawing without re-asking would
+>   strand the card unapprovable, which is MOTIR-5604's defect from the other side.
+>
+> **Asserted** — `tests/github/pullRequestApprovalGates.test.ts`: the withdrawal
+> and the hold at Implemented, the cause, the no-actor invariant (§6b) re-asserted
+> for the new path, the fresh gate on the next green, a decided gate untouched by a
+> later red, and a card not at In Review losing its gate without being dragged.
 
 > ### 9 — AMENDMENT: HOW TO TEST is per RUN (MOTIR-4906 re-plan, 2026-09-13), DECIDED BY THE REQUESTER (Yue, 2026-09-13)
 >

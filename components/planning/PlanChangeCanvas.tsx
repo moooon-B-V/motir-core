@@ -74,6 +74,11 @@ export interface PlanChangeCanvasProps {
   /** The canvas declined the request above, so the host can offer its own way
    *  there rather than leaving the reader beside a plan they cannot see. */
   onFollowDeclined?: (key: string) => void;
+  /** The reader moved the canvas THEMSELVES — a drill, a crumb, Back or a search
+   *  jump. Reported so a host that later SWAPS this canvas away can carry the fact
+   *  to its replacement (MOTIR-6155); it fires only for the reader's own moves,
+   *  never for a granted `followTo`, which is what makes it usable as that signal. */
+  onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
   ariaLabel?: string;
   /** What fills the canvas while the first level is still being read
    *  (MOTIR-2069) — the workspace passes its level-shaped skeleton. */
@@ -93,6 +98,7 @@ export function PlanChangeCanvas({
   initialTrail,
   followTo = null,
   onFollowDeclined,
+  onLevelChange,
   ariaLabel,
   loadingFallback,
   emptyRoot,
@@ -465,6 +471,7 @@ export function PlanChangeCanvas({
         isTargetCrumb={isTargetCrumb}
         followTo={followTo}
         onFollowDeclined={onFollowDeclined}
+        onLevelChange={onLevelChange}
         emptyDrilledFor={emptyDrilledFor}
       />
       {quickView}

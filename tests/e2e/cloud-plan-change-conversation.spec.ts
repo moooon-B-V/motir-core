@@ -232,6 +232,17 @@ const composer = (page: Page) => page.getByRole('textbox', { name: /Reply, or re
 const workspace = (page: Page) => page.getByRole('dialog', { name: /plan/i });
 const confirmBar = (page: Page) => workspace(page).getByTestId('plan-change-confirm-bar');
 const canvas = (page: Page) => workspace(page).getByTestId('roadmap-canvas');
+/** A PROPOSED card, as the PLAN PAGE draws it.
+ *
+ *  ⚠️ `PlanItemNode`'s `data-op`, NOT `PlanChangeDiffFrame`'s `data-diff-state`
+ *  (MOTIR-6155). Once a plan is proposed the left pane mounts the plan page's own
+ *  List | Canvas component, so a proposal on this surface is the same node the
+ *  plan page draws and wears the same vocabulary — `add` / `modify` / `remove`
+ *  rather than `add` / `change`. The diff frames stay the language of the
+ *  UNDECORATED roadmap, which is what this surface still shows with no plan and
+ *  while one is being written. */
+const opNodes = (page: Page, op: 'add' | 'modify' | 'remove') =>
+  workspace(page).locator(`[data-op="${op}"]`);
 
 /** Type a turn and send it, waiting on the DOOR's 200 — the turn is a persisted
  *  row written by that call, so its write response is the authoritative "the
@@ -345,10 +356,14 @@ test('plan change is a conversation — open, describe, refine, approve', async 
       // An ASKED plan's bar reads the gate's consequence line (MOTIR-6037).
       'Approving adds these to your backlog. Declining ends the plan and changes nothing.',
     );
+    // ⭐ THE PANE HAS SWAPPED. A proposed plan is read through the plan page's own
+    // List | Canvas component (MOTIR-6155), so what the reviewer sees here is what
+    // `/plans/<id>` shows — the same `PlanReviewCanvas`, drawing the same cards.
+    await expect(workspace(page).getByTestId('plan-proposal-views')).toBeVisible();
     await expect(canvas(page).getByText(ADDED_TITLE, { exact: true })).toBeVisible();
-    await expect(page.locator('[data-diff-state="add"]')).toHaveCount(1);
-    // The existing item the proposal renames wears the CHANGE frame in place.
-    await expect(page.locator('[data-diff-state="change"]')).toHaveCount(1);
+    await expect(opNodes(page, 'add')).toHaveCount(1);
+    // The existing item the proposal renames wears the MODIFY treatment in place.
+    await expect(opNodes(page, 'modify')).toHaveCount(1);
     await beat();
   });
 
@@ -363,7 +378,7 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     // The SECOND delta replaced the first on the canvas — the counts moved.
     await expect(confirmBar(page)).toContainText('2 added, 1 changed');
     await expect(canvas(page).getByText(REFINED_TITLE, { exact: true })).toBeVisible();
-    await expect(page.locator('[data-diff-state="add"]')).toHaveCount(2);
+    await expect(opNodes(page, 'add')).toHaveCount(2);
     await beat();
   });
 
@@ -384,16 +399,20 @@ test('plan change is a conversation — open, describe, refine, approve', async 
 
     // The GATE is gone; the overlay is not. It KEEPS the decided cards
     // (`design/ai-planning/design-notes.md` Part VI §3 / MOTIR-3162, via bug
-    // MOTIR-3206) — three diff nodes, the two adds and the change, each now
-    // carrying the accepted treatment instead of a pending one. The committed
-    // titles are still asserted below, which is what proves the client island
-    // refetched (it seeds its level once, so `router.refresh()` alone could not
-    // have reached it) — that half of this block is unchanged and is the half
-    // this spec was really pinning.
+    // MOTIR-3206) — three cards, the two adds and the modify, each now carrying
+    // the accepted treatment instead of a pending one. The committed titles are
+    // still asserted below, which is what proves the client island refetched (it
+    // seeds its level once, so `router.refresh()` alone could not have reached
+    // it) — that half of this block is unchanged and is the half this spec was
+    // really pinning.
+    //
+    // A DECIDED plan keeps the plan page's component too, in the decided
+    // treatment (MOTIR-6155's own criterion), so the nodes are read by that
+    // component's testid rather than the diff frame's.
     await expect(confirmBar(page)).toHaveCount(0);
-    await expect(canvas(page).getByTestId('plan-change-diff-node')).toHaveCount(3);
+    await expect(canvas(page).getByTestId('plan-item-node')).toHaveCount(3);
     // The outcome is read as the WORD, so a colour-only treatment cannot pass.
-    await expect(page.getByTestId('plan-change-outcome').first()).toHaveText('accepted');
+    await expect(workspace(page).getByTestId('plan-item-outcome').first()).toHaveText('accepted');
     await expect(canvas(page).getByText(REFINED_TITLE, { exact: true })).toBeVisible();
 
     // The real substrate: the tree reflects the change.

@@ -602,4 +602,110 @@ describe('AMENDMENT 6 Q5 — the withdrawal records WHY, and the three PR causes
       noteMd: null,
     });
   });
+
+  // ── A RED BUILD WITHDRAWS THE QUESTION (MOTIR-6271) ─────────────────────────
+  //
+  // `approval-gates.md` §8's amendment, decision 2 states the rule over EVERY event —
+  // *the question rides on the green set, so every event that takes the set out of green
+  // withdraws it* — and its enumeration (head move, close, draft, set change) omitted the
+  // most direct one. So a gate raised on a green verdict and contradicted by the build
+  // minutes later stood for ever, asking a person to approve a pull request whose suite
+  // was red. Observed on moooon-B-V/motir-core#3112 @ 88508fb2: raised 22:45:19, `Vitest
+  // (3/12)` and `(6/12)` failed at 22:58, `CI complete` at 23:02:17, and the gate was
+  // still `awaiting` over that commit hours later.
+
+  it('a terminal FAILURE at the asked-about commits withdraws the gate and holds the card at Implemented', async () => {
+    const { item } = await reviewedWithGate('pa-red-withdraws@example.com');
+
+    // The SAME commit the gate was raised over — nothing moved, the build simply spoke.
+    await ci({ conclusion: 'failure', headSha: 'sha-a', number: 11 });
+
+    expect((await approvalGates(item.id)).map((g) => [g.state, g.supersededCause])).toEqual([
+      ['superseded', 'ci_failed'],
+    ]);
+    // In Review is a promise that a person should look now; a red set is not one anybody
+    // can act on, so the card goes back to where its pull request is merely open.
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
+
+  it('the withdrawal is a CAUSE and not an actor — no decider, authority or note', async () => {
+    // §6b's invariant, re-asserted for the new writing path exactly as MOTIR-5659 asserted
+    // it for the first six: a cause says what happened to the SUBJECT, and must never be
+    // the toehold by which a product write starts reading as somebody's answer.
+    const { item } = await reviewedWithGate('pa-red-noactor@example.com');
+
+    await ci({ conclusion: 'failure', headSha: 'sha-a', number: 11 });
+
+    const [row] = await approvalGates(item.id);
+    expect(row).toMatchObject({ state: 'superseded', supersededCause: 'ci_failed' });
+    expect({
+      decidedById: row!.decidedById,
+      decidedAt: row!.decidedAt,
+      decidedByLabel: row!.decidedByLabel,
+      decidedUnderAuthority: row!.decidedUnderAuthority,
+      decisionSource: row!.decisionSource,
+      noteMd: row!.noteMd,
+    }).toEqual({
+      decidedById: null,
+      decidedAt: null,
+      decidedByLabel: null,
+      decidedUnderAuthority: null,
+      decisionSource: null,
+      noteMd: null,
+    });
+  });
+
+  it('the NEXT green raises a FRESH question over the commits that fixed it', async () => {
+    // What makes withdrawing right rather than merely tidy: the question comes back by
+    // itself. Withdraw-and-never-re-ask would strand the card unapprovable, which is the
+    // defect MOTIR-5604 paid for from the other direction.
+    const { item } = await reviewedWithGate('pa-red-then-green@example.com');
+    await ci({ conclusion: 'failure', headSha: 'sha-a', number: 11 });
+    expect(await awaiting(item.id)).toHaveLength(0);
+
+    // A push fixing the build, then green on BOTH members at their current heads.
+    await ci({ conclusion: 'success', headSha: 'sha-a3', number: 11 });
+    await ci({ conclusion: 'success', headSha: 'sha-b', number: 12 });
+
+    const [fresh] = await awaiting(item.id);
+    expect(fresh?.subjectVersion).toBe('moooon/acme#11@sha-a3,moooon/acme#12@sha-b');
+    expect(await statusOf(item.id)).toBe('in_review');
+  });
+
+  it('a DECIDED gate is untouched by a later red — §8 decision 5', async () => {
+    // A failure AFTER an approval re-opens the merge question through its own doors
+    // (*Queue again*, a push). It does not reach back and rewrite the answer a person
+    // already gave, and the audit must go on reading that answer as theirs.
+    const { s, item } = await reviewedWithGate('pa-red-after-decision@example.com');
+    const [gate] = await awaiting(item.id);
+    await adminDb.approvalGate.update({
+      where: { id: gate!.id },
+      data: {
+        state: 'approved',
+        decidedById: s.user.id,
+        decidedAt: new Date(),
+        decidedByLabel: 'Owner',
+      },
+    });
+
+    await ci({ conclusion: 'failure', headSha: 'sha-a', number: 11 });
+
+    const [row] = await approvalGates(item.id);
+    expect(row).toMatchObject({ state: 'approved', supersededCause: null });
+    expect(row!.decidedById).toBe(s.user.id);
+  });
+
+  it('a card NOT at In Review loses its gate and is not dragged anywhere', async () => {
+    // Only the rung where a person is being asked moves. A card already at Implemented,
+    // mid-merge at Approved, or in a terminal status is left exactly where it is — the
+    // withdrawal is the part that matters for *To approve*.
+    const s = await makeScenario('pa-red-not-in-review@example.com');
+    const item = await cardWithPrs(s, 'One pull request', [13]);
+    expect(await statusOf(item.id)).toBe('implemented');
+
+    await ci({ conclusion: 'failure', headSha: 'sha-c', number: 13 });
+
+    expect(await awaiting(item.id)).toHaveLength(0);
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
 });
