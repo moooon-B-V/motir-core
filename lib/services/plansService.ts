@@ -45,6 +45,10 @@ import {
 } from '@/lib/repositories/workItemRepository';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import {
+  workItemRevisionRepository,
+  WORK_ITEM_REVISIONS_AFTER_MAX,
+} from '@/lib/repositories/workItemRevisionRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
@@ -118,7 +122,9 @@ import {
   UnresolvedPlanRefError,
   InvalidPlanHistoryCursorError,
   PlanRevisionClassificationInvalidError,
+  ApprovedShapeVerdictTooManyIdsError,
 } from '@/lib/plans/errors';
+import { classifyRevision } from '@/lib/plans/approvedShapeChange';
 import {
   PLAN_REVISION_LEASE_MS,
   revisionLeaseOf,
@@ -167,6 +173,10 @@ import type {
   WorkItemPendingProposalDto,
   WorkItemPlanHistoryEntryDto,
   WorkItemPlanHistoryPageDto,
+  ApprovedShapeChildSetDto,
+  ApprovedShapeDivergingRevisionDto,
+  WorkItemApprovedShapeVerdictDto,
+  WorkItemApprovedShapeVerdictPageDto,
 } from '@/lib/dto/plans';
 import {
   PLAN_ITEM_REASON_MAX,
@@ -276,6 +286,159 @@ function decodePlanHistoryCursor(
 // engine (7.28.1 / planValidityService) keeps resolving refs through the EXACT
 // same contract materialize uses — no second source of truth.
 export { TEMP_REF_PREFIX };
+
+// ── The approved-shape verdict (Story MOTIR-5544 · MOTIR-6225) ──────────────────
+
+/** The most work items one {@link plansService.resolveApprovedShapeVerdict} answers. */
+export const APPROVED_SHAPE_VERDICT_MAX_IDS = 50;
+
+/** The approving plan's history entry, narrowed to what the verdict needs. */
+type ApprovingPlanEntry = WorkItemPlanHistoryEntryDto & { decidedAt: string };
+
+/**
+ * The LATEST `approved` plan in a card's history, or null. Pages the history
+ * read to its end (it is oldest first), so this is the one "which plans touched
+ * this card" query there is — no second one.
+ */
+async function latestApprovedPlanEntry(
+  projectId: string,
+  workItemId: string,
+  ctx: ServiceContext,
+): Promise<ApprovingPlanEntry | null> {
+  let latest: ApprovingPlanEntry | null = null;
+  let cursor: string | null = null;
+  do {
+    const page: WorkItemPlanHistoryPageDto = await plansService.listPlanHistoryForWorkItem(
+      projectId,
+      workItemId,
+      { cursor, limit: PLAN_HISTORY_MAX_LIMIT },
+      ctx,
+    );
+    for (const entry of page.items) {
+      if (entry.planStatus === 'approved' && entry.decidedAt !== null) {
+        latest = entry as ApprovingPlanEntry;
+      }
+    }
+    cursor = page.nextCursor;
+  } while (cursor !== null);
+  return latest;
+}
+
+function noPlanVerdict(workItemId: string): WorkItemApprovedShapeVerdictDto {
+  return {
+    workItemId,
+    verdict: 'no_plan',
+    planId: null,
+    planTitle: null,
+    decidedAt: null,
+    proposalId: null,
+    divergingRevision: null,
+    childSet: null,
+  };
+}
+
+/** Sorted `a − b`. */
+function idsMissingFrom(a: ReadonlySet<string>, b: ReadonlySet<string>): string[] {
+  return [...a].filter((id) => !b.has(id)).sort();
+}
+
+/**
+ * One card against its approving plan: the first shape-changing revision after
+ * `decidedAt`, and — for a container — the child set. All reads in ONE bound
+ * workspace context (RLS is live under the app role).
+ */
+async function verdictAgainst(
+  workItemId: string,
+  approving: ApprovingPlanEntry,
+  ctx: ServiceContext,
+): Promise<WorkItemApprovedShapeVerdictDto> {
+  const decidedAt = new Date(approving.decidedAt);
+  const selfProposalId = approving.proposalIds.self;
+  const selfOp = approving.relation.op;
+
+  const { diverging, proposals, children } = await withWorkspaceServiceContext(
+    ctx.workspaceId,
+    async (tx) => {
+      let diverging: ApprovedShapeDivergingRevisionDto | null = null;
+      let cursor: { changedAt: Date; id: string } | null = null;
+      for (;;) {
+        const revisions = await workItemRevisionRepository.findChangedAfter(
+          workItemId,
+          decidedAt,
+          cursor,
+          WORK_ITEM_REVISIONS_AFTER_MAX,
+          tx,
+        );
+        const hit = revisions.find(
+          (r) => classifyRevision(r.diff, { approvedArchived: selfOp === 'remove' }) === 'shape',
+        );
+        if (hit) {
+          diverging = {
+            id: hit.id,
+            changedAt: hit.changedAt.toISOString(),
+            changedById: hit.changedById,
+            changeKind: hit.changeKind,
+            changedKeys: Object.keys(hit.diff as Record<string, unknown>),
+          };
+          break;
+        }
+        if (revisions.length < WORK_ITEM_REVISIONS_AFTER_MAX) break;
+        const last = revisions[revisions.length - 1]!;
+        cursor = { changedAt: last.changedAt, id: last.id };
+      }
+      const proposals = await planItemRepository.findByPlanForWorkItem(
+        approving.planId,
+        workItemId,
+        selfOp === 'add' && selfProposalId ? `${TEMP_REF_PREFIX}${selfProposalId}` : null,
+        ctx.workspaceId,
+        tx,
+      );
+      const children = await workItemRepository.findChildren(workItemId, tx);
+      return { diverging, proposals, children };
+    },
+  );
+
+  // The children the approving plan put under the card: its child `add`s, by the
+  // card each one became. The target's own proposal is not one of them.
+  const planned = new Set(
+    proposals
+      .filter((p) => p.op === 'add' && p.id !== selfProposalId && p.workItemId !== null)
+      .map((p) => p.workItemId!),
+  );
+  const current = new Set(children.map((c) => c.id));
+  let childSet: ApprovedShapeChildSetDto | null = null;
+  if (planned.size > 0 || current.size > 0) {
+    // A plan that CREATED the container approved exactly its child adds; one that
+    // only amended it, or only added children, also approved the children it
+    // already had (see the method's header).
+    const approved = new Set(planned);
+    if (selfOp !== 'add') {
+      for (const child of children) {
+        if (child.createdAt.getTime() <= decidedAt.getTime()) approved.add(child.id);
+      }
+    }
+    const added = idsMissingFrom(current, approved);
+    const removed = idsMissingFrom(approved, current);
+    childSet = {
+      verdict: added.length > 0 || removed.length > 0 ? 'changed' : 'unchanged',
+      approvedChildIds: [...approved].sort(),
+      currentChildIds: [...current].sort(),
+      added,
+      removed,
+    };
+  }
+
+  return {
+    workItemId,
+    verdict: diverging !== null || childSet?.verdict === 'changed' ? 'changed' : 'unchanged',
+    planId: approving.planId,
+    planTitle: approving.planTitle,
+    decidedAt: approving.decidedAt,
+    proposalId: selfProposalId,
+    divergingRevision: diverging,
+    childSet,
+  };
+}
 
 /**
  * Validate the leaf SIZING of an `add`'s proposed fields (MOTIR-1433) — the
@@ -5709,6 +5872,56 @@ export const plansService = {
       throw new WorkItemNotFoundError(workItemId);
     }
     return plansService.listPlanHistoryForWorkItem(item.projectId, workItemId, options, ctx);
+  },
+
+  /**
+   * IS EACH WORK ITEM STILL WHAT THE LAST APPROVED PLAN APPROVED? (Story
+   * MOTIR-5544 · Subtask MOTIR-6225.) Answers `unchanged | changed | no_plan`
+   * per id, in the order supplied — the read a run that finds its target
+   * unbuildable asks before blaming the planner.
+   *
+   * Per id:
+   *   1. the APPROVING plan is the LATEST `approved` entry of
+   *      {@link plansService.listPlanHistoryForWorkItem} (reused, not
+   *      re-queried — so withdrawn proposals and cross-project ids behave
+   *      exactly as the history does). None → `no_plan`, never an error.
+   *   2. the revisions written strictly after its `decidedAt` are walked oldest
+   *      first, and the FIRST one {@link classifyRevision} calls `'shape'` is the
+   *      diverging revision. The verdict is computed from the REVISION LOG, not
+   *      by diffing field values: a `modify`'s patch is sparse, and the approve
+   *      writes its own rows (inside its transaction, so before `decidedAt`).
+   *   3. a CONTAINER (a card with children now, or children approved) also
+   *      compares its live child set against the approving plan's child `add`s
+   *      ({@link planItemRepository.findByPlanForWorkItem}). When that plan did
+   *      not create the container, the children it already had are part of what
+   *      was approved: a live child created at or before `decidedAt` counts as
+   *      approved. That side can only miss a change, never invent one — the safe
+   *      direction for a read that files bugs.
+   *
+   * Gated on `ai:view_plan`, asserted here exactly as the history read asserts
+   * it, so an actor without it gets the same refusal even for an empty set.
+   */
+  async resolveApprovedShapeVerdict(
+    projectId: string,
+    workItemIds: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<WorkItemApprovedShapeVerdictPageDto> {
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
+    const ids = [...new Set(workItemIds)];
+    if (ids.length > APPROVED_SHAPE_VERDICT_MAX_IDS) {
+      throw new ApprovedShapeVerdictTooManyIdsError(ids.length, APPROVED_SHAPE_VERDICT_MAX_IDS);
+    }
+
+    const verdicts = new Map<string, WorkItemApprovedShapeVerdictDto>();
+    for (const workItemId of ids) {
+      const approving = await latestApprovedPlanEntry(projectId, workItemId, ctx);
+      if (!approving) {
+        verdicts.set(workItemId, noPlanVerdict(workItemId));
+        continue;
+      }
+      verdicts.set(workItemId, await verdictAgainst(workItemId, approving, ctx));
+    }
+    return { items: workItemIds.map((id) => verdicts.get(id)!) };
   },
 
   /**

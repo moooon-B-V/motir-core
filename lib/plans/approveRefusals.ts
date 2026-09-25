@@ -245,6 +245,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       "The work-item plan-history read's refusal of a malformed page cursor (MOTIR-5546). Approve takes a plan id and pages nothing.",
   },
+  APPROVED_SHAPE_VERDICT_TOO_MANY_IDS: {
+    cause: 'not-approve',
+    justification:
+      "The approved-shape verdict read's refusal of an oversized id set (MOTIR-6225). It compares cards against an ALREADY approved plan; approve takes one plan id and reads no verdict.",
+  },
   PLAN_REVISION_CLASSIFICATION_INVALID: {
     cause: 'not-approve',
     justification:

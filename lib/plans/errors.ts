@@ -966,3 +966,19 @@ export class PlanRevisionClassificationInvalidError extends Error {
     this.name = 'PlanRevisionClassificationInvalidError';
   }
 }
+
+/**
+ * The approved-shape verdict (Story MOTIR-5544 · MOTIR-6225) was asked about
+ * more work items than one read answers. → 400: the caller splits the set; a
+ * silently truncated answer would read as "the rest have no plan".
+ */
+export class ApprovedShapeVerdictTooManyIdsError extends Error {
+  readonly code = 'APPROVED_SHAPE_VERDICT_TOO_MANY_IDS' as const;
+  constructor(
+    readonly requested: number,
+    readonly max: number,
+  ) {
+    super(`The approved-shape verdict answers at most ${max} work items; ${requested} were asked.`);
+    this.name = 'ApprovedShapeVerdictTooManyIdsError';
+  }
+}
