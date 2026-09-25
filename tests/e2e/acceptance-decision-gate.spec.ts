@@ -371,6 +371,12 @@ test.describe('an agent’s decision waits for a person', () => {
       expect((await action).status()).toBe(200);
       await expect(dev.getByText(en.approvalGate.state.changesRequested)).toBeVisible();
       expect(journal().filter((call) => call.method === 'PUT')).toHaveLength(1);
+      // MOTIR-6068 (MOTIR-6211): a Request changes on a decision now OFFERS the seeded
+      // planner in the decided band; declining it keeps the overlay open, so answer it
+      // before closing — that receipt is MOTIR-6068's, not this story's.
+      await dev
+        .getByRole('button', { name: en.planningWorkspace.handoff.notNow, exact: true })
+        .click();
       await closeOverlay(page);
     });
     await beat();
