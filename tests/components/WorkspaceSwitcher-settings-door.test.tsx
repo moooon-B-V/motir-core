@@ -40,7 +40,9 @@ const WORKSPACES = [
 afterEach(cleanup);
 
 function openSwitcher(workspaces = WORKSPACES) {
-  renderWithIntl(<WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId="ws0" />);
+  renderWithIntl(
+    <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId="ws0" canCreateWorkspace />,
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Switch workspace' }));
 }
 
@@ -83,14 +85,18 @@ describe('the workspace switcher carries the settings door', () => {
     // The trigger is a bare workspace name; the door is inside. This pins that
     // the row rides the popover rather than the bar, which is what makes
     // `ShellTierNav`'s reveal gate on the whole switcher sufficient (below).
-    renderWithIntl(<WorkspaceSwitcher workspaces={WORKSPACES} activeWorkspaceId="ws0" />);
+    renderWithIntl(
+      <WorkspaceSwitcher workspaces={WORKSPACES} activeWorkspaceId="ws0" canCreateWorkspace />,
+    );
     expect(document.body.innerHTML).not.toContain('href="/settings/workspace"');
   });
 
   it('⚠️ the EMPTY state carries no door — there is no workspace to configure', () => {
     // Zero memberships renders a bare `Create workspace` CTA, not a popover. A
     // settings row there would point at a workspace the reader does not have.
-    renderWithIntl(<WorkspaceSwitcher workspaces={[]} activeWorkspaceId={null} />);
+    renderWithIntl(
+      <WorkspaceSwitcher workspaces={[]} activeWorkspaceId={null} canCreateWorkspace />,
+    );
     expect(document.body.innerHTML).not.toContain('/settings/workspace');
   });
 });

@@ -5,7 +5,7 @@ import { organizationMembershipRepository } from '@/lib/repositories/organizatio
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/context';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
-import { isOrgOwnerRole } from '@/lib/organizations/roles';
+import { orgCan } from '@/lib/organizations/capabilities';
 import {
   createCheckoutSession,
   createPortalSession,
@@ -44,8 +44,9 @@ const PAID_AI_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
 // and INITIATES Stripe sessions through motir-ai (8.1.5), which owns the SDK and
 // the secret. This service is the email.ts-style leaf-client pattern the
 // aiUsageService already established — it (1) REUSES the 6.10.4 org gate
-// (`resolveOrgAccess`), (2) enforces the ADR §7 permission split (viewing billing
-// is owner/admin; every MUTATION is OWNER-ONLY), and (3) enforces the ADR §6
+// (`resolveOrgAccess`), (2) enforces the ADR §7 billing gate (viewing AND
+// mutating billing are owner/admin — the `manageBilling` capability; a plain
+// member has neither, MOTIR-6305), and (3) enforces the ADR §6
 // CLOUD-ONLY gate (`MOTIR_CLOUD`) so a self-hosted build has no billing at all.
 //
 // The two billed products (ADR §1) read from two stores: ① Motir (seats) is the
@@ -73,7 +74,8 @@ function billingPageUrl(query?: string): string {
 export const billingService = {
   /**
    * The org's billing status — the two billed lines + the catalog (Story 8.1.6).
-   * Cloud-only (BillingNotAvailableError → 404 off-cloud). VIEW is owner/admin;
+   * Cloud-only (BillingNotAvailableError → 404 off-cloud). VIEW is owner/admin
+   * (the `manageBilling` capability, `lib/organizations/capabilities.ts`);
    * a plain member gets BillingForbiddenError (→ 403, the routed-to-owner state).
    * Throws OrganizationNotFoundError (→ 404) for a non-member (the no-leak rule),
    * and lets a motir-ai failure propagate as a MotirAiError (→ the route's 502).
@@ -82,12 +84,13 @@ export const billingService = {
     if (!isCloudBilling()) throw new BillingNotAvailableError();
 
     // (1) Gate — reuse the 6.10.4 org access check (404 for a non-member); VIEW
-    // requires owner/admin (ADR §7), so a plain member is forbidden.
+    // requires the billing capability (owner/admin, ADR §7), so a plain member
+    // is forbidden.
     const access = await organizationsService.resolveOrgAccess(
       input.actorUserId,
       input.organizationId,
     );
-    if (!access.isOrgAdmin) {
+    if (!orgCan(access.role, 'manageBilling')) {
       throw new BillingForbiddenError('Viewing billing requires an org owner or admin.');
     }
 
@@ -123,7 +126,7 @@ export const billingService = {
 
     return {
       organizationId: input.organizationId,
-      access: { role: access.role, canManageBilling: isOrgOwnerRole(access.role) },
+      access: { role: access.role, canManageBilling: orgCan(access.role, 'manageBilling') },
       isMeta: org?.isMeta ?? false,
       internalBilling: org?.internalBilling ?? false,
       motir: { scaledTrackerSubscription, aiIncludedSeat: org?.aiIncludedSeat ?? false },
@@ -148,8 +151,8 @@ export const billingService = {
    *   • a free or `canceled` org (no scaled-tracker subscription).
    * When scaled+`active`/`past_due`, returns the pricing (from `BILLING_CATALOG`),
    * cadence (from the `tracker_*` price id), renewal (`currentPeriodEnd`) and the
-   * owner-only `canManageBilling` flag. This is a pure READ — it never writes
-   * Stripe (8.1.12 owns the seat-quantity sync); the seat COUNT is the membership
+   * `canManageBilling` flag (owner or admin since MOTIR-6305). This is a pure
+   * READ — it never writes Stripe (8.1.12 owns the seat-quantity sync); the seat COUNT is the membership
    * count, read client-side from the roster total.
    */
   async getSeatSummary(input: OrgActorInput): Promise<SeatSummaryDTO | null> {
@@ -159,7 +162,7 @@ export const billingService = {
       input.actorUserId,
       input.organizationId,
     );
-    if (!access.isOrgAdmin) return null;
+    if (!orgCan(access.role, 'manageBilling')) return null;
 
     const org = await withOrgContext(
       { userId: input.actorUserId, organizationId: input.organizationId },
@@ -178,7 +181,7 @@ export const billingService = {
       monthlyPerSeatUsd: seatPrices.monthly.amountUsd,
       annualPerSeatUsd: seatPrices.annual.amountUsd,
       currentPeriodEnd: sub.currentPeriodEnd,
-      canManageBilling: isOrgOwnerRole(access.role),
+      canManageBilling: orgCan(access.role, 'manageBilling'),
     };
   },
 
@@ -217,8 +220,9 @@ export const billingService = {
   async getAiAccess(input: OrgActorInput): Promise<AiAccessDTO> {
     if (!isCloudBilling()) return notApplicableAiAccess();
 
-    // Membership gate ONLY (any role) — NOT the owner/admin VIEW gate. Owner vs
-    // member just selects the paywall variant (canManageBilling), never access.
+    // Membership gate ONLY (any role) — NOT the owner/admin VIEW gate. Owner or
+    // admin vs member just selects the paywall variant (canManageBilling), never
+    // access.
     const access = await organizationsService.resolveOrgAccess(
       input.actorUserId,
       input.organizationId,
@@ -260,7 +264,7 @@ export const billingService = {
       applicable: true,
       organizationId: input.organizationId,
       organizationName: org?.name ?? null,
-      canManageBilling: isOrgOwnerRole(access.role),
+      canManageBilling: orgCan(access.role, 'manageBilling'),
       hasPaidAiPlan:
         subscription.status !== null && PAID_AI_SUBSCRIPTION_STATUSES.has(subscription.status),
       balance: usage.balance,
@@ -288,7 +292,7 @@ export const billingService = {
   async startCheckout(
     input: OrgActorInput & { priceLookupKey: string; quantity?: number },
   ): Promise<BillingSessionDTO> {
-    await this.assertOwnerForMutation(input);
+    await this.assertBillingManagerForMutation(input);
 
     if (!isKnownCheckoutPrice(input.priceLookupKey)) {
       throw new UnknownBillingPriceError(input.priceLookupKey);
@@ -316,7 +320,7 @@ export const billingService = {
    * surfaces as a MotirAiJobNotFoundError the route maps via the boundary path.
    */
   async openPortal(input: OrgActorInput): Promise<BillingSessionDTO> {
-    await this.assertOwnerForMutation(input);
+    await this.assertBillingManagerForMutation(input);
 
     return createPortalSession({
       coreOrganizationId: input.organizationId,
@@ -325,19 +329,23 @@ export const billingService = {
   },
 
   /**
-   * Shared mutation gate: cloud-on + the actor is the org OWNER (ADR §7 — every
-   * billing mutation is owner-only; an admin's view access does NOT extend to
-   * mutations). Throws BillingNotAvailableError (404) / OrganizationNotFoundError
-   * (404, non-member) / BillingForbiddenError (403, non-owner).
+   * Shared mutation gate: cloud-on + the actor holds the `manageBilling`
+   * capability — the Owner or an Admin (ADR §7 as amended 2026-09-25 by
+   * MOTIR-6305: billing mutations were owner-only until the role model,
+   * `role-model.md` §1, gave billing to the Admins). Throws
+   * BillingNotAvailableError (404) / OrganizationNotFoundError (404, non-member)
+   * / BillingForbiddenError (403, a plain member).
    */
-  async assertOwnerForMutation(input: OrgActorInput): Promise<void> {
+  async assertBillingManagerForMutation(input: OrgActorInput): Promise<void> {
     if (!isCloudBilling()) throw new BillingNotAvailableError();
     const access = await organizationsService.resolveOrgAccess(
       input.actorUserId,
       input.organizationId,
     );
-    if (!isOrgOwnerRole(access.role)) {
-      throw new BillingForbiddenError('Managing billing is limited to the organization owner.');
+    if (!orgCan(access.role, 'manageBilling')) {
+      throw new BillingForbiddenError(
+        'Managing billing is limited to the organization owner and admins.',
+      );
     }
   },
 

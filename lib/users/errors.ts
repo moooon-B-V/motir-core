@@ -191,20 +191,22 @@ export class PasswordRateLimitedError extends Error {
 // sentence, and `Unique constraint failed on the fields: (user_id)` is not one.
 
 /**
- * The reader is the last owner of an organization other people belong to, so
- * the account cannot be closed (DECISION 5 — `assertNotLastOwner`'s condition,
- * read through the impact preview rather than caught from a delete attempt).
+ * The reader is the owner of an organization other people belong to, so the
+ * account cannot be closed (DECISION 5 — the Owner's locked membership,
+ * MOTIR-6307, read through the impact preview rather than caught from a delete
+ * attempt).
  *
  * Carries the organization's NAME because the refusal is only actionable with
- * it: the pane's way out is *"hand the owner role over in `Organization ›
- * Members`"*, and a reader who owns three organizations needs to know which.
+ * it: the pane's way out is *Transfer ownership* on that organization's
+ * settings (MOTIR-6314), and a reader who owns three organizations needs to
+ * know which.
  */
 export class AccountDeletionBlockedError extends Error {
   readonly code = 'ACCOUNT_DELETION_BLOCKED' as const;
   constructor(readonly organizationName: string) {
     super(
-      `This account owns ${organizationName} and is its only owner. ` +
-        `Hand the owner role to somebody else before deleting the account.`,
+      `This account owns ${organizationName}, which other people belong to. ` +
+        `Transfer its ownership before deleting the account.`,
     );
     this.name = 'AccountDeletionBlockedError';
   }

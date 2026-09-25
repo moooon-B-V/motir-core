@@ -26,6 +26,14 @@ import { useDependencyLegendCollapsed } from '@/lib/hooks/useDependencyLegendCol
 import { Spinner } from '@/components/ui/Spinner';
 import { ARRIVAL_MIN_SCALE } from '@/lib/planning/canvasGeometry';
 import {
+  arrivalsSummary,
+  EMPTY_ARRIVALS,
+  foldArrivals,
+  visitLevel,
+  type ArrivalsLog,
+  type LiveArrival,
+} from '@/lib/planning/livePane';
+import {
   NODE_H,
   NODE_W,
   deterministicLayout,
@@ -424,6 +432,31 @@ interface ProjectRoadmapCanvasBaseProps {
    * nothing else on this surface, and must not be read as a failed load.
    */
   levelCaption?: ReactNode;
+  /**
+   * MOTION — threaded to `PlanningCanvas`'s opt-in (MOTIR-6297, Part XXIII
+   * §23.3–§23.5): a level whose nodes / edges change under a mounted canvas plays
+   * the change instead of snapping to it, and a node's `changeKey` drives the
+   * deepen cue. OFF by default and deliberately so: the roadmap, runs, work-item
+   * roadmaps, onboarding and the plan page redraw on navigation, where motion
+   * would animate a level change nobody asked to see. Only the planning surface's
+   * live pane opts in (MOTIR-6300). A drill still remounts the canvas per level,
+   * so arriving on a level plays nothing.
+   */
+  motion?: boolean;
+  /**
+   * THE ARRIVALS COUNT (MOTIR-6300; design Part XXIII §23.7) — the plan's cards as
+   * the snapshot being drawn has them, while the plan is WRITTEN. A card that
+   * arrives on a level other than the one being viewed is COUNTED in the
+   * breadcrumb row, as a pill in the follow offer's own markup, and never jumped
+   * to: taking the pill is the reader's own act. Visiting a level clears its
+   * count. The first snapshot is the baseline and counts nothing.
+   *
+   * Absent (the default) on every other surface, which then renders exactly as
+   * before. When it goes absent mid-mount (the plan stopped being written) the
+   * count stops growing and what it already holds stays, because the hand-over
+   * changes nothing but the bar (§23.13).
+   */
+  arrivals?: readonly LiveArrival[] | null;
 }
 
 /**
@@ -497,6 +530,8 @@ export function ProjectRoadmapCanvas({
   arriveAtReadableScale = false,
   resolveHeldNode,
   levelCaption,
+  motion = false,
+  arrivals = null,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tFolders = useTranslations('folders');
@@ -737,6 +772,25 @@ export function ProjectRoadmapCanvas({
     }
   }, [followEvent]);
 
+  // ── THE ARRIVALS COUNT (MOTIR-6300; design Part XXIII §23.7) ──────────────
+  // Folded DURING render, the same adjust-state-when-an-input-changes shape the
+  // follow above uses: each new snapshot is diffed against the last one by card id,
+  // and a change of the level the reader stands on clears that level's count. The
+  // canvas never moves for an arrival — the pill below is the only way there.
+  const [arrivalLog, setArrivalLog] = useState<ArrivalsLog>(() => ({
+    ...EMPTY_ARRIVALS,
+    viewing: focusId,
+  }));
+  {
+    let nextLog = arrivalLog;
+    if (arrivals !== null && arrivals !== nextLog.source) {
+      nextLog = foldArrivals(nextLog, arrivals, focusId);
+    }
+    if (nextLog.viewing !== focusId) nextLog = visitLevel(nextLog, focusId);
+    if (nextLog !== arrivalLog) setArrivalLog(nextLog);
+  }
+  const arrivalsPill = arrivalsSummary(arrivalLog.pending);
+
   // Release the fade once the followed level has painted, so it transitions IN
   // rather than appearing already faded. A frame, not a timer: the class does the
   // easing and this only flips the endpoint.
@@ -943,8 +997,39 @@ export function ProjectRoadmapCanvas({
   }, [focusId, reloadKey, applyDrill]);
 
   const nodes = useMemo(() => level?.data.nodes ?? [], [level]);
+  // ── AN EMPTY LEVEL FILLING IN FRONT OF THE READER (MOTIR-6300) ─────────────
+  // With `motion` on, an empty level renders the empty statement, not the engine,
+  // so the first cards to land would MOUNT the engine and draw settled — the one
+  // case a live plan most often starts from (a brand-new story's children). So the
+  // level that was seen EMPTY is remembered, and when that same level fills, the
+  // engine mounts with `animateInitial`: its first snapshot plays as arrivals.
+  // Opening on a populated level, or arriving on one by navigation, still plays
+  // nothing — the mark is cleared the moment a different, populated level draws.
+  const shownLevelKey = level === null ? null : levelKey(level.focusId);
+  const [emptySeenAt, setEmptySeenAt] = useState<string | null>(null);
+  if (motion && shownLevelKey !== null) {
+    if (nodes.length === 0) {
+      if (emptySeenAt !== shownLevelKey) setEmptySeenAt(shownLevelKey);
+    } else if (emptySeenAt !== null && emptySeenAt !== shownLevelKey) {
+      setEmptySeenAt(null);
+    }
+  }
+  const animateInitial = motion && shownLevelKey !== null && emptySeenAt === shownLevelKey;
   const deps = useMemo(() => level?.data.deps ?? [], [level]);
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  // ⚠️ AN EXITING NODE STILL NEEDS ITS CARD (bug MOTIR-6345). With `motion` on, the
+  // engine RETAINS a node that has left the level for its exit animation and still
+  // asks `renderNode` to draw it — but the id is no longer in `byId`, so the box
+  // faded out EMPTY and the card simply vanished (Part XXIII §23.3 says the CARD
+  // leaves). So the last card drawn for each id is kept here and read only for an
+  // id the current level no longer holds. It is written in an effect, so on the
+  // render where a node leaves it still holds that node. With `motion` off nothing
+  // reads it, and the output is unchanged.
+  const lastDrawnRef = useRef(new Map<string, (typeof nodes)[number]>());
+  useEffect(() => {
+    if (!motion) return;
+    for (const n of nodes) lastDrawnRef.current.set(n.id, n);
+  }, [motion, nodes]);
   const matchIds = useMemo(() => new Set(searchMatches(nodes, query)), [nodes, query]);
 
   // The emphasised ids that are actually ON this level. The consumer hands over
@@ -1061,6 +1146,7 @@ export function ProjectRoadmapCanvas({
     ...positionOf(n),
     width: n.width ?? NODE_W,
     height: n.height ?? NODE_H,
+    ...(n.changeKey !== undefined ? { changeKey: n.changeKey } : {}),
   }));
   const canvasEdges: CanvasEdge[] = deps.map((d) => ({
     from: d.from,
@@ -1127,6 +1213,24 @@ export function ProjectRoadmapCanvas({
   const goBack = useCallback(() => {
     navigate(crumbs.length >= 2 ? (crumbs[crumbs.length - 2]?.id ?? null) : null);
   }, [crumbs, navigate]);
+
+  // *Go there* on the ARRIVALS pill (MOTIR-6300; §23.7) — a navigation the reader
+  // CHOSE, so it is the one thing an arrival may move the canvas by. It drills by
+  // the arriving card's own trail, and it is the reader's act: every later
+  // `followTo` is declined, and the level is reported like any other move.
+  const goToArrivals = useCallback((trail: readonly CanvasCrumb[]) => {
+    const next = [...trail];
+    const levelId = next[next.length - 1]?.id ?? null;
+    setNavigated(true);
+    suppressedLevelRef.current = levelKey(levelId);
+    setCrumbs(next);
+    setFocusId(levelId);
+    setLocalPositions({});
+    setSelectedId(null);
+    setHighlightId(null);
+    setShowChangesOverride(null);
+    onLevelChangeRef.current?.(next);
+  }, []);
 
   const locate = useCallback(() => {
     const ms = searchMatches(nodes, query);
@@ -1228,7 +1332,7 @@ export function ProjectRoadmapCanvas({
   const locateDisabledReason = emphasis ? emphasis.emptyLabel : t('locateNothing');
 
   function renderNode(cn: CanvasNode) {
-    const node = byId.get(cn.id);
+    const node = byId.get(cn.id) ?? (motion ? lastDrawnRef.current.get(cn.id) : undefined);
     if (!node) return null;
     const matched = highlightId === cn.id || matchIds.has(cn.id);
     const selected = cn.id === selectedId;
@@ -1341,8 +1445,10 @@ export function ProjectRoadmapCanvas({
         {followAnnouncement}
       </div>
       <div className="pointer-events-none absolute top-3 right-3 left-3 z-10 flex min-w-0 flex-wrap items-start gap-2">
-        {/* breadcrumb + Back overlay — only while drilled */}
-        {(drilled || declined !== null) && (
+        {/* breadcrumb + Back overlay — only while drilled. At the ROOT it renders
+            for the arrivals pill too (§23.7): the root crumb and the pill, and no
+            Back, because there is nowhere to go back to. */}
+        {(drilled || declined !== null || arrivalsPill !== null) && (
           <nav
             aria-label={t('breadcrumb')}
             // Widened from 36rem with the `identifier · title` crumb label (MOTIR-1805
@@ -1352,14 +1458,16 @@ export function ProjectRoadmapCanvas({
             // their own right-aligned row instead of crushing the crumb targets.
             className="pointer-events-auto flex min-w-0 max-w-[44rem] basis-[44rem] flex-1 items-center gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)"
           >
-            <button
-              type="button"
-              onClick={goBack}
-              aria-label={t('back')}
-              className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-            >
-              <ChevronLeft className="size-4" aria-hidden="true" />
-            </button>
+            {(drilled || declined !== null) && (
+              <button
+                type="button"
+                onClick={goBack}
+                aria-label={t('back')}
+                className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              >
+                <ChevronLeft className="size-4" aria-hidden="true" />
+              </button>
+            )}
             <ol className="flex min-w-0 items-center gap-1 text-sm">
               <li className="shrink-0">
                 <Crumb label={resolvedRootLabel} active={false} onClick={() => navigate(null)} />
@@ -1453,6 +1561,29 @@ export function ProjectRoadmapCanvas({
                     declined.trail[declined.trail.length - 1]?.crumbKey ??
                     declined.trail[declined.trail.length - 1]?.label ??
                     '',
+                })}
+              </button>
+            )}
+            {/* THE ARRIVALS COUNT (MOTIR-6300; design Part XXIII §23.7) — ONE slot,
+                in the follow offer's own markup. The offer WINS it when it is up: it
+                already names where the plan lands. */}
+            {declined === null && arrivalsPill !== null && (
+              <button
+                type="button"
+                data-testid="canvas-arrivals-offer"
+                onClick={() => goToArrivals(arrivalsPill.latest.trail)}
+                className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
+                />
+                {tTarget(arrivalsPill.levels > 1 ? 'arrivedAcross' : 'arrivedIn', {
+                  count: arrivalsPill.count,
+                  identifier:
+                    arrivalsPill.latest.trail[arrivalsPill.latest.trail.length - 1]?.crumbKey ??
+                    arrivalsPill.latest.trail[arrivalsPill.latest.trail.length - 1]?.label ??
+                    resolvedRootLabel,
                 })}
               </button>
             )}
@@ -1854,6 +1985,8 @@ export function ProjectRoadmapCanvas({
           focusNonce={focusNonce}
           focusScale={focusScale}
           ariaLabel={resolvedAriaLabel}
+          motion={motion}
+          animateInitial={animateInitial}
         />
       )}
     </div>

@@ -133,13 +133,11 @@ export interface BuildWorkItemLevelOptions {
    *
    * It is a SET rather than a predicate for the same reason `groupCrumbLabel` is a
    * string: this builder is a pure function that knows nothing about plans, and
-   * WHICH rows are exempt is the consumer's own question. `PlanChangeCanvas` and
-   * `PlanReviewCanvas` answer it with `touchedByProposal`
-   * (`lib/planning/planChangeDiff.ts`), never with `diffStateForItem` — that
-   * function's `'locked'` verdict is a property of the row's own status, and
-   * keying on it would drag every `done` root back onto the road the moment any
-   * plan is pending. Absent / empty ⇒ the two-conjunct roadmap predicate,
-   * unchanged.
+   * WHICH rows are exempt is the consumer's own question. `PlanReviewCanvas`
+   * answers it with the node ids its plan names (plus a pending add's target) —
+   * membership in the proposal, never a row's own terminal status, which would
+   * drag every `done` root back onto the road the moment any plan is pending.
+   * Absent / empty ⇒ the two-conjunct roadmap predicate, unchanged.
    */
   groupExcludeIds?: ReadonlySet<string>;
   /** The grouped node's BREADCRUMB label — localized copy the consumer supplies,
@@ -311,14 +309,13 @@ export function buildWorkItemLevel(
   //    must still descend normally (MOTIR-1807).
   //
   // THE THIRD CONJUNCT (`groupExcludeIds`, Part XVI decision 2) narrows the
-  // candidate set on the plan-change canvases: a row the pending proposal touches
-  // stays on the road. It is applied HERE, with the other two, so the
-  // "leave something on the road" guard below measures the set that is actually
-  // grouped — and so a consumer can never group a proposal's target, which is
-  // what re-opens MOTIR-3206 (`decoratePlanChangeLevel` merges a materialized
-  // add's frame ONTO the committed node; take that node off the level and the
-  // merge cannot land, so the accepted card is appended a second time as a
-  // keyless ghost).
+  // candidate set on the plan review canvas: a row the plan touches stays on the
+  // road. It is applied HERE, with the other two, so the "leave something on the
+  // road" guard below measures the set that is actually grouped — and so a
+  // consumer can never group a proposal's target, which is what re-opens
+  // MOTIR-3206 (`mergePlanLevel` lands a materialized add ON the committed node;
+  // take that node off the level and the merge cannot land, so the accepted card
+  // is appended a second time as a keyless ghost).
   const exclude = opts.groupExcludeIds;
   const candidates =
     opts.groupNonEpicRoots === true

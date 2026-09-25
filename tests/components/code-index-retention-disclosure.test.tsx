@@ -33,7 +33,9 @@ afterEach(cleanup);
 describe('every surface with a code graph discloses what happens to it', () => {
   const surfaces = [
     { name: 'project archive', get: (m: typeof en) => m.settings.archive.modalCodeIndex },
-    { name: 'workspace delete', get: (m: typeof en) => m.settings.danger.deleteModalCodeIndex },
+    // The workspace-tier delete moved to the org Workspaces card's REMOVE (MOTIR-6312),
+    // and its immediate-no-recovery sentence moved with it.
+    { name: 'workspace remove', get: (m: typeof en) => m.orgAdmin.workspaces.removeCodeIndex },
     { name: 'GitHub repo selection', get: (m: typeof en) => m.github.repos.codeIndex },
   ];
 
@@ -62,19 +64,19 @@ describe('the windowed arms and the immediate arm do not read alike', () => {
     }
   });
 
-  it('the WORKSPACE-DELETE copy promises no window at all', () => {
+  it('the WORKSPACE-REMOVE copy promises no window at all', () => {
     // A workspace delete is a hard cascade with no surface left to undo into, so
     // it has no grace period. Copy that flattened the two arms into one
     // reassuring sentence would promise a recovery window that does not exist for
     // the most destructive action the product offers — worse than saying nothing,
     // because the user would rely on it.
-    const message = en.settings.danger.deleteModalCodeIndex;
+    const message = en.orgAdmin.workspaces.removeCodeIndex;
     expect(message).toMatch(/immediately/i);
     expect(message).not.toContain('{days}');
     expect(message).not.toMatch(/\b\d+\s*days?\b/);
 
-    expect(zh.settings.danger.deleteModalCodeIndex).toContain('立即');
-    expect(zh.settings.danger.deleteModalCodeIndex).not.toContain('{days}');
+    expect(zh.orgAdmin.workspaces.removeCodeIndex).toContain('立即');
+    expect(zh.orgAdmin.workspaces.removeCodeIndex).not.toContain('{days}');
   });
 
   it('the archive copy no longer claims the archive deletes nothing', () => {

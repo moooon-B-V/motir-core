@@ -8,11 +8,12 @@ import type { PlanPlacementSideDto, PlanReviewDto, PlanReviewItemDto } from '@/l
 // read (`getPlanReview`, MOTIR-847) returns them already resolved for a canvas —
 // node ids, parents, live target fields, staleness. But the canvas renders one
 // LEVEL at a time (drill-down, mistake #91). This module turns that flat item list
-// into what a level needs: "is THIS item changed / removed / locked?" and "which
-// proposed items are children of THIS focus?".
+// into what the surface's gate needs: the counts the confirm bar and the rail
+// read, the folder badges, and "which proposed items are children of THIS focus?".
 //
 // Pure (no React, no DOM, no fetching) so the placement rules are exhaustively
-// unit-testable; `planChangeLevel.tsx` renders what it returns.
+// unit-testable. It builds NO canvas level: the one level builder is
+// `mergePlanLevel` (`components/planning/planLevel.tsx`, MOTIR-6299).
 //
 // ⚠️ It indexes the PLAN, not a `PlanDelta` (MOTIR-1746). Every plan-edit handler
 // in motir-ai returns an EMPTY `planDelta` and writes its output as proposals
@@ -20,9 +21,6 @@ import type { PlanPlacementSideDto, PlanReviewDto, PlanReviewItemDto } from '@/l
 // and the review gate could never fire. Reading the plan also makes the design's
 // fourth state real: a `remove` proposal is something the engine genuinely emits
 // (`expandItem` / `replan`), where the delta contract had no op for it.
-
-/** The visual state a canvas node takes under a pending proposal. */
-export type PlanChangeDiffState = 'add' | 'change' | 'remove' | 'locked';
 
 /** The canvas node id prefix for a proposed (not-yet-persisted) item. Prefixed so
  *  it can never collide with a real work-item id, and so the canvas's drill /
@@ -34,16 +32,6 @@ export const PROPOSED_NODE_PREFIX = 'proposed:';
 export function isProposedNodeId(id: string): boolean {
   return id.startsWith(PROPOSED_NODE_PREFIX);
 }
-
-/**
- * Statuses whose items an approve REFUSES to modify. This mirrors the server
- * gate exactly: `plansService.approvePlan`'s persist gate (7.12.5 · MOTIR-911)
- * rejects any target whose status sits in a `done`-CATEGORY workflow status,
- * which in the default workflow is `done` + `cancelled`. Locking them on the
- * canvas is the same rule made visible BEFORE the user approves (design panel 4 —
- * "the engine proposes around finished work, never over it").
- */
-const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
 
 /**
  * Has this `add` BECOME a work item? `materialize` stamps `plan_item.workItemId`
@@ -66,9 +54,9 @@ function isMaterializedAdd(item: PlanReviewItemDto): boolean {
 export interface ProposedAdd {
   /** The canvas node id: the synthetic `proposed:<planItemId>` while the add is
    *  still a proposal, and the WORK ITEM's own id once it has materialized — the
-   *  same id the committed node on the level carries, which is what lets
-   *  `decoratePlanChangeLevel` land the decided treatment ON that node instead of
-   *  beside it (MOTIR-3160's rule, on this canvas). */
+   *  same id the committed node on the level carries, so a decided add names
+   *  the card it became rather than a keyless ghost beside it (MOTIR-3160's
+   *  rule). */
   nodeId: string;
   /** The review item itself — already the shape `PlanItemNode` draws. */
   item: PlanReviewItemDto;
@@ -230,21 +218,11 @@ function levelOfSide(side: PlanPlacementSideDto): string | null {
   return side.folderMissing ? null : folderNodeId(side.folderId);
 }
 
-/** The diff state an EXISTING level item takes, or null when the proposal doesn't
- *  touch it and it is freely editable. Terminal wins over a proposed change or
- *  removal: a finished item the engine tried to touch is still locked (and the
- *  approve is rejected server-side), so the lock is what the user must see. */
-export function diffStateForItem(
-  index: PlanChangeDiffIndex,
-  item: { id: string; status: string },
-): PlanChangeDiffState | null {
-  if (TERMINAL_STATUSES.has(item.status)) return 'locked';
-  if (index.removalsById.has(item.id)) return 'remove';
-  return index.changesById.has(item.id) ? 'change' : null;
-}
-
-/** The proposal (`modify` or `remove`) that put an existing item in that state,
- *  so the node can name WHAT changed. Null for `add` / `locked` / untouched. */
+/** The proposal (`modify` or `remove`) that touches an existing item, so a
+ *  caller can name WHAT changed. Undefined for an item the plan does not touch.
+ *  (A `locked` treatment is no longer decided here: it is `PlanItemNode`'s
+ *  `isLockedProposal`, drawn only on a modify / remove of a finished target —
+ *  MOTIR-6296.) */
 export function proposalForItem(
   index: PlanChangeDiffIndex,
   itemId: string,
@@ -259,22 +237,17 @@ export function proposalForItem(
  * epics AND what the change is about, so a row the proposal touches stays on the
  * level the reviewer is standing on instead of moving behind the group's door.
  *
- * ⚠️ THIS IS MEMBERSHIP IN THE PROPOSAL, NEVER `diffStateForItem`'s VERDICT, and
- * the difference is the trap Part XVI §16.8 names. `diffStateForItem` answers
- * "what state does this row draw in", and it returns `'locked'` for EVERY
- * terminal-status row on the level whenever the index is non-empty — regardless
- * of whether the plan touches it. Most parentless defects on a mature tree are
- * `done`, so keying on it would drag nearly the whole group back onto the road
- * the moment any plan is pending. `locked` is a property of the row's own
- * status, not of the proposal, and it does not qualify.
+ * ⚠️ THIS IS MEMBERSHIP IN THE PROPOSAL, never a row's own status — the trap
+ * Part XVI §16.8 names. Most parentless defects on a mature tree are `done`, so
+ * keying on terminal status would drag nearly the whole group back onto the road
+ * the moment any plan is pending.
  *
  * A MATERIALIZED `add` qualifies through `adds`: its `nodeId` IS the committed
- * work item's id ({@link isMaterializedAdd}), which is exactly the row
- * `decoratePlanChangeLevel` merges the add frame onto — and grouping that row
- * away is what re-opens MOTIR-3206 (the merge cannot land, the entry survives in
- * `pendingAdds`, and the accepted card is appended a second time as a keyless
- * ghost). A still-PENDING add cannot collide here: its `nodeId` carries the
- * `proposed:` prefix, which no work-item id has.
+ * work item's id ({@link isMaterializedAdd}), which is exactly the row a decided
+ * add lands ON — and grouping that row away is what re-opens MOTIR-3206 (the
+ * accepted card drawn a second time as a keyless ghost). A still-PENDING add
+ * cannot collide here: its `nodeId` carries the `proposed:` prefix, which no
+ * work-item id has.
  *
  * A pending add's TARGET qualifies through `parentNodeId`, and it is the case the
  * `nodeId` clauses above all miss: the commonest contextual ask ("break this

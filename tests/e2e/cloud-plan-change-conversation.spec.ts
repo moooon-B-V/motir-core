@@ -234,13 +234,12 @@ const confirmBar = (page: Page) => workspace(page).getByTestId('plan-change-conf
 const canvas = (page: Page) => workspace(page).getByTestId('roadmap-canvas');
 /** A PROPOSED card, as the PLAN PAGE draws it.
  *
- *  ⚠️ `PlanItemNode`'s `data-op`, NOT `PlanChangeDiffFrame`'s `data-diff-state`
- *  (MOTIR-6155). Once a plan is proposed the left pane mounts the plan page's own
- *  List | Canvas component, so a proposal on this surface is the same node the
- *  plan page draws and wears the same vocabulary — `add` / `modify` / `remove`
- *  rather than `add` / `change`. The diff frames stay the language of the
- *  UNDECORATED roadmap, which is what this surface still shows with no plan and
- *  while one is being written. */
+ *  ⚠️ `PlanItemNode`'s `data-op` (MOTIR-6155). Once a plan is proposed the left
+ *  pane mounts the plan page's own List | Canvas component, so a proposal on this
+ *  surface is the same node the plan page draws and wears the same vocabulary —
+ *  `add` / `modify` / `remove`. It is the one proposal card: MOTIR-6299 deleted
+ *  this surface's own diff frame, so with no plan (and, until MOTIR-6300, while
+ *  one is being written) the pane is the plain roadmap with no proposal on it. */
 const opNodes = (page: Page, op: 'add' | 'modify' | 'remove') =>
   workspace(page).locator(`[data-op="${op}"]`);
 
@@ -334,8 +333,8 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     ).toBeVisible();
     await expect(rail(page).getByRole('button', { name: 'Add work to an epic' })).toBeVisible();
     await expect(confirmBar(page)).toHaveCount(0);
-    // ON THE CANVAS — the diff nodes are drawn inside `roadmap-canvas`.
-    await expect(canvas(page).getByTestId('plan-change-diff-node')).toHaveCount(0);
+    // ON THE CANVAS — a proposal card would be drawn inside `roadmap-canvas`.
+    await expect(canvas(page).getByTestId('plan-item-node')).toHaveCount(0);
     await beat();
   });
 

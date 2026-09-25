@@ -96,7 +96,12 @@ describe('the below-reveal capability SET — what a plain workspace member can 
   it('hosts FOUR of the five sections itself — and the set is asserted whole, not one by one', async () => {
     seedPlainMember();
     render(
-      await WorkspaceFoldInSection({ workspaceId: 'ws1', actorUserId: 'u1', workspaceCount: 1 }),
+      await WorkspaceFoldInSection({
+        workspaceId: 'ws1',
+        actorUserId: 'u1',
+        workspaceCount: 1,
+        canManageWorkspaces: true,
+      }),
     );
 
     // `toEqual` on the full list rather than four `getByTestId` calls: a missing
@@ -113,7 +118,12 @@ describe('the below-reveal capability SET — what a plain workspace member can 
     // other surface anywhere in the product.
     seedPlainMember();
     render(
-      await WorkspaceFoldInSection({ workspaceId: 'ws1', actorUserId: 'u1', workspaceCount: 1 }),
+      await WorkspaceFoldInSection({
+        workspaceId: 'ws1',
+        actorUserId: 'u1',
+        workspaceCount: 1,
+        canManageWorkspaces: true,
+      }),
     );
     expect(screen.getByTestId('cap-danger')).toBeTruthy();
     // Nothing in this section's inputs is an org role.
@@ -133,7 +143,12 @@ describe('the below-reveal capability SET — what a plain workspace member can 
       organizationName: null,
     });
     const { container } = render(
-      await WorkspaceFoldInSection({ workspaceId: 'ws1', actorUserId: 'u1', workspaceCount: 1 }),
+      await WorkspaceFoldInSection({
+        workspaceId: 'ws1',
+        actorUserId: 'u1',
+        workspaceCount: 1,
+        canManageWorkspaces: true,
+      }),
     );
     expect(container.innerHTML).toBe('');
   });

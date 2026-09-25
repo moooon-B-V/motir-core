@@ -33,7 +33,7 @@ import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } fro
 //      select and the write;
 //   2. DELETED — the credential and auth substrate, the personal-data EXPORTS
 //      and the archives they built (Bug MOTIR-3732), and the sole-membership
-//      workspaces, which must go through `workspacesService.deleteWorkspace` so
+//      workspaces, which must go through `workspacesService.deleteWorkspaceForErasure` so
 //      the code-graph offboarding queue is fed;
 //   3. ANONYMISED — a third party's comments and backlog SURVIVE, counted
 //      before and after, with the name gone;
@@ -331,8 +331,8 @@ describe('DELETED — what is theirs alone', () => {
     expect(reborn.id).not.toBe(user.id);
   });
 
-  it('deletes a SOLE-MEMBERSHIP workspace through deleteWorkspace, feeding the offboarding queue', async () => {
-    // The card's own contract: routed through `deleteWorkspace`, the existing
+  it('deletes a SOLE-MEMBERSHIP workspace through deleteWorkspaceForErasure, feeding the offboarding queue', async () => {
+    // The card's own contract: routed through `deleteWorkspaceForErasure`, the existing
     // `workspace_deleted` arm fires and nothing is owed; by any other path the
     // derived graphs become the unreferenced orphans
     // `docs/decisions/code-graph-index-fleet.md` §14 exists to prevent. The
@@ -681,7 +681,7 @@ describe('the run', () => {
     await scheduleDue(user.id);
 
     const boom = vi
-      .spyOn(workspacesService, 'deleteWorkspace')
+      .spyOn(workspacesService, 'deleteWorkspaceForErasure')
       .mockRejectedValueOnce(new Error('blob store unreachable'));
     const first = await accountErasureSweepService.sweep();
     expect(first).toMatchObject({ failed: 1 });
@@ -728,10 +728,10 @@ describe('the run', () => {
 
   it('runs its side effect AFTER the erasure transaction commits, never inside it', async () => {
     // The acceptance criterion is about the SHAPE of the transaction: it holds
-    // DB writes and nothing else, and `deleteWorkspace` — which opens its own
+    // DB writes and nothing else, and `deleteWorkspaceForErasure` — which opens its own
     // transactions and fires the offboarding enqueue — is outside it.
     //
-    // Read from an INDEPENDENT connection at the moment `deleteWorkspace` is
+    // Read from an INDEPENDENT connection at the moment `deleteWorkspaceForErasure` is
     // entered: if the delete were inside the erasure transaction, that
     // transaction would not have committed and this read would still see
     // `scheduled`. Seeing `completed` is the ordering, observed rather than
@@ -741,8 +741,8 @@ describe('the run', () => {
     const request = await scheduleDue(user.id);
 
     let statusWhenSideEffectRan: string | null = null;
-    const real = workspacesService.deleteWorkspace;
-    vi.spyOn(workspacesService, 'deleteWorkspace').mockImplementation(async (input) => {
+    const real = workspacesService.deleteWorkspaceForErasure;
+    vi.spyOn(workspacesService, 'deleteWorkspaceForErasure').mockImplementation(async (input) => {
       const row = await adminDb.accountDeletionRequest.findUniqueOrThrow({
         where: { id: request.id },
       });

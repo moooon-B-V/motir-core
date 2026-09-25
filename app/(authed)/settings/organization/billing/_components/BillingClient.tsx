@@ -13,7 +13,6 @@ import {
   CreditCard,
   Crown,
   ExternalLink,
-  Eye,
   Info,
   Layers,
   Lock,
@@ -486,8 +485,6 @@ function HomeView({
         <p className="max-w-prose font-sans text-sm text-(--el-text-muted)">{t('subtitle')}</p>
       </header>
 
-      {!canManage ? <AdminViewOnlyNote t={t} /> : null}
-
       {ciPaused ? ciLine : null}
       <MotirLine
         data={data}
@@ -508,20 +505,6 @@ function HomeView({
       <MotirSearchLine data={data} t={t} />
       <PaymentCard t={t} canManage={canManage} portal={portal} redirecting={redirecting} />
     </>
-  );
-}
-
-function AdminViewOnlyNote({ t }: { t: T }) {
-  return (
-    <div className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding)">
-      <Eye className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-      <div className="flex flex-col gap-1">
-        <Pill tone="neutral" className="w-fit">
-          {t('admin.viewOnly')}
-        </Pill>
-        <p className="font-sans text-xs text-(--el-text-muted)">{t('admin.lockNote')}</p>
-      </div>
-    </div>
   );
 }
 

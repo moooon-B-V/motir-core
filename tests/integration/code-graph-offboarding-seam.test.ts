@@ -263,7 +263,7 @@ describe('each lifecycle trigger writes the scope §14.3 gives it', () => {
     });
 
     const before = Date.now();
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: workspace.id,
       actorUserId: owner.id,
     });
@@ -277,10 +277,10 @@ describe('each lifecycle trigger writes the scope §14.3 gives it', () => {
   });
 });
 
-// ── 2. ⚠️ the ordering property, through the REAL deleteWorkspace path ───────
+// ── 2. ⚠️ the ordering property, through the REAL workspace delete ───────────
 
 describe('the queue row survives the real workspace cascade (§14.5)', () => {
-  it('is written AND still present after deleteWorkspace returns', async () => {
+  it('is written AND still present after the workspace delete returns', async () => {
     // MOTIR-2166 asserts the row survives a cascade. This asserts it survives THE
     // REAL CALL PATH, which is where the ordering bug would actually live: the
     // enumeration has to precede the delete, and only driving the shipped service
@@ -294,7 +294,7 @@ describe('the queue row survives the real workspace cascade (§14.5)', () => {
       name: 'Core',
     });
 
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: workspace.id,
       actorUserId: owner.id,
     });

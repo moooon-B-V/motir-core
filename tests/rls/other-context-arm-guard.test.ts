@@ -142,7 +142,7 @@ const DELIBERATELY_UNARMED: Record<string, { verdict: Verdict; why: string }> = 
       verdict: 'guc-less-arm',
       why: HOSTNAME_RESERVATION_WHY,
     },
-  'workspace-user::lib/services/workspacesService.ts#deleteWorkspace :: publicHostnameReservation':
+  'workspace-user::lib/services/workspacesService.ts#deleteWorkspaceCascade :: publicHostnameReservation':
     {
       verdict: 'guc-less-arm',
       why: HOSTNAME_RESERVATION_WHY,

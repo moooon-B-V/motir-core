@@ -143,8 +143,7 @@ export const workspaceMembershipRepository = {
    * Count of memberships in a workspace, LOCKING those rows `FOR UPDATE` inside
    * the caller's transaction — the race-safe read the last-member guard in
    * workspacesService.removeMember uses (lock-before-read-derived-update,
-   * CLAUDE.md § 4-layer; mirrors organizationMembershipRepository
-   * .countOwnersByOrgForUpdate). A plain same-transaction COUNT does NOT lock
+   * CLAUDE.md § 4-layer). A plain same-transaction COUNT does NOT lock
    * the rows another transaction deletes, so two concurrent leaves of a
    * 2-member workspace could both see `count = 2`, both pass the guard, and both
    * delete → ZERO members (an orphaned, unreachable workspace). Locking the
@@ -269,11 +268,11 @@ export const workspaceMembershipRepository = {
    * ⚠️ IT RUNS AFTER THE ERASURE TRANSACTION, NOT INSIDE IT, and the reason is
    * a gate rather than a preference. The sweep's next act is to delete the
    * workspaces the reader is the only member of, through
-   * `workspacesService.deleteWorkspace` — which opens with `assertMembership`,
-   * and that gate resolves through the ORGANIZATION tier (Story 6.10.4: *"a
-   * user with a stale workspace membership but no org membership is DENIED"*).
-   * Removing either tier before the delete makes the delete refuse, leaving a
-   * workspace standing that DECISION 3 says goes with the account.
+   * `workspacesService.deleteWorkspaceForErasure` — which asserts, under a lock,
+   * that the reader's workspace membership is the workspace's ONLY one
+   * (MOTIR-6309). Removing the memberships before the delete makes the delete
+   * refuse, leaving a workspace standing that DECISION 3 says goes with the
+   * account.
    *
    * So the memberships are the LAST thing erasure removes, and the sole-
    * membership ones are usually gone by then anyway — the workspace delete

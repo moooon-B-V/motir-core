@@ -39,10 +39,10 @@ export type PlanEntranceFace = 'plan' | 'replan' | null;
 // WHY RULE 1 IS NOT MERELY A PREFERENCE: the engine already refuses the work.
 // `validatePlanProposals` step 4 throws `PlanTargetImmutableError` (409) for any
 // `modify`/`remove` whose target sits in a `category = 'done'` status —
-// DONE-WORK IMMUTABILITY — and `diffStateForItem` returns `'locked'` for a
-// terminal item before it looks at any proposal ("the engine proposes around
-// finished work, never over it"). A door onto a done card leads to a workspace
-// that renders the very item you anchored on as locked.
+// DONE-WORK IMMUTABILITY — and `PlanItemNode` draws such a proposal `locked`
+// (`isLockedProposal`, MOTIR-6296: "the engine proposes around finished work,
+// never over it"). A door onto a done card leads to a workspace whose every
+// proposal about the item you anchored on is refused.
 //
 // Rule 1 reads the CATEGORY, never the `'done'` status KEY: projects define
 // their own statuses, the default workflow already carries a SECOND

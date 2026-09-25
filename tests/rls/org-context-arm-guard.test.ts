@@ -278,6 +278,29 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'org_membership_insert_active_or_bootstrap admits the write; the read arm asserted below ' +
       'is org_membership_visible_active_or_own.',
   },
+  'lib/services/workspacesService.ts#listUserWorkspaces': {
+    tables: ['workspace'],
+    source: 'scan',
+    why:
+      "MOTIR-6308 — the org Owner's switcher lists every workspace of the orgs they OWN, member " +
+      'or not. Inside one `withUserContext` transaction it re-binds app.organization_id per ' +
+      "owned org (the ids come from the actor's own owner rows) and reads " +
+      '`workspaceRepository.listByOrganization`. workspace_org_member_read admits it: the org ' +
+      'GUC just bound, and an organization_membership row for app.user_id. The two reads before ' +
+      'the first bind (the actor’s workspace memberships and owner rows) run under the user ' +
+      'context alone and are not org-context reads.',
+  },
+  'lib/services/workspacesService.ts#assertMayRemoveWorkspace': {
+    tables: ['organization_membership'],
+    source: 'hand',
+    why:
+      'MOTIR-6309 — the org-Admin workspace-remove gate. It binds app.organization_id INSIDE ' +
+      'a `withWorkspaceContext` transaction (so app.user_id / app.workspace_id stay set), with ' +
+      "the org id read off the workspace row itself, then reads the actor's own org membership " +
+      'through `assertOrgCapability` — a SERVICE call the walk cannot follow, hence `hand`. ' +
+      'org_membership_visible_active_or_own admits that read on both halves (the org GUC it ' +
+      'just bound, and app.user_id = the row). It performs no write of its own.',
+  },
 };
 
 let rlsTables: Set<string>;
@@ -491,7 +514,7 @@ describe('the guard has been SEEN to fail', () => {
     expect(withoutJoinArm.has('attachment'), 'the FROM clause is still armed').toBe(true);
     expect(withoutJoinArm.has('workspace'), 'the JOIN target is not').toBe(false);
 
-    // ⚠️ THREE members since MOTIR-4839, not one. The control removes `workspace`'s
+    // ⚠️ FOUR members since MOTIR-6308 (three since MOTIR-4839), not one. The control removes `workspace`'s
     // org arms wholesale, so it reports every swept site that reaches that table
     // under the org context — and CI attribution now does, at both of its sites,
     // for the tenancy reason their sweep entries carry. Their presence here is the
@@ -507,6 +530,10 @@ describe('the guard has been SEEN to fail', () => {
       'lib/services/entitlementsService.ts#assertWithinStorageCap :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
         '(reached via attachmentRepository.sumSizeByOrganization)',
+      'lib/services/workspacesService.ts#listUserWorkspaces :: workspace -> "workspace" ' +
+        'has RLS and NO app.organization_id read arm ' +
+        '(reached via organizationMembershipRepository.findOwnedOrganizationsByUser, ' +
+        'workspaceMembershipRepository.findWorkspacesByUser, workspaceRepository.listByOrganization)',
     ]);
   });
 
