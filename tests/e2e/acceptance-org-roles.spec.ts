@@ -5,7 +5,7 @@ import { resetDatabase } from './_helpers/db-reset';
 import { pinContextCookies } from './_helpers/billing';
 import { createTestPerson } from './_helpers/testPerson';
 import { signUp, signIn, SHELL_PASSWORD } from './_helpers/shell-session';
-import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -71,8 +71,8 @@ interface Tenant {
  */
 async function seedTenant(page: Page): Promise<Tenant> {
   await signUp(page, OLIVE);
-  const olive = await db.user.findFirstOrThrow({ where: { email: OLIVE } });
-  const home = await db.workspace.findFirstOrThrow({
+  const olive = await adminDb.user.findFirstOrThrow({ where: { email: OLIVE } });
+  const home = await adminDb.workspace.findFirstOrThrow({
     where: { name: `${OLIVE.split('@')[0]!}'s Workspace` },
   });
   const organizationId = home.organizationId;
@@ -80,17 +80,17 @@ async function seedTenant(page: Page): Promise<Tenant> {
   // cloud-on — the same trap and the same one-field remedy as
   // `acceptance-repository-tenancy.spec.ts`: a paid AI plan bundles a seat,
   // which resolves the org to the uncapped `scaled` tier.
-  await db.organization.update({
+  await adminDb.organization.update({
     where: { id: organizationId },
     data: { name: ORG_NAME, aiIncludedSeat: true },
   });
 
   const ada = await createTestPerson({ email: ADA, password: SHELL_PASSWORD, name: 'Ada' });
   const mo = await createTestPerson({ email: MO, password: SHELL_PASSWORD, name: 'Mo' });
-  await db.organizationMembership.create({
+  await adminDb.organizationMembership.create({
     data: { organizationId, userId: ada.id, role: ORGANIZATION_ROLE.admin },
   });
-  await db.organizationMembership.create({
+  await adminDb.organizationMembership.create({
     data: { organizationId, userId: mo.id, role: ORGANIZATION_ROLE.member },
   });
   await workspacesService.addMember({ userId: ada.id, workspaceId: home.id });
@@ -107,7 +107,7 @@ async function seedTenant(page: Page): Promise<Tenant> {
     name: 'Secret roadmap',
     identifier: 'SEC',
   });
-  await db.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
+  await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
   const item = await workItemsService.createWorkItem(
     { projectId: project.id, kind: 'task', title: SECRET_TITLE },
     { userId: olive.id, workspaceId: platform.id },
@@ -134,7 +134,7 @@ function dangerZone(page: Page) {
 }
 
 async function ownerOf(organizationId: string): Promise<string[]> {
-  const rows = await db.organizationMembership.findMany({
+  const rows = await adminDb.organizationMembership.findMany({
     where: { organizationId, role: ORGANIZATION_ROLE.owner },
     select: { userId: true },
   });
@@ -165,7 +165,9 @@ test('an Owner hands the organization over; each role then holds exactly its own
       });
       await page.goto('/settings/organization');
       await expect(dangerZone(page)).toBeVisible();
-      await expect(page.getByText('You’re the owner', { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole('main').getByText('You’re the owner', { exact: true }),
+      ).toBeVisible();
       await expect(page.getByRole('button', { name: 'Transfer ownership…' })).toBeEnabled();
       await expect(page.getByRole('button', { name: 'Delete organization' })).toBeDisabled();
       await beat();
@@ -206,14 +208,18 @@ test('an Owner hands the organization over; each role then holds exactly its own
     expect(await ownerOf(t.organizationId)).toEqual([t.adaId]);
 
     // The page redraws as the new Admin's view: the danger zone is gone.
-    await expect(page.getByText('You’re an admin', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('main').getByText('You’re an admin', { exact: true }),
+    ).toBeVisible();
     await expect(dangerZone(page)).toHaveCount(0);
     await beat();
 
     // The roster agrees: Ada is the Owner, Olive an Admin, and the Owner's row
     // carries no role picker for anyone.
     await page.goto('/settings/organization/members');
-    await expect(page.getByText('Ownership moves only by transfer', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('main').getByText('Ownership moves only by transfer', { exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Organization role for Ada' })).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Organization role for Mo' })).toBeVisible();
     await beat();
@@ -229,9 +235,9 @@ test('an Owner hands the organization over; each role then holds exactly its own
     const created = actionWrite(page, '/settings/organization', 'Scratch');
     await create.getByRole('button', { name: 'New workspace', exact: true }).click();
     expect((await created).status()).toBe(200);
-    // Scoped to the card: creating a workspace also switches into it, so the
-    // header's workspace and project switchers read 'Scratch' too.
-    await expect(page.getByLabel('Workspaces').getByText('Scratch', { exact: true })).toBeVisible();
+    // Scoped to the page body: creating a workspace also switches into it, so the
+    // header's workspace and project switchers (outside `main`) read 'Scratch' too.
+    await expect(page.getByRole('main').getByText('Scratch', { exact: true })).toBeVisible();
     await beat();
 
     await page.getByRole('button', { name: 'Remove Scratch' }).click();
@@ -244,7 +250,11 @@ test('an Owner hands the organization over; each role then holds exactly its own
     );
     await remove.getByRole('button', { name: 'Remove workspace' }).click();
     expect((await removed).status()).toBe(200);
-    await expect(page.getByText('Scratch removed', { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole('region', { name: /^Notifications/ })
+        .getByText('Scratch removed', { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText('Scratch', { exact: true })).toHaveCount(0);
     await beat();
   });
@@ -252,7 +262,7 @@ test('an Owner hands the organization over; each role then holds exactly its own
   await chapter('Mo, a Member, finds no organization doors at all', async () => {
     await signInAt(page, MO, t, t.homeWorkspaceId);
     await page.goto('/workbench');
-    await expect(page.getByTestId('workbench-page')).toBeVisible();
+    await expect(page.getByRole('main').getByTestId('workbench-page')).toBeVisible();
     // The create doors: none, in the org menu or the switcher.
     await expect(page.getByRole('button', { name: /New workspace/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Create workspace/ })).toHaveCount(0);
@@ -295,7 +305,7 @@ test('an Owner hands the organization over; each role then holds exactly its own
   await chapter('Ada, now the Owner, edits inside a workspace she never joined', async () => {
     // Ada holds no membership in `Platform`, and the project is private.
     expect(
-      await db.workspaceMembership.count({
+      await adminDb.workspaceMembership.count({
         where: { userId: t.adaId, workspaceId: t.platformWorkspaceId },
       }),
     ).toBe(0);
@@ -311,7 +321,8 @@ test('an Owner hands the organization over; each role then holds exactly its own
     expect((await saved).status()).toBe(200);
     await expect
       .poll(
-        async () => (await db.workItem.findUniqueOrThrow({ where: { id: t.secretItemId } })).title,
+        async () =>
+          (await adminDb.workItem.findUniqueOrThrow({ where: { id: t.secretItemId } })).title,
       )
       .toBe(EDITED_TITLE);
     await page.goto(`/items/${t.secretItemKey}`);
@@ -332,9 +343,11 @@ test('an Owner hands the organization over; each role then holds exactly its own
     // offers the one way out, which opens the transfer dialog on that org.
     await signInAt(page, ADA, t, t.homeWorkspaceId);
     await page.goto('/settings/account/data');
-    await expect(page.getByText('Action needed', { exact: true })).toBeVisible();
+    await expect(page.getByRole('main').getByText('Action needed', { exact: true })).toBeVisible();
     // The blocking org's row: its size and Ada's role in it.
-    await expect(page.getByText('3 members · you are the owner', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('main').getByText('3 members · you are the owner', { exact: true }),
+    ).toBeVisible();
     await page.getByRole('link', { name: 'Transfer ownership' }).click();
     await page.waitForURL('**/settings/organization?**');
     await expect(

@@ -226,49 +226,59 @@ describe('seam 3 — the account-erasure sweep, after the create/remove gate cha
   });
 });
 
+// Three rounds, each resetting the fixture — a loop of truncates, which is
+// lock-wait bound under shard contention (MOTIR-4089). Measured at 2.5 s alone
+// (TEST_DB_APP_ROLE=1, one worker); the budget is ~24x that, the headroom the
+// other per-round race suites carry for a contended CI shard.
+const RACE_TEST_TIMEOUT_MS = 60_000;
+
 describe('seam 4 — the one-Owner index raced from two paths at once', () => {
-  it('a transfer and a direct repository write racing for the Owner slot end with exactly one Owner', async () => {
-    for (let round = 0; round < 3; round++) {
-      await truncateAuthTables();
-      const org = await makeOrg();
+  it(
+    'a transfer and a direct repository write racing for the Owner slot end with exactly one Owner',
+    { timeout: RACE_TEST_TIMEOUT_MS },
+    async () => {
+      for (let round = 0; round < 3; round++) {
+        await truncateAuthTables();
+        const org = await makeOrg();
 
-      const transfer = organizationsService.transferOwnership({
-        organizationId: org.organizationId,
-        actorUserId: org.owner.id,
-        toUserId: org.admin.id,
-        confirmName: org.orgName,
-      });
-      // The raw path no service guards: a repository write straight to `owner`.
-      // Only the partial unique index stands in its way.
-      const rawWrite = withOrgContext(
-        { userId: org.owner.id, organizationId: org.organizationId },
-        (tx) =>
-          organizationMembershipRepository.updateRole(
-            org.organizationId,
-            org.member.id,
-            'owner',
-            tx,
-          ),
-      );
-      const [t, w] = await Promise.allSettled([transfer, rawWrite]);
-
-      const owners = await ownersOf(org.organizationId);
-      expect(owners, `round ${round}`).toHaveLength(1);
-      // The raw write can never win while an Owner exists: it is refused by the
-      // index, whichever way the two interleave.
-      expect(w.status, `round ${round}`).toBe('rejected');
-      if (w.status === 'rejected') {
-        expect(String((w.reason as Error)?.message ?? w.reason)).toMatch(
-          /unique|owner_key|P2002|23505/i,
+        const transfer = organizationsService.transferOwnership({
+          organizationId: org.organizationId,
+          actorUserId: org.owner.id,
+          toUserId: org.admin.id,
+          confirmName: org.orgName,
+        });
+        // The raw path no service guards: a repository write straight to `owner`.
+        // Only the partial unique index stands in its way.
+        const rawWrite = withOrgContext(
+          { userId: org.owner.id, organizationId: org.organizationId },
+          (tx) =>
+            organizationMembershipRepository.updateRole(
+              org.organizationId,
+              org.member.id,
+              'owner',
+              tx,
+            ),
         );
+        const [t, w] = await Promise.allSettled([transfer, rawWrite]);
+
+        const owners = await ownersOf(org.organizationId);
+        expect(owners, `round ${round}`).toHaveLength(1);
+        // The raw write can never win while an Owner exists: it is refused by the
+        // index, whichever way the two interleave.
+        expect(w.status, `round ${round}`).toBe('rejected');
+        if (w.status === 'rejected') {
+          expect(String((w.reason as Error)?.message ?? w.reason)).toMatch(
+            /unique|owner_key|P2002|23505/i,
+          );
+        }
+        if (t.status === 'fulfilled') {
+          expect(owners).toEqual([org.admin.id]);
+        } else {
+          // The only legitimate refusal is the typed one.
+          expect(t.reason).toBeInstanceOf(OwnershipChangedError);
+          expect(owners).toEqual([org.owner.id]);
+        }
       }
-      if (t.status === 'fulfilled') {
-        expect(owners).toEqual([org.admin.id]);
-      } else {
-        // The only legitimate refusal is the typed one.
-        expect(t.reason).toBeInstanceOf(OwnershipChangedError);
-        expect(owners).toEqual([org.owner.id]);
-      }
-    }
-  });
+    },
+  );
 });
