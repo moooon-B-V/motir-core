@@ -30,6 +30,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **A leaf's DIFFICULTY on the plan review**      | **`plan-review--difficulty.mock.html`**                   | MOTIR-6134           | Part XX    |
 | **The surface's List \| Canvas for a plan**     | **`plan-review--surface-views.mock.html`**                | MOTIR-6184           | Part XXI   |
 | **Approve or decline a plan, in place**         | `plan-review--decide.mock.html` (on the design result)    | MOTIR-6033           | Part XXII  |
+| **The plan drawn as it is written**             | **`plan-review--live-drawing.mock.html`**                 | MOTIR-6294           | Part XXIII |
 
 **A Part number is an address in THIS file.** Before taking the next number, check the area's
 published design results too (`list_designs` with `pathPrefix: design/ai-planning/`): a result that
@@ -6514,3 +6515,440 @@ board chrome. The compiled token layer is the one place `--color-*` is wired, ex
 5. **"The rail's existing approve CTA"** is read as `PlanReviewRail`'s _Approve — add {n} items_ (the
    plan page) together with the workspace's mirrored review block. On both surfaces the gate's verbs
    ARE the existing controls, and nothing is placed beside them.
+
+# Part XXIII — the plan DRAWN AS IT IS WRITTEN: the generating pane, its motion, and the hand-over (MOTIR-6294 · Story MOTIR-6158 — `plan-review--live-drawing.mock.html`)
+
+**The asset:** one DELTA mock, `design/ai-planning/plan-review--live-drawing.mock.html`, eleven sheets.
+No `.png` (AMENDMENT 4).
+
+**Read the mock as an INTERACTION SPEC, not a layout.** The surface this Part draws is defined by
+movement — a card landing, an arrow drawing in, a withdrawn card leaving — and a still frame
+under-specifies all of it. So every motion is a row of numbered frames (before → during → after), and
+this Part gives each one its property, its duration, its easing and its reduced-motion form (23.4,
+23.5). A "during" frame is a real render with the moving element held at its mid-transition value.
+
+## 23.0 What this Part composes, and the five things it adds
+
+**It composes, and does not redraw:** `PlanProposalViews` and its pane header (Part XXI, Part VIII
+§2), `PlanReviewCanvas` with `mergePlanLevel`'s edges and the off-level anchor (Parts IX, XIII,
+MOTIR-5387), `PlanProposalList` (Part VIII §3, Part XIII §7), Part VI's op treatments,
+`ProjectRoadmapCanvas`'s breadcrumb and MOTIR-6161's follow offer, `PlanChangeConfirmBar` (Part
+XXII) and `PlanChangeRail` with its hand-off bubble (Part XXII §20.6).
+
+**It adds five elements, and nothing else:**
+
+| element                     | where                                                         | 23.x  |
+| --------------------------- | ------------------------------------------------------------- | ----- |
+| the **live marker**         | the pane header's RIGHT end — the slot Part IX released       | 23.1  |
+| the **arrivals count**      | the canvas breadcrumb row — the follow offer's own shape      | 23.7  |
+| the **present-tense empty** | `PlanProposalList`'s empty statement, while generating        | 23.9  |
+| the **discarded band**      | `PlanProposalViews`' `band` slot                              | 23.12 |
+| the **zero-turn MCP note**  | the rail, under the reopened line, in the rail's notice idiom | 23.11 |
+
+**And one behaviour: MOTION** — opt-in on `PlanningCanvas`, specified in 23.3–23.5.
+
+## 23.1 Decision 1 — while generating, the pane IS the proposed pane, minus the bar
+
+**The pane is `PlanProposalViews` from the plan's first live read**, fed by the generating poll
+(MOTIR-6295), exactly as Part XXI mounts it once the plan is proposed. It is not `PlanChangeCanvas`
+taught to draw live, and it is not a third component. **Why:** the story's hardest criterion is that
+the hand-over does not jump, and the only construction that satisfies it by definition rather than by
+care is one component on both sides of the hand-over (23.12).
+
+**The footer slot is EMPTY while generating** — no bar, no strip, no "writing…" line. Part XXI 21.8
+settled that an empty foot hides and the canvas runs to the pane's edge, and why: _the rail on the
+right IS the planner_. A generating plan has nothing to decide, so it has no bar. (The card offered a
+writing-in-progress strip as the alternative; it would be the second voice 21.8 rejected.)
+
+**What DOES say "this is being written" is a quiet marker at the pane header's right end** (sheet 1).
+Part VIII reserved that end for Show changes and Part IX released it, so it is free, and it is the
+right place: without the marker the generating pane is indistinguishable from a proposed pane whose bar
+has gone missing, and a reader looking for Approve should be told why it is not there on the pane
+itself, not only on the rail. It is a 6px dot plus a word, `text-xs`, `--el-text-secondary`:
+
+- **Being written** — dot `--el-status-in-progress`, the in-progress hue the canvas already uses for a
+  running edge. **Static.** It does not pulse: the pane stays open for the length of a run, and a
+  permanent loop there is the attention sink `app/globals.css` warns about for the running edge.
+- **Reconnecting — showing the last update** — dot `--el-warning` (23.8).
+
+`role="status"`, `aria-live="polite"`, so the change between the two is announced once. It leaves at
+the hand-over.
+
+## 23.2 Decision 2 — the switch shows from the FIRST read, zero proposals included
+
+The List | Canvas switch renders as soon as the plan exists, before any proposal has arrived (sheet 1
+panel A). Part XXI 21.6 already draws an EMPTY proposed plan with its switch, _"because there IS a
+plan"_; a generating plan with nothing in it yet is the same case one status earlier. Hiding the switch
+until the first batch would add a 44px header arriving mid-read, pushing the canvas down under the
+reader. With it there from the start, the only thing that arrives later is the bar, which overlays
+(21.8), so nothing is ever pushed.
+
+**The canvas stands where the reader stood** (MOTIR-6154 / MOTIR-6161): inside the target, showing its
+committed children. Before the first proposal it is the committed level, undecorated, and **Show
+changes** is disabled because there is nothing to show.
+
+## 23.3 Decision 3 — the level RE-LAYS on every change, and the cards GLIDE
+
+**The finding that made this a decision.** Measured on the shipped layout (renders at `origin/main`):
+the level's auto-layout re-computes every cell whenever its node or edge set changes, because
+dependency RANK decides the columns. One arriving card moved three others — the two committed children
+from the first row to the fourth, and the first proposal from column three to column one (sheet 2).
+One withdrawal reshuffled six cards (sheet 5). A live pane will re-lay on most batches.
+
+**Two answers were weighed:**
+
+- **FREEZE** every drawn card where it is and place arrivals in free cells. Rejected: the arrangement
+  IS the information — columns are the order the planner is proposing — so a frozen level draws the
+  plan in the wrong order, with arrows pointing backwards, which is the one thing a person is watching
+  for. And it cannot hand over: a fresh open of the proposed plan lays it out properly, so the frozen
+  live pane and the proposed pane would disagree, and the hand-over would have to jump.
+- **GLIDE** — every card moves to its new cell with a transition. **Chosen.** The level is always the
+  plan page's own layout of the plan as it stands, the hand-over is exact (23.13), and the reflow is
+  continuous, so a reader can follow a card with their eye.
+
+**A change is STAGED, never simultaneous** (sheets 2 and 5): first the cards that must make room glide,
+then the new cards enter the cells that are now free, then the arrows draw in. An exit runs the other
+way: the card leaves, then the rest glide into the gap, then the arrows draw in. Staging is what keeps
+an entering card from appearing underneath a card still sliding through its cell.
+
+**Arrows are hidden for a glide.** Edge routes are computed from node rectangles; a card moving by CSS
+transition has a route that is already at its end. So every edge touching a card that is about to move
+fades out first, and fades back in on its final route when the glide is done. **A gliding card passes
+BENEATH cards that are not moving** (it keeps its DOM order; nothing raises it).
+
+**The viewport never moves.** No arrival re-fits the canvas and no arrival pans to itself. The canvas's
+once-only arrival fit (MOTIR-3837) is the pane's mount, not a batch. A card that lands outside the
+visible part of the level is not counted (it is on this level) — the shipped LOCATE control reaches
+it.
+
+## 23.4 The motion spec
+
+**The implementation idiom is the shipped one and nothing else**: CSS transitions and one keyframe,
+declared in `app/globals.css` and gated behind `@media (prefers-reduced-motion: no-preference)`, exactly
+as `.canvas-edge-running` is (MOTIR-3972). `package.json` carries no animation library and this adds
+none. **The static form is the default**; motion is added, never removed.
+
+**Durations are the design system's own tokens**, so a style that is snappier or slower
+(`[data-style]` sets `--transition-fast / -duration / -slow` from 40–260ms and up) moves the canvas at its
+own pace. **Easings are two constants** declared beside `.canvas-edge-running` (no style overrides an
+easing today, so they are not theme tokens):
+
+- `--canvas-ease-enter: cubic-bezier(0.2, 0, 0, 1)` — decelerate, for anything arriving or settling;
+- `--canvas-ease-exit: cubic-bezier(0.3, 0, 1, 1)` — accelerate, for anything leaving.
+
+| change                                           | what moves                           | property / values                                                                                                           | duration                  | easing       | order                                                                   |
+| ------------------------------------------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------ | ----------------------------------------------------------------------- |
+| **ARRIVAL** (an `add`, or a card moved IN)       | the new card                         | `opacity 0 → 1`, `transform translateY(6px) scale(0.98) → none`                                                             | `--transition-slow`       | enter        | after any glide; several in one batch stagger **40ms**, capped at 160ms |
+|                                                  | its arrows                           | `opacity 0 → 1`                                                                                                             | `--transition-duration`   | enter        | after the cards have entered                                            |
+| **RE-LAY** (a card's cell changes)               | the card                             | `left`, `top`                                                                                                               | `--transition-slow`       | enter        | first; its arrows `opacity → 0` over `--transition-fast` just before it |
+| **REWIRE** (edge set changes, no cell changes)   | the removed arrow · the new arrow    | `opacity 1 → 0` · `opacity 0 → 1`, at the same time                                                                         | `--transition-duration`   | exit · enter | simultaneous; an arrow that only RE-ROUTES does not fade                |
+| **EXIT** (a withdrawn `add`)                     | the card and every arrow touching it | `opacity 1 → 0`, `transform scale(0.96)`                                                                                    | `--transition-duration`   | exit         | first; then any re-lay; then the arrows                                 |
+| **MOVE OUT** (`parentRef` to another level)      | as EXIT                              | as EXIT, plus the arrivals count increments (23.7)                                                                          | as EXIT                   | exit         | as EXIT                                                                 |
+| **DEEPEN** (body, type, title, sizing filled in) | the card's outline                   | `outline: 2px solid var(--el-accent-on-surface)`, `outline-offset: 2px`, held **600ms**, then `outline-color → transparent` | fade: `--transition-slow` | exit         | in place; no card moves and no arrow changes                            |
+
+- **What each change IS is decided by diffing two consecutive snapshots by node id** — never by
+  reading an event. An id that appears is an ARRIVAL; an id that disappears is an EXIT unless it
+  appears on another level, which makes it a MOVE (its `parentNodeId` changed); a changed edge set is a
+  REWIRE; a changed title / type / body / sizing on a kept id is a DEEPEN. The snapshot is the unit
+  because it is the only one the poll has (MOTIR-6295: each read REPLACES the set).
+- **An exiting card is RETAINED for its transition** and removed on `transitionend`, with a fallback
+  timer of the duration plus 50ms so a card never lingers when the event does not fire.
+- **A read that changes nothing plays nothing.** Nor does the first read of a pane: a pane that opens
+  on a plan already twenty cards in draws them settled, because nothing ARRIVED while the reader
+  watched.
+- **A read that lands while a change is still playing** completes the change in flight and then
+  plays the difference between what is drawn and the new snapshot. It never replays an arrival.
+- **Suggested class names for the MOTION card** (a name is the card's to settle): `canvas-node--enter`,
+  `canvas-node--exit`, `canvas-node--relay`, `canvas-node--deepened`, `canvas-edge--enter`,
+  `canvas-edge--exit`.
+
+**A proposed `remove` of a committed card is NOT an exit** (sheet 5 ⑤). The card stays on the level in
+Part VI's removal treatment, because nothing has been removed: the plan PROPOSES it. It arrives like any
+other card.
+
+**The ONE CARD survives every one of these unchanged.** The unified card ([MOTIR-6296](motir:cmugpy3gj00o3hwoi940o565s))
+keeps every Part VI op treatment — the dashed accent `add`, the info-ring `modify`, the struck
+`remove`, the decided spine and badge — and the motion is applied to the canvas's NODE BOX, never to the
+card inside it, so no treatment is touched. **`locked` appears in exactly one place**: a `modify` or
+`remove` whose TARGET is terminal (done / cancelled). A terminal card the plan does not touch is drawn
+as `/roadmap` draws it — sheet 1's done card MOTIR-6159 is a plain `WorkItemNode`, no hatch.
+
+## 23.5 Reduced motion — every change, with nothing moving
+
+Under `prefers-reduced-motion: reduce` **no transition runs and no keyframe plays**: the level is
+redrawn in its new state in one frame. Each change must still READ as a change (sheet 8):
+
+| change              | its reduced form                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| arrival             | drawn in place with the DEEPEN outline, held **1200ms**, then removed with no fade — the outline is a STATE, not a motion |
+| re-lay              | cards are at their new cells; arrows at their final routes                                                                |
+| rewire              | the new arrow is there, the removed one is not                                                                            |
+| exit · move out     | the card and its arrows are gone; a move out still increments the arrivals count                                          |
+| deepen              | the outline, held 1200ms, removed with no fade                                                                            |
+| live marker · count | unchanged — neither moves                                                                                                 |
+
+The outline is held longer than the animated form's 600ms because nothing else draws the eye to it.
+
+## 23.6 Arrows arrive WITH their cards — the edge rules, restated for a live level
+
+Nothing here is a new edge rule; `mergePlanLevel` is the one engine and it already says all of it. What
+this Part fixes is WHEN each is drawn:
+
+- **An arrow is drawn once BOTH its ends are on the level**, in the batch's edge phase (23.4). A lay
+  batch's `blockedByRefs` can only name proposals already appended, so a card's in-level blockers are
+  normally already drawn when it lands.
+- **An arrow whose other end has NOT arrived** — possible when that end is moved INTO this level later
+  — is simply absent, and draws in when that end lands. There is no placeholder.
+- **A blocker on ANOTHER level** takes the plan page's off-level treatment: the ghost anchor naming it,
+  the `cross` arrow, the "blocked elsewhere" flag (sheet 1 panel C). The anchor ARRIVES with the card
+  that needs it and EXITS with the last card that needed it (sheet 4).
+
+## 23.7 The ARRIVALS count — counted, never jumped to
+
+**What counts:** an ARRIVAL (an `add`, or a card moved in) on any level other than the one being
+viewed, since the reader last stood on that level. Visiting a level clears its count. Only the plan's
+own cards count; a committed card never "arrives".
+
+**Where:** the canvas breadcrumb row, as a pill at its right end, in **the shipped follow offer's own
+markup** — the same `bg-(--el-card)` control, the same 6px `--el-accent` dot, the same sentence shape
+(_"Plan is in {identifier} · Go there"_):
+
+- ONE level → **"{count} new in {identifier} · Go there"**, which goes to that level;
+- SEVERAL → **"{count} new elsewhere · latest in {identifier} · Go there"**, which goes to the level of
+  the LATEST arrival.
+
+Going there is a navigation the reader chose, so it is the one thing allowed to move the canvas; it
+drills by the arriving card's `parentTrail`, which every review item already carries.
+
+**ONE slot.** When MOTIR-6161's follow offer is up (the reader stepped away from a target that
+settled), the offer wins the slot and the count is not drawn: the offer already names where the plan
+lands (sheet 7 C). When the reader is at the ROOT, where the shipped row renders no breadcrumb, the row
+renders with the root crumb and the pill only — no Back, because there is nowhere to go back to.
+
+## 23.8 Follow-once vs never-jump
+
+- **The pane opens where the reader stood** (`canvasHeldTrail`), whichever pane they were on before.
+- **The first proposal of a plan whose target settled mid-conversation** may carry the canvas inside
+  that target ONCE, exactly by MOTIR-6161's rule and through its seam (`followTo`). Nothing in this
+  Part changes that rule.
+- **After the reader has navigated, nothing moves them** — not a batch, not a move, not the hand-over.
+  They are told instead: by the follow offer, or by the arrivals count.
+
+## 23.9 The LIST is live too
+
+The same pane's other body (sheet 9). Rows appear in the order the plan receives them — the snapshot's
+item order — in their section, with the card's entrance (`opacity 0 → 1`, `translateY(4px) → none`,
+`--transition-slow`, enter easing). A withdrawn row leaves with the exit. Reduced motion: rows simply
+are or are not there.
+
+**⚠️ The shipped empty statement is FALSE while a plan is being written.** `PlanProposalList` says
+_"No proposals — This plan finished without proposing anything. Declining ends it — nothing in your
+backlog changes."_ A generating plan has not finished and cannot be declined from here. So while the
+plan is `generating` the list's empty statement is present-tense: **"Nothing proposed yet"** /
+**"Items appear here as the plan is written."** (sheet 9 A; corrected at build, §23.14). The shipped statement stays for a plan
+that really did finish empty.
+
+## 23.10 The dropped read
+
+A read that fails is retried on the next tick and **the last good snapshot stays drawn** — nothing is
+cleared, dimmed, greyed or alerted. After **three consecutive failures** (≈7.5s at the 2.5s poll) the
+live marker turns to **"Reconnecting — showing the last update"** with a `--el-warning` dot (sheet 1
+panel D), and the next good read turns it back. A recovered read is a normal snapshot: because each one
+REPLACES the set, a card is never drawn twice and a withdrawn card never returns, and the canvas ends in
+the state a fresh open would draw.
+
+## 23.11 — the zero-turn MCP rail
+
+An agent's conversation happened in its own
+harness, so the session of an MCP-authored plan can hold **no turns** (MOTIR-6157,
+`docs/decisions/mcp-authored-plan-review.md`). The rail then says where the conversation was — one
+notice, **under the reopened line and above the opener**, in the rail's own notice idiom (the reopened
+line's border, fill and ink), led by the lucide `bot` glyph the plan page already uses for an
+MCP-authored plan's attribution (`PlanReviewRail`'s `writtenByHarness`):
+
+> **"The conversation behind this plan happened in {harness}, so it isn't shown here. Ask below to
+> change the plan."**
+
+`{harness}` is the plan's recorded `authorHarness` (sheet 10 B: _Claude Code_). It shows when the plan
+in hand has `authorSource: 'mcp'` and a harness, and the session has no turns. **It stays once a turn
+is sent** — it is still true — and it never shows for a hosted plan, whose conversation IS the rail
+(sheet 10 A, where the shipped hand-off bubble already says the plan is being written).
+
+**The composer stays live.** The starter chips and the composer render exactly as for any session;
+asking here changes the plan like any other turn.
+
+## 23.12 The DISCARDED pane
+
+`generating → declined` with `decisionReason: 'discarded'` is reachable directly: a plan closed holding
+zero proposals is discarded by the close, decided by nobody (`plansService.markPlanned`). The pane
+(sheet 11 ③ ④):
+
+- **no bar** — there is nothing to decide;
+- **the live marker leaves**;
+- **a band** in `PlanProposalViews`' `band` slot — between the header and the body, where the plan page
+  puts its establish band — saying it in **the plan page's own words**,
+  `planReview.discardedOutcome`: _"Plan discarded before it finished — your work items are unchanged"_.
+  One state, one sentence, on both surfaces;
+- **the canvas keeps its level**, undecorated; the List shows the shipped title **"No proposals"**
+  without the shipped body, whose _"Declining ends it"_ is false for a plan already declined.
+
+## 23.13 The HAND-OVER
+
+**`generating → planned` is a single frame pair in which only the bar changes** (sheet 11 ① ②): the
+confirm bar arrives over the canvas's bottom edge (Part XXI 21.8 — it overlays, so nothing resizes and
+the clusters do not move), and the live marker leaves. **The component is not remounted**: the view,
+the level, the zoom and pan, the Show changes state, every card and every arrow are the ones already
+drawn. The bar's own arrival is Part XXII's and is not animated here.
+
+| status                   | the pane                                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| `generating`, 0 items    | this Part, sheet 1 A                                                                         |
+| `generating`, items      | this Part, sheets 1–9                                                                        |
+| `planned`                | Part XXI (sheets 1–2), with the bar of Part XXII §20.4 — the hand-over INTO it is sheet 11   |
+| `stale`                  | Part XXI sheet 4 B and Part XXII §20.5 — not redrawn                                         |
+| `approved`               | Part XXI sheet 6 and Part VI's decided treatment (MOTIR-3162 keeps the review) — not redrawn |
+| `declined` (`reviewed`)  | as `approved`, in the declined tense — not redrawn                                           |
+| `declined` (`discarded`) | this Part, 23.12 and sheet 11 ③ ④                                                            |
+
+## 23.14 Copy
+
+Both catalogues are owed — `messages/en.json` AND `messages/zh.json` (the zh-parity gate).
+
+**New keys:**
+
+| key                                       | en                                                                                                             | zh                                                                          |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `planReview.liveWriting`                  | Being written                                                                                                  | 正在编写                                                                    |
+| `planReview.liveReconnecting`             | Reconnecting — showing the last update                                                                         | 正在重新连接 — 显示的是最近一次更新                                         |
+| `planReview.liveAnnounce`                 | {count, plural, one {# item} other {# items}} added to the plan                                                | 计划新增了 {count} 个工作项                                                 |
+| `planReview.listWritingTitle`             | Nothing proposed yet                                                                                           | 尚无提案                                                                    |
+| `planReview.listWritingBody`              | Items appear here as the plan is written.                                                                      | 计划编写过程中，工作项会出现在这里。                                        |
+| `planningWorkspace.arrival.arrivedIn`     | {count} new in {identifier} · Go there                                                                         | {identifier} 中有 {count} 项新内容 · 前往                                   |
+| `planningWorkspace.arrival.arrivedAcross` | {count} new elsewhere · latest in {identifier} · Go there                                                      | 其他层级有 {count} 项新内容 · 最新在 {identifier} · 前往                    |
+| `planningWorkspace.session.mcpNoTurns`    | The conversation behind this plan happened in {harness}, so it isn’t shown here. Ask below to change the plan. | 此计划背后的对话发生在 {harness} 中，因此不会显示在这里。可在下方提出修改。 |
+
+**⚠️ CORRECTED AT BUILD (MOTIR-6300, 2026-09-25) — two strings above.** As approved, `liveAnnounce`
+and `listWritingBody` said _card(s)_ / 卡片. That is this corpus's shorthand for a work item, not the
+product's noun, and the shipped reader-facing-noun guard (`tests/i18n-catalog.test.ts`) refuses it. They
+ship as _item(s)_ / 工作项, and the two rows above record the shipped strings. The approved published
+result (evidence `cmugtqshe007shytxfxtjiaxl`) still carries the old wording; this mirror records what
+ships.
+
+**Reused, verbatim:** `planReview.discardedOutcome` (23.12), `planReview.listEmptyTitle` (23.12),
+`planningWorkspace.arrival.goToTarget` (23.7). Every other string in the asset is the shipped
+catalogue's, rendered from it.
+
+`{identifier}` is the level's crumb key — the work item's `MOTIR-<n>`, or the folder's name for a
+folder level. `arrivedIn` / `arrivedAcross` take no plural form in either language because the number
+stands alone before "new" / "项".
+
+## 23.15 a11y
+
+- **Arrivals are announced, once per batch**, through a polite live region: `planReview.liveAnnounce`
+  with the batch's count — never per card, and never for a read that added nothing. A deepen, a rewire
+  and a re-lay are not announced; an exit is not announced (it is the reader's own agent's withdrawal,
+  and announcing every correction is noise).
+- **Nothing moves focus.** A focused card that glides keeps focus. A focused card that EXITS hands
+  focus to the canvas itself (`role="application"`), never to the page.
+- **The live marker is `role="status"`**, so _Being written → Reconnecting_ is heard.
+- **The arrivals pill is a real `<button>`** whose text is its name, as the follow offer's is.
+- **Reduced motion** is 23.5, and the outline it holds is not colour alone: it is a 2px outline at
+  3:1-on-surface ink (`--el-accent-on-surface`, MOTIR-4474), on a card that already has a label.
+
+## 23.16 Token and shape roles
+
+Nothing new. Every element in the asset is a shipped component's own markup, and the five new ones are
+built from shipped idioms: the live marker's dot is the follow offer's dot at `--el-status-in-progress`
+/ `--el-warning`; the pill IS the follow offer; the band is `--el-surface-soft` + `--el-border` +
+`--el-text-strong`; the note is the reopened line; the present-tense list statement is
+`PlanProposalList`'s own. The deepen outline is `--el-accent-on-surface`, never `--el-accent` — a mark
+ON the board owes 3:1 against `--el-canvas`, which the fill misses in four light palettes (MOTIR-4474).
+
+The asset's board chrome paints only through `--el-*`, with `--radius-card` for the board; `.seg-ic`
+is declared presentation-free for the reason Part XXI 21.9 gives.
+
+## 23.17 How the asset was produced
+
+- **Every pane, card, arrow, anchor, breadcrumb, list row, confirm bar and rail is the real components'
+  DOM**, rendered through `tests/helpers/renderWithIntl.tsx` in happy-dom on `origin/main`
+  @ `34b43b9ff`, with the per-level roadmap read stubbed exactly as `plan-review-canvas*.test.tsx` stub
+  it. So the layout, the cells, the edge routes, the dashed pending arrows, the off-level anchor and its
+  flag are the shipped engine's output, not a drawing.
+- **The Close + project bar** is copied from Part XXI's asset, which copied it verbatim from
+  `PlanningWorkspaceHost.tsx`.
+- **The dependency legend is drawn COLLAPSED** — a real state, reached through its own toggle in the
+  render — so it does not cover the committed cards.
+- **A "during" frame** is the real render with inline `opacity` / `transform` / `left` / `top` set to
+  the transition's midpoint; nothing is redrawn to make one.
+- **The five new elements** are rendered as JSX with their real lucide glyphs, so their markup is not
+  typed by hand.
+- **The first stylesheet** is Tailwind v4.3.0's output compiled over this document's class attributes
+  with `@motir/design-system/theme.css` and `@motir/brand/brand.css` (the rail's Motir glyph). Five
+  rules nothing carries were dropped: three utilities minted from prose words (`inline`, `table`,
+  `transform`) and the `.style-vignette > .sv-canvas` rules for a component this asset does not draw.
+- **Every lucide glyph is a `<symbol>` in one sprite sheet** at the top of the body, each carrying the
+  provenance comment the sprite audit reads, and each use site keeps the component's own outer `<svg>`
+  and classes. `node scripts/audit-mock-sprites.mjs … --strict`: **28 symbols, 0 undeclared, 0
+  drifted** against `lucide-react@1.16.0`.
+- **The frames of a motion sequence show the CANVAS only.** The Close bar, the pane header, the
+  breadcrumb and the controls are identical across a sequence, sheet 1 establishes them, and sheets 7
+  and 11 — which are ABOUT that chrome — keep it. Cropping keeps every card at the same place across a
+  sequence's frames, so the eye can compare them.
+- **It is ≈1.9MB formatted**, larger than any other mock, because it carries ~30 real renders of a
+  populated level and Prettier indents their nesting. It is committed anyway: this project keeps a
+  committed `design/` mirror that the design lane reads, and landing the notes is what stops the next
+  design taking the number XXIII (21.0).
+- **It was rendered and looked at** in headless Chromium, sheet by sheet, and **all 243 specs of the
+  design lane** (`vitest.design.config.ts`) are green over it.
+
+## 23.18 GIVES / TAKES
+
+Over every `MOTIR-<n>` the new mock and this Part name:
+
+- **MOTIR-6158** (the story) — neither. It is the container.
+- **MOTIR-6295** (ONE generating poll) — **GIVES** nothing and **TAKES** nothing it does not already
+  have: the snapshot-replace rule (23.4, 23.10) and the three-failure `failing` flag (23.10) are its own
+  criteria, which this Part draws.
+- **MOTIR-6296** (ONE CARD) — **GIVES** the ratification that every Part VI op treatment survives the
+  unification, and the one place `locked` appears (23.4). Takes nothing.
+- **MOTIR-6297** (MOTION) — **GIVES** 23.3–23.5 as its spec: the staging, the glide, the edge hide,
+  the property / duration-token / easing table, the retention rule and the reduced-motion forms.
+- **MOTIR-6298** (NO TURNS) — **GIVES** 23.11: the notice, its placement, when it shows, its copy.
+- **MOTIR-6299** (ONE LEVEL BUILDER) — neither. It is a refactor this Part does not see, and the edges
+  drawn here are already `mergePlanLevel`'s.
+- **MOTIR-6300** (LIVE PANE) — **GIVES** 23.1, 23.2, 23.7, 23.8, 23.9, 23.10, 23.12 and 23.13: the pane
+  swap, the empty foot, the live marker, the switch from the first read, the arrivals count and its
+  precedence, the present-tense list, the discarded band and the hand-over.
+- **MOTIR-6301 / MOTIR-6302** (the integration gate and the E2E) — **GIVE** them the observable
+  criteria: one component across the hand-over, one announcement per batch, no card or arrow twice.
+- **MOTIR-6161** — **TAKES** the follow-once rule and the follow offer, unchanged; **extends** the offer's
+  slot to carry the arrivals count when the offer is down (23.7).
+- **MOTIR-6157** — **TAKES** the decision that an MCP-authored plan is reviewed on the surface, turns or
+  no turns; this Part is the "legible with no turns" its Consequences hands to MOTIR-6158.
+- **MOTIR-6184** (Part XXI) — **TAKES** the pane, the empty foot and the overlaying bar, unchanged;
+  fills the `generating` row its 21.5 table left to this story.
+- **MOTIR-6033** (Part XXII) — **TAKES** the confirm bar at the hand-over, unchanged.
+- **MOTIR-3234** (Part VIII) — **TAKES** the pane header, and **names** a limit: §4's _Discard this plan_
+  for a generating plan lives on the plan page and is not brought here (23.19).
+- **MOTIR-3972** — **TAKES** the motion idiom: static by default, motion added under `no-preference`.
+- **MOTIR-3837** — **TAKES** the once-only arrival fit; no batch re-fits (23.3).
+- **MOTIR-5387** — **TAKES** the off-level anchor, whose arrival and exit 23.6 times.
+- **MOTIR-4474** — **TAKES** the rule that a mark on the board is `--el-accent-on-surface`.
+- **MOTIR-3162** — **TAKES** that a review survives its decision (23.13's table).
+- **MOTIR-6154 / MOTIR-6159** — **TAKES** where the canvas stands (23.2). Neither changes.
+- **MOTIR-6223 / MOTIR-6241** — neither: the level band is not redrawn here.
+
+## 23.19 What Part XXIII does NOT draw or decide
+
+- **Anything inside a card, the list row, the confirm bar, the decline band or the rail's turns** — all
+  shipped and composed.
+- **What an op MEANS**, the outcome axis, or any Part VI treatment.
+- **The transport** — MOTIR-6295's (a poll, by decision of shipped code).
+- **Discarding a generating plan from the surface.** Part VIII §4 gives the plan page _Discard this
+  plan_; the surface's rail already has Stop for a Motir AI run. An MCP-authored plan being written has
+  no discard control on the surface, and adding one is a decision for another card, not a gap this
+  Part fills.
+- **The level band** of MOTIR-6223 / MOTIR-6241.
+- **The plan page's own live poll**, which is unchanged.
+- **Motion anywhere but the planning canvas's nodes and edges** and the list's rows. The motion is
+  OPT-IN on `PlanningCanvas`; `/roadmap`, runs and onboarding do not get it.

@@ -44,6 +44,10 @@ import {
   type AutomationRuleFailedEmailProps,
 } from '@/lib/emailTemplates/automationRuleFailed';
 import { twoFactorOtpEmail, type TwoFactorOtpEmailProps } from '@/lib/emailTemplates/twoFactorOtp';
+import {
+  ownershipTransferredEmail,
+  type OwnershipTransferredEmailProps,
+} from '@/lib/emailTemplates/ownershipTransferred';
 
 // The execution-side email service (Story 1.6 · Subtask 1.6.3). This is the
 // ONE place a transactional email is rendered and handed to the provider:
@@ -91,7 +95,8 @@ export type TransactionalEmail =
     }
   | { to: string; template: 'two-factor-otp'; data: TwoFactorOtpEmailProps }
   | { to: string; template: 'follow-confirm'; data: FollowConfirmEmailProps }
-  | { to: string; template: 'follow-digest'; data: FollowDigestEmailProps };
+  | { to: string; template: 'follow-digest'; data: FollowDigestEmailProps }
+  | { to: string; template: 'ownership-transferred'; data: OwnershipTransferredEmailProps };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
@@ -141,6 +146,9 @@ export const EMAIL_TEMPLATE_CLASS: Record<EmailTemplate, EmailTemplateClass> = {
   'workspace-invite': 'essential',
   'follow-confirm': 'essential',
   'data-export-ready': 'essential',
+  // Who controls an organization changed — a security-relevant fact about the
+  // reader's own account, never budgeted away (MOTIR-6310).
+  'ownership-transferred': 'essential',
   'mention-notification': 'notification',
   'watcher-comment-notification': 'notification',
   'watcher-transition-notification': 'notification',
@@ -269,6 +277,8 @@ async function renderTemplate(message: TransactionalEmail) {
       return automationRuleFailedEmail(message.data);
     case 'two-factor-otp':
       return twoFactorOtpEmail(message.data);
+    case 'ownership-transferred':
+      return ownershipTransferredEmail(message.data);
     default: {
       // Exhaustiveness guard: a new template arm without a case here is a
       // compile error, not a silent fall-through.

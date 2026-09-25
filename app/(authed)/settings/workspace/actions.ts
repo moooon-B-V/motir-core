@@ -125,10 +125,3 @@ export async function leaveWorkspaceAction(): Promise<ActionResult> {
   await switchToRemainingOrClear(userId);
   redirect('/dashboard');
 }
-
-export async function deleteWorkspaceAction(): Promise<ActionResult> {
-  const { userId, workspaceId } = await requireContext();
-  await workspacesService.deleteWorkspace({ workspaceId, actorUserId: userId });
-  await switchToRemainingOrClear(userId);
-  redirect('/dashboard');
-}

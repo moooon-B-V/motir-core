@@ -6,7 +6,7 @@ import { defineJob } from '../defineJob';
 // MOTIR-3700 writes the request and starts the grace period; this is what runs
 // when it expires. The policy — the three DECISION 3 groups, the lock and
 // re-read that makes a day-29 cancel stick, the sole-membership workspaces that
-// go through `workspacesService.deleteWorkspace` so the code-graph offboarding
+// go through `workspacesService.deleteWorkspaceForErasure` so the code-graph offboarding
 // queue is fed — is all in `accountErasureSweepService`. This file is the
 // schedule and nothing else.
 //

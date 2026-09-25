@@ -32,8 +32,26 @@ import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 // every existing importer and every `plan-review-canvas*` test keeps working
 // against this module, unchanged.
 import { arrivalLevel } from '@/lib/planning/planArrival';
+import { liveArrivals, proposalChangeKey } from '@/lib/planning/livePane';
 
 export { arrivalLevel };
+
+/**
+ * Every node that IS one of the plan's proposals carries its content signature
+ * (MOTIR-6300 → MOTIR-6297's `changeKey`), so a snapshot that fills in a card's
+ * body or sizing plays the DEEPEN cue and never re-enters it. A committed card the
+ * plan does not touch carries none.
+ */
+function withChangeKeys(level: RoadmapLevel, items: PlanReviewItemDto[]): RoadmapLevel {
+  const byNodeId = new Map(items.map((i) => [i.nodeId, i]));
+  return {
+    ...level,
+    nodes: level.nodes.map((n) => {
+      const item = byNodeId.get(n.id);
+      return item ? { ...n, changeKey: proposalChangeKey(item) } : n;
+    }),
+  };
+}
 
 // The canvas pane of the plan detail (7.4.5 / MOTIR-847, redrawn by MOTIR-3083).
 //
@@ -98,6 +116,15 @@ export interface PlanReviewCanvasProps {
   onFollowDeclined?: (key: string) => void;
   readerHasNavigated?: boolean;
   onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
+  /**
+   * The plan is being WRITTEN and this canvas is drawing it live (MOTIR-6300;
+   * design Part XXIII). On: the level PLAYS each snapshot's change (`motion`,
+   * MOTIR-6297), each proposal carries a `changeKey` from its content so a deepen
+   * cues rather than re-enters, and arrivals on other levels are counted in the
+   * breadcrumb row. OFF by default — the plan page never passes it, and is
+   * unchanged by its existence.
+   */
+  live?: boolean;
 }
 
 export function PlanReviewCanvas({
@@ -111,6 +138,7 @@ export function PlanReviewCanvas({
   onFollowDeclined,
   readerHasNavigated = false,
   onLevelChange,
+  live = false,
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tPlan = useTranslations('planReview');
@@ -456,9 +484,16 @@ export function PlanReviewCanvas({
       }
       const merged = mergePlanLevel(committed, items, parentId, outcome);
       setLevelIsAllProposed(committed.nodes.length === 0 && merged.nodes.length > 0);
-      return merged;
+      return live ? withChangeKeys(merged, items) : merged;
     },
-    [items, projectKey, outcome, touchedNodeIds, folderChanges, t],
+    [items, projectKey, outcome, touchedNodeIds, folderChanges, t, live],
+  );
+
+  // The plan's cards for the ARRIVALS count (§23.7) — only while it is written.
+  const proposedWord = tPlan('proposedCrumb');
+  const arrivals = useMemo(
+    () => (live ? liveArrivals(items, proposedWord) : null),
+    [live, items, proposedWord],
   );
 
   return (
@@ -535,6 +570,10 @@ export function PlanReviewCanvas({
         // uses it.
         rootLabel={t('breadcrumbRoot')}
         ariaLabel={ariaLabel ?? 'Proposed plan'}
+        // LIVE (MOTIR-6300): the level plays each snapshot's change, and arrivals
+        // elsewhere are counted rather than jumped to. Off on the plan page.
+        motion={live}
+        arrivals={arrivals}
       />
       {/* Every PROPOSAL — `add`, `modify` and `remove` — opens the shipped peek in
           proposal mode (MOTIR-4185). A COMMITTED sibling node still opens the

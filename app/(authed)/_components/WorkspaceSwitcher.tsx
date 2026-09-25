@@ -19,9 +19,21 @@ import { createWorkspaceAction, switchWorkspaceAction } from '../_actions';
 export interface WorkspaceSwitcherProps {
   workspaces: WorkspaceSummaryDTO[];
   activeWorkspaceId: string | null;
+  /**
+   * Whether the viewer may CREATE a workspace here — `manageWorkspaces` on the
+   * active org, or no org at all (someone with no organization creates their own
+   * and becomes its Owner; MOTIR-6309 keeps that path). False for an org Member,
+   * whose `Create workspace` rows are ABSENT, cold-start button included
+   * (MOTIR-6312 · `org-admin--workspaces-at-org-tier.mock.html` panel 3c).
+   */
+  canCreateWorkspace: boolean;
 }
 
-export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSwitcherProps) {
+export function WorkspaceSwitcher({
+  workspaces,
+  activeWorkspaceId,
+  canCreateWorkspace,
+}: WorkspaceSwitcherProps) {
   const t = useTranslations('shell');
   const tl = useTranslations('labels');
   const tErr = useTranslations('errors');
@@ -94,6 +106,8 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
   // Empty state — no memberships yet (cold start before the 1.2.4 signup
   // hook lands). Surface a direct "Create workspace" CTA instead of a name.
   if (workspaces.length === 0) {
+    // A Member of an org with no workspace of theirs has no door to offer here.
+    if (!canCreateWorkspace) return null;
     return (
       <>
         <Button
@@ -182,17 +196,23 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
               );
             })}
           </ul>
-          <div className="my-1 h-px bg-(--el-border)" />
-          <div className="px-1">
-            <button
-              type="button"
-              onClick={openCreate}
-              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-            >
-              <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-              {t('workspaceSwitcher.create')}
-            </button>
-          </div>
+          {/* The MAKE-a-new-one group, absent for an org Member (panel 3c): the
+              list and the act-on-this-workspace group close up. */}
+          {canCreateWorkspace ? (
+            <>
+              <div className="my-1 h-px bg-(--el-border)" />
+              <div className="px-1">
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+                >
+                  <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                  {t('workspaceSwitcher.create')}
+                </button>
+              </div>
+            </>
+          ) : null}
           <div className="my-1 h-px bg-(--el-border)" />
           {/* THE LAST GROUP — the two rows that act on THIS workspace (Story
               MOTIR-4843 · MOTIR-4847 · `design/settings/workspace-settings.mock.html`

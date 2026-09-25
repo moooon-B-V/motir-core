@@ -200,3 +200,124 @@ body {
     animation: canvas-edge-flow 0.9s linear infinite;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   The planning canvas's MOTION — opt-in via `PlanningCanvas motion` (MOTIR-6297)
+   ═══════════════════════════════════════════════════════════════════════
+   The spec is `design/ai-planning/design-notes.md` Part XXIII §23.3–§23.5: a card
+   ARRIVES, LEAVES, GLIDES to a new cell, an arrow DRAWS IN or FADES, a deepened
+   card's outline is held and fades. The canvas decides WHAT changed and WHEN each
+   stage starts (it tags the node box / edge path with a `data-motion` and one of
+   the classes below); every interpolation is here.
+
+   ⚠️ THE SAME IDIOM AS THE RUNNING EDGE ABOVE: the motion is ADDED behind
+   `no-preference`, never removed under `reduce`. The static form is the default,
+   and under reduced motion the canvas redraws the new state at once and holds the
+   deepen OUTLINE instead (§23.5) — which is a STATE, not a motion, so it is the one
+   rule outside the gate.
+
+   The durations are the design system's own tokens, so a snappier or slower
+   `[data-style]` moves the canvas at its own pace. The two easings are constants
+   (no style overrides an easing today, so they are not theme tokens). The motion
+   is on the canvas's NODE BOX, never on the card inside it, so no Part VI op
+   treatment is touched. */
+:root {
+  /* decelerate — anything arriving or settling */
+  --canvas-ease-enter: cubic-bezier(0.2, 0, 0, 1);
+  /* accelerate — anything leaving */
+  --canvas-ease-exit: cubic-bezier(0.3, 0, 1, 1);
+}
+/* The keyframes name only the END they leave from / arrive at, so an edge dimmed
+   by the selection (its inline opacity) fades to and from ITS value, not to 1. */
+@keyframes canvas-node-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+@keyframes canvas-node-exit {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes canvas-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes canvas-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Staged: an arrival whose cell is still being vacated, or an arrow whose card
+     has not landed, is present in the DOM and not yet drawn. */
+  .canvas-motion-held {
+    visibility: hidden;
+  }
+  /* ARRIVAL — after any glide; the canvas staggers a batch 40ms apart, capped at
+     160ms, through an inline animation-delay (`both` holds the start state for it). */
+  .canvas-node--enter {
+    animation: canvas-node-enter var(--transition-slow) var(--canvas-ease-enter) both;
+  }
+  /* EXIT — retained until its animationend (or its duration + 50ms). */
+  .canvas-node--exit {
+    pointer-events: none;
+    animation: canvas-node-exit var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+  /* RE-LAY — the card glides to its new cell, beneath the cards that stay still
+     (nothing raises it: it keeps its DOM order). */
+  .canvas-node--relay {
+    transition:
+      left var(--transition-slow) var(--canvas-ease-enter),
+      top var(--transition-slow) var(--canvas-ease-enter);
+  }
+  /* DEEPEN — after the 600ms hold, the outline's colour fades away. */
+  .canvas-node--deepened-out {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    transition: outline-color var(--transition-slow) var(--canvas-ease-exit);
+  }
+  /* An arrow drawing in (an arrival's, a rewire's, or one returning after a glide). */
+  .canvas-edge--enter {
+    animation: canvas-fade-in var(--transition-duration) var(--canvas-ease-enter) both;
+  }
+  /* A removed arrow — on its old route, in its own layer, until it has faded. */
+  .canvas-edge--exit {
+    animation: canvas-fade-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+  /* The arrows of a card about to glide: out just before it, hidden through it. */
+  .canvas-edge--hide {
+    animation: canvas-fade-out var(--transition-fast) var(--canvas-ease-exit) forwards;
+  }
+}
+/* THE LIVE LIST (MOTIR-6300; design Part XXIII §23.9) — the same pane's other
+   body. A row that arrives while the plan is written takes the card's entrance
+   with a 4px rise; a withdrawn row leaves with the card's exit. Static by default,
+   added under `no-preference` exactly as the canvas's motion is: under reduced
+   motion rows simply are or are not there. */
+@keyframes plan-list-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plan-list-row--enter {
+    animation: plan-list-row-enter var(--transition-slow) var(--canvas-ease-enter) both;
+  }
+  .plan-list-row--exit {
+    pointer-events: none;
+    animation: canvas-fade-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+}
+/* The DEEPEN outline — the mark ON the board is the accent INK, never the fill
+   (`--el-accent-on-surface` owes 3:1 on `--el-canvas`; MOTIR-4474). A static
+   STATE: under reduced motion it is the whole of an arrival's and a deepen's cue,
+   held 1200ms and removed with no fade (§23.5). */
+.canvas-node--deepened {
+  outline: 2px solid var(--el-accent-on-surface);
+  outline-offset: 2px;
+}

@@ -11,12 +11,11 @@ import type { RoadmapLevel } from '@/components/planning/ProjectRoadmapCanvas';
 // `.node.active` accent ring + glow and the "Target" pill). It answers the
 // question the chat alone can't: WHICH part of the plan is the planner acting on.
 //
-// ⚠️ It WRAPS the shipped node — the same compose-don't-redraw seam
-// `PlanChangeDiffFrame` uses (`notes.html` #82 / #95). The work item keeps
-// rendering as the real `WorkItemNode` (kind tile, status pill, progress meter);
-// this adds a ring, a glow and a word on top, and it composes WITH the diff frame
-// when a proposal is pending — a targeted node that the proposal also changes
-// shows both, because both are true.
+// ⚠️ It WRAPS the shipped node — the compose-don't-redraw seam (`notes.html`
+// #82 / #95). The work item keeps rendering as the real `WorkItemNode` (kind
+// tile, status pill, progress meter); this adds a ring, a glow and a word on top.
+// It is drawn on `PlanChangeCanvas`, the pane for the "no plan" state; a pane
+// with a plan is the plan page's own component (MOTIR-6186 · MOTIR-6299).
 //
 // NOT COLOUR ALONE: the ring is paired with a "Target" pill whose label is real
 // text, so the state is legible and reaches a screen reader.

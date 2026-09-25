@@ -42,7 +42,7 @@ export const twoFactorRepository = {
    *
    * `ORDER BY "id"` pins a deterministic lock-acquisition order so two callers
    * that somehow see more than one row for a user cannot deadlock — the same
-   * reasoning as `organizationMembershipRepository.countOwnersByOrgForUpdate`.
+   * reasoning as `workspaceMembershipRepository.countByWorkspaceForUpdate`.
    *
    * `tx` REQUIRED: a row lock only lives for its transaction, so a caller
    * without one would take a lock and drop it on the next statement.

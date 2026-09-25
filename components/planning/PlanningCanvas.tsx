@@ -22,6 +22,20 @@ import {
   screenDeltaToWorld,
   zoomToward,
 } from '@/lib/planning/canvasGeometry';
+import {
+  DEEPEN_HOLD_MS,
+  EXIT_FALLBACK_SLACK_MS,
+  REDUCED_HOLD_MS,
+  diffSnapshots,
+  edgeKey,
+  enterDelayMs,
+  isQuietDiff,
+  planStages,
+  readDurations,
+  stageMs,
+  type MotionDiff,
+  type MotionStage,
+} from '@/lib/planning/canvasMotion';
 
 // The reusable spatial planning CANVAS (Subtask 7.3.76 / MOTIR-1236) — a Miro-style
 // pan / zoom / drag / fit viewport that renders caller-supplied nodes + READ-ONLY
@@ -45,6 +59,12 @@ export interface CanvasNode {
   /** Optional hint used for edge anchoring until the node is measured. */
   width?: number;
   height?: number;
+  /**
+   * A caller-supplied signature of the node's CONTENT (MOTIR-6297). Read only with
+   * `motion` on: when it changes while the id does not, the node plays the DEEPEN
+   * cue (Part XXIII §23.4). Absent is a value like any other.
+   */
+  changeKey?: string;
 }
 
 export interface CanvasEdge {
@@ -120,7 +140,214 @@ export interface PlanningCanvasProps {
    * `MIN_SCALE`, and `focalNodeId` naming nothing simply centres the bounds.
    */
   arrival?: { floor: number; focalNodeId?: string | null };
+  /**
+   * MOTION (MOTIR-6297, `design/ai-planning/design-notes.md` Part XXIII §23.3–§23.5)
+   * — opt-in, OFF by default. On, the canvas diffs each new `nodes` / `edges`
+   * snapshot against the one it drew and PLAYS the difference, staged: a leaving
+   * card fades (and the arrows of every card about to move fade with it), the
+   * re-laid cards GLIDE to their new cells, the new cards ENTER, then the arrows
+   * draw in on their final routes. A card or arrow that leaves is retained for its
+   * fade. A kept node whose `changeKey` changed plays the DEEPEN outline.
+   *
+   * Every interpolation lives in `app/globals.css` behind
+   * `prefers-reduced-motion: no-preference`, beside `.canvas-edge-running`; under
+   * `reduce` the new state is drawn at once, and an arrival or a deepen holds the
+   * outline instead (§23.5). The first snapshot plays nothing, and neither does a
+   * snapshot that changes nothing.
+   *
+   * ⚠️ OFF, the rendered DOM is exactly what it was before this prop existed —
+   * `/roadmap`, runs, onboarding and the plan page redraw on navigation, where
+   * motion would animate a level change nobody asked to see. Only the planning
+   * surface's live pane opts in (MOTIR-6300).
+   */
+  motion?: boolean;
+  /**
+   * With `motion` on: this MOUNT's first snapshot is an ARRIVAL, not a baseline
+   * (MOTIR-6300). Read once, at mount. The consumer sets it when the level it is
+   * drawing was EMPTY a moment ago on the same level, in front of the reader, so
+   * the cards that fill it enter (staggered, then their arrows) rather than
+   * appearing settled. Anything else keeps "the first read plays nothing" (§23.4).
+   */
+  animateInitial?: boolean;
   className?: string;
+}
+
+// ── MOTION state (MOTIR-6297) ─────────────────────────────────────────────────
+type Snapshot = { nodes: CanvasNode[]; edges: CanvasEdge[] };
+/** One change being played, stage by stage. */
+interface Play {
+  id: number;
+  diff: MotionDiff;
+  stages: MotionStage[];
+  index: number;
+  /** The snapshot the change left, by id — where a re-laid card waits before its glide. */
+  from: Map<string, CanvasNode>;
+}
+/** A node retained for its exit; `after` is the id it was drawn after, so it keeps its DOM place. */
+interface ExitNode {
+  node: CanvasNode;
+  after: string | null;
+}
+/** An edge retained for its fade, with its ends where they STOOD (it fades on its old route). */
+interface ExitEdge {
+  key: string;
+  edge: CanvasEdge;
+  ends: CanvasNode[];
+}
+/** The outline cue — a DEEPEN, or (under reduced motion) an arrival's stand-in for its entrance. */
+interface Mark {
+  motion: 'enter' | 'cue';
+  phase: 'hold' | 'fade';
+  reduced: boolean;
+}
+interface MotionState {
+  armed: boolean;
+  seq: number;
+  baseline: Snapshot;
+  play: Play | null;
+  exitNodes: ExitNode[];
+  exitEdges: ExitEdge[];
+  marks: Record<string, Mark>;
+}
+/** How one node or edge is drawn this frame. */
+interface MotionMark {
+  motion?: 'enter' | 'exit' | 'cue' | 'relay';
+  cls: string[];
+  delay?: number;
+}
+
+const idleMotion = (armed: boolean, baseline: Snapshot): MotionState => ({
+  armed,
+  seq: 0,
+  baseline,
+  play: null,
+  exitNodes: [],
+  exitEdges: [],
+  marks: {},
+});
+
+const prefersReducedMotion = (): boolean =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Fold one new snapshot into the motion state (pure). Called only between changes
+ * — a snapshot that lands while a change plays waits for it, and is then diffed
+ * against what was drawn, so an arrival is never replayed (§23.4).
+ */
+function advanceMotion(
+  s: MotionState,
+  next: Snapshot,
+  ignoreMoves: ReadonlySet<string>,
+  reduced: boolean,
+): MotionState {
+  const d = diffSnapshots(s.baseline, next, ignoreMoves);
+  if (isQuietDiff(d)) return d.dirty ? { ...s, baseline: next } : s;
+
+  const nextIds = new Set(next.nodes.map((n) => n.id));
+  const nextEdges = new Set(next.edges.map(edgeKey));
+  const gone = new Set(d.exits);
+  const marks: Record<string, Mark> = {};
+  for (const [id, m] of Object.entries(s.marks)) if (!gone.has(id)) marks[id] = m;
+  // A retained exit whose id (or edge) came BACK stops being an exit: it is drawn live again.
+  const keptExitNodes = s.exitNodes.filter((x) => !nextIds.has(x.node.id));
+  const keptExitEdges = s.exitEdges.filter((x) => !nextEdges.has(x.key));
+
+  if (reduced) {
+    // §23.5 — no transition runs; the level is redrawn in its new state at once, and
+    // an arrival or a deepen reads as a change through the held outline.
+    for (const id of d.enters) marks[id] = { motion: 'enter', phase: 'hold', reduced: true };
+    for (const id of d.cues) marks[id] = { motion: 'cue', phase: 'hold', reduced: true };
+    return {
+      ...s,
+      baseline: next,
+      marks,
+      exitNodes: keptExitNodes,
+      exitEdges: keptExitEdges,
+    };
+  }
+
+  for (const id of d.cues) marks[id] = { motion: 'cue', phase: 'hold', reduced: false };
+  const from = new Map(s.baseline.nodes.map((n) => [n.id, n]));
+  const exitNodes = [...keptExitNodes];
+  s.baseline.nodes.forEach((n, i) => {
+    if (gone.has(n.id)) exitNodes.push({ node: n, after: s.baseline.nodes[i - 1]?.id ?? null });
+  });
+  const edgeGone = new Set(d.edgeExits);
+  const exitEdges = [...keptExitEdges];
+  for (const e of s.baseline.edges) {
+    const key = edgeKey(e);
+    if (!edgeGone.has(key)) continue;
+    edgeGone.delete(key); // one retained path per key
+    const ends = [from.get(e.from), from.get(e.to)].filter((n): n is CanvasNode => !!n);
+    exitEdges.push({ key, edge: e, ends });
+  }
+  const stages = planStages(d);
+  const seq = s.seq + 1;
+  return {
+    ...s,
+    seq,
+    baseline: next,
+    marks,
+    exitNodes,
+    exitEdges,
+    play: stages.length > 0 ? { id: seq, diff: d, stages, index: 0, from } : null,
+  };
+}
+
+/** Draw the retained exits back in at the place they held, so none is re-ordered in the DOM. */
+function withExits(live: CanvasNode[], exits: ExitNode[]): CanvasNode[] {
+  if (exits.length === 0) return live;
+  const out = [...live];
+  const drawn = new Set(live.map((n) => n.id));
+  for (const x of exits) {
+    if (drawn.has(x.node.id)) continue;
+    const at = x.after ? out.findIndex((n) => n.id === x.after) : -1;
+    out.splice(at + 1, 0, x.node);
+    drawn.add(x.node.id);
+  }
+  return out;
+}
+
+/**
+ * Expire timed entries — each entry keyed and identified by OBJECT, so a render that
+ * keeps an entry keeps its timer, and one that replaces it restarts the timer.
+ */
+function useTimedEntries<T extends object>(
+  entries: ReadonlyArray<readonly [string, T]>,
+  msOf: (entry: T) => number,
+  onExpire: (key: string, entry: T) => void,
+) {
+  const timers = useRef(new Map<string, { entry: T; t: ReturnType<typeof setTimeout> }>());
+  useEffect(() => {
+    const live = new Set<string>();
+    for (const [key, entry] of entries) {
+      live.add(key);
+      const cur = timers.current.get(key);
+      if (cur?.entry === entry) continue;
+      if (cur) clearTimeout(cur.t);
+      timers.current.set(key, {
+        entry,
+        t: setTimeout(() => {
+          timers.current.delete(key);
+          onExpire(key, entry);
+        }, msOf(entry)),
+      });
+    }
+    for (const [key, cur] of timers.current) {
+      if (live.has(key)) continue;
+      clearTimeout(cur.t);
+      timers.current.delete(key);
+    }
+  });
+  useEffect(() => {
+    const map = timers.current;
+    return () => {
+      for (const cur of map.values()) clearTimeout(cur.t);
+      map.clear();
+    };
+  }, []);
 }
 
 const FALLBACK = { w: 300, h: 120 }; // edge anchoring before a node is measured
@@ -158,6 +385,8 @@ export function PlanningCanvas({
   onBackgroundClick,
   ariaLabel,
   arrival,
+  motion = false,
+  animateInitial = false,
   className,
 }: PlanningCanvasProps) {
   const t = useTranslations('roadmap.canvas');
@@ -172,9 +401,49 @@ export function PlanningCanvas({
   // Unique marker ids (a doc-global `<marker>` id collides across canvas instances).
   const mId = useId().replace(/:/g, '');
 
-  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  // ── MOTION (MOTIR-6297) — a presence layer over the snapshots, opt-in ──
+  // Adjusted DURING render when a new snapshot arrives (React's "state from a prop
+  // change" idiom), so a new node's very first render already carries its
+  // `data-motion`, and a leaving node is never unmounted before it is retained.
+  // An `animateInitial` mount starts from the EMPTY level it watched, so its first
+  // snapshot diffs as arrivals through the ordinary path below.
+  const [mo, setMo] = useState<MotionState>(() =>
+    idleMotion(motion, motion && animateInitial ? { nodes: [], edges: [] } : { nodes, edges }),
+  );
+  if (motion) {
+    if (!mo.armed) {
+      // Switched on under a mounted canvas: what is drawn now is the FIRST read.
+      setMo(idleMotion(true, { nodes, edges }));
+    } else if (!mo.play && (nodes !== mo.baseline.nodes || edges !== mo.baseline.edges)) {
+      const next = advanceMotion(
+        mo,
+        { nodes, edges },
+        new Set(Object.keys(dragPos)), // the reader's own drag is not a re-lay
+        prefersReducedMotion(),
+      );
+      if (next !== mo) setMo(next);
+    }
+  } else if (mo.armed) {
+    setMo(idleMotion(false, { nodes, edges }));
+  }
+  // While a change plays, the canvas draws the snapshot it is playing TO; a newer
+  // one waits for it (§23.4 "a read that lands while a change is still playing").
+  const play = motion ? mo.play : null;
+  const liveNodes = play ? mo.baseline.nodes : nodes;
+  const liveEdges = play ? mo.baseline.edges : edges;
+  const stage = play ? play.stages[play.index] : null;
+  const reached = (st: MotionStage) => !!play && play.stages.indexOf(st) <= play.index;
+  const movers = new Set(play?.diff.movers);
+  const enterOrder = new Map(play?.diff.enters.map((id, i) => [id, i]));
+  const edgeEnters = new Set(play?.diff.edgeEnters);
+  const hiddenEdges = new Set(play?.diff.hiddenEdges);
+  // A re-laid card WAITS in its old cell while the leaving card fades (§23.3).
+  const heldAt = (id: string) =>
+    stage === 'out' && movers.has(id) ? play?.from.get(id) : undefined;
+
+  const nodeById = new Map(liveNodes.map((n) => [n.id, n]));
   const rectOf = (n: CanvasNode): Rect => {
-    const p = dragPos[n.id];
+    const p = dragPos[n.id] ?? heldAt(n.id);
     const s = sizes[n.id];
     return {
       x: p ? p.x : n.x,
@@ -203,10 +472,119 @@ export function PlanningCanvas({
 
   // Route ALL edges together so the global lane pass keeps every connector on its
   // own track (one entry per edge, aligned to `edges`; null where a node is gone).
-  const routes = routeEdges(edges, (id) => {
+  const routes = routeEdges(liveEdges, (id) => {
     const n = nodeById.get(id);
     return n ? rectOf(n) : undefined;
   });
+  // A retained edge fades on the route it HAD — its ends where they stood.
+  const exitEdges = motion ? mo.exitEdges : [];
+  const exitEnds = new Map(exitEdges.flatMap((x) => x.ends.map((n) => [n.id, n] as const)));
+  const exitRoutes = routeEdges(
+    exitEdges.map((x) => x.edge),
+    (id) => {
+      const n = exitEnds.get(id);
+      return n ? rectOf(n) : undefined;
+    },
+  );
+  const drawnNodes = motion ? withExits(liveNodes, mo.exitNodes) : liveNodes;
+
+  const nodeMotion = (id: string): MotionMark | null => {
+    if (!motion) return null;
+    if (!nodeById.has(id)) return { motion: 'exit', cls: ['canvas-node--exit'] };
+    const m: MotionMark = { cls: [] };
+    if (movers.has(id) && (stage === 'out' || stage === 'glide')) {
+      m.motion = 'relay';
+      if (stage === 'glide') m.cls.push('canvas-node--relay');
+    }
+    const mark = mo.marks[id];
+    if (mark) {
+      m.motion = mark.motion;
+      m.cls.push(mark.phase === 'hold' ? 'canvas-node--deepened' : 'canvas-node--deepened-out');
+    }
+    const i = enterOrder.get(id);
+    if (i !== undefined) {
+      m.motion = 'enter';
+      if (reached('enter')) {
+        m.cls.push('canvas-node--enter');
+        m.delay = enterDelayMs(i);
+      } else {
+        m.cls.push('canvas-motion-held'); // its cell is still being vacated
+      }
+    }
+    return m.motion ? m : null;
+  };
+  const edgeMotion = (e: CanvasEdge): MotionMark | null => {
+    if (!play) return null;
+    const k = edgeKey(e);
+    const arrows = reached('arrows');
+    if (edgeEnters.has(k)) {
+      return { motion: 'enter', cls: [arrows ? 'canvas-edge--enter' : 'canvas-motion-held'] };
+    }
+    if (hiddenEdges.has(k)) {
+      // Hidden for the glide (its route is already at the end), back on the final route.
+      return arrows
+        ? { motion: 'enter', cls: ['canvas-edge--enter'] }
+        : { motion: 'relay', cls: ['canvas-edge--hide'] };
+    }
+    return null;
+  };
+  const withMotion = (base: string, mv: MotionMark | null) =>
+    mv && mv.cls.length > 0 ? `${base} ${mv.cls.join(' ')}` : base;
+
+  // The durations are the theme's tokens, read off the canvas so a `[data-style]`
+  // pace applies; the stylesheet animates with the same tokens.
+  const durations = () =>
+    readDurations(
+      vpRef.current && typeof getComputedStyle === 'function'
+        ? getComputedStyle(vpRef.current)
+        : null,
+    );
+  // Advance the change stage by stage.
+  useEffect(() => {
+    const current = play?.stages[play.index];
+    if (!play || !current) return;
+    const t = setTimeout(
+      () =>
+        setMo((s) => {
+          if (s.play?.id !== play.id || s.play.index !== play.index) return s;
+          const index = play.index + 1;
+          return { ...s, play: index < play.stages.length ? { ...play, index } : null };
+        }),
+      stageMs(current, play.diff, durations()),
+    );
+    return () => clearTimeout(t);
+  }, [play]);
+  // A retained exit goes on its animation's end, or its duration + 50ms if that
+  // never fires (§23.4). A focused card that leaves hands focus to the canvas.
+  const dropExitNode = (id: string) => {
+    const el = nodeEls.current.get(id);
+    if (el?.dataset.motion === 'exit' && el.contains(document.activeElement)) {
+      vpRef.current?.focus();
+    }
+    setMo((s) => ({ ...s, exitNodes: s.exitNodes.filter((x) => x.node.id !== id) }));
+  };
+  const dropExitEdge = (key: string) =>
+    setMo((s) => ({ ...s, exitEdges: s.exitEdges.filter((x) => x.key !== key) }));
+  const exitMs = () => durations().base + EXIT_FALLBACK_SLACK_MS;
+  useTimedEntries(
+    motion ? mo.exitNodes.map((x) => [x.node.id, x] as const) : [],
+    exitMs,
+    dropExitNode,
+  );
+  useTimedEntries(motion ? exitEdges.map((x) => [x.key, x] as const) : [], exitMs, dropExitEdge);
+  // The outline: held, then faded (motion) or simply removed (reduced motion, §23.5).
+  useTimedEntries(
+    motion ? Object.entries(mo.marks) : [],
+    (m) => (m.phase === 'fade' ? durations().slow : m.reduced ? REDUCED_HOLD_MS : DEEPEN_HOLD_MS),
+    (id, m) =>
+      setMo((s) => {
+        if (s.marks[id] !== m) return s;
+        const marks = { ...s.marks };
+        if (m.phase === 'hold' && !m.reduced) marks[id] = { ...m, phase: 'fade' };
+        else delete marks[id];
+        return { ...s, marks };
+      }),
+  );
 
   // ── measure node sizes so edges anchor accurately (RO callback setState) ──
   useEffect(() => {
@@ -381,6 +759,83 @@ export function PlanningCanvas({
     }
   }
 
+  // One dependency connector. Shared by the live edge layer and (motion only) the
+  // layer that holds a removed edge for its fade.
+  const drawEdge = (
+    edge: CanvasEdge,
+    route: NonNullable<(typeof routes)[number]>,
+    key: string,
+    mv: MotionMark | null,
+    onEnd?: () => void,
+  ) => {
+    const pending = edge.variant === 'pending';
+    const cross = edge.variant === 'cross';
+    const running = edge.variant === 'running';
+    // When a node is selected, only its own edges stay lit; a lit non-cross
+    // edge is EMPHASISED in the accent INK (so even a faint dashed `pending`
+    // connector clearly pops, matching the selected card's accent ring).
+    // ⚠️ `--el-accent-on-surface`, NEVER `--el-accent`. The fill token's
+    // contrast is guaranteed against `--el-accent-text` sitting ON it, not
+    // against a board it is painted on: on Candy light it measured 1.26:1
+    // on `--el-canvas` and 1.01:1 against a plain edge dimmed to 12%, so
+    // selecting a card painted its own edges the shade of the ones it was
+    // de-emphasising. `tests/theme/canvasEmphasisInkContrast.test.ts` reads
+    // the token back out of this file and measures it. MOTIR-4474.
+    // A live selection WINS; `litIds` decides only without one, the same
+    // precedence the consumer's cards follow (MOTIR-5639).
+    const lit =
+      selectedId != null
+        ? edge.from === selectedId || edge.to === selectedId
+        : litIds == null || litIds.has(edge.from) || litIds.has(edge.to);
+    // ⚠️ `running` outranks the selection emphasis and yields only to
+    // `cross`. A run's live edge must stay the live one while a reader
+    // clicks around the graph; `cross` stays loudest because a plan that
+    // is WRONG outranks a plan that is in motion.
+    const emph = lit && selectedId != null && !cross && !running;
+    const marker = cross
+      ? 'warning'
+      : running
+        ? 'running'
+        : emph
+          ? 'emphasis'
+          : pending
+            ? 'pending'
+            : 'committed';
+    return (
+      <path
+        key={key}
+        d={route.d}
+        fill="none"
+        className={withMotion(
+          cross
+            ? 'stroke-(--el-warning)'
+            : running
+              ? // The dash + its travel are in `globals.css`, gated behind
+                // `prefers-reduced-motion: no-preference` — so the STATIC
+                // form is the default and reduced motion keeps this hue
+                // and weight without moving (MOTIR-3972).
+                'canvas-edge-running stroke-(--el-status-in-progress)'
+              : emph
+                ? 'stroke-(--el-accent-on-surface)'
+                : pending
+                  ? 'stroke-(--el-canvas-edge-pending)'
+                  : 'stroke-(--el-canvas-edge-committed)',
+          mv,
+        )}
+        data-motion={mv?.motion}
+        onAnimationEnd={onEnd}
+        strokeWidth={running ? 3 : lit && selectedId != null ? (cross ? 3.5 : 3) : cross ? 2.5 : 2}
+        strokeLinecap="round"
+        // a denser dash when emphasised keeps the dashed line legible at the
+        // accent colour without losing the "pending" cue.
+        strokeDasharray={pending ? (emph ? '5 6' : '2 7') : undefined}
+        markerEnd={`url(#${mId}-${marker})`}
+        vectorEffect="non-scaling-stroke"
+        style={{ opacity: lit ? 1 : 0.12 }}
+      />
+    );
+  };
+
   const worldTransform = {
     transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
     transformOrigin: '0 0' as const,
@@ -444,6 +899,30 @@ export function PlanningCanvas({
           </defs>
         </svg>
 
+        {/* MOTION only (MOTIR-6297): an edge that LEFT the snapshot, held on its old
+            route for its fade — in its OWN layer, beneath the live edges, so the
+            canvas-edges <path> count stays = the edge count it was given. */}
+        {exitEdges.length > 0 && (
+          <svg
+            className="pointer-events-none absolute top-0 left-0 h-full w-full"
+            style={{ ...worldTransform, overflow: 'visible' }}
+            aria-hidden="true"
+            data-testid="canvas-edges-exit"
+          >
+            {exitEdges.map((x, i) => {
+              const route = exitRoutes[i];
+              if (!route) return null;
+              return drawEdge(
+                x.edge,
+                route,
+                `exit~${x.key}`,
+                { motion: 'exit', cls: ['canvas-edge--exit'] },
+                () => dropExitEdge(x.key),
+              );
+            })}
+          </svg>
+        )}
+
         {/* edges — read-only dependency connectors (non-scaling stroke) */}
         <svg
           className="pointer-events-none absolute top-0 left-0 h-full w-full"
@@ -451,85 +930,23 @@ export function PlanningCanvas({
           aria-hidden="true"
           data-testid="canvas-edges"
         >
-          {edges.map((edge, i) => {
+          {liveEdges.map((edge, i) => {
             const route = routes[i];
             if (!route) return null;
-            const pending = edge.variant === 'pending';
-            const cross = edge.variant === 'cross';
-            const running = edge.variant === 'running';
-            // When a node is selected, only its own edges stay lit; a lit non-cross
-            // edge is EMPHASISED in the accent INK (so even a faint dashed `pending`
-            // connector clearly pops, matching the selected card's accent ring).
-            // ⚠️ `--el-accent-on-surface`, NEVER `--el-accent`. The fill token's
-            // contrast is guaranteed against `--el-accent-text` sitting ON it, not
-            // against a board it is painted on: on Candy light it measured 1.26:1
-            // on `--el-canvas` and 1.01:1 against a plain edge dimmed to 12%, so
-            // selecting a card painted its own edges the shade of the ones it was
-            // de-emphasising. `tests/theme/canvasEmphasisInkContrast.test.ts` reads
-            // the token back out of this file and measures it. MOTIR-4474.
-            // A live selection WINS; `litIds` decides only without one, the same
-            // precedence the consumer's cards follow (MOTIR-5639).
-            const lit =
-              selectedId != null
-                ? edge.from === selectedId || edge.to === selectedId
-                : litIds == null || litIds.has(edge.from) || litIds.has(edge.to);
-            // ⚠️ `running` outranks the selection emphasis and yields only to
-            // `cross`. A run's live edge must stay the live one while a reader
-            // clicks around the graph; `cross` stays loudest because a plan that
-            // is WRONG outranks a plan that is in motion.
-            const emph = lit && selectedId != null && !cross && !running;
-            const marker = cross
-              ? 'warning'
-              : running
-                ? 'running'
-                : emph
-                  ? 'emphasis'
-                  : pending
-                    ? 'pending'
-                    : 'committed';
-            return (
-              <path
-                key={`${edge.from}~${edge.to}~${i}`}
-                d={route.d}
-                fill="none"
-                className={
-                  cross
-                    ? 'stroke-(--el-warning)'
-                    : running
-                      ? // The dash + its travel are in `globals.css`, gated behind
-                        // `prefers-reduced-motion: no-preference` — so the STATIC
-                        // form is the default and reduced motion keeps this hue
-                        // and weight without moving (MOTIR-3972).
-                        'canvas-edge-running stroke-(--el-status-in-progress)'
-                      : emph
-                        ? 'stroke-(--el-accent-on-surface)'
-                        : pending
-                          ? 'stroke-(--el-canvas-edge-pending)'
-                          : 'stroke-(--el-canvas-edge-committed)'
-                }
-                strokeWidth={
-                  running ? 3 : lit && selectedId != null ? (cross ? 3.5 : 3) : cross ? 2.5 : 2
-                }
-                strokeLinecap="round"
-                // a denser dash when emphasised keeps the dashed line legible at the
-                // accent colour without losing the "pending" cue.
-                strokeDasharray={pending ? (emph ? '5 6' : '2 7') : undefined}
-                markerEnd={`url(#${mId}-${marker})`}
-                vectorEffect="non-scaling-stroke"
-                style={{ opacity: lit ? 1 : 0.12 }}
-              />
-            );
+            return drawEdge(edge, route, `${edge.from}~${edge.to}~${i}`, edgeMotion(edge));
           })}
         </svg>
 
         {/* nodes — caller content; the canvas owns the box + drag */}
         <div className="absolute top-0 left-0" style={worldTransform} data-testid="canvas-world">
-          {nodes.map((n) => {
+          {drawnNodes.map((n) => {
             const r = rectOf(n);
+            const mv = nodeMotion(n.id);
             return (
               <div
                 key={n.id}
                 data-node-id={n.id}
+                data-motion={mv?.motion}
                 tabIndex={0}
                 onKeyDown={
                   onNodeActivate
@@ -545,10 +962,25 @@ export function PlanningCanvas({
                   if (el) nodeEls.current.set(n.id, el);
                   else nodeEls.current.delete(n.id);
                 }}
-                className={`absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) ${
-                  onNodeMove ? 'cursor-grab active:cursor-grabbing' : ''
-                }`}
-                style={{ left: r.x, top: r.y }}
+                onAnimationEnd={
+                  mv?.motion === 'exit'
+                    ? (e) => {
+                        // the card's OWN exit, not an animation bubbling up from inside it
+                        if (e.target === e.currentTarget) dropExitNode(n.id);
+                      }
+                    : undefined
+                }
+                className={withMotion(
+                  `absolute rounded-(--radius-card) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--el-accent) ${
+                    onNodeMove ? 'cursor-grab active:cursor-grabbing' : ''
+                  }`,
+                  mv,
+                )}
+                style={
+                  mv?.delay !== undefined
+                    ? { left: r.x, top: r.y, animationDelay: `${mv.delay}ms` }
+                    : { left: r.x, top: r.y }
+                }
               >
                 {renderNode(n)}
               </div>
@@ -570,7 +1002,7 @@ export function PlanningCanvas({
           aria-hidden="true"
           data-testid="canvas-cross-flags"
         >
-          {edges.map((edge, i) => {
+          {liveEdges.map((edge, i) => {
             if (edge.variant !== 'cross') return null;
             const route = routes[i];
             if (!route) return null;
@@ -578,7 +1010,11 @@ export function PlanningCanvas({
             return (
               <span
                 key={`flag~${edge.from}~${edge.to}~${i}`}
-                className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-(--radius-badge) bg-(--el-warning-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium whitespace-nowrap text-(--el-warning-text) shadow-(--shadow-subtle)"
+                // the chip rides its edge's motion (MOTIR-6297), so it never lands before the arrow
+                className={withMotion(
+                  'absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-(--radius-badge) bg-(--el-warning-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium whitespace-nowrap text-(--el-warning-text) shadow-(--shadow-subtle)',
+                  edgeMotion(edge),
+                )}
                 style={{ left: m.x, top: m.y }}
                 data-testid="cross-flag"
               >

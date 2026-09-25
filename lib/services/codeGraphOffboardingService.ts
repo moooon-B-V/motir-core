@@ -44,12 +44,13 @@ import { withSystemContext } from '@/lib/workspaces/context';
 //
 // **A workspace-delete arm must ENUMERATE its projects before the cascade removes
 // them.** The other three triggers leave the project rows standing, so the scope
-// is still readable afterwards; `deleteWorkspace` takes the projects with it. A
+// is still readable afterwards; a workspace delete takes the projects with it. A
 // caller that reads the project list after the delete has nothing to enumerate and
 // the graphs become permanently unreachable orphans — the exact end state Decision
 // 10 exists to prevent, produced by the code meant to prevent it. This service
 // cannot enforce that from here (it only sees the scopes it is handed), so
-// `workspacesService.deleteWorkspace` reads the projects FIRST and hands them in.
+// the one workspace delete (`deleteWorkspaceCascade` in `workspacesService`)
+// reads the projects FIRST and hands them in.
 
 /** What one enqueue covers, before the per-repo fan-out. */
 export interface EnqueueInput {

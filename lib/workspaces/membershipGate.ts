@@ -1,4 +1,5 @@
-import type { Prisma, WorkspaceMembership } from '@/generated/prisma/client';
+import type { MemberRole, Prisma, WorkspaceMembership } from '@/generated/prisma/client';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 
@@ -66,4 +67,62 @@ export async function readOwnMembership(
   return withUserContext(userId, (t) =>
     workspaceMembershipRepository.findByUserAndWorkspaceInTx(userId, workspaceId, t),
   );
+}
+
+/**
+ * The actor's WORKSPACE ROLE FOR A GATE, with the org Owner composed in
+ * (MOTIR-6308; `role-model.md` §1 — the Owner "acts with full rights in every
+ * workspace and project", member or not): the stored membership role, or
+ * `owner` for the Owner of the workspace's organization, or null for anyone
+ * else with no membership. An org Admin gets no raise here — their reach is
+ * their membership (reading R1).
+ *
+ * For the gates that answer "may this ACTOR act in this workspace". NOT for the
+ * ones that ask whether some other SUBJECT is a member (an assignee, a
+ * reporter, an invitee) — being the Owner does not put a person on a roster.
+ *
+ * Binding as {@link readMembership}: the owner join needs `app.workspace_id`
+ * (`organizationMembershipRepository.isOwnerOfWorkspaceOrg`), so a `tx` passed
+ * here must be a `withWorkspaceContext` body; omitted, this opens one.
+ */
+export async function readReachRole(
+  userId: string,
+  workspaceId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<MemberRole | null> {
+  const run = async (t: Prisma.TransactionClient): Promise<MemberRole | null> => {
+    const membership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+      userId,
+      workspaceId,
+      t,
+    );
+    return composeOwnerReach(userId, workspaceId, membership?.role ?? null, t);
+  };
+  if (tx) return run(tx);
+  return withWorkspaceContext({ userId, workspaceId }, run);
+}
+
+/**
+ * Compose the org Owner's reach onto an ALREADY-READ stored workspace role —
+ * the half of {@link readReachRole} for a caller that read the membership row
+ * itself (the project permission gate reads it through {@link readMembership}
+ * or {@link readOwnMembership} and needs the row's other fields too).
+ *
+ * A stored manager role (`owner` / `admin`) already passes every workspace
+ * gate, so it is returned without a read; anyone else costs one indexed round
+ * trip. `tx` must bind `app.workspace_id` to `workspaceId`.
+ */
+export async function composeOwnerReach(
+  userId: string,
+  workspaceId: string,
+  storedRole: MemberRole | null,
+  tx: Prisma.TransactionClient,
+): Promise<MemberRole | null> {
+  if (storedRole === 'owner' || storedRole === 'admin') return storedRole;
+  const isOwner = await organizationMembershipRepository.isOwnerOfWorkspaceOrg(
+    userId,
+    workspaceId,
+    tx,
+  );
+  return isOwner ? 'owner' : storedRole;
 }

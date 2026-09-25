@@ -15,15 +15,26 @@ import {
   withUserContext,
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
-import { isOrgAdminRole, ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { isOrgOwnerRole, ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { orgCan } from '@/lib/organizations/capabilities';
 import {
   AlreadyOrgMemberError,
-  LastOrgOwnerError,
+  InvalidOwnershipTargetError,
   OrganizationNotFoundError,
   OrgInviteeNotFoundError,
   OrgSlugCollisionError,
+  OwnerMembershipLockedError,
+  OwnerOnlyByTransferError,
+  OwnershipChangedError,
+  OwnershipConfirmationMismatchError,
 } from '@/lib/organizations/errors';
-import { assertOrgAdmin, assertOrgMember } from '@/lib/services/organizationAccessService';
+import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import {
+  assertOrgAdmin,
+  assertOrgCapability,
+  assertOrgMember,
+} from '@/lib/services/organizationAccessService';
 import {
   toCurrentOrganizationDTO,
   toOrganizationDTO,
@@ -43,8 +54,9 @@ import type {
 // owns:
 //
 //   * the ACCESS GATE (resolveWorkspaceAccess) — org membership gates workspace
-//     access, and an org owner/admin's role composes ABOVE the 6.4 workspace
-//     MemberRole (admin-equivalent on every workspace under the org). A
+//     access, and the org OWNER's role composes ABOVE the 6.4 workspace
+//     MemberRole (owner-equivalent on every workspace under the org; an org
+//     Admin reaches by membership since MOTIR-6308). A
 //     non-org-member is denied with 404-not-403 (the cross-tenant no-leak rule).
 //     This is the single shared helper the workspace-scoped guards
 //     (workspacesService.assertMembership / getMemberRole / resolveActiveWorkspace)
@@ -105,18 +117,19 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
  * The result of the workspace access gate. `granted` is implied by a non-null
  * return (null = no access → the caller raises 404). `effectiveRole` is the
  * workspace-scoped role the actor effectively has AFTER composing the org role:
- * an org owner/admin is `owner` on EVERY workspace under the org; a plain org
- * member falls back to their stored workspace `MemberRole`.
+ * the org OWNER is `owner` on EVERY workspace under the org, member or not;
+ * everyone else — an org Admin included (MOTIR-6308, `role-model.md` §1 R1) —
+ * falls back to their stored workspace `MemberRole`.
  */
 export interface WorkspaceAccess {
   organizationId: string;
   orgRole: OrganizationRole;
-  /** The actor's stored workspace MemberRole, or null when they have none (an org admin spanning the workspace by role). */
+  /** The actor's stored workspace MemberRole, or null when they have none (the org Owner spanning the workspace by role). */
   workspaceRole: string | null;
-  /** The composed workspace-scoped role (org owner/admin ⇒ 'owner'). */
+  /** The composed workspace-scoped role (org Owner ⇒ 'owner'). */
   effectiveRole: string;
-  /** True when the org role is owner or admin (admin-equivalent across the org). */
-  isOrgAdmin: boolean;
+  /** True when the actor is the org's Owner — the one role that reaches every workspace. */
+  isOrgOwner: boolean;
 }
 
 export const organizationsService = {
@@ -166,19 +179,24 @@ export const organizationsService = {
         workspaceId,
         t,
       );
-      const isOrgAdmin = isOrgAdminRole(orgMembership.role);
+      // The ceiling raise is the org OWNER's alone (MOTIR-6308; `role-model.md`
+      // §1 reading R1, and `organization-tier.md` §4 as amended). An org Admin
+      // reaches a workspace through their workspace membership, like anyone
+      // else — every pre-existing Admin was given one by
+      // `20260925130000_keep_org_admins_workspace_reach`, so none lost reach.
+      const isOrgOwner = isOrgOwnerRole(orgMembership.role);
 
-      // A plain org member reaches only workspaces they're explicitly added to.
-      if (!isOrgAdmin && !workspaceMembership) return null;
+      // Everyone but the Owner reaches only the workspaces they're a member of.
+      if (!isOrgOwner && !workspaceMembership) return null;
 
       return {
         organizationId: workspace.organizationId,
         orgRole: orgMembership.role,
         workspaceRole: workspaceMembership?.role ?? null,
-        // Org owner/admin composes to workspace-owner-equivalent; otherwise the
-        // stored workspace role (guaranteed present in the non-admin branch).
-        effectiveRole: isOrgAdmin ? ORGANIZATION_ROLE.owner : workspaceMembership!.role,
-        isOrgAdmin,
+        // The org Owner composes to workspace-owner-equivalent; otherwise the
+        // stored workspace role (guaranteed present in the non-owner branch).
+        effectiveRole: isOrgOwner ? ORGANIZATION_ROLE.owner : workspaceMembership!.role,
+        isOrgOwner,
       };
     };
 
@@ -200,7 +218,7 @@ export const organizationsService = {
   ): Promise<{ role: OrganizationRole; isOrgAdmin: boolean }> {
     return withOrgContext({ userId, organizationId }, async (tx) => {
       const role = await assertOrgMember(userId, organizationId, tx);
-      return { role, isOrgAdmin: isOrgAdminRole(role) };
+      return { role, isOrgAdmin: orgCan(role, 'manageOrgSettings') };
     });
   },
 
@@ -331,9 +349,12 @@ export const organizationsService = {
    * the id comes from a TRUSTED resolution — the org's own workspace row, read
    * inside this transaction — never from request input.
    *
-   * The actor must be an org owner/admin. Idempotency: a duplicate
-   * (organizationId, userId) raises AlreadyOrgMemberError; a duplicate workspace
-   * membership is swallowed, exactly as `ensureOrgMembership` does upward.
+   * The actor must hold `manageOrgMembers` (an Owner or an Admin). A target role
+   * of `owner` is refused with OwnerOnlyByTransferError (409): an organization
+   * has exactly one Owner, and ownership moves only by transfer (MOTIR-6307).
+   * Idempotency: a duplicate (organizationId, userId) raises
+   * AlreadyOrgMemberError; a duplicate workspace membership is swallowed, exactly
+   * as `ensureOrgMembership` does upward.
    */
   async addMember(input: {
     organizationId: string;
@@ -345,7 +366,15 @@ export const organizationsService = {
       await withOrgContext(
         { userId: input.actorUserId, organizationId: input.organizationId },
         async (tx) => {
-          await assertOrgAdmin(input.actorUserId, input.organizationId, tx);
+          await assertOrgCapability(
+            input.actorUserId,
+            input.organizationId,
+            'manageOrgMembers',
+            tx,
+          );
+          if (input.role === ORGANIZATION_ROLE.owner) {
+            throw new OwnerOnlyByTransferError(input.organizationId);
+          }
           await organizationMembershipRepository.create(
             { organizationId: input.organizationId, userId: input.userId, role: input.role },
             tx,
@@ -428,12 +457,16 @@ export const organizationsService = {
   },
 
   /**
-   * Change a member's org role. Requires the actor to be an org owner/admin.
-   * Guards the last owner: demoting the only remaining owner is refused
-   * (LastOrgOwnerError). The guard LOCKS the org's owner rows `FOR UPDATE`
-   * before counting (assertNotLastOwner), so two concurrent demotions of a
-   * 2-owner org serialize — the second blocks, re-counts after the first
-   * commits, and is refused — and the org can never drop to zero owners.
+   * Change a member's org role between Admin and Member. Requires
+   * `manageOrgMembers` (an Owner or an Admin). The Owner stays out of reach of
+   * this path in both directions (MOTIR-6307):
+   *   - a target role of `owner` → OwnerOnlyByTransferError (409) — ownership
+   *     moves only by transfer;
+   *   - a target who IS the Owner → OwnerMembershipLockedError (409), whoever is
+   *     acting, the Owner included.
+   * The target's row is read `FOR UPDATE` inside the transaction, so a transfer
+   * committing concurrently cannot slip a new Owner under the check: the second
+   * writer blocks, re-reads the committed role, and is refused.
    */
   async changeMemberRole(input: {
     organizationId: string;
@@ -444,16 +477,12 @@ export const organizationsService = {
     await withOrgContext(
       { userId: input.actorUserId, organizationId: input.organizationId },
       async (tx) => {
-        await assertOrgAdmin(input.actorUserId, input.organizationId, tx);
-        if (input.role !== ORGANIZATION_ROLE.owner) {
-          await assertNotLastOwner(input.organizationId, input.userId, tx);
+        await assertOrgCapability(input.actorUserId, input.organizationId, 'manageOrgMembers', tx);
+        if (input.role === ORGANIZATION_ROLE.owner) {
+          throw new OwnerOnlyByTransferError(input.organizationId);
         }
-        await organizationMembershipRepository.updateRole(
-          input.organizationId,
-          input.userId,
-          input.role,
-          tx,
-        );
+        await assertNotOwnerMembership(input.organizationId, input.userId, tx);
+        await writeMembershipRole(input.organizationId, input.userId, input.role, tx);
       },
     );
   },
@@ -464,10 +493,11 @@ export const organizationsService = {
    * workspace access (the gate denies once the org membership is gone — 6.10.2
    * §5iii); we deliberately do NOT delete the workspace_membership rows (the
    * asymmetry: leaving a workspace doesn't drop org membership, and the gate is
-   * what enforces access, not row presence). Guards the last owner — the guard
-   * LOCKS the org's owner rows `FOR UPDATE` before counting (assertNotLastOwner),
-   * so two concurrent removals of a 2-owner org serialize and the org can never
-   * drop to zero owners. Idempotent: removing a non-member is a no-op.
+   * what enforces access, not row presence). The OWNER's membership cannot be
+   * removed by anyone, the Owner leaving included — OwnerMembershipLockedError
+   * (409); the Owner leaves only by transferring first (MOTIR-6307). The target's
+   * row is read `FOR UPDATE`, so a concurrent transfer serializes against it.
+   * Idempotent: removing a non-member is a no-op.
    */
   async removeMember(input: {
     organizationId: string;
@@ -479,9 +509,14 @@ export const organizationsService = {
       async (tx) => {
         const isSelfLeave = input.actorUserId === input.userId;
         if (!isSelfLeave) {
-          await assertOrgAdmin(input.actorUserId, input.organizationId, tx);
+          await assertOrgCapability(
+            input.actorUserId,
+            input.organizationId,
+            'manageOrgMembers',
+            tx,
+          );
         }
-        await assertNotLastOwner(input.organizationId, input.userId, tx);
+        await assertNotOwnerMembership(input.organizationId, input.userId, tx);
         await organizationMembershipRepository.deleteByOrgAndUser(
           input.organizationId,
           input.userId,
@@ -493,6 +528,96 @@ export const organizationsService = {
     // (8.1.12). Best-effort + OUTSIDE the tx (a billing failure must never fail
     // the remove); idempotent absolute set, so a no-op remove resyncs harmlessly.
     await enqueueScaledTrackerSeatSync(input.organizationId);
+  },
+
+  /**
+   * TRANSFER OWNERSHIP — the one door by which an organization's Owner changes
+   * (Story MOTIR-6167 · Subtask MOTIR-6310). The Owner hands the role WHOLE to
+   * another member and becomes an Admin; there is exactly one Owner before and
+   * after, and never a moment with zero or two.
+   *
+   * Refusals, in the order they are checked:
+   *   - a non-member actor → OrganizationNotFoundError (404); an Admin or Member
+   *     → OrgForbiddenError (403) — `transferOwnership` is the Owner's alone;
+   *   - the actor as the target → InvalidOwnershipTargetError('self') (422);
+   *   - `confirmName` not EXACTLY the organization's current name →
+   *     OwnershipConfirmationMismatchError (400). The server checks the typed
+   *     confirmation, not only the dialog;
+   *   - a target who is not a member → InvalidOwnershipTargetError('not_member');
+   *   - the actor no longer the Owner once their row is LOCKED — a concurrent
+   *     transfer committed first → OwnershipChangedError (409).
+   *
+   * ⚠️ ONE TRANSACTION, LOCK THEN RE-READ. Both membership rows are read
+   * `FOR UPDATE` in a stable order (by user id, so two transfers touching the
+   * same pair cannot deadlock), and the actor's role is re-read UNDER that lock:
+   * the capability check above ran on an unlocked read, which a transfer racing
+   * this one can have made stale. The loser blocks on the Owner's row, then sees
+   * the committed role and is refused — it never writes.
+   *
+   * ⚠️ DEMOTE FIRST, THEN PROMOTE, so the one-owner partial unique index is
+   * never violated mid-transaction (MOTIR-6307).
+   *
+   * The target's workspace memberships are untouched: an Owner reaches every
+   * workspace by role (MOTIR-6308), which the new Owner inherits. Billing does
+   * not move — the subscription belongs to the organization, not to a person
+   * (`organization-tier.md` §3).
+   *
+   * After the commit, both people are emailed. Best-effort: a failed enqueue is
+   * logged and never undoes the transfer.
+   */
+  async transferOwnership(input: {
+    organizationId: string;
+    actorUserId: string;
+    toUserId: string;
+    confirmName: string;
+  }): Promise<void> {
+    const organizationName = await withOrgContext(
+      { userId: input.actorUserId, organizationId: input.organizationId },
+      async (tx) => {
+        await assertOrgCapability(input.actorUserId, input.organizationId, 'transferOwnership', tx);
+        if (input.toUserId === input.actorUserId) {
+          throw new InvalidOwnershipTargetError(input.organizationId, 'self');
+        }
+        const organization = await organizationRepository.findByIdInTx(input.organizationId, tx);
+        if (!organization) throw new OrganizationNotFoundError(input.organizationId);
+        if (input.confirmName !== organization.name) {
+          throw new OwnershipConfirmationMismatchError();
+        }
+
+        // Lock both rows in a stable order, then decide on what is COMMITTED.
+        const locked = new Map<string, Awaited<ReturnType<typeof lockMembership>>>();
+        for (const userId of [input.actorUserId, input.toUserId].sort()) {
+          locked.set(userId, await lockMembership(input.organizationId, userId, tx));
+        }
+        if (!locked.get(input.toUserId)) {
+          throw new InvalidOwnershipTargetError(input.organizationId, 'not_member');
+        }
+        if (locked.get(input.actorUserId)?.role !== ORGANIZATION_ROLE.owner) {
+          throw new OwnershipChangedError(input.organizationId);
+        }
+
+        await writeMembershipRole(
+          input.organizationId,
+          input.actorUserId,
+          ORGANIZATION_ROLE.admin,
+          tx,
+        );
+        await writeMembershipRole(
+          input.organizationId,
+          input.toUserId,
+          ORGANIZATION_ROLE.owner,
+          tx,
+        );
+        return organization.name;
+      },
+    );
+
+    await notifyOwnershipTransferred({
+      organizationId: input.organizationId,
+      organizationName,
+      previousOwnerId: input.actorUserId,
+      newOwnerId: input.toUserId,
+    });
   },
 
   /**
@@ -627,7 +752,11 @@ export const organizationsService = {
     actorUserId: string;
     limit?: number;
     cursor?: string | null;
+    /** Name/email search and the Owner-less picker view (MOTIR-6313). */
+    q?: string | null;
+    excludeOwner?: boolean;
   }): Promise<OrgMemberPageDTO> {
+    const filter = { q: input.q ?? null, excludeOwner: input.excludeOwner ?? false };
     const limit = Math.min(Math.max(input.limit ?? ROSTER_DEFAULT_LIMIT, 1), ROSTER_MAX_LIMIT);
     return withOrgContext(
       { userId: input.actorUserId, organizationId: input.organizationId },
@@ -639,11 +768,16 @@ export const organizationsService = {
           limit,
           input.cursor ?? null,
           tx,
+          filter,
         );
         const hasMore = page.length > limit;
         const rows = hasMore ? page.slice(0, limit) : page;
         const nextCursor = hasMore ? rows[rows.length - 1]!.id : null;
-        const total = await organizationMembershipRepository.countByOrg(input.organizationId, tx);
+        const total = await organizationMembershipRepository.countByOrg(
+          input.organizationId,
+          tx,
+          filter,
+        );
 
         // Enrich each member with the org's workspaces they belong to. One read
         // for the org's workspaces + one for this page's memberships across them.
@@ -748,27 +882,118 @@ export const organizationsService = {
 // ── Internal authorization helpers (read the actor's own membership; the
 // org_membership RLS policy's userId branch admits it under the bound context) ─
 
-async function assertNotLastOwner(
+/**
+ * Refuse any change to the OWNER's own membership (MOTIR-6307): the Owner's row
+ * moves only by transfer, which is what keeps the organization at exactly one
+ * Owner and never zero. Reads the target row `FOR UPDATE` in the caller's
+ * transaction (lock, then re-read, then decide): a transfer committing between a
+ * plain read and this write would otherwise hand the role to the very row being
+ * demoted or removed. A non-member target passes — the write that follows is then
+ * a no-op or a not-found, as before.
+ */
+async function assertNotOwnerMembership(
   organizationId: string,
   targetUserId: string,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  const target = await organizationMembershipRepository.findByOrgAndUserInTx(
+  const target = await organizationMembershipRepository.findByOrgAndUserForUpdate(
     organizationId,
     targetUserId,
     tx,
   );
-  // Only removing/demoting an OWNER can drop the owner count; a non-owner target
-  // (or a non-member) can't, so there's nothing to guard.
-  if (!target || target.role !== ORGANIZATION_ROLE.owner) return;
-  // Lock the org's owner rows before counting (lock-before-read-derived-update):
-  // a plain COUNT doesn't lock the rows a concurrent remove/demote mutates, so
-  // two racers could both see count = 2 and both write → zero owners. The
-  // FOR-UPDATE read serializes them — the second blocks, re-reads the reduced
-  // owner set, and correctly hits LastOrgOwnerError.
-  const owners = await organizationMembershipRepository.countOwnersByOrgForUpdate(
-    organizationId,
-    tx,
-  );
-  if (owners <= 1) throw new LastOrgOwnerError(organizationId);
+  if (target?.role === ORGANIZATION_ROLE.owner) {
+    throw new OwnerMembershipLockedError(organizationId);
+  }
+}
+
+/**
+ * The ONE place an organization membership's role is written, so the one-Owner
+ * index's refusal has one translation (MOTIR-6307). The partial unique index
+ * `organization_membership_one_owner_key` allows at most one `owner` row per
+ * organization; a write that would add a second — two promotions racing, a
+ * transfer racing a raw write — is refused by the database whatever path it took.
+ * An UPDATE of `role` cannot violate the only other unique key,
+ * (organizationId, userId), so a P2002 on a write to `owner` IS that index, and
+ * it surfaces as the typed 409 rather than a 500.
+ *
+ * Exported for the transfer service, which promotes the new Owner through it.
+ */
+export async function writeMembershipRole(
+  organizationId: string,
+  userId: string,
+  role: OrganizationRole,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  try {
+    await organizationMembershipRepository.updateRole(organizationId, userId, role, tx);
+  } catch (err) {
+    if (role === ORGANIZATION_ROLE.owner && isUniqueViolation(err)) {
+      throw new OwnerOnlyByTransferError(organizationId);
+    }
+    throw err;
+  }
+}
+
+function lockMembership(organizationId: string, userId: string, tx: Prisma.TransactionClient) {
+  return organizationMembershipRepository.findByOrgAndUserForUpdate(organizationId, userId, tx);
+}
+
+/**
+ * Email both sides of a committed ownership transfer (MOTIR-6310). Runs AFTER
+ * the transaction and is best-effort: the transfer is the durable fact, and a
+ * provider or queue failure must never be reported as a failed transfer — so a
+ * failure is logged and swallowed, per recipient. The provider call itself runs
+ * in the durable `email.send` job (enqueued, never sent inline).
+ */
+async function notifyOwnershipTransferred(input: {
+  organizationId: string;
+  organizationName: string;
+  previousOwnerId: string;
+  newOwnerId: string;
+}): Promise<void> {
+  try {
+    // `user` carries no RLS, and these reads gate no write.
+    const [previousOwner, newOwner] = await Promise.all([
+      userRepository.findById(input.previousOwnerId),
+      userRepository.findById(input.newOwnerId),
+    ]);
+    if (!previousOwner || !newOwner) return;
+    const settingsUrl = `${resolveBaseUrlTrimmed()}/settings/organization`;
+    const transferredAt = Date.now();
+    for (const [recipient, audience] of [
+      [newOwner, 'new-owner'],
+      [previousOwner, 'previous-owner'],
+    ] as const) {
+      if (!recipient.email) continue;
+      try {
+        await sendEvent('email.send', {
+          // Organization-scoped, not workspace-scoped: it has no single workspace.
+          workspaceId: null,
+          idempotencyKey: `ownership-transferred:${input.organizationId}:${transferredAt}:${audience}`,
+          to: recipient.email,
+          template: 'ownership-transferred',
+          data: {
+            audience,
+            recipientName: recipient.name,
+            organizationName: input.organizationName,
+            previousOwnerName: previousOwner.name,
+            newOwnerName: newOwner.name,
+            settingsUrl,
+          },
+        });
+      } catch (err) {
+        console.error(
+          '[organizationsService] the ownership-transferred email could not be enqueued; ' +
+            'the transfer is committed',
+          { organizationId: input.organizationId, audience, err },
+        );
+      }
+    }
+  } catch (err) {
+    console.error(
+      '[organizationsService] the ownership-transferred notification failed; ' +
+        'the transfer is committed',
+      { organizationId: input.organizationId, err },
+    );
+  }
 }
