@@ -14,6 +14,7 @@ import { useBacklogDnd } from './BacklogDndProvider';
 import { RowActionsMenu } from './RowActionsMenu';
 import type { RegionKind } from './backlogDnd';
 import type { StatusByKey } from './backlogShared';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // One backlog / sprint issue row (Story 4.2 · render 4.2.3 · drag 4.2.4 ·
 // grooming 4.2.5). Reuses the Story-2.x work-items list-row vocabulary — the
@@ -285,8 +286,17 @@ export function BacklogSortableRow({
 }) {
   const { overRowId, activeId, selectedIds, activateRow, toggleRow, bumpSprintPoints } =
     useBacklogDnd();
+  // MOTIR-6174 — every write this row drives (rank drag, the cross-region drag,
+  // the bulk selection, the ⋯ Move rows) asserts `sprint:manage`
+  // (`backlogService.assertCanGroom`). Without it the row is READ-ONLY: it does
+  // not drag, offers no selection box and draws no menu — the permission-gated
+  // UI rule (design/projects/design-notes.md): the menu is an entry point (HIDE,
+  // row 5) and the drag an in-place write the page's read-only state explains.
+  const { can } = useProjectAccess();
+  const canGroom = can('sprint:manage');
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
+    disabled: !canGroom,
   });
   const selected = selectedIds.has(item.id);
 
@@ -297,7 +307,7 @@ export function BacklogSortableRow({
       assigneeNameById={assigneeNameById}
       innerRef={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      dragProps={{ ...attributes, ...listeners }}
+      dragProps={canGroom ? { ...attributes, ...listeners } : undefined}
       dragging={isDragging}
       dropBefore={overRowId === item.id && activeId !== item.id}
       selected={selected}
@@ -310,19 +320,23 @@ export function BacklogSortableRow({
         activateRow(item.id, { shiftKey: e.shiftKey, toggleKey: e.metaKey || e.ctrlKey })
       }
       checkbox={
-        <SelectionCheckbox
-          selected={selected}
-          identifier={item.identifier}
-          onToggle={() => toggleRow(item.id)}
-        />
+        canGroom ? (
+          <SelectionCheckbox
+            selected={selected}
+            identifier={item.identifier}
+            onToggle={() => toggleRow(item.id)}
+          />
+        ) : undefined
       }
       actions={
-        <RowActionsMenu
-          itemId={item.id}
-          identifier={item.identifier}
-          regionKind={regionKind}
-          currentSprintId={sprintId ?? null}
-        />
+        canGroom ? (
+          <RowActionsMenu
+            itemId={item.id}
+            identifier={item.identifier}
+            regionKind={regionKind}
+            currentSprintId={sprintId ?? null}
+          />
+        ) : undefined
       }
     />
   );

@@ -74,7 +74,7 @@ export function SprintHeader({
   sprint,
   projectName,
   workflow,
-  canEdit,
+  canCompleteSprint,
   onSprintCompleted,
 }: {
   sprint: SprintSummaryDto;
@@ -83,9 +83,10 @@ export function SprintHeader({
    *  Complete-sprint entry is gated on its presence. */
   projectName: string;
   workflow?: WorkflowDto;
-  /** Whether the actor may act on the board (Story 6.4.6) — gates the
-   *  Complete-sprint entry, matching the read-only board treatment. */
-  canEdit: boolean;
+  /** Whether the actor holds `sprint:manage` — the key `completeSprint` asserts
+   *  (MOTIR-6174; it was `work_item:edit`, which the built-in roles happen to pair
+   *  with it and a custom role need not). Gates the Complete-sprint entry. */
+  canCompleteSprint: boolean;
   /** Reload the board after the sprint completes (→ no-active-sprint state). */
   onSprintCompleted: () => void | Promise<void>;
 }) {
@@ -183,7 +184,7 @@ export function SprintHeader({
             emphasis
           />
         </div>
-        {canEdit && workflow ? (
+        {canCompleteSprint && workflow ? (
           <CompleteSprintEntry
             sprintId={sprint.id}
             projectName={projectName}

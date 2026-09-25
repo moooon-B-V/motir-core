@@ -309,6 +309,68 @@ describe('Backlog inline create (4.2.5 → 4.2.2)', () => {
     });
     expect(await screen.findByTestId('backlog-row-PROD-999')).toBeTruthy();
   });
+
+  // MOTIR-6174 — the rest of the form's paths, now the create row carries a
+  // permission branch of its own (drawn disabled without `work_item:edit`).
+  it('picks the type from its menu, and Escape / Cancel close the form without a write', async () => {
+    const calls = installFetch({
+      sprints: [],
+      backlog: [item({ id: 'b1', key: 150 })],
+      sprintIssues: [],
+    });
+    render(ui);
+
+    fireEvent.click(await screen.findByTestId('create-issue-backlog'));
+    fireEvent.click(screen.getByTestId('create-issue-type'));
+    const menu = screen.getByRole('menu', { name: 'Choose work item type' });
+    fireEvent.click(within(menu).getByRole('menuitemradio', { name: /Task/ }));
+    fireEvent.change(screen.getByTestId('create-issue-input'), { target: { value: 'Typed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.url === '/api/backlog' && c.method === 'POST')[0]?.body,
+      ).toMatchObject({ title: 'Typed', kind: 'task' }),
+    );
+
+    fireEvent.keyDown(screen.getByTestId('create-issue-input'), { key: 'Escape' });
+    expect(screen.queryByTestId('create-issue-input')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('create-issue-backlog'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByTestId('create-issue-input')).toBeNull();
+    // An empty title never writes, and an ordinary keystroke is just typing.
+    fireEvent.click(screen.getByTestId('create-issue-backlog'));
+    const field = screen.getByTestId('create-issue-input');
+    fireEvent.keyDown(field, { key: 'Enter' });
+    fireEvent.keyDown(field, { key: 'a' });
+    expect(calls.filter((c) => c.url === '/api/backlog' && c.method === 'POST')).toHaveLength(1);
+
+    // A second Enter while the first create is in flight writes nothing more.
+    fireEvent.change(field, { target: { value: 'Once' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url === '/api/backlog' && c.method === 'POST')).toHaveLength(2),
+    );
+  });
+});
+
+describe('Backlog selection bar → a sprint (4.2.5)', () => {
+  it('moves a backlog selection INTO a picked sprint in one request', async () => {
+    const calls = installFetch({
+      sprints: [sprint({ id: 'sp1', name: 'Sprint 25', state: 'planned', issueCount: 0 })],
+      backlog: [item({ id: 'b1', key: 150 })],
+      sprintIssues: [],
+    });
+    render(ui);
+
+    fireEvent.click(await screen.findByTestId('backlog-row-check-PROD-150'));
+    const bar = screen.getByTestId('backlog-selection-bar');
+    fireEvent.click(within(bar).getByRole('button', { name: /Move to sprint/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Sprint 25/ }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+    expect(screen.queryByTestId('backlog-selection-bar')).toBeNull();
+  });
 });
 
 describe('Backlog row ⋯ menu (4.2.5)', () => {

@@ -85,6 +85,13 @@ export const ORGANIZATION_SETTINGS_NAV_GROUP_ORDER: OrganizationSettingsNavGroup
 export interface OrganizationSettingsNavActor {
   /** `isOrgAdminRole(role)` — owner or admin. */
   isOrgAdmin: boolean;
+  /**
+   * `isWorkspaceTierRevealed(count)` — whether the workspace tier is shown. It
+   * decides what the area ROOT hosts for a plain member (see `organization`
+   * below), so the row that opens it reads it. Absent = not revealed, the
+   * one-workspace default.
+   */
+  workspaceTierRevealed?: boolean;
 }
 
 /**
@@ -123,6 +130,14 @@ export interface OrganizationSettingsNavEntry {
    */
   orgAdminOnly?: true;
   /**
+   * Requires org owner/admin ONCE THE WORKSPACE TIER IS REVEALED (MOTIR-6175).
+   * Below the reveal the row's page hosts the folded-in workspace sections a
+   * plain member uses; above it, those sections move to `/settings/workspace`
+   * and the page holds only the org-scoped cards, which answer a plain member
+   * with the forbidden panel — a door onto a room with nothing in it for them.
+   */
+  orgAdminOnlyAboveReveal?: true;
+  /**
    * Cloud builds only — the route `notFound()`s on a self-host build, so a row
    * would point at a 404. Same flag, same default-closed handling, as the project
    * registry's `cloudOnly`.
@@ -157,6 +172,12 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     // alternative surface anywhere in the product. Hiding the row would close the
     // only route to it, which is precisely the defect §6d was written to repair.
     // The page keeps gating PER SECTION; the row is the door to the page.
+    //
+    // ⚠️ ABOVE the reveal that reason is gone (MOTIR-6175): the fold-in is not
+    // rendered, `/settings/workspace` hosts those sections instead, and the page
+    // answers a plain member with panel 5d's forbidden state and nothing else —
+    // so the door hides for them there, and only there.
+    orgAdminOnlyAboveReveal: true,
   },
   {
     id: 'git',
@@ -201,7 +222,12 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     href: '/settings/organization/usage',
     icon: Coins,
     labelKey: 'usage',
-    orgAdminOnly: true,
+    // ⚠️ NOT `orgAdminOnly` (MOTIR-6175 — it carried the flag until then). The page
+    // gates no role and `aiUsageService.getUsage` SCOPES the read instead: an
+    // owner/admin sees the org, a plain member sees the workspaces they belong to
+    // (`access.isOrgAdmin`). So a plain member has a real room here — the org
+    // menu's `Usage & cost` row has always offered it to them — and the rail
+    // hiding it was the two doors disagreeing about one room.
   },
   {
     id: 'billing',
@@ -259,7 +285,10 @@ export function visibleOrganizationSettingsNav(
   available: OrganizationSettingsNavAvailability = NO_CLOUD,
 ): OrganizationSettingsNavEntry[] {
   return entries.filter(
-    (entry) => isAvailable(entry, available) && (!entry.orgAdminOnly || actor.isOrgAdmin),
+    (entry) =>
+      isAvailable(entry, available) &&
+      (!entry.orgAdminOnly || actor.isOrgAdmin) &&
+      (!entry.orgAdminOnlyAboveReveal || actor.isOrgAdmin || !actor.workspaceTierRevealed),
   );
 }
 

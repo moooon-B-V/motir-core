@@ -154,7 +154,9 @@ describe('LabelsCard', () => {
     ).toBeTruthy();
   });
 
-  it('read-only (viewer): chips only, NO chevron — affordances absent', () => {
+  // MOTIR-6173 — the chevron STAYS for a read-only actor, disabled, and says why
+  // (the permission-gated UI rule's part 2); it never opens the picker.
+  it('read-only (viewer): chips, a DISABLED chevron that says why, and no picker', () => {
     stubLabelSearch([]);
     render(
       <ProjectAccessProvider permissions={[]}>
@@ -163,6 +165,13 @@ describe('LabelsCard', () => {
     );
     expect(screen.getByText('api')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Edit Labels' })).toBeNull();
+    const chevron = screen.getByRole('button', {
+      name: 'Labels — You have read-only access to this project',
+    });
+    expect(chevron.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(chevron);
+    expect(screen.queryByRole('combobox', { name: 'Labels' })).toBeNull();
+    expect(addLabelSpy).not.toHaveBeenCalled();
   });
 
   it('shows the muted empty placeholder with no labels', () => {
@@ -180,7 +189,7 @@ describe('ComponentsCard', () => {
         workItemId="wi_1"
         initialComponents={[apiComponent]}
         projectComponents={[apiComponent, webComponent]}
-        canManageProject={false}
+        canManageComponents={false}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Edit Components' }));
@@ -204,7 +213,7 @@ describe('ComponentsCard', () => {
         workItemId="wi_1"
         initialComponents={[apiComponent]}
         projectComponents={[apiComponent]}
-        canManageProject={false}
+        canManageComponents={false}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Edit Components' }));
@@ -224,22 +233,26 @@ describe('ComponentsCard', () => {
         workItemId="wi_1"
         initialComponents={[]}
         projectComponents={[]}
-        canManageProject
+        canManageComponents
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Edit Components' }));
     fireEvent.focus(screen.getByRole('combobox', { name: 'Components' }));
     expect(screen.getByText('No components defined')).toBeTruthy();
+    // MOTIR-6173 — the door goes to the Components ROOM, which `component:manage`
+    // opens; it used to point at Details, a `project:administer` room.
     expect(
-      screen.getByRole('link', { name: 'Manage components in Project settings →' }),
-    ).toBeTruthy();
+      screen
+        .getByRole('link', { name: 'Manage components in Project settings →' })
+        .getAttribute('href'),
+    ).toBe('/settings/project/components');
 
     rerender(
       <ComponentsCard
         workItemId="wi_1"
         initialComponents={[]}
         projectComponents={[]}
-        canManageProject={false}
+        canManageComponents={false}
       />,
     );
     expect(
@@ -247,18 +260,24 @@ describe('ComponentsCard', () => {
     ).toBeNull();
   });
 
-  it('read-only (viewer): neutral glyph chips, no chevron', () => {
+  it('read-only (viewer): neutral glyph chips, a DISABLED chevron that says why', () => {
     render(
       <ProjectAccessProvider permissions={[]}>
         <ComponentsCard
           workItemId="wi_1"
           initialComponents={[apiComponent]}
           projectComponents={[apiComponent]}
-          canManageProject={false}
+          canManageComponents={false}
         />
       </ProjectAccessProvider>,
     );
     expect(screen.getByText('API')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Edit Components' })).toBeNull();
+    const chevron = screen.getByRole('button', {
+      name: 'Components — You have read-only access to this project',
+    });
+    expect(chevron.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(chevron);
+    expect(screen.queryByRole('combobox', { name: 'Components' })).toBeNull();
   });
 });

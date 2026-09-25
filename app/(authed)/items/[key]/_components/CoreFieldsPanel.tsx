@@ -123,7 +123,7 @@ export interface CoreFieldsPanelProps {
     labels: LabelDto[];
     components: ComponentDto[];
     projectComponents: ComponentDto[];
-    canManageProject: boolean;
+    canManageComponents: boolean;
   };
   /**
    * The project's sprints (Subtask 2.4.14) — backs the inline Sprint field's
@@ -202,6 +202,12 @@ export function CoreFieldsPanel({
   const { can } = useProjectAccess();
   const canEdit = can('work_item:edit');
   const readOnly = !canEdit;
+  // MOTIR-6173 — the permission-gated UI rule's part 2: every field card a
+  // read-only actor sees keeps its chevron DISABLED, with this reason on it, and
+  // never mounts an editor (the MOTIR-4822 path was an auto-opening picker
+  // mounted for a Viewer). Undefined for an actor who can edit.
+  const tpa = useTranslations('projectAccess');
+  const readOnlyReason = readOnly ? tpa('readOnlyHint') : undefined;
   const [editing, setEditing] = useState<EditableKey | null>(null);
   const [updatedAt, setUpdatedAt] = useState(item.updatedAt);
   const [dueDate, setDueDate] = useState(item.dueDate ? item.dueDate.slice(0, 10) : '');
@@ -285,7 +291,12 @@ export function CoreFieldsPanel({
     if (keys.includes('parentId')) setParentOverride(undefined);
   }
 
-  const toggle = (key: EditableKey) => setEditing((cur) => (cur === key ? null : key));
+  const toggle = (key: EditableKey) => {
+    // A read-only actor never enters edit mode — not from the chevron (which is
+    // disabled) and not from an inline "Set …" button (which they are not shown).
+    if (readOnly) return;
+    setEditing((cur) => (cur === key ? null : key));
+  };
 
   // THE PAGE'S PLACEMENT CHANNEL (MOTIR-5381). A parent change moves the item, and
   // the breadcrumb that draws where it sits is another island; reporting asks the
@@ -413,6 +424,7 @@ export function CoreFieldsPanel({
   return (
     <div className="flex flex-col gap-3">
       <FieldCard
+        readOnlyReason={readOnlyReason}
         label={t('status')}
         editing={editing === 'status'}
         onToggle={() => toggle('status')}
@@ -457,7 +469,12 @@ export function CoreFieldsPanel({
         </FieldCard>
       ) : null}
 
-      <FieldCard label={t('type')} editing={editing === 'type'} onToggle={() => toggle('type')}>
+      <FieldCard
+        readOnlyReason={readOnlyReason}
+        label={t('type')}
+        editing={editing === 'type'}
+        onToggle={() => toggle('type')}
+      >
         {editing === 'type' ? (
           <TypePicker
             value={eff.kind as IssueType}
@@ -482,6 +499,7 @@ export function CoreFieldsPanel({
       {isTypeableKind(eff.kind as WorkItemKindDto) ? (
         <>
           <FieldCard
+            readOnlyReason={readOnlyReason}
             label={t('workItemType')}
             editing={editing === 'workItemType'}
             onToggle={() => toggle('workItemType')}
@@ -501,6 +519,8 @@ export function CoreFieldsPanel({
               />
             ) : eff.type ? (
               <WorkItemTypeChip type={eff.type} />
+            ) : readOnly ? (
+              <span className="text-(--el-text-secondary)">{t('none')}</span>
             ) : (
               <button
                 type="button"
@@ -516,6 +536,7 @@ export function CoreFieldsPanel({
 
           {eff.type ? (
             <FieldCard
+              readOnlyReason={readOnlyReason}
               label={t('executor')}
               editing={editing === 'executor'}
               onToggle={() => toggle('executor')}
@@ -536,10 +557,11 @@ export function CoreFieldsPanel({
               design/work-items/core-fields--difficulty.mock.html — directly below
               Executor, inside the SAME leaf-only branch, so an epic/story renders
               no card at all. Unlike Executor it does not wait for a type. A
-              read-only viewer sees the value with no chevron. */}
+              read-only viewer sees the value and a DISABLED chevron that says why
+              (MOTIR-6173). */}
           <FieldCard
+            readOnlyReason={readOnlyReason}
             label={t('difficulty')}
-            editable={!readOnly}
             editing={editing === 'difficulty'}
             onToggle={() => toggle('difficulty')}
           >
@@ -569,6 +591,7 @@ export function CoreFieldsPanel({
       ) : null}
 
       <FieldCard
+        readOnlyReason={readOnlyReason}
         label={t('priority')}
         editing={editing === 'priority'}
         onToggle={() => toggle('priority')}
@@ -588,6 +611,7 @@ export function CoreFieldsPanel({
       </FieldCard>
 
       <FieldCard
+        readOnlyReason={readOnlyReason}
         label={t('assignee')}
         editing={editing === 'assignee'}
         onToggle={() => toggle('assignee')}
@@ -622,6 +646,7 @@ export function CoreFieldsPanel({
       </FieldCard>
 
       <FieldCard
+        readOnlyReason={readOnlyReason}
         label={t('parent')}
         editing={editing === 'parent'}
         onToggle={() => toggle('parent')}
@@ -655,11 +680,12 @@ export function CoreFieldsPanel({
 
       {/* Folder (MOTIR-5377, placement.mock.html panels 2–3) — directly below Parent,
           because the two are one fact about placement. The control is the quick
-          view's, unforked. A viewer sees the value with no chevron. */}
+          view's, unforked. A viewer sees the value and a DISABLED chevron that
+          says why (MOTIR-6173). */}
       {placement ? (
         <FieldCard
+          readOnlyReason={readOnlyReason}
           label={tf('fieldLabel')}
-          editable={canEdit}
           editing={editing === 'folder'}
           onToggle={() => toggle('folder')}
         >
@@ -707,12 +733,13 @@ export function CoreFieldsPanel({
             workItemId={item.id}
             initialComponents={labelsComponents.components}
             projectComponents={labelsComponents.projectComponents}
-            canManageProject={labelsComponents.canManageProject}
+            canManageComponents={labelsComponents.canManageComponents}
           />
         </>
       ) : null}
 
       <FieldCard
+        readOnlyReason={readOnlyReason}
         label={t('dueDate')}
         editing={editing === 'dueDate'}
         onToggle={() => toggle('dueDate')}
@@ -745,6 +772,7 @@ export function CoreFieldsPanel({
           optimistically with no router.refresh. */}
       {eff.kind !== 'epic' ? (
         <FieldCard
+          readOnlyReason={readOnlyReason}
           label={t('sprint')}
           editing={editing === 'sprint'}
           onToggle={() => toggle('sprint')}
@@ -788,6 +816,7 @@ export function CoreFieldsPanel({
       </FieldCard>
 
       <FieldCard
+        readOnlyReason={readOnlyReason}
         label={t('estimate')}
         editing={editing === 'estimate'}
         onToggle={() => (editing === 'estimate' ? commitEstimate() : setEditing('estimate'))}

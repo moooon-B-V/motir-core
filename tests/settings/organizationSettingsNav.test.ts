@@ -105,7 +105,27 @@ describe('the two FILTER AXES — what the actor holds, and what this build has'
     // `Git` is here for §6's reason (see the registry entry); `Organisation` for
     // §6d's, below.
     const ids = visibleOrganizationSettingsNav(MEMBER, undefined, CLOUD).map((e) => e.id);
-    expect(ids).toEqual(['organization', 'git']);
+    // `Usage & cost` too (MOTIR-6175): `aiUsageService.getUsage` scopes the read
+    // to the member's own workspaces, so the room has something in it for them.
+    expect(ids).toEqual(['organization', 'git', 'usage']);
+  });
+
+  it('ABOVE the workspace-tier reveal a plain member loses `Organisation` — it holds only the forbidden panel then (MOTIR-6175)', () => {
+    // Above the reveal the fold-in moves to `/settings/workspace`, and the index
+    // page answers a plain member with panel 5d's forbidden state and nothing
+    // else. An admin keeps the row either way.
+    const revealed = { ...MEMBER, workspaceTierRevealed: true };
+    expect(visibleOrganizationSettingsNav(revealed, undefined, CLOUD).map((e) => e.id)).toEqual([
+      'git',
+      'usage',
+    ]);
+    expect(
+      visibleOrganizationSettingsNav(
+        { ...ADMIN, workspaceTierRevealed: true },
+        undefined,
+        CLOUD,
+      ).map((e) => e.id),
+    ).toEqual(['organization', 'git', 'members', 'security', 'usage', 'billing']);
   });
 
   it('`Billing & plans` is ABSENT off cloud, and `Usage & cost` is not', () => {
@@ -121,7 +141,11 @@ describe('the two FILTER AXES — what the actor holds, and what this build has'
     // The property that makes a missing prop safe. `visibleSettingsNav` on the
     // project registry defaults closed for the same reason: a surface that forgets
     // the availability flag must drop the row, never offer a door onto a corridor.
-    expect(visibleOrganizationSettingsNav().map((e) => e.id)).toEqual(['organization', 'git']);
+    expect(visibleOrganizationSettingsNav().map((e) => e.id)).toEqual([
+      'organization',
+      'git',
+      'usage',
+    ]);
   });
 });
 
@@ -137,7 +161,10 @@ describe('grouping — a group with no surviving rows is not rendered', () => {
     const groups = groupOrganizationSettingsNav(
       visibleOrganizationSettingsNav({ isOrgAdmin: false }, undefined, { billingAvailable: true }),
     );
-    expect(groups.map((g) => g.group)).toEqual(['general']);
+    // `access` (Members, Security) empties for a plain member and is dropped with
+    // its heading. `billing` survives on `Usage & cost` since MOTIR-6175.
+    expect(groups.map((g) => g.group)).toEqual(['general', 'billing']);
+    expect(groups.find((g) => g.group === 'billing')?.entries.map((e) => e.id)).toEqual(['usage']);
   });
 
   it('keeps a PARTIALLY filtered group, with its survivors', () => {

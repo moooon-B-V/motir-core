@@ -125,17 +125,20 @@ describe('the rail SWAPS on an organisation-settings route', () => {
 });
 
 describe('the two filtered arms, as they RENDER', () => {
-  it('a plain org member sees `Organisation` and `Git` — absent, not disabled', () => {
+  it('a plain org member sees `Organisation`, `Git` and `Usage & cost` — the rest absent, not disabled', () => {
     // Both survive, for two DIFFERENT reasons: `Organisation` because §6d's
     // folded-in workspace sections (and Leave workspace) are reached only through
     // it, `Git` because §6 forbids a relocation that narrows an audience and the
     // surface it moved from checks no role at all.
+    // `Usage & cost` since MOTIR-6175: the usage read SCOPES to the member's own
+    // workspaces (`aiUsageService.getUsage`), so the room has content for them,
+    // and the org menu had always offered it.
     renderRail(MEMBER_ORG);
-    expect(rowNames()).toEqual(['Back to Motir', 'Organisation', 'Git']);
+    expect(rowNames()).toEqual(['Back to Motir', 'Organisation', 'Git', 'Usage & cost']);
     // Nothing marks the gap: an entry point is a promise about a room, and a
     // disabled row is a promise the product then refuses (MOTIR-2468).
     expect(screen.queryByText('Access')).toBeNull();
-    expect(screen.queryByText('Billing')).toBeNull();
+    expect(rowNames()).not.toContain('Billing & plans');
   });
 
   it('off cloud, `Billing & plans` is gone and its group keeps `Usage & cost`', () => {
@@ -149,7 +152,7 @@ describe('the two filtered arms, as they RENDER', () => {
     // A caller that forgets the prop must lose rows, never gain them. The head is
     // omitted too rather than rendering an empty identity.
     renderRail(null);
-    expect(rowNames()).toEqual(['Organisation', 'Git']);
+    expect(rowNames()).toEqual(['Organisation', 'Git', 'Usage & cost']);
     expect(screen.queryByText('Organisation settings')).toBeNull();
   });
 });
