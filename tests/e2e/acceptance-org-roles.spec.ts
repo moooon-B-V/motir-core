@@ -242,7 +242,7 @@ test('an Owner hands the organization over; each role then holds exactly its own
     );
     await remove.getByRole('button', { name: 'Remove workspace' }).click();
     expect((await removed).status()).toBe(200);
-    await expect(page.getByText('Scratch removed')).toBeVisible();
+    await expect(page.getByText('Scratch removed', { exact: true })).toBeVisible();
     await expect(page.getByText('Scratch', { exact: true })).toHaveCount(0);
     await beat();
   });
