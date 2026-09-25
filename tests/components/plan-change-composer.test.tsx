@@ -73,7 +73,12 @@ function stubComputedStyle() {
       boxSizing: 'border-box',
       borderTopWidth: '1px',
       borderBottomWidth: '1px',
-    } as CSSStyleDeclaration;
+      // `dom-accessibility-api` reads `visibility` / `display` through this when
+      // a `getByRole` MISSES and testing-library builds its error message. A
+      // stub without it turns every near-miss into an unrelated TypeError.
+      getPropertyValue: (name: string) =>
+        ({ 'line-height': `${LINE}px`, visibility: 'visible', display: 'block' })[name] ?? '',
+    } as unknown as CSSStyleDeclaration;
   });
 }
 
@@ -109,6 +114,8 @@ interface Harness {
   autoFocus: boolean;
   disabled: boolean;
   mentions: boolean;
+  awaitingQuestion: string | null;
+  onSeeQuestion: Mock<() => void> | undefined;
   onAddTarget: Mock<(target: PlanningTarget) => void>;
   onRemoveTarget: Mock<(identifier: string) => void>;
   onSubmit: Mock<(text: string) => void>;
@@ -124,6 +131,8 @@ function renderComposer(initial: Partial<Harness> = {}) {
     autoFocus: initial.autoFocus ?? false,
     disabled: initial.disabled ?? false,
     mentions: initial.mentions ?? true,
+    awaitingQuestion: initial.awaitingQuestion ?? null,
+    onSeeQuestion: initial.onSeeQuestion,
     onAddTarget: vi.fn<(target: PlanningTarget) => void>(),
     onRemoveTarget: vi.fn<(identifier: string) => void>(),
     onSubmit: vi.fn<(text: string) => void>(),
@@ -152,6 +161,8 @@ function renderComposer(initial: Partial<Harness> = {}) {
         autoFocus={h.autoFocus}
         disabled={h.disabled}
         mentions={h.mentions}
+        awaitingQuestion={h.awaitingQuestion}
+        onSeeQuestion={h.onSeeQuestion}
       />
     );
   }
@@ -652,5 +663,146 @@ describe('the states the composer already had behave exactly as before', () => {
     expect(field().tagName).toBe('TEXTAREA');
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Add a work item to plan around' })).toBeNull();
+  });
+});
+
+// ── MOTIR-6239 — the coverage top-up ────────────────────────────────────────
+// The picker's remaining keyboard and pointer paths, and the `@` trigger's
+// spacing branch. Each is a shipped behaviour with no test of its own; they are
+// here rather than in the integration file because they need no database and no
+// browser, which is the tier test the story's own boundary sets.
+
+describe('the picker’s remaining paths', () => {
+  it('Tab DISMISSES the picker and lets focus move on', async () => {
+    renderComposer();
+    const el = type('@bil');
+    await screen.findAllByRole('option', {}, { timeout: 3000 });
+
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    act(() => {
+      el.dispatchEvent(tab);
+    });
+
+    // Not swallowed — Tab is how a keyboard user leaves the field, and a
+    // dismissed picker must not also trap them in it.
+    expect(tab.defaultPrevented).toBe(false);
+    await waitFor(() => expect(screen.queryByTestId('target-search-popup')).toBeNull());
+  });
+
+  it('↑ moves the active row UP, wrapping to the last', async () => {
+    renderComposer();
+    const el = type('@bil');
+    await screen.findAllByRole('option', {}, { timeout: 3000 });
+
+    // From the first row, ↑ wraps to the last.
+    fireEvent.keyDown(el, { key: 'ArrowUp' });
+
+    await waitFor(() =>
+      expect(screen.getAllByRole('option')[1]!.getAttribute('aria-selected')).toBe('true'),
+    );
+    expect(el.getAttribute('aria-activedescendant')).toBe('planning-target-option-1');
+  });
+
+  it('HOVERING a row makes it the active one, so the pointer and the keyboard agree', async () => {
+    renderComposer();
+    const el = type('@bil');
+    const options = await screen.findAllByRole('option', {}, { timeout: 3000 });
+
+    fireEvent.mouseEnter(options[1]!);
+
+    await waitFor(() => expect(options[1]!.getAttribute('aria-selected')).toBe('true'));
+    expect(el.getAttribute('aria-activedescendant')).toBe('planning-target-option-1');
+  });
+
+  it('CLICKING in the field re-derives the query from the caret it just moved', async () => {
+    const harness = renderComposer();
+    // A draft that already holds a mention token, with the caret at the END so
+    // nothing is open yet — `findMentionQuery` reads the caret, not the text.
+    const el = type('@bil and more', 13);
+    expect(screen.queryByTestId('target-search-popup')).toBeNull();
+
+    // The user clicks back inside the token. The click moves the caret first;
+    // the handler is what notices.
+    el.setSelectionRange(4, 4);
+    fireEvent.click(el);
+
+    await screen.findAllByRole('option', {}, { timeout: 3000 });
+    expect(harness.onAddTarget).not.toHaveBeenCalled();
+  });
+});
+
+describe('the `@` BUTTON’s spacing branch', () => {
+  it('inserts a bare `@` on an EMPTY draft — no leading space to separate from', async () => {
+    const harness = renderComposer();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a work item to plan around' }));
+
+    expect(harness.onDraftChange).toHaveBeenCalledWith('@');
+    expect(await screen.findByText('Type to search the project’s work items…')).toBeTruthy();
+  });
+
+  it('inserts a bare `@` after a draft that ALREADY ends in whitespace', () => {
+    const harness = renderComposer({ draft: 'Plan ' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a work item to plan around' }));
+
+    // One space, not two: the separator is added only when there is none.
+    expect(harness.onDraftChange).toHaveBeenCalledWith('Plan @');
+  });
+
+  it('inserts at the CARET, not at the end, keeping the rest of the sentence', () => {
+    const harness = renderComposer({ draft: 'Split the billing story' });
+    const el = field();
+    el.setSelectionRange(5, 5); // after "Split"
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a work item to plan around' }));
+
+    expect(harness.onDraftChange).toHaveBeenCalledWith('Split @ the billing story');
+  });
+});
+
+describe('the ANSWER state, driven through the composer itself', () => {
+  // Asserted at the rail in `plan-change-planner-turn`, and never here — so the
+  // composer's own three cues had no test that renders only the composer.
+  it('shows the awaiting bar, relabels Send to Answer, and offers the jump when it can', () => {
+    const onSeeQuestion = vi.fn<() => void>();
+    renderComposer({
+      draft: 'Monthly and yearly.',
+      awaitingQuestion: 'Should invoices be monthly or yearly?',
+      onSeeQuestion,
+    });
+
+    expect(screen.getByTestId('plan-change-awaiting').textContent).toContain(
+      'Should invoices be monthly or yearly?',
+    );
+    // The third cue: the control's own word changes, not only its colour.
+    expect(screen.getByRole('button', { name: 'Answer' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'See it' }));
+    expect(onSeeQuestion).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws the bar with NO jump when the host offers none', () => {
+    renderComposer({ awaitingQuestion: 'Monthly or yearly?' });
+
+    expect(screen.getByTestId('plan-change-awaiting')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'See it' })).toBeNull();
+  });
+
+  it('closes the picker AT the target limit, so no row can be offered that cannot be added', async () => {
+    const targets = Array.from({ length: MAX_PLANNING_TARGETS }, (_, i) => ({
+      id: `w-${i}`,
+      identifier: `MOTIR-${i}`,
+      title: `Item ${i}`,
+      kind: 'story' as const,
+    }));
+    renderComposer({ targets });
+
+    type('@bil');
+
+    // The dropdown never opens: `atLimit` closes it, and the tray says why.
+    await waitFor(() => expect(screen.queryByTestId('target-search-popup')).toBeNull());
+    expect(screen.getByText(/You can plan around up to 20 work items at once\./)).toBeTruthy();
   });
 });
