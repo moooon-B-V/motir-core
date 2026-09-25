@@ -74,8 +74,10 @@ export interface ProseAdvisorySubject {
   /** Number of outgoing `blocked_by` edges; compared with counted prose claims. */
   blockerCount: number;
   /**
-   * The card's work TYPE and EXECUTOR — read ONLY by the ORDERING check's
-   * exemption ({@link isOrderingCheckExempt}), never by the reference scan.
+   * The card's work TYPE and EXECUTOR — read by the ORDERING check's
+   * exemption ({@link isOrderingCheckExempt}) and, `type` alone, by the
+   * SELF-BLOCKING-DESIGN check's scope ({@link selfBlockingDesignAdvisory});
+   * never by the reference scan.
    * Required so every caller has to decide what it knows; `null` is a real
    * answer ("untyped", and therefore not exempt).
    */
@@ -488,11 +490,21 @@ function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto
  * dismissing it means reconstructing enough of the card to prove nothing is
  * wrong. The arm this does NOT touch is the one the check was built for: a card
  * that both draws and builds with NO design blocker still emits.
+ *
+ * ⚠️ AND A `type: design` CARD IS NEVER REPORTED (MOTIR-6201). It IS the design,
+ * so the LIFT remedy has no meaning on it — and `hasDesignBlocker` cannot exclude
+ * it, because the card that produces a design is never `blocked_by` one. The
+ * per-criterion scan cannot either: a design card's criteria describe what the
+ * DRAWING shows (*"the row is drawn as opening the planning surface"*), which the
+ * surface arm reads as building a rendered surface, and there is no finite list of
+ * asset words to exclude that with. So the TYPE is the scope test. A card of any
+ * other type that both commissions a design and builds the surface still emits.
  */
 function selfBlockingDesignAdvisory(
   subject: ProseAdvisorySubject,
 ): WorkItemProseAdvisoryDto | null {
   if (subject.hasChildren) return null;
+  if (subject.type === 'design') return null;
   if (subject.hasDesignBlocker) return null;
   const found = selfBlockingDesignCriteria(subject.descriptionMd);
   if (!found) return null;
