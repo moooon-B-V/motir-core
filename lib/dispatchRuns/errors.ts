@@ -15,6 +15,8 @@
 //   DispatchRunEventBodyTooLargeError → 413
 //   DispatchRunEventLimitError      → 422
 //   DispatchRunNoTargetError        → 422
+//   RunFoundReportReasonInvalidError → 422 (MCP only — `report_unbuildable_target`
+//                                     has no `/api/v1` door, so no status row)
 
 /**
  * 404 — no such run FOR THIS CALLER.
@@ -150,5 +152,29 @@ export class DispatchRunNoTargetError extends Error {
         'write How to test onto — each of its cards is its own target.',
     );
     this.name = 'DispatchRunNoTargetError';
+  }
+}
+
+/** The bounds of a run-found report's `reason`, after trimming. */
+export const RUN_FOUND_REPORT_REASON_MAX = 4000;
+
+/**
+ * 422 — a run-found report's `reason` is empty or longer than
+ * {@link RUN_FOUND_REPORT_REASON_MAX} characters once trimmed (Story MOTIR-5544 ·
+ * MOTIR-6285, `runFoundReportService.reportUnbuildableTarget`).
+ *
+ * Refused, not truncated: the reason is the runner's verbatim account of why the
+ * card could not be built, and a cut account reads as a whole one. Checked
+ * BEFORE anything is resolved, so the refusal is the same for every target and
+ * says nothing about the card, its run or its plan.
+ */
+export class RunFoundReportReasonInvalidError extends Error {
+  readonly code = 'RUN_FOUND_REPORT_REASON_INVALID';
+  constructor(readonly length: number) {
+    super(
+      `A run-found report's reason must be 1-${RUN_FOUND_REPORT_REASON_MAX} characters once ` +
+        `trimmed; this one is ${length}. Send the same text as your comment on the card.`,
+    );
+    this.name = 'RunFoundReportReasonInvalidError';
   }
 }

@@ -1040,6 +1040,11 @@ export default defineConfig({
         // the one place a customer's text could cross into Motir's own project.
         // Pure; gated from its own spec (`tests/plans/runFoundPlanningBug`).
         'lib/plans/runFoundPlanningBug.ts',
+        // Story MOTIR-5544 · MOTIR-6285 — the run-found report SERVICE: a
+        // read-derived write under a lock, a cross-workspace create as the system
+        // principal, and an acknowledgement that must leak nothing. Gated from
+        // its own spec (`tests/runFoundReportService`).
+        'lib/services/runFoundReportService.ts',
         // Story 7.12 · Subtask 7.12.6 (MOTIR-912) — the REVIEW-AND-CONFIRM seam
         // the story's rail runs on (MOTIR-1746/1747). `planReview.ts` answers the
         // three questions every AI-planning entrance asks of a run (is a proposal
@@ -4388,6 +4393,13 @@ export default defineConfig({
         },
         // Story MOTIR-5544 · MOTIR-6283 — the run-found planning bug's composer.
         'lib/plans/runFoundPlanningBug.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        // Story MOTIR-5544 · MOTIR-6285 — the run-found report service.
+        'lib/services/runFoundReportService.ts': {
           branches: 90,
           functions: 90,
           lines: 90,
