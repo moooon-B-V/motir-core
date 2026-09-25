@@ -14,7 +14,7 @@ import type { PublicAddressKind } from '@/generated/prisma/client';
 // workspace delete takes the rows, and with them the reservation.
 //
 // The delete is not an admin curiosity: `accountErasureSweepService` routes a
-// sole-membership workspace through `workspacesService.deleteWorkspace` on a
+// sole-membership workspace through `workspacesService.deleteWorkspaceForErasure` on a
 // scheduled job, discharging a GDPR erasure request. So the release happened
 // with nobody deciding it, and the first evidence would have been a stranger's
 // roadmap at an address someone's README still points at.

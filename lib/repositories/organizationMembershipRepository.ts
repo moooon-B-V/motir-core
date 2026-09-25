@@ -23,6 +23,38 @@ export type OrgMembershipWithUser = OrganizationMembership & {
 // `motir_app` role. The membership-gating logic + the cross-workspace roster
 // pagination live in `organizationsService` (6.10.4).
 
+/**
+ * Optional narrowing of the roster page (MOTIR-6313). `q` matches a member's
+ * name or email, case-insensitively; `excludeOwner` leaves the Owner's row out —
+ * the transfer dialog's picker, which never offers the Owner. Both apply to the
+ * page AND its count, so the pager's total describes the list it pages.
+ */
+export interface OrgMemberPageFilter {
+  q?: string | null;
+  excludeOwner?: boolean;
+}
+
+function memberPageWhere(
+  organizationId: string,
+  filter: OrgMemberPageFilter,
+): Prisma.OrganizationMembershipWhereInput {
+  const q = filter.q?.trim();
+  return {
+    organizationId,
+    ...(filter.excludeOwner ? { role: { not: ORGANIZATION_ROLE.owner } } : {}),
+    ...(q
+      ? {
+          user: {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' } },
+              { email: { contains: q, mode: 'insensitive' } },
+            ],
+          },
+        }
+      : {}),
+  };
+}
+
 export const organizationMembershipRepository = {
   /**
    * The membership lookup, inside the caller's transaction so the
@@ -44,6 +76,57 @@ export const organizationMembershipRepository = {
     return tx.organizationMembership.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
     });
+  },
+
+  /**
+   * Is `userId` the OWNER of the organization that owns `workspaceId`? One
+   * round trip — the project permission gate asks it on every resolution for an
+   * actor who is not already a workspace manager (MOTIR-6308: the org Owner acts
+   * with full rights in every project of the org, member or not).
+   *
+   * ⚠️ BINDING: the caller's `tx` must bind `app.workspace_id` to `workspaceId`
+   * (a `withWorkspaceContext` body). The `workspace` row is admitted by
+   * `workspace_active` off that GUC — a non-member Owner has no
+   * `workspace_membership_visible` arm to fall back on — and the membership row
+   * by the "or your own" arm of `org_membership_visible_active_or_own`, keyed on
+   * `app.user_id`. Unbound, the join sees no workspace and answers `false`,
+   * which fails CLOSED (the Owner is treated as a non-member), never open.
+   */
+  async isOwnerOfWorkspaceOrg(
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<Array<{ one: number }>>`
+      SELECT 1 AS one
+      FROM "workspace" w
+      JOIN "organization_membership" om ON om."organizationId" = w."organizationId"
+      WHERE w."id" = ${workspaceId}
+        AND om."userId" = ${userId}
+        AND om."role" = 'owner'
+      LIMIT 1
+    `;
+    return rows.length > 0;
+  },
+
+  /**
+   * {@link findByOrgAndUserInTx}, taking a ROW LOCK (`FOR UPDATE`) on the
+   * membership — the lock-then-re-read the one-Owner guards use before they
+   * decide on a role (MOTIR-6307): a transfer committing concurrently blocks on
+   * this row or is blocked by it, so the decision is made on the committed role,
+   * never a stale one. `tx` REQUIRED — a row lock lives only for its transaction.
+   */
+  async findByOrgAndUserForUpdate(
+    organizationId: string,
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<OrganizationMembership | null> {
+    const rows = await tx.$queryRaw<OrganizationMembership[]>`
+      SELECT * FROM "organization_membership"
+      WHERE "organizationId" = ${organizationId} AND "userId" = ${userId}
+      FOR UPDATE
+    `;
+    return rows[0] ?? null;
   },
 
   /**
@@ -97,8 +180,12 @@ export const organizationMembershipRepository = {
    * the service (6.10.4) can read the count and mutate in the same transaction,
    * preventing a TOCTOU race (mirrors workspaceMembershipRepository.countByWorkspace).
    */
-  async countByOrg(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.organizationMembership.count({ where: { organizationId } });
+  async countByOrg(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+    filter: OrgMemberPageFilter = {},
+  ): Promise<number> {
+    return tx.organizationMembership.count({ where: memberPageWhere(organizationId, filter) });
   },
 
   /**
@@ -107,10 +194,10 @@ export const organizationMembershipRepository = {
    * preview's blocking organization is deterministic when a reader owns more
    * than one).
    *
-   * Used by the account-erasure impact preview (MOTIR-3699): only an OWNER can
-   * trip `assertNotLastOwner`, so this is the candidate set the block is
-   * computed over — a non-owner membership cannot drop the owner count and needs
-   * no per-org read at all.
+   * Used by the account-erasure impact preview (MOTIR-3699): only the OWNER's
+   * membership is locked against removal (`OwnerMembershipLockedError`,
+   * MOTIR-6307), so this is the candidate set the block is computed over — a
+   * non-owner membership can always be removed and needs no per-org read at all.
    *
    * `tx` REQUIRED, for the reason {@link findOrganizationsByUser} spells out: the
    * `org_membership_visible_active_or_own` policy admits the caller's OWN rows
@@ -131,17 +218,11 @@ export const organizationMembershipRepository = {
   },
 
   /**
-   * Count of OWNER memberships in an organization, taking NO lock — the read
-   * half of the same condition {@link countOwnersByOrgForUpdate} guards a write
-   * with.
-   *
-   * ⚠️ THE TWO ARE NOT INTERCHANGEABLE, AND THAT IS THE POINT (MOTIR-3699). The
-   * locking variant exists because a guard that COUNTS and then WRITES must
-   * serialize its racers. The account-erasure preview writes nothing and decides
-   * nothing — it renders whether the reader would be refused — so locking every
-   * owner row of every organization they own, on a screen the pane paints at
-   * rest, would be a write-shaped cost for a read. Reach for the locking one the
-   * moment a decision is derived from the count.
+   * Count of OWNER memberships in an organization. Exactly one on every
+   * organization since MOTIR-6307 (the one-owner partial unique index holds "at
+   * most one", the member paths refuse to remove or demote the Owner), so the
+   * account-erasure preview reads it as a consistency check rather than a race:
+   * it writes nothing and decides nothing, and takes no lock.
    *
    * `tx` REQUIRED: `organization_membership`'s policy admits the ACTIVE org's
    * rows off `app.organization_id`, so counting the OTHER owners needs an
@@ -151,38 +232,6 @@ export const organizationMembershipRepository = {
     return tx.organizationMembership.count({
       where: { organizationId, role: ORGANIZATION_ROLE.owner },
     });
-  },
-
-  /**
-   * Count of OWNER memberships in an organization, LOCKING those owner rows
-   * `FOR UPDATE` inside the caller's transaction — the race-safe read the
-   * last-owner guard in organizationsService (remove / demote) uses
-   * (lock-before-read-derived-update, CLAUDE.md § 4-layer). A plain
-   * same-transaction `COUNT` does NOT lock the rows another transaction
-   * deletes/demotes, so two concurrent removals of a 2-owner org could both
-   * observe `count = 2`, both pass the guard, and both write → ZERO owners (an
-   * unadministrable org). Locking the owner rows serializes the racers: the
-   * second blocks until the first commits, then the FOR UPDATE re-reads the
-   * now-reduced set (a deleted/demoted owner no longer matches `role = 'owner'`)
-   * and correctly sees a single owner, so the guard fires `LastOrgOwnerError`.
-   *
-   * `ORDER BY "id"` pins a deterministic lock-acquisition order across
-   * concurrent callers so the two transactions can't deadlock. Postgres forbids
-   * `count(*) … FOR UPDATE` (a locking clause can't combine with an aggregate),
-   * so we SELECT the owner row ids under the lock and count them in JS. `tx`
-   * REQUIRED — a row lock only lives for its transaction.
-   */
-  async countOwnersByOrgForUpdate(
-    organizationId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<number> {
-    const rows = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT "id" FROM "organization_membership"
-      WHERE "organizationId" = ${organizationId} AND "role" = 'owner'
-      ORDER BY "id"
-      FOR UPDATE
-    `;
-    return rows.length;
   },
 
   /**
@@ -201,9 +250,10 @@ export const organizationMembershipRepository = {
     limit: number,
     cursorId: string | null,
     tx: Prisma.TransactionClient,
+    filter: OrgMemberPageFilter = {},
   ): Promise<OrgMembershipWithUser[]> {
     return tx.organizationMembership.findMany({
-      where: { organizationId },
+      where: memberPageWhere(organizationId, filter),
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit + 1,
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
@@ -292,8 +342,8 @@ export const organizationMembershipRepository = {
    * Drop every organization membership this user holds — the erasure sweep's
    * org arm (MOTIR-3702).
    *
-   * ⚠️ IT DOES NOT CONSULT `assertNotLastOwner`, AND THAT GUARD IS STILL
-   * HONOURED — one tier up, as a READ. `accountErasureService.previewAccountErasure`
+   * ⚠️ IT DOES NOT CONSULT the Owner lock (`OwnerMembershipLockedError`,
+   * MOTIR-6307), AND THAT GUARD IS STILL HONOURED — one tier up, as a READ. `accountErasureService.previewAccountErasure`
    * computes the block (sole owner of a SHARED organization) and the sweep
    * REFUSES to erase a blocked account at all, leaving the request scheduled for
    * a later tick. So by the time this runs, either no organization the user owns

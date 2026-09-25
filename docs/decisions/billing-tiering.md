@@ -3,7 +3,7 @@
 - **Status:** Accepted (2026-06-21, locked with Yue; **catalog provisioned in
   Stripe sandbox 2026-06-22** per the §3 + §6 reconciliations below). This is the
   rung-1 pricing decision Story 8.1 implements — no billing code ships until it
-  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 — see below.**
+  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 + 2026-09-25 — see below.**
 - **Credit model:** the rates, the token→credit conversion and the ledger this ADR
   builds on are specified in `motir-ai/docs/credit-model.md`, owned by the closed
   side (where the ledger lives). Every citation of it below is repo-qualified for
@@ -700,6 +700,24 @@ Reuse `OrganizationRole` (`owner | admin | member`) and `resolveOrgAccess.isOrgA
 Billing **mutations are owner-only**; admins get **read** (view plan, usage,
 invoices). The `isOrgAdmin` helper gates the read surface; an `isOrgOwner` check
 gates the mutations. Self-host: N/A (no billing surface).
+
+> **Amendment (2026-09-25, MOTIR-6305) — billing mutations are Owner AND Admin.**
+> The role model (`role-model.md` §1, decided by MOTIR-6165) gives the Admins the
+> org settings **"billing included"**, so the owner is no longer the single billing
+> authority. The table's first row now reads ✓ for `admin` as well as `owner`:
+> starting checkout, changing plan or payment method, cancelling and changing the
+> seat quantity are all open to an Admin.
+>
+> - **Supersedes:** _"Billing **mutations are owner-only**; admins get **read**"_ and
+>   _"an `isOrgOwner` check gates the mutations"_ above, and the parenthetical _"owner
+>   is the sole billing/destructive authority"_ in this section's opening line (the
+>   destructive half stands: deleting the organization is still the Owner's alone).
+> - **The gate is now one capability, `manageBilling`**, read from
+>   `lib/organizations/capabilities.ts` (`orgCan`) for both the read surface and
+>   `billingService.assertBillingManagerForMutation` — no separate owner check.
+> - **NOT changed:** a plain **member** still has **no billing view** (403, the
+>   routed-to-owner state), and the third row stands — anyone may hit a cap and see
+>   the upgrade prompt, which routes a member to the people who can act.
 
 ---
 

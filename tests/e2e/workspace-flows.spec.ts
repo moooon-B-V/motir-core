@@ -271,25 +271,40 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   // live subtree would prove strictly less. Keeps its inventory row.
   await expect(page.getByText(INVITEE_EMAIL)).toHaveCount(0);
 
-  // ─── Owner deletes "Acme Renamed" via double-confirmation ───
+  // ─── Owner removes "Acme Renamed" from the ORG Workspaces card ───
+  // MOTIR-6312: removing a workspace is an org-Admin act (MOTIR-6309), and the
+  // workspace tier's Delete is gone — its only door is the org settings page's
+  // Workspaces card, behind the same type-the-name confirmation.
   // Make sure Acme Renamed is the active workspace.
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText(
     'Acme Renamed',
   );
   const acmeWorkspace = await db.workspace.findFirst({ where: { name: 'Acme Renamed' } });
   expect(acmeWorkspace).not.toBeNull();
+  // The workspace tier offers no Delete any more — only the pointer to where it went.
+  await expect(livePane(page).getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  const deleteDialog = page.getByRole('dialog');
-  const deleteButton = deleteDialog.getByRole('button', { name: 'Delete workspace' });
+  await gotoAuthed(page, '/settings/organization');
+  await livePane(page).getByRole('button', { name: 'Remove Acme Renamed' }).click();
+  const removeDialog = page.getByRole('dialog');
+  const removeButton = removeDialog.getByRole('button', { name: 'Remove workspace' });
   // Disabled until the typed name matches exactly.
-  await expect(deleteButton).toBeDisabled();
-  await deleteDialog.getByLabel(/Type Acme Renamed to confirm/).fill('Wrong Name');
-  await expect(deleteButton).toBeDisabled();
-  await deleteDialog.getByLabel(/Type Acme Renamed to confirm/).fill('Acme Renamed');
-  await expect(deleteButton).toBeEnabled();
-  await deleteButton.click();
-  await page.waitForURL('**/dashboard');
+  await expect(removeButton).toBeDisabled();
+  await removeDialog.getByLabel(/Type Acme Renamed to confirm/).fill('Wrong Name');
+  await expect(removeButton).toBeDisabled();
+  await removeDialog.getByLabel(/Type Acme Renamed to confirm/).fill('Acme Renamed');
+  await expect(removeButton).toBeEnabled();
+  // The AUTHORITATIVE signal is the DELETE's own 200 — armed before the click.
+  const removed = page.waitForResponse(
+    (r) =>
+      /\/api\/organizations\/[^/]+\/workspaces\/[^/]+$/.test(r.url()) &&
+      r.request().method() === 'DELETE',
+  );
+  await removeButton.click();
+  expect((await removed).status()).toBe(200);
+  // Removing the ACTIVE workspace re-points the active one the way a switch
+  // does, which lands on the signed-in landing.
+  await page.waitForURL(isLandedWorkbenchUrl);
 
   // ─── Cascade verified by DB query ───
   expect(await db.workspace.findUnique({ where: { id: acmeWorkspace!.id } })).toBeNull();

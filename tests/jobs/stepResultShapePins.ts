@@ -378,10 +378,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // stands: a memo written before the change has no `skipped`, and absent reads
   // as "not skipped", which is exactly what that memo recorded (it was sent).
   // Nothing branches on the value; it is surfaced on `job_run.output` only.
+  // MOTIR-6310 WIDENED `template` by one member (`ownership-transferred`) and
+  // kept the id for the same reason: every memo already stored carries one of
+  // the older members, which is still a member, so the replay reads true.
   send: {
     file: 'lib/jobs/definitions/emailSend.ts',
     shape:
-      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
+      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
   },
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',

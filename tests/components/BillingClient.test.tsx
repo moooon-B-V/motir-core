@@ -305,7 +305,7 @@ describe('BillingClient', () => {
     );
     renderClient();
     await waitFor(() =>
-      expect(screen.getByText('Billing is managed by your org owner')).toBeTruthy(),
+      expect(screen.getByText('Billing is managed by your organization’s admins')).toBeTruthy(),
     );
   });
 
@@ -695,7 +695,7 @@ describe('BillingClient — the Motir CI line', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Motir CI' })).toBeTruthy());
 
     expect(screen.getByText('CI is paused — this organization is out of credits.')).toBeTruthy();
-    expect(screen.getByText(/until an organization owner adds credits/)).toBeTruthy();
+    expect(screen.getByText(/until an organization owner or admin adds credits/)).toBeTruthy();
     expect(screen.getByText(/There is no action for you here/)).toBeTruthy();
     // A control this user cannot use is never rendered — not even disabled.
     expect(screen.queryByRole('button', { name: 'Add credits' })).toBeNull();

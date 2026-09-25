@@ -179,7 +179,10 @@ describe('the per-organisation verdict', () => {
       ownerUserId: owner.id,
     });
     const row = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } });
-    await workspacesService.deleteWorkspace({ workspaceId: workspace.id, actorUserId: owner.id });
+    await workspacesService.removeWorkspaceAsOrgAdmin({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+    });
 
     const res = await POST(
       request({ organizations: [{ coreOrganizationId: row.organizationId }] }),

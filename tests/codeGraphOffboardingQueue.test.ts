@@ -29,7 +29,7 @@ import { organizationIdOf } from './helpers/organizationOf';
 //
 //   1. the WINDOW and the sentinel (pure)
 //   2. enqueue / cancel / upsert semantics
-//   3. ⚠️ the row SURVIVES `deleteWorkspace` — the single most important
+//   3. ⚠️ the row SURVIVES the workspace delete — the single most important
 //      assertion on the card, and the reason the table has no foreign key
 //   4. every trigger enqueues with the right scope and `dueAt`
 //   5. enqueue is POST-COMMIT and QUIET — a failing queue write may not fail or
@@ -262,7 +262,7 @@ describe('enqueue and cancel', () => {
 // ── 3. ⚠️ THE ROW SURVIVES THE WORKSPACE CASCADE ─────────────────────────────
 
 describe('the queue row OUTLIVES its workspace (§14.5)', () => {
-  it('survives deleteWorkspace — the reason the table has no foreign key', async () => {
+  it('survives the workspace delete — the reason the table has no foreign key', async () => {
     // THE assertion of this card. Today's defect is that the only inventory of
     // what was retained (`CodeRepo`) is destroyed by the delete that makes it
     // garbage. A queue row FK'd to the workspace would reproduce that exact bug
@@ -271,7 +271,7 @@ describe('the queue row OUTLIVES its workspace (§14.5)', () => {
     const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
     const project = await makeProject(workspace.id, owner.id, 'Core');
 
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: workspace.id,
       actorUserId: owner.id,
     });
@@ -325,7 +325,7 @@ describe('the four lifecycle triggers (§14.3)', () => {
     });
 
     const before = Date.now();
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: workspace.id,
       actorUserId: owner.id,
     });
@@ -537,7 +537,7 @@ describe('a failing enqueue never fails the user action (§14.5, `notes.html` #3
     boom.mockRestore();
   });
 
-  it('deleteWorkspace still commits when the queue write throws', async () => {
+  it('the workspace delete still commits when the queue write throws', async () => {
     const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
     await makeProject(workspace.id, owner.id, 'Core');
 
@@ -546,7 +546,10 @@ describe('a failing enqueue never fails the user action (§14.5, `notes.html` #3
       .mockRejectedValue(new Error('queue is down'));
 
     await expect(
-      workspacesService.deleteWorkspace({ workspaceId: workspace.id, actorUserId: owner.id }),
+      workspacesService.removeWorkspaceAsOrgAdmin({
+        workspaceId: workspace.id,
+        actorUserId: owner.id,
+      }),
     ).resolves.toBeUndefined();
 
     const workspaceRow = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
