@@ -405,6 +405,12 @@ export function PlanningWorkspaceHost({
   const review = state.review;
   const showsProposalViews =
     review !== null && (isProposedReview(review) || state.decided !== null);
+  // ⚠️ A NAMED session is opened to show its plan (bug MOTIR-6289) — a To-approve row
+  // or a Plans row writes `planSession`. Until the conversation has read whether a plan
+  // is pending, the pane is its skeleton, NOT the roadmap: drawing `PlanChangeCanvas`
+  // for that interval is what flashed the roadmap and then jumped to the plan. A launch
+  // with no session has no plan to wait for, so it draws the roadmap at once, as before.
+  const openingNamedSession = Boolean(launch.sessionId) && state.phase === 'loading';
 
   // ⚠️ THE VIEW IS LOCAL, AND IT IS NEVER WRITTEN TO THE URL (`design-notes.md`
   // Part XXI 21.4). The plan page keeps it in the URL and is right to; this is an
@@ -613,6 +619,10 @@ export function PlanningWorkspaceHost({
                 readerHasNavigated={readerHasNavigated}
                 onCanvasLevelChange={noteReaderLevel}
               />
+            ) : openingNamedSession ? (
+              <div className="h-full w-full" data-testid="planning-pane-opening" aria-busy>
+                <PlanningCanvasSkeleton />
+              </div>
             ) : (
               <PlanChangeCanvas
                 projectKey={projectKey}
