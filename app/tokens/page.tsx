@@ -1098,6 +1098,15 @@ export default function TokensPage() {
           />
           <Input label="Disabled" placeholder="Can't edit" disabled />
           <Textarea label="Textarea" placeholder="Multi-line input…" rows={3} />
+          <Textarea
+            label="Textarea — auto-grow (opt-in)"
+            autoGrow
+            rows={1}
+            maxRows={6}
+            defaultValue={
+              'Starts at one row and grows with what you type.\nShift+Enter for a new line.\nAt six rows it stops and scrolls inside itself.'
+            }
+          />
         </div>
       </Section>
 

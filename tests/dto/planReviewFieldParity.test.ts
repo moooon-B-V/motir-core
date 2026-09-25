@@ -286,8 +286,9 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     },
     executor: {
       everyOp:
-        'MOTIR-4143 — and it has NO patch key, so a modify has no proposed side at all: the ' +
-        "target's live value IS the value the card will have, which is what the rail asks.",
+        'MOTIR-4143 — and it has NO patch key, so a modify has no proposed side of its own. ' +
+        "The rail reads what the card WILL have: the target's live value, or — when the patch " +
+        're-types a target with none — the default the approve seeds (MOTIR-6259).',
     },
     todos: {
       addOnly:
@@ -587,6 +588,8 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
   const DERIVED_ROWS: Partial<Record<PlanItemChangeField, string>> = {
     status:
       'MOTIR-5359 — a re-scoping patch (title / description / repository) on an in-progress-category target resets its status on approve',
+    executor:
+      'MOTIR-6259 — a patch that re-types a target with NO executor seeds the type default on approve (`resolveExecutor`)',
   };
 
   it('declares the patch key set exactly — the constant cannot drift from the interface', () => {

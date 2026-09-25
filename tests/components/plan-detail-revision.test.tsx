@@ -73,8 +73,10 @@ function render(over: Partial<PlanReviewDto> = {}) {
   return renderWithIntl(<PlanDetail initialReview={review(over)} projectKey="MOTIR" />);
 }
 
-function composer(): HTMLInputElement {
-  return screen.getByPlaceholderText('Ask Motir to change this plan…') as HTMLInputElement;
+function composer(): HTMLTextAreaElement {
+  // A `<textarea>` since MOTIR-6238 — the revise box hosts the SAME
+  // `PlanChangeComposer` the planning rail does, so it inherited the change.
+  return screen.getByPlaceholderText('Ask Motir to change this plan…') as HTMLTextAreaElement;
 }
 
 beforeEach(() => {
@@ -91,7 +93,10 @@ describe('the ask — where it is, and where it is NOT', () => {
     // The accessible name TRACKS the prompt — the shipped composer's own
     // contract, so a screen reader hears the same ask the placeholder shows.
     expect(field.getAttribute('aria-label')).toBe('Ask Motir to change this plan…');
-    expect(field.tagName).toBe('INPUT');
+    // A `<textarea>` since MOTIR-6238, and still the `textbox` role: a revision
+    // instruction is a paragraph or a list of changes, not one line.
+    expect(field.tagName).toBe('TEXTAREA');
+    expect(screen.getByRole('textbox')).toBe(field);
   });
 
   it('offers NO `@` target picker — a revision can only name proposals, which have no key', () => {
@@ -165,6 +170,33 @@ describe('submitting', () => {
     expect(screen.queryByTestId('plan-revision-running')).toBeNull();
     const approve = screen.getByRole('button', { name: /Approve/ }) as HTMLButtonElement;
     expect(approve.disabled).toBe(false);
+  });
+
+  // MOTIR-6238 — the revise box is the composer's SECOND host, and the keys are
+  // the composer's, so they arrive here with no code of this surface's own. The
+  // assertions exist because "it inherits everything" is a claim about a
+  // component boundary, and this is the surface that would break if it moved.
+  it('Enter SENDS a multi-line instruction, with its line breaks intact', async () => {
+    mocks.fetchPlanReview.mockResolvedValue(review({ revision: RUNNING }));
+    render();
+    const instruction = 'Split the second story:\n- monthly\n- yearly';
+    fireEvent.change(composer(), { target: { value: instruction } });
+
+    fireEvent.keyDown(composer(), { key: 'Enter' });
+
+    await waitFor(() => expect(mocks.revisePlanRequest).toHaveBeenCalled());
+    expect(mocks.revisePlanRequest).toHaveBeenCalledWith('plan_1', instruction);
+  });
+
+  it('Shift+Enter does NOT send — it is a newline in the instruction', () => {
+    render();
+    fireEvent.change(composer(), { target: { value: 'Split the second story:' } });
+
+    fireEvent.keyDown(composer(), { key: 'Enter', shiftKey: true });
+
+    expect(mocks.revisePlanRequest).not.toHaveBeenCalled();
+    // The pinned decision footer is untouched by a growing field.
+    expect(screen.getByRole('button', { name: /Approve/ })).toBeTruthy();
   });
 });
 

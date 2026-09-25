@@ -490,6 +490,54 @@ describe('Q6 — listing, links, and what a caller may not see', () => {
     ).toEqual([]);
   });
 
+  it('a filtered page is EMPTY only when nothing is left — it reads on past the cards the filter drops (MOTIR-6272)', async () => {
+    // Three approved designs; `design/frame/p` matches only the OLDEST. Before
+    // MOTIR-6272 the filter ran after the page was cut, so `limit: 1` answered
+    // `{ designs: [], nextCursor: <newest> }` — an empty page with the match
+    // two pages on, which the MCP summary then reported as "No approved designs
+    // matched".
+    const cards: WorkItem[] = [];
+    for (const label of ['p0', 'q1', 'q2']) {
+      const card = await designCard(`Paged ${label}`);
+      await dependentOn(card.id);
+      await approve(await publish(card, label));
+      cards.push(card);
+    }
+
+    const page = await designAccessService.listApprovedDesigns(
+      fx.projectIdentifier,
+      { pathPrefix: 'design/frame/p', limit: 1 },
+      fx.ctx,
+    );
+    expect(page.designs.map((d) => d.designCardKey)).toEqual([cards[0]!.identifier]);
+    expect(page.nextCursor).toBeNull();
+
+    // A filter matching TWO still stops at `limit`, and the cursor is the last
+    // card CONSUMED — so resuming from it returns the second match, nothing twice.
+    const q1 = await designAccessService.listApprovedDesigns(
+      fx.projectIdentifier,
+      { pathPrefix: 'design/frame/q', limit: 1 },
+      fx.ctx,
+    );
+    expect(q1.designs.map((d) => d.designCardKey)).toEqual([cards[2]!.identifier]);
+    expect(q1.nextCursor).toBe(String(cards[2]!.key));
+    const q2 = await designAccessService.listApprovedDesigns(
+      fx.projectIdentifier,
+      { pathPrefix: 'design/frame/q', limit: 1, cursor: q1.nextCursor! },
+      fx.ctx,
+    );
+    expect(q2.designs.map((d) => d.designCardKey)).toEqual([cards[1]!.identifier]);
+    // `p0` is still UNREAD after `q1`, so that cursor is honest; the page after
+    // it reads `p0`, drops it, and ends with no cursor rather than an empty
+    // page pointing further on.
+    const q3 = await designAccessService.listApprovedDesigns(
+      fx.projectIdentifier,
+      { pathPrefix: 'design/frame/q', limit: 1, cursor: q2.nextCursor! },
+      fx.ctx,
+    );
+    expect(q3).toEqual({ designs: [], nextCursor: null });
+  });
+
   it('a design card with no approved design is not listed', async () => {
     const card = await designCard('Pending');
     await dependentOn(card.id);

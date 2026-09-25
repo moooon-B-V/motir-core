@@ -1360,13 +1360,21 @@ export class MotirClient {
    *
    * TWO reads: v1 splits identity from workspace description, and the adapter
    * matches them on `workspaceId` rather than assuming a position.
+   *
+   * ⚠️ SETTLED, not `Promise.all` (MOTIR-6278). A token without `project:browse`
+   * is refused on both reads; `Promise.all` rejected on the first refusal and
+   * handed control back while the other request was still being served. The
+   * error the caller sees is the same either way — the FIRST read's, `/me`'s
+   * when both fail — but the call no longer ends with its own work in flight.
    */
   async whoami(): Promise<WhoamiResult> {
-    const [me, workspaces] = await Promise.all([
+    const [me, workspaces] = await Promise.allSettled([
       this.v1.request('getMe'),
       this.v1.request('listWorkspaces'),
     ]);
-    return toWhoami(me, workspaces);
+    if (me.status === 'rejected') throw me.reason;
+    if (workspaces.status === 'rejected') throw workspaces.reason;
+    return toWhoami(me.value, workspaces.value);
   }
 
   /** The token workspace's browsable projects (MOTIR-1879). Takes no arguments:

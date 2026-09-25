@@ -95,14 +95,19 @@ export default defineConfig({
     // React flush passive effects synchronously inside RTL's act scopes, which
     // REMOVES the effect-ordering race class MOTIR-1736/1737 hit — see that file
     // for the mechanism and the contract it imposes on component tests.
-    // `inFlightProbe` is LAST and is a no-op unless `MOTIR_INFLIGHT_PROBE=1`
-    // (MOTIR-3077): it registers one `afterEach` that reads `pg_stat_activity`
-    // for work this worker started and did not wait for. Off by default — it
-    // costs a round trip per test and its import is dynamic, so an ordinary run
-    // does not even construct the admin client.
+    // `inFlightProbe` registers one `afterEach` that FAILS a DB-backed test
+    // which left a backend `active` or `idle in transaction` on its worker's
+    // database, naming the query (MOTIR-6278; MOTIR-3077 built it as an
+    // opt-in sweep). A file that never opened a Prisma client skips it, and its
+    // import is dynamic, so a pure component file pays nothing.
+    // `rateLimitStoreDefault` gives the shared rate-limit store the TEST-TIME
+    // deadline in those same files, so a request waits for its own counter
+    // write instead of failing open and abandoning it mid-transaction —
+    // which the in-flight check would otherwise catch as a leak (MOTIR-6278).
     setupFiles: [
       './tests/helpers/perWorkerDb.ts',
       './tests/helpers/actEnvironment.ts',
+      './tests/helpers/rateLimitStoreDefault.ts',
       './tests/helpers/inFlightProbe.ts',
     ],
     // Cross-FILE parallelism is now safe (each worker has its own DB, above).
@@ -2492,6 +2497,34 @@ export default defineConfig({
         'lib/services/workItemCiStateBackfillService.ts',
         'components/github/ciStateMeta.ts',
         'components/github/CiStateBadge.tsx',
+        // ── Story MOTIR-6156 · THE MULTI-LINE COMPOSER (Subtask MOTIR-6239) ──
+        // MEASURED on this branch before being pinned, per this list's own rule:
+        // 97.11 statements / 90.43 branches / 100 functions / 100 lines, over the
+        // eleven planning component suites. Gated at the project floor below.
+        //
+        // ⚠️ TWO FILES THE CARD NAMES ARE NOT HERE, and both are dispositions
+        // rather than omissions.
+        //
+        // `packages/design-system/src/components/ui/Textarea.tsx` is NOT
+        // MEASURABLE from this lane. motir-core imports the BUILT package
+        // (`@motir/design-system` → `dist/`), so no test here loads that source
+        // file; an entry for it would report 0% and gate the whole suite red for
+        // ever. The package's own vitest config declares no coverage at all, so
+        // there is no lane to move it to either. Its behaviour is covered by
+        // MOTIR-6237's 24 cases over the shipped artifact
+        // (`tests/components/textarea-autogrow.test.tsx`) plus the default-is-a-
+        // contract and caller-pinning cases in
+        // `tests/integration/planning/multilineComposerStoryGate.test.tsx`.
+        //
+        // `components/planning/PlanChangeRail.tsx` is deliberately NOT gated.
+        // MOTIR-6239 asks for coverage on its CHANGED LINES — three classes on
+        // the user bubble — and those are asserted directly
+        // (`tests/components/plan-change-rail.test.tsx`, the MOTIR-6238 suite).
+        // The file itself measured 78.19 / 71.86 / 80.64 / 78.33: it is a
+        // 1,300-line rail this story widened by one className, and gating it
+        // here would gate this story on code no card in it wrote — the trap the
+        // `changeRequestCiFeedback.ts` note above names.
+        'components/planning/PlanChangeComposer.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2502,6 +2535,17 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-6156 · THE MULTI-LINE COMPOSER (Subtask MOTIR-6239) ──
+        // Measured at 97.11 / 90.43 / 100 / 100 on this branch. The branch axis
+        // has the thinnest margin in this list — its residue is three `if (!el)
+        // return` ref guards that cannot be reached without breaking the ref, so
+        // the honest ceiling is close to the floor.
+        'components/planning/PlanChangeComposer.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-6016 · DIFFICULTY (Subtask MOTIR-6102) ───────────────
         'lib/issues/difficulty.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/hooks/useActivityRevision.ts': {
