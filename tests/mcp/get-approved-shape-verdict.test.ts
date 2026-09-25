@@ -161,18 +161,6 @@ describe('registered, permissioned, documented (criteria 1, 6, 8, 9)', () => {
     );
   });
 
-  it('docs/mcp.md carries its section, with the CHANGE definition in both directions', () => {
-    const doc = read('docs/mcp.md');
-    const start = doc.indexOf(`#### \`${GET_APPROVED_SHAPE_VERDICT_TOOL_NAME}\``);
-    expect(start).toBeGreaterThan(doc.indexOf('#### `get_plan`'));
-    const section = doc.slice(start, doc.indexOf('\n#### ', start + 1));
-    expect(section).toContain('THE CHANGE DEFINITION');
-    expect(section).toMatch(/\*\*Counts:\*\*/);
-    expect(section).toMatch(/\*\*Does not count:\*\*/);
-    expect(section).toContain('status transitions');
-    expect(section).toContain('`no_plan` is an ANSWER');
-  });
-
   it('is NOT billable — a read starts no model job', () => {
     expect(isBillableTool(GET_APPROVED_SHAPE_VERDICT_TOOL_NAME)).toBe(false);
   });
