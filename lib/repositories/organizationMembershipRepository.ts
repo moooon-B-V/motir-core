@@ -23,6 +23,38 @@ export type OrgMembershipWithUser = OrganizationMembership & {
 // `motir_app` role. The membership-gating logic + the cross-workspace roster
 // pagination live in `organizationsService` (6.10.4).
 
+/**
+ * Optional narrowing of the roster page (MOTIR-6313). `q` matches a member's
+ * name or email, case-insensitively; `excludeOwner` leaves the Owner's row out —
+ * the transfer dialog's picker, which never offers the Owner. Both apply to the
+ * page AND its count, so the pager's total describes the list it pages.
+ */
+export interface OrgMemberPageFilter {
+  q?: string | null;
+  excludeOwner?: boolean;
+}
+
+function memberPageWhere(
+  organizationId: string,
+  filter: OrgMemberPageFilter,
+): Prisma.OrganizationMembershipWhereInput {
+  const q = filter.q?.trim();
+  return {
+    organizationId,
+    ...(filter.excludeOwner ? { role: { not: ORGANIZATION_ROLE.owner } } : {}),
+    ...(q
+      ? {
+          user: {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' } },
+              { email: { contains: q, mode: 'insensitive' } },
+            ],
+          },
+        }
+      : {}),
+  };
+}
+
 export const organizationMembershipRepository = {
   /**
    * The membership lookup, inside the caller's transaction so the
@@ -148,8 +180,12 @@ export const organizationMembershipRepository = {
    * the service (6.10.4) can read the count and mutate in the same transaction,
    * preventing a TOCTOU race (mirrors workspaceMembershipRepository.countByWorkspace).
    */
-  async countByOrg(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.organizationMembership.count({ where: { organizationId } });
+  async countByOrg(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+    filter: OrgMemberPageFilter = {},
+  ): Promise<number> {
+    return tx.organizationMembership.count({ where: memberPageWhere(organizationId, filter) });
   },
 
   /**
@@ -214,9 +250,10 @@ export const organizationMembershipRepository = {
     limit: number,
     cursorId: string | null,
     tx: Prisma.TransactionClient,
+    filter: OrgMemberPageFilter = {},
   ): Promise<OrgMembershipWithUser[]> {
     return tx.organizationMembership.findMany({
-      where: { organizationId },
+      where: memberPageWhere(organizationId, filter),
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit + 1,
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),

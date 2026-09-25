@@ -36,7 +36,18 @@ export default async function OrganizationSettingsPage({
    *  Below the workspace-tier reveal this page hosts that dashboard, and a
    *  dashboard whose tabs, filters and pages are URL-driven needs a URL on the
    *  page that renders it. Every other section here ignores these. */
-  searchParams: Promise<{ tab?: string; status?: string; page?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    status?: string;
+    page?: string;
+    /** MOTIR-6314's deep link names the org to open (the one blocking an account
+     *  deletion), which need not be the active one. Honoured only for an org the
+     *  viewer belongs to — `resolveActiveOrganization` checks membership. */
+    org?: string;
+    /** `transfer-ownership` opens the Owner's transfer dialog on arrival
+     *  (MOTIR-6313). Ignored for a viewer without `transferOwnership`. */
+    dialog?: string;
+  }>;
 }) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
@@ -69,7 +80,7 @@ export default async function OrganizationSettingsPage({
   const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
   const current = await organizationsService.resolveActiveOrganization(
     session.user.id,
-    preferredOrganizationId(activeWorkspace, orgCookie),
+    jobsParams.org || preferredOrganizationId(activeWorkspace, orgCookie),
   );
 
   if (!current) {
@@ -85,6 +96,9 @@ export default async function OrganizationSettingsPage({
 
   const org = current.organization;
   const isAdmin = orgCan(current.role, 'manageOrgSettings');
+  // The Danger zone is the OWNER's (design MOTIR-6303 panels 2–3): an Admin holds
+  // org settings but not `transferOwnership`, and gets no card at all.
+  const canTransfer = orgCan(current.role, 'transferOwnership');
 
   // ⚠️ GATED PER SECTION, NOT PER PAGE (MOTIR-3519 · organization-tier.md §6d).
   //
@@ -145,6 +159,8 @@ export default async function OrganizationSettingsPage({
           orgName={org.name}
           role={current.role}
           isAdmin={isAdmin}
+          canTransfer={canTransfer}
+          openTransfer={canTransfer && jobsParams.dialog === 'transfer-ownership'}
           actorUserId={session.user.id}
           actorEmail={session.user.email}
           orgWorkspaceCount={orgWorkspaces.length}
@@ -168,6 +184,8 @@ async function OrgPaneBody({
   orgName,
   role,
   isAdmin,
+  canTransfer,
+  openTransfer,
   actorUserId,
   actorEmail,
   orgWorkspaceCount,
@@ -178,6 +196,8 @@ async function OrgPaneBody({
   orgName: string;
   role: React.ComponentProps<typeof OrgGeneralCard>['role'];
   isAdmin: boolean;
+  canTransfer: boolean;
+  openTransfer: boolean;
   actorUserId: string;
   actorEmail: string;
   orgWorkspaceCount: number;
@@ -246,7 +266,9 @@ async function OrgPaneBody({
         />
       ) : null}
 
-      {isAdmin ? <DangerZoneCard /> : null}
+      {canTransfer ? (
+        <DangerZoneCard orgId={orgId} orgName={orgName} openTransfer={openTransfer} />
+      ) : null}
     </>
   );
 }

@@ -64,9 +64,16 @@ describe('the org Settings home gates per SECTION, not per page', () => {
       /\{isAdmin \?\s*\(\s*<>/.test(src),
       'the org-scoped cards are no longer wrapped in an isAdmin branch',
     ).toBe(true);
+    // The ORG danger zone is the OWNER's (MOTIR-6313, design MOTIR-6303 panels
+    // 2–3): gated on `transferOwnership`, which an Admin does not hold — so an
+    // Admin gets no card at all, rather than the old admin-wide gate.
     expect(
-      /\{isAdmin \? <DangerZoneCard \/> : null\}/.test(src),
-      'the ORG danger zone is no longer admin-gated',
+      /\{canTransfer \?\s*\(\s*<DangerZoneCard\b/.test(src),
+      'the ORG danger zone is no longer gated on canTransfer',
+    ).toBe(true);
+    expect(
+      /const canTransfer = orgCan\(current\.role, 'transferOwnership'\)/.test(src),
+      'canTransfer no longer reads the transferOwnership capability',
     ).toBe(true);
   });
 

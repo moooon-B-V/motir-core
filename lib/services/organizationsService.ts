@@ -752,7 +752,11 @@ export const organizationsService = {
     actorUserId: string;
     limit?: number;
     cursor?: string | null;
+    /** Name/email search and the Owner-less picker view (MOTIR-6313). */
+    q?: string | null;
+    excludeOwner?: boolean;
   }): Promise<OrgMemberPageDTO> {
+    const filter = { q: input.q ?? null, excludeOwner: input.excludeOwner ?? false };
     const limit = Math.min(Math.max(input.limit ?? ROSTER_DEFAULT_LIMIT, 1), ROSTER_MAX_LIMIT);
     return withOrgContext(
       { userId: input.actorUserId, organizationId: input.organizationId },
@@ -764,11 +768,16 @@ export const organizationsService = {
           limit,
           input.cursor ?? null,
           tx,
+          filter,
         );
         const hasMore = page.length > limit;
         const rows = hasMore ? page.slice(0, limit) : page;
         const nextCursor = hasMore ? rows[rows.length - 1]!.id : null;
-        const total = await organizationMembershipRepository.countByOrg(input.organizationId, tx);
+        const total = await organizationMembershipRepository.countByOrg(
+          input.organizationId,
+          tx,
+          filter,
+        );
 
         // Enrich each member with the org's workspaces they belong to. One read
         // for the org's workspaces + one for this page's memberships across them.
