@@ -255,6 +255,28 @@ export default defineConfig({
         'lib/services/organizationRepoService.ts',
         'lib/services/organizationAccessService.ts',
         'lib/settings/organizationSettingsNav.ts',
+        // Story MOTIR-6167 · MOTIR-6315 — the org roles. The capability table and
+        // the three org routes the story added are GATED below, each MEASURED on
+        // this branch first against the story's own specs: capabilities 100 /
+        // 100 / 100 / 100; ownership-transfer 95 / 83.33 / 100 / 94.44;
+        // workspaces 94.44 / 90 / 100 / 93.75; workspaces/[workspaceId] 92.85 /
+        // 83.33 / 100 / 91.66 (statements / branches / functions / lines). Each
+        // route's residue is its unmapped-error rethrow.
+        'lib/organizations/capabilities.ts',
+        'app/api/organizations/**/ownership-transfer/route.ts',
+        'app/api/organizations/**/workspaces/route.ts',
+        'app/api/organizations/**/workspaces/*/route.ts',
+        // ⚠️ REPORT-ONLY, deliberately: the three services the story changed most
+        // are added to `include` but NOT to `thresholds`. Measured against the
+        // story's specs alone they read organizationsService 80.88 / 77.08 / 90 /
+        // 84.15, workspacesService 82.77 / 74.46 / 91.11 / 84.37 and billingService
+        // 87.5 / 85.93 / 82.35 / 88.52 — every uncovered line in the STORY's own
+        // diff is a defensive arm (a unique-violation mapping the service's own
+        // guard pre-empts, the best-effort notification's failure paths). The
+        // suite-wide number is CI's to publish; the pin belongs to whoever measures it.
+        'lib/services/organizationsService.ts',
+        'lib/services/workspacesService.ts',
+        'lib/services/billingService.ts',
         'lib/mappers/organizationRepoMappers.ts',
         'lib/projectRepos/roomSections.ts',
         'lib/services/legalAcceptanceService.ts',
@@ -3171,6 +3193,31 @@ export default defineConfig({
           statements: 90,
         },
         'lib/services/organizationAccessService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 75,
+          statements: 90,
+        },
+        // Story MOTIR-6167 · MOTIR-6315 — measured before pinning (see `include`).
+        'lib/organizations/capabilities.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/organizations/**/ownership-transfer/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 75,
+          statements: 90,
+        },
+        'app/api/organizations/**/workspaces/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 75,
+          statements: 90,
+        },
+        'app/api/organizations/**/workspaces/*/route.ts': {
           lines: 90,
           functions: 90,
           branches: 75,

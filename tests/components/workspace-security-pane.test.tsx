@@ -189,6 +189,7 @@ describe('the fold-in on /settings/organization', () => {
       workspaceId: WS.id,
       actorUserId: 'u1',
       workspaceCount: 1,
+      canManageWorkspaces: true,
     })) as ReactElement;
     render(<ToastProvider>{tree}</ToastProvider>);
   }
@@ -248,6 +249,7 @@ describe('the fold-in on /settings/organization', () => {
       workspaceId: WS.id,
       actorUserId: 'u1',
       workspaceCount: 1,
+      canManageWorkspaces: true,
     });
     expect(tree).toBeNull();
   });

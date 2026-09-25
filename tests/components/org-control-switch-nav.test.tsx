@@ -50,6 +50,7 @@ function renderOrgControl() {
         activeOrg={{ id: ACME.id, name: ACME.name, role: 'owner' }}
         orgs={[ACME, BEACON]}
         cloudBilling={false}
+        workspaceTierRevealed={false}
       />
     </ToastProvider>,
   );

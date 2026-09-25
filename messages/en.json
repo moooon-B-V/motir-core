@@ -270,6 +270,11 @@
     "approvedOutcome": "Added {n, plural, one {# item} other {# items}} to your backlog",
     "declinedOutcome": "Plan declined — your tree was left untouched",
     "discardedOutcome": "Plan discarded before it finished — your work items are unchanged",
+    "liveWriting": "Being written",
+    "liveReconnecting": "Reconnecting — showing the last update",
+    "liveAnnounce": "{count, plural, one {# item} other {# items}} added to the plan",
+    "listWritingTitle": "Nothing proposed yet",
+    "listWritingBody": "Items appear here as the plan is written.",
     "abandonedOutcome": "Generation never finished — this plan was ended automatically",
     "viewInBacklog": "View in backlog",
     "staleConfirmTitle": "Some items may be out of date",
@@ -773,6 +778,17 @@
       "open": "Open Data & privacy",
       "freshLink": "For your security, the file is not attached and there is no download link in this email. Each Download makes a fresh, private link that expires after five minutes.",
       "retention": "We keep the file for {days} days, then delete it. After that, you can ask for a new export at any time."
+    },
+    "ownershipTransferred": {
+      "subject": "Ownership of {organization} has moved to {newOwner}",
+      "preview": "{newOwner} is now the owner of {organization}",
+      "greeting": "Hi {name},",
+      "ledeNewOwner": "{previousOwner} transferred ownership of {organization} to you. You are now its Owner.",
+      "ledePreviousOwner": "You transferred ownership of {organization} to {newOwner}. You are now an Admin.",
+      "detailNewOwner": "As the Owner you hold every permission in the organization, and you alone can transfer it or delete it.",
+      "detailPreviousOwner": "You keep everything an Admin can do: workspaces, members, settings and billing. Only the Owner can transfer or delete the organization.",
+      "open": "Open organization settings",
+      "notYou": "If you did not expect this change, contact the organization's owner."
     },
     "mentionNotification": {
       "subject": "{author} mentioned you on {identifier}: {title}",
@@ -1844,16 +1860,10 @@
       "heading": "Danger zone",
       "leaveWorkspace": "Leave workspace",
       "leaveWorkspaceDesc": "You'll lose access to all data in this workspace.",
-      "lastMemberTooltip": "You're the last member — delete the workspace instead.",
-      "deleteWorkspace": "Delete workspace",
-      "deleteWorkspaceDesc": "Permanently delete this workspace and all its data. This cannot be undone.",
-      "delete": "Delete",
-      "deleteErrorTitle": "Could not delete workspace",
-      "deleteModalTitle": "Delete {workspaceName}?",
-      "deleteModalDesc": "This will permanently delete the workspace and all its data (projects, work items, members). This action cannot be undone.",
-      "deleteModalCodeIndex": "The code index Motir built from this workspace's repositories is removed immediately — deleting a workspace has no recovery window.",
-      "confirmLabel": "Type {workspaceName} to confirm",
-      "deleteConfirmButton": "Delete workspace"
+      "lastMemberTooltip": "You’re the last member. An organization admin can remove this workspace.",
+      "lastMemberTooltipAdmin": "You’re the last member. Remove the workspace from Organization settings → Workspaces instead.",
+      "removeHint": "To remove this workspace, go to Organization settings → Workspaces.",
+      "removeHintFoldIn": "To remove this workspace, use Workspaces above."
     },
     "project": {
       "empty": {
@@ -2739,10 +2749,10 @@
           "blocked": {
             "pill": "Action needed",
             "title": "One thing has to be handed over first. Motir will not quietly leave an organization without an owner, and it will not delete one out from under the people in it.",
-            "body": "<b>You are the only owner of an organization that other people belong to.</b> Give someone else the owner role and this page unblocks itself — you do not need to ask anyone at Motir.",
-            "orgRow": "{count, plural, one {# member} other {# members}} · you are the only owner",
-            "manageMembers": "Organization › Members",
-            "disabledReason": "Available once every organization you own has another owner.",
+            "body": "<b>You own an organization that other people belong to.</b> Transfer ownership to one of them and this page unblocks itself — you do not need to ask anyone at Motir.",
+            "orgRow": "{count, plural, one {# member} other {# members}} · you are the owner",
+            "transfer": "Transfer ownership",
+            "disabledReason": "Available once you have transferred every organization you own.",
             "workspaces": "Workspaces are <b>not</b> a block. {count, plural, one {You are the only member of one of them, so it cannot be left behind — it is deleted with your account, and the confirmation lists it.} other {You are the only member of # of them, so they cannot be left behind — they are deleted with your account, and the confirmation lists them.}} To keep one, invite somebody to it first."
           },
           "confirm": {
@@ -2754,7 +2764,7 @@
             "cancel": "Cancel",
             "schedule": "<b>Nothing is erased today.</b> Your account closes now and is erased on <b>{date}</b>. Signing back in does not cancel it — until then you can stop the erasure from the banner on every page, or here on Data & privacy.",
             "error": "We couldn't schedule the deletion. Try again in a moment.",
-            "blockedError": "One organization you own still needs another owner before your account can be deleted."
+            "blockedError": "You still own an organization other people belong to. Transfer it before deleting your account."
           },
           "ledger": {
             "deleted": "Deleted",
@@ -4884,9 +4894,10 @@
     "settings": {
       "title": "Organization settings",
       "subtitle": "Manage the {org} organization — the account your workspaces live under. Only organization owners and admins can change these.",
+      "subtitleMember": "Manage the {org} organization — the account your workspaces live under.",
       "general": "General",
       "generalSub": "The organization’s identity across all its workspaces.",
-      "youreOwner": "You’re an owner",
+      "youreTheOwner": "You’re the owner",
       "youreAdmin": "You’re an admin",
       "nameLabel": "Organization name",
       "save": "Save changes",
@@ -4902,9 +4913,34 @@
       "workspaceConfigSub": "{count, plural, one {Managed here while you have one workspace — splits into its own area when you add a second.} other {Managed here — splits into its own area when you add another workspace.}}",
       "workspaceConfigBadge": "{count, plural, one {# workspace} other {# workspaces}}",
       "dangerZone": "Danger zone",
+      "transferTitle": "Transfer ownership",
+      "transferDesc": "Hand the organization to another member. They become the Owner — the only person who can transfer or delete it — and you become an Admin.",
+      "transferCta": "Transfer ownership…",
       "deleteOrg": "Delete organization",
       "deleteOrgNote": "Deleting the organization removes all its workspaces and data. This cannot be undone.",
       "deleteUnavailable": "Organization deletion isn’t available yet."
+    },
+    "transfer": {
+      "title": "Transfer ownership of {org}",
+      "description": "There is exactly one Owner. Transferring hands the role over whole — it cannot be shared or split.",
+      "pickerLabel": "New owner",
+      "searchPlaceholder": "Search members by name or email",
+      "pickerFoot": "Showing {from}–{to} of {total} · the Owner is not listed",
+      "pickerEmpty": "No one else is in this organization yet. Invite someone first.",
+      "pickerNoMatch": "No member matches “{q}”.",
+      "pickerLoadError": "Couldn’t load members. Try again.",
+      "previous": "Previous page",
+      "next": "Next page",
+      "consequence": "{name} becomes the Owner. You become an Admin.",
+      "consequenceSub": "Only the Owner can transfer or delete the organization. You keep your workspaces and everything an Admin can do.",
+      "confirmLabel": "Type {org} to confirm",
+      "confirm": "Transfer ownership",
+      "pending": "Transferring…",
+      "errorNotMember": "Couldn’t transfer ownership. {name} is no longer a member of {org}. Nothing changed — pick someone else.",
+      "errorChanged": "Couldn’t transfer ownership. You are no longer the owner of {org} — ownership changed while this was open. Nothing changed here.",
+      "errorNameMismatch": "Couldn’t transfer ownership. The name you typed doesn’t match {org}. Nothing changed — type it exactly.",
+      "errorGeneric": "Couldn’t transfer ownership. Something went wrong and nothing changed — try again.",
+      "success": "{name} is now the owner of {org}. You’re an admin."
     },
     "members": {
       "title": "Members",
@@ -4920,6 +4956,9 @@
       "removeError": "Couldn’t remove member",
       "roleChanged": "Role updated",
       "roleChangeError": "Couldn’t change role",
+      "ownerLocked": "Ownership moves only by transfer",
+      "ownerLockedLink": "Transfer ownership",
+      "ownerNotOffered": "Owner isn’t offered here — ownership moves only by transfer.",
       "roleLabel": "Organization role for {name}",
       "pager": "Showing {from}–{to} of {total}",
       "page": "Page {n} of {m}",
@@ -4932,7 +4971,6 @@
       "period": "{cadence, select, monthly {mo} other {yr}}",
       "scaled": "Scaled",
       "pastDue": "Past due",
-      "viewOnly": "View only",
       "annualSaving": "Annual · saves ${save}/yr",
       "follows": "Seats follow membership — 1 per active member (${rate}/seat/{period}). Adding or removing a member adjusts your next invoice automatically (prorated).",
       "manage": "Manage seats in Billing",
@@ -4945,20 +4983,18 @@
       "removeCredit": "Frees a seat ({from} → {to}). A prorated credit for the unused time posts to your next invoice — no mid-term refund. Your plan returns to ${next} / {period} at renewal.",
       "removeAccess": "They lose access to every workspace under {org}.",
       "pastDueNote": "We couldn’t charge your card for the Motir seat plan. Motir stays active while we retry over the next ~2 weeks — seats are still editable. Update your payment method to avoid dropping to the free caps.",
-      "updatePayment": "Update payment",
-      "viewOnlyNote": "Billing is managed by an owner. Adding or removing a member still adjusts the organization’s seats — the charge or credit is handled on the owner’s plan.",
-      "subtitleAdmin": "You’re an admin of {org} — you can manage who’s in the organization. The seat plan and payment are managed by an owner."
+      "updatePayment": "Update payment"
     },
     "roles": {
       "owner": "Owner",
       "admin": "Admin",
       "member": "Member",
-      "ownerDesc": "Full control — billing, delete, all workspaces",
-      "adminDesc": "Manage members + settings + every workspace",
-      "memberDesc": "Belongs to the org; access by workspace role"
+      "ownerDesc": "The one owner — alone transfers or deletes the organization",
+      "adminDesc": "Runs the organization — members, workspaces, settings and billing",
+      "memberDesc": "No organization powers — access comes from their workspace roles"
     },
     "roleHelp": {
-      "adminLine": "Owner / Admin administer the organization and are granted admin on every workspace under it — above any per-workspace role.",
+      "adminLine": "The Owner and Admins run the organization. The Owner acts with full rights in every workspace; an Admin’s rights inside a workspace come from their role there.",
       "memberLine": "An org Member belongs to the org but has no cross-workspace powers — what they can do inside a workspace is still governed by their workspace role.",
       "gatingNote": "Org membership gates workspace access: someone removed from the organization loses access to every workspace under it."
     },
@@ -4973,6 +5009,32 @@
       "errorNotFound": "No Motir account for {email}. Invite them to a workspace first — they’ll join the organization automatically.",
       "errorAlready": "{email} is already in this organization.",
       "errorGeneric": "Couldn’t add that person. Try again."
+    },
+    "workspaces": {
+      "title": "Workspaces",
+      "subtitle": "Every workspace in {org}. Only owners and admins can create or remove one.",
+      "count": "{count, plural, one {# workspace} other {# workspaces}}",
+      "new": "New workspace",
+      "rowMeta": "{members, plural, one {# member} other {# members}} · {projects, plural, one {# project} other {# projects}}",
+      "remove": "Remove",
+      "removeAria": "Remove {workspace}",
+      "pager": "Showing {from}–{to} of {total}",
+      "prev": "Prev",
+      "next": "Next",
+      "page": "Page {n} of {m}",
+      "loading": "Loading workspaces…",
+      "emptyTitle": "No workspaces yet",
+      "emptyDescription": "A workspace groups the projects one team works on. Create one to start tracking work in {org}.",
+      "errorTitle": "Couldn’t load workspaces",
+      "errorDescription": "Something went wrong fetching this organization’s workspaces. Try again.",
+      "removeTitle": "Remove {workspace}?",
+      "removeDesc": "This permanently deletes the workspace and everything in it: {projects, plural, one {# project} other {# projects}} with their work items, sprints and boards. Its {members, plural, one {# member loses} other {# members lose}} access to it; they stay in {org}.",
+      "removeCodeIndex": "The code index Motir built from this workspace’s repositories is removed immediately — removing a workspace has no recovery window.",
+      "removeLastWorkspace": "This is {org}’s only workspace. After removing it, the organization has no workspace until someone creates one.",
+      "removeConfirmLabel": "Type {workspace} to confirm",
+      "removeConfirmButton": "Remove workspace",
+      "removed": "{workspace} removed",
+      "removeErrorTitle": "Couldn’t remove {workspace}"
     },
     "states": {
       "emptyTitle": "It’s just you so far",
@@ -5600,13 +5662,9 @@
       "checkoutCanceled": "Checkout canceled — no change was made to your plan."
     },
     "member": {
-      "gateTitle": "Billing is managed by your org owner",
-      "gateDescription": "Plans and payment for the {org} organization are visible to owners and admins. Ask an organization owner to change the plan or buy AI credits.",
-      "contactOwner": "Contact an owner"
-    },
-    "admin": {
-      "viewOnly": "View only",
-      "lockNote": "You can see the plan, usage and invoices. Changing the plan, payment method or cancelling is limited to the organization owner."
+      "gateTitle": "Billing is managed by your organization’s admins",
+      "gateDescription": "Plans and payment for the {org} organization are visible to its owner and admins. Ask an organization admin to change the plan or buy AI credits.",
+      "contactOwner": "Contact an admin"
     },
     "motir": {
       "name": "Motir",
@@ -5668,8 +5726,8 @@
       "pausedTitle": "CI is paused — your credits ran out.",
       "pausedBody": "You used all {pool} included minutes and the {over} minutes since then drew {credits} credits, which emptied your Motir AI balance. Until this is resolved, no workflows run on the repositories Motir hosts for you, and new work can't be dispatched. Nothing has been deleted, and your code is untouched.",
       "pausedTitleMember": "CI is paused — this organization is out of credits.",
-      "pausedBodyMember": "Workflows won't run on the repositories Motir hosts, and new work can't be dispatched, until an organization owner adds credits or moves the repositories to your own GitHub. Nothing has been deleted, and your code is untouched.",
-      "memberLockNote": "Billing for this organization is managed by its owners. There is no action for you here — this line is informational.",
+      "pausedBodyMember": "Workflows won't run on the repositories Motir hosts, and new work can't be dispatched, until an organization owner or admin adds credits or moves the repositories to your own GitHub. Nothing has been deleted, and your code is untouched.",
+      "memberLockNote": "Billing for this organization is managed by its owner and admins. There is no action for you here — this line is informational.",
       "balanceUnavailable": "Your credit balance is temporarily unavailable. Your minutes are accurate and nothing is paused — only the balance figure is missing.",
       "optionCreditsTitle": "Add credits",
       "optionCreditsBody": "Top up your Motir AI balance. CI keeps running on Motir's repositories and the overage keeps drawing 1 credit per minute.",
@@ -5800,7 +5858,7 @@
       "perUnit": "× {n}",
       "buy": "Buy {n} credits — ${total}",
       "rate": "${unit} per {credits} credits · one-time · tax at checkout. Credits are an allotment, not currency — this is the price you pay Stripe.",
-      "gate": "Top-ups are available on a paid AI plan; the Free trial can't top up (choose a plan above first). Owner-only, like every billing action."
+      "gate": "Top-ups are available on a paid AI plan; the Free trial can't top up (choose a plan above first). Owner and admins only, like every billing action."
     },
     "seats": {
       "breadcrumb": "Organization · {org} · Motir",
@@ -5854,8 +5912,8 @@
       },
       "member": {
         "title": "AI is out of credits for this org",
-        "body": "Planning is paused until the {org} organization's plan is upgraded. Only an organization owner can change the plan or buy credits.",
-        "askOwner": "Ask an owner to upgrade"
+        "body": "Planning is paused until the {org} organization's plan is upgraded. Only an organization owner or admin can change the plan or buy credits.",
+        "askOwner": "Ask an admin to upgrade"
       }
     },
     "exempt": {
@@ -6799,12 +6857,15 @@
       "reopened": "Reopened from the Plans page · started by {name} · last active {when}",
       "reopenedYours": "Reopened from the Plans page · started by you · last active {when}",
       "readOnly": "You can read this conversation. Continuing it needs permission to plan with Motir AI.",
-      "someone": "someone"
+      "someone": "someone",
+      "mcpNoTurns": "The conversation behind this plan happened in {harness}, so it isn’t shown here. Ask below to change the plan."
     },
     "arrival": {
       "crumbTargetPrefix": "Planning target:",
       "movedAnnouncement": "Showing work inside {target}",
-      "goToTarget": "Plan is in {identifier} · Go there"
+      "goToTarget": "Plan is in {identifier} · Go there",
+      "arrivedIn": "{count} new in {identifier} · Go there",
+      "arrivedAcross": "{count} new elsewhere · latest in {identifier} · Go there"
     },
     "dividerAria": "Resize the conversation"
   },

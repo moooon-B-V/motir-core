@@ -21,14 +21,10 @@ import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
-import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
-import {
-  createOrganizationAction,
-  createWorkspaceAction,
-  switchOrganizationAction,
-} from '../_actions';
+import { orgCan } from '@/lib/organizations/capabilities';
 import { visibleOrganizationSettingsNav } from '@/lib/settings/organizationSettingsNav';
-import { isOrgAdminRole } from '@/lib/organizations/roles';
+import { createOrganizationAction, switchOrganizationAction } from '../_actions';
+import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 
 export interface OrgControlActiveOrg {
   id: string;
@@ -45,9 +41,11 @@ export interface OrgControlProps {
    *  surface does not exist, so the row is hidden entirely (ADR §6). */
   cloudBilling: boolean;
   /**
-   * `isWorkspaceTierRevealed(count)` — threaded from the shell (MOTIR-6175). It
-   * decides whether the org Settings row opens a room a plain member can use (see
-   * `ORGANIZATION_SETTINGS_NAV`'s `organization` entry). Defaults closed.
+   * Whether the active org has ≥2 workspaces (`isWorkspaceTierRevealed`, the
+   * shell's one reveal verdict). It decides whether an org MEMBER keeps the
+   * `Settings` row: below the reveal it is their only door to the folded-in
+   * workspace sections (Leave workspace among them); above it the org page has
+   * nothing of theirs and answers 404 (MOTIR-6312 · panel 3a / 3b).
    */
   workspaceTierRevealed?: boolean;
 }
@@ -66,24 +64,9 @@ export function OrgControl({
   workspaceTierRevealed = false,
 }: OrgControlProps) {
   const t = useTranslations('orgAdmin');
-  const ts = useTranslations('shell');
-  const tErr = useTranslations('errors');
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
-  // MOTIR-6175 — each settings row is offered ONLY when the actor has a room
-  // behind it, read from the SAME registry the org settings rail filters with, so
-  // the menu and the rail can never disagree about a door (the permission-gated
-  // UI rule, rows 1 and 4). It used to draw Settings / Security / Members /
-  // Usage for everyone, and three of those answer a plain member with the
-  // forbidden panel.
-  const offered = new Set(
-    visibleOrganizationSettingsNav(
-      { isOrgAdmin: activeOrg ? isOrgAdminRole(activeOrg.role) : false, workspaceTierRevealed },
-      undefined,
-      { billingAvailable: cloudBilling },
-    ).map((entry) => entry.id),
-  );
   const [open, setOpen] = useState(false);
   const [createWsOpen, setCreateWsOpen] = useState(false);
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
@@ -94,6 +77,38 @@ export function OrgControl({
   if (!activeOrg) return null;
 
   const multiOrg = orgs.length >= 2;
+
+  // WHAT THIS ROLE MAY DO AT THE ORG decides which rows exist (MOTIR-6312 ·
+  // `design/org-admin/org-admin--workspaces-at-org-tier.mock.html` panel 3). A
+  // row a role cannot use is ABSENT, never disabled (MOTIR-2462): each org-tier
+  // row opened a page that refused a Member, and `New workspace` a create the
+  // server refuses them (MOTIR-6309). The answers come from the ONE capability
+  // table (`lib/organizations/capabilities.ts`), read off the role the layout
+  // already hands this control — no second fetch.
+  const canManageWorkspaces = orgCan(activeOrg.role, 'manageWorkspaces');
+  // The SETTINGS rows are offered from the SAME registry the org settings rail
+  // filters with (MOTIR-6175), so the menu and the rail can never disagree about
+  // a door. A Member keeps `Settings` only BELOW the reveal, where it is the door
+  // to the folded-in workspace sections (3a); above it the page 404s for them (3d).
+  const offered = new Set(
+    visibleOrganizationSettingsNav(
+      { isOrgAdmin: orgCan(activeOrg.role, 'manageOrgSettings'), workspaceTierRevealed },
+      undefined,
+      { billingAvailable: cloudBilling },
+    ).map((entry) => entry.id),
+  );
+  const hasOrgRows = offered.size > 0 || canManageWorkspaces;
+
+  // 3b · a Member, 2+ workspaces, ONE org: the menu would hold nothing — no org
+  // page to open and no org to switch to — so the name is a plain LABEL, not a
+  // button with a chevron over an empty popover.
+  if (!hasOrgRows && !multiOrg) {
+    return (
+      <span className="flex min-w-0 shrink-3 items-center px-(--spacing-control-x) font-sans text-sm text-(--el-text)">
+        <span className="min-w-0 max-w-[20ch] truncate font-serif">{activeOrg.name}</span>
+      </span>
+    );
+  }
 
   function handleSwitchOrg(orgId: string) {
     if (orgId === activeOrg!.id) {
@@ -151,78 +166,84 @@ export function OrgControl({
           </Button>
         </Popover.Trigger>
         <Popover.Content align="start" width={288} className="py-1">
-          <ul role="list" className="px-1">
-            {offered.has('organization') ? (
-              <li>
-                <MenuLink href="/settings/organization" onNavigate={() => setOpen(false)}>
-                  <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                  {t('menu.settings')}
-                </MenuLink>
-              </li>
-            ) : null}
-            {offered.has('security') ? (
-              <li>
-                {/* Security — the org's require-2FA policy (Story MOTIR-1215 ·
-                    MOTIR-3646, design/org-admin/security-policy panel 1). Directly
-                    under Settings, where the design puts it: it is a
-                    settings-shaped destination, and keeping it above Members holds
-                    the two account-level concerns together. A route with no door
-                    is not shipped. */}
-                <MenuLink href="/settings/organization/security" onNavigate={() => setOpen(false)}>
-                  <ShieldCheck className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                  {t('menu.security')}
-                </MenuLink>
-              </li>
-            ) : null}
-            {offered.has('members') ? (
-              <li>
-                <MenuLink href="/settings/organization/members" onNavigate={() => setOpen(false)}>
-                  <Users className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                  {t('menu.members')}
-                </MenuLink>
-              </li>
-            ) : null}
-            {offered.has('usage') ? (
-              <li>
-                {/* Usage & cost — the org cost dashboard (7.2.11, design ai-usage
-                    panel 1). The usage half of the "Billing & usage" promise; the
-                    billing/checkout half stays "Coming soon" (Epic 8). */}
-                <MenuLink href="/settings/organization/usage" onNavigate={() => setOpen(false)}>
-                  <Coins className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                  {t('menu.usage')}
-                </MenuLink>
-              </li>
-            ) : null}
-            {offered.has('billing') ? (
-              <li>
-                {/* Billing & plans — the org's commercial home (Story 8.1.7,
-                    design/billing panel 1). The row the ai-usage design left as a
-                    passive "Coming soon" is now ACTIVE. Cloud-only (ADR §6): on a
-                    self-hosted build it is hidden entirely (no billing surface). */}
-                <MenuLink href="/settings/organization/billing" onNavigate={() => setOpen(false)}>
-                  <CreditCard className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                  {t('menu.billing')}
-                </MenuLink>
-              </li>
-            ) : null}
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  setCreateWsOpen(true);
-                }}
-                className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-              >
-                <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                <span className="flex-1">{t('menu.newWorkspace')}</span>
-              </button>
-            </li>
-          </ul>
+          {hasOrgRows ? (
+            <ul role="list" className="px-1">
+              {offered.has('organization') ? (
+                <li>
+                  <MenuLink href="/settings/organization" onNavigate={() => setOpen(false)}>
+                    <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    {t('menu.settings')}
+                  </MenuLink>
+                </li>
+              ) : null}
+              {offered.has('security') ? (
+                <li>
+                  {/* Security — the org's require-2FA policy (Story MOTIR-1215 ·
+                      MOTIR-3646, design/org-admin/security-policy panel 1). Directly
+                      under Settings, where the design puts it: it is a
+                      settings-shaped destination, and keeping it above Members holds
+                      the two account-level concerns together. A route with no door
+                      is not shipped. */}
+                  <MenuLink
+                    href="/settings/organization/security"
+                    onNavigate={() => setOpen(false)}
+                  >
+                    <ShieldCheck className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    {t('menu.security')}
+                  </MenuLink>
+                </li>
+              ) : null}
+              {offered.has('members') ? (
+                <li>
+                  <MenuLink href="/settings/organization/members" onNavigate={() => setOpen(false)}>
+                    <Users className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    {t('menu.members')}
+                  </MenuLink>
+                </li>
+              ) : null}
+              {offered.has('usage') ? (
+                <li>
+                  {/* Usage & cost — the org cost dashboard (7.2.11, design ai-usage
+                      panel 1). The usage half of the "Billing & usage" promise; the
+                      billing/checkout half stays "Coming soon" (Epic 8). */}
+                  <MenuLink href="/settings/organization/usage" onNavigate={() => setOpen(false)}>
+                    <Coins className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    {t('menu.usage')}
+                  </MenuLink>
+                </li>
+              ) : null}
+              {offered.has('billing') ? (
+                <li>
+                  {/* Billing & plans — the org's commercial home (Story 8.1.7,
+                      design/billing panel 1). Cloud-only (ADR §6): on a self-hosted
+                      build the registry does not offer it (no billing surface). */}
+                  <MenuLink href="/settings/organization/billing" onNavigate={() => setOpen(false)}>
+                    <CreditCard className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    {t('menu.billing')}
+                  </MenuLink>
+                </li>
+              ) : null}
+              {canManageWorkspaces ? (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      setCreateWsOpen(true);
+                    }}
+                    className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+                  >
+                    <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    <span className="flex-1">{t('menu.newWorkspace')}</span>
+                  </button>
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
 
           {multiOrg ? (
             <>
-              <div className="my-1 h-px bg-(--el-border)" />
+              {hasOrgRows ? <div className="my-1 h-px bg-(--el-border)" /> : null}
               <div className="px-3 pb-1 pt-2">
                 <span className="text-(--el-text-secondary) font-mono text-xs uppercase tracking-wider">
                   {t('menu.switchOrg')}
@@ -280,29 +301,13 @@ export function OrgControl({
         </Popover.Content>
       </Popover>
 
-      <NameModal
-        open={createWsOpen}
-        onOpenChange={setCreateWsOpen}
-        title={t('menu.newWorkspace')}
-        label={ts('workspaceSwitcher.nameLabel')}
-        submitLabel={t('menu.newWorkspace')}
-        // MOTIR-5130 — a §4.4 cap refusal comes back as a VALUE, not a throw, so
-        // it is translated into the modal's failure shape and the plan limit is
-        // what the reader is told. This modal used to carry no `onError` at all
-        // while its organisation twin nine lines below did, so the refusal
-        // reached the user as a 500 and then as nothing.
-        // MOTIR-5133 — the sentence is chosen by the `entitlement` KIND from the
-        // catalogue, never `result.error`: that is the server's English string,
-        // and a `zh` reader was being shown it verbatim.
-        run={async (name) => {
-          const result = await createWorkspaceAction(name);
-          if (!result.ok) return { error: entitlementExceededMessage(tErr, result.entitlement) };
-        }}
-        onDone={() => router.refresh()}
-        onError={(message) =>
-          toast({ variant: 'error', title: message ?? t('settings.saveError') })
-        }
-      />
+      {canManageWorkspaces ? (
+        <CreateWorkspaceDialog
+          open={createWsOpen}
+          onOpenChange={setCreateWsOpen}
+          onCreated={() => router.refresh()}
+        />
+      ) : null}
       <NameModal
         open={createOrgOpen}
         onOpenChange={setCreateOrgOpen}
@@ -344,8 +349,9 @@ function MenuLink({
  */
 type NameModalFailure = { error: string };
 
-// A minimal name-only create modal shared by "New workspace" and "Create
-// organization". (The richer create-workspace dialog — copy-source picker,
+// A minimal name-only create modal, for "Create organization". ("New workspace"
+// moved to the shared `CreateWorkspaceDialog`, which the org settings page's
+// Workspaces card opens too — MOTIR-6312.) (The richer create-workspace dialog — copy-source picker,
 // tier-2 reveal — is gated on the 6.10.9 copy-on-create backend; design
 // create-workspace.mock.html.)
 function NameModal({

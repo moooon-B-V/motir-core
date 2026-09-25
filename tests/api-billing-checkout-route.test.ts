@@ -14,7 +14,7 @@ import { adminDb } from './helpers/adminDb';
 //   - that an absent `quantity` is NOT forwarded as null/NaN (the service, not
 //     the wire, owns the default),
 //   - the typed-error → HTTP mapping for the quantity guard (400, distinct from
-//     the OWNER gate's 403).
+//     the billing gate's 403).
 // Real Postgres for the org/membership seed (the no-mocks rule); the two
 // sanctioned boundary mocks are `getSession` (no cookie in the test env) and the
 // motir-ai HTTP client leaf (an external network call).
@@ -73,7 +73,14 @@ async function makeOrgWithRoles() {
     role: 'admin',
     actorUserId: owner.id,
   });
-  return { organizationId, owner, admin };
+  const member = await createTestUser();
+  await organizationsService.addMember({
+    organizationId,
+    userId: member.id,
+    role: 'member',
+    actorUserId: owner.id,
+  });
+  return { organizationId, owner, admin, member };
 }
 
 beforeEach(async () => {
@@ -214,9 +221,9 @@ describe('POST /api/organizations/[orgId]/billing/checkout', () => {
     await expect(POST(req, ctx)).rejects.toThrow('kaboom');
   });
 
-  it('403 for an admin — the OWNER gate runs before the quantity guard', async () => {
-    const { organizationId, admin } = await makeOrgWithRoles();
-    signInAs(admin);
+  it('403 for a plain member — the billing gate runs before the quantity guard', async () => {
+    const { organizationId, member } = await makeOrgWithRoles();
+    signInAs(member);
 
     const { req, ctx } = checkoutReq(organizationId, {
       priceLookupKey: 'credit_topup',

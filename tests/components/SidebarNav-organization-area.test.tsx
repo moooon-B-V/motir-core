@@ -42,6 +42,7 @@ const MEMBER_ORG = { name: 'moooon', isOrgAdmin: false };
 function renderRail(
   organization: { name: string; isOrgAdmin: boolean } | null,
   billingAvailable = true,
+  workspaceTierRevealed = false,
 ) {
   return renderWithIntl(
     <SidebarNav
@@ -49,6 +50,7 @@ function renderRail(
       user={USER}
       organization={organization}
       billingAvailable={billingAvailable}
+      workspaceTierRevealed={workspaceTierRevealed}
     />,
   );
 }
@@ -125,16 +127,12 @@ describe('the rail SWAPS on an organisation-settings route', () => {
 });
 
 describe('the two filtered arms, as they RENDER', () => {
-  it('a plain org member sees `Organisation`, `Git` and `Usage & cost` — the rest absent, not disabled', () => {
-    // Both survive, for two DIFFERENT reasons: `Organisation` because §6d's
-    // folded-in workspace sections (and Leave workspace) are reached only through
-    // it, `Git` because §6 forbids a relocation that narrows an audience and the
-    // surface it moved from checks no role at all.
-    // `Usage & cost` since MOTIR-6175: the usage read SCOPES to the member's own
-    // workspaces (`aiUsageService.getUsage`), so the room has content for them,
-    // and the org menu had always offered it.
+  it('a plain org member sees `Organisation` alone — the rest absent, not disabled', () => {
+    // `Organisation` survives because §6d's folded-in workspace sections (and
+    // Leave workspace) are reached only through it. `Git` joined the Admin-gated
+    // set with the role model (MOTIR-6312 · panel 3d, the Git-row flag).
     renderRail(MEMBER_ORG);
-    expect(rowNames()).toEqual(['Back to Motir', 'Organisation', 'Git', 'Usage & cost']);
+    expect(rowNames()).toEqual(['Back to Motir', 'Organisation']);
     // Nothing marks the gap: an entry point is a promise about a room, and a
     // disabled row is a promise the product then refuses (MOTIR-2468).
     expect(screen.queryByText('Access')).toBeNull();
@@ -148,11 +146,17 @@ describe('the two filtered arms, as they RENDER', () => {
     expect(screen.getByText('Billing')).toBeTruthy(); // the group heading survives
   });
 
+  it('a plain org member ABOVE the reveal sees no org row at all — the page 404s for them', () => {
+    // MOTIR-6312 · panel 3d: at 2+ workspaces nothing on the org page is theirs.
+    renderRail(MEMBER_ORG, true, true);
+    expect(rowNames()).toEqual(['Back to Motir']);
+  });
+
   it('⚠️ with NO organisation threaded the rail defaults CLOSED', () => {
     // A caller that forgets the prop must lose rows, never gain them. The head is
     // omitted too rather than rendering an empty identity.
     renderRail(null);
-    expect(rowNames()).toEqual(['Organisation', 'Git', 'Usage & cost']);
+    expect(rowNames()).toEqual(['Organisation']);
     expect(screen.queryByText('Organisation settings')).toBeNull();
   });
 });

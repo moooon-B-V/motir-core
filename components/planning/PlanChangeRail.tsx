@@ -6,6 +6,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import {
   BookOpenText,
   Ban,
+  Bot,
   Check,
   CircleQuestionMark,
   Clock,
@@ -166,6 +167,20 @@ export interface PlanChangeRailProps {
   onConfirmDecline?: (noteMd: string | null) => void;
   /** A press from THIS block was refused as stale. */
   staleRefused?: boolean;
+  /**
+   * THE CONVERSATION HAPPENED ELSEWHERE (MOTIR-6298; design Part XXIII §23.11 ·
+   * sheet 10 B). An MCP-authored plan's session can hold no turns, because the
+   * agent's conversation happened in its own harness. Set → one notice under the
+   * reopened line and above the opener naming that harness, rendered AS GIVEN
+   * (`authorHarness` is data, not a closed set). The opener, the starter chips and
+   * the composer stay exactly as for any session: asking here changes the plan
+   * like any other turn.
+   *
+   * The HOST decides when it is set (zero turns at the moment the plan's
+   * attribution is read) and keeps it once a turn is sent, because it is still
+   * true; the rail only draws it.
+   */
+  conversationElsewhere?: { harness: string } | null;
 }
 
 export function PlanChangeRail({
@@ -189,6 +204,7 @@ export function PlanChangeRail({
   onCancelDecline,
   onConfirmDecline,
   staleRefused = false,
+  conversationElsewhere = null,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tp = useTranslations('approvalGate.planApproval');
@@ -375,6 +391,19 @@ export function PlanChangeRail({
           </p>
         ) : !state.session && state.earlier ? (
           <EarlierNotice earlier={state.earlier} projectName={projectName} />
+        ) : null}
+
+        {/* WHERE THE CONVERSATION WAS (MOTIR-6298; design §23.11 · sheet 10 B): an
+            MCP agent planned this in its own harness. The reopened line's idiom,
+            led by the `bot` glyph the plan page uses for `writtenByHarness`. */}
+        {conversationElsewhere ? (
+          <p
+            data-testid="planning-mcp-no-turns"
+            className="flex items-start gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+          >
+            <Bot className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>{ts('mcpNoTurns', { harness: conversationElsewhere.harness })}</span>
+          </p>
         ) : null}
 
         {/* The opener — the canvas already shows the plan, so "empty" is never a

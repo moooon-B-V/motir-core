@@ -81,7 +81,7 @@ export function OrgGeneralCard({
           </div>
           <Pill orgRole={isOwner ? 'owner' : 'admin'} className="shrink-0">
             <Crown className="h-3.5 w-3.5" aria-hidden />
-            {isOwner ? t('settings.youreOwner') : t('settings.youreAdmin')}
+            {isOwner ? t('settings.youreTheOwner') : t('settings.youreAdmin')}
           </Pill>
         </div>
       }

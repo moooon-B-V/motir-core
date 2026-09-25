@@ -31,10 +31,14 @@ export async function WorkspaceFoldInSection({
   workspaceId,
   actorUserId,
   workspaceCount,
+  canManageWorkspaces,
 }: {
   workspaceId: string;
   actorUserId: string;
   workspaceCount: number;
+  /** `manageWorkspaces` on the org — read off the role the page already holds.
+   *  Only decides the danger zone's pointer at the Workspaces card above. */
+  canManageWorkspaces: boolean;
 }) {
   const t = await getTranslations('orgAdmin');
 
@@ -94,7 +98,11 @@ export async function WorkspaceFoldInSection({
         onSave={setWorkspaceRequireTwoFactorAction}
       />
 
-      <DangerZoneCard workspaceName={workspace.name} isLastMember={members.length <= 1} />
+      <DangerZoneCard
+        isLastMember={members.length <= 1}
+        canRemoveWorkspace={canManageWorkspaces}
+        placement="foldIn"
+      />
     </>
   );
 }

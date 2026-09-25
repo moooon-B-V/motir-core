@@ -86,6 +86,31 @@ export function arrivalLevel(
 }
 
 /**
+ * The breadcrumb down to ANY level a proposal sits on — the planning surface's
+ * arrivals count drills by it (MOTIR-6300; design Part XXIII §23.7). `[]` for the
+ * top level. The same walk `arrivalLevel` takes, so the count and the arrival can
+ * never name a level two different ways; the one addition is the LAST crumb's
+ * `crumbKey` (the level's `MOTIR-<n>`, when it has one), which the pill names the
+ * level by — `label` stays the display string, exactly as the follow offer reads
+ * `crumbKey ?? label`.
+ */
+export function levelTrail(
+  items: readonly PlanReviewItemDto[],
+  levelId: string | null,
+  proposedWord: string,
+): CanvasCrumb[] {
+  if (levelId === null) return [];
+  const trail = trailTo([...items], levelId, proposedWord);
+  const last = trail[trail.length - 1];
+  if (!last || last.id !== levelId) return trail;
+  const key =
+    items.find((i) => i.nodeId === levelId)?.identifier ??
+    items.find((i) => i.parentNodeId === levelId)?.parentIdentifier ??
+    null;
+  return key ? [...trail.slice(0, -1), { ...last, crumbKey: key }] : trail;
+}
+
+/**
  * The breadcrumb down to a container, committed or proposed.
  *
  * Walks UP from the container: each PROPOSED ancestor contributes one crumb

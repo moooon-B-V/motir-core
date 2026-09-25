@@ -14,7 +14,7 @@ const { createUser } = usersService;
 const {
   addMember,
   createWorkspace,
-  deleteWorkspace,
+  removeWorkspaceAsOrgAdmin,
   findMembership,
   listMembers,
   listUserWorkspaces,
@@ -281,14 +281,14 @@ describe('listMembers', () => {
   });
 });
 
-describe('deleteWorkspace', () => {
+describe('removeWorkspaceAsOrgAdmin', () => {
   it('deletes the workspace and cascades to memberships', async () => {
     const owner = await makeUser('owner@example.com');
     const invitee = await makeUser('invitee@example.com');
     const { workspace } = await createWorkspace({ name: 'Doomed', ownerUserId: owner.id });
     await addMember({ userId: invitee.id, workspaceId: workspace.id });
 
-    await deleteWorkspace({ workspaceId: workspace.id, actorUserId: owner.id });
+    await removeWorkspaceAsOrgAdmin({ workspaceId: workspace.id, actorUserId: owner.id });
 
     const workspaceRow = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
     expect(workspaceRow).toBeNull();
@@ -298,14 +298,14 @@ describe('deleteWorkspace', () => {
     expect(workspaceMembershipCount).toBe(0);
   });
 
-  it('rejects a delete from a non-member', async () => {
+  it('hides the workspace from someone outside its organization (404)', async () => {
     const owner = await makeUser('owner@example.com');
     const stranger = await makeUser('stranger@example.com');
     const { workspace } = await createWorkspace({ name: 'Private', ownerUserId: owner.id });
 
     await expect(
-      deleteWorkspace({ workspaceId: workspace.id, actorUserId: stranger.id }),
-    ).rejects.toMatchObject({ code: 'NOT_A_MEMBER' });
+      removeWorkspaceAsOrgAdmin({ workspaceId: workspace.id, actorUserId: stranger.id }),
+    ).rejects.toMatchObject({ code: 'ORGANIZATION_NOT_FOUND' });
     const workspaceRow = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
     expect(workspaceRow).not.toBeNull();
   });

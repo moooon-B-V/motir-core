@@ -270,6 +270,11 @@
     "approvedOutcome": "已将 {n} 个工作项加入待办列表",
     "declinedOutcome": "计划已拒绝 — 你的工作项树未作改动",
     "discardedOutcome": "计划在完成前被弃置 — 你的工作项未作改动",
+    "liveWriting": "正在编写",
+    "liveReconnecting": "正在重新连接 — 显示的是最近一次更新",
+    "liveAnnounce": "计划新增了 {count} 个工作项",
+    "listWritingTitle": "尚无提案",
+    "listWritingBody": "计划编写过程中，工作项会出现在这里。",
     "abandonedOutcome": "生成始终未完成 — 该计划已自动结束",
     "viewInBacklog": "在待办列表中查看",
     "staleConfirmTitle": "部分工作项可能已过期",
@@ -773,6 +778,17 @@
       "open": "打开数据与隐私",
       "freshLink": "出于安全考虑，此邮件不含附件，也不含下载链接。每次点击下载都会生成一个全新的私密链接，5分钟后失效。",
       "retention": "该文件我们保留{days}天，之后会删除。此后你可以随时重新申请导出。"
+    },
+    "ownershipTransferred": {
+      "subject": "{organization} 的所有权已转移给 {newOwner}",
+      "preview": "{newOwner} 现在是 {organization} 的所有者",
+      "greeting": "{name}，你好：",
+      "ledeNewOwner": "{previousOwner} 已将 {organization} 的所有权转移给你。你现在是它的所有者。",
+      "ledePreviousOwner": "你已将 {organization} 的所有权转移给 {newOwner}。你现在是管理员。",
+      "detailNewOwner": "作为所有者，你拥有该组织的全部权限，并且只有你可以转移或删除它。",
+      "detailPreviousOwner": "你保留管理员的全部能力：工作区、成员、设置和账单。只有所有者可以转移或删除该组织。",
+      "open": "打开组织设置",
+      "notYou": "如果你没有预料到这项变更，请联系该组织的所有者。"
     },
     "mentionNotification": {
       "subject": "{author}在{identifier}中提到了你：{title}",
@@ -1844,16 +1860,10 @@
       "heading": "危险操作区",
       "leaveWorkspace": "离开工作区",
       "leaveWorkspaceDesc": "你将失去对该工作区所有数据的访问权限。",
-      "lastMemberTooltip": "你是最后一名成员——请改为删除工作区。",
-      "deleteWorkspace": "删除工作区",
-      "deleteWorkspaceDesc": "永久删除该工作区及其所有数据。此操作无法撤销。",
-      "delete": "删除",
-      "deleteErrorTitle": "无法删除工作区",
-      "deleteModalTitle": "删除 {workspaceName}？",
-      "deleteModalDesc": "这将永久删除该工作区及其所有数据（项目、工作项、成员）。此操作无法撤销。",
-      "deleteModalCodeIndex": "Motir 为该工作区的仓库建立的代码索引会被立即删除——删除工作区没有任何恢复期。",
-      "confirmLabel": "输入 {workspaceName} 以确认",
-      "deleteConfirmButton": "删除工作区"
+      "lastMemberTooltip": "你是最后一名成员。组织管理员可以移除该工作区。",
+      "lastMemberTooltipAdmin": "你是最后一名成员。请改为在「组织设置 → 工作区」中移除该工作区。",
+      "removeHint": "如需移除该工作区，请前往「组织设置 → 工作区」。",
+      "removeHintFoldIn": "如需移除该工作区，请使用上方的「工作区」。"
     },
     "project": {
       "empty": {
@@ -2739,10 +2749,10 @@
           "blocked": {
             "pill": "需要处理",
             "title": "有一件事需要先交接。Motir不会让一个组织悄悄失去所有者，也不会在其他成员还在使用时把它删掉。",
-            "body": "<b>你是一个还有其他成员的组织的唯一所有者。</b>把所有者角色交给另一个人，此页面就会自动解除限制——无需联系Motir的任何人。",
-            "orgRow": "{count, plural, other {#位成员}}·你是唯一的所有者",
-            "manageMembers": "组织›成员",
-            "disabledReason": "当你拥有的每个组织都另有所有者后即可使用。",
+            "body": "<b>你拥有一个还有其他成员的组织。</b>将所有权转让给其中一人，此页面就会自动解除限制——无需联系Motir的任何人。",
+            "orgRow": "{count, plural, other {#位成员}}·你是所有者",
+            "transfer": "转让所有权",
+            "disabledReason": "将你拥有的每个组织都转让出去后即可使用。",
             "workspaces": "工作区<b>不会</b>造成阻塞。{count, plural, other {你是其中#个工作区的唯一成员，因此它们无法被留下——它们会随你的账户一起删除，确认弹窗中会逐一列出。}}要保留某一个，请先邀请他人加入。"
           },
           "confirm": {
@@ -2754,7 +2764,7 @@
             "cancel": "取消",
             "schedule": "<b>今天不会擦除任何数据。</b>你的账户现在关闭，并将于<b>{date}</b>擦除。重新登录并不会撤销注销——在此之前，你可以通过每个页面上的提示栏撤销，也可以回到「数据与隐私」页面撤销。",
             "error": "注销未能安排成功，请稍后重试。",
-            "blockedError": "你拥有的一个组织还需要另一位所有者，之后才能注销账户。"
+            "blockedError": "你仍拥有一个还有其他成员的组织。请先转让它，再注销账户。"
           },
           "ledger": {
             "deleted": "删除",
@@ -4884,9 +4894,10 @@
     "settings": {
       "title": "组织设置",
       "subtitle": "管理 {org} 组织——你的工作区都归属于这个账户。仅组织所有者和管理员可以更改这些设置。",
+      "subtitleMember": "管理 {org} 组织——你的工作区都归属于这个账户。",
       "general": "常规",
       "generalSub": "组织在所有工作区中的标识。",
-      "youreOwner": "你是所有者",
+      "youreTheOwner": "你是所有者",
       "youreAdmin": "你是管理员",
       "nameLabel": "组织名称",
       "save": "保存更改",
@@ -4902,9 +4913,34 @@
       "workspaceConfigSub": "{count, plural, one {在你只有一个工作区时在此管理——添加第二个工作区后会拆分为独立区域。} other {在此管理——再添加一个工作区后会拆分为独立区域。}}",
       "workspaceConfigBadge": "{count} 个工作区",
       "dangerZone": "危险区域",
+      "transferTitle": "转让所有权",
+      "transferDesc": "将组织交给另一位成员。对方成为所有者——唯一可以转让或删除组织的人——你将成为管理员。",
+      "transferCta": "转让所有权…",
       "deleteOrg": "删除组织",
       "deleteOrgNote": "删除组织会移除其所有工作区和数据。此操作无法撤销。",
       "deleteUnavailable": "暂不支持删除组织。"
+    },
+    "transfer": {
+      "title": "转让 {org} 的所有权",
+      "description": "组织只有一位所有者。转让会将该角色完整交出——无法共享或拆分。",
+      "pickerLabel": "新所有者",
+      "searchPlaceholder": "按姓名或邮箱搜索成员",
+      "pickerFoot": "第 {from}–{to} 条，共 {total} 条 · 不列出所有者",
+      "pickerEmpty": "该组织还没有其他成员。请先邀请成员。",
+      "pickerNoMatch": "没有与“{q}”匹配的成员。",
+      "pickerLoadError": "无法加载成员。请重试。",
+      "previous": "上一页",
+      "next": "下一页",
+      "consequence": "{name} 将成为所有者。你将成为管理员。",
+      "consequenceSub": "只有所有者可以转让或删除组织。你将保留你的工作区以及管理员可做的一切。",
+      "confirmLabel": "输入 {org} 以确认",
+      "confirm": "转让所有权",
+      "pending": "正在转让…",
+      "errorNotMember": "无法转让所有权。{name} 已不再是 {org} 的成员。未做任何更改——请选择其他人。",
+      "errorChanged": "无法转让所有权。你已不再是 {org} 的所有者——在此期间所有权已发生变化。此处未做任何更改。",
+      "errorNameMismatch": "无法转让所有权。你输入的名称与 {org} 不符。未做任何更改——请准确输入。",
+      "errorGeneric": "无法转让所有权。出现问题，未做任何更改——请重试。",
+      "success": "{name} 现在是 {org} 的所有者。你是管理员。"
     },
     "members": {
       "title": "成员",
@@ -4920,6 +4956,9 @@
       "removeError": "无法移除成员",
       "roleChanged": "角色已更新",
       "roleChangeError": "无法更改角色",
+      "ownerLocked": "所有权只能通过转让变更",
+      "ownerLockedLink": "转让所有权",
+      "ownerNotOffered": "此处不提供所有者角色——所有权只能通过转让变更。",
       "roleLabel": "{name} 的组织角色",
       "pager": "显示第 {from}–{to} 项，共 {total} 项",
       "page": "第 {n} 页，共 {m} 页",
@@ -4932,7 +4971,6 @@
       "period": "{cadence, select, monthly {月} other {年}}",
       "scaled": "已订阅",
       "pastDue": "逾期未付",
-      "viewOnly": "仅查看",
       "annualSaving": "年付 · 每年省 ${save}",
       "follows": "席位随成员数变化——每位在职成员 1 个席位（${rate}/席位/{period}）。添加或移除成员将自动按比例调整你的下一期账单。",
       "manage": "在账单中管理席位",
@@ -4945,20 +4983,18 @@
       "removeCredit": "释放一个席位（{from} → {to}）。未使用时段的按比例抵扣将记入你的下一期账单——期中不退款。续费时你的方案将回到 ${next} / {period}。",
       "removeAccess": "他们将失去对 {org} 下所有工作区的访问权限。",
       "pastDueNote": "我们未能从你的卡扣取 Motir 席位方案的费用。在接下来约两周的重试期间 Motir 仍保持可用——席位仍可编辑。请更新支付方式，以免回退到免费额度。",
-      "updatePayment": "更新支付方式",
-      "viewOnlyNote": "账单由所有者管理。添加或移除成员仍会调整组织的席位——相应的扣费或抵扣将计入所有者的方案。",
-      "subtitleAdmin": "你是 {org} 的管理员——可以管理组织成员。席位方案与付款由所有者管理。"
+      "updatePayment": "更新支付方式"
     },
     "roles": {
       "owner": "所有者",
       "admin": "管理员",
       "member": "成员",
-      "ownerDesc": "完全控制——账单、删除、所有工作区",
-      "adminDesc": "管理成员、设置和每个工作区",
-      "memberDesc": "归属于组织；权限由工作区角色决定"
+      "ownerDesc": "唯一的所有者——只有其能转让或删除组织",
+      "adminDesc": "负责运营组织——成员、工作区、设置与账单",
+      "memberDesc": "不具备组织级权限——权限来自其工作区角色"
     },
     "roleHelp": {
-      "adminLine": "所有者 / 管理员负责管理组织，并在其下每个工作区中拥有管理员权限——高于任何按工作区的角色。",
+      "adminLine": "所有者和管理员负责运营组织。所有者在每个工作区中都拥有完整权限；管理员在工作区内的权限取决于其在该工作区的角色。",
       "memberLine": "组织成员归属于该组织，但没有跨工作区的权限——其在某个工作区中能做什么仍由工作区角色决定。",
       "gatingNote": "组织成员资格是访问工作区的前提：被移出组织的人将失去对其下所有工作区的访问权限。"
     },
@@ -4973,6 +5009,32 @@
       "errorNotFound": "没有与 {email} 对应的 Motir 账户。请先邀请其加入某个工作区——他们会自动加入该组织。",
       "errorAlready": "{email} 已在该组织中。",
       "errorGeneric": "无法添加该成员。请重试。"
+    },
+    "workspaces": {
+      "title": "工作区",
+      "subtitle": "{org} 中的所有工作区。仅所有者和管理员可以创建或移除工作区。",
+      "count": "{count, plural, other {# 个工作区}}",
+      "new": "新建工作区",
+      "rowMeta": "{members, plural, other {# 名成员}} · {projects, plural, other {# 个项目}}",
+      "remove": "移除",
+      "removeAria": "移除 {workspace}",
+      "pager": "显示第 {from}–{to} 个，共 {total} 个",
+      "prev": "上一页",
+      "next": "下一页",
+      "page": "第 {n} 页，共 {m} 页",
+      "loading": "正在加载工作区…",
+      "emptyTitle": "还没有工作区",
+      "emptyDescription": "工作区用于归集一个团队负责的项目。创建一个工作区，开始在 {org} 中跟踪工作。",
+      "errorTitle": "无法加载工作区",
+      "errorDescription": "获取该组织的工作区时出错。请重试。",
+      "removeTitle": "移除 {workspace}？",
+      "removeDesc": "这将永久删除该工作区及其中的一切：{projects, plural, other {# 个项目}}及其工作项、迭代和看板。其中的 {members, plural, other {# 名成员}}将失去对它的访问权限，但仍留在 {org} 中。",
+      "removeCodeIndex": "Motir 为该工作区的仓库建立的代码索引会被立即删除——移除工作区没有任何恢复期。",
+      "removeLastWorkspace": "这是 {org} 唯一的工作区。移除后，该组织将没有任何工作区，直到有人新建一个。",
+      "removeConfirmLabel": "输入 {workspace} 以确认",
+      "removeConfirmButton": "移除工作区",
+      "removed": "已移除 {workspace}",
+      "removeErrorTitle": "无法移除 {workspace}"
     },
     "states": {
       "emptyTitle": "目前只有你一个人",
@@ -5600,13 +5662,9 @@
       "checkoutCanceled": "结账已取消 —— 你的套餐未做任何变更。"
     },
     "member": {
-      "gateTitle": "账单由你的组织所有者管理",
-      "gateDescription": "{org} 组织的套餐与支付仅对所有者和管理员可见。如需变更套餐或购买 AI 额度，请联系组织所有者。",
-      "contactOwner": "联系所有者"
-    },
-    "admin": {
-      "viewOnly": "仅可查看",
-      "lockNote": "你可以查看套餐、用量与发票。变更套餐、支付方式或取消订阅仅限组织所有者操作。"
+      "gateTitle": "账单由你的组织管理员管理",
+      "gateDescription": "{org} 组织的套餐与支付对其所有者和管理员可见。如需变更套餐或购买 AI 额度，请联系组织管理员。",
+      "contactOwner": "联系管理员"
     },
     "motir": {
       "name": "Motir",
@@ -5668,8 +5726,8 @@
       "pausedTitle": "CI 已暂停 —— 你的额度已用尽。",
       "pausedBody": "你已用完全部 {pool} 分钟包含额度，此后的 {over} 分钟扣减了 {credits} 额度，并耗尽了 Motir AI 余额。在此问题解决前，Motir 代管的仓库不会运行任何工作流，也无法派发新工作。没有任何内容被删除，你的代码也未受影响。",
       "pausedTitleMember": "CI 已暂停 —— 本组织的额度已用尽。",
-      "pausedBodyMember": "在某位组织所有者补充额度或将仓库迁回你自己的 GitHub 之前，Motir 代管的仓库不会运行工作流，也无法派发新工作。没有任何内容被删除，你的代码也未受影响。",
-      "memberLockNote": "本组织的计费由其所有者管理。此处没有你可执行的操作 —— 这一行仅供参考。",
+      "pausedBodyMember": "在组织所有者或管理员补充额度或将仓库迁回你自己的 GitHub 之前，Motir 代管的仓库不会运行工作流，也无法派发新工作。没有任何内容被删除，你的代码也未受影响。",
+      "memberLockNote": "本组织的计费由其所有者和管理员管理。此处没有你可执行的操作 —— 这一行仅供参考。",
       "balanceUnavailable": "暂时无法获取你的额度余额。分钟数是准确的，也没有任何内容被暂停 —— 只是余额数字缺失。",
       "optionCreditsTitle": "补充额度",
       "optionCreditsBody": "为你的 Motir AI 余额充值。CI 会继续在 Motir 的仓库上运行，超出部分仍按每分钟 1 额度扣减。",
@@ -5796,7 +5854,7 @@
       "perUnit": "× {n}",
       "buy": "购买 {n} 额度 —— ${total}",
       "rate": "每 {credits} 额度 ${unit} · 一次性 · 结账时计税。额度是配额而非货币 —— 这是你向 Stripe 支付的价格。",
-      "gate": "加购额度需付费 AI 套餐；免费试用无法加购（请先在上方选择套餐）。与所有账单操作一样，仅限所有者。"
+      "gate": "加购额度需付费 AI 套餐；免费试用无法加购（请先在上方选择套餐）。与所有账单操作一样，仅限所有者和管理员。"
     },
     "seats": {
       "breadcrumb": "组织 · {org} · Motir",
@@ -5850,8 +5908,8 @@
       },
       "member": {
         "title": "本组织的 AI 额度已用尽",
-        "body": "在 {org} 组织升级套餐前，规划将保持暂停。只有组织所有者可以变更套餐或购买额度。",
-        "askOwner": "请联系所有者升级"
+        "body": "在 {org} 组织升级套餐前，规划将保持暂停。只有组织所有者或管理员可以变更套餐或购买额度。",
+        "askOwner": "请联系管理员升级"
       }
     },
     "exempt": {
@@ -6795,12 +6853,15 @@
       "reopened": "从计划页面重新打开 · 发起人 {name} · 最近活动 {when}",
       "reopenedYours": "从计划页面重新打开 · 由你发起 · 最近活动 {when}",
       "readOnly": "你可以阅读此对话。继续对话需要使用 Motir AI 规划的权限。",
-      "someone": "某人"
+      "someone": "某人",
+      "mcpNoTurns": "此计划背后的对话发生在 {harness} 中，因此不会显示在这里。可在下方提出修改。"
     },
     "arrival": {
       "crumbTargetPrefix": "规划目标：",
       "movedAnnouncement": "正在显示 {target} 内的工作",
-      "goToTarget": "方案在 {identifier} · 前往"
+      "goToTarget": "方案在 {identifier} · 前往",
+      "arrivedIn": "{identifier} 中有 {count} 项新内容 · 前往",
+      "arrivedAcross": "其他层级有 {count} 项新内容 · 最新在 {identifier} · 前往"
     },
     "dividerAria": "调整对话窗口宽度"
   },

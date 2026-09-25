@@ -5,11 +5,10 @@ import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
-import { EMPTY_DIFF_INDEX, indexPlanReview } from '@/lib/planning/planChangeDiff';
-import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
-import { planReview, planReviewItem } from '../helpers/planReview';
+import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import { planReviewItem } from '../helpers/planReview';
 
-// MOTIR-4771 — the "Not in an epic" group on the two PLAN-CHANGE canvases.
+// MOTIR-4771 — the "Not in an epic" group on the two planning canvases.
 //
 // MOTIR-3490 gave the ROOT level a grouped node and a truncation tile, and wired
 // them in as an OPT-IN OPTION on the shared `buildWorkItemLevel`. Four of its
@@ -24,13 +23,18 @@ import { planReview, planReviewItem } from '../helpers/planReview';
 //
 //     parentId === null && kind !== 'epic' && !touchedByThisProposal(id)
 //
-// The third conjunct is not a preference. Grouping takes rows OUT of
-// `base.nodes` before `decoratePlanChangeLevel` runs, and a MATERIALIZED `add`
-// carries its committed work item's OWN id — so grouping that row stops the add
-// frame merging onto it, the entry survives in `pendingAdds`, and the accepted
-// card is appended a second time as a keyless ghost. That is bug MOTIR-3206,
-// re-created by passing one boolean, and the last case here is the one that
-// would catch it.
+// The third conjunct is not a preference. Grouping takes rows OUT of the
+// committed level before `mergePlanLevel` runs, and a MATERIALIZED `add` carries
+// its committed work item's OWN id — so grouping that row stops the add landing
+// on it, and the accepted card is appended a second time as a keyless ghost.
+// That is bug MOTIR-3206, re-created by passing one boolean.
+//
+// ⚠️ WHICH CANVAS HOLDS WHICH HALF (MOTIR-6299). `PlanChangeCanvas` is the
+// surface's pane for the "no plan" state, so it keeps DECISION 1 and the tile.
+// Every pane WITH a plan is `PlanReviewCanvas` (through `PlanProposalViews`), so
+// DECISION 2's cases — a row the plan touches stays on the road — live on it,
+// below. They were first written against `PlanChangeCanvas`'s own proposal
+// decoration, which the host had stopped reaching and which is now deleted.
 
 const EPIC_ID = 'wi_epic';
 const BUG_A = 'wi_bug_a';
@@ -129,7 +133,7 @@ afterEach(() => {
 
 describe('the planning workspace overlay groups the roots that are in no epic', () => {
   it('draws the epics plus ONE grouped node — no bug / story / task beside them (DECISION 1)', async () => {
-    render(<PlanChangeCanvas projectKey="MOTIR" index={EMPTY_DIFF_INDEX} diffKey="k0" />);
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k0" />);
 
     // The epic is on the road…
     await waitFor(() => expect(el(EPIC_ID)).not.toBeNull());
@@ -144,7 +148,7 @@ describe('the planning workspace overlay groups the roots that are in no epic', 
   });
 
   it('the grouped node DRILLS IN from the overlay, served from the root read (criterion 2)', async () => {
-    render(<PlanChangeCanvas projectKey="MOTIR" index={EMPTY_DIFF_INDEX} diffKey="k0" />);
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k0" />);
     await waitFor(() => expect(screen.getByTestId('level-group-node')).toBeTruthy());
 
     drill('__not_in_an_epic__');
@@ -162,7 +166,7 @@ describe('the planning workspace overlay groups the roots that are in no epic', 
 
   it('draws the truncation tile, and Show all re-reads THIS level uncapped (criterion 4)', async () => {
     rootLevelTotal = 12;
-    render(<PlanChangeCanvas projectKey="MOTIR" index={EMPTY_DIFF_INDEX} diffKey="k0" />);
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k0" />);
 
     const tile = await screen.findByTestId('level-truncation-tile');
     expect(tile.textContent).toContain('+ 8 more');
@@ -174,106 +178,9 @@ describe('the planning workspace overlay groups the roots that are in no epic', 
     // and that level is re-read with the ceiling raised.
     await waitFor(() => expect(allFlags).toEqual(['-', '1']));
   });
-
-  it('a row the pending proposal TOUCHES stays on the road (DECISION 2)', async () => {
-    const review: PlanReviewDto = planReview(
-      [
-        root({
-          planItemId: 'pi_mod',
-          op: 'modify',
-          nodeId: BUG_A,
-          identifier: 'MOTIR-3490',
-          title: 'The roadmap root level',
-          changes: [{ field: 'priority', from: 'medium', to: 'high' }],
-        }),
-      ],
-      { status: 'planned', itemCount: 1 },
-    );
-
-    render(<PlanChangeCanvas projectKey="MOTIR" index={indexPlanReview(review)} diffKey="k1" />);
-
-    // The `modify`'s target is on the level the reviewer is standing on — the
-    // frame they are meant to act on is not filed behind a drawer.
-    await waitFor(() => expect(el(BUG_A)).not.toBeNull());
-    // …and the two rows it does NOT touch are still grouped, so the count falls
-    // from 3 to 2 rather than the group disappearing.
-    expect(el(BUG_B)).toBeNull();
-    expect(el(STORY_ROOT)).toBeNull();
-    expect(screen.getByTestId('level-group-node').textContent).toContain('2 items');
-  });
-
-  it('an ACCEPTED add is drawn ONCE, not twice — the MOTIR-3206 constraint', async () => {
-    // A MATERIALIZED add: the plan was approved, the proposal became a card, and
-    // its `nodeId` is now that card's own id. Group the committed row away and
-    // `decoratePlanChangeLevel` cannot merge the add frame onto it, so the entry
-    // survives in `pendingAdds` and is appended as a keyless `ProposedAddNode` —
-    // a second copy of an accepted card. The third conjunct is what stops it.
-    const review: PlanReviewDto = planReview(
-      [
-        root({
-          planItemId: 'pi_add',
-          op: 'add',
-          nodeId: BUG_A,
-          identifier: 'MOTIR-3490',
-          title: 'The roadmap root level',
-          status: 'todo',
-        }),
-      ],
-      { status: 'approved', itemCount: 1 },
-    );
-
-    render(
-      <PlanChangeCanvas
-        projectKey="MOTIR"
-        index={indexPlanReview(review)}
-        diffKey="k2"
-        outcome="accepted"
-      />,
-    );
-
-    await waitFor(() => expect(el(BUG_A)).not.toBeNull());
-    // ONE node for it, and it is the committed card — not a keyless ghost beside
-    // a group that swallowed the original.
-    expect(drawnIds().filter((id) => id === BUG_A)).toHaveLength(1);
-    expect(drawnIds().some((id) => id.startsWith('proposed:'))).toBe(false);
-    expect(screen.getByTestId('level-group-node').textContent).toContain('2 items');
-  });
-
-  it('the ANCHOR a pending add is proposed UNDER stays on the road', async () => {
-    // The commonest contextual ask — "break this story into subtasks" — touches
-    // its anchor through NOTHING the three `nodeId` clauses reach: no `modify`,
-    // no `remove`, and a still-pending add whose own node id is `proposed:`-
-    // prefixed and matches no committed row. Only `parentNodeId` names it.
-    const review: PlanReviewDto = planReview(
-      [
-        planReviewItem({
-          planItemId: 'pi_digest',
-          op: 'add',
-          nodeId: 'pi_digest',
-          kind: 'subtask',
-          title: 'An email digest',
-          parentNodeId: STORY_ROOT,
-        }),
-      ],
-      { status: 'planned', itemCount: 1 },
-    );
-
-    render(<PlanChangeCanvas projectKey="MOTIR" index={indexPlanReview(review)} diffKey="k3" />);
-
-    // Group the anchor away and the proposal is UNREACHABLE rather than merely
-    // hidden: it is drawn one level down, under a row that has just moved behind
-    // the group's door, so the reviewer cannot drill to the thing they are being
-    // asked to confirm. That is the E2E `cloud-contextual-plan-confirm` drills.
-    await waitFor(() => expect(el(STORY_ROOT)).not.toBeNull());
-    // …and the rule stays NARROW: the two roots the plan says nothing about are
-    // still grouped, so the count falls from 3 to 2 rather than the group going.
-    expect(el(BUG_A)).toBeNull();
-    expect(el(BUG_B)).toBeNull();
-    expect(screen.getByTestId('level-group-node').textContent).toContain('2 items');
-  });
 });
 
-describe('the plan-detail canvas takes the same ruling (DECISION 5 / criterion 5)', () => {
+describe('the plan review canvas — a row the plan TOUCHES stays on the road (DECISION 2 / 5)', () => {
   it('groups the non-epic roots, and keeps the plan’s own target on the road', async () => {
     const items = [
       root({
@@ -299,10 +206,38 @@ describe('the plan-detail canvas takes the same ruling (DECISION 5 / criterion 5
     expect(screen.getByTestId('level-group-node').textContent).toContain('2 items');
   });
 
+  it('an ACCEPTED add is drawn ONCE, not twice — the MOTIR-3206 constraint', async () => {
+    // A MATERIALIZED add: the plan was approved, the proposal became a card, and
+    // its `nodeId` is now that card's own id. Group the committed row away and
+    // `mergePlanLevel` cannot land the add on it, so it is appended as a second,
+    // standalone node. The third conjunct is what stops it.
+    const items = [
+      root({
+        planItemId: 'pi_add',
+        op: 'add',
+        nodeId: BUG_A,
+        identifier: 'MOTIR-3490',
+        title: 'The roadmap root level',
+        status: 'todo',
+      }),
+    ];
+
+    render(<PlanReviewCanvas items={items} projectKey="MOTIR" version={1} outcome="accepted" />);
+
+    await waitFor(() => expect(el(BUG_A)).not.toBeNull());
+    // ONE node for it, and it is the committed card.
+    expect(drawnIds().filter((id) => id === BUG_A)).toHaveLength(1);
+    expect(el(BUG_B)).toBeNull();
+    expect(el(STORY_ROOT)).toBeNull();
+    expect(screen.getByTestId('level-group-node').textContent).toContain('2 items');
+  });
+
   it('keeps the anchor a pending add is parented on, on the road too', async () => {
-    // This canvas keys the third conjunct on its own merge set rather than
-    // `touchedByProposal`, so the pending-add TARGET has to be widened here as
-    // well — the same gap, in the second of the two places that decides it.
+    // The commonest contextual ask — "break this story into subtasks" — touches
+    // its anchor through NOTHING but the parent ref its add carries. Group the
+    // anchor away and the proposal is UNREACHABLE: it is drawn one level down,
+    // under a row that has moved behind the group's door. That is the E2E
+    // `cloud-contextual-plan-confirm` drills.
     const items = [
       planReviewItem({
         planItemId: 'pi_toasts',

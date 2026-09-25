@@ -182,7 +182,7 @@ test('@smoke jobs dashboard: DLQ badge counts entries, and an owner replays', as
 
   // Open the DLQ tab and replay (the signed-up user is the workspace owner).
   await page.getByRole('link', { name: /Dead letter/ }).click();
-  const replay = page.getByRole('button', { name: 'Replay' });
+  const replay = page.getByRole('button', { name: 'Replay', exact: true });
   await expect(replay).toBeEnabled();
   await replay.click();
 

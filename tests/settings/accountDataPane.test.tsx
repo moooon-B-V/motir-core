@@ -29,7 +29,7 @@ import type { AccountErasurePreviewDTO } from '@/lib/dto/accountErasure';
 //     "without the delete write ever being invoked". That is asserted here by
 //     making every deletion-side entry point THROW if it is called, and then
 //     rendering the pane to completion — so a pane that reached the refusal by
-//     calling delete and catching `LastOrgOwnerError` fails rather than passes.
+//     calling delete and catching `OwnerMembershipLockedError` fails rather than passes.
 
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
 const { previewAccountErasure } = vi.hoisted(() => ({ previewAccountErasure: vi.fn() }));
@@ -64,11 +64,14 @@ const deletionWrites = vi.hoisted(() => ({
 // which is what every case in THIS suite is about; the scheduled state has its
 // own suite (`accountDeletionBanner.test.tsx`).
 const findOpenDeletion = vi.hoisted(() => vi.fn(async () => null));
-const { assertNotLastOwner } = vi.hoisted(() => ({
-  assertNotLastOwner: vi.fn(() => {
+// The Owner lock (MOTIR-6307) lives on the two member paths that can refuse
+// the Owner — removal and demotion. The pane must never reach either.
+const { ownerLockedPaths } = vi.hoisted(() => {
+  const refuse = () => {
     throw new Error('the pane must READ the block, not call the guard and catch its error');
-  }),
-}));
+  };
+  return { ownerLockedPaths: { removeMember: vi.fn(refuse), changeMemberRole: vi.fn(refuse) } };
+});
 
 vi.mock('@/lib/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth')>()),
@@ -103,10 +106,13 @@ vi.mock('@/lib/services/dataExportService', () => ({
 vi.mock('@/lib/services/accountDeletionService', () => ({
   accountDeletionService: { ...deletionWrites, findOpenDeletion },
 }));
-vi.mock('@/lib/services/organizationsService', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organizationsService')>()),
-  assertNotLastOwner,
-}));
+vi.mock('@/lib/services/organizationsService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/services/organizationsService')>();
+  return {
+    ...actual,
+    organizationsService: { ...actual.organizationsService, ...ownerLockedPaths },
+  };
+});
 // The Server Action the export card calls. Importing the real module pulls
 // `next/cache` into a unit render; its own behaviour is covered by
 // `tests/export/dataExportLatest.test.ts`.
@@ -252,18 +258,49 @@ describe('⚠️ the BLOCKED state — read at rest, never raised at submit', ()
     });
   });
 
-  it('names the organization, shows its member count, and links to its Members page', async () => {
+  it('names the organization, shows its member count, and says to TRANSFER it (MOTIR-6314)', async () => {
     const html = await renderPane();
     expect(html).toContain('moooon');
     expect(html).toContain('6 members');
-    expect(html).toContain('you are the only owner');
-    expect(html).toContain('/settings/organization/members');
+    expect(html).toContain('you are the owner');
+    expect(html).toContain('Transfer ownership to one of them');
     expect(html).toContain('Action needed');
+    // Ownership moves only by transfer (MOTIR-6307): nothing on the pane may ask
+    // for "another owner" or send the reader to the roster's role picker.
+    expect(html).not.toContain('another owner');
+    expect(html).not.toContain('owner role');
+    expect(html).not.toContain('/settings/organization/members');
+  });
+
+  it('links to the BLOCKING organization’s settings with the Transfer ownership dialog open', async () => {
+    const html = await renderPane();
+    expect(html).toContain(
+      `href="/settings/organization?org=${ORG.id}&amp;dialog=transfer-ownership"`,
+    );
+    expect(html).toMatch(/>\s*(?:<[^>]+>\s*)*Transfer ownership\s*</);
+  });
+
+  it('follows the block to the SECOND organization when that is the one it names', async () => {
+    // The reader owns two organizations; the preview names the second. The link
+    // must open THAT org's settings — never the reader's active one, which the
+    // settings page would otherwise resolve.
+    const second = { id: 'org_second', name: 'Second Co', memberCount: 3 };
+    previewAccountErasure.mockResolvedValue({
+      ...emptyPreview(),
+      blocked: true,
+      blockingOrganization: second,
+    });
+    const html = await renderPane();
+    expect(html).toContain('Second Co');
+    expect(html).toContain(
+      'href="/settings/organization?org=org_second&amp;dialog=transfer-ownership"',
+    );
+    expect(html).not.toContain(`org=${ORG.id}`);
   });
 
   it('renders the Delete control DISABLED, with the reason beside it', async () => {
     const html = await renderPane();
-    expect(html).toContain('Available once every organization you own has another owner.');
+    expect(html).toContain('Available once you have transferred every organization you own.');
     // The shipped Button renders `disabled` on the element itself.
     expect(/<button[^>]*disabled[^>]*>(?:(?!<\/button>)[\s\S])*Delete account/.test(html)).toBe(
       true,
@@ -273,10 +310,11 @@ describe('⚠️ the BLOCKED state — read at rest, never raised at submit', ()
   it('⚠️ never invokes the delete write, nor the guard whose error it would catch', async () => {
     await renderPane();
     // The whole criterion: the refusal came from the PREVIEW's answer, not from
-    // trying the action and translating `LastOrgOwnerError`. A reader must not
-    // type their own email address into a form that was always going to refuse.
+    // trying the action and translating `OwnerMembershipLockedError`. A reader must
+    // not type their own email address into a form that was always going to refuse.
     expect(previewAccountErasure).toHaveBeenCalledWith('u1');
-    expect(assertNotLastOwner).not.toHaveBeenCalled();
+    expect(ownerLockedPaths.removeMember).not.toHaveBeenCalled();
+    expect(ownerLockedPaths.changeMemberRole).not.toHaveBeenCalled();
     for (const write of Object.values(deletionWrites)) {
       expect(write).not.toHaveBeenCalled();
     }
@@ -286,7 +324,7 @@ describe('⚠️ the BLOCKED state — read at rest, never raised at submit', ()
     const html = await renderPane();
     // With an organization block on screen a reader has every reason to assume
     // their sole-membership workspaces are another one. They are not:
-    // `deleteWorkspace` asserts membership and checks no role.
+    // `deleteWorkspaceForErasure` asks only for sole membership and checks no role.
     expect(html).toContain('a block');
     expect(html).toContain('To keep one, invite somebody to it first.');
   });

@@ -3,7 +3,8 @@
 - **Status:** Accepted (2026-06-12, billing-entity decision locked with Yue; revised
   2026-06-13 — precise Atlassian-vs-Linear mirror citation, multi-org membership (N:N),
   asymmetric org↔workspace membership direction (§5), and progressive disclosure +
-  auto-provisioning + settings-collapse + copy-on-create (§6))
+  auto-provisioning + settings-collapse + copy-on-create (§6)). **§4 amended
+  2026-09-25 (MOTIR-6305) — see the amendment at the end of §4.**
 - **Story / Subtask:** 6.10 (Organization (root-account) tier + org admin) · Subtask 6.10.2
 - **Supersedes / superseded by:** none
 - **Consumed by:** 6.10.3 (schema — `Organization` + `OrganizationMembership` +
@@ -226,6 +227,35 @@ i.e. the org owner/admin grant is a **ceiling raise** — it can only **grant** 
 workspace role wouldn't, never **reduce** it. A workspace `owner`/`admin` keeps their
 powers regardless of org role. This mirrors Atlassian's org-admin-above-site-admin and
 Linear's Owner-above-Admin split.
+
+> **Amendment (2026-09-25, MOTIR-6305) — `owner` and `admin` are no longer one tier.**
+> The role model (`role-model.md` §1, decided by MOTIR-6165) splits them, and the
+> split is written once, as a table, in `lib/organizations/capabilities.ts`:
+>
+> | capability                                          | owner | admin | member |
+> | --------------------------------------------------- | ----- | ----- | ------ |
+> | delete the organization                             | ✓     | —     | —      |
+> | transfer ownership                                  | ✓     | —     | —      |
+> | create / remove workspaces                          | ✓     | ✓     | —      |
+> | org settings (name, security, Git, usage)           | ✓     | ✓     | —      |
+> | billing, read AND mutate                            | ✓     | ✓     | —      |
+> | org members (invite, change Admin ↔ Member, remove) | ✓     | ✓     | —      |
+>
+> - **Supersedes, in this section:** _"`owner` is the single billing/destructive
+>   authority"_ — billing now belongs to the Admins too (`billing-tiering.md` §7 as
+>   amended the same day); the DESTRUCTIVE half stands and is now named: delete and
+>   transfer are the **Owner's alone**. And _"this ADR fixes that both span all
+>   workspaces"_ is withdrawn: the two roles are distinct rows.
+> - **Supersedes the precedence rule above for the Admin:** the ceiling raise
+>   (_"if user is org owner/admin … → ADMIN-equivalent"_) becomes **Owner-only**. An
+>   org Admin's abilities inside a workspace come from the workspace role they hold
+>   there, like anyone else's (`role-model.md` §1, reading R1, confirmed at that
+>   record's gate). The Owner acts with full rights in every workspace and project
+>   of the org, member or not. **MOTIR-6308 implements this**, including keeping
+>   today's Admins whole by migration; until it merges, `resolveWorkspaceAccess`
+>   still applies the owner-or-admin raise.
+> - **Exactly one Owner** per organization is the model's invariant, enforced by the
+>   database — MOTIR-6307 implements it.
 
 ### 5. Access gating + the asymmetric membership direction + the backfill semantics
 

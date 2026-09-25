@@ -73,7 +73,7 @@ const { projectAccessService } = await import('@/lib/services/projectAccessServi
 const { organizationsService } = await import('@/lib/services/organizationsService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { workflowsService } = await import('@/lib/services/workflowsService');
-const { isOrgAdminRole } = await import('@/lib/organizations/roles');
+const { orgCan } = await import('@/lib/organizations/capabilities');
 const { ProjectAccessProvider } = await import('@/app/(authed)/_components/ProjectAccessProvider');
 const { CoreFieldsPanel } = await import('@/app/(authed)/items/[key]/_components/CoreFieldsPanel');
 const { TodoListSection } = await import('@/app/(authed)/items/[key]/_components/TodoListSection');
@@ -365,7 +365,9 @@ describe('the backlog and the board', () => {
     expect(screen.queryByTestId('backlog-row-check-GAT-1')).toBeNull();
     expect(screen.queryByTestId('backlog-row-actions-GAT-1')).toBeNull();
     expect(screen.queryByTestId('create-sprint')).toBeNull();
-    expect(screen.getByTestId('create-issue-backlog').getAttribute('aria-disabled')).toBe('true');
+    expect((await screen.findByTestId('create-issue-backlog')).getAttribute('aria-disabled')).toBe(
+      'true',
+    );
     expect(screen.queryAllByRole('button', { name: 'Column actions' })).toHaveLength(0);
     const group = screen.getByRole('group', { name: 'Swimlane group by' });
     expect(
@@ -382,7 +384,7 @@ describe('the backlog and the board', () => {
     expect(await screen.findByTestId('backlog-row-actions-GAT-1')).toBeTruthy();
     expect(screen.getByTestId('backlog-row-check-GAT-1')).toBeTruthy();
     expect(screen.getByTestId('create-sprint')).toBeTruthy();
-    expect(screen.getByTestId('create-issue-backlog').tagName).toBe('BUTTON');
+    expect((await screen.findByTestId('create-issue-backlog')).tagName).toBe('BUTTON');
     expect(screen.queryByText(/Read-only access — you can view this board/)).toBeNull();
   });
 });
@@ -395,7 +397,7 @@ describe('navigation', () => {
       [owner!.role, true],
     ] as const) {
       cleanup();
-      expect(isOrgAdminRole(role)).toBe(admin);
+      expect(orgCan(role, 'manageOrgSettings')).toBe(admin);
       render(
         <OrgControl
           activeOrg={{ id: owner!.organization.id, name: owner!.organization.name, role }}
@@ -404,11 +406,11 @@ describe('navigation', () => {
         />,
       );
       fireEvent.click(screen.getByRole('button', { name: 'Organization menu' }));
-      for (const room of ['Security', 'Members', 'Billing & plans']) {
+      // Usage & cost is Owner/Admin too since the org-roles merge (MOTIR-6167 over
+      // MOTIR-6175): a Member's org menu carries no org rows (MOTIR-6312 · panel 3).
+      for (const room of ['Security', 'Members', 'Usage & cost', 'Billing & plans']) {
         expect(screen.queryByRole('link', { name: room }) !== null, `${role}: ${room}`).toBe(admin);
       }
-      // Usage is scoped to the member's own workspaces — every member has a room there.
-      expect(screen.getByRole('link', { name: 'Usage & cost' })).toBeTruthy();
     }
   });
 

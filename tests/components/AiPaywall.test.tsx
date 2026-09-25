@@ -95,8 +95,8 @@ describe('AiPaywall (render)', () => {
   it('member variant: routed to an owner, no actionable navigation CTA', () => {
     render(<AiPaywall access={access({ canManageBilling: false, balance: 0 })} />);
     expect(screen.getByText('AI is out of credits for this org')).toBeTruthy();
-    // "Ask an owner" is presentational guidance — a button, not a link.
-    expect(screen.getByRole('button', { name: 'Ask an owner to upgrade' })).toBeTruthy();
+    // "Ask an admin" is presentational guidance — a button, not a link.
+    expect(screen.getByRole('button', { name: 'Ask an admin to upgrade' })).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
   });
 
