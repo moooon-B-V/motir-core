@@ -6530,7 +6530,16 @@
       "filteredEmptyTitle": "此状态下没有对话",
       "filteredEmptyDescription": "本项目的其他对话在“全部”下。",
       "loadMoreError": "无法加载更多对话。",
-      "loadMoreRetry": "重试"
+      "loadMoreRetry": "重试",
+      "seed": {
+        "label": "<mono>{key}</mono> 的重新规划",
+        "verb": {
+          "decisionApproval": "要求修改",
+          "decisionConfirmation": "推翻",
+          "decisionChoice": "都不合适"
+        },
+        "aria": "打开 {key}，即此对话重新规划的工作项"
+      }
     }
   },
   "planningWorkspace": {

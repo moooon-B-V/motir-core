@@ -249,6 +249,11 @@ export const planChangeSessionRepository = {
    *
    * `state` filters on the LATEST plan: `none` = no plan at all, otherwise that
    * plan's status. `sessionId` narrows to one row (the `?session=` landing).
+   *
+   * The SEED (MOTIR-6209) rides the same statement: `seed_gate_id → gate → work
+   * item`, two plain joins, so a seeded row costs no query of its own.
+   * `seedCardInProject` is the browse fact the mapper keys off — see
+   * `toPlanSessionRowDto`.
    */
   async listPageByProject(
     args: {
@@ -272,9 +277,16 @@ export const planChangeSessionRepository = {
              ft."body" AS "firstTurn",
              lp."id" AS "planId", lp."status"::text AS "planStatus",
              lp."title" AS "planTitle", lp."summary" AS "planSummary",
-             pc."n" AS "planCount"
+             pc."n" AS "planCount",
+             s."seed_gate_id" AS "seedGateId", sg."kind"::text AS "seedGateKind",
+             sw."identifier" AS "seedCardKey",
+             (sw."id" IS NOT NULL AND sw."projectId" = s."project_id") AS "seedCardInProject"
       FROM "plan_change_session" s
       LEFT JOIN "user" u ON u."id" = s."created_by_id"
+      LEFT JOIN "approval_gate" sg
+        ON sg."id" = s."seed_gate_id" AND sg."workspace_id" = s."workspace_id"
+      LEFT JOIN "work_item" sw
+        ON sw."id" = sg."work_item_id" AND sw."workspaceId" = s."workspace_id"
       LEFT JOIN LATERAL (
         SELECT t."body" FROM "plan_change_turn" t
         WHERE t."session_id" = s."id" AND t."role" = 'user'
@@ -329,6 +341,15 @@ export interface PlanSessionListRow {
   planTitle: string | null;
   planSummary: string | null;
   planCount: number;
+  /** MOTIR-6207's `seed_gate_id` — still set when the gate's work item moved away. */
+  seedGateId: string | null;
+  /** The seeding gate's kind; null when the session is unseeded or the gate is gone. */
+  seedGateKind: string | null;
+  /** The seeding gate's work item's identifier, when it still exists. */
+  seedCardKey: string | null;
+  /** Whether that work item is in the SESSION's project — the one the list is
+   *  browse-gated on. False when there is no such work item. */
+  seedCardInProject: boolean;
 }
 
 /** A session's LATEST plan — newest `created_at`, `id` breaking a tie. */

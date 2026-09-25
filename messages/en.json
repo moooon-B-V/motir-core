@@ -6534,7 +6534,16 @@
       "filteredEmptyTitle": "No conversations in this state",
       "filteredEmptyDescription": "This project's other conversations are under All.",
       "loadMoreError": "Couldn’t load more conversations.",
-      "loadMoreRetry": "Retry"
+      "loadMoreRetry": "Retry",
+      "seed": {
+        "label": "Re-plan of <mono>{key}</mono>",
+        "verb": {
+          "decisionApproval": "Request changes",
+          "decisionConfirmation": "Overturn",
+          "decisionChoice": "None of these"
+        },
+        "aria": "Open {key}, the work item this conversation re-plans"
+      }
     }
   },
   "planningWorkspace": {
