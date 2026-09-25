@@ -164,6 +164,54 @@ MOTIR-3823's own criteria are unchanged and still green (`tests/github/ciGreenPr
 repository that CANNOT report still counts as green, and a pull request with zero rows in a repository
 that CAN report is still not promoted.
 
+## AMENDMENT 2 — the residual window is CORRECTED downstream, not closed here (MOTIR-6271)
+
+**Failure mode 1 above is not a caveat; it is load-bearing, and nothing in this
+decision was ever going to remove it.** A host read establishes the runs GitHub
+has CREATED. A workflow whose later jobs do not exist yet is in no snapshot and
+cannot be — and on `motir-core` that is not an exotic shape: the `Vitest (n/12)`
+legs are created only once earlier CI jobs finish, so **every** pull request here
+has a window in which the recorded set is complete, terminal and green while the
+lanes that will fail have not been created.
+
+Failure mode 3 widens the same window on purpose. An unreachable host answers
+`null`, and every caller then falls back to the recorded set — _"a transient
+GitHub outage costs the sharper verdict rather than stalling every card behind
+it"_. That is still the right trade, and it means a verdict formed over a partial
+set is an ACCEPTED outcome of this design rather than a bug in it.
+
+**Observed, at the cost the window was always going to have** — `#3112` @
+`88508fb2`, 2026-09-24. The approve-to-merge gate was raised at `22:45:19.033`
+and routed to a person. `Vitest (3/12)` and `(6/12)` were CREATED at
+`22:45:27/28` — **eight seconds later** — and failed at `22:58`; `CI complete`
+failed at `23:02:17`. The gate was still `awaiting` over that commit hours
+afterwards, because nothing retired it.
+
+**The decision: the correction belongs to the WITHDRAWAL, not to a wider read.**
+`approval-gates.md` §8's SIXTH AMENDMENT adds the `ci_failed` cause and the path
+that writes it, so a verdict contradicted by the build retires the question it
+raised. This ADR's callers are unchanged.
+
+**The alternative, and why it is NOT taken.** A COMPLETION SENTINEL — requiring a
+terminal aggregate check (`motir-core` ships one, `CI complete`) before any
+verdict — would narrow the window further. It is rejected for the same three
+reasons the expected-set candidate was rejected above, plus a fourth: it makes
+the verdict depend on a workflow CONVENTION, so a repository without that job
+would never be judged green at all, which is the fleet-wide stall failure mode 3
+exists to refuse. A window that is corrected a few minutes later is cheaper than
+one that never opens for some repositories.
+
+**What this amendment does NOT say.** It does not excuse a caller from the
+reconcile. The two callers named in the table above still pay for it, and a THIRD
+raise path — the rung reconcile
+`workItemsService.applyStatusTransition` runs on every transition to a rung at or
+above `implemented` (MOTIR-5652 / MOTIR-5663) — folds the recorded rows with no
+reconcile of its own. It is in-transaction, so it cannot make a host read where it
+stands; whether it should be deferred past the commit or left to the withdrawal to
+correct is **open**, and MOTIR-6271's own investigation could not settle which
+path raised `#3112`'s gate. The withdrawal covers every one of them, which is why
+it is the fix that shipped first.
+
 ## AMENDMENT 1 — a set claiming to be STILL RUNNING is distrusted too, once it has claimed it too long (MOTIR-5838)
 
 **The decision above is asymmetric, and the missing half cost a green pull request its merge.** It

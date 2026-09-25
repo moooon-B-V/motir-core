@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -224,19 +225,49 @@ describe('the PREMISE the legibility arm is justified against (MOTIR-6250)', () 
   // at 1440x900"*. MOTIR-6250 made the planning WORKSPACE's frame a resizable
   // split, so that premise is now true of one host and false of the other.
   //
-  // It still holds where it is READ, because `defaultPlanView`'s only production
-  // caller is `PlanDetail` and `PlanDetail` keeps the FIXED frame. This test is
-  // what stops that becoming accidental: opt the plan page into the split and the
-  // number below is justified against a width its frame no longer has, and this
-  // fails NAMING the derivation rather than letting a stale comment stand.
+  // It still holds where it is READ. `defaultPlanView` has exactly TWO production
+  // callers, and each has been asked which frame it reasons about:
+  //
+  // - `PlanDetail`, which keeps the FIXED frame the derivation was measured in.
+  // - `PlanningWorkspaceHost` (MOTIR-6155, Part XXI decision 2), which IS the
+  //   split. Its seed is read on the plan's first proposed read, which is the same
+  //   transition `PlanningResizableFrame` resets the rail on, so at the moment the
+  //   seed is read the rail is at most its default `max(352px, a third)`. The
+  //   overlay is full-bleed, with none of the app chrome the plan page's canvas
+  //   loses, so the canvas is AT LEAST as wide as the plan page's at every viewport
+  //   Part XIII §6 measured. The number was derived against the narrower frame.
+  //
+  // This test is what stops a THIRD caller becoming accidental, and stops the plan
+  // page opting into the split without the derivation noticing: either one fails
+  // here NAMING the derivation rather than letting a stale comment stand.
   const read = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
 
-  it('has exactly ONE production caller, and it is the plan detail', () => {
-    const callers = ['components/planning/PlanDetail.tsx'];
-    for (const c of callers) expect(read(c)).toMatch(/defaultPlanView/);
+  it('has exactly TWO production callers — the plan detail and the workspace host', () => {
+    const callers = [
+      'components/planning/PlanDetail.tsx',
+      'components/planning/PlanningWorkspaceHost.tsx',
+    ];
+    for (const c of callers) expect(read(c)).toMatch(/defaultPlanView\(/);
     // Any NEW production caller has to re-ask which frame it is reasoning about.
+    const others = execFileSync(
+      'git',
+      ['grep', '-l', 'defaultPlanView(', '--', 'app', 'components', 'lib'],
+      {
+        encoding: 'utf8',
+      },
+    )
+      .split('\n')
+      .filter((f) => f && f !== 'lib/planning/planView.ts' && !callers.includes(f));
+    expect(others).toEqual([]);
+  });
+
+  it('the workspace host seeds on the SAME transition the rail resets on', () => {
+    // The premise above holds only because the seed is read when the rail is at
+    // its default. The reset is keyed on `proposalPresent`, which the host feeds
+    // from `state.review !== null` — the same review the seed effect waits for.
     const host = read('components/planning/PlanningWorkspaceHost.tsx');
-    expect(host).not.toMatch(/defaultPlanView/);
+    expect(host).toMatch(/proposalPresent=\{state\.review !== null\}/);
+    expect(host).toMatch(/const review = state\.review;/);
   });
 
   it('the plan detail does NOT opt into the resizable split', () => {

@@ -188,14 +188,17 @@ describe('the unauthenticated path still costs no database round-trip', () => {
  */
 describe('every next/headers session read routes through the memoised helper', () => {
   /**
-   * `lib/auth/index.ts` IS the helper. `lib/workspaces/middleware.ts` takes an
-   * explicit `Request` (it serves the proxy and route handlers, which have no
-   * render scope to share), so it legitimately calls Better-Auth directly.
+   * `lib/auth/index.ts` IS the helper, and the only caller. Since MOTIR-5864
+   * `lib/workspaces/middleware.ts` — which takes an explicit `Request` and has
+   * no render scope to share — reads through `readSession(request.headers)`,
+   * the un-memoised half of that same helper, so a dropped connection on its
+   * session read is retried and named like every other.
    *
-   * Adding an entry here means accepting an extra session round-trip. Say why
-   * beside the call, the way `middleware.ts` does.
+   * Adding an entry here means accepting an extra session round-trip AND a
+   * session read that escapes as Better-Auth's 500 when the database drops a
+   * connection. Say why beside the call.
    */
-  const SANCTIONED_DIRECT_CALLERS = ['lib/auth/index.ts', 'lib/workspaces/middleware.ts'];
+  const SANCTIONED_DIRECT_CALLERS = ['lib/auth/index.ts'];
 
   it('has no unsanctioned auth.api.getSession call site under app/ or lib/', () => {
     // The trailing `(` matches a CALL, not a mention — the docstrings that

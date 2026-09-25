@@ -6708,8 +6708,6 @@
       "conventionRefine": "Opened to refine {repo}'s coding convention.",
       "roadmap": "Opened from the roadmap."
     },
-    "footerRestingTitle": "Roadmap — as saved",
-    "footerRestingBody": "Nothing proposed. The conversation has changed nothing.",
     "searchLabel": "Search this project",
     "reading": {
       "eyebrow": "Before we plan",
@@ -8435,6 +8433,7 @@
         "conflict": "A pull request conflicts with its base branch, so this question was withdrawn.",
         "set_changed": "The pull requests changed, so this question was withdrawn.",
         "pulled_back": "The work was pulled back out of review, so this question was withdrawn.",
+        "ci_failed": "The checks on these commits failed, so this question was withdrawn.",
         "plan_stale": "Work this plan changes was finished, so the plan went out of date and this question was withdrawn.",
         "plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
         "unknown": "This question was withdrawn. The reason was not recorded."

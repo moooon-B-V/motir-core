@@ -144,8 +144,6 @@ describe('i18n — the keys this story added, and the one it removed', () => {
       ['planningWorkspace', 'conversation', 'progress', 'reading'],
       ['planningWorkspace', 'conversation', 'progress', 'redirected'],
       ['planningWorkspace', 'conversation', 'error', 'askSilent'],
-      ['planningWorkspace', 'footerRestingTitle'],
-      ['planningWorkspace', 'footerRestingBody'],
     ]) {
       for (const [name, cat] of [
         ['en', enC],
@@ -173,6 +171,25 @@ describe('i18n — the keys this story added, and the one it removed', () => {
         | undefined;
       expect(chat, `${name}.onboarding.chat`).toBeTruthy();
       expect(Object.keys(chat!), name).not.toContain('assistantInitial');
+    }
+  });
+
+  it('⭐ the RESTING FOOTER copy is GONE from both — the footer hides now', () => {
+    // MOTIR-6186 removed the planning surface's resting footer: when there is
+    // nothing to show, the footer hides, so its two lines have no renderer left
+    // (`design/ai-planning/design-notes.md` Part XXI 21.8). This assertion used to
+    // run the other way, in the "exists in BOTH catalogs" case above, and it moved
+    // here rather than simply being deleted — for the reason the neighbour above
+    // gives: a removal has two sides, and an un-asserted one is indistinguishable
+    // from an accident at the next read.
+    for (const [name, cat] of [
+      ['en', enC],
+      ['zh', zhC],
+    ] as const) {
+      const workspace = cat['planningWorkspace'] as Record<string, unknown> | undefined;
+      expect(workspace, `${name}.planningWorkspace`).toBeTruthy();
+      expect(Object.keys(workspace!), name).not.toContain('footerRestingTitle');
+      expect(Object.keys(workspace!), name).not.toContain('footerRestingBody');
     }
   });
 

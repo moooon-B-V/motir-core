@@ -85,8 +85,19 @@ const composer = (page: Page) => page.getByRole('textbox', { name: /Reply, or re
 // lingering route-level subtree cannot reach into (`_helpers/settle.ts`).
 const live = (page: Page) => page.getByRole('dialog', { name: /plan/i });
 const confirmBar = (page: Page) => live(page).getByTestId('plan-change-confirm-bar');
+/** The canvas foot. ⚠️ IT EXISTS ONLY WHEN THERE IS SOMETHING TO SAY (MOTIR-6155,
+ *  `design/ai-planning/design-notes.md` § 21.8) — the resting copy it used to
+ *  carry at rest is gone, because the planning status is already clear from the
+ *  conversation panel beside it, so the foot HIDES rather than being emptied.
+ *  Every assertion below reads it as an ABSENCE. */
 const canvasFooter = (page: Page) => live(page).getByTestId('plan-change-canvas-footer');
 const canvas = (page: Page) => live(page).getByTestId('roadmap-canvas');
+/** A PROPOSED card, as the plan page draws it. ⚠️ `PlanItemNode`'s `data-op`,
+ *  NOT `PlanChangeDiffFrame`'s `data-diff-state` (MOTIR-6155): once a plan is
+ *  proposed the left pane mounts the plan page's own List | Canvas component, so
+ *  the proposal wears the plan page's vocabulary — `add` / `modify` / `remove`. */
+const opNodes = (page: Page, op: 'add' | 'modify' | 'remove') =>
+  live(page).locator(`[data-op="${op}"]`);
 const answers = (page: Page) => rail(page).getByTestId('plan-change-report');
 
 /**
@@ -220,9 +231,9 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
     await expect(
       rail(page).getByRole('button', { name: "What's blocked, and why?" }),
     ).toBeVisible();
-    // Nothing is proposed, and the canvas footer says so rather than vanishing.
+    // Nothing is proposed, and the canvas foot is GONE rather than saying so.
     await expect(confirmBar(page)).toHaveCount(0);
-    await expect(canvasFooter(page)).toContainText('Roadmap — as saved');
+    await expect(canvasFooter(page)).toHaveCount(0);
     await beat();
   });
 
@@ -244,10 +255,11 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
     // The no-mutation claim, checked on the TREE rather than on the absence of a
     // bar: the roadmap still shows the project as saved, with no diff on it.
     await expect(confirmBar(page)).toHaveCount(0);
-    // ON THE CANVAS — the diff nodes are drawn inside `roadmap-canvas`.
+    // ON THE CANVAS — with NO plan the pane is still `PlanChangeCanvas`, so the
+    // absence is read off the undecorated roadmap, in its own vocabulary.
     await expect(canvas(page).getByTestId('plan-change-diff-node')).toHaveCount(0);
-    await expect(page.locator('[data-diff-state="add"]')).toHaveCount(0);
-    await expect(canvasFooter(page)).toContainText('Nothing proposed');
+    await expect(opNodes(page, 'add')).toHaveCount(0);
+    await expect(canvasFooter(page)).toHaveCount(0);
     await beat();
   });
 
@@ -281,7 +293,13 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
     await expect(confirmBar(page)).toContainText(
       'Approving adds these to your backlog. Declining ends the plan and changes nothing.',
     );
-    await expect(page.locator('[data-diff-state="add"]')).toHaveCount(1);
+    // ⭐ AND THE PANE HAS SWAPPED. A proposed plan is shown with the plan page's
+    // own List | Canvas component (MOTIR-6155), so the added card is a
+    // `PlanItemNode` on the plan review canvas rather than a diff frame painted
+    // over the roadmap. The thread is untouched by that: the same conversation
+    // that answered a question produced a plan, and the pane followed it.
+    await expect(live(page).getByTestId('plan-proposal-views')).toBeVisible();
+    await expect(opNodes(page, 'add')).toHaveCount(1);
 
     // BOTH turn kinds are on the one thread, in order — the answer above, the
     // proposal below it.

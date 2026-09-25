@@ -167,6 +167,11 @@ export interface NormalizedStatusEvent {
    *  outlived the run that replaced it. `null` where the provider reports no
    *  run identity at all (a legacy commit-`status` event). */
   suiteId: string | null;
+  /** TRUE when the event is a suite's OWN roll-up rather than a check — a GitHub
+   *  `check_suite` event, whose `context` is the App slug and therefore identical
+   *  for every workflow of that App (MOTIR-6274). Stored on the row so the
+   *  supersession rule can leave it out of its shared-name test. Absent = a check. */
+  suiteAggregate?: boolean;
 }
 
 /** A push to a repository branch, normalized across providers — consumed by the
