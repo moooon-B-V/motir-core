@@ -16,9 +16,46 @@
   Every composer fragment below is the REAL emitted markup of the shipped
   `components/planning/PlanChangeComposer.tsx`, captured from a headless render
   of the actual component through the repo's own `tests/helpers/renderWithIntl`
-  harness -> `container.innerHTML`, at the rail's real 22rem, in seven states
-  (rest / typed / tray / answering / running / disabled / revise-box). The
-  harness was deleted before this asset was committed.
+  harness -> `container.innerHTML`, in seven states (rest / typed / tray /
+  answering / running / disabled / revise-box). The harness was deleted before
+  this asset was committed.
+
+  ── THE WIDTH: REDRAWN AT 480px (MOTIR-6236's re-scope, 2026-09-24) ─────────
+  The first version of this asset drew every panel at the rail's then-fixed
+  `22rem` and its design gate was answered REQUEST CHANGES for exactly that:
+  *"the right conversation window is too narrow, so the textarea is too narrow
+  too."* The width is no longer this card's to choose. It is MOTIR-6249's
+  approved split, and the numbers are shipped in `lib/planning/railWidth.ts`:
+
+    RAIL_MIN_PX = 352 · RAIL_DEFAULT_FRACTION = 1/3 · RAIL_MAX_FRACTION = 0.5
+    RAIL_DEFAULT_CROSSOVER_PX = 1056 · SPLIT_MIN_CONTAINER_PX = 768
+
+  `defaultRailWidth(1440)` = clamp(352, 480, 720) = **480px**, so panels 1-11 are
+  drawn at a 480px conversation (a 1440 viewport; canvas 960px) and panel 12 at
+  the 352px FLOOR. The board reads both from one `--rail-w` token.
+
+  ── MEASURED IN A REAL BROWSER, NOT ASSERTED ────────────────────────────────
+  Every number in the prose below was read back out of a headless Chromium
+  render of THIS FILE (1440x1000, dSF 1) rather than computed from the tokens.
+  What the measurement settled, and could not have been read off the markup:
+
+    rail   field    target tray      the same 3-line message
+    352px  302px    79px / 3 lines   needs 4 rows   <- the floor
+    378px  328px    58px / 2 lines   needs 3 rows   <- the plan page's default
+    480px  430px    58px / 2 lines   needs 3 rows   <- the workspace default
+    720px  670px    26px / 1 line    needs 3 rows   <- the drag ceiling
+
+  So the redraw is not cosmetic: at the floor the sample message costs a FOURTH
+  row and the tray costs a THIRD line. Panel 12's grown board is drawn at 104px
+  (4 rows) for that reason — reusing the 84px board there would have clipped its
+  own content under `overflow-y: hidden`, which is invisible in the markup.
+
+  Field heights were confirmed exactly on the arithmetic at both widths: 44px at
+  one row, +20px per further row, 184px at the 8-row cap, and `overflow-y`
+  flipping `hidden` -> `auto` only at the cap. Send stays on the field's row with
+  its bottom flush to the field's (delta 0) in all thirteen panels, at 480px and
+  at 352px, and the `@` trigger sits 6px above the field's bottom edge
+  (`bottom-1.5`) in every one.
 
   EXACTLY ONE NODE IS CHANGED in each fragment: the `<input type="text">`
   becomes a `<textarea>`. Its class list is the input's OWN, plus `resize-none`,
@@ -3071,6 +3108,30 @@
          value is the board backdrop + the canvas grid-dot texture, which are
          non-semantic decoration (the sanctioned exception).
          ───────────────────────────────────────────────────────────────────── */
+      /* ── THE WIDTH THIS BOARD IS DRAWN AT (MOTIR-6249's approved split) ──────
+         ONE place the number lives, so no panel can disagree with another.
+         Both values are READ from the shipped geometry — `lib/planning/railWidth.ts`,
+         whose own header says every number in it is a decision of MOTIR-6249's
+         approved design result. This board does not re-choose them:
+
+           RAIL_MIN_PX            = 352   -> --rail-floor
+           RAIL_DEFAULT_FRACTION  = 1/3
+           RAIL_MAX_FRACTION      = 0.5
+           RAIL_DEFAULT_CROSSOVER = 1056  (= 352 / (1/3))
+
+         `defaultRailWidth(1440)` = clamp(352, 1440/3, 720) = **480px**, which is
+         what panels 1-11 are drawn at (a 1440 viewport, canvas 960px). Panel 12 is
+         drawn at the FLOOR by setting `--rail-w` to `--rail-floor` on one wrapper,
+         so every box inside it follows without a second copy of the markup. */
+      :root {
+        --rail-floor: 352px;
+        --rail-w: 480px;
+      }
+      /* Panel 12 only: the conversation at its floor. */
+      .floorscope {
+        --rail-w: var(--rail-floor);
+      }
+
       body {
         margin: 0;
         padding: 30px 22px 60px;
@@ -3199,7 +3260,13 @@
         line-height: 1;
       }
 
-      /* the shipped PlanningWorkspace frame — canvas left · 22rem rail right */
+      /* INHERITED, UNUSED. These `.frame` / `.statecol` / `.foldframe` rules came
+         with the stylesheet lifted from `plan-change-run-live.mock.html` and NO
+         element on this board carries them — checked, not assumed. Their `22rem`
+         is that asset's fixed rail, which `origin/main` no longer has
+         (MOTIR-6250 shipped the resizable split); they are left byte-identical
+         because the sheet is lifted verbatim, and they are NOT this board's
+         claim about the shipped frame. This board's width is `--rail-w`. */
       .shot {
         border-radius: var(--radius-card);
         overflow: hidden;
@@ -3653,7 +3720,7 @@
         margin-bottom: 6px;
       }
       .anatbox {
-        width: 22rem;
+        width: var(--rail-w);
         max-width: 100%;
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
@@ -3983,6 +4050,16 @@
       :root {
         --active-scale: 0.98;
         --tracking-wider: 0.05em;
+        /* ⚠️ FOUND BY THE RENDER OF THIS REDRAW, and INHERITED from the first
+           version rather than introduced by it: `--focus-ring-color` is
+           referenced 74 times on this board — every `focus-visible:ring-` on the
+           field, the `@` trigger, Send and Stop — and the lifted sheet never
+           defined it, so all 74 focus rings computed to nothing. It is exactly
+           the tree-shaking hazard this asset's own warning above describes,
+           one token further on. Value verbatim from
+           `packages/design-system/theme.css:262`, and `--color-primary` (its
+           referent) IS defined above, so it now resolves in both themes. */
+        --focus-ring-color: var(--color-primary);
       }
     </style>
   </head>
@@ -3998,7 +4075,14 @@
         <span class="ref">ai-planning/plan-revision.mock.html</span>, and carries only the panels
         that change.
       </p>
-      <p class="ref">MOTIR-6236 · Story MOTIR-6156 · Epic MOTIR-6010</p>
+      <p>
+        <b>Drawn at a 480px conversation</b> — <code>defaultRailWidth(1440)</code> from MOTIR-6249's
+        approved resizable split, not at the old fixed <code>22rem</code>. Panel 12 is the 352px
+        floor. Every number in the prose was measured in a headless Chromium render of this file.
+      </p>
+      <p class="ref">
+        MOTIR-6236 · Story MOTIR-6156 · Epic MOTIR-6010 · width from MOTIR-6249 / MOTIR-6250
+      </p>
     </div>
 
     <section class="sheet">
@@ -4016,7 +4100,7 @@
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div class="anatbox railbox">
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
@@ -4129,7 +4213,7 @@
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div class="anatbox railbox">
@@ -4261,16 +4345,22 @@
         <div>
           <h2>Grown — three lines typed with <kbd>Shift</kbd>+<kbd>Enter</kbd></h2>
           <p>
-            The field is three rows tall.
-            <b>The transcript above it shrinks and scrolls; nothing outside the rail moves</b> — the
-            composer is in the pinned footer, and the footer grows downward into the rail, never
-            outward into the canvas.
+            The field is three rows tall — <b>84px</b>, measured, at the 480px default. The same
+            message needs a <b>fourth</b> row at the 352px floor (panel 12), which is the whole
+            reason this asset was redrawn.
+            <b
+              >The transcript above it shrinks and scrolls; nothing outside the conversation pane
+              moves</b
+            >
+            — the composer is in the pinned footer, the footer grows downward into the pane, and the
+            pane's width is the split's, so growth never reaches the divider or the canvas beyond
+            it.
           </p>
         </div>
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div
               class="anatbox railbox"
@@ -4470,7 +4560,7 @@ Split the billing story into three:
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div
@@ -4689,15 +4779,26 @@ Split the billing story into three:
         <div>
           <h2>At the cap — a ten-line paste stops and scrolls inside itself</h2>
           <p>
-            The cap is <b>8 rows</b> (184px). Past it the field stops growing and
+            The cap is <b>8 rows</b> (184px), measured. Past it the field stops growing and
             <code>overflow-y</code> flips from <code>hidden</code> to <code>auto</code>, so the
             content scrolls within the field and the footer's height is bounded.
+            <b
+              >The cap is a VERTICAL budget and the split changed WIDTH, so the number does not
+              move</b
+            >
+            — but its worst case is re-measured here rather than inherited. Worst-case footer = cap
+            + target tray + running bar: <b>184 + 66 + 56 = 306px at 480px</b>,
+            <b>327px at the 352px floor</b> (the tray's third line) and
+            <b>274px at the 720px ceiling</b> (the tray on one line). At a 900px-tall viewport the
+            480px worst case still leaves the transcript ~525px — the majority of the rail — which
+            is the argument the 8 rows were chosen on, now true at the width the composer actually
+            ships at.
           </p>
         </div>
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div
               class="anatbox railbox"
@@ -4904,7 +5005,7 @@ Split the billing story into three:
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div
@@ -5137,7 +5238,7 @@ Split the billing story into three:
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div
               class="anatbox railbox"
@@ -5439,7 +5540,7 @@ Split the billing story into three:
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div
@@ -5746,8 +5847,17 @@ Split the billing story into three:
         </div>
       </div>
       <div class="note">
-        The tray wraps to a second line at three or more chips at 22rem, which it already did.
-        Growth does not change its behaviour — it changes only how much room is left below it.
+        <b>⚠️ CORRECTED against the render.</b> The first version of this asset said the tray
+        <i>"wraps to a second line at three or more chips at 22rem"</i>. Measured on this board, the
+        <code>Targets</code> label plus <b>TWO</b> chips is already on <b>two lines at 480px</b>
+        (58px), so the three-chip threshold was wrong at both widths. The measured behaviour:
+        <b
+          >79px on three lines at the 352px floor · 58px on two lines from 378px to ~600px · 26px on
+          one line at the 720px ceiling.</b
+        >
+        The tray is the one element in the footer whose height the split genuinely changes, which is
+        why it is the term that moves in sheet 3's worst case. Growth does not change the tray's
+        behaviour — it changes only how much room is left below it.
       </div>
     </section>
 
@@ -5764,7 +5874,7 @@ Split the billing story into three:
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div
               class="anatbox railbox"
@@ -5919,7 +6029,7 @@ Dead-letter it, and raise a Motir error on the third failure.</textarea
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div
@@ -6098,7 +6208,7 @@ Dead-letter it, and raise a Motir error on the third failure.</textarea
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div
               class="anatbox railbox"
@@ -6252,7 +6362,7 @@ Also add the settings toggle while you are in there.</textarea
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div
@@ -6430,7 +6540,7 @@ Also add the settings toggle while you are in there.</textarea
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div
               class="anatbox railbox"
@@ -6633,7 +6743,7 @@ Split the billing story into three:
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div
@@ -6861,7 +6971,7 @@ Split the billing story into three:
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div
               class="anatbox railbox"
@@ -6982,7 +7092,7 @@ Please revise the plan.</textarea
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div
@@ -7131,7 +7241,7 @@ Please revise the plan.</textarea
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div
               class="anatbox railbox"
@@ -7263,7 +7373,7 @@ Please revise the plan.</textarea
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div
@@ -7420,7 +7530,7 @@ Please revise the plan.</textarea
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">light</span>
             <div
               class="anatbox railbox"
@@ -7553,7 +7663,7 @@ Please revise the plan.</textarea
               </form>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">dark</span>
             <div class="darkwrap" data-theme="dark" data-appearance-scope>
               <div
@@ -7714,7 +7824,7 @@ Please revise the plan.</textarea
       </div>
       <div class="sheetbody">
         <div class="row2">
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">at rest</span>
             <div class="anatbox railbox">
               <form class="relative border-t border-(--el-border) px-3 py-3">
@@ -7779,7 +7889,7 @@ Please revise the plan.</textarea
               </div>
             </div>
           </div>
-          <div class="stack" style="flex: 1; min-width: 22rem">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
             <span class="shotcap">grown · the reviseNote appears with the text</span>
             <div class="anatbox railbox">
               <form class="relative border-t border-(--el-border) px-3 py-3">
@@ -7863,6 +7973,977 @@ Split proposal 4 into two:
       <div class="sheethead">
         <div class="snum">12</div>
         <div>
+          <h2>At the conversation's <b>MINIMUM</b> width — 352px, the split's floor</h2>
+          <p>
+            The same three states at <code>RAIL_MIN_PX</code> (<code>352px</code> =
+            <code>22rem</code>), the floor <code>clampRailWidth</code> holds against
+            (<code>lib/planning/railWidth.ts</code>). <b>All three controls stay usable:</b> the
+            <code>@</code> trigger keeps its <code>bottom-1.5</code> seat, the field keeps its full
+            travel to the 8-row cap, and Send never wraps below the field.
+            <b>This is also every split container between 768px and the 1056px crossover</b> — below
+            the crossover a third is under the floor and the default clamps, so the conversation
+            opens at exactly this width. It is not an edge case; it is what a 13-inch laptop gets.
+            <b>⚠️ Measured, the floor costs a row.</b> The field is <b>302px</b> here against 430px
+            at the 480px default, so
+            <b>the same sample message needs FOUR rows instead of three</b> — the middle board is
+            drawn at 104px for that reason, not at the 84px its 480px twin uses. The target tray
+            costs a third line too (79px against 58px), which is why the worst-case footer is 327px
+            here and 306px at the default. The cap does not move: it is a vertical budget, and eight
+            rows is still the last count that leaves the transcript the larger region.
+          </p>
+        </div>
+      </div>
+      <div class="sheetbody">
+        <div class="row2 floorscope">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
+            <span class="shotcap">at rest · 352px</span>
+            <div class="anatbox railbox">
+              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                ><span
+                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >Motir AI</span
+                ><span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
+                  data-testid="planning-mode-chip"
+                  >plan</span
+                >
+              </div>
+              <div class="railscroll" role="log">
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <span
+                      >Opened on Motir. What should change — or what would you like to know?</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <form class="relative border-t border-(--el-border) px-3 py-3">
+                <div class="flex items-end gap-2">
+                  <div
+                    role="combobox"
+                    aria-expanded="false"
+                    aria-haspopup="listbox"
+                    aria-controls="planning-target-listbox"
+                    class="relative flex min-w-0 flex-1 items-end"
+                  >
+                    <button
+                      type="button"
+                      aria-label="Add a work item to plan around"
+                      data-testid="planning-target-trigger"
+                      class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-at-sign size-4"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                      </svg></button
+                    ><textarea
+                      aria-autocomplete="list"
+                      rows="1"
+                      placeholder="Describe the change you want"
+                      aria-label="Describe the change you want"
+                      class="min-h-(--height-input) resize-none overflow-y-hidden min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                      style="height: 44px; padding-block: 11px"
+                    ></textarea>
+                  </div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                    disabled=""
+                    aria-label="Send"
+                  >
+                    <span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-4"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        ></path>
+                        <path d="m21.854 2.147-10.94 10.939"></path></svg
+                    ></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
+            <span class="shotcap">grown · FOUR rows at the floor (three at 480px) · 352px</span>
+            <div
+              class="anatbox railbox"
+              style="height: 520px; display: flex; flex-direction: column"
+            >
+              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                ><span
+                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >Motir AI</span
+                ><span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
+                  data-testid="planning-mode-chip"
+                  >plan</span
+                >
+              </div>
+              <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <span
+                      >Opened on Motir. What should change — or what would you like to know?</span
+                    >
+                  </div>
+                </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >Turn 1</span
+                    >Add a settings surface for the invoice job
+                  </div>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <span
+                      >I read the billing epic. It has one story and no settings card — I can add
+                      one.</span
+                    >
+                  </div>
+                </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >Turn 2 · refine</span
+                    >Only for the retry policy, not the whole job
+                  </div>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <span>Understood. Anything else before I lay it?</span>
+                  </div>
+                </div>
+              </div>
+              <form class="relative border-t border-(--el-border) px-3 py-3">
+                <div class="flex items-end gap-2">
+                  <div
+                    role="combobox"
+                    aria-expanded="false"
+                    aria-haspopup="listbox"
+                    aria-controls="planning-target-listbox"
+                    class="relative flex min-w-0 flex-1 items-end"
+                  >
+                    <button
+                      type="button"
+                      aria-label="Add a work item to plan around"
+                      data-testid="planning-target-trigger"
+                      class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-at-sign size-4"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                      </svg></button
+                    ><textarea
+                      aria-autocomplete="list"
+                      rows="1"
+                      placeholder="Describe the change you want"
+                      aria-label="Describe the change you want"
+                      class="min-h-(--height-input) resize-none overflow-y-hidden min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                      style="height: 104px; padding-block: 11px"
+                    >
+Split the billing story into three:
+- the invoice schema and its migration
+- the retry and dead-letter job</textarea
+                    >
+                  </div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                    aria-label="Send"
+                  >
+                    <span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-4"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        ></path>
+                        <path d="m21.854 2.147-10.94 10.939"></path></svg
+                    ></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
+            <span class="shotcap">at the cap · 352px</span>
+            <div
+              class="anatbox railbox"
+              style="height: 520px; display: flex; flex-direction: column"
+            >
+              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                ><span
+                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >Motir AI</span
+                ><span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
+                  data-testid="planning-mode-chip"
+                  >plan</span
+                >
+              </div>
+              <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <span
+                      >Opened on Motir. What should change — or what would you like to know?</span
+                    >
+                  </div>
+                </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >Turn 1</span
+                    >Add a settings surface for the invoice job
+                  </div>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <span
+                      >I read the billing epic. It has one story and no settings card — I can add
+                      one.</span
+                    >
+                  </div>
+                </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >Turn 2 · refine</span
+                    >Only for the retry policy, not the whole job
+                  </div>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <span>Understood. Anything else before I lay it?</span>
+                  </div>
+                </div>
+              </div>
+              <form class="relative border-t border-(--el-border) px-3 py-3">
+                <div class="flex items-end gap-2">
+                  <div
+                    role="combobox"
+                    aria-expanded="false"
+                    aria-haspopup="listbox"
+                    aria-controls="planning-target-listbox"
+                    class="relative flex min-w-0 flex-1 items-end"
+                  >
+                    <button
+                      type="button"
+                      aria-label="Add a work item to plan around"
+                      data-testid="planning-target-trigger"
+                      class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-at-sign size-4"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                      </svg></button
+                    ><textarea
+                      aria-autocomplete="list"
+                      rows="1"
+                      placeholder="Describe the change you want"
+                      aria-label="Describe the change you want"
+                      class="min-h-(--height-input) resize-none overflow-y-auto min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                      style="height: 184px; padding-block: 11px"
+                    >
+1. the schema
+2. the migration
+3. the service
+4. the job
+5. the route
+6. the settings page
+7. the locale keys
+8. the integration test
+9. the E2E spec
+10. the acceptance video</textarea
+                    >
+                  </div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                    aria-label="Send"
+                  >
+                    <span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-4"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        ></path>
+                        <path d="m21.854 2.147-10.94 10.939"></path></svg
+                    ></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="row2 floorscope">
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
+            <span class="shotcap">dark · grown · FOUR rows at the floor · 352px</span>
+            <div class="darkwrap" data-theme="dark" data-appearance-scope>
+              <div
+                class="anatbox railbox"
+                style="height: 520px; display: flex; flex-direction: column"
+              >
+                <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                  <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                  ><span
+                    class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                    >Motir AI</span
+                  ><span
+                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
+                    data-testid="planning-mode-chip"
+                    >plan</span
+                  >
+                </div>
+                <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                  <div class="flex items-start gap-2">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                      ><span class="brand-inv"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          width="13"
+                          height="13"
+                          class="brand-glyph"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          ></path></svg></span
+                    ></span>
+                    <div
+                      class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                    >
+                      <span
+                        >Opened on Motir. What should change — or what would you like to know?</span
+                      >
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2 flex-row-reverse">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                      >·</span
+                    >
+                    <div
+                      class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)"
+                    >
+                      <span
+                        class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                        >Turn 1</span
+                      >Add a settings surface for the invoice job
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                      ><span class="brand-inv"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          width="13"
+                          height="13"
+                          class="brand-glyph"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          ></path></svg></span
+                    ></span>
+                    <div
+                      class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                    >
+                      <span
+                        >I read the billing epic. It has one story and no settings card — I can add
+                        one.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2 flex-row-reverse">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                      >·</span
+                    >
+                    <div
+                      class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)"
+                    >
+                      <span
+                        class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                        >Turn 2 · refine</span
+                      >Only for the retry policy, not the whole job
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                      ><span class="brand-inv"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          width="13"
+                          height="13"
+                          class="brand-glyph"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          ></path></svg></span
+                    ></span>
+                    <div
+                      class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                    >
+                      <span>Understood. Anything else before I lay it?</span>
+                    </div>
+                  </div>
+                </div>
+                <form class="relative border-t border-(--el-border) px-3 py-3">
+                  <div class="flex items-end gap-2">
+                    <div
+                      role="combobox"
+                      aria-expanded="false"
+                      aria-haspopup="listbox"
+                      aria-controls="planning-target-listbox"
+                      class="relative flex min-w-0 flex-1 items-end"
+                    >
+                      <button
+                        type="button"
+                        aria-label="Add a work item to plan around"
+                        data-testid="planning-target-trigger"
+                        class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-at-sign size-4"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="4"></circle>
+                          <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                        </svg></button
+                      ><textarea
+                        aria-autocomplete="list"
+                        rows="1"
+                        placeholder="Describe the change you want"
+                        aria-label="Describe the change you want"
+                        class="min-h-(--height-input) resize-none overflow-y-hidden min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                        style="height: 104px; padding-block: 11px"
+                      >
+Split the billing story into three:
+- the invoice schema and its migration
+- the retry and dead-letter job</textarea
+                      >
+                    </div>
+                    <button
+                      type="submit"
+                      data-variant="primary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                      aria-label="Send"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-send size-4"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                          ></path>
+                          <path d="m21.854 2.147-10.94 10.939"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
+            <span class="shotcap">dark · at the cap · 352px</span>
+            <div class="darkwrap" data-theme="dark" data-appearance-scope>
+              <div
+                class="anatbox railbox"
+                style="height: 520px; display: flex; flex-direction: column"
+              >
+                <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                  <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                  ><span
+                    class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                    >Motir AI</span
+                  ><span
+                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
+                    data-testid="planning-mode-chip"
+                    >plan</span
+                  >
+                </div>
+                <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                  <div class="flex items-start gap-2">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                      ><span class="brand-inv"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          width="13"
+                          height="13"
+                          class="brand-glyph"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          ></path></svg></span
+                    ></span>
+                    <div
+                      class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                    >
+                      <span
+                        >Opened on Motir. What should change — or what would you like to know?</span
+                      >
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2 flex-row-reverse">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                      >·</span
+                    >
+                    <div
+                      class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)"
+                    >
+                      <span
+                        class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                        >Turn 1</span
+                      >Add a settings surface for the invoice job
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                      ><span class="brand-inv"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          width="13"
+                          height="13"
+                          class="brand-glyph"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          ></path></svg></span
+                    ></span>
+                    <div
+                      class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                    >
+                      <span
+                        >I read the billing epic. It has one story and no settings card — I can add
+                        one.</span
+                      >
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2 flex-row-reverse">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                      >·</span
+                    >
+                    <div
+                      class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)"
+                    >
+                      <span
+                        class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                        >Turn 2 · refine</span
+                      >Only for the retry policy, not the whole job
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2">
+                    <span
+                      aria-hidden="true"
+                      class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                      ><span class="brand-inv"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          width="13"
+                          height="13"
+                          class="brand-glyph"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          ></path></svg></span
+                    ></span>
+                    <div
+                      class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                    >
+                      <span>Understood. Anything else before I lay it?</span>
+                    </div>
+                  </div>
+                </div>
+                <form class="relative border-t border-(--el-border) px-3 py-3">
+                  <div class="flex items-end gap-2">
+                    <div
+                      role="combobox"
+                      aria-expanded="false"
+                      aria-haspopup="listbox"
+                      aria-controls="planning-target-listbox"
+                      class="relative flex min-w-0 flex-1 items-end"
+                    >
+                      <button
+                        type="button"
+                        aria-label="Add a work item to plan around"
+                        data-testid="planning-target-trigger"
+                        class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-at-sign size-4"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="4"></circle>
+                          <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                        </svg></button
+                      ><textarea
+                        aria-autocomplete="list"
+                        rows="1"
+                        placeholder="Describe the change you want"
+                        aria-label="Describe the change you want"
+                        class="min-h-(--height-input) resize-none overflow-y-auto min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                        style="height: 184px; padding-block: 11px"
+                      >
+1. the schema
+2. the migration
+3. the service
+4. the job
+5. the route
+6. the settings page
+7. the locale keys
+8. the integration test
+9. the E2E spec
+10. the acceptance video</textarea
+                      >
+                    </div>
+                    <button
+                      type="submit"
+                      data-variant="primary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                      aria-label="Send"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-send size-4"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                          ></path>
+                          <path d="m21.854 2.147-10.94 10.939"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <b>Drawn at the floor on purpose, and these boards are the superseded first version's.</b>
+          MOTIR-6236's first pass drew every panel at <code>22rem</code> and was sent back for it —
+          but 352px did not stop being a real width, it stopped being the DEFAULT and became the
+          floor. So the markup here is that pass's, re-used rather than re-drawn, which is also why
+          it is the one narrow width in this rail that has ever been measured (MOTIR-2225's
+          already-full header row).
+        </div>
+      </div>
+    </section>
+
+    <section class="sheet">
+      <div class="sheethead">
+        <div class="snum">13</div>
+        <div>
           <h2>The three decisions, the anatomy, and what is <b>unchanged</b></h2>
           <p>Everything the code card reads literally.</p>
         </div>
@@ -7870,9 +8951,30 @@ Split proposal 4 into two:
       <div class="sheetbody">
         <div class="note" style="border-top: 0; background: transparent; padding: 0 0 14px">
           <p>
-            <b>1 · The cap is 8 rows (184px).</b> Confirms the story's assumption. The arithmetic is
-            on sheet 3: 8 rows is the last count at which the worst-case footer — cap + tray +
-            running bar — leaves the transcript the larger region on a 700–800px rail.
+            <b>0 · THE WIDTH IS 480px, AND THIS CARD DID NOT CHOOSE IT.</b> It is
+            <code>defaultRailWidth(1440)</code> = <code>clamp(352px, 33.333%, 50%)</code> of the
+            split container, from MOTIR-6249's approved design result as shipped in
+            <code>lib/planning/railWidth.ts</code> (<code>RAIL_MIN_PX 352</code>,
+            <code>RAIL_DEFAULT_FRACTION 1/3</code>, <code>RAIL_MAX_FRACTION 0.5</code>). Panels 1–11
+            are that 480px; <b>panel 12 is the 352px floor</b>, and the floor is not an edge case —
+            below the <code>1056px</code> crossover a third is under the floor and the default
+            clamps to it, so every split container from 768px to 1056px opens at exactly 352px.
+            <b>The plan page's revise box is NOT a split host</b> and keeps its own width; measured,
+            its 378px default behaves like the 480px one and not like the floor.
+          </p>
+          <p>
+            <b>1 · The cap is 8 rows (184px) — unchanged by the split, and re-measured at it.</b>
+            Confirms the story's assumption. The cap is a VERTICAL budget and the split changed
+            WIDTH, so the number does not move; what moves is the worst case around it, re-measured
+            on sheet 3 as <b>306px at 480px</b> (cap 184 + tray 66 + running bar 56), 327px at the
+            floor and 274px at the 720px ceiling. At 480px on a 900px-tall viewport that still
+            leaves the transcript ~525px — the majority of the rail — which is the argument the 8
+            rows were chosen on, now checked at the width the composer actually ships at.
+            <b
+              >A wider field does not mean a taller one: it means the same paragraph reaches the cap
+              LATER</b
+            >
+            — measured, the sample message is 3 rows at 480px and 4 at 352px.
           </p>
           <p>
             <b>2 · <code>@</code> and Send align to the BOTTOM</b> from two rows on (<code
@@ -7895,9 +8997,9 @@ Split proposal 4 into two:
             <b>MUI X's Chat Composer</b> documents the behaviour — "submits on Enter and inserts a
             newline on Shift+Enter" — and its component anatomy carries no hint element; the
             behaviour is implicit. <b>Slack</b> documents "Create a new line: Shift Enter" in its
-            <em>help centre</em>, not as composer chrome. At 22rem a permanent hint line costs ~18px
-            of the one region that never scrolls, permanently, to teach a convention both references
-            treat as already known.
+            <em>help centre</em>, not as composer chrome. At the 352px FLOOR a permanent hint line
+            costs ~18px of the one region that never scrolls, permanently, to teach a convention
+            both references treat as already known.
             <em
               >(Both checks are of published documentation, not of a rendered screenshot — stated so
               the next reader knows what was and was not verified.)</em
@@ -7939,12 +9041,20 @@ Split proposal 4 into two:
       </div>
       <div class="note">
         <b>GIVES / TAKES.</b> This design GIVES <b>MOTIR-6238</b> the cap, the bottom alignment, the
-        <code>whitespace-pre-wrap</code> + <code>wrap-anywhere</code> bubble and the no-hint
-        decision; it GIVES <b>MOTIR-6237</b> the row arithmetic and the
-        <code>resize-none</code> switch. It GIVES <b>MOTIR-6210</b> panel 8's pre-filled shape. It
-        TAKES <b>nothing</b> from any card: no criterion on 6237, 6238, 6239, 6240, 6206 or 6210 is
-        contradicted or removed by it — the cap it settles is the number those cards already say
-        they read from this asset.
+        <code>whitespace-pre-wrap</code> + <code>wrap-anywhere</code> bubble, the no-hint decision
+        and <b>the two widths to build and test at (480px and the 352px floor)</b>; it GIVES
+        <b>MOTIR-6237</b> the row arithmetic and the <code>resize-none</code> switch. It GIVES
+        <b>MOTIR-6210</b> panel 8's pre-filled shape. It GIVES <b>MOTIR-6239</b> and
+        <b>MOTIR-6240</b> the floor as a second width their seams and their E2E walk are exercised
+        at, which panel 12 is the drawing of. <b>MOTIR-6249</b> and <b>MOTIR-6250</b> are CONSUMED,
+        not amended: this asset reads their settled numbers out of
+        <code>lib/planning/railWidth.ts</code> and chooses none of them. It TAKES
+        <b>nothing</b> from any card: no criterion on 6237, 6238, 6239, 6240, 6206, 6210, 6249 or
+        6250 is contradicted or removed by it — the cap it settles is the number those cards already
+        say they read from this asset, and it is unchanged.
+        <b>The one correction this redraw makes is to ITS OWN first version's prose</b>, not to a
+        card: the target tray's "three or more chips at 22rem" threshold, falsified by the render
+        (sheet 4).
       </div>
     </section>
   </body>

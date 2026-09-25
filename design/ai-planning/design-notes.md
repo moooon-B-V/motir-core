@@ -2892,6 +2892,14 @@ specific to this host and are drawn on that sheet:
 
 `reviseNote` is unchanged: shown only while the field has text.
 
+**⚠️ AND THE WIDTH: the revise box is NOT a split host.** MOTIR-6249's resizable split (story
+MOTIR-6248) makes the planning surface's conversation pane a draggable third of its container, and
+MOTIR-6236's sheets were redrawn at that width. **This host is unaffected**: the plan page's rail keeps
+its own width, so no number in Part XII moves. Measured, its container-derived 378px default puts the
+field at 328px, where the composer behaves exactly as at the planning surface's 480px default — same
+cap, same row arithmetic, same alignment. The one width at which the same message costs an extra row
+is the split's 352px floor, which this host never takes.
+
 ---
 
 # Part XIII — The plan DETAIL, refined: the proposed title, the fold, the changes lit on arrival, the locate walk, the search box's own words, the derived default, a clickable row, and the rail's decision (MOTIR-4017 / Story MOTIR-4016)
