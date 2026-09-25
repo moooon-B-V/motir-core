@@ -370,6 +370,18 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `tests/mcp/get-approved-shape-verdict.test.ts` asserts the refusal off the
   // constant.
   get_approved_shape_verdict: 'ai:view_plan',
+  // The RUN-FOUND REPORT (MOTIR-6286) — the dispatched runner's report that its
+  // card is unbuildable. `work_item:edit`, and ⚠️ the grant is NOT widened:
+  // `CLI_TOKEN_GRANT` already carries this key, and the runner — the only caller
+  // — holds exactly that grant (`tests/mcp/report-unbuildable-target.test.ts`
+  // asserts the reach off the constant, and drives the real `/api/mcp` with a
+  // token minted from it). It is the key `POST /api/v1/dispatch-runs/{id}/events`
+  // asserts for the same kind of write: a run recording what happened on its
+  // leg. It is deliberately NOT `ai:view_plan`, although the service reads a
+  // verdict beneath it: the tool returns an ACKNOWLEDGEMENT only — never the
+  // verdict, the plan or a bug key — so what that gate protects never reaches
+  // the caller (`docs/decisions/run-found-trigger-dispatched-path.md`, *Its key*).
+  report_unbuildable_target: 'work_item:edit',
 
   // ── removal — the RECOVERABLE and the IRREVERSIBLE, now two keys ─────────
   // ⚠️ CORRECTED (MOTIR-3629). This block used to read: "`archiveWorkItem` /

@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **71 tools**.
+`initialize` handshake and registers **72 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -2873,6 +2873,44 @@ A PURE READ, safe to repeat: it files nothing, transitions nothing and creates
 nothing — what to do with the verdict is the caller's. Requires **`ai:view_plan`**,
 which is deliberately NOT in `CLI_TOKEN_GRANT`: a dispatched agent is not this
 tool's caller (`docs/decisions/run-findings-protocol.md` Q3).
+
+#### `report_unbuildable_target`
+
+A dispatched runner's report that the card it stopped on **cannot be built as
+written** (Story MOTIR-5544 · MOTIR-6286). It is called by a dispatched runner,
+once, right after it comments on the card in its card-is-wrong steps — the
+server does the rest (`docs/decisions/run-found-trigger-dispatched-path.md`).
+
+| Input        | Type   | Required | Notes                                                                                            |
+| ------------ | ------ | -------- | ------------------------------------------------------------------------------------------------ |
+| `projectKey` | string | yes      | The card's project key, resolved in the caller's workspace. Case-insensitive.                    |
+| `targetKey`  | string | yes      | The card the runner stopped on (`ACME-7`). Case-insensitive.                                     |
+| `reason`     | string | yes      | What is wrong with the CARD — the same text as the runner's comment. 1–4000 characters, trimmed. |
+
+**Output** — `structuredContent` is an acknowledgement and nothing else:
+
+```json
+{ "acknowledged": true, "recordedOnRun": true }
+```
+
+`recordedOnRun` is `true` when the card had an open leg on a running dispatch
+run, and `false` otherwise (a call from outside a dispatch records nothing). The
+answer is the same whatever the server concluded: it **returns nothing to act
+on** — never a verdict, a plan or a bug key.
+
+It spends nothing, and it is **safe to repeat — one record per leg**: a repeated
+report on the same leg returns the same acknowledgement and records nothing more.
+
+**Refusals**, each with its code:
+
+- a `reason` that is empty or over 4000 characters once trimmed →
+  `RUN_FOUND_REPORT_REASON_INVALID`;
+- an unknown key, or a key in another workspace → the same `WORK_ITEM_NOT_FOUND`
+  every work-item tool returns (404-not-403);
+- a caller who may read but not edit the card → `PERMISSION_DENIED`.
+
+Requires **`work_item:edit`**, which `CLI_TOKEN_GRANT` already carries — a token
+from `motir login` reaches it without widening the grant.
 
 #### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason`
 

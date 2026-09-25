@@ -1730,6 +1730,31 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  report_unbuildable_target: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value. Case-insensitive.',
+      },
+      targetKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The card you stopped on — the one you were dispatched to build (e.g. "ACME-7"). Case-insensitive.',
+      },
+      reason: {
+        type: 'string',
+        description:
+          'Why the card cannot be built — the SAME text as the comment you left on it (1–4000 characters once trimmed). Describe what is wrong with the CARD.',
+      },
+    },
+    required: ['projectKey', 'targetKey', 'reason'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   search_lessons: {
     type: 'object',
     properties: {

@@ -88,6 +88,7 @@ import {
 } from '@/lib/planChange/errors';
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
+import { RunFoundReportReasonInvalidError } from '@/lib/dispatchRuns/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
@@ -520,7 +521,13 @@ export function toToolError(err: unknown): CallToolResult {
     // a verdict read that fails opaquely is one an agent retries or guesses past.
     err instanceof ApprovedShapeChildKeyNotAChildError ||
     err instanceof ApprovedShapeVerdictTooManyIdsError ||
-    err instanceof InvalidPlanHistoryCursorError
+    err instanceof InvalidPlanHistoryCursorError ||
+    // RUN_FOUND_REPORT_REASON_INVALID (MOTIR-6286) — `report_unbuildable_target`'s
+    // `reason` empty or over 4000 characters once trimmed. The runner's own
+    // input, fixable in one hop (send the same text as the card comment); the
+    // bound is the SERVICE's, so it must reach the runner as this code rather
+    // than as a JSON-RPC internal error.
+    err instanceof RunFoundReportReasonInvalidError
   ) {
     return toolError(err.code, err.message);
   }

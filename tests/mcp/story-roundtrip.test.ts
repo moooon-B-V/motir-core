@@ -300,6 +300,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // non-member must read the key as not-found rather than learn A's plan
         // history or a verdict about it.
         get_approved_shape_verdict: { key: item1 },
+        // The run-found report (MOTIR-6286) — item-keyed within a project, so a
+        // non-member must read A's key as not-found rather than record on A's run.
+        report_unbuildable_target: { projectKey: 'PROD', targetKey: item1, reason: 'leak?' },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'leak?' },
         submit_plan_session: { projectKey: 'PROD' },
@@ -819,6 +822,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // MOTIR-6227 — the caller's OWN item. Gated on `ai:view_plan`, so the
         // read-only-token loop asserts it is REFUSED at the scope gate.
         get_approved_shape_verdict: { key: item1 },
+        // MOTIR-6286 — the caller's OWN item. Gated on `work_item:edit`, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate.
+        report_unbuildable_target: {
+          projectKey: 'PROD',
+          targetKey: item1,
+          reason: 'scoped report',
+        },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },
         submit_plan_session: { projectKey: 'PROD' },

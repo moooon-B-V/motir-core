@@ -226,6 +226,11 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // carries it for the six plan-authoring neighbours, so this adds no loss and no
   // widening (`tests/mcp/scopes.test.ts`'s forward-map check).
   get_approved_shape_verdict: 'work_items:write',
+  // The run-found report (MOTIR-6286). A write onto the caller's run leg, gated
+  // on `work_item:edit` (`TOOL_PERMISSIONS`); `work_items:write`'s forward map
+  // already carries that key, so this row adds no loss and no widening
+  // (`tests/mcp/scopes.test.ts`'s forward-map check).
+  report_unbuildable_target: 'work_items:write',
   open_plan_session: 'read',
   // The plan-AUTHORING door (MOTIR-2988), mapped into the RETIRED six-scope
   // vocabulary only because this table is total over the registry and a new tool
