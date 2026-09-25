@@ -206,6 +206,9 @@ describe('github.parseCiStatusEvent', () => {
       prNumbers: [7, 8],
       headBranch: 'feat/x',
       suiteId: '87626129473',
+      // The App slug names the APP, not the workflow, so the row is marked as a
+      // roll-up the supersession rule must not read as a shared check (MOTIR-6274).
+      suiteAggregate: true,
     });
   });
 

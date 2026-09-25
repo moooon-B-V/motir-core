@@ -278,6 +278,22 @@ interface ProjectRoadmapCanvasBaseProps {
    */
   onFollowDeclined?: (key: string) => void;
   /**
+   * THE READER HAD ALREADY NAVIGATED — BEFORE THIS MOUNT (MOTIR-6155).
+   *
+   * `navigated` is per-mount state, and that is right for a canvas that lives as
+   * long as its surface. The planning surface SWAPS the pane when a plan becomes
+   * proposed (`PlanChangeCanvas` → the plan page's component), so a reader who had
+   * drilled somewhere met a FRESH canvas with `navigated: false`, which granted the
+   * follow and moved them off the level they chose — the one thing MOTIR-6161 ruled
+   * must not happen. Seeding the flag carries that fact across the swap, so the new
+   * canvas declines exactly as the old one would have and the bar offers the trip.
+   *
+   * It seeds MOUNT state only: the reader's own navigation still sets the flag, and
+   * a later change of this prop does not clear it. A surface that never swaps its
+   * canvas has no reason to pass it.
+   */
+  readerHasNavigated?: boolean;
+  /**
    * ARRIVE ALREADY DRILLED (MOTIR-2070). The breadcrumb trail the canvas OPENS on,
    * root-ancestor first: the LAST crumb is the level it loads, and the whole array
    * becomes the breadcrumb. `[]` (the default) is the shipped behaviour — open at
@@ -310,7 +326,8 @@ interface ProjectRoadmapCanvasBaseProps {
    * level LOAD resolves. The consumer supplied that trail; telling it what it
    * just said is a write loop waiting to happen.
    *
-   * Absent by default — the four other consumers are untouched.
+   * Absent by default. The two plan canvases forward it (MOTIR-6155), and of their
+   * hosts only the planning surface supplies it; the rest leave it `undefined`.
    */
   onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
   /**
@@ -473,6 +490,7 @@ export function ProjectRoadmapCanvas({
   isTargetCrumb,
   followTo = null,
   onFollowDeclined,
+  readerHasNavigated = false,
   initialTrail,
   onLevelChange,
   controlledTrail,
@@ -641,7 +659,12 @@ export function ProjectRoadmapCanvas({
   // (`applyDrill` and `navigate`, which the crumbs and `goBack` funnel through)
   // rather than inferred from the level, because an auto-descend moves the level
   // too and it is not the reader.
-  const [navigated, setNavigated] = useState(false);
+  // ⚠️ SEEDED, not merely initialised false (MOTIR-6155). A surface that swaps its
+  // canvas mid-session — the planning surface, when a plan becomes proposed — hands
+  // the fact forward through `readerHasNavigated`, so a reader who had drilled is
+  // not moved by the fresh mount's first `followTo`. Mount-only by construction:
+  // `useState`'s argument is read once, which is exactly the semantics wanted.
+  const [navigated, setNavigated] = useState(readerHasNavigated);
   // The request last SEEN. It is held for a DECLINED key as well, which is what
   // makes "honoured at most once" true of a decline too — a re-render cannot
   // retry a request the reader already outran. `everGranted` is the separate
@@ -1572,7 +1595,7 @@ export function ProjectRoadmapCanvas({
           bottom-left, just RIGHT of the engine's zoom + fit cluster (bottom-4 left-4,
           ~7rem wide), so it reads as part of the viewport-navigation controls. */}
       {locatable && (
-        <div className="absolute bottom-4 left-[8.25rem] z-10 flex items-center gap-2">
+        <div className="absolute bottom-[calc(--spacing(4)+var(--canvas-foot-inset,0px))] left-[8.25rem] z-10 flex items-center gap-2">
           <button
             type="button"
             data-testid="locate-button"
@@ -1612,7 +1635,19 @@ export function ProjectRoadmapCanvas({
           // shell's clearance band (today: the roadmap page); it defaults to `0px`,
           // so every other mount — the item page's Children panel, the two plan
           // canvases — is exactly where it is now.
-          className="absolute right-3 bottom-[calc(1rem+var(--canvas-fold-inset,0px))] z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          //
+          // ⚠️ TWO INSETS, AND THEY ARE NOT THE SAME SHAPE (MOTIR-6186). This
+          // control adds BOTH; the left-anchored overlays add only the second.
+          //   • `--canvas-fold-inset` — a bottom-RIGHT obstruction (the orb). It
+          //     reaches one corner, which is why the left overlays ignore it and
+          //     `ProjectRoadmapCanvas.test.tsx` asserts they do.
+          //   • `--canvas-foot-inset` — an obstruction spanning the canvas's FULL
+          //     WIDTH: the planning surface's confirm bar, which since MOTIR-6186
+          //     floats over this box's bottom edge rather than sitting below it.
+          //     A full-width bar reaches every bottom-anchored overlay, so all
+          //     four add it.
+          // Both default to `0px`, so a mount that declares neither is untouched.
+          className="absolute right-3 bottom-[calc(1rem+var(--canvas-fold-inset,0px)+var(--canvas-foot-inset,0px))] z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
         >
           <RotateCcw className="size-3.5" aria-hidden="true" />
           {t('resetLayout')}
@@ -1684,7 +1719,7 @@ export function ProjectRoadmapCanvas({
         <div
           data-testid="edge-legend"
           data-collapsed={legendCollapsed || undefined}
-          className="absolute bottom-[4.25rem] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
+          className="absolute bottom-[calc(4.25rem+var(--canvas-foot-inset,0px))] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
         >
           {/* COLLAPSE (MOTIR-3838). The chevron rides the panel's OWN heading row
               rather than being a bare pill beside it: the heading is the one thing

@@ -6706,8 +6706,6 @@
       "conventionRefine": "已打开，用于完善 {repo} 的编码规范。",
       "roadmap": "已从路线图打开。"
     },
-    "footerRestingTitle": "路线图 —— 已保存的版本",
-    "footerRestingBody": "暂无提议。这段对话没有改动任何内容。",
     "searchLabel": "搜索本项目",
     "reading": {
       "eyebrow": "开始规划前",
@@ -8433,6 +8431,7 @@
         "conflict": "有拉取请求与其目标分支冲突，因此该问题已撤回。",
         "set_changed": "Pull Request 集合发生变化，因此该问题已撤回。",
         "pulled_back": "工作已撤回评审，因此该问题已撤回。",
+        "ci_failed": "这些提交的检查未通过，因此该问题已撤回。",
         "plan_stale": "此计划要改动的工作已经完成，计划因此过期，该问题已撤回。",
         "plan_discarded": "计划中的所有建议都已撤回，计划随之结束，该问题也一并撤回。",
         "unknown": "该问题已撤回。原因未被记录。"

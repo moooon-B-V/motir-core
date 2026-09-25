@@ -435,14 +435,48 @@ describe('MOTIR-3833 — the shared canvas’s opt-in defaults', () => {
   // them — it is MOTIR-2070's shipped arrival seed, and `PlanChangeCanvas` already
   // forwards it, which is exactly why the list is the story's additions rather than
   // "every prop with a trail in its name".
-  const optIns = ['onLevelChange', 'controlledTrail', 'arriveAtReadableScale'];
+  //
+  // Two of them CHANGE what the canvas does, and no other consumer may pass them.
+  // The third, `onLevelChange`, is a REPORT: it fires after the reader's own move
+  // and changes nothing the canvas draws. MOTIR-6155 needs it on both plan canvases
+  // (the planning surface swaps one for the other and has to carry "the reader
+  // moved" across the swap), so they FORWARD it — optional, no default — and the
+  // promise it keeps instead is that exactly ONE host supplies it.
+  const behaviourOptIns = ['controlledTrail', 'arriveAtReadableScale'];
 
   it('the three other consumers pass NONE of the level/arrival props', () => {
     for (const file of consumers) {
       const src = readFileSync(join(process.cwd(), file), 'utf8');
-      for (const prop of optIns) {
+      for (const prop of behaviourOptIns) {
         expect(src, `${file} must not pass ${prop}`).not.toContain(prop);
       }
+    }
+    expect(
+      readFileSync(join(process.cwd(), 'components/onboarding/OnboardingCanvas.tsx'), 'utf8'),
+    ).not.toContain('onLevelChange');
+  });
+
+  it('the plan canvases only FORWARD the level report, and one host supplies it (MOTIR-6155)', () => {
+    for (const file of [
+      'components/planning/PlanChangeCanvas.tsx',
+      'components/planning/PlanReviewCanvas.tsx',
+    ]) {
+      const src = readFileSync(join(process.cwd(), file), 'utf8');
+      // Optional, destructured with NO default, handed straight through.
+      expect(src).toMatch(/onLevelChange\?: \(trail: readonly CanvasCrumb\[\]\) => void;/);
+      expect(src).toMatch(/^\s+onLevelChange,$/m);
+      expect(src.match(/onLevelChange=\{[^}]*\}/g)).toEqual(['onLevelChange={onLevelChange}']);
+    }
+    // The plan page and the generation flow mount the same canvases and supply
+    // nothing, so for them the prop is `undefined` — today's behaviour.
+    for (const file of [
+      'components/planning/PlanDetail.tsx',
+      'components/planning/GenerationFlow.tsx',
+    ]) {
+      const src = readFileSync(join(process.cwd(), file), 'utf8');
+      expect(src, `${file} must not supply a level report`).not.toMatch(
+        /onLevelChange|onCanvasLevelChange/,
+      );
     }
   });
 

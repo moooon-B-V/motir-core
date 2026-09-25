@@ -163,6 +163,8 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'conflict'
   | 'set_changed'
   | 'pulled_back'
+  /** CI reported a terminal FAILURE at the commits the gate asked about (MOTIR-6271). */
+  | 'ci_failed'
   | 'unknown'
   /** The plan went `stale` (ADR §11.7). */
   | 'plan_stale'
