@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mintJobToken, verifyJobToken } from '@/lib/ai/jobToken';
 import { POST as refreshPOST } from '@/app/api/internal/ai/job-token/refresh/route';
+import { pinSharedRateLimitStoreDeadline } from '../../helpers/rateLimitStore';
 
 // MOTIR-3288 — the renewal endpoint, through the REAL route handler.
 //
@@ -29,6 +30,13 @@ function authed(token: string): Request {
 
 beforeEach(() => {
   process.env['CORE_CALLBACK_SECRET'] = SERVICE_SECRET;
+  // Every request here passes the `ai:internal` limiter, which writes a counter
+  // row through the shared Postgres store under a 250 ms production deadline.
+  // On a loaded runner the deadline expires, the request fails OPEN and is
+  // served — and the abandoned increment is still `idle in transaction` when
+  // the test ends, which the suite-wide in-flight check refuses (MOTIR-6278).
+  // A test-time deadline makes the request wait for its own write.
+  pinSharedRateLimitStoreDeadline();
 });
 afterEach(() => {
   vi.unstubAllEnvs();
