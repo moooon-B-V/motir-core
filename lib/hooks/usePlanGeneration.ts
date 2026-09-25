@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { drainSseFrames } from '@/lib/ai/sseFrames';
-import { fetchPlanReview } from '@/lib/planning/planReviewClient';
+import { useGeneratingPlanPoll } from '@/lib/hooks/useGeneratingPlanPoll';
 import {
   OUT_OF_CREDITS_CODE,
   PlanGenerateError,
   startPlanGeneration,
 } from '@/lib/planning/planGenerateClient';
-import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 
 // The client driver for the 7.4 generation ENTRY (Subtask 7.4.9 / MOTIR-1396).
 // It owns the I/O the entry can't: POST `/api/ai/plan/generate` → `{ jobId,
@@ -29,9 +29,10 @@ import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 // review surface; everything else renders an in-place terminal state (Panel D).
 //
 // Mirrors `useDiscoveryChat`'s fetch-ReadableStream + `drainSseFrames` shape (the
-// established motir-core SSE-consumer pattern) and `PlanDetail`'s poll cadence.
-
-const POLL_MS = 2500;
+// established motir-core SSE-consumer pattern). The reveal poll is THE shared
+// generating-plan poll (`useGeneratingPlanPoll`, MOTIR-6295) — the plan page's
+// poll, lifted — watching the opened plan for exactly as long as the phase is
+// `generating`.
 
 export type GenerationPhase =
   | 'idle'
@@ -64,7 +65,6 @@ export function usePlanGeneration(): UsePlanGeneration {
 
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Guards the single terminal transition: whichever channel resolves first wins;
   // the other's late frame/poll is ignored so we never overwrite a settled phase.
   const settledRef = useRef(false);
@@ -72,10 +72,6 @@ export function usePlanGeneration(): UsePlanGeneration {
   const teardown = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
   }, []);
 
   const settle = useCallback(
@@ -87,6 +83,21 @@ export function usePlanGeneration(): UsePlanGeneration {
     },
     [teardown],
   );
+
+  // Channel 1 — the live reveal poll (resolves SUCCESS). It runs for exactly as
+  // long as the phase is `generating` with the opened plan's id, reading once
+  // immediately so the first level shows fast. A late snapshot after the other
+  // channel settled is ignored, so it can never overwrite a settled phase.
+  const { refresh: nudgePoll } = useGeneratingPlanPoll(phase === 'generating' ? planId : null, {
+    onSnapshot: (review: PlanReviewDto) => {
+      if (!mountedRef.current || settledRef.current) return;
+      setItems(review.items);
+      setVersion((v) => v + 1);
+      if (review.status !== 'generating') {
+        settle(review.items.length > 0 ? 'planned' : 'empty');
+      }
+    },
+  });
 
   const start = useCallback(() => {
     if (abortRef.current) return; // already running
@@ -111,30 +122,16 @@ export function usePlanGeneration(): UsePlanGeneration {
         return;
       }
       if (!mountedRef.current) return;
+      // Entering `generating` with the plan id starts channel 1.
       setPlanId(ids.planId);
       setPhase('generating');
 
-      // Channel 1 — the live reveal poll (resolves SUCCESS).
-      const poll = async () => {
-        try {
-          const review = await fetchPlanReview(ids.planId, controller.signal);
-          if (!mountedRef.current || settledRef.current) return;
-          setItems(review.items);
-          setVersion((v) => v + 1);
-          if (review.status !== 'generating') {
-            settle(review.items.length > 0 ? 'planned' : 'empty');
-          }
-        } catch {
-          /* best-effort — a transient poll failure just retries next tick */
-        }
-      };
-      pollRef.current = setInterval(() => void poll(), POLL_MS);
-      void poll(); // kick off immediately so the first level shows fast
-
       // Channel 2 — the terminal-outcome stream (resolves FAILURE).
-      void consumeStream(ids.jobId, controller.signal, settle, () => void poll());
+      // Its success nudge reads out of cadence; one that lands before the poll has
+      // started is covered by the poll's own immediate first read.
+      void consumeStream(ids.jobId, controller.signal, settle, nudgePoll);
     })();
-  }, [settle]);
+  }, [settle, nudgePoll]);
 
   const stop = useCallback(() => {
     settledRef.current = true;

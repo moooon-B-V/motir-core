@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { usePlanGeneration } from '@/lib/hooks/usePlanGeneration';
 import { OUT_OF_CREDITS_CODE } from '@/lib/planning/planGenerateClient';
+import { planReview, planReviewItem } from '../helpers/planReview';
 
 // The 7.4 generation driver (Subtask 7.4.9 / MOTIR-1396). It POSTs the job, then
 // runs the live-reveal poll (success → planned/empty) + the SSE stream (failure →
@@ -102,5 +103,43 @@ describe('usePlanGeneration (MOTIR-1396)', () => {
     await waitFor(() => expect(result.current.phase).toBe('generating'));
     expect(result.current.planId).toBe('plan_1');
     unmount(); // aborts the poll/stream
+  });
+
+  // MOTIR-6301 (the live-drawing gate's coverage top-up). The reveal poll became
+  // THE shared generating-plan poll (MOTIR-6295), and its SUCCESS arm — the
+  // snapshot that says the plan left `generating` — was reached by no spec: the
+  // cases above settle through the submit and the stream. Driven here through the
+  // real poll over a stubbed `/api/plans/:id`.
+  function revealing(status: 'planned', items: ReturnType<typeof planReviewItem>[]) {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url === '/api/ai/plan/generate') {
+        return Promise.resolve(jsonResponse(200, { jobId: 'job_1', planId: 'plan_1' }));
+      }
+      if (url.includes('/stream')) return Promise.resolve(emptyStream());
+      return Promise.resolve(jsonResponse(200, planReview(items, { id: 'plan_1', status })));
+    });
+  }
+
+  it('settles PLANNED, with the revealed items, when the poll reads the plan proposed', async () => {
+    const item = planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', title: 'Invoices' });
+    revealing('planned', [item]);
+    const { result, unmount } = renderHook(() => usePlanGeneration());
+    act(() => result.current.start());
+
+    await waitFor(() => expect(result.current.phase).toBe('planned'));
+    expect(result.current.items.map((i) => i.planItemId)).toEqual(['pi_1']);
+    expect(result.current.version).toBeGreaterThan(0);
+    unmount();
+  });
+
+  it('settles EMPTY when the plan left generating holding no proposals', async () => {
+    revealing('planned', []);
+    const { result, unmount } = renderHook(() => usePlanGeneration());
+    act(() => result.current.start());
+
+    await waitFor(() => expect(result.current.phase).toBe('empty'));
+    expect(result.current.items).toEqual([]);
+    unmount();
   });
 });

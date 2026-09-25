@@ -8,7 +8,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
-import { isOrgAdminRole } from '@/lib/organizations/roles';
+import { orgCan } from '@/lib/organizations/capabilities';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { onboardingSubstrateService } from '@/lib/services/onboardingSubstrateService';
@@ -446,7 +446,10 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                         user={{ name: session.user.name, email: session.user.email }}
                         organization={
                           activeOrg
-                            ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
+                            ? {
+                                name: activeOrg.name,
+                                isOrgAdmin: orgCan(activeOrg.role, 'manageOrgSettings'),
+                              }
                             : null
                         }
                         workspace={
@@ -551,7 +554,10 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       user={{ name: session.user.name, email: session.user.email }}
                       organization={
                         activeOrg
-                          ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
+                          ? {
+                              name: activeOrg.name,
+                              isOrgAdmin: orgCan(activeOrg.role, 'manageOrgSettings'),
+                            }
                           : null
                       }
                       workspace={activeWorkspaceModel ? { name: activeWorkspaceModel.name } : null}
@@ -572,7 +578,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     settingsPermissions={settingsPermissions}
                     aiPlanningConfigured={aiPlanningConfigured}
                     publicProjectsAvailable={publicProjectsAvailable}
-                    isOrgAdmin={activeOrg ? isOrgAdminRole(activeOrg.role) : false}
+                    isOrgAdmin={activeOrg ? orgCan(activeOrg.role, 'manageOrgSettings') : false}
                   />
 
                   {/* The floating "M" entrance (MOTIR-1299) — the second of the two

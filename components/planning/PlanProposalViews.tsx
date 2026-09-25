@@ -1,8 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { List, Workflow } from 'lucide-react';
+import { Info, List, Workflow } from 'lucide-react';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import { Segmented } from '@/components/ui/Segmented';
@@ -10,6 +10,7 @@ import type { PlanViewDto } from '@/lib/planning/planView';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import { addedProposalIds, newlyAddedCount } from '@/lib/planning/livePane';
 
 // The plan page's List | Canvas pane, as ONE component two hosts mount
 // (Subtask MOTIR-6185 · Story MOTIR-6155).
@@ -94,6 +95,29 @@ export interface PlanProposalViewsProps {
   onFollowDeclined?: (key: string) => void;
   readerHasNavigated?: boolean;
   onCanvasLevelChange?: (trail: readonly CanvasCrumb[]) => void;
+  /**
+   * The plan is being WRITTEN, and this pane is drawing it as it is (MOTIR-6300;
+   * design Part XXIII §23.1). The pane is the same one a proposed plan gets — that
+   * is the whole design, so the hand-over into the proposed plan swaps nothing —
+   * and `live` adds only what a plan being written owes:
+   *   · the LIVE MARKER at the header's right end (*Being written*), a polite
+   *     status, so a reader looking for Approve is told why it is not there;
+   *   · MOTION on the canvas, a changeKey per proposal, and the arrivals count;
+   *   · the present-tense empty List, and the rows' entrance;
+   *   · ONE announcement per batch of added cards (§23.15).
+   * OFF by default. The plan page never passes it, and is unchanged by it.
+   */
+  live?: boolean;
+  /** Three reads in a row have failed (§23.10): the marker says so. The last
+   *  snapshot stays drawn — nothing else changes. Read only while `live`. */
+  liveFailing?: boolean;
+  /**
+   * The plan was DISCARDED before it finished (§23.12): the plan page's own
+   * sentence (`planReview.discardedOutcome`) in the band slot, and the List's
+   * empty statement without its *"Declining ends it"* body. `band`, if given,
+   * wins the slot.
+   */
+  discarded?: boolean;
 }
 
 export function PlanProposalViews({
@@ -111,9 +135,13 @@ export function PlanProposalViews({
   onFollowDeclined,
   readerHasNavigated = false,
   onCanvasLevelChange,
+  live = false,
+  liveFailing = false,
+  discarded = false,
 }: PlanProposalViewsProps) {
   const t = useTranslations('planReview');
   const showingList = view === 'list';
+  const announcement = useBatchAnnouncement(items, live);
   const canvas = (
     <PlanReviewCanvas
       items={items}
@@ -126,8 +154,20 @@ export function PlanProposalViews({
       onFollowDeclined={onFollowDeclined}
       readerHasNavigated={readerHasNavigated}
       onLevelChange={onCanvasLevelChange}
+      live={live}
     />
   );
+  // THE DISCARDED BAND (§23.12) — the band idiom (`--el-surface-soft` +
+  // `--el-border` + `--el-text-strong`), in the plan page's own words.
+  const discardedBand = discarded ? (
+    <p
+      data-testid="plan-live-discarded"
+      className="flex shrink-0 items-start gap-2 border-b border-(--el-border) bg-(--el-surface-soft) px-4 py-2.5 text-xs leading-relaxed text-(--el-text-strong)"
+    >
+      <Info className="mt-px size-3.5 flex-none text-(--el-text-secondary)" aria-hidden="true" />
+      <span>{t('discardedOutcome')}</span>
+    </p>
+  ) : null;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col" data-testid="plan-proposal-views">
@@ -155,13 +195,49 @@ export function PlanProposalViews({
             },
           ]}
         />
+        {/* THE LIVE MARKER (§23.1) — the slot Part IX released. A 6px dot and a
+            word, STATIC (a permanent loop here is the attention sink the running
+            edge warns about). `role="status"`, so *Being written → Reconnecting*
+            is heard once. It leaves at the hand-over. */}
+        {live ? (
+          <span
+            data-testid="plan-live-state"
+            role="status"
+            aria-live="polite"
+            className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-(--el-text-secondary)"
+          >
+            <span
+              aria-hidden="true"
+              className={`size-1.5 shrink-0 rounded-(--radius-badge) ${
+                liveFailing ? 'bg-(--el-warning)' : 'bg-(--el-status-in-progress)'
+              }`}
+            />
+            {t(liveFailing ? 'liveReconnecting' : 'liveWriting')}
+          </span>
+        ) : null}
+        {/* ONE announcement per batch of added cards (§23.15) — never per card,
+            never for a read that added nothing, never for an exit or a deepen. */}
+        {live ? (
+          <span
+            className="sr-only"
+            role="status"
+            aria-live="polite"
+            data-testid="plan-live-announce"
+          >
+            {announcement ? (
+              <span key={announcement.seq}>{t('liveAnnounce', { count: announcement.count })}</span>
+            ) : null}
+          </span>
+        ) : null}
       </div>
-      {band}
+      {band ?? discardedBand}
       <div className="relative min-h-0 flex-1">
         {/* A SECOND BODY in the same pane, never a re-drawing of the first. The
             canvas answers where a proposal LANDS; the list answers what exactly
             is being approved, which is a question about a SET. */}
-        {showingList ? <PlanProposalList items={items} outcome={outcome} /> : null}
+        {showingList ? (
+          <PlanProposalList items={items} outcome={outcome} live={live} discarded={discarded} />
+        ) : null}
         {preserveCanvasLevel ? (
           // KEPT MOUNTED under List (21.7). The drilled level lives in the
           // canvas's own state, so the only way it can survive a round trip is
@@ -188,4 +264,31 @@ export function PlanProposalViews({
       </div>
     </div>
   );
+}
+
+/**
+ * The announcement of a BATCH (§23.15): how many `add`s the last snapshot brought,
+ * with a sequence number so two batches of the same size are both heard. The
+ * first snapshot the pane draws is the baseline and announces nothing — nothing
+ * ARRIVED while the reader was here. Inert unless `live`.
+ */
+function useBatchAnnouncement(
+  items: readonly PlanReviewItemDto[],
+  live: boolean,
+): { count: number; seq: number } | null {
+  const [state, setState] = useState<{
+    items: readonly PlanReviewItemDto[];
+    ids: ReadonlySet<string>;
+    said: { count: number; seq: number } | null;
+  }>(() => ({ items, ids: addedProposalIds(items), said: null }));
+  if (items !== state.items) {
+    const ids = addedProposalIds(items);
+    const count = live ? newlyAddedCount(state.ids, ids) : 0;
+    setState({
+      items,
+      ids,
+      said: count > 0 ? { count, seq: (state.said?.seq ?? 0) + 1 } : state.said,
+    });
+  }
+  return live ? state.said : null;
 }

@@ -23,7 +23,7 @@ export function toErasureWorkspaceDTO(workspace: Workspace): ErasureWorkspaceDTO
 
 /**
  * The blocking organization, with the member COUNT the pane shows beside its
- * name — *"you are the only owner of an organization N other people belong
+ * name — *"you own an organization N other people belong
  * to"*. The count is supplied by the caller because it is a separate bound read,
  * not a column on the row.
  */

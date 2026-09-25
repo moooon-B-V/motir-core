@@ -7,6 +7,7 @@ import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { billingService } from '@/lib/services/billingService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
+import { orgCan } from '@/lib/organizations/capabilities';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
@@ -40,8 +41,7 @@ export default async function OrganizationMembersPage() {
   }
 
   const org = current.organization;
-  const isAdmin =
-    current.role === ORGANIZATION_ROLE.owner || current.role === ORGANIZATION_ROLE.admin;
+  const isAdmin = orgCan(current.role, 'manageOrgMembers');
 
   if (!isAdmin) {
     return (
@@ -75,13 +75,10 @@ export default async function OrganizationMembersPage() {
     billingService.getSeatSummary({ organizationId: org.id, actorUserId: session.user.id }),
   ]);
 
-  // Panel-6 (design/org-admin members-billing): a scaled-org ADMIN (manages
-  // membership, does NOT own the seat plan) gets the billing-owned-by-an-owner
-  // subtitle; an owner / free org keeps the standard one.
-  const subtitle =
-    seat && !seat.canManageBilling
-      ? t('seat.subtitleAdmin', { org: org.name })
-      : t('members.subtitle', { org: org.name });
+  // One subtitle for every viewer: an Admin manages billing too (MOTIR-6305), so
+  // members-billing panel 6's "managed by an owner" subtitle is retired (design
+  // MOTIR-6303 panel 5).
+  const subtitle = t('members.subtitle', { org: org.name });
 
   return (
     <div className="mx-auto flex max-w-[48rem] flex-col gap-6">
@@ -94,6 +91,7 @@ export default async function OrganizationMembersPage() {
         orgId={org.id}
         orgName={org.name}
         currentUserId={session.user.id}
+        viewerIsOwner={current.role === ORGANIZATION_ROLE.owner}
         initialPage={initialPage}
         seat={seat}
       />

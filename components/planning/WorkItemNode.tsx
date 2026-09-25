@@ -14,6 +14,7 @@ import {
   Layers,
   MapPin,
 } from 'lucide-react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
@@ -99,7 +100,14 @@ export interface WorkItemNodeData {
 // status was structurally unable to. The resolver is shared with `PlanItemNode`
 // so the canvas has ONE status vocabulary rather than three.
 
-const KIND_TINT: Record<IssueType, string> = {
+/**
+ * The kind TILE's fill, by kind — declared ONCE, here (MOTIR-6296, absorbing bug
+ * MOTIR-6196). `PlanItemNode` used to declare an identical copy, which is how a
+ * proposal and a committed card became two drawings; both now draw their tile
+ * through {@link WorkItemCardShell}, and `plan-item-node-shell.test.tsx` fails a
+ * second declaration of this map anywhere under `components/`.
+ */
+export const KIND_TINT: Record<IssueType, string> = {
   epic: 'bg-(--el-tint-rose)',
   story: 'bg-(--el-tint-mint)',
   task: 'bg-(--el-tint-sky)',
@@ -243,12 +251,7 @@ export function WorkItemNode({
             ? 'not-in-sprint'
             : 'normal';
   return (
-    <div
-      // Fixed height (= the layout's NODE_H) so a long, two-line title can never
-      // grow the card into the row below it — the deterministic layout spaces rows
-      // by NODE_H, so the card must honour it exactly. Compact: tight padding + a
-      // small status chip, no wasted space (MOTIR-1194 review).
-      style={{ width: NODE_W, height: NODE_H }}
+    <WorkItemCardShell
       // The current-position node carries `aria-current="step"` (the design's
       // "You are here" semantics — a step in the journey), so AT it reads as the
       // active waypoint, not just a visual ring.
@@ -272,7 +275,7 @@ export function WorkItemNode({
       // "not committed") and the dotted edge is the only border, in every style. The
       // louder `crossBlocked` / `here` chromes still win (they keep their solid
       // borders + shadows).
-      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${
+      frameClassName={
         crossBlocked
           ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-card)'
           : here
@@ -288,140 +291,227 @@ export function WorkItemNode({
                 : notInSprintChrome
                   ? 'border-dotted border-(--el-border-strong) bg-(--el-muted)'
                   : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
-      }`}
-    >
-      {/* TOP ROW — the compact STATUS chip (top-left) — REPLACED by the accent
-          "You are here" pill on the current-position node, the success "Ready" pill
-          on a ready-to-start node, or the neutral "Done" pill on a done node — and
-          the cross-link tag (or the has-children hint) pushed to the right. The
-          READY treatment is now the whole-card mint wash (MOTIR-1422), not a 3px bar. */}
-      <div className="flex shrink-0 items-center gap-2">
-        {here ? (
-          <HerePill />
-        ) : showReady ? (
-          <ReadyPill />
-        ) : showDone ? (
-          <DonePill />
-        ) : (
-          <WorkItemStatusPill
-            status={item.status}
-            label={item.statusLabel ?? null}
-            category={item.statusCategory ?? null}
-          />
-        )}
-        {/* The run DISPOSITION (MOTIR-3895), beside the work item's own status and
-            never instead of it: they are different facts. The status is what the
-            work item IS; the disposition is what THIS RUN did with it, and a run
-            that skipped a work item has not changed its status at all. */}
-        {runLeg ? (
-          <RunTonePill tone={runLeg.tone} compact>
-            {runLeg.label}
-          </RunTonePill>
-        ) : null}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,
-              NOT the red cross-blocked flag: this node is simply outside the
-              committed sprint, not a broken dependency. Suppressed when the card is
-              cross-blocked (its own flag already reads "not in sprint" in sprint
-              scope), so the card never carries two tags. */}
-          {showNotInSprintTag ? (
-            <span
-              data-testid="not-in-sprint-tag"
-              // A plain neutral chip (no border) — a bordered tag would read as an
-              // extra border on the card, and a border style would fight the active
-              // `data-style`. The card's muted fill + this tag carry the signal.
-              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
-            >
-              <CircleDashed className="size-3" aria-hidden="true" />
-              {t('node.notInSprint')}
-            </span>
-          ) : null}
-          {crossBlocked ? (
-            <CrossBlockedFlag sprint={crossBlockedSprint} />
-          ) : drillable ? (
-            <ChevronRight
-              className="size-4 shrink-0 text-(--el-text-muted)"
-              aria-hidden="true"
-              data-testid="drill-affordance"
+      }
+      // TOP ROW — the compact STATUS chip (top-left) — REPLACED by the accent
+      // "You are here" pill on the current-position node, the success "Ready" pill
+      // on a ready-to-start node, or the neutral "Done" pill on a done node — and
+      // the cross-link tag (or the has-children hint) pushed to the right. The
+      // READY treatment is now the whole-card mint wash (MOTIR-1422), not a 3px bar.
+      statusRow={
+        <>
+          {here ? (
+            <HerePill />
+          ) : showReady ? (
+            <ReadyPill />
+          ) : showDone ? (
+            <DonePill />
+          ) : (
+            <WorkItemStatusPill
+              status={item.status}
+              label={item.statusLabel ?? null}
+              category={item.statusCategory ?? null}
             />
+          )}
+          {/* The run DISPOSITION (MOTIR-3895), beside the work item's own status and
+              never instead of it: they are different facts. The status is what the
+              work item IS; the disposition is what THIS RUN did with it, and a run
+              that skipped a work item has not changed its status at all. */}
+          {runLeg ? (
+            <RunTonePill tone={runLeg.tone} compact>
+              {runLeg.label}
+            </RunTonePill>
           ) : null}
-        </div>
-      </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,
+                NOT the red cross-blocked flag: this node is simply outside the
+                committed sprint, not a broken dependency. Suppressed when the card is
+                cross-blocked (its own flag already reads "not in sprint" in sprint
+                scope), so the card never carries two tags. */}
+            {showNotInSprintTag ? (
+              <span
+                data-testid="not-in-sprint-tag"
+                // A plain neutral chip (no border) — a bordered tag would read as an
+                // extra border on the card, and a border style would fight the active
+                // `data-style`. The card's muted fill + this tag carry the signal.
+                className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
+              >
+                <CircleDashed className="size-3" aria-hidden="true" />
+                {t('node.notInSprint')}
+              </span>
+            ) : null}
+            {crossBlocked ? (
+              <CrossBlockedFlag sprint={crossBlockedSprint} />
+            ) : drillable ? (
+              <ChevronRight
+                className="size-4 shrink-0 text-(--el-text-muted)"
+                aria-hidden="true"
+                data-testid="drill-affordance"
+              />
+            ) : null}
+          </div>
+        </>
+      }
+      kind={item.kind}
+      identifier={item.identifier}
+      // The Manual chip rides the id line (right-aligned), NOT the crowded status
+      // row — a hairline `--el-border` lifts it off every node fill. Composed from
+      // the shipped WorkItemTypeChip; manual-only by design.
+      identifierTrailing={
+        isManual ? (
+          <WorkItemTypeChip
+            type="manual"
+            className="ml-auto shrink-0 gap-1 border-(--el-border) px-1.5 py-0 text-[10.5px]"
+          />
+        ) : null
+      }
+      title={item.title}
+      titleStruck={showDone}
+      // PROGRESS METER (Subtask 7.20.6 / MOTIR-1013) — a thin done/total bar on a
+      // container node: `--el-success` fill over the `--el-muted` track, with the
+      // count beside it. Leaves (no `progress`) and `0`-total containers omit it.
+      footer={
+        showMeter ? (
+          <div className="mt-2 flex shrink-0 items-center gap-2" data-testid="progress-meter">
+            <div
+              role="progressbar"
+              aria-label={t('subtreeProgress')}
+              aria-valuenow={progress.done}
+              aria-valuemin={0}
+              aria-valuemax={progress.total}
+              className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-(--radius-badge) bg-(--el-muted)"
+            >
+              <div
+                className="h-full rounded-(--radius-badge) bg-(--el-success)"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="shrink-0 text-xs font-medium text-(--el-text-secondary) tabular-nums">
+              {progress.done} / {progress.total}
+            </span>
+            {/* CI-verified count (Subtask 7.10.6 / MOTIR-894) — the "N of M verified"
+                roll-up beside the done/total meter; shown only once CI has verified
+                at least one descendant. */}
+            {progress.verified && progress.verified > 0 ? (
+              <span
+                className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-(--el-success) tabular-nums"
+                title={t('verifiedCount', { count: progress.verified })}
+              >
+                <Check className="size-3" aria-hidden="true" />
+                {progress.verified}
+              </span>
+            ) : null}
+          </div>
+        ) : item.assigneeName ? (
+          <span className="shrink-0 truncate pt-1.5 text-right text-xs text-(--el-text-secondary)">
+            {item.assigneeName}
+          </span>
+        ) : null
+      }
+    />
+  );
+}
+
+/**
+ * THE CARD SHELL (MOTIR-6296 · design Part XXIII §23.4) — the ONE drawing of a
+ * canvas card, shared by a committed work item (`WorkItemNode`) and a proposal
+ * (`PlanItemNode`). It owns everything the two must agree on: the fixed
+ * `NODE_W × NODE_H` footprint (the deterministic layout spaces rows by NODE_H, so
+ * a long title can never grow the card into the row below), the `--radius-card`
+ * radius, the 1px border weight, the `p-3.5` padding, the status row, the kind
+ * tile (through the one {@link KIND_TINT}), the identifier line and the title.
+ *
+ * A caller contributes only what its STATE means: `frameClassName` (border
+ * style + colour, fill, shadow, any ring), the status row's contents, a footer
+ * (the progress meter, the assignee, a proposal's bottom slot) and an `overlay`
+ * — absolutely-positioned decoration drawn over the card (a proposal's outcome
+ * spine, the `locked` hatch). That is the compose-don't-redraw seam
+ * `PlanningTargetNode` already uses, one level down: a proposal is a LAYER over
+ * this shell, never a second card.
+ *
+ * Everything else (`data-*`, `aria-*`) is spread onto the root, so each caller
+ * keeps its own state hooks.
+ */
+export function WorkItemCardShell({
+  frameClassName,
+  statusRow,
+  kind,
+  identifier,
+  identifierTrailing = null,
+  title,
+  titleStruck = false,
+  titleSingleLine = false,
+  footer = null,
+  overlay = null,
+  ...rootProps
+}: {
+  /** The state's border style + colour, fill, shadow (and any ring). The shell
+   *  adds the shared `border` weight, radius and padding itself. */
+  frameClassName: string;
+  /** The top row's CONTENTS — the shell draws the row. */
+  statusRow: ReactNode;
+  kind: IssueType;
+  identifier: ReactNode;
+  /** Right of the identifier on its line (the Manual chip). */
+  identifierTrailing?: ReactNode;
+  title: string;
+  /** The struck, secondary-ink title — a done card, a proposed removal. */
+  titleStruck?: boolean;
+  /** One clean ellipsis instead of the two-line clamp, for a card whose footer
+   *  spends the bottom slot (Part XVII §17.2); the full title then rides `title`. */
+  titleSingleLine?: boolean;
+  footer?: ReactNode;
+  /** Absolutely-positioned decoration over the card (spine, hatch). */
+  overlay?: ReactNode;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'style' | 'title' | 'children'>) {
+  return (
+    <div
+      {...rootProps}
+      // Fixed height (= the layout's NODE_H) so a long, two-line title can never
+      // grow the card into the row below it — the deterministic layout spaces rows
+      // by NODE_H, so the card must honour it exactly. Compact: tight padding + a
+      // small status chip, no wasted space (MOTIR-1194 review).
+      style={{ width: NODE_W, height: NODE_H }}
+      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${frameClassName}`}
+    >
+      <div className="flex shrink-0 items-center gap-2">{statusRow}</div>
 
       {/* BODY — the kind tile + identifier + title; the title gets the room. */}
       <div className="mt-1.5 flex min-h-0 flex-1 items-start gap-2 overflow-hidden">
         <span
-          className={`flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) ${KIND_TINT[item.kind]}`}
+          className={`flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) ${KIND_TINT[kind]}`}
           aria-hidden="true"
         >
-          <IssueTypeIcon type={item.kind} className="size-4" />
+          <IssueTypeIcon type={kind} className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-(--el-text-secondary)">{item.identifier}</span>
-            {/* The Manual chip rides the id line (right-aligned), NOT the crowded
-                status row — a hairline `--el-border` lifts it off every node fill.
-                Composed from the shipped WorkItemTypeChip; manual-only by design. */}
-            {isManual ? (
-              <WorkItemTypeChip
-                type="manual"
-                className="ml-auto shrink-0 gap-1 border-(--el-border) px-1.5 py-0 text-[10.5px]"
-              />
-            ) : null}
+            <span className="font-mono text-xs text-(--el-text-secondary)">{identifier}</span>
+            {identifierTrailing}
           </div>
           <span
             // Tagged so a decorator that WRAPS this node (the plan-change diff
             // frame's `remove` state) can strike the title without redrawing the
-            // card — the same struck-title language `showDone` uses below.
+            // card — the same struck-title language `titleStruck` uses below.
             data-node-title
-            className={`mt-0.5 line-clamp-2 text-sm leading-snug font-semibold ${
-              showDone ? 'text-(--el-text-secondary) line-through' : 'text-(--el-text)'
+            // MOTIR-5459 — `block` rides WITH `truncate`, never beside `line-clamp-2`:
+            // `truncate` needs a block box for its ellipsis, while `.block` is emitted
+            // after `.line-clamp-2` and would take `display` back from its
+            // `-webkit-box`, leaving the two-line clamp inert.
+            title={titleSingleLine ? title : undefined}
+            className={`mt-0.5 ${titleSingleLine ? 'block truncate' : 'line-clamp-2'} text-sm leading-snug font-semibold ${
+              // `--el-text-secondary`, never `--el-text-muted`, for the struck
+              // title (MOTIR-4260): a proposed removal paints `bg-(--el-muted)`,
+              // where the muted ink is 4.12:1 and secondary 6.18:1.
+              titleStruck ? 'text-(--el-text-secondary) line-through' : 'text-(--el-text)'
             }`}
           >
-            {item.title}
+            {title}
           </span>
         </div>
       </div>
 
-      {/* PROGRESS METER (Subtask 7.20.6 / MOTIR-1013) — a thin done/total bar on a
-          container node: `--el-success` fill over the `--el-muted` track, with the
-          count beside it. Leaves (no `progress`) and `0`-total containers omit it. */}
-      {showMeter ? (
-        <div className="mt-2 flex shrink-0 items-center gap-2" data-testid="progress-meter">
-          <div
-            role="progressbar"
-            aria-label={t('subtreeProgress')}
-            aria-valuenow={progress.done}
-            aria-valuemin={0}
-            aria-valuemax={progress.total}
-            className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-(--radius-badge) bg-(--el-muted)"
-          >
-            <div
-              className="h-full rounded-(--radius-badge) bg-(--el-success)"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <span className="shrink-0 text-xs font-medium text-(--el-text-secondary) tabular-nums">
-            {progress.done} / {progress.total}
-          </span>
-          {/* CI-verified count (Subtask 7.10.6 / MOTIR-894) — the "N of M verified"
-              roll-up beside the done/total meter; shown only once CI has verified
-              at least one descendant. */}
-          {progress.verified && progress.verified > 0 ? (
-            <span
-              className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-(--el-success) tabular-nums"
-              title={t('verifiedCount', { count: progress.verified })}
-            >
-              <Check className="size-3" aria-hidden="true" />
-              {progress.verified}
-            </span>
-          ) : null}
-        </div>
-      ) : item.assigneeName ? (
-        <span className="shrink-0 truncate pt-1.5 text-right text-xs text-(--el-text-secondary)">
-          {item.assigneeName}
-        </span>
-      ) : null}
+      {footer}
+      {overlay}
     </div>
   );
 }

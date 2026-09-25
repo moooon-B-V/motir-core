@@ -24,8 +24,21 @@ import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 // module path `plan-detail-view-switch.test.tsx` already uses, which is why the
 // lift kept both imports on their original module paths.
 vi.mock('@/components/planning/PlanReviewCanvas', () => ({
-  PlanReviewCanvas: ({ outcome, ariaLabel }: { outcome: string | null; ariaLabel: string }) => (
-    <div data-testid="plan-review-canvas" data-outcome={outcome ?? 'none'} aria-label={ariaLabel} />
+  PlanReviewCanvas: ({
+    outcome,
+    ariaLabel,
+    live,
+  }: {
+    outcome: string | null;
+    ariaLabel: string;
+    live?: boolean;
+  }) => (
+    <div
+      data-testid="plan-review-canvas"
+      data-outcome={outcome ?? 'none'}
+      data-live={String(live ?? false)}
+      aria-label={ariaLabel}
+    />
   ),
 }));
 
@@ -194,5 +207,25 @@ describe('PlanProposalViews', () => {
     expect(screen.getByTestId('plan-review-canvas').getAttribute('aria-label')).toBe(
       'The proposed plan',
     );
+  });
+});
+
+// MOTIR-6300 — `live` is OPT-IN, and the plan page never opts in: without it the
+// pane renders exactly what it did before the live pane existed.
+describe('PlanProposalViews — live is off by default (the plan page is unchanged)', () => {
+  it('renders no live marker, no announcement region and no discarded band, and a still canvas', () => {
+    mount();
+    expect(screen.queryByTestId('plan-live-state')).toBeNull();
+    expect(screen.queryByTestId('plan-live-announce')).toBeNull();
+    expect(screen.queryByTestId('plan-live-discarded')).toBeNull();
+    expect(screen.getByTestId('plan-review-canvas').getAttribute('data-live')).toBe('false');
+  });
+
+  it('live threads to the canvas and draws the marker; a host band wins the band slot', () => {
+    mount({ live: true, discarded: true, band: <p data-testid="host-band" /> });
+    expect(screen.getByTestId('plan-review-canvas').getAttribute('data-live')).toBe('true');
+    expect(screen.getByTestId('plan-live-state').textContent).toBe('Being written');
+    expect(screen.getByTestId('host-band')).toBeTruthy();
+    expect(screen.queryByTestId('plan-live-discarded')).toBeNull();
   });
 });

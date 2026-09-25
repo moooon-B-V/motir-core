@@ -200,7 +200,9 @@ export const projectRepository = {
    * EVERY project id in a workspace, ARCHIVED INCLUDED — the unfiltered
    * counterpart of `findByWorkspace` (MOTIR-2166).
    *
-   * Its caller is `workspacesService.deleteWorkspace`, which must enumerate the
+   * Its caller is the one workspace delete (`deleteWorkspaceCascade` in
+   * `workspacesService`, behind `removeWorkspaceAsOrgAdmin` and
+   * `deleteWorkspaceForErasure`), which must enumerate the
    * projects whose derived code graphs need offboarding BEFORE the cascade takes
    * them (`docs/decisions/code-graph-index-fleet.md` §14.3). An archived project's
    * graph still exists, so the archive filter would silently skip it and leave

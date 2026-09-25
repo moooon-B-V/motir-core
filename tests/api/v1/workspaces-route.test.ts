@@ -187,7 +187,7 @@ describe('GET /api/v1/workspaces', () => {
       if (index !== 0) return;
       // Drop the LAST workspace — under an offset pager this shifts the tail
       // left and silently skips a row.
-      await workspacesService.deleteWorkspace({
+      await workspacesService.removeWorkspaceAsOrgAdmin({
         workspaceId: created[created.length - 1] as string,
         actorUserId: caller.user.id,
       });

@@ -140,7 +140,7 @@ describe('the per-pair verdict', () => {
       actorUserId: owner.id,
       name: 'Core',
     });
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: workspace.id,
       actorUserId: owner.id,
     });

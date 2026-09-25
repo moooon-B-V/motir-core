@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import {
   AlreadyOrgMemberError,
-  LastOrgOwnerError,
+  InvalidOwnershipTargetError,
+  OwnershipChangedError,
+  OwnershipConfirmationMismatchError,
   OrganizationNotFoundError,
   OrgForbiddenError,
   OrgInviteeNotFoundError,
   OrgSlugCollisionError,
+  OwnerMembershipLockedError,
+  OwnerOnlyByTransferError,
 } from '@/lib/organizations/errors';
 
 // Typed-error → HTTP-status mapper for the organization routes (Story 6.10.5),
@@ -33,8 +37,25 @@ export function mapOrgError(err: unknown): NextResponse | null {
   if (err instanceof AlreadyOrgMemberError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
-  if (err instanceof LastOrgOwnerError) {
+  if (err instanceof OwnerOnlyByTransferError || err instanceof OwnerMembershipLockedError) {
+    // Both are the one-Owner invariant (MOTIR-6307): the request is well-formed,
+    // it conflicts with the organization's state — exactly one Owner, whose row
+    // moves only by transfer.
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof InvalidOwnershipTargetError) {
+    // The transfer target is a client-correctable input (not a member, or the
+    // Owner themselves) — 422, carrying WHICH so the dialog can say it.
+    return NextResponse.json(
+      { code: err.code, reason: err.reason, error: err.message },
+      { status: 422 },
+    );
+  }
+  if (err instanceof OwnershipChangedError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof OwnershipConfirmationMismatchError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
   }
   if (err instanceof OrgSlugCollisionError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });

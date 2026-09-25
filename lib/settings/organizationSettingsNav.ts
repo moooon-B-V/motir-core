@@ -83,7 +83,7 @@ export const ORGANIZATION_SETTINGS_NAV_GROUP_ORDER: OrganizationSettingsNavGroup
  * use case.
  */
 export interface OrganizationSettingsNavActor {
-  /** `isOrgAdminRole(role)` — owner or admin. */
+  /** `orgCan(role, 'manageOrgSettings')` — owner or admin (`lib/organizations/capabilities.ts`). */
   isOrgAdmin: boolean;
   /**
    * `isWorkspaceTierRevealed(count)` — whether the workspace tier is shown. It
@@ -106,7 +106,7 @@ export interface OrganizationSettingsNavAvailability {
 }
 
 const NO_CLOUD: OrganizationSettingsNavAvailability = { billingAvailable: false };
-const NO_ADMIN: OrganizationSettingsNavActor = { isOrgAdmin: false };
+const NO_ADMIN: OrganizationSettingsNavActor = { isOrgAdmin: false, workspaceTierRevealed: true };
 
 export interface OrganizationSettingsNavEntry {
   /** Stable id — also the command-palette action id (`org-settings-<id>`). */
@@ -185,16 +185,18 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     href: '/settings/organization/git',
     icon: GitBranch,
     labelKey: 'git',
-    // ⚠️ NOT `orgAdminOnly`, and §6 of `docs/decisions/organization-tier.md` is
-    // why: "a hidden tier may not remove a capability … relocating a surface
-    // preserves its gate." The surface this page relocates FROM,
-    // `/settings/workspace/github`, checks a session and a workspace context and
-    // NO ROLE AT ALL — every workspace member reads it today, and every workspace
-    // member is an org member by §5's upward invariant. Admin-gating the row
-    // would have taken a shipped capability away silently.
-    //
-    // The owner/admin gate lives on the page's WRITE controls instead, and in the
-    // service beneath them (`organizationRepoService.disconnectFromOrganisation`).
+    // ⚠️ `orgAdminOnly` SINCE THE ROLE MODEL (MOTIR-6312 · `design/org-admin/
+    // design-notes.md` § *Workspaces are created and removed at the org tier*,
+    // the Git-row flag, approved 2026-09-25). This row used to be open to every
+    // org member for §6's reason — the surface it relocated from,
+    // `/settings/workspace/github`, checked no role. `role-model.md` §1 now says
+    // a Member's abilities come ENTIRELY from their workspace roles, so the org
+    // repository inventory is Owner/Admin reading. What a Member keeps is the
+    // per-project half of the same information, at Settings › Project ›
+    // Repositories (MOTIR-4674). The page's own READ gate moved with the row
+    // (`/settings/organization/git` renders the forbidden state to a Member), so
+    // the row is not merely hidden over a readable URL.
+    orgAdminOnly: true,
     //
     // `general`, beside `Organisation`, for the reason the project rail puts
     // `repositories` there: it is the tenant's own resources, not a permission
@@ -222,12 +224,17 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     href: '/settings/organization/usage',
     icon: Coins,
     labelKey: 'usage',
-    // ⚠️ NOT `orgAdminOnly` (MOTIR-6175 — it carried the flag until then). The page
-    // gates no role and `aiUsageService.getUsage` SCOPES the read instead: an
-    // owner/admin sees the org, a plain member sees the workspaces they belong to
-    // (`access.isOrgAdmin`). So a plain member has a real room here — the org
-    // menu's `Usage & cost` row has always offered it to them — and the rail
-    // hiding it was the two doors disagreeing about one room.
+    // ⚠️ `orgAdminOnly` — RE-APPLIED by MOTIR-6167 over MOTIR-6175 (2026-09-25).
+    // MOTIR-6175 lifted the flag because the page gates no role and
+    // `aiUsageService.getUsage` scopes a plain member's read to their own
+    // workspaces. The role model's approved org-tier design says otherwise for the
+    // DOOR: a Member's org rail and org menu carry no org rows at all
+    // (`design/org-admin/design-notes.md` § *Workspaces are created and removed at
+    // the org tier*, panel 3; MOTIR-6312; the story's criterion "an org Member sees
+    // no org settings beyond their own profile"), and the owner chose that design
+    // when the two collided at this merge. The PAGE is unchanged — it still
+    // serves a Member their scoped slice if the URL is opened directly (7.2.11).
+    orgAdminOnly: true,
   },
   {
     id: 'billing',

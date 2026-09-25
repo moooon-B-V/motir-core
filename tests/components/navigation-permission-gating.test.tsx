@@ -82,17 +82,30 @@ describe('the organization menu', () => {
     expect(has('Security')).toBe(false);
     expect(has('Members')).toBe(false);
     expect(has('Billing & plans')).toBe(false);
-    // Usage is scoped to their own workspaces — a real room, kept.
-    expect(has('Usage & cost')).toBe(true);
+    // Usage & cost too: the role model's org tier carries no org rows for a
+    // Member (MOTIR-6312 · design panel 3), re-applied over MOTIR-6175.
+    expect(has('Usage & cost')).toBe(false);
     // Below the workspace-tier reveal, Settings hosts their folded-in workspace
     // sections (and Leave workspace) — kept.
     expect(has('Settings')).toBe(true);
   });
 
-  it('ABOVE the reveal a plain member loses Settings — the page holds only the forbidden panel for them then', () => {
-    const has = openOrgMenu('member', { workspaceTierRevealed: true });
-    expect(has('Settings')).toBe(false);
-    expect(has('Usage & cost')).toBe(true);
+  it('ABOVE the reveal a plain member in one org gets the org NAME as a label — no menu over nothing', () => {
+    // MOTIR-6312 · panel 3b: no row is left for them and there is no other org
+    // to switch to, so the control is a plain label rather than a button over an
+    // empty popover.
+    renderWithIntl(
+      <ToastProvider>
+        <OrgControl
+          activeOrg={{ id: ACME.id, name: ACME.name, role: 'member' }}
+          orgs={[ACME]}
+          cloudBilling
+          workspaceTierRevealed
+        />
+      </ToastProvider>,
+    );
+    expect(screen.queryByRole('button', { name: 'Organization menu' })).toBeNull();
+    expect(screen.getByText('Acme', { exact: true })).toBeTruthy();
   });
 
   it('off cloud nobody is offered Billing — the room 404s there', () => {

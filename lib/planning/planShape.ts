@@ -166,13 +166,13 @@ export function fullestContainer(
  * The one predicate behind *"a childless card the plan proposes work under MUST
  * be drillable, or the proposal is unreachable"*, which is the commonest shape
  * an expansion produces. It had been written out TWICE — `indexPlanReview` (for
- * a proposed add's own `hasChildren`) and `decoratePlanChangeLevel` (the
- * plan-change canvas's `gainsChildren`) — and NOT AT ALL on the plan-review
- * canvas, which is the surface a reviewer actually approves from. Two copies and
- * one omission is what a shared predicate is for.
+ * a proposed add's own `hasChildren`) and the plan-change canvas's own level
+ * builder (deleted by MOTIR-6299) — and NOT AT ALL on the plan-review canvas,
+ * which is the surface a reviewer actually approves from. Two copies and one
+ * omission is what a shared predicate is for.
  *
- * STRUCTURALLY typed on purpose: the three call sites hold two different item
- * shapes (`PlanReviewItemDto` and `ProposedAdd`) and all three answer the same
+ * STRUCTURALLY typed on purpose: the call sites hold two different item
+ * shapes (`PlanReviewItemDto` and `ProposedAdd`) and both answer the same
  * question off the same field. `null` is the TOP level and never a node id, so
  * it is dropped rather than represented.
  */

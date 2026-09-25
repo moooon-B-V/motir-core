@@ -139,9 +139,11 @@ async function DataPane({ userId, email }: { userId: string; email: string }) {
       {/* Drawn beside the BLOCKED card only (panel 4), because that is the
           confusion it exists to clear: with an organization block on screen, a
           reader has every reason to assume their sole-membership workspaces are
-          a second one. They are not — `deleteWorkspace` asserts membership and
-          checks no role — so they are a CHOICE the ledger presents, and the
-          escape is stated here rather than discovered at submit. */}
+          a second one. They are not — erasure deletes them through
+          `deleteWorkspaceForErasure`, which asks only that the reader be the
+          sole member and checks no role — so they are a CHOICE the ledger
+          presents, and the escape is stated here rather than discovered at
+          submit. */}
       {!deletion && preview.blocked && soleMemberCount > 0 ? (
         <SettingsCallout>
           {t.rich('delete.blocked.workspaces', {

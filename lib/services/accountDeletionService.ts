@@ -46,7 +46,7 @@ import type { AccountDeletionRequestDTO } from '@/lib/dto/accountErasure';
 //
 // ── THE BLOCK IS READ, NOT CAUGHT ───────────────────────────────────────────
 // {@link scheduleAccountDeletion} asks the impact preview for its verdict and
-// refuses on it. It does NOT attempt the delete and catch `LastOrgOwnerError`:
+// refuses on it. It does NOT attempt the delete and catch `OwnerMembershipLockedError`:
 // DECISION 5 is explicit that *"a blocked state discovered at submit is a
 // design defect, not an error message"*, and a service that learns the verdict
 // only by trying cannot render it on the pane at rest.
