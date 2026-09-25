@@ -169,7 +169,7 @@ describe('a seeded role renders exactly what it holds', () => {
     }
   });
 
-  it('a project VIEWER loses the TWO destinations that refuse them outright', async () => {
+  it('a project VIEWER loses the ONE destination that refuses them outright', async () => {
     const s = await seed('viewer-path');
     const shell = await renderFor(s.projectId, s.ctxs.viewer);
 
@@ -181,8 +181,13 @@ describe('a seeded role renders exactly what it holds', () => {
     // Three became two for the reason above: `/code` is browse-reachable, so a
     // viewer is offered the room and meets Health's own admin-only state inside
     // it rather than being denied the door (MOTIR-1768).
-    for (const gone of ['/plans', '/triage']) {
+    // Two became ONE with MOTIR-6332: `/plans` opens on `plan:view_any`, which a
+    // viewer holds (MOTIR-6328) — and so do Approvals and Runs, on theirs.
+    for (const gone of ['/triage']) {
       expect(shell.navRows, gone).not.toContain(gone);
+    }
+    for (const room of ['/plans', '/approvals', '/runs']) {
+      expect(shell.navRows, room).toContain(room);
     }
     expect(shell.navRows).toContain('/code');
     // …and keeps every read surface. The primary nav never renders empty for an

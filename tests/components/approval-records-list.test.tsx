@@ -321,10 +321,16 @@ describe('the room decides nothing about access, and its door is browse-only', (
     );
   });
 
-  it('`/approvals` is in the one nav map as browse-only, naming the widening key in its evidence', () => {
+  it('`/approvals` is in the one nav map, opening on the view key OR a way to act (MOTIR-6332)', () => {
     const entry = PROJECT_NAV_ACCESS.find((e) => e.href === '/approvals');
-    expect(entry?.requires).toBe('browse-only');
     expect(entry?.evidence).toContain('approval:view_any');
-    expect(canOfferNavDestination('/approvals', new Set(['project:browse']))).toBe(true);
+    // Browse alone is a room empty by construction, so it is no longer offered.
+    expect(canOfferNavDestination('/approvals', new Set(['project:browse']))).toBe(false);
+    expect(
+      canOfferNavDestination('/approvals', new Set(['project:browse', 'approval:view_any'])),
+    ).toBe(true);
+    expect(
+      canOfferNavDestination('/approvals', new Set(['project:browse', 'work_item:edit'])),
+    ).toBe(true);
   });
 });

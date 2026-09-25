@@ -52,8 +52,13 @@ const USER = { name: 'Yue', email: 'yue@example.com' };
 // Without them `canOfferNavDestination` drops Plans, Triage, Reports and Code
 // health, and the list under test would be the browse-only subset — which is a
 // real rail, but not the one whose order this card changed.
+// MOTIR-6332: the three ROOM rows open on their view-any key (or a way to act),
+// so the rail's full order needs those three keys — `ai:view_plan` no longer
+// opens Plans.
 const ALL_PRIMARY_KEYS: PermissionKey[] = [
-  'ai:view_plan',
+  'plan:view_any',
+  'run:view_any',
+  'approval:view_any',
   'work_item:triage',
   'report:view',
   'ai:configure',
