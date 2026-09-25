@@ -163,7 +163,10 @@ describe('add_plan_items — a SAME-level edge across parents is accepted', () =
 
     const validated = await call(client, VALIDATE_PLAN_TOOL_NAME, { planId });
     expect(validated.isError, text(validated)).toBeFalsy();
-    expect(validated.structuredContent).toMatchObject({ valid: true, rejections: [] });
+    // APPROVABLE — no `cross_level` rejection. (Not `valid`: these three edges
+    // cross parents with no parent edge, which MOTIR-6370's `invalidEdges`
+    // reports; that half is pinned in tests/mcp/cross-parent-coverage.test.ts.)
+    expect(validated.structuredContent).toMatchObject({ rejections: [] });
 
     const closed = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,

@@ -160,6 +160,8 @@ describe('POST /api/internal/ai/validate-plan', () => {
           blockerSprintId: null,
         },
       ],
+      // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
+      invalidEdges: [],
       advisories: [],
     });
 
@@ -178,6 +180,8 @@ describe('POST /api/internal/ai/validate-plan', () => {
       key: story.identifier,
       valid: true,
       blockers: [],
+      // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
+      invalidEdges: [],
       advisories: [],
     });
   });
@@ -314,6 +318,8 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       // verbatim (MOTIR-3575) — which is what the generator's pre-commit
       // post-condition needs it to carry.
       rejections: [],
+      // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
+      invalidEdges: [],
     });
 
     // Invalid: a new root add gated by a not-done cross-project item.
@@ -365,6 +371,8 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
           blockerSprintId: null,
         },
       ],
+      // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
+      invalidEdges: [],
     });
   });
 });
