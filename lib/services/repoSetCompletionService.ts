@@ -12,7 +12,7 @@ import {
 } from '@/lib/workItems/repoDelivery';
 import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
-import { IllegalTransitionError } from '@/lib/workItems/errors';
+import { IllegalTransitionError, PlanTargetHeldError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
 // RE-EVALUATION of the repository-SET completion gate, WITHOUT a delivery event
@@ -66,6 +66,9 @@ export type RepoSetReevaluationOutcome =
   | 'no_matching_status'
   /** The item's current status has no legal edge to done (e.g. it is still To Do). */
   | 'illegal_transition'
+  /** An UNDECIDED plan holds the item at `planning` (MOTIR-6265; AMENDMENT 21
+   *  §5(b)) — the plan decides what happens to it next, not the repository set. */
+  | 'plan_held'
   /** No workspace owner to author the move, or the write was refused. */
   | 'access_denied';
 
@@ -245,6 +248,13 @@ export const repoSetCompletionService = {
         return {
           workItemId,
           outcome: 'illegal_transition',
+          shortfall: EMPTY_SHORTFALL,
+          toStatus: targetKey,
+        };
+      if (err instanceof PlanTargetHeldError)
+        return {
+          workItemId,
+          outcome: 'plan_held',
           shortfall: EMPTY_SHORTFALL,
           toStatus: targetKey,
         };

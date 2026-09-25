@@ -15,6 +15,7 @@ import type { ReactNode } from 'react';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 import type { Locale } from '@/lib/i18n/locales';
 import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
@@ -349,7 +350,12 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
   // A move an approval or a merge HOLDS (MOTIR-5529; the status-control design's
   // list-row panel): the ONE refused line, anchored on this row's status cell with
   // its door — not a toast. The list reads no gate per row; this is the refusal.
-  const [held, setHeld] = useState<StatusHeldLine | null>(null);
+  // A PLAN hold (MOTIR-6268; the plan-hold status-control design's panel 8) is the
+  // other arm: the list reads no plan per row either, so it draws the plan line
+  // the refusal carried, with its Review plan door.
+  const [held, setHeld] = useState<
+    { kind: 'gate'; line: StatusHeldLine } | { kind: 'plan'; plan: PlanHoldDTO } | null
+  >(null);
   const heldRef = useRef<HTMLSpanElement>(null);
   const closeHeld = useCallback(() => setHeld(null), []);
   useDismissOnEscapeOrOutside(heldRef, held !== null, closeHeld);
@@ -387,7 +393,13 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
       } else if (res.code === 'APPROVAL_GATE_PENDING' && res.gate) {
         status.fail(token);
         const target = workflow.statuses.find((s) => s.key === toStatusKey);
-        setHeld(heldLineFromRefusal(toStatusKey, target?.label ?? toStatusKey, res.gate));
+        setHeld({
+          kind: 'gate',
+          line: heldLineFromRefusal(toStatusKey, target?.label ?? toStatusKey, res.gate),
+        });
+      } else if (res.code === 'PLAN_TARGET_HELD' && res.plan) {
+        status.fail(token);
+        setHeld({ kind: 'plan', plan: res.plan });
       } else {
         status.fail(token);
         toast({ variant: 'error', title: res.error });
@@ -434,7 +446,11 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
         data-list-held=""
         className="absolute top-full left-0 mt-1.5 block w-[18.75rem] rounded-(--radius-control) shadow-(--shadow-elevated)"
       >
-        <StatusHeldNotice itemKey={row.identifier} lines={[held]} />
+        {held.kind === 'plan' ? (
+          <StatusHeldNotice itemKey={row.identifier} lines={[]} plan={held.plan} />
+        ) : (
+          <StatusHeldNotice itemKey={row.identifier} lines={[held.line]} />
+        )}
       </span>
     </span>
   );

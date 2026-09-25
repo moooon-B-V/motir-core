@@ -261,6 +261,10 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // distinct: the edge is legal, the status is spelled right, nothing is missing
   // — the fix is for a person to decide the gate. No new STATUS, so no ADR §4 row.
   APPROVAL_GATE_PENDING: 422,
+  // MOTIR-6265 — an UNDECIDED plan holds the card at Planning (`agent-authored-plans.md`
+  // AMENDMENT 21). The same status as the gate's refusal, for the same reason: the
+  // edge is legal and the fix is a person deciding the plan.
+  PLAN_TARGET_HELD: 422,
 
   // 11.2.9 (MOTIR-2051) — the link edges.
   SELF_LINK: 422,

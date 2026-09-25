@@ -7,6 +7,7 @@ import {
   BoardColumnNotFoundError,
   BoardNotFoundError,
   IllegalBoardMoveError,
+  PlanTargetHeldBoardMoveError,
   UnmappedColumnTargetError,
 } from '@/lib/boards/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -20,6 +21,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 // Typed errors → the status codes the 3.2 UI branches on:
 //   IllegalBoardMoveError    → 409  (illegal transition — the snap-back signal)
 //   ApprovalGatePendingBoardMoveError → 409 `{ code: 'APPROVAL_GATE_PENDING', gate }` (MOTIR-5526)
+//   PlanTargetHeldBoardMoveError → 409 `{ code: 'PLAN_TARGET_HELD', plan }` (MOTIR-6265)
 //   UnmappedColumnTargetError → 422 (the target column maps no live status)
 //   Board/Column/WorkItem not found → 404
 // `boardId` rides in the body (the client holds it from the projection — the
@@ -82,6 +84,15 @@ export async function POST(req: Request): Promise<Response> {
     if (err instanceof ApprovalGatePendingBoardMoveError) {
       return NextResponse.json(
         { code: err.code, error: err.message, gate: err.gate },
+        { status: 409 },
+      );
+    }
+    // An undecided plan holds the card at Planning (MOTIR-6265). The same 409 and
+    // the same on-the-card rendering, with the `plan` payload its Review plan door
+    // is computed from.
+    if (err instanceof PlanTargetHeldBoardMoveError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, plan: err.plan },
         { status: 409 },
       );
     }

@@ -4,7 +4,11 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { ApprovalGatePendingError, IllegalTransitionError } from '@/lib/workItems/errors';
+import {
+  ApprovalGatePendingError,
+  IllegalTransitionError,
+  PlanTargetHeldError,
+} from '@/lib/workItems/errors';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
@@ -92,6 +96,18 @@ function approvalPendingResult(
   return toolError(err.code, `${err.message} ${who}`);
 }
 
+/** Build the enriched PLAN_TARGET_HELD tool error naming the plan and its state
+ *  (MOTIR-6265; `agent-authored-plans.md` AMENDMENT 21 §2). */
+function planHeldResult(err: PlanTargetHeldError): CallToolResult {
+  const state =
+    err.planStatus === 'generating'
+      ? 'is still being written'
+      : err.planStatus === 'planned'
+        ? 'is waiting for approval'
+        : 'is stale and needs attention before it can be approved';
+  return toolError(err.code, `${err.message} Plan ${err.planId} ${state}.`);
+}
+
 /** The adapter: resolve project + item + target status, then transition. */
 export async function runTransitionStatus(
   args: { key: string; status: string },
@@ -130,6 +146,9 @@ export async function runTransitionStatus(
         await approvalGatesService.describePendingRefusal(err, ctx),
       );
     }
+    // An undecided plan holds the card at Planning (MOTIR-6265): name the plan and
+    // what it is doing, so an agent reports it rather than retrying.
+    if (err instanceof PlanTargetHeldError) return planHeldResult(err);
     return toToolError(err);
   }
 }

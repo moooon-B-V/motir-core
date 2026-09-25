@@ -14,6 +14,8 @@
 // what the route layer (Epic 2) maps to an HTTP status, matching the
 // `readonly code` convention the workspaces/projects domains established.
 
+import type { PlanHoldDTO } from '@/lib/dto/plans';
+
 export type WorkItemErrorTag =
   | 'ILLEGAL_PARENT_TYPE'
   | 'DEPTH_LIMIT_EXCEEDED'
@@ -36,7 +38,8 @@ export type WorkItemErrorTag =
   | 'CONFLICTING_TARGET_REPO_INPUT'
   | 'MISSING_ARTIFACT_EVIDENCE'
   | 'CONTAINER_HAS_OPEN_CHILDREN'
-  | 'APPROVAL_GATE_PENDING';
+  | 'APPROVAL_GATE_PENDING'
+  | 'PLAN_TARGET_HELD';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -588,6 +591,80 @@ export class ApprovalGatePendingError extends WorkItemError {
     this.gateKind = args.gateKind;
     this.itemKey = args.itemKey;
     this.workItemId = args.workItemId;
+  }
+}
+
+/**
+ * THE PLAN HOLD's refusal (Story MOTIR-6017 · Subtask MOTIR-6265;
+ * `docs/decisions/agent-authored-plans.md` AMENDMENT 21 §2).
+ *
+ * The work item sits at `planning` under an UNDECIDED plan's lock — the plan is
+ * rewriting it — so no hand move out of `planning` is the person's to make until
+ * the plan is decided. EVERY target is refused, not one: where an approval gate
+ * owns one status ({@link ApprovalGatePendingError}), an open plan owns them all.
+ *
+ * ⚠️ ITS OWN CODE, for the reason the gate's has one: the edge is legal, and the
+ * way out is to decide the plan (or withdraw the proposal naming the card), which
+ * only this code can say.
+ *
+ * Unlike the gate's refusal it carries its WHOLE render payload: every field is
+ * read on the refused transaction under the item lock the funnel already holds,
+ * and `sessionId` + `anchorKey` are exactly what `planRowDestination` needs to
+ * send the surface's Review plan door where the plan is (§2's table). No
+ * enrichment read follows.
+ */
+export class PlanTargetHeldError extends WorkItemError {
+  readonly tag = 'PLAN_TARGET_HELD' as const;
+  readonly code = 'PLAN_TARGET_HELD' as const;
+  /** The status the refused move targeted. */
+  readonly statusKey: string;
+  /** The held card's `KEY-n`. */
+  readonly itemKey: string;
+  readonly workItemId: string;
+  /** The plan holding it. */
+  readonly planId: string;
+  /** The plan's status — `generating` · `planned` · `stale` — which is the second
+   *  line a surface draws. */
+  readonly planStatus: 'generating' | 'planned' | 'stale';
+  /** The plan's SESSION, or null when it has none — `planRowDestination`'s key. */
+  readonly sessionId: string | null;
+  /** The plan's first anchor key — its session's `targetKeys[0]`, the way the
+   *  To-approve row reads it — or null. */
+  readonly anchorKey: string | null;
+  constructor(args: {
+    statusKey: string;
+    itemKey: string;
+    workItemId: string;
+    planId: string;
+    planStatus: 'generating' | 'planned' | 'stale';
+    sessionId: string | null;
+    anchorKey: string | null;
+  }) {
+    super(
+      `${args.itemKey} cannot be moved out of Planning while a plan is open: the plan is ` +
+        'rewriting this item, so its status is the plan’s until the plan is decided. Approve or ' +
+        'decline the plan, or withdraw the proposal that names this item.',
+    );
+    this.name = 'PlanTargetHeldError';
+    this.statusKey = args.statusKey;
+    this.itemKey = args.itemKey;
+    this.workItemId = args.workItemId;
+    this.planId = args.planId;
+    this.planStatus = args.planStatus;
+    this.sessionId = args.sessionId;
+    this.anchorKey = args.anchorKey;
+  }
+
+  /** The wire payload every door returns under `plan` — AMENDMENT 21 §2's table. */
+  get payload(): PlanHoldDTO {
+    return {
+      itemKey: this.itemKey,
+      workItemId: this.workItemId,
+      planId: this.planId,
+      planStatus: this.planStatus,
+      sessionId: this.sessionId,
+      anchorKey: this.anchorKey,
+    };
   }
 }
 

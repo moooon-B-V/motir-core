@@ -34,6 +34,7 @@ vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) 
 import { IssueListTable } from '@/app/(authed)/items/_components/IssueListTable';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
+import { planRowDestination } from '@/lib/planning/planDestination';
 
 beforeAll(() => {
   // Radix Popover (the DatePicker dialog) needs a few browser APIs happy-dom lacks.
@@ -185,6 +186,43 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
     expect(notice.textContent).toContain("Status can't be moved to In Progress directly");
     expect(screen.getByRole('link', { name: 'Review & approve' }).getAttribute('href')).toBe(
       '/items?approval=PROD-1&approvalKind=design_result',
+    );
+    // Reverted: the cell reads its old status again.
+    expect(screen.getByRole('button', { name: 'Edit Status' }).textContent).toContain('To Do');
+
+    // Esc closes it.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+  });
+
+  it('a status move a PLAN holds reverts and shows the plan line ON the status cell, with Review plan — not a toast (MOTIR-6268)', async () => {
+    const plan = {
+      itemKey: 'PROD-1',
+      workItemId: 'wi_1',
+      planId: 'pln_a',
+      planStatus: 'planned' as const,
+      sessionId: 'pcs_1',
+      anchorKey: 'PROD-9',
+    };
+    statusSpy.mockResolvedValue({
+      ok: false,
+      error: 'held',
+      field: 'status',
+      code: 'PLAN_TARGET_HELD',
+      plan,
+    });
+    renderTable([row({ identifier: 'PROD-1', id: 'wi_1', status: 'todo', statusLabel: 'To Do' })]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'In Progress' }));
+    await act(async () => {});
+
+    expect(toastSpy).not.toHaveBeenCalled();
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain("Status can't be changed while a plan is open.");
+    expect(notice.textContent).toContain('This plan is waiting for approval.');
+    expect(screen.getByRole('link', { name: 'Review plan' }).getAttribute('href')).toBe(
+      planRowDestination({ ...plan, host: '/items' }).href,
     );
     // Reverted: the cell reads its old status again.
     expect(screen.getByRole('button', { name: 'Edit Status' }).textContent).toContain('To Do');

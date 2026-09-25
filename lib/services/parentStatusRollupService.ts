@@ -4,6 +4,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workflowsService } from './workflowsService';
+import { readPlanHoldWithin } from './planTargetLockService';
 import { workItemsService } from './workItemsService';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
@@ -166,6 +167,10 @@ export type RollupOutcome =
   | { outcome: 'no_matching_status'; parentId: string }
   | { outcome: 'illegal_transition'; parentId: string; toStatus: string }
   | { outcome: 'approval_pending'; parentId: string; toStatus: string }
+  /** An UNDECIDED plan holds the parent at `planning` (MOTIR-6265; AMENDMENT 21
+   *  §5(b)): the derivation reads the parent's OLD shape, which the plan is
+   *  replacing, so it declines to answer rather than failing its job. */
+  | { outcome: 'plan_held'; parentId: string; toStatus: string }
   | { outcome: 'access_denied'; parentId: string }
   | { outcome: 'unresolvable' };
 
@@ -403,6 +408,19 @@ export const parentStatusRollupService = {
       if (parent.status === wanted.key) {
         return {
           outcome: { outcome: 'already_there', parentId, toStatus: wanted.key },
+          emit: null,
+        };
+      }
+
+      // THE PLAN HOLD (MOTIR-6265; `agent-authored-plans.md` AMENDMENT 21 §5(b)).
+      // A parent an UNDECIDED plan is rewriting is not the derivation's to move:
+      // the children describe the shape the plan is replacing. Asked HERE, ahead of
+      // both arms, because the BACKWARD arm is a `{ system: true }` set the funnel's
+      // refusal exempts — without this it would walk a held parent out of
+      // `planning` with no refusal at all. Recorded, never a failed job.
+      if (await readPlanHoldWithin(parent, tx)) {
+        return {
+          outcome: { outcome: 'plan_held', parentId, toStatus: wanted.key },
           emit: null,
         };
       }

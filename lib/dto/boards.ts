@@ -17,6 +17,7 @@ import type { SprintPointsDto } from '@/lib/dto/estimation';
 import type { SprintStateDto } from '@/lib/dto/sprints';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { PendingDecisionDTO } from '@/lib/dto/approvalGate';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 
 /** Board kind — mirrors the Prisma `BoardType` enum (Story 3.1.1). */
 export type BoardTypeDto = 'kanban' | 'scrum';
@@ -181,6 +182,15 @@ export interface BoardCardDto {
    */
   ciState: string | null;
   /**
+   * The undecided PLAN holding this card at Planning (Story MOTIR-6017 ·
+   * MOTIR-6268; AMENDMENT 21 §1), or `null` when none does — a session-held
+   * lease, an expired `generating` lease and a decided plan are all `null`.
+   * Read in ONE batch for the board's `planning` cards and passed through
+   * `planHoldFor`, the rule the status funnel refuses with, so the board draws
+   * the hold up front and the server's refusal cannot disagree with it.
+   */
+  planHold: PlanHoldDTO | null;
+  /**
    * The card's status CATEGORY, resolved SERVER-SIDE from the workflow the board
    * projection already loads — the client never re-derives it, and the badge rule
    * is keyed on the CATEGORY rather than on the column because a board maps
@@ -197,6 +207,24 @@ export interface BoardCardDto {
    * `none` projection is byte-for-byte the 3.1.4 card shape, no regression.
    */
   swimlaneKey?: string;
+}
+
+/**
+ * One PLAN that holds cards on the board (Story MOTIR-6017 · MOTIR-6268) — what
+ * every held card's footer names it by, and how many items it holds. The label
+ * order is `design/boards/design-notes.md`'s `{name}` rule: `anchorKey`, else
+ * `title`, else the project's name (which the board already has). `heldCount` is
+ * the plan's held items in the board's PROJECT, counted server-side — columns
+ * load a bounded set, so a client count would be wrong for a long lane.
+ */
+export interface BoardPlanHoldSummaryDto {
+  planId: string;
+  /** The plan's first anchor key (its session's `targetKeys[0]`), or null. */
+  anchorKey: string | null;
+  /** The plan's title, or null. */
+  title: string | null;
+  /** The live items of the board's project this plan holds, the card included. */
+  heldCount: number;
 }
 
 /**
@@ -343,6 +371,12 @@ export interface BoardProjectionDto {
    * summary here.
    */
   sprint: SprintSummaryDto | null;
+  /**
+   * Every plan that holds a loaded card, keyed by `planId` (MOTIR-6268) — the
+   * label fields and held count each card's plan footer and refusal read. Empty
+   * when no loaded card is held.
+   */
+  planHolds: Record<string, BoardPlanHoldSummaryDto>;
 }
 
 /**

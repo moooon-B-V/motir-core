@@ -196,7 +196,7 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
       resolve(process.cwd(), 'lib/jobs/definitions/statusDerivation.ts'),
       'utf8',
     );
-    expect(source).toContain("ctx.step.run('roll-up-parent-v2'");
+    expect(source).toContain("ctx.step.run('roll-up-parent-v3'");
     expect(source).toContain("ctx.step.run('cascade-to-children'");
   });
 

@@ -1460,6 +1460,31 @@ export interface PlanHistoryListOptions {
 }
 
 /**
+ * AN UNDECIDED PLAN HOLDS THIS CARD (Story MOTIR-6017 · MOTIR-6265;
+ * `docs/decisions/agent-authored-plans.md` AMENDMENT 21 §§1–2) — the one shape both
+ * the up-front read (`planTargetLockService.readPlanHold`) and the refusal
+ * (`PLAN_TARGET_HELD`'s `plan` field, on every door) carry, so a surface draws the
+ * line and the Review plan door from either without a second read.
+ *
+ * `sessionId` + `planId` are `planRowDestination`'s whole input
+ * (`lib/planning/planDestination.ts`): a plan WITH a session opens the planning
+ * surface, one without opens `/plans/<planId>`.
+ */
+export interface PlanHoldDTO {
+  /** The held card's `KEY-n`. */
+  itemKey: string;
+  workItemId: string;
+  /** The plan holding it. */
+  planId: string;
+  /** Only an UNDECIDED status holds — the second line's copy key. */
+  planStatus: 'generating' | 'planned' | 'stale';
+  /** The plan's session, or null when it has none. */
+  sessionId: string | null;
+  /** The plan's first anchor key (its session's `targetKeys[0]`), or null. */
+  anchorKey: string | null;
+}
+
+/**
  * Is this work item still what the last APPROVED plan approved? (Story
  * MOTIR-5544 · Subtask MOTIR-6225.) `no_plan` is a verdict, never an error: the
  * card was never shaped by an approved plan (untouched by any plan, or touched

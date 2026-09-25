@@ -5,6 +5,7 @@ import { plansService } from '@/lib/services/plansService';
 import { planValidityService } from '@/lib/services/planValidityService';
 import { buildProjection, projectedWorkItem } from '@/lib/services/planProjectionService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { sprintsService } from '@/lib/services/sprintsService';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import { isCoverageAdvisory, type WorkItemValidityDto } from '@/lib/dto/workItems';
@@ -1680,10 +1681,12 @@ describe('validateProjectedPlan — the APPROVABILITY half (MOTIR-3575)', () => 
       fx,
       [{ op: 'modify', workItemId: target.id, patch: { title: 'Rewritten' } }],
       async () => {
-        // The target ships while the plan waits — the drift approve exists for.
-        for (const status of ['in_progress', 'in_review', 'done'] as const) {
-          await workItemsService.updateStatus(target.id, status, fx.ctx);
-        }
+        // The target ships while the plan waits — the drift approve exists for. A
+        // SYSTEM write (a merge's cascade), because the plan hold refuses a hand
+        // move out of `planning` while the plan is undecided (AMENDMENT 21).
+        await withWorkspaceContext(fx.ctx, (tx) =>
+          workItemsService.applyStatusTransition(target.id, 'done', fx.ctx, tx, { system: true }),
+        );
       },
     );
     const immutableRes = await planValidityService.validateProjectedPlan(immutable, fx.ctx);

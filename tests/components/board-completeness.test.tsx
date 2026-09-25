@@ -73,6 +73,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     position: 'a0',
     ready: true,
     pendingDecision: null,
+    planHold: null,
     ...over,
   };
 }
@@ -102,6 +103,7 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
     cap: 5000,
     truncated: false,
     sprint: null,
+    planHolds: {},
     columns: [column({ id: 'c1', name: 'To Do' }), column({ id: 'c2', name: 'In Progress' })],
     ...over,
   };

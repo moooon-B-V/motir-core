@@ -1,9 +1,12 @@
 'use client';
 
+import type { MouseEvent } from 'react';
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CircleAlert, GripVertical, Hash } from 'lucide-react';
+import { CircleAlert, GripVertical, Hash, Sparkles } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
@@ -11,11 +14,19 @@ import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMar
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { formatStoryPoints } from '@/lib/estimation/scales';
 import type { BoardCardDto } from '@/lib/dto/boards';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
+import { planRowDestination } from '@/lib/planning/planDestination';
 import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActionsMenu';
 import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitives';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 import { useNotifyIssuesChanged } from '../../_components/CreateIssueProvider';
-import { BoardCardHeldRefusal } from './BoardHeldRefusal';
+import {
+  BoardCardHeldRefusal,
+  PLAN_FOOTER_CLASS,
+  PlanHoldMarker,
+  useBoardHeldRefusal,
+} from './BoardHeldRefusal';
 
 // BoardCard (Subtask 3.2.3 · drag wired in 3.2.4) — the compact issue card per
 // `design/boards/board.mock.html` (`.bcard`). It REUSES the shipped issue
@@ -206,8 +217,96 @@ export function BoardCardView({
   );
 }
 
-const CARD_CLASS =
-  'group flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) text-left shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
+// The card body's own look — its layout, padding, type and focus ring. A card no
+// plan holds adds its own border, radius and shadow ({@link CARD_CLASS}); a HELD
+// card's body sits inside the plan shell, which carries them instead.
+const CARD_BODY_CLASS =
+  'group flex flex-col gap-2 bg-(--el-page-bg) p-(--spacing-card-padding) text-left transition-colors focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
+
+const CARD_CLASS = `${CARD_BODY_CLASS} rounded-(--radius-card) border border-(--el-border) shadow-(--shadow-subtle) hover:border-(--el-border-strong)`;
+
+// THE HELD SHELL (MOTIR-6268; `board--plan-hold.mock.html` `.hcard`): ONE border,
+// radius and shadow around the card body AND its plan footer, so the footer reads
+// as part of the item — never as one more card in the lane.
+const SHELL_CLASS =
+  'flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) transition-colors hover:border-(--el-border-strong)';
+
+/** The shell's elevation, its sibling outline and its drag ghost, by state. */
+function shellStateClass(args: { refused: boolean; outlined: boolean; dragging: boolean }): string {
+  const classes = [
+    args.dragging
+      ? 'border-dashed opacity-40'
+      : args.refused
+        ? 'shadow-(--shadow-elevated)'
+        : 'shadow-(--shadow-subtle)',
+  ];
+  // Every item of the highlighted plan: 2px `--el-status-planning`, offset 2px.
+  if (args.outlined) classes.push('outline-2 outline-offset-2 outline-(--el-status-planning)');
+  return classes.join(' ');
+}
+
+/**
+ * THE PLAN FOOTER AT REST — the door (MOTIR-6268). A LINK where
+ * `planRowDestination` sends the plan: the planning surface over THIS page with a
+ * session (written with `shallowPush`, so Close returns here), `/plans/<id>`
+ * without one. Its `title` is the `planState` sentence. Hover or focus outlines
+ * every item of the plan; the card body's own hover does not.
+ */
+function PlanFooterDoor({ plan }: { plan: PlanHoldDTO }) {
+  const tHeld = useTranslations('approvalGate.statusHeld');
+  const { onPlanFooterHover } = useBoardHeldRefusal();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const qs = searchParams?.toString() ?? '';
+  const destination = planRowDestination({
+    planStatus: plan.planStatus,
+    planId: plan.planId,
+    sessionId: plan.sessionId,
+    host: `${pathname}${qs ? `?${qs}` : ''}`,
+    anchorKey: plan.anchorKey,
+  });
+  const highlight = () => onPlanFooterHover?.(plan.planId);
+  const clear = () => onPlanFooterHover?.(null);
+  const props = {
+    title: tHeld(`planState.${plan.planStatus}`),
+    'data-plan-footer': plan.planId,
+    'data-plan-door': destination.kind,
+    onMouseEnter: highlight,
+    onMouseLeave: clear,
+    onFocus: highlight,
+    onBlur: clear,
+    className: `${PLAN_FOOTER_CLASS} group/foot focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-(--focus-ring-color) focus-visible:outline-none`,
+  };
+  const content = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <PlanHoldMarker plan={plan} />
+      <span className="flex-1" />
+      <span className="inline-flex shrink-0 items-center gap-1 font-medium group-hover/foot:underline">
+        <Sparkles aria-hidden className="h-3.5 w-3.5" />
+        {tHeld('reviewPlan')}
+      </span>
+    </span>
+  );
+  if (destination.kind === 'plan-page') {
+    return (
+      <Link href={destination.href} {...props}>
+        {content}
+      </Link>
+    );
+  }
+  function onClick(event: MouseEvent<HTMLAnchorElement>) {
+    // A modified or non-primary click keeps the real href (a new tab).
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
+    event.preventDefault();
+    shallowPush(destination.href);
+  }
+  return (
+    <a href={destination.href} onClick={onClick} {...props}>
+      {content}
+    </a>
+  );
+}
 
 export function BoardCard({
   card,
@@ -234,56 +333,111 @@ export function BoardCard({
   const canArchive = can('work_item:archive');
   const canDelete = can('work_item:delete');
   const notifyIssuesChanged = useNotifyIssuesChanged();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: card.id,
   });
+  // THE PLAN HOLD (MOTIR-6268): drawn up front from the projection, and — when a
+  // move was refused with `PLAN_TARGET_HELD` — from the refusal's own payload,
+  // which is the fresher of the two.
+  const { held, highlightedPlanId } = useBoardHeldRefusal();
+  const refusedByPlan = held?.kind === 'plan' && held.workItemId === card.id;
+  const planHold = refusedByPlan ? held.plan : card.planHold;
+  const style = { transform: CSS.Translate.toString(transform), transition };
+
+  const button = (
+    <button
+      // A held item's SHELL is the sortable node (it moves and measures as one,
+      // footer included); its body stays the drag activator.
+      ref={planHold ? setActivatorNodeRef : setNodeRef}
+      type="button"
+      onClick={() => onOpenQuickView(card.identifier)}
+      aria-label={t('openIssueAria', { key: card.identifier, title: card.title })}
+      data-testid={`board-card-${card.identifier}`}
+      // `data-tilt` opts the kanban card into the 3D / Immersive pointer-tilt
+      // (7.3.39). Inert for every other style + under reduced motion. While
+      // dragging, dnd-kit's inline `transform` (a translate) overrides the
+      // tilt transform, so the two never fight; at rest the tilt applies.
+      data-tilt={planHold ? undefined : ''}
+      // `data-surface` opts the board card into the surface-MATERIAL layer so a
+      // surface-material style (glassmorphism frost, aurora glow) reaches the
+      // board — not only Card-built settings surfaces. Inert under non-material
+      // styles (no `[data-style] [data-surface]` rule targets them). 7.3.38.
+      // A held card's SHELL carries it instead (the surface is the whole item).
+      data-surface={planHold ? undefined : 'card'}
+      // The held body moves with the shell (below), so it takes no transform.
+      style={planHold ? undefined : style}
+      // While lifted, the resting card is the dashed ghost marking the insertion
+      // slot (the DragOverlay carries the visible clone); `touch-none` keeps a
+      // touch-drag from scrolling the column. `cursor-grab` is the affordance.
+      // Inside a plan shell the body drops its own border and shadow, and its
+      // focus ring is inset so the shell's clip cannot cut it.
+      className={
+        planHold
+          ? `${CARD_BODY_CLASS} w-full cursor-grab touch-none focus-visible:ring-inset`
+          : `${CARD_CLASS} w-full cursor-grab touch-none ${
+              isDragging ? 'border-dashed opacity-40' : ''
+            }`
+      }
+      {...attributes}
+      // The card's own label would hide the decision-waiting marker from a screen
+      // reader (MOTIR-5875 § *The three forms*), so the button points at it —
+      // only when a marker is rendered, since the slot may hold `Blocked`.
+      // ⚠️ AFTER the dnd-kit spread and JOINED with it: `attributes` carries its
+      // own `aria-describedby` (the keyboard-drag instructions), which a prop
+      // set before the spread is silently overwritten by.
+      aria-describedby={describedBy(attributes['aria-describedby'], card)}
+      {...listeners}
+    >
+      <BoardCardView
+        card={card}
+        assigneeName={assigneeName}
+        routedToName={routedToName}
+        markerId={decisionMarkerId(card.id)}
+      />
+    </button>
+  );
 
   return (
     // `relative group/card` hosts the card button + the hover-revealed ⋯ menu
     // OVERLAY (2.8.4). The menu is a SIBLING of the draggable button, never a
     // child — nesting an interactive control inside the card button would be a
-    // nested-interactive a11y violation and would steal the drag pointer.
+    // nested-interactive a11y violation and would steal the drag pointer. The
+    // plan footer's door is a sibling for the same reason, and comes right after
+    // the button so it is the next tab stop after the card.
     <div className="group/card relative">
-      <button
-        ref={setNodeRef}
-        type="button"
-        onClick={() => onOpenQuickView(card.identifier)}
-        aria-label={t('openIssueAria', { key: card.identifier, title: card.title })}
-        data-testid={`board-card-${card.identifier}`}
-        // `data-tilt` opts the kanban card into the 3D / Immersive pointer-tilt
-        // (7.3.39). Inert for every other style + under reduced motion. While
-        // dragging, dnd-kit's inline `transform` (a translate) overrides the
-        // tilt transform, so the two never fight; at rest the tilt applies.
-        data-tilt=""
-        // `data-surface` opts the board card into the surface-MATERIAL layer so a
-        // surface-material style (glassmorphism frost, aurora glow) reaches the
-        // board — not only Card-built settings surfaces. Inert under non-material
-        // styles (no `[data-style] [data-surface]` rule targets them). 7.3.38.
-        data-surface="card"
-        style={{ transform: CSS.Translate.toString(transform), transition }}
-        // While lifted, the resting card is the dashed ghost marking the insertion
-        // slot (the DragOverlay carries the visible clone); `touch-none` keeps a
-        // touch-drag from scrolling the column. `cursor-grab` is the affordance.
-        className={`${CARD_CLASS} w-full cursor-grab touch-none ${
-          isDragging ? 'border-dashed opacity-40' : ''
-        }`}
-        {...attributes}
-        // The card's own label would hide the decision-waiting marker from a screen
-        // reader (MOTIR-5875 § *The three forms*), so the button points at it —
-        // only when a marker is rendered, since the slot may hold `Blocked`.
-        // ⚠️ AFTER the dnd-kit spread and JOINED with it: `attributes` carries its
-        // own `aria-describedby` (the keyboard-drag instructions), which a prop
-        // set before the spread is silently overwritten by.
-        aria-describedby={describedBy(attributes['aria-describedby'], card)}
-        {...listeners}
-      >
-        <BoardCardView
-          card={card}
-          assigneeName={assigneeName}
-          routedToName={routedToName}
-          markerId={decisionMarkerId(card.id)}
-        />
-      </button>
+      {planHold ? (
+        <div
+          ref={setNodeRef}
+          data-plan-id={planHold.planId}
+          data-plan-shell=""
+          data-plan-outlined={highlightedPlanId === planHold.planId ? '' : undefined}
+          data-surface="card"
+          data-tilt=""
+          style={style}
+          className={`${SHELL_CLASS} ${shellStateClass({
+            refused: refusedByPlan,
+            outlined: highlightedPlanId === planHold.planId,
+            dragging: isDragging,
+          })}`}
+        >
+          {button}
+          {refusedByPlan ? (
+            <BoardCardHeldRefusal workItemId={card.id} slot="footer" />
+          ) : (
+            <PlanFooterDoor plan={planHold} />
+          )}
+        </div>
+      ) : (
+        button
+      )}
       {/* Hidden until the card is hovered / the menu is focused — and
         `pointer-events-none` while hidden so it never intercepts a click/drag
         meant for the card corner. */}
@@ -301,7 +455,8 @@ export function BoardCard({
         />
       </div>
       {/* A move an approval or a merge HOLDS, refused on THIS card (MOTIR-5529,
-          design panel 2b) — the line sits directly under the returned card. */}
+          design panel 2b) — the line sits directly under the returned card. A
+          PLAN refusal opens in the plan footer above instead. */}
       <BoardCardHeldRefusal workItemId={card.id} />
     </div>
   );
@@ -320,6 +475,23 @@ export function BoardCardOverlay({
   assigneeName: string | null;
   routedToName?: string | null;
 }) {
+  if (card.planHold) {
+    // A held item keeps its group while it moves (design panel 7): the clone
+    // carries its plan footer, INERT — spans, no link, no door.
+    return (
+      <div
+        data-surface="card"
+        className={`${SHELL_CLASS} w-[17rem] rotate-2 cursor-grabbing border-(--el-accent) shadow-(--shadow-elevated)`}
+      >
+        <div className={CARD_BODY_CLASS}>
+          <BoardCardView card={card} assigneeName={assigneeName} routedToName={routedToName} />
+        </div>
+        <div className={PLAN_FOOTER_CLASS} data-plan-footer-inert="">
+          <PlanHoldMarker plan={card.planHold} />
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       data-surface="card"
