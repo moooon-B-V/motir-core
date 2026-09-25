@@ -22,6 +22,7 @@ import {
   assertValidParent,
   assertValidPlacement,
   allowedParentKinds,
+  isIssueType,
   type IssueType,
 } from '@/lib/issues/parentRules';
 import { isTypeableKind, resolveExecutor } from '@/lib/issues/executorDefaults';
@@ -132,6 +133,7 @@ import {
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
+import { assertLinkSameLevel, edgeLevel, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
@@ -232,6 +234,7 @@ import type {
   WorkItemValidityDto,
   WorkItemCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
+  WorkItemProseCrossLevelEdgeAdvisoryDto,
   WorkItemImplementationProvenanceInput,
   WorkItemRepositoryDto,
   WorkItemPlacementDto,
@@ -1958,6 +1961,13 @@ export const workItemsService = {
           if (target.workspaceId !== workspaceId) throw new WorkItemNotFoundError(pending.targetId);
 
           const directed = relationshipToLink(pending.relationship, row.id, pending.targetId);
+          // The same-level rule, on the create path too (MOTIR-6369) — a
+          // refusal rolls the whole create back, like every bad link here.
+          assertLinkSameLevel(
+            directed.kind,
+            directed.fromId === row.id ? row : target,
+            directed.fromId === row.id ? target : row,
+          );
           await workItemLinkRepository.create(
             {
               workspaceId,
@@ -5229,6 +5239,11 @@ export const workItemsService = {
       // editor only needs edit rights on the item they're linking FROM.
       await projectAccessService.assertCanEdit(fromItem.projectId, ctx, tx);
 
+      // A dependency joins two items on the SAME LEVEL (MOTIR-6369): refused
+      // before the insert, so nothing is written. `blocks` arrives here already
+      // flipped to its stored `is_blocked_by` direction.
+      assertLinkSameLevel(input.kind, fromItem, toItem);
+
       // The forward edge + the `relates_to` reciprocal + the `links.added`
       // revision, via the shared write-core (extracted in 5.8.3 so the
       // auto-relate-on-mention path reuses the exact same logic). `idempotent:
@@ -7776,6 +7791,7 @@ async function computeWorkItemValidity(
     edges,
     ctx,
   );
+  const crossLevel = crossLevelEdgeAdvisories(edges, membersById);
   const coverage = await computeSubtreeCoverageAdvisories(notDone, members, ctx);
   // The PATH-REFERENCE family (MOTIR-5424), off the SAME scanned bodies the prose
   // family read — `subjects` is `notDone` mapped in order, so the two zip.
@@ -7794,8 +7810,40 @@ async function computeWorkItemValidity(
     key: root.identifier,
     valid: blockers.length === 0,
     blockers,
-    advisories: [...prose, ...coverage, ...pathReferences],
+    advisories: [...prose, ...crossLevel, ...coverage, ...pathReferences],
   };
+}
+
+/**
+ * The CROSS-LEVEL-EDGE advisories for a validated subtree (Story MOTIR-6015 ·
+ * MOTIR-6369): one per `blocked_by` a not-done member ALREADY carries to an item
+ * on another level (epic · story · leaf). A new such edge is refused at every
+ * write door; this surfaces the ones drawn before the rule. Pure over the edge
+ * read the finishability walk already made — no extra query.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER — `valid` / `blockers` are computed without it.
+ */
+function crossLevelEdgeAdvisories(
+  edges: ReadonlyArray<{ fromId: string; blockerKey: string; blockerKind: string }>,
+  membersById: ReadonlyMap<string, { identifier: string; kind: string }>,
+): WorkItemProseCrossLevelEdgeAdvisoryDto[] {
+  const out: WorkItemProseCrossLevelEdgeAdvisoryDto[] = [];
+  for (const edge of edges) {
+    const member = membersById.get(edge.fromId);
+    if (!member || !isIssueType(member.kind) || !isIssueType(edge.blockerKind)) continue;
+    if (!isCrossLevelEdge(member.kind, edge.blockerKind)) continue;
+    out.push({
+      kind: 'shape',
+      item: member.identifier,
+      severity: 'cross-level-edge',
+      blockedBy: edge.blockerKey,
+      itemKind: member.kind,
+      itemLevel: edgeLevel(member.kind),
+      blockedByKind: edge.blockerKind,
+      blockedByLevel: edgeLevel(edge.blockerKind),
+    });
+  }
+  return out.sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
 }
 
 /**

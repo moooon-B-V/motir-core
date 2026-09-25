@@ -694,7 +694,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // UNCHANGED: it narrows an advisory, and this line describes the verdict.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: 'fd4073e85a9f',
+    // Re-pinned for MOTIR-6369, summary UNCHANGED: one more advisory severity
+    // (`cross-level-edge`) in the family the summary already names.
+    descriptionFingerprint: '6c8ee1c15f86',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -938,7 +940,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   link_work_items: {
     summary:
       'Create an edge between two items — blocked_by is the one that holds an item out of the ready set.',
-    descriptionFingerprint: 'e2d02dc88244',
+    // Re-pinned for MOTIR-6369, summary UNCHANGED: the description gained the
+    // same-level rule and its CROSS_LEVEL_LINK refusal, which the summary does not
+    // enumerate for the other refusals either.
+    descriptionFingerprint: '64aa983e5137',
   },
   unlink_work_items: {
     summary: 'Remove an edge, given the same relationship used to create it.',

@@ -7,6 +7,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   isCoverageAdvisory,
   isBlockerCountAdvisory,
+  isCrossLevelEdgeAdvisory,
   isPathReferenceAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
@@ -94,6 +95,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
+  const crossLevel = result.advisories.filter(isCrossLevelEdgeAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
   const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
 
@@ -102,6 +104,24 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
     lines.push(
       '',
       `Advisory (${unaffected}): ${a.item} claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Update the prose or the graph.`,
+    );
+  }
+  // The CROSS-LEVEL-EDGE member (MOTIR-6369) — an edge the card already carries
+  // that joins two levels. Every write door now refuses a new one; this is how
+  // the ones drawn before the rule become visible.
+  if (crossLevel.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards are blocked_by an item on ANOTHER LEVEL — a ` +
+        'dependency joins two items on the same level (epic · story · leaf):',
+      ...crossLevel.map(
+        (a) =>
+          `  ${a.item} (${a.itemKind}, ${a.itemLevel}) is blocked_by ${a.blockedBy} ` +
+          `(${a.blockedByKind}, ${a.blockedByLevel}) (${a.severity})`,
+      ),
+      'Re-wire it to the same-level item really waited on — it may be under another parent — or ' +
+        'between the two containers if the whole of one is needed. A new edge like this is ' +
+        'refused (CROSS_LEVEL_LINK); this one predates the rule.',
     );
   }
   if (references.length > 0) {
@@ -428,7 +448,10 @@ export function registerValidateWorkItem(
         'trail), or ' +
         "`likely-blocker-count-mismatch` when an explicit counted claim about the card's own " +
         'blocker siblings disagrees with its current blocked_by edge count (with the exact ' +
-        '`claim`, `claimedCount`, and `blockerCount`). A `coverage` ' +
+        '`claim`, `claimedCount`, and `blockerCount`), or `cross-level-edge` when a subtree ' +
+        'member ALREADY carries a blocked_by to an item on another LEVEL — epic, story, leaf — ' +
+        '(with `blockedBy`, `itemKind` / `itemLevel` and `blockedByKind` / `blockedByLevel`; a ' +
+        'new such edge is refused CROSS_LEVEL_LINK). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +

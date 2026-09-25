@@ -374,6 +374,8 @@ export const workItemLinkRepository = {
       blockerStatus: string;
       blockerSprintId: string | null;
       blockerProjectId: string;
+      /** The blocker's kind — the cross-level-edge advisory's far end (MOTIR-6369). */
+      blockerKind: string;
     }>
   > {
     if (fromIds.length === 0) return [];
@@ -394,6 +396,7 @@ export const workItemLinkRepository = {
             status: true,
             sprintId: true,
             projectId: true,
+            kind: true,
           },
         },
       },
@@ -401,6 +404,7 @@ export const workItemLinkRepository = {
     return rows.map((r) => ({
       fromId: r.fromId,
       blockerId: r.toItem.id,
+      blockerKind: r.toItem.kind,
       blockerKey: r.toItem.identifier,
       blockerTitle: r.toItem.title,
       blockerStatus: r.toItem.status,

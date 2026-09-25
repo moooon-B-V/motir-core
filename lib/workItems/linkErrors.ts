@@ -22,7 +22,8 @@ export type WorkItemLinkErrorTag =
   | 'WORKSPACE_MISMATCH_LINK'
   | 'SELF_LINK'
   | 'DUPLICATE_LINK'
-  | 'WORK_ITEM_LINK_NOT_FOUND';
+  | 'WORK_ITEM_LINK_NOT_FOUND'
+  | 'CROSS_LEVEL_LINK';
 
 /**
  * Base class for every work-item-link typed error. Concrete subclasses set a
@@ -159,5 +160,34 @@ export class WorkItemLinkNotFoundError extends WorkItemLinkError {
   constructor(id: string) {
     super(`Work item link ${id} not found.`);
     this.name = 'WorkItemLinkNotFoundError';
+  }
+}
+
+/**
+ * A NEW `is_blocked_by` edge whose two ends sit on different LEVELS — epic,
+ * story, leaf, where a task, a bug and a subtask are all leaves (Story
+ * MOTIR-6015 · MOTIR-6369). A dependency joins two items on the same level and
+ * may cross parents; it never joins a subtask to a story or an epic to a
+ * subtask. Raised by the SERVICE before the insert, so no row is written.
+ * `relates_to`, `duplicates` and `clones` are never judged, and an existing
+ * cross-level edge is not refused — `validate_work_item` reports it as a
+ * `cross-level-edge` advisory instead.
+ *
+ * Carries both ends' keys, kinds and levels so a caller can name the pair.
+ */
+export class CrossLevelLinkError extends WorkItemLinkError {
+  readonly tag = 'CROSS_LEVEL_LINK' as const;
+  readonly code = 'CROSS_LEVEL_LINK' as const;
+  constructor(
+    readonly blocked: { key: string; kind: string; level: string },
+    readonly blocker: { key: string; kind: string; level: string },
+  ) {
+    super(
+      `${blocked.key} is a ${blocked.kind} (level: ${blocked.level}) and ${blocker.key} is a ` +
+        `${blocker.kind} (level: ${blocker.level}). A blocked_by joins two work items on the SAME ` +
+        `level — epic, story or leaf (a task, a bug and a subtask are all leaves). It may cross ` +
+        `parents; it may not cross levels.`,
+    );
+    this.name = 'CrossLevelLinkError';
   }
 }

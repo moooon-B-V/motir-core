@@ -133,8 +133,10 @@ export function registerLinkWorkItems(server: McpServer, resolveContext: McpCont
         'use "blocked_by" to record a DEPENDENCY EDGE (the first item is blocked by the second, so ' +
         'it leaves the ready set until the second is done), or "blocks" / "relates_to" / ' +
         '"duplicates" / "clones". Targets may be in another project in the same workspace. ' +
-        'Re-creating an existing link is idempotent; a self / cycle / cross-workspace link returns ' +
-        'a typed error. Honors the same access checks as the UI.',
+        'A dependency joins two items on the SAME LEVEL — epic, story, or leaf (task / bug / ' +
+        'subtask) — and may cross parents; a blocked_by / blocks between two levels is refused ' +
+        '(CROSS_LEVEL_LINK). Re-creating an existing link is idempotent; a self / cycle / ' +
+        'cross-workspace link returns a typed error. Honors the same access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runLinkWorkItems(args, resolveContext(extra)),

@@ -17,6 +17,7 @@
 // the two cannot disagree about which edges are legal.
 
 import { isIssueType, type IssueType } from '@/lib/issues/parentRules';
+import { CrossLevelLinkError } from '@/lib/workItems/linkErrors';
 
 /** The three levels an edge may join within. */
 export type EdgeLevel = 'epic' | 'story' | 'leaf';
@@ -40,4 +41,21 @@ export function edgeLevel(kind: string): EdgeLevel {
 /** True when a `blocked_by` between `a` and `b` would join two different levels. */
 export function isCrossLevelEdge(a: string, b: string): boolean {
   return edgeLevel(a) !== edgeLevel(b);
+}
+
+/**
+ * The committed-edge half of the rule (MOTIR-6369): refuse a NEW directed
+ * `is_blocked_by` between two levels. `from` is the blocked item, `to` its
+ * blocker — the stored direction. Every other link kind passes untouched.
+ */
+export function assertLinkSameLevel(
+  kind: string,
+  from: { identifier: string; kind: string },
+  to: { identifier: string; kind: string },
+): void {
+  if (kind !== 'is_blocked_by' || !isCrossLevelEdge(from.kind, to.kind)) return;
+  throw new CrossLevelLinkError(
+    { key: from.identifier, kind: from.kind, level: edgeLevel(from.kind) },
+    { key: to.identifier, kind: to.kind, level: edgeLevel(to.kind) },
+  );
 }

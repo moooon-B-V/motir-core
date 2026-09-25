@@ -2014,6 +2014,18 @@ Re-creating an existing link is **idempotent** (a success no-op, not an error). 
 **cross-workspace** link returns a typed error naming the violation. The link is
 an edit of the FROM item, so the same Story-6.4 edit gate as the UI applies.
 
+**A dependency joins two items on the SAME LEVEL** (Story MOTIR-6015 ·
+MOTIR-6369) — epic, story or leaf, where a task, a bug and a subtask are all
+leaves. It **may cross parents**: a subtask `blocked_by` a subtask in another
+story, a story `blocked_by` a story in another epic, and a bug `blocked_by` a
+subtask are all created. A `blocked_by` / `blocks` between two levels (a subtask
+and a story, an epic and a subtask) is refused **`CROSS_LEVEL_LINK`**, naming
+both keys, kinds and levels, and nothing is written. The same refusal guards the
+links collected by `create_work_item` / the create modal. `relates_to`,
+`duplicates` and `clones` are never judged, and an edge that already exists is
+never deleted — `validate_work_item` reports it as a `cross-level-edge`
+advisory.
+
 | Input          | Type                                                                   | Required | Notes                                                     |
 | -------------- | ---------------------------------------------------------------------- | -------- | --------------------------------------------------------- |
 | `fromKey`      | string                                                                 | yes      | The first item's identifier, e.g. `"ACME-3"`.             |
@@ -2505,6 +2517,30 @@ carries `threshold`, `storyPoints` and `estimateMinutes`; the fourth carries
 carries the exact `claim`, its `claimedCount` and the graph's current
 `blockerCount`; the body-edit member carries `bodyEdit` and `fieldMove`. Only two
 of the six carry `criterionIndex`, so narrow on `severity` before reading one.
+
+A seventh shape member is `validate_work_item`'s alone (Story MOTIR-6015 ·
+MOTIR-6369): **`cross-level-edge`** — a subtree member ALREADY carries a
+`blocked_by` to an item on another LEVEL (epic · story · leaf, where a task, a
+bug and a subtask are all leaves). It carries `blockedBy`, `itemKind` /
+`itemLevel` and `blockedByKind` / `blockedByLevel`, and like every advisory it
+never moves `valid`. A NEW such edge is refused at every write door
+(`link_work_items` → `CROSS_LEVEL_LINK`; a plan → `INVALID_PLAN_REF_GRAPH` /
+`cross_level`), so this entry reports an edge drawn before the rule. The remedy
+is to re-wire it to the same-level item really waited on, which may sit under
+another parent. The dispatch surfaces do not emit it.
+
+```jsonc
+{
+  "kind": "shape",
+  "item": "ACME-9",
+  "severity": "cross-level-edge",
+  "blockedBy": "ACME-2",
+  "itemKind": "subtask",
+  "itemLevel": "leaf",
+  "blockedByKind": "story",
+  "blockedByLevel": "story",
+}
+```
 
 A `subsumption` entry (`kind: "subsumption"`) reports that a path this card's
 body names is being changed SOMEWHERE ELSE — the one advisory family whose far

@@ -1573,7 +1573,8 @@ export type WorkItemProseShapeSeverityDto =
   | 'likely-over-gate-sizing'
   | 'likely-self-blocking-design'
   | 'body-edit-above-field-move'
-  | 'likely-blocker-count-mismatch';
+  | 'likely-blocker-count-mismatch'
+  | 'cross-level-edge';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -1893,6 +1894,30 @@ export interface WorkItemProseBlockerCountAdvisoryDto extends WorkItemProseShape
 }
 
 /**
+ * A `blocked_by` the card ALREADY carries that joins two different LEVELS —
+ * epic, story, leaf (a task, a bug and a subtask are all leaves) — Story
+ * MOTIR-6015 · MOTIR-6369. A new such edge is refused at every write door
+ * (`CROSS_LEVEL_LINK`, `INVALID_PLAN_REF_GRAPH` / `cross_level`); this reports
+ * the ones drawn before the rule, or below the doors.
+ *
+ * ⚠️ **Never a gate.** Refusing here would fail every validation of an old tree
+ * at once, over data nobody has had a chance to look at. The remedy is to
+ * re-wire the edge to the same-level item really needed (or between the
+ * containers), which only a reader of the finding can decide.
+ */
+export interface WorkItemProseCrossLevelEdgeAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'cross-level-edge';
+  /** The blocker's identifier — the far end of the edge `item` carries. */
+  blockedBy: string;
+  /** `item`'s kind and level. */
+  itemKind: string;
+  itemLevel: string;
+  /** The blocker's kind and level. */
+  blockedByKind: string;
+  blockedByLevel: string;
+}
+
+/**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
  * once `kind === 'shape'` has narrowed the outer union.
  *
@@ -1906,7 +1931,8 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseSizingAdvisoryDto
   | WorkItemProseSelfBlockingDesignAdvisoryDto
   | WorkItemProseBodyAboveFieldMoveAdvisoryDto
-  | WorkItemProseBlockerCountAdvisoryDto;
+  | WorkItemProseBlockerCountAdvisoryDto
+  | WorkItemProseCrossLevelEdgeAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). Named rather than inlined
@@ -2224,6 +2250,13 @@ export function isBodyAboveFieldMoveAdvisory(
   a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseBodyAboveFieldMoveAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'body-edit-above-field-move';
+}
+
+/** Narrow an advisory to the cross-level-edge shape (MOTIR-6369). */
+export function isCrossLevelEdgeAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseCrossLevelEdgeAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'cross-level-edge';
 }
 
 /** Narrow an advisory to the counted-own-blockers shape (MOTIR-5428). */
