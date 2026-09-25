@@ -5781,11 +5781,17 @@ enum AutomationTriggerType {
 /// 6.6.1 ships the table). `success` = the action list ran; `failure` = an
 /// action threw (the typed error is recorded); `no_actions` = the condition
 /// group gated the rule out (a matched trigger whose conditions didn't hold —
-/// distinct from a failure, the verified Jira "no actions performed" outcome).
+/// distinct from a failure, the verified Jira "no actions performed" outcome);
+/// `plan_held` = a `transition` action met a card an undecided plan holds at
+/// `planning` (`PLAN_TARGET_HELD`, recorded in `error`) — the card is not the
+/// rule's to move while a plan rewrites it, so this is neither a success nor a
+/// failure and never counts toward auto-disable (MOTIR-6340;
+/// `agent-authored-plans.md` AMENDMENT 21 §5(b)).
 enum AutomationExecutionStatus {
   success
   failure
   no_actions
+  plan_held
 
   @@map("automation_execution_status")
 }

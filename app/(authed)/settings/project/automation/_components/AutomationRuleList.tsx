@@ -193,7 +193,8 @@ function RuleRow({
  * auto-disabled rule overrides everything (the engine switched it off after the
  * failure threshold). Otherwise: Success → mint check + "Ran {time} ago",
  * Failure → rose alert + "Failed · {time} ago", No actions → faint minus +
- * "No actions · {time} ago", never-fired → faint "Never run". */
+ * "No actions · {time} ago", Held by a plan → the same faint minus + "Held by a
+ * plan · {time}", never-fired → faint "Never run". */
 function LastRun({ rule, auto }: { rule: AutomationRuleSummaryDto; auto: boolean }) {
   const t = useTranslations('settings.automation');
   const format = useFormatter();
@@ -232,7 +233,9 @@ function LastRun({ rule, auto }: { rule: AutomationRuleSummaryDto; auto: boolean
   return (
     <span className="flex items-center gap-1 text-(--el-text-muted)">
       <MinusCircle className="size-3.5 shrink-0" aria-hidden />
-      {t('row.noActionsAgo', { time })}
+      {lastRun.status === 'plan_held'
+        ? t('row.planHeldAgo', { time })
+        : t('row.noActionsAgo', { time })}
     </span>
   );
 }
