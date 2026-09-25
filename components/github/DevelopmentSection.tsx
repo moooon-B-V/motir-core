@@ -435,6 +435,7 @@ export function DevelopmentSectionBody({
   gateKey,
   gateNotice,
   gateVerbsDisabled = false,
+  handOver,
   cardTerminal = false,
   designResult = null,
   repair = null,
@@ -530,6 +531,12 @@ export function DevelopmentSectionBody({
    *  overlay's live withdrawal (MOTIR-5917, § 30 Panel 4a). Passed straight to the frame. */
   gateNotice?: ReactNode;
   gateVerbsDisabled?: boolean;
+  /**
+   * THE ITEM PAGE HANDS THE DECISION OVER (Bug MOTIR-6323) — passed straight to the frame.
+   * An awaiting gate this reader may decide draws the block unframed, closed by the
+   * call-to-action band into the approval overlay. The overlay and the peek omit it.
+   */
+  handOver?: { routedToViewer: boolean };
   /**
    * The card sits in a DONE-category status (Bug MOTIR-5884; § 29's cite table). A
    * withdrawn merge question on such a card is never asked again, so its cite promises
@@ -756,6 +763,7 @@ export function DevelopmentSectionBody({
         gateKey={gateKey}
         notice={gateNotice}
         verbsDisabled={gateVerbsDisabled}
+        handOver={handOver}
       >
         {block}
       </DevelopmentGateFrame>

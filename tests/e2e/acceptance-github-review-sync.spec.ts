@@ -318,7 +318,11 @@ test.describe('a GitHub approval syncs into Motir', () => {
       await expect(prRow(page, API_REPO, api)).toHaveCount(1);
       // ONE gate over the whole set, and the person it waits on can still answer it in Motir
       // — which is what makes the next two chapters a SYNC rather than the only way through.
-      await expect(dev.getByRole('button', { name: pra.verb.approveAndMerge })).toBeVisible();
+      // ⚠️ AMENDED by MOTIR-6323: answered through the band's ONE control into the approval
+      // overlay; the item page carries no verb of its own.
+      await expect(
+        dev.getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove, exact: true }),
+      ).toBeVisible();
     });
     await beat();
 
@@ -349,8 +353,12 @@ test.describe('a GitHub approval syncs into Motir', () => {
       // asserts both: the gate still Awaiting, the card still In Review.
       await expect(developmentCard(page)).toContainText(gate.state.awaiting);
       await expect(statusCard(page)).toContainText('In Review');
+      // ⚠️ AMENDED by MOTIR-6323: still answerable — through the band's door.
       await expect(
-        developmentCard(page).getByRole('button', { name: pra.verb.approveAndMerge }),
+        developmentCard(page).getByRole('link', {
+          name: en.approvalGate.statusHeld.reviewAndApprove,
+          exact: true,
+        }),
       ).toBeVisible();
       expect(mergePresses(), 'nothing merges on a half-approved set').toEqual([]);
     });
@@ -481,8 +489,11 @@ test.describe('a GitHub approval syncs into Motir', () => {
     await page.goto(`/items/${seed.zh.identifier}`);
     const dev = developmentCard(page);
     await expect(dev).toHaveCount(1, { timeout: 60_000 });
-    // The question is still open, still answerable by the person it waits on.
-    await expect(dev.getByRole('button', { name: pra.verb.approveAndMerge })).toBeVisible();
+    // The question is still open, still answerable by the person it waits on — through the
+    // band's door (AMENDED by MOTIR-6323: the item page carries no verb of its own).
+    await expect(
+      dev.getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove, exact: true }),
+    ).toBeVisible();
     // `state.awaitingYou` contains `state.awaiting`, so this one assertion covers the gate as
     // the decider sees it and as a bystander would.
     await expect(dev).toContainText(gate.state.awaiting);
