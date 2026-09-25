@@ -1,194 +1,207 @@
-# The dispatched path's run-found trigger — the shipped planner computes it, and the bug lands in Motir's planner-bug home
+# The dispatched path's run-found trigger — the runner reports to a motir-core endpoint, and only a motir-ai plan files a planning bug
 
-**Status:** proposed · **MOTIR-6226** (story MOTIR-5544) · read at `motir-core` `origin/main`
-`534eca4e2` and `motir-ai` `origin/main` `6d98693`
+**Status:** proposed, rewritten to the reviewer's direction (decision gate `changes_requested`,
+2026-09-25) · **MOTIR-6226** (story MOTIR-5544) · read at `motir-core` `origin/main` `e1aeac8ac`
+and `origin/parent/MOTIR-5544-run-found-verdict` for the verdict (MOTIR-6225, not yet on main)
 
 **Extends** [`run-findings-protocol.md`](run-findings-protocol.md) **Q3** (_Where a run-filed bug
 is parented_), **Q5** (_How the RUN RECORD points at the bug it filed and the plan it submitted_)
-and **Q6** (_The submit is a TOOL CALL, and the agent COMPOSES the WHAT_). That file is not
-edited. Every answer below keeps what those three sections decided.
+and **Q6** (_The submit is a TOOL CALL, and the agent COMPOSES the WHAT_). That file is not edited.
 
 ## Context
 
-MOTIR-5544 makes a run that finds its card unbuildable ask one more question: **is the card
-still what the last approved plan approved?** The server computes the answer as a verdict,
-`unchanged | changed | no_plan` (MOTIR-6225). Only `unchanged` files a planning bug. On the
-runbook path the runbook reads the verdict itself (MOTIR-6227, MOTIR-6231). On the product
-path, the dispatched agent is deliberately kept out of the question:
+MOTIR-5544 makes a run that finds its target unbuildable ask one more question: **is the target
+still what the last approved plan approved?** The server answers it as a verdict,
+`unchanged | changed | no_plan` (`plansService.resolveApprovedShapeVerdict`, MOTIR-6225). Only
+`unchanged` blames the planner. On the product path the dispatched agent is kept out of that
+question on purpose: **Q3** keeps its bugs out of the planner-bug home, **Q6** has it compose
+what is wrong with the CARD and submit once without classifying (_"an agent asked to classify
+invents"_), and **Q5** has the SERVER record `plan_submitted` on the run's leg.
 
-- **Q3** keeps the agent's bugs out of the planner-bug home, and the home is out of reach of
-  `CLI_TOKEN_GRANT` anyway.
-- **Q6** has the agent append one turn and call `submit_plan_session` ONCE, anchored at
-  `targetKeys: [<KEY>]`, and exit. It is told not to classify: _"Q3's reasoning holds one step
-  over: an agent asked to classify invents."_
-- **Q5** has the SERVER record `plan_submitted` on the run's leg
-  (`plansService.recordSubmittedPlanFinding`).
+The first version of this record gave the question to the shipped planner (motir-ai), read
+through an internal route. The reviewer rejected that and set the direction below.
 
-That leaves two questions this record settles: **(a)** who computes the verdict and files the
-bug when a dispatched agent refuses its card, and **(b)** where that bug lands when the tenant
-is a customer's.
+> 1. there's a precondition, the plan needs to be made by motir-ai, the plan made by MCP planner
+>    will never fire a planning bug
+> 2. the shipped planner -- motir-ai won't be involved in this process. We change the runner
+>    prompt to let the runner call an endpoint when stop the run -- unbuildable, the endpoint
+>    will collect the data -- the plan, the run target (sent by the runner), why can't not run
+>    (sent by the runner) then compose the planning bug, we will debug using those information
+>    later
+
+Two findings from the first version still hold. They are kept because the direction depends on
+them:
+
+- **Planning bugs file into Motir's own planner-bug home, never into the customer's project.**
+  motir-ai's `log_planning_bug` files through `lessonService.filePlanningBug` into
+  `META_PROJECT_KEY` with `parentKey` `@planner-bug-home` (MOTIR-1460; motir-ai
+  `planner-files-tenant-bug.md` §2b: a wrong planning bug is _"a card **we** cancel … Never seen
+  by a customer"_). `aiWorkItemsService.filePlannerBug` is `log_bug`'s sink, which files a
+  product defect into the job's own project, so it does not serve here.
+- **The leg is closed before anything downstream reads it.** `submit_plan_session` returns at
+  once, the agent exits, and the CLI settles the leg `replanned` and closes the run
+  (`packages/cli/src/dispatchLeg.ts`, `commands/dispatch.ts`). A reader that comes later finds no
+  open leg (`dispatchRunCardRepository.findOpenLegForWorkItem` needs `endedAt: null` on a
+  `running` run). That is reported separately as MOTIR-6279.
 
 ## Decision
 
-### (a) The shipped planner computes it — option 1
+### (a) The actor: a motir-core endpoint the runner calls once, when it stops on an unbuildable target
 
-The planning job that `submit_plan_session` starts is where the verdict gets read. That job
-is motir-ai's one planning handler (`src/jobs/handlers/plan.ts` → `runPlanningJob` in
-`src/jobs/planningEngine.ts`). It reads the verdict through an internal AI route (MOTIR-6228),
-and on `unchanged` it files through `log_planning_bug`. That handler already starts at exactly
-the moment a dispatched agent refuses a card. Every run already includes
-`buildLessonCaptureSink`, which holds `log_planning_bug`. MOTIR-5543 added the rest of the
-classification machinery to the same engine: the branch-carrying bug (MOTIR-6085), the
-whole-corpus rule search (MOTIR-6093) and the internal record (MOTIR-6083, written by
-MOTIR-6088's pass). **Plain code decides the branch, and the model decides nothing about the
-verdict** (MOTIR-6230).
+**The dispatched runner calls one new motir-core endpoint at the moment it stops because its
+target is unbuildable. The runner sends the target key and why it cannot run it. The server
+resolves the plan, reads the verdict, and composes and files the planning bug. motir-ai takes no
+part.** Option 1 (the shipped planner reads the verdict and files) is not taken, because the
+reviewer directed otherwise. MOTIR-6228's internal route and the motir-ai pass have no job left
+to do.
 
-- **Option 2 is refused. It was a `motir-core` listener on `plan_submitted`.** It would add a
-  second bug-filing path, a second resolver for the planner-bug home and a second set of
-  evidence rules, one repository away from the set motir-ai already has. That gives one rule
-  two homes, which `core.md` gate 19 exists to prevent. The event also arrives too late (see
-  _The run-submitted discriminator_ below).
-- **Option 3 is refused. It would have the dispatched agent classify or file.** That
-  **reverses Q3 outright**, and Q6 too: the agent would be asked the one question both
-  sections keep from it, and would need a credential Q3 says it must not hold.
+- **Where it lives.** It is an MCP tool on motir-core's `/api/mcp`, working name
+  `report_unbuildable_target`, over one new service method. The runner reaches motir-core only
+  through that MCP server, and every other step of the card-is-wrong lane is already a tool call.
+  Q6 point 1 chose the MCP tool as the door for the same reason. A `/api/v1` mirror is not needed
+  because nothing but the runner calls it.
+- **Its key: `work_item:edit`.** `CLI_TOKEN_GRANT` (`lib/mcp/toolPermissions.ts`) already carries
+  that key, so **the grant is not widened**. `POST /api/v1/dispatch-runs/{id}/events` asserts the
+  same key for the same kind of write, which is a run recording what happened on its leg. It is
+  deliberately not `ai:view_plan`. The runner reads nothing back: the tool returns an
+  acknowledgement only, never the verdict, the plan or a bug key. The service computes the verdict
+  beneath `resolveApprovedShapeVerdict`'s `ai:view_plan` assertion, so that gate is not
+  laundered: what the gate protects never reaches the caller.
+- **Timing fixes the leg.** The runner calls while it is still running, so the leg is open. The
+  server resolves it with `findOpenLegForWorkItem` in the caller's own tenant. If there is no open
+  leg (a call from outside a dispatch), the server records and files nothing and says so in the
+  acknowledgement. MOTIR-6279's late-read problem cannot reach this trigger.
 
-### (b) The bug lands in Motir's own planner-bug home, with the plan's author recorded on it
+### The precondition: only a plan motir-ai made fires a bug
 
-**This departs from the card's recommendation (A).** A run-found planning bug from ANY tenant
-goes where `log_planning_bug` sends every planning bug today. That is
-`lessonService.filePlanningBug` → `createBug` with `projectKey: META_PROJECT_KEY` (`MOTIR`),
-as the Motir system principal, `parentKey` `@planner-bug-home`. `aiWorkItemsService.fileBug`
-then resolves that through `bugDestinationService.resolvePlannerBug`. The bug body is
-sanitized under that tool's own mandate (_"sanitized; never the customer tenant"_). It also
-carries the **approving plan's author triple**: `Plan.authorSource`, `authorHarness` and
-`authorModel`, as stored (null included). A triager reads them to tell Motir's own generator
-(`native`) from an agent holding a workspace PAT (`mcp`) or any other author.
+**The server reads `Plan.authorSource` (`prisma/schema.prisma`, enum `WorkItemPlanningSource`
+`native | mcp | manual | api`) on the approving plan. A bug is composed only when it is
+`native`.** This field is written by the server and never taken from the caller. `native`
+(with `authorHarness: 'Motir'`) is written only on the two paths that hand the tree to motir-ai
+to write: `aiGenerationService` (`lib/services/aiGenerationService.ts`) and `aiPlanEditsService`
+(expand, augment, replan and contextual submits, plus the cadence watcher). `mcp` is written by
+the `create_plan` MCP tool (`lib/mcp/tools/authorPlan.ts`). **A plan with `mcp`, or any value
+other than `native`, never fires a bug.** A `null` from before MOTIR-2996 does not fire either.
+This is the strict reading, and the reviewer can relax it to `sourceJobId != null`.
 
-**The evidence that overturned A.** The card cited `aiWorkItemsService.filePlannerBug` as
-proof that the shipped code already files into the tenant's own planner-bug destination. It
-does not. `filePlannerBug` is the sink for **`log_bug`**, which files a PRODUCT defect into
-the job's own project, and with no parent it resolves `bugDestinationService.resolve`, the
-product bug folder, not `resolvePlannerBug`. **`log_planning_bug` is the planning-bug sink,
-and it files into Motir's project and never into the customer's**
-(`src/jobs/lessonCaptureSink.ts`, `src/services/lessonService.ts` `filePlanningBug`, MOTIR-1460).
-motir-ai's `docs/decisions/planner-files-tenant-bug.md` §2b sets the two apart on purpose:
-a wrong planning bug is _"a card **we** cancel, in a click. Never seen by a customer"_. A
-wrong `log_bug` is _"a false defect in **someone else's** backlog"_.
+**The verdict (recommended, the reviewer can overrule): file only on `unchanged`.** That is the
+story's premise: a target edited after approval (`changed`) or never shaped by a plan
+(`no_plan`) is not the planner's defect. The verdict and its diverging revision are recorded on
+every arm, on the leg and on the bug when one is filed. The order is: no open leg → nothing;
+`no_plan` → record; approving plan not `native` → record; `changed` → record; `native` and
+`unchanged` → record and file.
 
-- **A is refused. It would put the bug in the tenant's own planner-bug destination.** Nothing
-  shipped does that. It would need a third sink, and it would reverse the §2b split for one
-  trigger. A customer cannot fix Motir's planning rules, so it would pass the triage cost to
-  the one party that cannot act on the bug.
-- **B is refused. It would file only when `authorSource` is `native`.** It silences every
-  plan written with a workspace PAT (`mcp`), and that includes how Motir plans Motir. The
-  author triple on the bug makes the same cut at triage without losing the signal.
-- **C is refused as the card framed it, and the shipped channel is not C.** C was
-  _"somewhere Motir can read across tenants"_. Nothing here reads across a tenant. The pass
-  is already that tenant's planner. It WRITES one sanitized record outward through the single
-  route MOTIR-1460 pinned to Motir's own workspace, and that route cannot target a customer
-  project. The same channel already carries every trigger-1 bug from MOTIR-6088's pass. This
-  record adds a trigger to it and does not widen it.
+### Which plan, and where the bug lands
 
-### The run-submitted discriminator — the leg that was open at SUBMIT, not at read
+**"The plan" is the last approved plan that shaped the target, and the server resolves it.** It
+is the verdict's approving plan (the latest `approved` entry of `listPlanHistoryForWorkItem`).
+The runner never names a plan.
 
-**The card recommended the OPEN DISPATCH LEG. That is adopted as the fact to read, but it is
-corrected on WHEN to read it,** because by the time the pass reads, the leg is usually closed:
+**There is one destination: Motir's planner-bug home.** A defect in Motir's planner is Motir's
+defect in every tenant. The service resolves the system principal (`resolveSystemPrincipal`,
+`lib/ai/serviceAuth.ts`) and calls `aiWorkItemsService.fileBug` with
+`projectKey: metaProjectKey()` and `parentKey: PLANNER_BUG_HOME_MARKER` (`@planner-bug-home`,
+`lib/ai/plannerBugHome.ts`). That call resolves `bugDestinationService.resolvePlannerBug`, and
+the bug is filed into the `Bugs / Planning bugs` folder. It is the same in-process pattern
+`dlqStandingDepthService.fileOne` already uses to file into the meta project as the system
+principal.
 
-1. `submit_plan_session` returns `{ jobId, planId }` **immediately**. It opens a `generating`
-   `Plan` bound to the job (`planChangeSessionsService.submit`) and does not wait for the
-   planner (`lib/mcp/tools/planSession.ts`).
-2. The agent then exits. The CLI settles the leg with `disposition: 'replanned'`, which stamps
-   `endedAt` (`packages/cli/src/dispatchLeg.ts` → `dispatchRunService` event ingest), and
-   `motir run` and `motir next` close the run (`packages/cli/src/commands/dispatch.ts`,
-   `reporter.close('replanned')`).
-3. `dispatchRunCardRepository.findOpenLegForWorkItem` requires `endedAt: null` AND a
-   `running` run. A pass that asks it minutes later finds nothing, and would call a real run
-   a person's re-plan.
+**When the tenant is a customer's, no tenant is read from another.** Every read runs in the
+caller's own workspace under its own request context: the target, the leg, the plan and the
+verdict. Then ONE record is written outward to Motir's project, which is the direction MOTIR-1460
+and §2b already allow. No LLM takes part, so sanitizing is a fixed allowlist rather than a
+judgement:
 
-**The rule the pass applies (read through MOTIR-6228's route, from shipped rows only):** a
-session is RUN-SUBMITTED when all three of these hold:
+- **Motir's own workspace** (the caller's workspace is the system principal's). The bug carries
+  everything verbatim.
+- **A customer's workspace.** The bug carries only ids, enums, timestamps and field names. It
+  carries no titles, no card keys and no runner text. The runner's reason and the plan title stay
+  in the customer's tenant, on the leg's finding event. The bug points at them by workspace id
+  and leg id.
 
-- its `origin` is `conversation`;
-- its `scopeKey` names exactly ONE anchor, which is Q6's `targetKeys: [<KEY>]` shape and the
-  same filter `recordSubmittedPlanFinding` applies;
-- a `DispatchRunCard` for that anchor was open at the instant this job's plan was created:
-  `startedAt <= plan.createdAt` and (`endedAt IS NULL` or `endedAt >= plan.createdAt`).
+**What the bug carries:** the plan id and title; the shaping proposal id (the verdict's
+`proposalId`); the run target key; the runner's stated reason, verbatim; the verdict, and on
+`changed` the diverging revision (id, `changeKind`, `changedKeys`) or the container's child-set
+delta; the plan's author triple (`authorSource`, `authorHarness`, `authorModel`); and the
+dispatch run id and leg (`DispatchRunCard`) id. In a customer tenant, the title, key and reason
+are replaced by the pointer described above.
 
-No field is added to `PlanChangeSession`. The leg serves, once it is read against the moment
-of submission rather than the moment of reading. Every value in the test is written once and
-never moved: `Plan.createdAt`, and the leg's `startedAt` and `endedAt`. Q5 rejected this kind
-of read-time lookup for the run RECORD because tree edits move its answer. That objection
-does not reach this test.
+**Idempotency: one bug per stopped leg, keyed by the `DispatchRunCard` id.** A filing row that is
+unique on the leg id is inserted and locked before the create, following the
+`job_dlq_standing_filing` pattern. A retried call finds the row and returns its first outcome.
 
-**When it cannot tell, the answer is NOT run-submitted.** That covers no such leg, a deleted
-anchor, a project-wide or multi-anchor scope, and an unreachable route. Then the pass files
-nothing under this trigger and records which of these arms it took (MOTIR-6230). This is
-Q5's own posture: _"No open leg means no event, and that is not an error."_ One gap is named
-rather than closed. A person who submits on the same card while a run holds it is counted as
-run-submitted. Q2's B1 accepts the same gap for the same reason: the card is held out of the
-ready set the whole time.
+### The prompt change, and why it does not reopen Q3
 
-The agent's own refusal writes (the comment, the move to `planning`) are not a CHANGE under
-MOTIR-5544's definition, so refusing does not turn its own verdict into `changed`.
+**In `lib/dispatch/promptTemplate.ts`, `cardIsWrongSteps` gains one call, placed right after
+step 3's comment. It is added in both lanes (with and without re-planning), because the lane
+changes what the runner does next, not what it found:**
 
-### The dispatch prompt is unchanged
+```text
+report_unbuildable_target  projectKey: <PROJECT>  targetKey: <KEY>
+                           reason: the SAME text as your step-3 comment
+```
 
-The agent classifies nothing and is asked nothing new. `lib/dispatch/promptTemplate.ts`,
-`cardIsWrongSteps` included, is not touched. Its own doc comment already states the reason:
-_"an agent asked to classify invents"_. The classification runs on the SERVER side of the
-seam, where Q5 already put the observation.
+The prompt tells the runner that the call spends nothing, that it is safe to repeat (the server
+keeps one record per run), and that it returns no answer to act on.
+
+**This does not reopen Q3.** The runner still reports only what is wrong with the CARD. That is
+the text it already composes for the comment and for Q6's WHAT, and it still never says why the
+card was PLANNED that way. The server does the classifying, from the approving plan's author and
+from a verdict computed off recorded rows.
 
 ### `--auto-approve-replan` changes nothing
 
-Q4 and Q2's B1 limit **who may APPROVE** the plan a refusal produced. They do not limit
-whether a finding is recorded. The verdict is read and the bug filed inside the planning
-pass, before the plan reaches `planned` and so before the `auto` loop can approve it. The
-refused card is held out of the same run either way (B5). So the verdict, the filing and the
-destination are identical with or without the flag.
+The report is made before `submit_plan_session` and does not depend on it. Q4 and Q2's B1 limit
+who may APPROVE the plan that follows. They do not limit what a finding records. The verdict is
+read against the plan that shaped the target before the refusal, not against the re-plan, so
+the filing and the destination are the same with or without the flag.
 
 ## Consequences
 
-- motir-ai is the only home of trigger 2's behaviour on the product path, and `motir-core`
-  gains only the read route (MOTIR-6228). The rule text lives in `SHARED_PLANNING_RULES`
-  (MOTIR-6229), with no `MIRROR.md` narrowing.
-- Customer tenants see nothing new. Motir's planner-bug home gains run-found bugs from every
-  tenant, each carrying its author triple and sanitized under `log_planning_bug`'s existing
-  mandate.
-- **Named as amended, not edited here:**
-  - MOTIR-6230 criterion 3 (_"no open dispatch leg for the target"_) and its Approach line on
-    the open leg. The test is now the open-at-submit window above.
-  - MOTIR-6230's context ref to `filePlannerBug` _"and where the bug lands"_. The bug lands
-    through `log_planning_bug`.
-  - This card's recommendation (b) = A and its `filePlannerBug` evidence.
-
-  Each edit rides its consuming card.
+- motir-core owns trigger 2 on the product path end to end. motir-ai gains nothing, and
+  `SHARED_PLANNING_RULES` does not carry this trigger. MOTIR-5544's fourth criterion (the shipped
+  home carries the rule) needs re-planning with the story.
+- Motir's own tenant plans through the MCP, so its dispatched runs will rarely fire this trigger.
+  That is the precondition working as intended, not a gap.
+- A customer-tenant bug cannot be fully debugged from Motir's project alone. The reason is read
+  in the customer's tenant, under that tenant's access rules.
+- **Named as amended, not edited here (`run-findings-protocol.md`):**
+  - **Q3, _Why not the planner-bug home_.** Its claim that a dispatched agent cannot produce a
+    planning defect through the card-is-wrong branch, and that the home is unreachable, stays
+    true of the agent. It no longer holds of the run: the server now files into the home on the
+    runner's report.
+  - **Q6, _"Run it ONCE" now has two parts_.** It now has three. The report is free and safe to
+    repeat, and the submit is still the only act that spends credits and is never retried.
+- The comment on `get_approved_shape_verdict` in `lib/mcp/toolPermissions.ts` (on the parent
+  branch) says the shipped planner reads the verdict through its internal AI route. That becomes
+  false and is corrected by the endpoint's card.
 
 ## Consumed by
 
-- **MOTIR-5544**: criterion 3, the dispatched path behaves as this record says.
-- **MOTIR-6228**: the internal AI route returns the verdict and the run-submitted answer
-  above.
-- **MOTIR-6229**: the run-found rule in `SHARED_PLANNING_RULES`, carried by the shipped
-  planner.
-- **MOTIR-6230**: the deterministic branch, `log_planning_bug` on `unchanged` with the author
-  triple, and a record on every arm.
-- **MOTIR-6232 / MOTIR-6233**: the gates, including _the dispatch prompt still asks the agent
-  to classify nothing_ and _a person-opened re-plan takes neither branch_.
+- **MOTIR-5544**: criterion 3, the dispatched path behaves as this record says. Its body is
+  re-planned to this direction.
+- **New work owed** (to be planned under MOTIR-5544): the endpoint (the MCP tool, the service,
+  the leg-keyed filing row and a new `DispatchEventKind` member for the finding); the bug
+  composition and allowlist; the `cardIsWrongSteps` prompt change.
+- **MOTIR-6232**: re-scoped. Its gate covers the verdict, the runbook door and this endpoint,
+  with one case per arm of the precondition and the verdict, instead of MOTIR-6228's route.
+- **No longer needed:** **MOTIR-6228** (the internal AI route), **MOTIR-6229**, **MOTIR-6230**
+  and **MOTIR-6233** (the motir-ai rule, the pass and its gate).
 
 ## Supersedes
 
-None. This record **extends** `run-findings-protocol.md` Q3, Q5 and Q6 and supersedes none
-of them. It also leaves motir-ai's `planner-files-tenant-bug.md` §2b and MOTIR-1460 as they
-stand.
+None. This record **extends** `run-findings-protocol.md` Q3, Q5 and Q6 and amends the two
+clauses named above. motir-ai's `planner-files-tenant-bug.md` §2b and MOTIR-1460 stand
+unchanged.
 
 ## What this does NOT decide
 
-- **When** a run judges a card unbuildable. The existing guards and the card-is-wrong
-  branch keep that.
-- **What counts as a CHANGE.** MOTIR-6225's verdict owns it.
-- **Whether `log_planning_bug`'s LLM-judged sanitization should become a deterministic
-  scrubber.** MOTIR-1443 left that as future work, and it stays there.
-- **Whether a `non-native` customer plan's bug should be routed or filtered at triage.** The
-  author triple makes that possible, and doing it is the sweep's business.
-- **Q5's own `plan_submitted` timing**, which has the same late-read shape. It is reported
-  separately and is not fixed by this record.
+- **Whether the motir-ai-only precondition also binds the RUNBOOK path (MOTIR-6231).** The
+  runbook plans through the MCP, so under the precondition it would never fire. This record
+  decides the dispatched path only. That question stays with MOTIR-5544.
+- **The leg-timing bug MOTIR-6279** (Q5's `plan_submitted` read after the leg closes). This
+  trigger avoids it by calling early. It does not fix it.
+- **When** a run judges a target unbuildable, and **what counts as a CHANGE**. The existing
+  guards own the first, and MOTIR-6225's verdict owns the second.
+- **How Motir staff read a customer's verbatim reason** when they debug a customer-tenant bug.
+  That is a support-access question, not a filing question.
