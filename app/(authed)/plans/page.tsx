@@ -7,7 +7,7 @@ import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RoomViewSwitch } from '@/components/rooms/RoomViewSwitch';
-import { parseRoomView, resolveRoomView, ROOM_VIEW_PARAM } from '@/lib/rooms/roomView';
+import { parseRoomView, pickRoomView, ROOM_VIEW_PARAM } from '@/lib/rooms/roomView';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
@@ -54,16 +54,21 @@ export default async function PlansPage({
 } = {}) {
   // THE URL IS THE SINGLE SOURCE OF TRUTH for the filter (MOTIR-3241): derived on
   // every render, and an unknown value falls back to All rather than erroring.
-  const params = (await searchParams) ?? {};
+  //
+  // THE READS ARRIVE IN WAVES, not one await each — the serial-read ratchet
+  // (`tests/navigation/loading-boundary-guard.test.ts`, MOTIR-3449).
+  const [awaitedParams, session] = await Promise.all([searchParams, getSession()]);
+  const params = awaitedParams ?? {};
   const planState = planStateFromParam(firstParam(params.planState));
   // `?session=<id>` — the overlay's fresh-start notice lands here (MOTIR-6024).
   const landingId = firstParam(params.session) || null;
-  const session = await getSession();
   if (!session) redirect('/sign-in');
 
-  const t = await getTranslations('aiPlanning');
-
-  const ctx = await getActiveProject();
+  const [t, ta, ctx] = await Promise.all([
+    getTranslations('aiPlanning'),
+    getTranslations('projectAccess'),
+    getActiveProject(),
+  ]);
   // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
   // the WORKSPACE tier). The guard stays because the type does.
   if (!ctx) redirect('/sign-in');
@@ -72,9 +77,27 @@ export default async function PlansPage({
 
   // The active project may be one the actor can no longer browse (made private
   // while pinned) — render the no-access state rather than crashing.
-  const caps = await projectAccessService.getCapabilities(ctx.projectId, wsCtx);
+  //
+  // ONE WAVE: the browse check, the room's views and — on a clean URL, the one
+  // case the default rule consults it — the Mine probe. The room's access read is
+  // SETTLED, not caught into a default: an unbrowsable project still reaches the
+  // no-access state below, and any other failure is rethrown after it.
+  const requested = parseRoomView(params[ROOM_VIEW_PARAM]);
+  const sumCounts = (c: Record<string, number>) => Object.values(c).reduce((a, n) => a + n, 0);
+  const [caps, accessRead, mineHasRows] = await Promise.all([
+    projectAccessService.getCapabilities(ctx.projectId, wsCtx),
+    planSessionsService
+      .roomAccess(ctx.projectId, wsCtx)
+      .then((value) => ({ ok: true as const, value }))
+      .catch((error: unknown) => ({ ok: false as const, error })),
+    requested === null
+      ? planSessionsService
+          .countSessionsByPlanState(ctx.projectId, wsCtx, { view: 'mine' })
+          .then((counts) => sumCounts(counts) > 0)
+          .catch(() => false)
+      : null,
+  ]);
   if (!caps.canBrowse) {
-    const ta = await getTranslations('projectAccess');
     return (
       <div className="flex flex-col gap-6">
         <header className="flex flex-col gap-1">
@@ -90,20 +113,11 @@ export default async function PlansPage({
     );
   }
 
-  const access = await planSessionsService.roomAccess(ctx.projectId, wsCtx);
+  if (!accessRead.ok) throw accessRead.error;
+  const access = accessRead.value;
   if (access.views.length === 0) notFound();
-  const sumCounts = (c: Record<string, number>) => Object.values(c).reduce((a, n) => a + n, 0);
   const view =
-    (await resolveRoomView({
-      requested: parseRoomView(params[ROOM_VIEW_PARAM]),
-      available: access.views,
-      mineHasRows: async () =>
-        sumCounts(
-          await planSessionsService.countSessionsByPlanState(ctx.projectId, wsCtx, {
-            view: 'mine',
-          }),
-        ) > 0,
-    })) ?? access.views[0]!;
+    pickRoomView({ requested, available: access.views, mineHasRows }) ?? access.views[0]!;
   const tv = (key: 'subtitle' | 'subtitleMine') =>
     t(`sessions.${key}`, { project: ctx.project.name });
   const header = (

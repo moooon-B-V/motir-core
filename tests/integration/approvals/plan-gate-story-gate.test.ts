@@ -311,8 +311,10 @@ describe('SEAM · close → raise → queue → decide → record (§11.6, §11.
     expect(theirs.items.map((r) => r.gateId)).toEqual([requestedGate!.id]);
     expect(await approvalGatesService.countAwaitingMe(meCtx(other.id))).toBe(1);
 
-    // The record room lists both raised questions, neither as if it had a card.
-    const open = await approvalGatesService.listRecords(meCtx(), { limit: 50 });
+    // The record room lists both raised questions, neither as if it had a card —
+    // in its PROJECT view, which is where another member's question lives since
+    // the room serves Mine by default to a reader with rows (MOTIR-6333).
+    const open = await approvalGatesService.listRecords(meCtx(), { limit: 50, view: 'project' });
     expect(open.sections.awaiting.items.map((r) => [r.gateId, r.workItem])).toEqual(
       expect.arrayContaining([
         [cadenceGate!.id, null],
@@ -329,7 +331,7 @@ describe('SEAM · close → raise → queue → decide → record (§11.6, §11.
     // …and the asker's question is untouched by it.
     expect(await approvalGatesService.countAwaitingMe(meCtx(other.id))).toBe(1);
 
-    const after = await approvalGatesService.listRecords(meCtx(), { limit: 50 });
+    const after = await approvalGatesService.listRecords(meCtx(), { limit: 50, view: 'project' });
     const decided = after.sections.decided.items.find((r) => r.gateId === cadenceGate!.id);
     expect(decided).toMatchObject({
       kind: 'plan_approval',

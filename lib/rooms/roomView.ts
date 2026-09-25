@@ -59,6 +59,26 @@ export async function resolveRoomView(args: {
 }
 
 /**
+ * {@link resolveRoomView} with the Mine probe ALREADY READ — the same rule, for a
+ * page that ran the probe in the same wave as its other reads rather than after
+ * them (the serial-read ratchet, `tests/navigation/loading-boundary-guard.test.ts`).
+ * `mineHasRows` is null when the probe was not run, which is only correct when the
+ * rule never consults it (a valid `requested`, or fewer than two views); a null
+ * there reads as "no rows", so a page that skipped the probe lands on Project.
+ */
+export function pickRoomView(args: {
+  requested: RoomView | null;
+  available: readonly RoomView[];
+  mineHasRows: boolean | null;
+}): RoomView | null {
+  const { requested, available } = args;
+  if (available.length === 0) return null;
+  if (requested && available.includes(requested)) return requested;
+  if (available.length === 1) return available[0]!;
+  return args.mineHasRows ? 'mine' : 'project';
+}
+
+/**
  * "Can act" in the PLANS room (design MOTIR-6327 § the readers): author a plan
  * (`ai:plan`) or decide one (`ai:decide_plan`). The page and MOTIR-6332's nav
  * row read this one list.

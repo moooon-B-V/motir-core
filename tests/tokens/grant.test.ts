@@ -373,12 +373,13 @@ describe('expandStoredGrant — the room view keys read FORWARD (MOTIR-6329)', (
     expect(unrecognised).toEqual([]);
   });
 
-  it('a FIXED device grant (no project) is read forward, marker or not', () => {
-    for (const stored of [['project:browse'], ['project:browse', MARK]]) {
-      const { grant } = expandStoredGrant(stored, { projectId: null });
-      expect(grant).toContain('plan:view_any');
-      expect(grant).toContain('run:view_any');
-    }
+  it('a FIXED device grant follows the same rule — read forward without the marker, exact with it', () => {
+    const before = expandStoredGrant(['project:browse'], { projectId: null }).grant;
+    expect(before).toContain('plan:view_any');
+    expect(before).toContain('run:view_any');
+    expect(expandStoredGrant(['project:browse', MARK], { projectId: null }).grant).toEqual([
+      'project:browse',
+    ]);
   });
 
   it('a grant that cannot browse gains nothing', () => {

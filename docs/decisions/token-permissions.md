@@ -703,10 +703,10 @@ reads land. The carry follows §5's rule for a stored value, not a migration:
   on the day it runs. The marker is exact by construction: the code that writes it is
   the code that offers the keys. (The first cut of MOTIR-6329 used `created_at`
   against a constant, and CI on its own head showed the third failure.)
-- **A FIXED grant (the device credential, `project_id` NULL) is read forward
-  whatever its date** — nobody chose it, so there is no narrowing to honour — and
-  `CLI_TOKEN_GRANT` itself now carries both keys, in catalog order, for the reads
-  the CLI already performs.
+- **A FIXED grant (the device credential, `project_id` NULL) follows the SAME
+  rule.** One minted before this change holds neither key and no marker, and is
+  read forward; one minted after stores `CLI_TOKEN_GRANT` — which now carries both
+  keys, in catalog order, for the reads the CLI already performs — and the marker.
 - **No `PERMISSION_IMPLICATIONS` edge `project:browse ⇒ *:view_any`.** An
   implication would make the view keys impossible to withhold anywhere, and the
   DECISION card (MOTIR-6165 Q2) says a custom role and a token must be able to

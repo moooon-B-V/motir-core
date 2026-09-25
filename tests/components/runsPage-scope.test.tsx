@@ -113,7 +113,15 @@ describe('⚠️ a key that resolves to NOTHING is its own face', () => {
     expect(screen.queryByRole('link', { name: /PROD-999/ })).toBeNull();
     // No list, and neither of the other two faces' words.
     expect(screen.queryByTestId('runs-index')).toBeNull();
-    expect(listRunsForProject).not.toHaveBeenCalled();
+    // No INDEX read. The one call allowed is the Mine probe (take 1, view mine),
+    // which starts in the same wave as the header read (MOTIR-6335, the
+    // serial-read ratchet) — it is not a list, and nothing renders from it.
+    for (const [, pageArg] of listRunsForProject.mock.calls as [
+      unknown,
+      { take: number; view?: string },
+    ][]) {
+      expect(pageArg).toMatchObject({ take: 1, view: 'mine' });
+    }
     expect(document.body.textContent).not.toContain('scopeIndex.emptyTitle');
     expect(document.body.textContent).not.toContain('indexReadFailed');
     // The way back is there.

@@ -266,13 +266,19 @@ export const ROOM_VIEW_FORWARD_KEYS: readonly PermissionKey[] = ['plan:view_any'
  * keys. It is not a permission and not a legacy scope; `expandStoredGrant` reads
  * it and drops it, so no surface ever displays it.
  *
- * A FIXED grant (no project: the device credential, `CLI_TOKEN_GRANT`) is read
- * forward whether or not it carries the marker — nobody chose it, so there is no
- * narrowing to honour.
+ * ONE rule for both shapes: a FIXED grant (the device credential) minted from
+ * this change on stores `CLI_TOKEN_GRANT` — which already holds both keys — and
+ * the marker; one minted before it holds neither, and is read forward like any
+ * other pre-marker grant.
  */
 export const GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER = '#room-view-keys-offered';
 
-/** Where a stored grant came from — what the read-time forward mapping needs to know. */
+/**
+ * Where a stored grant came from. A caller that passes one is reading a LIVE
+ * credential row, which is what opts it into the forward read; a caller reading
+ * a bare value list (a test, a forward-map audit) passes none and gets the
+ * stored values expanded exactly.
+ */
 export interface StoredGrantProvenance {
   /** The project it is bound to; `null` is the FIXED device-credential shape. */
   projectId: string | null;
@@ -284,7 +290,6 @@ function readsRoomViewKeysForward(
   provenance: StoredGrantProvenance | undefined,
 ): boolean {
   if (provenance === undefined) return false;
-  if (provenance.projectId === null) return true;
   return !stored.includes(GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER);
 }
 
@@ -328,8 +333,8 @@ export function expandStoredGrant(
     }
     for (const key of expanded) grant.add(key);
   }
-  // The ROOM VIEW KEYS, read forward (MOTIR-6329): a chosen grant stored
-  // without the mint marker — or any fixed device grant — that could BROWSE also holds the Plans
+  // The ROOM VIEW KEYS, read forward (MOTIR-6329): a grant stored without the
+  // mint marker that could BROWSE also holds the Plans
   // and Runs rooms' view keys, so the rooms asserting them (MOTIR-6330 /
   // MOTIR-6331) take nothing from a token that reached them on browse. Applied
   // AFTER the legacy expansion, so a legacy `read` scope (which maps to browse)

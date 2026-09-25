@@ -451,6 +451,8 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
           command: 'run_scope',
           status: 'running',
           scopeWorkItemId: item.id,
+          // The caller STARTED it — a run it "owns" is one it opened (MOTIR-6331).
+          createdById: caller.user.id,
         },
       });
     const myRun = await scopedRun(mine, myItem);

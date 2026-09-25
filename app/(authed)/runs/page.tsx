@@ -14,7 +14,7 @@ import {
   parseRunsScope,
   runsHref,
 } from '@/lib/runs/runsAddress';
-import { parseRoomView, resolveRoomView, type RoomView } from '@/lib/rooms/roomView';
+import { parseRoomView, pickRoomView, type RoomView } from '@/lib/rooms/roomView';
 import { RoomViewSwitch } from '@/components/rooms/RoomViewSwitch';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { DISPATCH_RUN_LIVE_STATUSES, DISPATCH_RUN_PAST_STATUSES } from '@/lib/runs/timeline';
@@ -75,8 +75,13 @@ export default async function RunsPage({
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
-  const t = await getTranslations('runs');
-  const ctx = await getActiveProject();
+  // ONE WAVE, not three awaits — the serial-read ratchet
+  // (`tests/navigation/loading-boundary-guard.test.ts`, MOTIR-3449).
+  const [t, ctx, awaitedParams] = await Promise.all([
+    getTranslations('runs'),
+    getActiveProject(),
+    searchParams,
+  ]);
   // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
   // the WORKSPACE tier). The guard stays because the type does — the only null
   // left is a session-less request — and it redirects rather than rendering.
@@ -84,29 +89,38 @@ export default async function RunsPage({
 
   const projectKey = ctx.project.identifier;
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const params = (await searchParams) ?? {};
+  const params = awaitedParams ?? {};
   const scopeKey = parseRunsScope(params[RUNS_SCOPE_PARAM]);
+  const requested = parseRoomView(params[RUNS_VIEW_PARAM]);
 
   // THE VIEW (Story MOTIR-6179 · MOTIR-6335, design MOTIR-6327
   // `runs-index--view-tabs.mock.html`): WHOSE runs — a different axis from
   // `?scope=` (WHICH work item's). Project on `run:view_any`, Mine on starting a
   // run; both ⇒ the switch, one ⇒ that view alone, none ⇒ not-found. The two
   // headed sections stay, and the switch filters both.
-  const access = await dispatchRunService.roomAccess(projectKey, wsCtx);
-  if (access.views.length === 0) notFound();
-  const view: RoomView =
-    (await resolveRoomView({
-      requested: parseRoomView(params[RUNS_VIEW_PARAM]),
-      available: access.views,
-      mineHasRows: async () =>
-        (
-          await dispatchRunService.listRunsForProject(
+  //
+  // ONE WAVE: the access read, the Mine probe (only on a clean URL — the one case
+  // the default rule consults it) and the narrowed page's header all start
+  // together. A probe that fails reads as "no rows" rather than failing the page.
+  const [access, mineHasRows, scopeHeader] = await Promise.all([
+    dispatchRunService.roomAccess(projectKey, wsCtx),
+    requested === null
+      ? dispatchRunService
+          .listRunsForProject(
             projectKey,
             { take: 1, view: 'mine', ...(scopeKey ? { scopeWorkItemKey: scopeKey } : {}) },
             wsCtx,
           )
-        ).runs.length > 0,
-    }).catch(() => null)) ?? access.views[0]!;
+          .then((page) => page.runs.length > 0)
+          .catch(() => false)
+      : null,
+    // The header's read — the design's one new read — is made only on a
+    // narrowed address, and only once: the list's poll and paging never ask again.
+    scopeKey ? readScopeHeader(projectKey, scopeKey, wsCtx) : null,
+  ]);
+  if (access.views.length === 0) notFound();
+  const view: RoomView =
+    pickRoomView({ requested, available: access.views, mineHasRows }) ?? access.views[0]!;
   const hasSwitch = access.views.length > 1;
   // A switch keeps `scope` and drops `run` — the modal covers the page, so an
   // open run is never under the switch anyway.
@@ -145,9 +159,8 @@ export default async function RunsPage({
     );
   }
 
-  // The header's read — the design's one new read — is made only on a narrowed
-  // address, and only once: the list's poll and paging never ask for it again.
-  const header = await readScopeHeader(projectKey, scopeKey, wsCtx);
+  // Read in the wave above whenever `scopeKey` is set, which it is here.
+  const header = scopeHeader!;
 
   return (
     <div className="flex flex-col gap-6">
