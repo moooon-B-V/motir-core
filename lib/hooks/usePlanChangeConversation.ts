@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EarlierSessionDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { announceGateStateDecided } from '@/lib/approvals/decidedGates';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
+import { useGeneratingPlanPoll } from '@/lib/hooks/useGeneratingPlanPoll';
 import {
   findResumableSession,
   getPlanChangeSession,
@@ -186,6 +187,39 @@ export interface PlanChangeConversationState {
    */
   review: PlanReviewDto | null;
   /**
+   * The LIVE review of the plan being WRITTEN (Subtask MOTIR-6295) — a whole
+   * snapshot of a `generating` plan, replaced on every tick of the shared
+   * generating-plan poll (`useGeneratingPlanPoll`), never merged.
+   *
+   * Fed for the plan the session is writing, whoever writes it: the hosted run's
+   * plan from the moment its turn is submitted, and a NAMED session's
+   * `pendingPlanId` at mount when that plan is still `generating` (an MCP agent
+   * writing it). {@link review} cannot carry this: `readPendingProposal` is null
+   * for a `generating` plan by design.
+   *
+   * ⚠️ A HAND-OVER, NOT A SECOND REVIEW. When the poll OBSERVES the plan leave
+   * `generating` — the transition, once — the existing proposed-review path
+   * (`readPendingProposal` → {@link review}) runs exactly once and this goes back
+   * to `null` — in the SAME update that sets `review`, so the planning surface's
+   * pane, which draws `liveReview ?? review`, is never without a plan in between
+   * and is not remounted (MOTIR-6300).
+   */
+  liveReview: PlanReviewDto | null;
+  /** Bumped on every applied live snapshot. */
+  liveVersion: number;
+  /** The live poll has failed several reads in a row (the last snapshot stands). */
+  liveFailing: boolean;
+  /**
+   * The plan this session WATCHED being written, when it ended DISCARDED rather
+   * than proposed (MOTIR-6300; design Part XXIII §23.12): `generating → declined`
+   * with `decisionReason: 'discarded'` — a plan closed holding zero proposals,
+   * decided by nobody. `readPendingProposal` is null for it, so {@link review}
+   * never carries it; this is the last snapshot, kept so the pane that drew the
+   * plan live can say how it ended instead of vanishing. Only an OBSERVED
+   * transition sets it, and a new run clears it.
+   */
+  discardedReview: PlanReviewDto | null;
+  /**
    * WHICH WAY the current `review` was decided, or `null` while it is still
    * pending (MOTIR-3162). It is what tells the canvas to draw the accepted or
    * declined treatment `design/ai-planning/design-notes.md` Part VI specifies —
@@ -274,6 +308,10 @@ const INITIAL: PlanChangeConversationState = {
   progress: null,
   acts: [],
   review: null,
+  liveReview: null,
+  liveVersion: 0,
+  liveFailing: false,
+  discardedReview: null,
   decided: null,
   jobId: null,
   planId: null,
@@ -535,12 +573,96 @@ export function usePlanChangeConversation({
 
   useEffect(() => {
     mountedRef.current = true;
+    const live = new AbortController();
+    liveAbortRef.current = live;
     return () => {
       mountedRef.current = false;
       abortRef.current?.abort();
       abortRef.current = null;
+      live.abort();
     };
   }, []);
+
+  // ── THE LIVE REVIEW (Subtask MOTIR-6295) ─────────────────────────────────
+  // The plan being written right now, if any: the hosted run's (set when its turn
+  // is submitted, cleared when the run ends) or a named session's pending one
+  // (set at mount when it is still `generating`).
+  const [livePlanId, setLivePlanId] = useState<string | null>(null);
+  // The plan the poll has SEEN generating — what makes a later non-`generating`
+  // snapshot a TRANSITION rather than merely a state.
+  const sawGeneratingRef = useRef<string | null>(null);
+  // The ONE proposed-review read per run: the hand-over and the settle of a hosted
+  // run both reach for it, and whichever comes second awaits the first's read.
+  const proposalReadRef = useRef<{
+    planId: string;
+    read: Promise<PlanReviewDto | null>;
+  } | null>(null);
+  const liveAbortRef = useRef<AbortController | null>(null);
+
+  const readProposalOnce = useCallback((planId: string, signal?: AbortSignal) => {
+    const memo = proposalReadRef.current;
+    if (memo && memo.planId === planId) return memo.read;
+    const read = readPendingProposal(planId, signal);
+    proposalReadRef.current = { planId, read };
+    return read;
+  }, []);
+
+  /** A new run: its plan has not been seen generating, nor its proposal read. */
+  const resetLiveRun = useCallback(() => {
+    sawGeneratingRef.current = null;
+    proposalReadRef.current = null;
+  }, []);
+
+  /** The run that watched `planId` has ended: its settle has filed what it
+   *  proposed, so stop watching — a plan a failed run left `generating` must not
+   *  be polled forever. */
+  const endLive = useCallback((planId: string | null) => {
+    if (planId) setLivePlanId((cur) => (cur === planId ? null : cur));
+  }, []);
+
+  /** The plan left `generating`: the existing proposed-review path takes over,
+   *  once, and the live review is done. */
+  const handOver = async (planId: string) => {
+    let pending: PlanReviewDto | null = null;
+    try {
+      pending = await readProposalOnce(planId, liveAbortRef.current?.signal);
+    } catch {
+      /* nothing proposed we can show — the live review still ends */
+    }
+    if (!mountedRef.current) return;
+    setState((s) => ({
+      ...s,
+      liveReview: null,
+      // Exactly what the mount path does with a pending proposal; a run still
+      // streaming keeps its phase, and its own settle re-enters the gate.
+      ...(pending ? { review: pending, phase: s.phase === 'idle' ? 'review' : s.phase } : {}),
+    }));
+  };
+
+  const { failing: liveFailing } = useGeneratingPlanPoll(livePlanId, {
+    onSnapshot: (snap) => {
+      if (!livePlanId || !mountedRef.current) return;
+      if (snap.status === 'generating') {
+        sawGeneratingRef.current = livePlanId;
+        setState((s) => ({ ...s, liveReview: snap, liveVersion: s.liveVersion + 1 }));
+        return;
+      }
+      // Out of `generating` — the poll has stopped itself. Only an OBSERVED
+      // change hands over: a plan first read already settled is the mount's or
+      // the run's own read to file, not this one's.
+      const transitioned = sawGeneratingRef.current === livePlanId;
+      sawGeneratingRef.current = null;
+      if (!transitioned) return;
+      // DISCARDED while it was being written (§23.12): nothing is proposed, so there
+      // is nothing to hand over — the ended snapshot replaces the live one in ONE
+      // update, so the pane that drew it stays mounted and says how it ended.
+      if (snap.status === 'declined' && snap.decisionReason === 'discarded') {
+        setState((s) => ({ ...s, liveReview: null, discardedReview: snap }));
+        return;
+      }
+      void handOver(livePlanId);
+    },
+  });
 
   // Open OR RESUME the thread on mount — the project's, or the ANCHORED item's.
   // Best-effort: a failure leaves an empty thread with a recoverable error, never
@@ -626,9 +748,15 @@ export function usePlanChangeConversation({
         try {
           const pending = await readPendingProposal(planId, controller.signal);
           if (!mountedRef.current) return;
-          setState((s) =>
-            pending ? { ...s, phase: 'review', review: pending } : { ...s, phase: 'idle' },
-          );
+          // Nothing reviewable YET on a named session's plan may mean an agent is
+          // still writing it (MOTIR-6295): watch it live. The poll's first read
+          // says whether it is `generating`; one that is not stops at once.
+          if (!pending) {
+            setState((s) => ({ ...s, phase: 'idle' }));
+            if (sessionId) setLivePlanId(planId);
+            return;
+          }
+          setState((s) => ({ ...s, phase: 'review', review: pending }));
         } catch (err) {
           if (err instanceof DOMException && err.name === 'AbortError') return;
           if (!mountedRef.current) return;
@@ -694,6 +822,7 @@ export function usePlanChangeConversation({
             ...s,
             phase: s.review ? 'review' : 'idle',
             progress: null,
+            liveReview: null,
             errorCode: gated ? null : (code ?? 'FAILED'),
             outOfCredits: gated,
           }));
@@ -729,14 +858,16 @@ export function usePlanChangeConversation({
       }
 
       // Then read what the run actually PROPOSED, from its Plan. The job
-      // result's `planDelta` is not consulted: it is empty by construction.
-      const pending = planId ? await readPendingProposal(planId, controller.signal) : null;
+      // result's `planDelta` is not consulted: it is empty by construction. The
+      // read is the run's ONE: if the live poll already handed over, this is it.
+      const pending = planId ? await readProposalOnce(planId, controller.signal) : null;
       if (!mountedRef.current) return;
       if (pending) {
         setState((s) => ({
           ...s,
           phase: 'review',
           review: pending,
+          liveReview: null,
           progress: null,
           errorCode: null,
           // THE PLAN SURVIVES A STOP. A run stopped after it had appended a level
@@ -758,6 +889,7 @@ export function usePlanChangeConversation({
           ...s,
           phase: s.review ? 'review' : 'idle',
           progress: null,
+          liveReview: null,
           // ⚠️ A STOPPED RUN IS THE THIRD REASON NOTHING CAME BACK, and without
           // this arm it would surface as `EMPTY` — a failure banner on the one
           // outcome the user chose deliberately (MOTIR-4068). The three are:
@@ -773,7 +905,7 @@ export function usePlanChangeConversation({
         stoppingRef.current = false;
       }
     },
-    [],
+    [readProposalOnce],
   );
 
   /** Submit the thread's ACCUMULATED intent, then stream + settle the job. Shared
@@ -792,6 +924,8 @@ export function usePlanChangeConversation({
     ) => {
       const controller = new AbortController();
       abortRef.current = controller;
+      resetLiveRun();
+      let livePlan: string | null = null;
       // Remembered before the hop, so a retry after a failure re-sends to the
       // thread this turn actually landed in.
       lastAnchorRef.current = anchor;
@@ -810,6 +944,9 @@ export function usePlanChangeConversation({
       try {
         const { jobId, planId, session } = await submit(controller.signal);
         if (!mountedRef.current) return;
+        // The hosted run's plan is watched live from the moment it is known.
+        livePlan = planId ?? null;
+        setLivePlanId(livePlan);
         setState((s) => ({
           ...s,
           phase: 'streaming',
@@ -829,6 +966,8 @@ export function usePlanChangeConversation({
           // would drop a proposal the user is still looking at and the server
           // still awaits a decision on.
           review: s.decided ? null : s.review,
+          liveReview: null,
+          discardedReview: null,
           decided: null,
           ...firstAct('submitted'),
           errorCode: null,
@@ -860,9 +999,10 @@ export function usePlanChangeConversation({
         }));
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
+        endLive(livePlan);
       }
     },
-    [finishPlanRun],
+    [finishPlanRun, resetLiveRun, endLive],
   );
 
   /**
@@ -891,6 +1031,8 @@ export function usePlanChangeConversation({
     ) => {
       const controller = new AbortController();
       abortRef.current = controller;
+      resetLiveRun();
+      let livePlan: string | null = null;
       // An ask is project-wide by construction, so a retry after one must not
       // re-aim at an anchor an earlier plan-change run happened to use.
       lastAnchorRef.current = null;
@@ -909,6 +1051,8 @@ export function usePlanChangeConversation({
         // waiting row says what it has always said for one.
         if ('outcome' in submitted) {
           lastAskTurnRef.current = null;
+          livePlan = submitted.planId ?? null;
+          setLivePlanId(livePlan);
           setState((s) => ({
             ...s,
             phase: 'streaming',
@@ -916,6 +1060,8 @@ export function usePlanChangeConversation({
             jobId: submitted.jobId,
             planId: submitted.planId,
             review: s.decided ? null : s.review,
+            liveReview: null,
+            discardedReview: null,
             decided: null,
             ...firstAct('submitted'),
             errorCode: null,
@@ -986,11 +1132,15 @@ export function usePlanChangeConversation({
         if (!mountedRef.current) return;
 
         if (settled.outcome === 'redirected') {
+          livePlan = settled.planId ?? null;
+          setLivePlanId(livePlan);
           setState((s) => ({
             ...s,
             session: settled.session,
             jobId: settled.jobId,
             planId: settled.planId,
+            // A plan run starts here, so an earlier discarded plan stops describing it.
+            discardedReview: null,
             // The hand-off is an act like any other: it joins the record as well
             // as replacing the live line (MOTIR-4069).
             progress: { kind: 'redirected' },
@@ -1023,9 +1173,10 @@ export function usePlanChangeConversation({
         }));
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
+        endLive(livePlan);
       }
     },
-    [finishPlanRun],
+    [finishPlanRun, resetLiveRun, endLive],
   );
 
   /**
@@ -1538,5 +1689,11 @@ export function usePlanChangeConversation({
     }
   }, []);
 
-  return { state, send, retry, correctTurn, approve, discard, dismissError, stop };
+  // `failing` is the poll's own, so it rides on the state it describes.
+  const exposed = useMemo(
+    () => (state.liveFailing === liveFailing ? state : { ...state, liveFailing }),
+    [state, liveFailing],
+  );
+
+  return { state: exposed, send, retry, correctTurn, approve, discard, dismissError, stop };
 }

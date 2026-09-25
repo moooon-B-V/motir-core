@@ -164,7 +164,12 @@ describe('the ⌘K palette', () => {
     );
   }
 
-  it('offers the ORG security pane to an org owner/admin at every count — an organization always exists', () => {
+  it('does NOT offer the org security pane to an org MEMBER (MOTIR-6312) — the page refuses them', () => {
+    renderPalette(2, false);
+    expect(screen.queryByRole('option', { name: /go to organization security/i })).toBeNull();
+  });
+
+  it('offers the ORG security pane at every count — an organization always exists', () => {
     for (const count of [1, 2]) {
       cleanup();
       renderPalette(count);

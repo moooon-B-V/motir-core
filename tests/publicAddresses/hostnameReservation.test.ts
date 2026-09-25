@@ -17,7 +17,7 @@ import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } fro
 // The suite is organised around the two paths that reach the delete, because the
 // SECOND is what makes this a defect rather than an oddity:
 //
-//   1. `workspacesService.deleteWorkspace` — the delete itself;
+//   1. the workspace delete (`removeWorkspaceAsOrgAdmin` / `deleteWorkspaceForErasure`) — the delete itself;
 //   2. `accountErasureSweepService.sweep` — the SCHEDULED JOB that calls it on a
 //      GDPR erasure request, with no operator and no decision;
 //   3. what is RETAINED, which the erasure obligation constrains from the other
@@ -135,13 +135,13 @@ async function scheduleDue(userId: string, daysOverdue = 1): Promise<AccountDele
 // 1. THE DELETE ITSELF
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('deleteWorkspace holds the workspace’s subdomain out of the namespace', () => {
+describe('the workspace delete holds the workspace’s subdomain out of the namespace', () => {
   it('refuses another workspace’s claim of BOTH the live name and the retired alias', async () => {
     // The card's own criterion, and the whole defect in one test: claim, rename
     // once so a retained alias exists, delete the workspace, then try to take
     // both names from a workspace that has nothing to do with it.
     const gone = await soleOwnerWithRenamedSubdomain();
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: gone.workspaceId,
       actorUserId: gone.userId,
     });
@@ -166,7 +166,7 @@ describe('deleteWorkspace holds the workspace’s subdomain out of the namespace
     // `public_address` row would hold the name against its own claimant for ever
     // and read as a claim that succeeded.
     const gone = await soleOwnerWithRenamedSubdomain();
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: gone.workspaceId,
       actorUserId: gone.userId,
     });
@@ -191,7 +191,7 @@ describe('deleteWorkspace holds the workspace’s subdomain out of the namespace
     // same check. A test that covers only `claim` passes with the rename path
     // still releasing the name.
     const gone = await soleOwnerWithRenamedSubdomain();
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: gone.workspaceId,
       actorUserId: gone.userId,
     });
@@ -219,7 +219,10 @@ describe('deleteWorkspace holds the workspace’s subdomain out of the namespace
     await publicSubdomainService.claim(workspace.id, 'first', user.id);
     await publicSubdomainService.rename(workspace.id, 'second', user.id);
     await publicSubdomainService.rename(workspace.id, 'third', user.id);
-    await workspacesService.deleteWorkspace({ workspaceId: workspace.id, actorUserId: user.id });
+    await workspacesService.removeWorkspaceAsOrgAdmin({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+    });
 
     expect(await adminDb.publicHostnameReservation.count()).toBe(3);
 
@@ -237,7 +240,7 @@ describe('deleteWorkspace holds the workspace’s subdomain out of the namespace
     // on, so this write can genuinely run twice. A 23505 here would abort an
     // erasure mid-way.
     const gone = await soleOwnerWithRenamedSubdomain();
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: gone.workspaceId,
       actorUserId: gone.userId,
     });
@@ -264,9 +267,9 @@ describe('deleteWorkspace holds the workspace’s subdomain out of the namespace
 describe('the account-erasure sweep does not release the departed workspace’s address', () => {
   it('reserves the live name and the alias when the scheduled job erases the account', async () => {
     // This is the path the defect fires on. `accountErasureSweepService` routes
-    // a sole-membership workspace through `deleteWorkspace` on a cron, so the
-    // release needed nobody to decide it and raised nothing — a test on
-    // `deleteWorkspace` alone would pass while the automatic path regressed
+    // a sole-membership workspace through `deleteWorkspaceForErasure` on a cron,
+    // so the release needed nobody to decide it and raised nothing — a test on
+    // the Admin door alone would pass while the automatic path regressed
     // (a future erasure arm reaching the rows by any other route).
     const gone = await soleOwnerWithRenamedSubdomain('leaver', 'leaver-inc');
     await scheduleDue(gone.userId);
@@ -315,7 +318,7 @@ describe('the retained row satisfies the erasure obligation', () => {
     });
     await giveCustomDomain(gone.workspaceId, project.id, 'roadmap.acme-customer.example');
 
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: gone.workspaceId,
       actorUserId: gone.userId,
     });
@@ -346,7 +349,7 @@ describe('the retained row satisfies the erasure obligation', () => {
     // into one. Asserted over the whole serialized row rather than over the one
     // column, because the claim is about what is RETAINED, not about a field.
     const gone = await soleOwnerWithRenamedSubdomain('jane-smith', 'jane-smith-two');
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: gone.workspaceId,
       actorUserId: gone.userId,
     });
@@ -374,7 +377,7 @@ describe('the retained row satisfies the erasure obligation', () => {
     // is what stops a later change re-attaching a foreign key to it — which
     // would cascade the row away at exactly the moment it matters.
     const gone = await soleOwnerWithRenamedSubdomain();
-    await workspacesService.deleteWorkspace({
+    await workspacesService.removeWorkspaceAsOrgAdmin({
       workspaceId: gone.workspaceId,
       actorUserId: gone.userId,
     });
@@ -406,7 +409,10 @@ describe('a CUSTOMER domain is not reserved', () => {
     });
     await giveCustomDomain(workspace.id, project.id, 'roadmap.acme-customer.example');
 
-    await workspacesService.deleteWorkspace({ workspaceId: workspace.id, actorUserId: user.id });
+    await workspacesService.removeWorkspaceAsOrgAdmin({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+    });
 
     expect(await adminDb.publicHostnameReservation.count()).toBe(0);
 

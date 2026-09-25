@@ -5,9 +5,9 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import {
   AlreadyOrgMemberError,
-  LastOrgOwnerError,
   OrganizationNotFoundError,
   OrgForbiddenError,
+  OwnerMembershipLockedError,
 } from '@/lib/organizations/errors';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
@@ -17,7 +17,7 @@ import { truncateAuthTables } from './helpers/db';
 // membership management. Real Postgres, no mocks (the project rule); the
 // exhaustive matrix (incl. the RLS-policy assertions + the migration backfill)
 // is Subtask 6.10.7. This suite locks the gate composition, the asymmetric
-// membership direction, the last-owner guard, and the paginated roster — the
+// membership direction, the Owner lock (MOTIR-6307), and the paginated roster — the
 // load-bearing behaviour this subtask introduces.
 
 beforeEach(async () => {
@@ -47,10 +47,10 @@ describe('resolveWorkspaceAccess (the org access gate)', () => {
     expect(access).not.toBeNull();
     expect(access!.effectiveRole).toBe('owner');
     expect(access!.orgRole).toBe('owner');
-    expect(access!.isOrgAdmin).toBe(true);
+    expect(access!.isOrgOwner).toBe(true);
   });
 
-  it('grants an org owner/admin admin-equivalent access to EVERY workspace under the org, with no workspace membership', async () => {
+  it('grants the org OWNER owner-equivalent access to EVERY workspace under the org, with no workspace membership — and an org ADMIN none by role alone (MOTIR-6308)', async () => {
     const owner = await createTestUser();
     const admin = await createTestUser();
     const { workspace: w1 } = await workspacesService.createWorkspace({
@@ -58,27 +58,43 @@ describe('resolveWorkspaceAccess (the org access gate)', () => {
       ownerUserId: owner.id,
     });
     const orgId = await orgIdOfWorkspace(w1.id);
-    // A second workspace under the SAME org.
-    const { workspace: w2 } = await workspacesService.createWorkspace({
-      name: 'Beta',
+    // A second workspace under the SAME org BEFORE the Admin joins — with two
+    // workspaces, joining the org enrols them in neither (the one-workspace
+    // auto-join of `organization-tier.md` §6 does not apply).
+    const { workspace: wOwner } = await workspacesService.createWorkspace({
+      name: 'Gamma',
       ownerUserId: owner.id,
       organizationId: orgId,
     });
-    // admin is an ORG admin only — no workspace membership anywhere.
     await organizationsService.addMember({
       organizationId: orgId,
       userId: admin.id,
       role: 'admin',
       actorUserId: owner.id,
     });
+    // A third, created by the Admin — so the Owner holds no membership in it.
+    const { workspace: w2 } = await workspacesService.createWorkspace({
+      name: 'Beta',
+      ownerUserId: admin.id,
+      organizationId: orgId,
+    });
 
-    for (const ws of [w1, w2]) {
-      const access = await organizationsService.resolveWorkspaceAccess(admin.id, ws.id);
-      expect(access, `admin should reach ${ws.name}`).not.toBeNull();
-      expect(access!.effectiveRole).toBe('owner'); // admin-equivalent
-      expect(access!.isOrgAdmin).toBe(true);
-      expect(access!.workspaceRole).toBeNull(); // spans by org role, not membership
+    const ownerAccess = await organizationsService.resolveWorkspaceAccess(owner.id, w2.id);
+    expect(ownerAccess, 'the Owner reaches a workspace they never joined').not.toBeNull();
+    expect(ownerAccess!.effectiveRole).toBe('owner');
+    expect(ownerAccess!.isOrgOwner).toBe(true);
+    expect(ownerAccess!.workspaceRole).toBeNull(); // spans by org role, not membership
+
+    // The Admin is a member of neither owner-made workspace: an Admin's reach is
+    // membership (role-model.md §1 R1).
+    for (const ws of [w1, wOwner]) {
+      expect(await organizationsService.resolveWorkspaceAccess(admin.id, ws.id)).toBeNull();
     }
+    // …and in w2, where they are the stored owner, they read exactly that.
+    const adminAccess = await organizationsService.resolveWorkspaceAccess(admin.id, w2.id);
+    expect(adminAccess!.effectiveRole).toBe('owner');
+    expect(adminAccess!.isOrgOwner).toBe(false);
+    expect(adminAccess!.workspaceRole).toBe('owner');
   });
 
   it('grants a plain org member only the workspaces they are explicitly added to (falls back to their workspace role)', async () => {
@@ -100,7 +116,7 @@ describe('resolveWorkspaceAccess (the org access gate)', () => {
     const a1 = await organizationsService.resolveWorkspaceAccess(member.id, w1.id);
     expect(a1).not.toBeNull();
     expect(a1!.effectiveRole).toBe('member');
-    expect(a1!.isOrgAdmin).toBe(false);
+    expect(a1!.isOrgOwner).toBe(false);
 
     // Same org, but no workspace membership in w2 → DENIED (org member reaches
     // only the workspaces they're explicitly in).
@@ -418,7 +434,9 @@ describe('org admin authorization + last-owner guard', () => {
     ).rejects.toBeInstanceOf(OrganizationNotFoundError);
   });
 
-  it('refuses to remove or demote the last owner (LastOrgOwnerError)', async () => {
+  it('refuses to remove or demote the Owner, the Owner acting on themselves included (OwnerMembershipLockedError)', async () => {
+    // The full matrix — owner AND admin as the actor, the add paths, the route and
+    // the race — is `tests/organizations/oneOwner.test.ts` (MOTIR-6307).
     const owner = await createTestUser();
     const { workspace } = await workspacesService.createWorkspace({
       name: 'Acme',
@@ -432,7 +450,7 @@ describe('org admin authorization + last-owner guard', () => {
         userId: owner.id,
         actorUserId: owner.id,
       }),
-    ).rejects.toBeInstanceOf(LastOrgOwnerError);
+    ).rejects.toBeInstanceOf(OwnerMembershipLockedError);
 
     await expect(
       organizationsService.changeMemberRole({
@@ -441,33 +459,7 @@ describe('org admin authorization + last-owner guard', () => {
         role: 'member',
         actorUserId: owner.id,
       }),
-    ).rejects.toBeInstanceOf(LastOrgOwnerError);
-  });
-
-  it('allows removing an owner once another owner exists', async () => {
-    const owner = await createTestUser();
-    const second = await createTestUser();
-    const { workspace } = await workspacesService.createWorkspace({
-      name: 'Acme',
-      ownerUserId: owner.id,
-    });
-    const orgId = await orgIdOfWorkspace(workspace.id);
-    await organizationsService.addMember({
-      organizationId: orgId,
-      userId: second.id,
-      role: 'owner',
-      actorUserId: owner.id,
-    });
-
-    await organizationsService.removeMember({
-      organizationId: orgId,
-      userId: owner.id,
-      actorUserId: second.id,
-    });
-    const gone = await adminDb.$transaction((tx) =>
-      organizationMembershipRepository.findByOrgAndUserInTx(orgId, owner.id, tx),
-    );
-    expect(gone).toBeNull();
+    ).rejects.toBeInstanceOf(OwnerMembershipLockedError);
   });
 });
 

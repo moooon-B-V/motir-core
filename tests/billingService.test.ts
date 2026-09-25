@@ -9,8 +9,9 @@ import { adminDb } from './helpers/adminDb';
 // one legitimate boundary mock, like a network call); the org + memberships are
 // seeded through the REAL services against the real Postgres (the no-mocks rule
 // otherwise). This proves the GATES: the cloud-only flag, the 6.10.4 org gate
-// (404 non-member), and the ADR §7 split (view = owner/admin, mutate = OWNER
-// only) — plus the DTO shape and the Checkout/Portal forwarding.
+// (404 non-member), and the ADR §7 gate (view AND mutate = owner/admin, the
+// `manageBilling` capability — amended 2026-09-25 by MOTIR-6305; a plain member
+// has neither) — plus the DTO shape and the Checkout/Portal forwarding.
 const getOrgUsageMock = vi.fn<(q: unknown) => Promise<RawUsageResponse>>();
 const getOrgSubscriptionMock = vi.fn<(q: unknown) => Promise<RawSubscriptionResponse>>();
 const createCheckoutSessionMock = vi.fn<(i: unknown) => Promise<{ url: string }>>();
@@ -172,11 +173,11 @@ describe('billingService.getBillingStatus', () => {
     ).rejects.toBeInstanceOf(BillingForbiddenError);
   });
 
-  it('lets an admin VIEW (canManageBilling false) with the AI tier folded from usage', async () => {
+  it('lets an admin VIEW and MANAGE (canManageBilling true, MOTIR-6305) with the AI tier folded from usage', async () => {
     const { organizationId, admin } = await makeOrgWithRoles();
     const dto = await billingService.getBillingStatus({ organizationId, actorUserId: admin.id });
 
-    expect(dto.access).toEqual({ role: 'admin', canManageBilling: false });
+    expect(dto.access).toEqual({ role: 'admin', canManageBilling: true });
     expect(dto.motirAi).toEqual({
       tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
       balance: 1420,
@@ -409,15 +410,38 @@ describe('billingService.startCheckout', () => {
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
-  it('is OWNER-ONLY — an admin cannot start checkout (ADR §7)', async () => {
+  it('lets an ADMIN start checkout (ADR §7 as amended by MOTIR-6305)', async () => {
     const { organizationId, admin } = await makeOrgWithRoles();
+    const { url } = await billingService.startCheckout({
+      organizationId,
+      actorUserId: admin.id,
+      priceLookupKey: 'pro_pool_annual',
+    });
+    expect(url).toBe('https://checkout.stripe.com/c/pay/cs_1');
+    expect(createCheckoutSessionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a plain MEMBER checkout (ADR §7)', async () => {
+    const { organizationId, member } = await makeOrgWithRoles();
     await expect(
       billingService.startCheckout({
         organizationId,
-        actorUserId: admin.id,
+        actorUserId: member.id,
         priceLookupKey: 'pro_pool_annual',
       }),
     ).rejects.toBeInstanceOf(BillingForbiddenError);
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('hides the org from a NON-MEMBER at the mutation gate (404, the no-leak rule)', async () => {
+    const { organizationId, outsider } = await makeOrgWithRoles();
+    await expect(
+      billingService.startCheckout({
+        organizationId,
+        actorUserId: outsider.id,
+        priceLookupKey: 'pro_pool_annual',
+      }),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
@@ -563,12 +587,12 @@ describe('billingService.startCheckout', () => {
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
-  it('runs the OWNER gate before the quantity guard — an admin is FORBIDDEN, not INVALID_QUANTITY', async () => {
-    const { organizationId, admin } = await makeOrgWithRoles();
+  it('runs the billing gate before the quantity guard — a member is FORBIDDEN, not INVALID_QUANTITY', async () => {
+    const { organizationId, member } = await makeOrgWithRoles();
     await expect(
       billingService.startCheckout({
         organizationId,
-        actorUserId: admin.id,
+        actorUserId: member.id,
         priceLookupKey: 'tracker_monthly',
         quantity: 10,
       }),
@@ -578,12 +602,18 @@ describe('billingService.startCheckout', () => {
 });
 
 describe('billingService.openPortal', () => {
-  it('is OWNER-ONLY — an admin cannot open the portal', async () => {
-    const { organizationId, admin } = await makeOrgWithRoles();
+  it('refuses a plain MEMBER the portal', async () => {
+    const { organizationId, member } = await makeOrgWithRoles();
     await expect(
-      billingService.openPortal({ organizationId, actorUserId: admin.id }),
+      billingService.openPortal({ organizationId, actorUserId: member.id }),
     ).rejects.toBeInstanceOf(BillingForbiddenError);
     expect(createPortalSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('opens the portal for an ADMIN (MOTIR-6305)', async () => {
+    const { organizationId, admin } = await makeOrgWithRoles();
+    const { url } = await billingService.openPortal({ organizationId, actorUserId: admin.id });
+    expect(url).toBe('https://billing.stripe.com/p/session/1');
   });
 
   it('opens the portal for an owner with the return URL', async () => {
@@ -776,19 +806,19 @@ describe('billingService.getAiAccess (the member-safe 8.1.8 paywall read)', () =
     expect(access.renewsAt).toBeNull();
   });
 
-  it('an admin can read (applicable) but cannot buy (canManageBilling false)', async () => {
+  it('an admin can read (applicable) AND buy (canManageBilling true, MOTIR-6305)', async () => {
     const { organizationId, admin } = await makeOrgWithRoles();
     const access = await billingService.getAiAccess({ organizationId, actorUserId: admin.id });
     expect(access.applicable).toBe(true);
-    expect(access.canManageBilling).toBe(false);
+    expect(access.canManageBilling).toBe(true);
   });
 });
 
 // The members-page seat summary (Subtask 8.1.14) — the gating + the derived
 // pricing the in-context seat band reads. The seat COUNT is the membership count
 // (resolved client-side), so this only proves the pricing/lifecycle + the three
-// "no seat UI" (→ null) gates: self-host, free/canceled, and the owner-vs-admin
-// canManageBilling split.
+// "no seat UI" (→ null) gates: self-host, free/canceled, and the member-vs-manager
+// canManageBilling split (owner and admin both manage since MOTIR-6305).
 describe('billingService.getSeatSummary', () => {
   async function setScaled(organizationId: string, sub: ScaledTrackerSubscription | null) {
     await billingPropagationService.setScaledTrackerState({
@@ -844,11 +874,11 @@ describe('billingService.getSeatSummary', () => {
     });
   });
 
-  it('gives an ADMIN the summary READ-ONLY (canManageBilling false — ADR §7)', async () => {
+  it('gives an ADMIN the summary with the seat controls (canManageBilling true — ADR §7 as amended)', async () => {
     const { organizationId, admin } = await makeOrgWithRoles();
     await setScaled(organizationId, SCALED);
     const summary = await billingService.getSeatSummary({ organizationId, actorUserId: admin.id });
-    expect(summary?.canManageBilling).toBe(false);
+    expect(summary?.canManageBilling).toBe(true);
     expect(summary?.status).toBe('active');
   });
 

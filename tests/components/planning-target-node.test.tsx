@@ -3,17 +3,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { decorateTargetLevel } from '@/components/planning/PlanningTargetNode';
-import { decoratePlanChangeLevel } from '@/components/planning/planChangeLevel';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
-import { indexPlanReview } from '@/lib/planning/planChangeDiff';
-import { planReview, planReviewItem } from '../helpers/planReview';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
-import type { PlanReviewDto } from '@/lib/dto/planReview';
 
 // The TARGET ring layered onto a roadmap level (Subtask MOTIR-1491; design
 // `target-picker.mock.html` panels 3 + 5 — "the canvas highlights the target").
-// Like the diff decoration it wraps the SHIPPED node rather than redrawing one,
-// so these assert the layering, not the canvas.
+// It wraps the SHIPPED node rather than redrawing one, so these assert the
+// layering, not the canvas. The ring is drawn by `PlanChangeCanvas`, the pane for
+// the "no plan" state, so the level under it is the plain work-item level
+// (MOTIR-6299 removed the proposal decoration that used to sit between them).
 
 const LEVEL: RoadmapLevelData = {
   items: [
@@ -40,23 +38,8 @@ const LEVEL: RoadmapLevelData = {
   offLevelBlockers: [],
 };
 
-const REVIEW: PlanReviewDto = planReview([
-  planReviewItem({
-    op: 'modify',
-    nodeId: 'wi-812',
-    identifier: 'PAY-812',
-    title: 'Billing — invoices',
-    changes: [{ field: 'title', from: 'Billing — invoicing', to: 'Billing — invoices' }],
-  }),
-]);
-
-function renderNode(nodeId: string, targetIds: string[], review: PlanReviewDto | null = null) {
-  const base = decoratePlanChangeLevel(
-    buildWorkItemLevel(LEVEL),
-    LEVEL,
-    indexPlanReview(review),
-    null,
-  );
+function renderNode(nodeId: string, targetIds: string[]) {
+  const base = buildWorkItemLevel(LEVEL);
   const level = decorateTargetLevel(base, targetIds);
   const node = level.nodes.find((n) => n.id === nodeId)!;
   return { node, ...renderWithIntl(<>{node.content}</>) };
@@ -83,22 +66,12 @@ describe('the canvas shows what the planner is pointed at', () => {
   });
 
   it('is a no-op when nothing is targeted — the plain roadmap render', () => {
-    const base = decoratePlanChangeLevel(
-      buildWorkItemLevel(LEVEL),
-      LEVEL,
-      indexPlanReview(null),
-      null,
-    );
+    const base = buildWorkItemLevel(LEVEL);
     expect(decorateTargetLevel(base, [])).toBe(base);
   });
 
   it('marks EVERY target that is on this level, not only the first', () => {
-    const base = decoratePlanChangeLevel(
-      buildWorkItemLevel(LEVEL),
-      LEVEL,
-      indexPlanReview(null),
-      null,
-    );
+    const base = buildWorkItemLevel(LEVEL);
     const level = decorateTargetLevel(base, ['wi-812', 'wi-511']);
 
     // A target the user has not drilled to simply is not on this level — the
@@ -113,14 +86,5 @@ describe('the canvas shows what the planner is pointed at', () => {
     expect(node.searchText).toContain('target');
     // …without losing what was searchable before.
     expect(node.searchText).toContain('PAY-812');
-  });
-
-  it('COMPOSES with the diff frame — a targeted node the proposal also changes shows both', () => {
-    renderNode('wi-812', ['wi-812'], REVIEW);
-
-    expect(screen.getByTestId('planning-target-node')).toBeTruthy();
-    expect(screen.getByTestId('plan-change-diff-node')).toBeTruthy();
-    expect(screen.getByText('Target')).toBeTruthy();
-    expect(screen.getByText('changed')).toBeTruthy();
   });
 });

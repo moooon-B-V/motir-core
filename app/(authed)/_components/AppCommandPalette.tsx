@@ -102,7 +102,7 @@ export interface AppCommandPaletteProps {
    */
   publicProjectsAvailable?: boolean;
   /**
-   * `isOrgAdminRole(activeOrg.role)` (MOTIR-6175) — the org-settings deep links
+   * `orgCan(activeOrg.role, 'manageOrgSettings')` (MOTIR-6175 · MOTIR-6305) — the org-settings deep links
    * are offered through `visibleOrganizationSettingsNav`, the registry the org
    * rail and the org menu read. Defaults CLOSED, like the two props above.
    */

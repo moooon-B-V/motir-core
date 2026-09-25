@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { OrgMembersClient } from '@/app/(authed)/settings/organization/members/_components/OrgMembersClient';
@@ -10,8 +10,10 @@ import type { SeatSummaryDTO } from '@/lib/dto/billing';
 // Component test for the 8.1.14 members-admin seat/billing layer (design/org-
 // admin members-billing). Proves the GATING the design turns on: a free org /
 // self-host sees NO seat UI; a scaled org sees the seat band + the add cost note
-// + the remove confirm; an admin sees it read-only; past_due shows the dunning
-// variant. The members API (fetch) is stubbed — only the seat UI is under test.
+// + the remove confirm; an admin gets the owner's controls (MOTIR-6311, design
+// MOTIR-6303 panel 5); past_due shows the dunning variant. Plus the roster's
+// org-role rules (panel 1): Admin / Member are the only roles offered, and the
+// Owner's row is locked for every viewer. The members API (fetch) is stubbed.
 
 // Radix Popover/Modal need APIs happy-dom omits (the CreateIssueModal recipe).
 beforeAll(() => {
@@ -31,6 +33,7 @@ const PAGE: OrgMemberPageDTO = {
   nextCursor: null,
   members: [
     { userId: 'u-self', name: 'Zhu Yue', email: 'zhuyue@motir.co', role: 'owner', workspaces: [] },
+    { userId: 'u-mara', name: 'Mara', email: 'mara@motir.co', role: 'admin', workspaces: [] },
     { userId: 'u-mo', name: 'Mo', email: 'mo@motir.co', role: 'member', workspaces: [] },
     { userId: 'u-odie', name: 'Odie', email: 'odie@motir.co', role: 'member', workspaces: [] },
   ],
@@ -47,18 +50,26 @@ const SCALED: SeatSummaryDTO = {
   canManageBilling: true,
 };
 
-function renderClient(seat: SeatSummaryDTO | null) {
+// The viewer: the Owner (u-self) by default, or the Admin (u-mara).
+function renderClient(seat: SeatSummaryDTO | null, viewer: 'owner' | 'admin' = 'owner') {
   return render(
     <ToastProvider>
       <OrgMembersClient
         orgId="org1"
         orgName="moooon"
-        currentUserId="u-self"
+        currentUserId={viewer === 'owner' ? 'u-self' : 'u-mara'}
+        viewerIsOwner={viewer === 'owner'}
         initialPage={PAGE}
         seat={seat}
       />
     </ToastProvider>,
   );
+}
+
+async function click(el: Element) {
+  await act(async () => {
+    fireEvent.click(el);
+  });
 }
 
 beforeEach(() => {
@@ -117,11 +128,14 @@ describe('OrgMembersClient — seat/billing layer', () => {
     );
   });
 
-  it('an ADMIN (canManageBilling false) sees the band READ-ONLY — View only, no Manage link', () => {
-    renderClient({ ...SCALED, canManageBilling: false });
-    expect(screen.getByText('View only')).toBeTruthy();
+  it('an ADMIN gets the Owner’s seat controls — Manage link, no View-only band (MOTIR-6311)', () => {
+    // canManageBilling is true for an Admin since MOTIR-6305.
+    renderClient(SCALED, 'admin');
     expect(screen.getByText('Scaled')).toBeTruthy();
-    expect(screen.queryByText('Manage seats in Billing')).toBeNull();
+    expect(screen.queryByText('View only')).toBeNull();
+    expect(screen.queryByText(/managed by an owner/)).toBeNull();
+    const manage = screen.getByText('Manage seats in Billing').closest('a');
+    expect(manage?.getAttribute('href')).toBe('/settings/organization/billing');
   });
 
   it('a past_due org shows the dunning variant — Past due + Update payment', () => {
@@ -130,5 +144,83 @@ describe('OrgMembersClient — seat/billing layer', () => {
     expect(screen.getByText('Update payment')).toBeTruthy();
     // No no-pay-wall note in the dunning state (active-only).
     expect(screen.queryByText('No pay-wall.')).toBeNull();
+  });
+});
+
+describe('OrgMembersClient — the org roles on the roster (MOTIR-6311)', () => {
+  const roleCombo = (name: string) =>
+    screen.queryByRole('combobox', { name: `Organization role for ${name}` });
+
+  it('as the OWNER: the Owner row is a static pill with the lock hint + Transfer link; no picker, no Remove', () => {
+    renderClient(null, 'owner');
+    expect(roleCombo('Zhu Yue')).toBeNull();
+    expect(screen.getByText('Ownership moves only by transfer')).toBeTruthy();
+    const link = screen.getByRole('link', { name: 'Transfer ownership' });
+    expect(link.getAttribute('href')).toBe('/settings/organization#transfer-ownership');
+    // Every other row keeps its picker and its Remove: Mara, Mo, Odie.
+    expect(roleCombo('Mara')).toBeTruthy();
+    expect(roleCombo('Mo')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Remove' })).toHaveLength(3);
+  });
+
+  it('the picker offers exactly Admin and Member, and says why Owner is absent', async () => {
+    renderClient(null, 'owner');
+    await click(roleCombo('Mo')!);
+    const options = screen.getAllByRole('option').map((o) => o.textContent?.trim());
+    expect(options).toEqual(['Admin', 'Member']);
+    expect(
+      screen.getByText('Owner isn’t offered here — ownership moves only by transfer.'),
+    ).toBeTruthy();
+  });
+
+  it('as an ADMIN: the Owner row is locked too — no picker, no Remove, and no Transfer link', () => {
+    renderClient(null, 'admin');
+    expect(roleCombo('Zhu Yue')).toBeNull();
+    expect(screen.getByText('Ownership moves only by transfer')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Transfer ownership' })).toBeNull();
+    // The Admin's own row is static; Mo and Odie keep picker + Remove.
+    expect(roleCombo('Mara')).toBeNull();
+    expect(roleCombo('Mo')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Remove' })).toHaveLength(2);
+  });
+
+  it('the Invite modal offers Admin and Member only', async () => {
+    renderClient(null, 'admin');
+    await click(screen.getByRole('button', { name: /Invite to organization/ }));
+    await click(screen.getByRole('combobox', { name: 'Organization role' }));
+    const options = screen
+      .getAllByRole('option')
+      .map((o) => o.getAttribute('aria-label') ?? o.textContent);
+    expect(options.some((o) => /Owner/.test(o ?? ''))).toBe(false);
+    expect(screen.getAllByRole('option')).toHaveLength(2);
+  });
+
+  it('a stale role change refused ORG_OWNER_ONLY_BY_TRANSFER shows the design copy and reverts', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ code: 'ORG_OWNER_ONLY_BY_TRANSFER' }), { status: 409 }),
+    ) as unknown as typeof fetch;
+    renderClient(null, 'admin');
+    await click(roleCombo('Mo')!);
+    await click(screen.getByRole('option', { name: /Admin/ }));
+    await waitFor(() =>
+      expect(
+        screen.getAllByText('Owner isn’t offered here — ownership moves only by transfer.').length,
+      ).toBeGreaterThan(0),
+    );
+    expect(screen.queryByText('Couldn’t change role')).toBeNull();
+  });
+
+  it('a stale Remove refused ORG_OWNER_MEMBERSHIP_LOCKED shows the design copy, not a generic failure', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ code: 'ORG_OWNER_MEMBERSHIP_LOCKED' }), { status: 409 }),
+    ) as unknown as typeof fetch;
+    renderClient(null, 'admin');
+    await click(screen.getAllByRole('button', { name: 'Remove' })[0]!);
+    await waitFor(() =>
+      expect(screen.getAllByText('Ownership moves only by transfer').length).toBeGreaterThan(1),
+    );
+    expect(screen.queryByText('Couldn’t remove member')).toBeNull();
   });
 });

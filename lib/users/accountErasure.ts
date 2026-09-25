@@ -87,7 +87,7 @@ export function erasedEmailFor(userId: string): string {
  *
  * ⚠️ WHAT THIS WINDOW IS FOR, because it is not a retention period. The erasure
  * commits in ONE locked transaction and then deletes the reader's sole-
- * membership workspaces AFTER it — through `workspacesService.deleteWorkspace`,
+ * membership workspaces AFTER it — through `workspacesService.deleteWorkspaceForErasure`,
  * which opens its own transactions and fires its own offboarding enqueue, so it
  * cannot be inside. A crash between the two leaves a `completed` request whose
  * workspaces are still standing, and the ordinary due set (`scheduled` and past

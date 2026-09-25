@@ -36,3 +36,25 @@ export interface WorkspaceSummaryDTO {
   name: string;
   slug: string;
 }
+
+/**
+ * One row of the org Workspaces section (MOTIR-6309): a workspace in the
+ * organization with the two counts the section shows. `projectCount` includes
+ * archived projects — it is the count removal REACHES (the same number the
+ * remove confirmation states), not the count a picker would offer.
+ */
+export interface OrgWorkspaceRowDTO {
+  id: string;
+  name: string;
+  slug: string;
+  memberCount: number;
+  projectCount: number;
+  createdAt: string;
+}
+
+/** One keyset page of {@link OrgWorkspaceRowDTO}s. */
+export interface OrgWorkspacePageDTO {
+  workspaces: OrgWorkspaceRowDTO[];
+  nextCursor: string | null;
+  total: number;
+}

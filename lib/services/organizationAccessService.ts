@@ -2,7 +2,8 @@ import type { OrganizationRole, Prisma } from '@/generated/prisma/client';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
-import { isOrgAdminRole } from '@/lib/organizations/roles';
+import { withOrgContext } from '@/lib/organizations/context';
+import { orgCan, type OrgCapability } from '@/lib/organizations/capabilities';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 
 /**
@@ -45,14 +46,42 @@ export async function assertOrgMember(
   return membership.role;
 }
 
-/** {@link assertOrgMember}, then require the owner/admin tier. */
+/**
+ * {@link assertOrgMember}, then require `capability` from the org-role table
+ * (`lib/organizations/capabilities.ts`, MOTIR-6305). Same two codes as the
+ * member guard: a non-member → `OrganizationNotFoundError` (404), a member whose
+ * role lacks the capability → `OrgForbiddenError` (403).
+ *
+ * Pass the caller's `tx` when the check gates a write in that transaction (the
+ * reason the member guard takes one). Without it the read opens its own org
+ * context — for a caller that only needs the answer, not a lock-step with a write.
+ */
+export async function assertOrgCapability(
+  userId: string,
+  organizationId: string,
+  capability: OrgCapability,
+  tx?: Prisma.TransactionClient,
+): Promise<OrganizationRole> {
+  const check = async (t: Prisma.TransactionClient): Promise<OrganizationRole> => {
+    const role = await assertOrgMember(userId, organizationId, t);
+    if (!orgCan(role, capability)) throw new OrgForbiddenError(userId, organizationId);
+    return role;
+  };
+  if (tx) return check(tx);
+  return withOrgContext({ userId, organizationId }, check);
+}
+
+/**
+ * {@link assertOrgMember}, then require the org-settings capability — an Owner
+ * or an Admin. Kept as a thin wrapper over {@link assertOrgCapability} so its
+ * existing callers read the capability table without each being re-pointed.
+ */
 export async function assertOrgAdmin(
   userId: string,
   organizationId: string,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  const role = await assertOrgMember(userId, organizationId, tx);
-  if (!isOrgAdminRole(role)) throw new OrgForbiddenError(userId, organizationId);
+  await assertOrgCapability(userId, organizationId, 'manageOrgSettings', tx);
 }
 
 /**
@@ -77,6 +106,21 @@ export async function isOrgAdminForWorkspace(
   userId: string,
   workspaceId: string,
 ): Promise<boolean> {
+  return orgCanForWorkspace(userId, workspaceId, 'manageOrgSettings');
+}
+
+/**
+ * {@link isOrgAdminForWorkspace} for ANY capability — whether the actor holds
+ * `capability` on the organisation that owns `workspaceId`. The same rendering
+ * question, asked of a different row of the table: the workspace danger zone
+ * asks `manageWorkspaces` to decide whether to point at where removal went
+ * (MOTIR-6312). Same fail-closed posture: an unresolvable workspace is `false`.
+ */
+export async function orgCanForWorkspace(
+  userId: string,
+  workspaceId: string,
+  capability: OrgCapability,
+): Promise<boolean> {
   try {
     return await withWorkspaceContext({ userId, workspaceId }, async (tx) => {
       const organizationId = await resolveOrganizationId(workspaceId, tx);
@@ -85,7 +129,7 @@ export async function isOrgAdminForWorkspace(
         userId,
         tx,
       );
-      return isOrgAdminRole(membership?.role ?? null);
+      return orgCan(membership?.role, capability);
     });
   } catch {
     // An unresolvable workspace is a caller error, not an admin. The room renders

@@ -33,6 +33,12 @@ function renderCard() {
 }
 
 describe('OrgGeneralCard', () => {
+  it('tells the one Owner "You’re the owner" (MOTIR-6313 — never "an owner")', () => {
+    renderCard();
+    expect(screen.getByText('You’re the owner')).toBeTruthy();
+    expect(screen.queryByText('You’re an owner')).toBeNull();
+  });
+
   it('renders the organization NAME as its only editable field', () => {
     renderCard();
     const name = screen.getByLabelText('Organization name') as HTMLInputElement;

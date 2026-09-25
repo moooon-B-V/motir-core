@@ -805,6 +805,11 @@ describe('the establish run is honest about what it did NOT do', () => {
     // created. Every write after that point is refused — including the one that
     // would record the failure — and the repository on GitHub is NOT deleted to
     // make the record tidy (ADR §4.2).
+    //
+    // ⚠️ The actor here created the workspace, which makes them the ORG OWNER, and
+    // the Owner reaches every workspace of the org member or not (MOTIR-6308). So
+    // dropping the workspace membership alone no longer revokes anything: the
+    // actor leaves the ORGANIZATION as well, which ends every reach.
     const realFetch = globalThis.fetch;
     vi.stubGlobal(
       'fetch',
@@ -813,6 +818,13 @@ describe('the establish run is honest about what it did NOT do', () => {
         if (body?.['name'] === 'acme-web') {
           await adminDb.workspaceMembership.deleteMany({
             where: { userId: fx.ownerId, workspaceId: fx.workspaceId },
+          });
+          const { organizationId } = await adminDb.workspace.findUniqueOrThrow({
+            where: { id: fx.workspaceId },
+            select: { organizationId: true },
+          });
+          await adminDb.organizationMembership.deleteMany({
+            where: { userId: fx.ownerId, organizationId },
           });
         }
         return realFetch(url, init);

@@ -97,3 +97,32 @@ export class InvalidEmailError extends Error {
     this.name = 'InvalidEmailError';
   }
 }
+
+/**
+ * The workspace named does not exist, or does not belong to the organization
+ * the request addressed it through (MOTIR-6309 — the org-tier remove route).
+ * Both read as 404: a workspace in another org must be indistinguishable from
+ * one that does not exist.
+ */
+export class WorkspaceNotFoundError extends Error {
+  readonly code = 'WORKSPACE_NOT_FOUND' as const;
+  constructor(workspaceId: string) {
+    super(`Workspace ${workspaceId} was not found.`);
+    this.name = 'WorkspaceNotFoundError';
+  }
+}
+
+/**
+ * Account erasure may delete a workspace only when the leaving user is its SOLE
+ * member (`design/settings/design-notes.md` → Data & privacy → DECISION 3;
+ * MOTIR-6309). Raised,
+ * under the membership lock, when a second member is present — a workspace
+ * somebody else now shares is not the account's to delete.
+ */
+export class WorkspaceNotSoleMemberError extends Error {
+  readonly code = 'WORKSPACE_NOT_SOLE_MEMBER' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(`User ${userId} is not the sole member of workspace ${workspaceId}.`);
+    this.name = 'WorkspaceNotSoleMemberError';
+  }
+}

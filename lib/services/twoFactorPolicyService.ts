@@ -1,5 +1,5 @@
 import { withOrgContext } from '@/lib/organizations/context';
-import { isOrgAdminRole } from '@/lib/organizations/roles';
+import { orgCan } from '@/lib/organizations/capabilities';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import {
@@ -133,7 +133,7 @@ export const twoFactorPolicyService = {
         // Not a member ⇒ 404, not 403: the org must stay indistinguishable from
         // one that does not exist (`lib/organizations/errors.ts`).
         if (!membership) throw new OrganizationNotFoundError(input.organizationId);
-        if (!isOrgAdminRole(membership.role)) {
+        if (!orgCan(membership.role, 'manageOrgSettings')) {
           throw new OrgForbiddenError(input.actorUserId, input.organizationId);
         }
         return organizationRepository.update(
@@ -171,8 +171,9 @@ export const twoFactorPolicyService = {
       const workspace = await workspaceRepository.findByIdInTx(workspaceId, tx);
       /* v8 ignore next 2 -- UNREACHABLE, and the invariant that forbids it is
          asserted rather than asserted-about: `resolveWorkspaceAccess` above
-         admits only through a `workspace_membership` row, and a membership
-         cannot outlive its workspace because the FK cascades. The test is
+         admits only through a `workspace` row it has just read (a membership, or
+         the org Owner's reach over that same row), and a membership cannot
+         outlive its workspace because the FK cascades. The test is
          `tests/integration/twoFactorEnforcementStoryGate.test.ts` →
          "⚠️ a workspace_membership cannot outlive its workspace — the FK
          cascades", which deletes a workspace and watches the membership go with
@@ -196,9 +197,10 @@ export const twoFactorPolicyService = {
    * `owner` and `member` and predates the four-value `MemberRole` enum; gating
    * on it would refuse a workspace `admin`.
    *
-   * An org owner/admin passes WITHOUT a workspace membership row, as they do
+   * The org OWNER passes WITHOUT a workspace membership row, as they do
    * everywhere else beneath the org tier: `resolveWorkspaceAccess` composes the
-   * org role into `effectiveRole`, reporting `owner` for them.
+   * org role into `effectiveRole`, reporting `owner` for them. An org Admin
+   * passes through their workspace membership's role (MOTIR-6308).
    *
    * The write is admitted by `workspace_mutate_active`
    * (`id = current_setting('app.workspace_id')`), which needs no user arm — so

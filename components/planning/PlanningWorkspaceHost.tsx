@@ -24,7 +24,10 @@ import {
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
-import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
+import {
+  usePlanChangeConversation,
+  type PlanChangeConversationState,
+} from '@/lib/hooks/usePlanChangeConversation';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import {
   closeLosesProposal,
@@ -352,11 +355,33 @@ export function PlanningWorkspaceHost({
   // render is both cheaper and the shape the lint rule asks for — an effect that
   // only calls `setState` from props is the case `react-hooks/set-state-in-effect`
   // exists to remove.
+  //
+  // ⚠️ LATCHED PER PLAN (MOTIR-6300). The plan is now read WHILE it is written, and
+  // "the level it most fills" moves as it grows — so a derivation per snapshot would
+  // hand the canvas a new request on every batch, each one declined into the offer.
+  // The first answer a plan gives is its answer (§23.8: the FIRST proposal may carry
+  // the canvas once), and it is kept through the hand-over to the proposed plan.
   const proposedWord = tPlanReview('proposedCrumb');
-  const followFromThePlan = useMemo(
-    () => (startedWithNoTarget ? followFromPlan(state.review, proposedWord) : null),
-    [startedWithNoTarget, state.review, proposedWord],
+  const planForFollow = state.liveReview ?? state.review ?? null;
+  const followCandidate = useMemo(
+    () => (startedWithNoTarget ? followFromPlan(planForFollow, proposedWord) : null),
+    [startedWithNoTarget, planForFollow, proposedWord],
   );
+  const [planFollow, setPlanFollow] = useState<{
+    planId: string;
+    follow: FollowRequest;
+  } | null>(null);
+  if (
+    followCandidate !== null &&
+    planForFollow !== null &&
+    planFollow?.planId !== planForFollow.id
+  ) {
+    setPlanFollow({ planId: planForFollow.id, follow: followCandidate });
+  }
+  const followFromThePlan =
+    planFollow !== null && planForFollow !== null && planFollow.planId === planForFollow.id
+      ? planFollow.follow
+      : followCandidate;
 
   // The FIRST trigger to fire wins: a target the person added is their own act,
   // and the plan's landing place is an inference about it. The canvas honours at
@@ -407,6 +432,21 @@ export function PlanningWorkspaceHost({
     review: state.review,
     rewriting: state.phase === 'streaming' && state.planId !== null,
   });
+  // ── THE CONVERSATION HAPPENED ELSEWHERE (MOTIR-6298; design Part XXIII §23.11) ─────
+  //
+  // An MCP agent plans in its own harness, so its session can reach this surface
+  // holding NO turns (MOTIR-6157). The rail then names the harness. WHO WROTE the
+  // plan is read off its own attribution — `authorSource` alone, as the plan page's
+  // `ReviewAttribution` does, never inferred from `sourceJobId` — from the live
+  // review while an agent is still writing it and from the proposed one after.
+  //
+  // ⚠️ KEYED ON THE SESSION, AND LATCHED. The note shows when the plan is read while
+  // the session holds zero turns, and it STAYS once a turn is sent — it is still
+  // true, and sending clears `review` for the new run, so a live derivation would
+  // drop it the moment the person used the composer. An MCP session that ALREADY
+  // had turns when its plan was read never latches, and renders as before.
+  const conversationElsewhere = useConversationElsewhere(state);
+
   // ── THE PLAN PAGE'S OWN List | Canvas, ON THIS SURFACE (Subtask MOTIR-6186) ────────
   //
   // Once the conversation holds a PROPOSED plan, the left pane renders the very
@@ -420,12 +460,28 @@ export function PlanningWorkspaceHost({
   // clears the review, and the pane falls back to `PlanChangeCanvas` — which is the
   // "no plan" state again, and correct.
   //
-  // ⚠️ `generating` is NOT handled here. `isProposedReview` is false for it, so the
-  // pane stays on `PlanChangeCanvas` until MOTIR-6158 replaces that phase's pane.
-  // Do not add a generating read.
+  // ── …AND WHILE THE PLAN IS BEING WRITTEN (MOTIR-6300; design Part XXIII) ─────────
+  //
+  // From the plan's FIRST live read (`state.liveReview`, the shared generating poll —
+  // MOTIR-6295), the pane is that SAME component, fed the snapshot and opted into
+  // `live`: the level plays each snapshot's change, arrivals elsewhere are counted,
+  // the header says *Being written*, and the footer is EMPTY (§23.1 — a generating
+  // plan has nothing to decide). Zero proposals included: the switch shows from the
+  // first read (§23.2).
+  //
+  // ⚠️ THE HAND-OVER IS NOT A SWAP. `liveReview → review` for the same plan is one
+  // state update (the hook sets both at once), the pane is the same element at the
+  // same position under the same KEY — the plan's id — so React keeps the instance:
+  // the view, the level, the zoom and pan, Show changes, every card and every arrow
+  // are the ones already drawn, and only the bar arrives (§23.13). A plan DISCARDED
+  // while it was written (`state.discardedReview`) keeps the pane too, with the plan
+  // page's discarded sentence in its band slot (§23.12).
   const review = state.review;
-  const showsProposalViews =
-    review !== null && (isProposedReview(review) || state.decided !== null);
+  const liveReview = state.liveReview ?? null;
+  const showsProposed = review !== null && (isProposedReview(review) || state.decided !== null);
+  const paneReview = liveReview ?? (showsProposed ? review : null) ?? state.discardedReview ?? null;
+  const paneLive = liveReview !== null;
+  const paneDiscarded = !paneLive && !showsProposed && paneReview !== null;
   // ⚠️ A NAMED session is opened to show its plan (bug MOTIR-6289) — a To-approve row
   // or a Plans row writes `planSession`. Until the conversation has read whether a plan
   // is pending, the pane is its skeleton, NOT the roadmap: drawing `PlanChangeCanvas`
@@ -449,11 +505,31 @@ export function PlanningWorkspaceHost({
   // by a decision.
   const [view, setView] = useState<PlanViewDto>('canvas');
   const seededForPlanRef = useRef<string | null>(null);
+  // Seeded from the pane's plan, so a plan watched as it is written takes its
+  // default ONCE, at its first read, and neither a growing snapshot nor the
+  // hand-over re-derives it (§23.13 — the view is kept).
   useEffect(() => {
-    if (!review || seededForPlanRef.current === review.id) return;
-    seededForPlanRef.current = review.id;
-    setView(defaultPlanView(review));
-  }, [review]);
+    if (!paneReview || seededForPlanRef.current === paneReview.id) return;
+    seededForPlanRef.current = paneReview.id;
+    setView(defaultPlanView(paneReview));
+  }, [paneReview]);
+
+  // THE PANE'S REFETCH TICK. The review canvas re-reads its level on `version`
+  // (`reloadKey`), and the host's `treeVersion` bumps only on an approve. While the
+  // plan is written every snapshot is new data, and so is the hand-over's proposed
+  // read, which may carry a batch the last tick missed — so a new item set bumps
+  // the tick while the pane is live or leaving live. A proposed plan's own re-reads
+  // are not counted, exactly as before.
+  const paneItems = paneReview?.items ?? null;
+  const [paneTick, setPaneTick] = useState<{
+    items: typeof paneItems;
+    live: boolean;
+    tick: number;
+  }>({ items: paneItems, live: paneLive, tick: 0 });
+  if (paneItems !== paneTick.items || paneLive !== paneTick.live) {
+    const bump = paneItems !== paneTick.items && (paneLive || paneTick.live);
+    setPaneTick({ items: paneItems, live: paneLive, tick: paneTick.tick + (bump ? 1 : 0) });
+  }
 
   // WHERE Decline's confirm band is up, and where the last press came from — the stale
   // refusal is said beside the verbs it refused (Panel 5). Local UI state: it describes
@@ -557,7 +633,9 @@ export function PlanningWorkspaceHost({
       // the transition the reset fires on; it is the workspace's own state rather
       // than a route change, so it covers a plan watched as it is written.
       resizable
-      proposalPresent={state.review !== null}
+      // The PANE's plan, so the reset fires when a plan first appears — its first
+      // live read — and not again at the hand-over, where nothing resizes (§23.13).
+      proposalPresent={paneReview !== null}
       canvas={
         <div className="flex h-full min-h-0 flex-col bg-(--el-canvas)">
           {/* The shell's own exit chrome + project crumb. The canvas keeps its
@@ -619,12 +697,15 @@ export function PlanningWorkspaceHost({
             className="relative min-h-0 flex-1 overflow-hidden"
             style={{ '--canvas-foot-inset': PLAN_CONFIRM_BAR_HEIGHT } as CSSProperties}
           >
-            {showsProposalViews ? (
+            {paneReview !== null ? (
               <PlanProposalViews
-                items={review.items}
-                outcome={state.decided}
+                // ONE key per PLAN: the instance mounted at the first live read is
+                // the one that shows the proposed plan (§23.13).
+                key={paneReview.id}
+                items={paneReview.items}
+                outcome={paneLive ? null : state.decided}
                 projectKey={projectKey}
-                version={treeVersion}
+                version={treeVersion + paneTick.tick}
                 ariaLabel={t('canvasAria', { project: projectName })}
                 view={view}
                 onViewChange={setView}
@@ -635,10 +716,23 @@ export function PlanningWorkspaceHost({
                 // The hand-off: open where the reader was, already marked as having
                 // navigated, so the pending request is DECLINED into the bar's
                 // offer rather than granted as a move.
-                canvasHeldTrail={canvasHeldTrail}
+                //
+                // A pane that mounts LIVE opens where the roadmap stood (§23.2,
+                // §23.8): the reader's own level, else the level the surface
+                // arrived on — never the root because nothing is proposed yet. It
+                // is a mount-time seed, so the value it takes later is ignored.
+                canvasHeldTrail={
+                  canvasHeldTrail ??
+                  (paneLive && initialCanvasTrail && initialCanvasTrail.length > 0
+                    ? initialCanvasTrail
+                    : null)
+                }
                 followTo={followTo}
                 readerHasNavigated={readerHasNavigated}
                 onCanvasLevelChange={noteReaderLevel}
+                live={paneLive}
+                liveFailing={state.liveFailing}
+                discarded={paneDiscarded}
               />
             ) : openingNamedSession ? (
               <div className="h-full w-full" data-testid="planning-pane-opening" aria-busy>
@@ -647,9 +741,7 @@ export function PlanningWorkspaceHost({
             ) : (
               <PlanChangeCanvas
                 projectKey={projectKey}
-                index={index}
                 diffKey={diffKey}
-                outcome={state.decided}
                 targetIds={targetIds}
                 initialTrail={initialCanvasTrail}
                 // MOTIR-6154/6161's follow-move. It stays on THIS branch of the
@@ -676,7 +768,10 @@ export function PlanningWorkspaceHost({
                 review" does not mean "there is a decision to take" — `state.decided`
                 is what does). When there is nothing to decide there is NOTHING HERE:
                 the footer hides, and the body runs to the pane's edge. */}
-            {pending ? (
+            {/* While the plan is WRITTEN the foot is empty (§23.1), even over a
+                pending proposal a retry kept: the pane shows the plan being
+                written, and its bar is not that plan's. */}
+            {pending && !paneLive ? (
               <div className="absolute inset-x-0 bottom-0 z-20">
                 <PlanChangeConfirmBar
                   index={index}
@@ -731,8 +826,41 @@ export function PlanningWorkspaceHost({
           onCancelDecline={() => setDeclineFrom(null)}
           onConfirmDecline={confirmDecline}
           staleRefused={staleRefusedAt === 'rail'}
+          conversationElsewhere={conversationElsewhere}
         />
       }
     />
   );
+}
+
+/**
+ * The harness an MCP-authored plan's conversation happened in, for the session
+ * that opened here with NO turns (MOTIR-6298; design §23.11) — latched per
+ * session id so it survives the turns sent after it. `null` for a hosted plan
+ * (`authorSource` other than `mcp`), a plan with no recorded harness, and a
+ * session that already held turns when its plan was read.
+ */
+function useConversationElsewhere(state: PlanChangeConversationState): { harness: string } | null {
+  const sessionId = state.session?.id ?? null;
+  const plan = state.liveReview ?? state.review;
+  const harness =
+    sessionId !== null &&
+    (state.session?.turns.length ?? 0) === 0 &&
+    plan?.authorSource === 'mcp' &&
+    plan.authorHarness
+      ? plan.authorHarness
+      : null;
+  const [latched, setLatched] = useState<{ sessionId: string; harness: string } | null>(null);
+  // Adjusting state while rendering (React's documented pattern for a value
+  // derived from a transition): the latch is set in the same render that first
+  // sees the zero-turn MCP plan, so the note never flashes in a frame late.
+  if (
+    harness !== null &&
+    sessionId !== null &&
+    (latched?.sessionId !== sessionId || latched.harness !== harness)
+  ) {
+    setLatched({ sessionId, harness });
+  }
+  if (harness !== null) return { harness };
+  return latched !== null && latched.sessionId === sessionId ? { harness: latched.harness } : null;
 }

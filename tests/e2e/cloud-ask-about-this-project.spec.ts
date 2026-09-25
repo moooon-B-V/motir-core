@@ -92,10 +92,11 @@ const confirmBar = (page: Page) => live(page).getByTestId('plan-change-confirm-b
  *  Every assertion below reads it as an ABSENCE. */
 const canvasFooter = (page: Page) => live(page).getByTestId('plan-change-canvas-footer');
 const canvas = (page: Page) => live(page).getByTestId('roadmap-canvas');
-/** A PROPOSED card, as the plan page draws it. ⚠️ `PlanItemNode`'s `data-op`,
- *  NOT `PlanChangeDiffFrame`'s `data-diff-state` (MOTIR-6155): once a plan is
- *  proposed the left pane mounts the plan page's own List | Canvas component, so
- *  the proposal wears the plan page's vocabulary — `add` / `modify` / `remove`. */
+/** A PROPOSED card, as the plan page draws it. ⚠️ `PlanItemNode`'s `data-op`
+ *  (MOTIR-6155): once a plan is proposed the left pane mounts the plan page's own
+ *  List | Canvas component, so the proposal wears the plan page's vocabulary —
+ *  `add` / `modify` / `remove`. The surface has no diff frame of its own any more
+ *  (MOTIR-6299): `PlanItemNode` is the one proposal card. */
 const opNodes = (page: Page, op: 'add' | 'modify' | 'remove') =>
   live(page).locator(`[data-op="${op}"]`);
 const answers = (page: Page) => rail(page).getByTestId('plan-change-report');
@@ -255,9 +256,9 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
     // The no-mutation claim, checked on the TREE rather than on the absence of a
     // bar: the roadmap still shows the project as saved, with no diff on it.
     await expect(confirmBar(page)).toHaveCount(0);
-    // ON THE CANVAS — with NO plan the pane is still `PlanChangeCanvas`, so the
-    // absence is read off the undecorated roadmap, in its own vocabulary.
-    await expect(canvas(page).getByTestId('plan-change-diff-node')).toHaveCount(0);
+    // ON THE CANVAS — with NO plan the pane is still `PlanChangeCanvas`, the
+    // plain roadmap, so no proposal card is drawn on it.
+    await expect(canvas(page).getByTestId('plan-item-node')).toHaveCount(0);
     await expect(opNodes(page, 'add')).toHaveCount(0);
     await expect(canvasFooter(page)).toHaveCount(0);
     await beat();

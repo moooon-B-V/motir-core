@@ -21,7 +21,7 @@ import { GrantRow } from '../../workspace/_components/gitSettingsPrimitives';
 import { githubAppInstallUrl } from '@/lib/github/appLinks';
 import { encodeInstallState } from '@/lib/github/installState';
 import { buttonVariants } from '@/components/ui/Button';
-import { BadgeCheck, ExternalLink, FolderGit2 } from 'lucide-react';
+import { BadgeCheck, ExternalLink, FolderGit2, Lock } from 'lucide-react';
 import { GitlabConnection } from './_components/GitlabConnection';
 import { OrgGitClient } from './_components/OrgGitClient';
 
@@ -83,6 +83,28 @@ export default async function OrganizationGitPage({ searchParams }: OrgGitPagePr
   // `notFound()`s on a self-host build — the 404 that `billing-selfhost.spec.ts`
   // asserts would become a 200. An in-page `<Suspense>` placed after the gate
   // streams without touching the status, which is why it is the instrument here.
+  // ⚠️ THE READ GATE MOVED WITH THE RAIL ROW (MOTIR-6312 · the Git-row flag in
+  // `design/org-admin/design-notes.md` § *Workspaces are created and removed at
+  // the org tier*). The org repository inventory is Owner/Admin reading under the
+  // role model, so a plain org member opening this URL directly meets panel 5d's
+  // forbidden state — never the inventory under a row that hides it. What a
+  // Member keeps is Settings › Project › Repositories (MOTIR-4674).
+  if (!(await isOrgAdminForWorkspace(ctx.userId, ctx.workspaceId))) {
+    const [tOrg, organization] = await Promise.all([
+      getTranslations('orgAdmin'),
+      organizationsService.resolveWorkspaceOrganization(ctx.userId, ctx.workspaceId),
+    ]);
+    return (
+      <GitSettingsShell provider={provider} hrefs={PROVIDER_HREFS}>
+        <EmptyState
+          icon={<Lock className="h-12 w-12" aria-hidden />}
+          title={tOrg('states.forbiddenTitle')}
+          description={tOrg('states.forbiddenDescription', { org: organization?.name ?? '' })}
+        />
+      </GitSettingsShell>
+    );
+  }
+
   return (
     <GitSettingsShell
       provider={provider}

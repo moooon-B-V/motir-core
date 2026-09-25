@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { FOLDER_REF_PREFIX } from '@/lib/plans/refs';
+import { useGeneratingPlanPoll } from '@/lib/hooks/useGeneratingPlanPoll';
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import {
   PLAN_VIEW_PARAM,
@@ -50,6 +51,7 @@ import {
 // does both. Decline and the proposal inline edit do NOT refresh: neither reveals
 // a server-rendered surface, and surface kind 1 (the edited cell) must not.
 
+// The REVISION poll's cadence. The generating poll's is `useGeneratingPlanPoll`'s own.
 const POLL_MS = 2500;
 
 export interface PlanDetailProps {
@@ -184,20 +186,17 @@ export function PlanDetail({
   }, [review.revision, refetch, router]);
 
   // Live polling WHILE generating — the proposed items stream in per level as the
-  // engine emits them. Stops the instant the plan leaves `generating`.
-  useEffect(() => {
-    if (review.status !== 'generating') return;
-    const ctrl = new AbortController();
-    const handle = setInterval(() => {
-      void refetch(ctrl.signal).catch(() => {
-        /* best-effort poll — a transient failure just retries next tick */
-      });
-    }, POLL_MS);
-    return () => {
-      ctrl.abort();
-      clearInterval(handle);
-    };
-  }, [review.status, refetch]);
+  // engine emits them. Stops the instant the plan leaves `generating`. The poll
+  // itself is the shared one (MOTIR-6295); this island only files each snapshot
+  // into its own state, exactly as `refetch` does. Not `immediate`: the island is
+  // seeded from the server read, so the first re-read waits a full interval.
+  useGeneratingPlanPoll(review.status === 'generating' ? planId : null, {
+    immediate: false,
+    onSnapshot: (fresh) => {
+      setReview(fresh);
+      setVersion((v) => v + 1);
+    },
+  });
 
   const onRevise = useCallback(
     async (prompt: string) => {

@@ -8,18 +8,18 @@ import { mapOrgError } from '@/lib/organizations/errorResponse';
 // /api/organizations/[orgId]/members/[userId] (Story 6.10.5) — per-member
 // org-role change + removal. Thin HTTP layer over organizationsService
 // (CLAUDE.md § 4-layer): session-gated (401), one service call; the service
-// owns the org-admin gate, the last-owner guard, and the transaction.
+// owns the org-admin gate, the Owner lock, and the transaction.
 
-function isOrganizationRole(value: unknown): value is OrganizationRole {
-  return (
-    value === ORGANIZATION_ROLE.owner ||
-    value === ORGANIZATION_ROLE.admin ||
-    value === ORGANIZATION_ROLE.member
-  );
+// A role this route may ASSIGN: Admin or Member. `owner` is not assignable —
+// ownership moves only by the Owner's transfer (MOTIR-6307) — so it is refused
+// here at validation (400) before the service is asked.
+function isAssignableOrgRole(value: unknown): value is OrganizationRole {
+  return value === ORGANIZATION_ROLE.admin || value === ORGANIZATION_ROLE.member;
 }
 
-// PATCH — change a member's org role. Body: { role }. Org owner/admin only;
-// demoting the last owner is refused (409 LAST_ORG_OWNER).
+// PATCH — change a member's org role between Admin and Member. Body: { role }.
+// Owner/Admin only; changing the Owner's own row is refused (409
+// ORG_OWNER_MEMBERSHIP_LOCKED).
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ orgId: string; userId: string }> },
@@ -41,9 +41,9 @@ export async function PATCH(
     );
   }
   const { role } = (body ?? {}) as Record<string, unknown>;
-  if (!isOrganizationRole(role)) {
+  if (!isAssignableOrgRole(role)) {
     return NextResponse.json(
-      { code: 'BAD_REQUEST', error: '`role` must be owner, admin, or member.' },
+      { code: 'BAD_REQUEST', error: '`role` must be admin or member.' },
       { status: 400 },
     );
   }
@@ -64,7 +64,8 @@ export async function PATCH(
 }
 
 // DELETE — remove a member from the org. Org owner/admin (or self-leave);
-// removing the last owner is refused (409 LAST_ORG_OWNER).
+// removing the Owner is refused, the Owner leaving included (409
+// ORG_OWNER_MEMBERSHIP_LOCKED).
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ orgId: string; userId: string }> },

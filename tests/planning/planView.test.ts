@@ -264,10 +264,13 @@ describe('the PREMISE the legibility arm is justified against (MOTIR-6250)', () 
   it('the workspace host seeds on the SAME transition the rail resets on', () => {
     // The premise above holds only because the seed is read when the rail is at
     // its default. The reset is keyed on `proposalPresent`, which the host feeds
-    // from `state.review !== null` — the same review the seed effect waits for.
+    // from `paneReview !== null` — the same plan the seed effect waits for. (Since
+    // MOTIR-6300 that is the PANE's plan: the live review from its first read, then
+    // the proposed one, so both fire once, at the first read, and not at the
+    // hand-over.)
     const host = read('components/planning/PlanningWorkspaceHost.tsx');
-    expect(host).toMatch(/proposalPresent=\{state\.review !== null\}/);
-    expect(host).toMatch(/const review = state\.review;/);
+    expect(host).toMatch(/proposalPresent=\{paneReview !== null\}/);
+    expect(host).toMatch(/setView\(defaultPlanView\(paneReview\)\)/);
   });
 
   it('the plan detail does NOT opt into the resizable split', () => {
