@@ -181,6 +181,18 @@ export default defineConfig({
       // database and this lane must not: a `design/*` PR editing §5c skips every app
       // lane, and is exactly the pull request that must not skip this.
       'tests/design-github-development-copy.test.ts',
+      // `design-surface-views-chrome-copy` (MOTIR-6184) reads
+      // `design/ai-planning/plan-review--surface-views.mock.html` and
+      // `messages/en.json` together — the same shape as its two neighbours above.
+      // That asset composes the planning surface's own chrome, and its first
+      // version copied the class strings out of `PlanningWorkspaceHost.tsx` while
+      // TYPING the text: the resting footer read "Ask for a change" where the
+      // catalogue says "Roadmap — as saved". Every other guard in this lane was
+      // green over it, because none of them reads a string. It is here rather
+      // than beside the component tests because a `design/*` PR editing the mock
+      // skips every app lane and is exactly the pull request that must not skip
+      // this.
+      'tests/design-surface-views-chrome-copy.test.ts',
     ],
   },
   resolve: {

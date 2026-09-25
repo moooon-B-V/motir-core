@@ -38,8 +38,27 @@ export async function readPendingProposal(
   signal?: AbortSignal,
 ): Promise<PlanReviewDto | null> {
   const review = await fetchPlanReview(planId, signal);
-  const undecided = review.status === 'planned' || review.status === 'stale';
-  return undecided && review.items.length > 0 ? review : null;
+  return isProposedReview(review) && review.items.length > 0 ? review : null;
+}
+
+/**
+ * Is this review PROPOSED — undecided, and therefore something a person is still
+ * holding?
+ *
+ * Lifted out of `readPendingProposal` by Subtask MOTIR-6186, which needs the same
+ * question answered SYNCHRONOUSLY about a review already in hand: the planning
+ * surface shows the plan page's List | Canvas exactly while the plan is proposed,
+ * and it has no plan id to re-read. Everything the docstring above says about
+ * `stale` applies here — it is the predicate, not a copy of it.
+ *
+ * ⚠️ It deliberately does NOT ask about `items.length`. "Undecided" and "has
+ * anything in it" are two questions, and only `readPendingProposal` wants both:
+ * an EMPTY proposed plan is still a plan a reviewer is holding, and the surface
+ * draws it (the shared component's own empty state) rather than falling back to
+ * the roadmap as though no plan existed.
+ */
+export function isProposedReview(review: PlanReviewDto): boolean {
+  return review.status === 'planned' || review.status === 'stale';
 }
 
 /**

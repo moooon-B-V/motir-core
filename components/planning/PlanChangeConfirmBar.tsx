@@ -30,6 +30,29 @@ import type { PlanGateView } from '@/lib/planning/planGateView';
 // aside; a press refused as STALE says so in a yellow band directly above the verbs it
 // refused. The shipped words stay for a proposal nobody has been asked about.
 
+/**
+ * The bar's own height, as ONE definition (Subtask MOTIR-6186;
+ * `design/ai-planning/design-notes.md` Part XXI 21.8).
+ *
+ * The planning surface no longer puts this bar in a footer slot below the canvas
+ * box — it floats it OVER the box's bottom edge, so that hiding it when there is
+ * nothing to decide resizes nothing. For that to work the canvas has to keep its
+ * three bottom-anchored control clusters clear of the strip the bar will occupy,
+ * whether or not the bar is up, and it does that with a `--canvas-foot` inset.
+ *
+ * ⚠️ THE POINT IS THAT THERE IS ONE NUMBER, NOT THAT THE NUMBER IS CLEVER. The
+ * hazard Part XXI names is two numbers drifting apart — a magic `min-h` on one
+ * side and a magic inset on the other — so the bar and the inset read this, and
+ * `tests/components/plan-confirm-bar-height.test.tsx` asserts the bar the browser
+ * actually lays out is this tall. A pinned number that is CHECKED cannot drift
+ * silently; an unchecked one is exactly what the rule is about.
+ *
+ * The residual, stated rather than hidden: the bar is `min-height`, so content
+ * taller than this grows it and the inset would then be a little short. The test
+ * is what makes that a visible failure instead of a quiet one.
+ */
+export const PLAN_CONFIRM_BAR_HEIGHT = '3.5rem';
+
 export interface PlanChangeConfirmBarProps {
   index: PlanChangeDiffIndex;
   /** A decision is in flight. BOTH decisions write now (approve materializes,
@@ -81,6 +104,7 @@ export function PlanChangeConfirmBar({
       <div
         data-testid="plan-change-confirm-bar"
         className="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
+        style={{ minHeight: PLAN_CONFIRM_BAR_HEIGHT }}
       >
         <span className="flex min-w-0 flex-col">
           {counts}
@@ -124,6 +148,7 @@ export function PlanChangeConfirmBar({
       <div
         data-testid="plan-change-confirm-bar"
         className="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
+        style={{ minHeight: PLAN_CONFIRM_BAR_HEIGHT }}
       >
         <span className="flex min-w-0 flex-col">
           {counts}

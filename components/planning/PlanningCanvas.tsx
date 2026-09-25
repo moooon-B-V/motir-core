@@ -592,7 +592,7 @@ export function PlanningCanvas({
 
       {/* zoom controls (fixed — do not pan/zoom) */}
       <div
-        className="absolute bottom-4 left-4 flex overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)"
+        className="absolute bottom-[calc(--spacing(4)+var(--canvas-foot-inset,0px))] left-4 flex overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)"
         role="group"
         aria-label={t('zoom')}
       >

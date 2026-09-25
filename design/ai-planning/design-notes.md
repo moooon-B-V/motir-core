@@ -28,6 +28,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **Folders as LEVELS on the planning canvases**  | **`plan-folder-levels.mock.html`**                        | MOTIR-5793           | Part XVIII |
 | **A card MOVED under a proposed parent**        | **`plan-review--surgical-edits.mock.html`**               | MOTIR-6053           | Part XIX   |
 | **A leaf's DIFFICULTY on the plan review**      | **`plan-review--difficulty.mock.html`**                   | MOTIR-6134           | Part XX    |
+| **The surface's List \| Canvas for a plan**     | **`plan-review--surface-views.mock.html`**                | MOTIR-6184           | Part XXI   |
 | **Approve or decline a plan, in place**         | `plan-review--decide.mock.html` (on the design result)    | MOTIR-6033           | Part XXII  |
 
 **A Part number is an address in THIS file.** Before taking the next number, check the area's
@@ -5716,6 +5717,361 @@ Not named in the mock, but owed: **GIVES MOTIR-6137** (the review renderer, `blo
 - Any new entry point (see the access path above).
 
 ---
+
+# Part XXI — the planning surface's left pane holds the plan page's List | Canvas (MOTIR-6184 · Story MOTIR-6155 — `plan-review--surface-views.mock.html`)
+
+**The asset:** one DELTA mock, `design/ai-planning/plan-review--surface-views.mock.html`, holding only
+the panels that change. No `.png` (AMENDMENT 4).
+
+## 21.0 ⚠️ WHICH "Part XX" this Part cites, and why it never says the number
+
+This Part amends **two** designs, and when it was written one of them was not in this file.
+
+- **MOTIR-3234's Part VIII** (`plan-detail-list-view.mock.html`) — the pane header and the switch.
+  That one IS here, and is cited by number.
+- **MOTIR-6033's decide design** — the planning surface as a plan's DECISION surface, and the confirm
+  bar's verbs, consequence line, decline band, held reason and stale alert. It was **published only**:
+  evidence `cmueg6bue00kghwoikl5e6bxp`, approved 2026-09-23, carrying `plan-review--decide.mock.html`
+  and a note fragment of its own.
+
+**✅ RESOLVED — it is now Part XXII of this file (MOTIR-6190, `#3101`).** While this story was in
+review, the bug this section was written to dodge was fixed: the decide design landed here, renumbered
+from the `Part XX` its own result claims to **Part XXII**, with its sections `§20.x` kept as published.
+So the ambiguous address is gone, and a citation of the decide design in this Part may now say
+**Part XXII** and mean exactly one thing.
+
+**Why the care was not pedantry, kept as the record of what went wrong.** That fragment numbered
+itself `Part XX` and said it lands after Part XIX. It never landed. `Part XX` in this file is
+MOTIR-6134's difficulty design (merged in the same merge-queue batch,
+`moooon-B-V/motir-core#3082`), so for a stretch the number resolved to two different designs depending
+on which document a reader had open — anything here that had said "Part XX §20.4" would have pointed
+at difficulty chips. This Part refused the ambiguous address rather than guessing, and the index
+table's own note above now carries the rule that prevents a repeat: **check the area's published
+design results before taking the next number.**
+
+## 21.1 What this COMPOSES and must not redraw
+
+Almost everything. This Part adds no element and changes nothing inside one:
+
+- the pane header and its `Segmented` **List | Canvas** switch — Part VIII §2, unchanged, including
+  its `--el-surface` fill, its bottom hairline, its 44px height and `planReview.viewSwitchAria`;
+- `PlanProposalList` — Part VIII §3, with Part XIII §7's clickable row;
+- `PlanReviewCanvas` — Parts IX and XIII, including `arrivalLevel()` and the decided treatments of
+  Part VI;
+- `PlanChangeConfirmBar`, its decline band, its held reason and its stale alert — MOTIR-6033's design,
+  Part XXII §20.4 and §20.5;
+- the surface's Close + project bar and the audit-coverage banner's seam — `PlanningWorkspaceHost` as
+  shipped, **including their COPY**: `planningWorkspace.close` and `escKey`, resolved from the
+  catalogue rather than typed (21.11).
+
+**The ONE thing it does not compose — and the one change this Part makes to a shipped surface — is
+the footer SLOT.** The shipped host keeps a resting footer in it at all times; **21.8 hides the slot
+entirely when there is nothing to show**, and moves the confirm bar from a sibling below the canvas to
+an overlay on its bottom edge so that hiding it resizes nothing. That is a decision about the pane
+this Part owns, not a re-drawing of anything inside the bar, whose every state is composed unchanged
+(21.6).
+
+**The canvas is a LABELLED REGION in the asset, not a redrawing** — the same treatment MOTIR-6033's
+own mock gives it, and for the same reason: nothing inside it changes. This Part decides where the
+component SITS.
+
+## 21.2 Decision 1 — the component's pane header is a SECOND BAR, beneath the surface's Close bar
+
+**The question.** Part VIII §2 decided a 44px pane header because _"the pane had no header … So a
+header had to be DECIDED, not found."_ The planning surface's left pane is not in that position: it
+already has a top bar — Close · `Esc` · the project name — that the plan page does not have. So either
+the switch merges into that bar, or the component's own header stacks beneath it.
+
+**The decision: the component's own 44px header, BENEATH the Close bar, composed whole.** Three
+reasons, in the order they decided it:
+
+1. **The component is mounted, not re-cut.** The whole story is that the surface and the plan page
+   cannot disagree about a plan. A headerless variant for one host is a second shape of the pane
+   header, and a second shape is the first thing that drifts. Merging would need exactly that.
+2. **The Close bar is the OVERLAY's chrome, not the pane's control bar.** It carries Close, the `Esc`
+   hint and the project name — the workspace's identity and its exit. The switch governs the BODY.
+   Part VIII §2's own argument for placing the bar above the establish band ("the bar governs the
+   BODY, and the band is not part of the body") is the same argument here one level up. The tell is
+   already in the shipped code: the audit-coverage banner sits in the SEAM beneath the Close bar,
+   full-bleed and unpadded (`design/audit-coverage` §1) — a bar that has a full-bleed banner hanging
+   under it is not a control bar for the body below that banner.
+3. **The fold cost is 45px and it is paid only while there is a plan.** The pane's chrome with a
+   proposed plan is the Close bar (≈41px), this header (44px + 1px hairline) and the confirm bar
+   (≈57px) — about 143px. With no plan the header does not render at all (decision 4), so the resting
+   surface is byte-identical to what ships today, and the 45px arrives with the thing it controls.
+
+**What is NOT decided here:** the Close bar's own contents. Nothing moves into or out of it.
+
+## 21.3 Decision 2 — the DEFAULT view is the plan page's own rule, pinned at the first proposed read
+
+**`defaultPlanView(review)`, unchanged** — Part IX §3's conditional rule: the canvas, and the LIST when
+the plan's proposals straddle more than one container.
+
+**Why the same rule and not a surface-specific one.** Part IX §3 reasons about the PLAN's shape, not
+about the host: the list wins when the canvas cannot show the proposals on one level. That fact is a
+property of the plan, and the surface is showing the same plan. A different default would mean one
+plan opens as a list in one place and as a canvas in the other, which is the disagreement this story
+exists to remove.
+
+**PINNED, and re-seeded only when the plan changes.** The seed is taken once, at the first read in
+which the plan is proposed, exactly as `PlanDetail` pins it at mount (Part XIII §6 / MOTIR-3262) and
+for the same reason: a plan's item set can grow under a re-read, so recomputing per render would move
+a reader between views while they are reading. It is re-seeded when the plan in hand changes identity
+(a new `review.planId`), and by nothing else — not by a stale refusal, not by a revision, not by a
+decision.
+
+## 21.4 Decision 3 — the view is LOCAL to the open surface, and is NEVER written to the URL. CONFIRMED
+
+The card asked for this to be confirmed or overturned. **Confirmed**, and the reason is stronger than
+"the overlay owns four parameters":
+
+- **The surface is an OVERLAY over whichever page the reader is on.** The address bar belongs to that
+  page. `?view=` is not a free name — the plan page itself uses `PLAN_VIEW_PARAM`, so an overlay
+  opened over `/plans/<id>` would be writing into a key the page underneath already reads.
+- **Back already means one thing here, and it must keep meaning it.** The overlay routes Close, `Esc`,
+  the scrim AND browser Back through one `requestClose()`, which is the seam the pending-proposal
+  guard intercepts. A view switch that pushed history would make Back mean "go back to Canvas"
+  sometimes and "close the workspace, and maybe ask about your proposal" other times, decided by
+  something the reader cannot see.
+- **Nothing is lost.** The plan page keeps the URL contract MOTIR-3239 / MOTIR-3434 gave it, because
+  the view stays CONTROLLED by the host: the page holds it in the URL, the surface holds it in local
+  state, and the component holds it in neither.
+
+**So a switch on the surface leaves the query string byte-identical**, and that is drawn as a
+criterion rather than left as an intention.
+
+## 21.5 Decision 4 — the access path: no new door, and the switch APPEARS when the plan becomes proposed
+
+**The surface is reached exactly as it is today** — _Plan with AI_ on a work item, a Plans row, or a
+To-approve row (Part XXII §20.2). This Part adds no entrance.
+
+**What it adds is a moment.** The switch is not a control the reader goes looking for; it arrives with
+the plan:
+
+| when                                | the left pane                                                                                                                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **no plan yet** (conversation only) | `PlanChangeCanvas`, exactly as shipped. **No pane header, no switch** — there is nothing to list. Footer slot: the resting footer. Sheet 1 panel A.                                               |
+| **`generating`**                    | NOT this Part's. The live-drawing story (MOTIR-6158) owns the pane while the plan is being written, and hands over to this component the moment the plan becomes proposed. Nothing here draws it. |
+| **proposed** (`planned` or `stale`) | the pane header arrives with the switch, and the body is `PlanProposalList` or `PlanReviewCanvas`. Footer slot: the confirm bar. Sheet 1 panel B, sheet 2.                                        |
+| **decided**                         | the component stays, on the view the reader was on, in Part VI's decided treatment. The bar leaves with the proposal and the resting footer takes the slot back. Sheet 6.                         |
+
+## 21.6 The confirm bar is IDENTICAL under both views — and the bands belong to the BAR
+
+**The verbs do not move when the view changes.** Sheet 2 draws the proposed pair, sheet 4 the held and
+stale pairs; in each the pane header and the bar are the same element and only the body differs. The
+bar is the pane's FOOTER SLOT, and the switch governs the body above it.
+
+**Every band is the bar's, not either view's:**
+
+- **Decline pressed** — the `confirming` band stacks above the bar and the verb group steps aside.
+  Drawn over the LIST (sheet 3) precisely because MOTIR-6033 drew it over the canvas; one design
+  showing it over each body is what makes "it belongs to the bar" unambiguous.
+- **Held** — both verbs disabled, not removed, the held reason in place of the consequence line.
+  **The switch stays LIVE: reading is never held.** Sheet 4 panel A.
+- **Refused as stale** — the `role="alert"` band directly above the verbs it refused; the body re-reads
+  to the new version and **the view does not move**. Sheet 4 panel B.
+- **See but not decide** — no verbs at all, not disabled ones. The switch and both bodies are
+  untouched, which is the point: a reader who may not decide may still read the plan either way.
+  Sheet 5.
+
+**An EMPTY proposed plan** (sheet 7) draws whatever the shared component already draws, composed. The
+switch still renders, because there IS a plan.
+
+## 21.7 The canvas LEVEL survives a round trip, and so does the composer draft
+
+**A note, not a panel — it is a behaviour and a still frame cannot show it.** Canvas → List → Canvas
+returns the reader to the level they were on, not to the arrival level. On the plan page the canvas
+unmounts under List and that is correct there (its suite asserts it), so the surface asks for the
+behaviour as an **opt-in** rather than changing the page: the canvas stays mounted, hidden and `inert`,
+and the level survives because the component never unmounted.
+
+**The composer draft is untouched by all of this.** It lives in the RAIL, which is the other pane; a
+switch in the left pane cannot reach it. Drawn nowhere, asserted everywhere.
+
+## 21.8 When there is NOTHING to show, the footer HIDES — and the bar OVERLAYS the canvas
+
+**Yue's decision, this review round: if there is nothing to show in the footer, the footer should be
+hiding.** With no proposal in hand there is no footer slot at all. The canvas runs to the pane's
+bottom edge.
+
+**Why the foot has nothing to say.** The rail on the right IS the planner. Before a plan is proposed
+it is where the conversation is happening and where the planner says where it has got to — so a line
+in the foot restating that is a second voice for one fact, at the far side of the surface from where
+the reader is looking. And once it has nothing to say, an empty box holding its own height is worse
+than no box: it is chrome that exists to be invisible.
+
+### The structural change that makes hiding SAFE — the bar stops being a sibling
+
+Hiding the slot cannot be done by itself, and this is the part a build must not skip.
+
+The confirm bar is today a `shrink-0` sibling BELOW the `min-h-0 flex-1` canvas box. The canvas
+anchors three control clusters to the bottom of that box — the engine's zoom + fit
+(`bottom-4 left-4`, `PlanningCanvas.tsx`), LOCATE (`bottom-4 left-[8.25rem]`,
+`ProjectRoadmapCanvas.tsx`) and full-screen (`right-3 bottom-4`). So a slot that comes and goes
+resizes that box by the bar's full height on every proposal, and all three clusters slide with it.
+That is **bug MOTIR-1815**, and the fix that shipped was to stop the box changing size by keeping a
+resting footer in the slot at all times.
+
+**This Part replaces that fix rather than reverting it**, and the replacement is strictly better:
+
+- **The canvas box is ALWAYS the full height of the pane below the header.** It has no footer sibling,
+  ever.
+- **The confirm bar OVERLAYS its bottom edge** when there is a proposal, instead of sitting under it.
+- **The three clusters carry a permanent bottom inset of the bar's height**, so they sit above the
+  strip the bar will occupy whether or not the bar is up.
+
+The result is that **nothing resizes and nothing moves, in either direction** — which is more than the
+old fix achieved, because the old fix held the box constant by always spending the space. Here the
+space is only ever _drawn into_ when there is something to draw.
+
+**Drawn in sheet 1 panel A**: the dashed strip at the foot of the canvas is the region the bar will
+overlay, and the two control clusters sit above it. When resting, that strip is canvas — the reader
+sees the roadmap, not a box.
+
+### What a build must get right
+
+1. **Do not make the canvas box's height conditional on the proposal.** If `PlanChangeCanvas` /
+   `PlanProposalViews` grows and shrinks, MOTIR-1815 is back and no guard in the design lane will
+   see it. The box is constant because it is always full; the bar floats.
+2. **Inset the clusters permanently, and derive the inset** from the bar's own box rather than pinning
+   a number — the same discipline the shipped resting footer already keeps: _"a magic `min-h` would
+   drift the moment the bar's own content changed and re-introduce the jump this slot exists to
+   remove."_ The `57px` in this asset's board chrome is a drawing convenience and is **not** the
+   specification.
+3. **Retire the two catalogue keys with their only consumer.** `planningWorkspace.footerRestingTitle`
+   and `footerRestingBody` are rendered in exactly one place, `PlanningWorkspaceHost.tsx`
+   (`git grep -n "footerRestingTitle" -- components app` → one file). Removing the resting footer
+   orphans both, in `messages/en.json` **and** `messages/zh.json`. They go in the same change; a dead
+   key that still reads as live copy is how a later card puts the line back.
+4. **A test asserts the canvas box is the same height with a proposal and without one**, and that the
+   clusters are at the same offset in both. That is the assertion MOTIR-1815 never had — its fix was
+   protected by a visible footer rather than by a measurement, which is why emptying that footer was
+   able to look safe.
+
+**What this does NOT change.** The confirm bar itself, in every one of its states — the verbs, the
+consequence line, the decline band, the held reason, the stale alert — is untouched (21.6). This
+decision is about the slot, not its content: where the bar sits, and what happens when there is no bar.
+
+## 21.9 Token and shape roles
+
+Nothing new. Every element in the asset is a shipped component's own markup or the surface's own
+chrome, so the roles are those components' — Part VIII §2's table for the header and the switch,
+Part XXII §20.8 for the bar and its bands.
+
+The asset's two additions are its BOARD chrome, which paints only through `--el-*`
+(`--el-text-secondary` / `--el-text-strong` / `--el-text` for ink, `--el-canvas` / `--el-surface` /
+`--el-page-bg` for surfaces, `--radius-card` for the board), and one presentation-free
+`.seg-ic { font: inherit }` declaration. That class is a MARKER the shipped `Segmented` puts on an
+option's glyph and styles with utilities on the same element — nothing in the app declares a rule for
+it — and it is declared here only because this asset carries the real markup and
+`tests/design-mock-utility-correspondence.test.ts` direction (D) rules on a class carried with no
+declaring selector. The `.seg button .seg-ic` rules in older assets are shims for hand-drawn
+segmented controls this asset does not have.
+
+## 21.10 a11y
+
+Inherited, and worth stating because the switch is the one control this Part places:
+
+- the switch is the shipped `Segmented` — a labelled `role="group"` whose options are real `<button>`s
+  carrying `aria-pressed`, so it is keyboard-operable and announced as a toggle;
+- its accessible group name is `planReview.viewSwitchAria`, the plan page's own key. **No new string is
+  introduced by this Part**, in either catalogue;
+- the stale band keeps its `role="alert"`, so a refusal is announced whichever body is showing;
+- the held state DISABLES the verbs rather than removing them, so their absence is never silent — and
+  the switch is deliberately left enabled, because nothing about reading is held.
+
+## 21.11 How the asset was produced
+
+Stated because criterion 2 asks for it, and because a claim to compose shipped markup is worth being
+checkable:
+
+- Every pane header, list body, confirm bar, decline band, held bar and stale bar in the asset is the
+  **real components' own DOM**, rendered through `tests/helpers/renderWithIntl.tsx` in happy-dom on
+  `origin/main` @ `d0976c0ab` and emitted verbatim — real `Segmented`, real `PlanProposalList`, real
+  `PlanChangeConfirmBar`, real `en` catalogue strings. Not a transcription.
+- The Close + project bar and the resting footer are copied verbatim from
+  `components/planning/PlanningWorkspaceHost.tsx` at that commit — its inline chrome is not a
+  component that can be rendered on its own, so its MARKUP is copied and **its TEXT is resolved from
+  `messages/en.json`**, never typed.
+
+  ⚠️ **That last clause is a correction, and it is worth reading.** The first version of this asset
+  copied those class strings correctly and then TYPED the words: the resting footer read
+  _"Ask for a change"_ / _"Asking writes nothing — you will see the plan before anything is created."_
+  where the catalogue says `planningWorkspace.footerRestingTitle` / `footerRestingBody` —
+  _"Roadmap — as saved"_ / _"Nothing proposed. The conversation has changed nothing."_. The invented
+  pair was worse than merely wrong: it read as a call to action, which is precisely what that footer
+  must not do (`PlanningWorkspaceHost.tsx`: _"deliberately quiet … so it never competes with the gate
+  or reads as something to act on"_). **A mock is product COPY**, in the register it ships in, and a
+  later card building to this asset would have transcribed it. It shipped in a published result and
+  was caught by a person reading the board.
+
+  Two things changed as a result. The asset's own build resolves every product string through a
+  catalogue lookup that THROWS on a missing key, so a string it cannot resolve fails rather than
+  ships. And **`tests/design-surface-views-chrome-copy.test.ts`** now reads this asset and
+  `messages/en.json` together and requires each of the four chrome strings verbatim, hard-coding
+  none of them — the same shape as `design-lesson-phase-chips` (MOTIR-5107) and
+  `design-github-development-copy` (MOTIR-5152). It is in the design lane, because a `design/*` pull
+  request editing this mock skips every app lane and is the one that must not skip this. Every other
+  guard in that lane was green over the invented copy: they rule on colour, shape, structure and dead
+  rules, and none of them reads a string.
+
+- `PlanReviewCanvas` and `PlanChangeCanvas` are labelled regions (21.1).
+- The first stylesheet is the project's real Tailwind v4.3.0 output, compiled over this document's own
+  class attributes with `@motir/design-system/theme.css` — the token layer is generated, not
+  hand-copied. Four authored rules for a component this asset does not draw
+  (`.style-vignette > .sv-canvas`) were dropped, because a rule nothing carries is what MOTIR-4150 read
+  a measure off and direction (B) rules on it at zero.
+- **No pixel render of the assembled board was taken.** The sandbox this was authored in has no
+  browser system libraries and no root, so `scripts/render-design-mock.mjs` could not run. It is
+  optional and publishes nothing. What DID render the finished asset are the guards that use
+  happy-dom — `design-dark-parity`, `design-state-ink-contrast`, `design-ink-contrast` and
+  `design-mock-utility-correspondence` — and all 228 specs in the design lane are green over it.
+
+## 21.12 GIVES / TAKES
+
+Over every `MOTIR-<n>` the new mock and this Part name:
+
+- **MOTIR-6155** (the story) — neither. It is the container.
+- **MOTIR-6185** (the extraction) — **GIVES** nothing and **TAKES** nothing. It is a pure lift of the
+  plan page's own JSX, decided before this design and unaffected by it; this Part only requires that
+  the result be mountable whole, which is what it already is.
+- **MOTIR-6186** (the mount) — **GIVES** it all four decisions as its spec: where the header sits
+  (21.2), the default and its pinning (21.3), local-not-URL (21.4), and the state table (21.5–21.7).
+  It takes nothing from it.
+- **MOTIR-6033** (the decide design) — **TAKES** the confirm bar, its verbs, its consequence line and
+  all four of its bands, composed unchanged. **Nothing is given back and its asset is not edited.**
+  This Part adds a second body above that bar and does not touch the bar.
+- **MOTIR-3234** (Part VIII) — **TAKES** the pane header and the switch, composed unchanged, and
+  extends the REASONING behind its placement to a host that already has a top bar (21.2). Part VIII's
+  own decision for the plan page is unchanged.
+- **MOTIR-4016 / MOTIR-4017** (Part XIII) — **TAKES** the derived default's pinning and the clickable
+  list row. Unchanged.
+- **MOTIR-3162** — **TAKES** the property that a review survives its decision, which is what lets a
+  decided plan keep the view the reader was on (21.5). Unchanged.
+- **MOTIR-3239 / MOTIR-3434** — **TAKES** the plan page's URL contract by leaving it alone: 21.4 keeps
+  the view host-controlled precisely so the page's `?view=` behaviour is untouched.
+- **MOTIR-6158** (the live-drawing story) — neither. 21.5 names the handover and draws nothing of it.
+- **MOTIR-6154 / MOTIR-6159 / MOTIR-6160** (the landing story) — neither. Where the canvas ARRIVES is
+  theirs; this Part draws the canvas as a region and says nothing about its level.
+- **MOTIR-6134** (Part XX, difficulty) — neither, and 21.0 is the only reason it is named: its Part
+  number collided with the number MOTIR-6033's published fragment used.
+- **MOTIR-6190** — the bug 21.0 raised, now FIXED (`#3101`): it landed the decide design here as
+  Part XXII, so this Part cites it by number rather than by evidence id. Neither gives nor takes.
+- **MOTIR-4150 / MOTIR-4687** — neither. Named in 21.11 as the reason a dead rule is dropped.
+
+## 21.13 What Part XXI does NOT draw
+
+- **Anything inside the list, the canvas, the confirm bar or the decline band.** All approved and
+  shipped; composed only.
+- **The `generating` pane** — MOTIR-6158's.
+- **Where the canvas arrives, and the move when a target settles** — MOTIR-6154's, drawn by
+  MOTIR-6159.
+- **The decide verbs themselves, the held reason's wording, the stale sentence and the see-only line**
+  — MOTIR-6033's, quoted but not re-decided.
+- **The rail**: the transcript, the composer and the review block are untouched, and the composer
+  draft's survival (21.7) is a property of NOT touching them.
+- **The plan page.** It is unchanged, and its own suites are the assertion of that.
+- **Any new string**, in either catalogue.
 
 # Part XXII — The PLAN-APPROVAL gate: the To-approve row, the planning surface as its DECISION surface, and the hand-off before generation (MOTIR-6033 · Story MOTIR-6012, DATED 2026-09-23)
 

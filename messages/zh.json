@@ -6704,8 +6704,6 @@
       "conventionRefine": "已打开，用于完善 {repo} 的编码规范。",
       "roadmap": "已从路线图打开。"
     },
-    "footerRestingTitle": "路线图 —— 已保存的版本",
-    "footerRestingBody": "暂无提议。这段对话没有改动任何内容。",
     "searchLabel": "搜索本项目",
     "reading": {
       "eyebrow": "开始规划前",
