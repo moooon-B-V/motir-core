@@ -4916,6 +4916,9 @@
       "removeError": "Couldn’t remove member",
       "roleChanged": "Role updated",
       "roleChangeError": "Couldn’t change role",
+      "ownerLocked": "Ownership moves only by transfer",
+      "ownerLockedLink": "Transfer ownership",
+      "ownerNotOffered": "Owner isn’t offered here — ownership moves only by transfer.",
       "roleLabel": "Organization role for {name}",
       "pager": "Showing {from}–{to} of {total}",
       "page": "Page {n} of {m}",
@@ -4928,7 +4931,6 @@
       "period": "{cadence, select, monthly {mo} other {yr}}",
       "scaled": "Scaled",
       "pastDue": "Past due",
-      "viewOnly": "View only",
       "annualSaving": "Annual · saves ${save}/yr",
       "follows": "Seats follow membership — 1 per active member (${rate}/seat/{period}). Adding or removing a member adjusts your next invoice automatically (prorated).",
       "manage": "Manage seats in Billing",
@@ -4941,20 +4943,18 @@
       "removeCredit": "Frees a seat ({from} → {to}). A prorated credit for the unused time posts to your next invoice — no mid-term refund. Your plan returns to ${next} / {period} at renewal.",
       "removeAccess": "They lose access to every workspace under {org}.",
       "pastDueNote": "We couldn’t charge your card for the Motir seat plan. Motir stays active while we retry over the next ~2 weeks — seats are still editable. Update your payment method to avoid dropping to the free caps.",
-      "updatePayment": "Update payment",
-      "viewOnlyNote": "Billing is managed by an owner. Adding or removing a member still adjusts the organization’s seats — the charge or credit is handled on the owner’s plan.",
-      "subtitleAdmin": "You’re an admin of {org} — you can manage who’s in the organization. The seat plan and payment are managed by an owner."
+      "updatePayment": "Update payment"
     },
     "roles": {
       "owner": "Owner",
       "admin": "Admin",
       "member": "Member",
-      "ownerDesc": "Full control — billing, delete, all workspaces",
-      "adminDesc": "Manage members + settings + every workspace",
-      "memberDesc": "Belongs to the org; access by workspace role"
+      "ownerDesc": "The one owner — alone transfers or deletes the organization",
+      "adminDesc": "Runs the organization — members, workspaces, settings and billing",
+      "memberDesc": "No organization powers — access comes from their workspace roles"
     },
     "roleHelp": {
-      "adminLine": "Owner / Admin administer the organization and are granted admin on every workspace under it — above any per-workspace role.",
+      "adminLine": "The Owner and Admins run the organization. The Owner acts with full rights in every workspace; an Admin’s rights inside a workspace come from their role there.",
       "memberLine": "An org Member belongs to the org but has no cross-workspace powers — what they can do inside a workspace is still governed by their workspace role.",
       "gatingNote": "Org membership gates workspace access: someone removed from the organization loses access to every workspace under it."
     },
@@ -5596,13 +5596,9 @@
       "checkoutCanceled": "Checkout canceled — no change was made to your plan."
     },
     "member": {
-      "gateTitle": "Billing is managed by your org owner",
-      "gateDescription": "Plans and payment for the {org} organization are visible to owners and admins. Ask an organization owner to change the plan or buy AI credits.",
-      "contactOwner": "Contact an owner"
-    },
-    "admin": {
-      "viewOnly": "View only",
-      "lockNote": "You can see the plan, usage and invoices. Changing the plan, payment method or cancelling is limited to the organization owner."
+      "gateTitle": "Billing is managed by your organization’s admins",
+      "gateDescription": "Plans and payment for the {org} organization are visible to its owner and admins. Ask an organization admin to change the plan or buy AI credits.",
+      "contactOwner": "Contact an admin"
     },
     "motir": {
       "name": "Motir",
@@ -5664,8 +5660,8 @@
       "pausedTitle": "CI is paused — your credits ran out.",
       "pausedBody": "You used all {pool} included minutes and the {over} minutes since then drew {credits} credits, which emptied your Motir AI balance. Until this is resolved, no workflows run on the repositories Motir hosts for you, and new work can't be dispatched. Nothing has been deleted, and your code is untouched.",
       "pausedTitleMember": "CI is paused — this organization is out of credits.",
-      "pausedBodyMember": "Workflows won't run on the repositories Motir hosts, and new work can't be dispatched, until an organization owner adds credits or moves the repositories to your own GitHub. Nothing has been deleted, and your code is untouched.",
-      "memberLockNote": "Billing for this organization is managed by its owners. There is no action for you here — this line is informational.",
+      "pausedBodyMember": "Workflows won't run on the repositories Motir hosts, and new work can't be dispatched, until an organization owner or admin adds credits or moves the repositories to your own GitHub. Nothing has been deleted, and your code is untouched.",
+      "memberLockNote": "Billing for this organization is managed by its owner and admins. There is no action for you here — this line is informational.",
       "balanceUnavailable": "Your credit balance is temporarily unavailable. Your minutes are accurate and nothing is paused — only the balance figure is missing.",
       "optionCreditsTitle": "Add credits",
       "optionCreditsBody": "Top up your Motir AI balance. CI keeps running on Motir's repositories and the overage keeps drawing 1 credit per minute.",
@@ -5796,7 +5792,7 @@
       "perUnit": "× {n}",
       "buy": "Buy {n} credits — ${total}",
       "rate": "${unit} per {credits} credits · one-time · tax at checkout. Credits are an allotment, not currency — this is the price you pay Stripe.",
-      "gate": "Top-ups are available on a paid AI plan; the Free trial can't top up (choose a plan above first). Owner-only, like every billing action."
+      "gate": "Top-ups are available on a paid AI plan; the Free trial can't top up (choose a plan above first). Owner and admins only, like every billing action."
     },
     "seats": {
       "breadcrumb": "Organization · {org} · Motir",
@@ -5850,8 +5846,8 @@
       },
       "member": {
         "title": "AI is out of credits for this org",
-        "body": "Planning is paused until the {org} organization's plan is upgraded. Only an organization owner can change the plan or buy credits.",
-        "askOwner": "Ask an owner to upgrade"
+        "body": "Planning is paused until the {org} organization's plan is upgraded. Only an organization owner or admin can change the plan or buy credits.",
+        "askOwner": "Ask an admin to upgrade"
       }
     },
     "exempt": {

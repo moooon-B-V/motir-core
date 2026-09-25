@@ -7,10 +7,11 @@ import {
   AlertTriangle,
   Check,
   CreditCard,
+  Crown,
   ExternalLink,
-  Eye,
   Info,
   Layers,
+  Lock,
   Mail,
   UserMinus,
   UserPlus,
@@ -33,6 +34,10 @@ import { annualSaving, formatRenewal, proratedAddCharge, seatTotal } from './sea
 
 // The org-settings billing page the seat affordances link to (Story 8.1.7).
 const BILLING_PATH = '/settings/organization/billing';
+// The Owner-only Danger zone's Transfer ownership row on the org settings page
+// (design MOTIR-6303 panel 2, built by MOTIR-6313) — where the Owner row's hint
+// sends the Owner.
+const TRANSFER_OWNERSHIP_PATH = '/settings/organization#transfer-ownership';
 // `ORG_ROSTER_PAGE_SIZE` lives in a non-'use client' module (../rosterPageSize)
 // so the server component (page.tsx) can import the numeric value directly — a
 // value imported FROM this client module into a server component becomes a
@@ -40,16 +45,28 @@ const BILLING_PATH = '/settings/organization/billing';
 // `take`).
 import { ORG_ROSTER_PAGE_SIZE } from '../rosterPageSize';
 
-const ORG_ROLES: OrganizationRole[] = [
-  ORGANIZATION_ROLE.owner,
+// The roles a member can be GIVEN here — Admin and Member only. There is exactly
+// one Owner, and ownership moves only by transfer (MOTIR-6307 / MOTIR-6310;
+// design MOTIR-6303 panel 1), so `owner` is never offered, in the row picker or
+// the invite modal.
+const ASSIGNABLE_ORG_ROLES: OrganizationRole[] = [
   ORGANIZATION_ROLE.admin,
   ORGANIZATION_ROLE.member,
 ];
+
+/** The error copy for a refusal the server makes about the Owner (a stale page). */
+function ownerRefusalMessage(t: (key: string) => string, code: string | undefined): string | null {
+  if (code === 'ORG_OWNER_MEMBERSHIP_LOCKED') return t('members.ownerLocked');
+  if (code === 'ORG_OWNER_ONLY_BY_TRANSFER') return t('members.ownerNotOffered');
+  return null;
+}
 
 export interface OrgMembersClientProps {
   orgId: string;
   orgName: string;
   currentUserId: string;
+  /** Whether the viewer is the org's Owner — only they are offered the transfer link. */
+  viewerIsOwner: boolean;
   initialPage: OrgMemberPageDTO;
   /** The in-context seat/billing state (Story 8.1.14). `null` → NO seat UI: a
    *  self-host build, a free org, or a non-owner/admin — the page is unchanged. */
@@ -65,6 +82,7 @@ export function OrgMembersClient({
   orgId,
   orgName,
   currentUserId,
+  viewerIsOwner,
   initialPage,
   seat,
 }: OrgMembersClientProps) {
@@ -259,6 +277,7 @@ export function OrgMembersClient({
                 orgName={orgName}
                 member={m}
                 isSelf={m.userId === currentUserId}
+                viewerIsOwner={viewerIsOwner}
                 seat={seat}
                 seatCount={page.total}
                 onRoleChanged={applyRoleChange}
@@ -301,9 +320,10 @@ export function OrgMembersClient({
 // ── Seat-summary band (design/org-admin members-billing, panels 1/5/6) ───────
 // In-context seat/billing summary at the top of the People card body, for a
 // SCALED org. Mirrors the shipped billing seat-line grammar (mint glyph chip at
-// --radius-control, --el-text-strong on tint, finding #35). Owner → "Manage
-// seats" link; admin → read-only "View only" + lock note. past_due → yellow
-// dunning band with an "Update payment" CTA (owner). Seats = the membership
+// --radius-control, --el-text-strong on tint, finding #35). Owner or Admin →
+// "Manage seats" link (billing is theirs since MOTIR-6305; design MOTIR-6303
+// panel 5 retires the admin's read-only "View only" band). past_due → yellow
+// dunning band with an "Update payment" CTA. Seats = the membership
 // count, so the band recomputes as members are added/removed (page-state-after-
 // mutation: the band reads the same client state the optimistic add/remove edits).
 function SeatSummaryBand({ seat, seats }: { seat: SeatSummaryDTO; seats: number }) {
@@ -358,20 +378,10 @@ function SeatSummaryBand({ seat, seats }: { seat: SeatSummaryDTO; seats: number 
               {t('seat.annualSaving', { save: saving })}
             </span>
           ) : null}
-          {!seat.canManageBilling && !pastDue ? (
-            <Pill tone="neutral">
-              <Eye className="h-3 w-3" aria-hidden />
-              {t('seat.viewOnly')}
-            </Pill>
-          ) : null}
         </div>
 
         <p className="text-(--el-text-secondary) mt-1 font-sans text-xs leading-relaxed">
-          {pastDue
-            ? t('seat.pastDueNote')
-            : seat.canManageBilling
-              ? t('seat.follows', { rate: seat.perSeatUsd, period })
-              : t('seat.viewOnlyNote')}
+          {pastDue ? t('seat.pastDueNote') : t('seat.follows', { rate: seat.perSeatUsd, period })}
         </p>
       </div>
 
@@ -407,6 +417,7 @@ function MemberRow({
   orgName,
   member,
   isSelf,
+  viewerIsOwner,
   seat,
   seatCount,
   onRoleChanged,
@@ -416,6 +427,7 @@ function MemberRow({
   orgName: string;
   member: OrgMemberDTO;
   isSelf: boolean;
+  viewerIsOwner: boolean;
   seat: SeatSummaryDTO | null;
   seatCount: number;
   onRoleChanged: (userId: string, role: OrganizationRole) => void;
@@ -428,10 +440,17 @@ function MemberRow({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const initial = (member.name || member.email).charAt(0).toUpperCase();
 
-  const roleOptions: ComboboxOption<OrganizationRole>[] = ORG_ROLES.map((r) => ({
+  const roleOptions: ComboboxOption<OrganizationRole>[] = ASSIGNABLE_ORG_ROLES.map((r) => ({
     value: r,
     label: t(`roles.${r}`),
   }));
+
+  // THE OWNER'S ROW IS LOCKED FOR EVERY VIEWER, the Owner included (design
+  // MOTIR-6303 panel 1): a static pill, no picker, no Remove — not rendered,
+  // rather than disabled (MOTIR-2462). The server refuses both anyway
+  // (MOTIR-6307); this is the surface offering only what can be done.
+  const isOwnerRow = member.role === ORGANIZATION_ROLE.owner;
+  const locked = isSelf || isOwnerRow;
 
   const shownWorkspaces = member.workspaces.slice(0, MAX_WORKSPACE_CHIPS);
   const overflow = member.workspaces.length - shownWorkspaces.length;
@@ -452,7 +471,11 @@ function MemberRow({
           return;
         }
         onRoleChanged(member.userId, previous as OrganizationRole); // revert
-        toast({ variant: 'error', title: t('members.roleChangeError') });
+        const data = (await res.json().catch(() => ({}))) as { code?: string };
+        toast({
+          variant: 'error',
+          title: ownerRefusalMessage(t, data.code) ?? t('members.roleChangeError'),
+        });
       } catch {
         onRoleChanged(member.userId, previous as OrganizationRole);
         toast({ variant: 'error', title: t('members.roleChangeError') });
@@ -471,7 +494,11 @@ function MemberRow({
           onRemoved(member.userId);
           return;
         }
-        toast({ variant: 'error', title: t('members.removeError') });
+        const data = (await res.json().catch(() => ({}))) as { code?: string };
+        toast({
+          variant: 'error',
+          title: ownerRefusalMessage(t, data.code) ?? t('members.removeError'),
+        });
       } catch {
         toast({ variant: 'error', title: t('members.removeError') });
       }
@@ -491,6 +518,20 @@ function MemberRow({
           ) : null}
         </p>
         <p className="text-(--el-text-muted) truncate font-sans text-xs">{member.email}</p>
+        {isOwnerRow ? (
+          <p className="text-(--el-text-muted) mt-0.5 flex items-center gap-1 font-sans text-[11px]">
+            <Lock className="h-3 w-3 shrink-0" aria-hidden />
+            <span>{t('members.ownerLocked')}</span>
+            {viewerIsOwner ? (
+              <>
+                <span aria-hidden>·</span>
+                <Link href={TRANSFER_OWNERSHIP_PATH} className="text-(--el-link) font-medium">
+                  {t('members.ownerLockedLink')}
+                </Link>
+              </>
+            ) : null}
+          </p>
+        ) : null}
       </div>
       <div className="hidden items-center gap-1 sm:flex">
         {member.workspaces.length === 0 ? (
@@ -513,8 +554,9 @@ function MemberRow({
           </>
         )}
       </div>
-      {isSelf ? (
+      {locked ? (
         <Pill orgRole={member.role as 'owner' | 'admin' | 'member'}>
+          {isOwnerRow ? <Crown className="h-3 w-3" aria-hidden /> : null}
           {t(`roles.${member.role}`)}
         </Pill>
       ) : (
@@ -525,10 +567,16 @@ function MemberRow({
             value={member.role as OrganizationRole}
             onChange={handleRoleChange}
             disabled={isPending}
+            footer={
+              <span className="text-(--el-text-secondary) flex items-start gap-1.5 font-sans text-xs">
+                <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                {t('members.ownerNotOffered')}
+              </span>
+            }
           />
         </div>
       )}
-      {isSelf ? null : seat ? (
+      {locked ? null : seat ? (
         // Scaled org: removing a member frees a seat (adjusts the bill), so the
         // one-click remove gains a confirm popover disclosing the prorated
         // credit (design panel 3). Portaled, so the People card's overflow can't
@@ -629,7 +677,7 @@ function InviteModal({
   const [error, setError] = useState<string | undefined>();
   const [isPending, startTransition] = useTransition();
 
-  const roleOptions: ComboboxOption<OrganizationRole>[] = ORG_ROLES.map((r) => ({
+  const roleOptions: ComboboxOption<OrganizationRole>[] = ASSIGNABLE_ORG_ROLES.map((r) => ({
     value: r,
     label: t(`roles.${r}`),
     secondary: t(`roles.${r}Desc`),
