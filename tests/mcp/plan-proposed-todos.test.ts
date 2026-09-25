@@ -306,9 +306,10 @@ describe('update_plan_proposal — the CORRECTION door carries `todos`', () => {
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
 
-    // The patch schema declares no `todos`, and the service's `applyModify`
-    // writes only `PLAN_ITEM_PATCH_KEYS`, so a key sent here reaches no column:
-    // the target's list is untouched by a plan (AMENDMENT 14 D2).
+    // The patch schema declares no `todos` and `applyModify` writes only
+    // `PLAN_ITEM_PATCH_KEYS`, so a key sent here could never reach a column
+    // (AMENDMENT 14 D2). Since MOTIR-6259 it is not even stored: the append
+    // REFUSES a patch key it cannot apply, by name, instead of dropping it.
     const target = await createTestWorkItem(fx, { title: 'A committed card', kind: 'task' });
     const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
@@ -321,8 +322,9 @@ describe('update_plan_proposal — the CORRECTION door carries `todos`', () => {
       ],
     });
 
-    const stored = struct(appended).items[0]!.patch as Record<string, unknown>;
-    expect(stored.title).toBe('A re-scoped title');
+    expect(appended.isError).toBe(true);
+    expect(JSON.stringify(appended.content)).toContain('`todos`');
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
     // Nothing anywhere turns this into a to-do row.
     expect(await adminDb.workItemTodo.count()).toBe(0);
     await client.close();
