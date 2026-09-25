@@ -97,6 +97,18 @@ export function defaultPlanView(review: PlanReviewDto): PlanViewDto {
   // it arrive above the floor" (that answers *two nodes* and sends every plan to
   // the list); it is the largest level still at the canvas's OWN ceiling at the
   // tightest viewport, which is four rows of the shipped 3-column layout.
+  //
+  // ⚠️ AND THE `grid-cols-[1fr_22rem]` ABOVE IS THE PLAN DETAIL'S FRAME, WHICH IS
+  // STILL FIXED — read it as a premise about THAT host, not about every planning
+  // surface (MOTIR-6250). The planning WORKSPACE's frame became a resizable split
+  // whose rail is `clamp(352px, 33.333%, 50%)`, so a canvas width derived from a
+  // constant `22rem` would be wrong there. It does not reach this computation:
+  // `defaultPlanView`'s only production caller is `PlanDetail` (`:399`), and
+  // `PlanDetail` deliberately does NOT opt into the split — both MOTIR-6250
+  // (*"Does NOT change: … the plan page's rail"*) and MOTIR-6236 (*"This host is
+  // NOT a split"*) say so. `tests/planning/planView.test.ts` pins that: if the
+  // plan page ever opts in, the test fails NAMING this derivation, because the
+  // number below would then be justified against a width the frame no longer has.
   if (review.arrivalLevelSize > ARRIVAL_LEVEL_MAX_NODES) return 'list';
 
   // Part IX §3's arm, unchanged and last: a plan SPREAD across containers has no

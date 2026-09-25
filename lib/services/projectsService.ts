@@ -6,7 +6,11 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
-import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withWorkspaceContext,
+  type TransactionBudget,
+  type WorkspaceContext,
+} from '@/lib/workspaces/context';
 import { readMembership } from '@/lib/workspaces/membershipGate';
 import { readProjectForService } from '@/lib/workspaces/tenantRead';
 import { NotAMemberError } from '@/lib/workspaces/errors';
@@ -315,6 +319,36 @@ async function insertProjectWithSeedsInTx(
 const NO_PROJECT_IN_WORKSPACE = Symbol('no-project-in-workspace');
 
 /**
+ * The budget the active-project resolver runs under (MOTIR-6254) — raised from
+ * Prisma's 5000 ms default because of what the transaction WAITS for, never
+ * because of what it does. The same argument, and the same number, as the 2FA
+ * gate's `TWO_FACTOR_GATE_TX` (MOTIR-5866).
+ *
+ * It does almost nothing: two indexed reads (the membership with its
+ * workspace, the pinned project) and, only when the pointer has to heal, the
+ * project list and ONE single-row UPDATE. Production still expired it once
+ * (2026-09-24, `GET /api/workbench/stream`): *5000 ms, however 6455 ms passed*,
+ * refused at COMMIT — so every statement had returned, the last one late,
+ * behind a lock or a stall no transaction this small can cause or avoid.
+ *
+ * ⚠️ THE DEFAULT NEVER SHORTENED THAT WAIT. Prisma does not cancel the statement
+ * in flight when the timer fires; it refuses the commit after the statement
+ * returns. So the request waited the full 6.4 s and THEN answered 500, and a
+ * heal that had already written the pointer rolled it back. The resolver sits
+ * under the (authed) layout and ~130 pages, actions and routes, so the wrong
+ * answer after a stall is a 500 on whichever request was unlucky.
+ *
+ * ⚠️ AND THE ONE LOCK IT TAKES IS TAKEN LAST. The heal's UPDATE of the member's
+ * own membership row is the transaction's final statement, followed only by
+ * the commit, so a longer ceiling cannot lengthen how long that lock is held:
+ * everything the extra time covers happens BEFORE the lock is taken, or while
+ * waiting for somebody else's. `maxWaitMs` stays Prisma's default — this is
+ * about a transaction that STARTED and then waited, not about waiting for a
+ * connection to start one.
+ */
+const ACTIVE_PROJECT_RESOLVE_TX: TransactionBudget = { timeoutMs: 30_000, maxWaitMs: 2_000 };
+
+/**
  * The resolution half of `getActiveProject`, in ONE transaction — split out
  * (MOTIR-4870) so the self-heal can run BETWEEN two calls of it rather than
  * inside one, which the nested-transaction deadlock forbids.
@@ -334,51 +368,55 @@ async function resolveActiveProjectInContext(
   userId: string,
   workspaceId: string,
 ): Promise<ProjectDTO | null | typeof NO_PROJECT_IN_WORKSPACE> {
-  return withWorkspaceContext({ userId, workspaceId }, async (tx) => {
-    const membership = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
-      userId,
-      workspaceId,
-      tx,
-    );
-    if (!membership) return null;
-
-    if (membership.activeProjectId) {
-      const pinned = await projectRepository.findById(membership.activeProjectId, tx);
-      // Accept the pinned project whether archived or not (#29.2): an
-      // archived active project is surfaced (with archivedAt set) so the
-      // shell shows the "Archived" pill. Only a genuinely unresolvable
-      // pointer — hard-deleted (the FK's onDelete: SetNull would have
-      // nulled it, but belt + suspenders) or cross-workspace — falls
-      // through to recovery below.
-      if (pinned && pinned.workspaceId === workspaceId) {
-        return toProjectDTO(pinned);
-      }
-    }
-
-    // No resolvable pinned project. Recover to the first non-archived
-    // project if one exists (#29.3), persisting it so the pointer heals.
-    const projects = await projectRepository.findByWorkspace(workspaceId, tx);
-    const first = projects[0];
-    // A MEMBER with no project — the healable state, told apart from the
-    // `null` above (MOTIR-4870). `getActiveProject` is what acts on it.
-    if (!first) return NO_PROJECT_IN_WORKSPACE;
-
-    if (membership.activeProjectId) {
-      // The pointer was SET but didn't resolve — a real inconsistency
-      // (deleted / cross-workspace). Worth a warning so we can watch it.
-      console.warn(
-        '[projectsService.getActiveProject] active-project pointer unresolvable; auto-recovering',
-        {
-          userId,
-          workspaceId,
-          staleProjectId: membership.activeProjectId,
-          recoveredProjectId: first.id,
-        },
+  return withWorkspaceContext(
+    { userId, workspaceId },
+    async (tx) => {
+      const membership = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
+        userId,
+        workspaceId,
+        tx,
       );
-    }
-    await workspaceMembershipRepository.setActiveProject(userId, workspaceId, first.id, tx);
-    return toProjectDTO(first);
-  });
+      if (!membership) return null;
+
+      if (membership.activeProjectId) {
+        const pinned = await projectRepository.findById(membership.activeProjectId, tx);
+        // Accept the pinned project whether archived or not (#29.2): an
+        // archived active project is surfaced (with archivedAt set) so the
+        // shell shows the "Archived" pill. Only a genuinely unresolvable
+        // pointer — hard-deleted (the FK's onDelete: SetNull would have
+        // nulled it, but belt + suspenders) or cross-workspace — falls
+        // through to recovery below.
+        if (pinned && pinned.workspaceId === workspaceId) {
+          return toProjectDTO(pinned);
+        }
+      }
+
+      // No resolvable pinned project. Recover to the first non-archived
+      // project if one exists (#29.3), persisting it so the pointer heals.
+      const projects = await projectRepository.findByWorkspace(workspaceId, tx);
+      const first = projects[0];
+      // A MEMBER with no project — the healable state, told apart from the
+      // `null` above (MOTIR-4870). `getActiveProject` is what acts on it.
+      if (!first) return NO_PROJECT_IN_WORKSPACE;
+
+      if (membership.activeProjectId) {
+        // The pointer was SET but didn't resolve — a real inconsistency
+        // (deleted / cross-workspace). Worth a warning so we can watch it.
+        console.warn(
+          '[projectsService.getActiveProject] active-project pointer unresolvable; auto-recovering',
+          {
+            userId,
+            workspaceId,
+            staleProjectId: membership.activeProjectId,
+            recoveredProjectId: first.id,
+          },
+        );
+      }
+      await workspaceMembershipRepository.setActiveProject(userId, workspaceId, first.id, tx);
+      return toProjectDTO(first);
+    },
+    ACTIVE_PROJECT_RESOLVE_TX,
+  );
 }
 
 export const projectsService = {
