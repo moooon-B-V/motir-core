@@ -191,9 +191,10 @@ export class PasswordRateLimitedError extends Error {
 // sentence, and `Unique constraint failed on the fields: (user_id)` is not one.
 
 /**
- * The reader is the last owner of an organization other people belong to, so
- * the account cannot be closed (DECISION 5 — `assertNotLastOwner`'s condition,
- * read through the impact preview rather than caught from a delete attempt).
+ * The reader is the owner of an organization other people belong to, so the
+ * account cannot be closed (DECISION 5 — the Owner's locked membership,
+ * MOTIR-6307, read through the impact preview rather than caught from a delete
+ * attempt).
  *
  * Carries the organization's NAME because the refusal is only actionable with
  * it: the pane's way out is *"hand the owner role over in `Organization ›

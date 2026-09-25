@@ -265,9 +265,12 @@ describe('previewAccountErasure — the block (DECISION 5: the ORGANIZATION tier
     expect(preview.blockingOrganization).toBeNull();
   });
 
-  it('does NOT block when the organization has a SECOND owner — the guard it mirrors would pass', async () => {
+  it('STILL blocks the Owner when an ADMIN shares the organization — an org has exactly one Owner, and only a transfer moves it (MOTIR-6307)', async () => {
+    // Before the one-Owner invariant a second OWNER unblocked this reader. There
+    // is no second owner any more, and an Admin does not stand in for one: the
+    // Owner's membership is locked until they transfer.
     const user = await createTestUser();
-    const coOwner = await createTestUser();
+    const admin = await createTestUser();
     const { workspace } = await workspacesService.createWorkspace({
       name: 'Acme',
       ownerUserId: user.id,
@@ -275,15 +278,15 @@ describe('previewAccountErasure — the block (DECISION 5: the ORGANIZATION tier
     const organizationId = await orgIdOfWorkspace(workspace.id);
     await organizationsService.addMember({
       organizationId,
-      userId: coOwner.id,
-      role: 'owner',
+      userId: admin.id,
+      role: 'admin',
       actorUserId: user.id,
     });
 
     const preview = await accountErasureService.previewAccountErasure(user.id);
 
-    expect(preview.blocked).toBe(false);
-    expect(preview.blockingOrganization).toBeNull();
+    expect(preview.blocked).toBe(true);
+    expect(preview.blockingOrganization?.id).toBe(organizationId);
   });
 
   it('does NOT block a plain MEMBER of a shared organization — only an owner can drop the owner count', async () => {
@@ -310,8 +313,8 @@ describe('previewAccountErasure — the block (DECISION 5: the ORGANIZATION tier
 
 describe('previewAccountErasure — a sole WORKSPACE membership is a choice, not a block', () => {
   it('lists the workspace by name in the DELETED group and leaves the verdict unblocked', async () => {
-    // The org has TWO owners, so the org-tier guard cannot fire — which isolates
-    // the workspace tier. This is the case the card says the original framing got
+    // The reader is an org ADMIN, not its Owner, so the org-tier guard cannot
+    // fire — which isolates the workspace tier. This is the case the card says the original framing got
     // wrong: `removeMemberInTx` refuses the last member LEAVING, but
     // `deleteWorkspace` asserts membership without checking a role, so a
     // sole-membership workspace has two futures rather than none.
@@ -325,7 +328,7 @@ describe('previewAccountErasure — a sole WORKSPACE membership is a choice, not
     await organizationsService.addMember({
       organizationId,
       userId: user.id,
-      role: 'owner',
+      role: 'admin',
       actorUserId: coOwner.id,
     });
     const { workspace: mine } = await workspacesService.createWorkspace({
@@ -627,7 +630,7 @@ describe('previewAccountErasure — it is a READ', () => {
 
     // The delete paths the block must NOT be discovered through. Spied rather
     // than merely absent from the source: the card asks for the assertion
-    // BECAUSE catching `LastOrgOwnerError` off a real removal is the obvious
+    // BECAUSE catching `OwnerMembershipLockedError` off a real removal is the obvious
     // implementation and the one the design rejects.
     const orgRemove = vi.spyOn(organizationsService, 'removeMember');
     const orgDemote = vi.spyOn(organizationsService, 'changeMemberRole');

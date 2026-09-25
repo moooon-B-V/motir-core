@@ -227,9 +227,10 @@ async function eraseOneAccount(
   // long time for an ownership to move.
   //
   // The request stays `scheduled`, so it is due again on every later tick and
-  // completes by itself the moment somebody else takes the owner role. That is
-  // the only correct answer: `assertNotLastOwner` is structural — an org may
-  // not drop to zero owners — so there is nothing the sweep could do instead.
+  // completes by itself the moment the reader transfers the ownership. That is
+  // the only correct answer: the Owner lock is structural — an org has exactly
+  // one Owner, whose membership moves only by transfer (MOTIR-6307) — so there
+  // is nothing the sweep could do instead.
   // The `blocked` count is what makes the wait visible rather than silent.
   //
   // NOT re-checked on the RESUME arm: that request is already `completed`, the

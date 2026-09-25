@@ -29,7 +29,7 @@ import type { AccountErasurePreviewDTO } from '@/lib/dto/accountErasure';
 //     "without the delete write ever being invoked". That is asserted here by
 //     making every deletion-side entry point THROW if it is called, and then
 //     rendering the pane to completion — so a pane that reached the refusal by
-//     calling delete and catching `LastOrgOwnerError` fails rather than passes.
+//     calling delete and catching `OwnerMembershipLockedError` fails rather than passes.
 
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
 const { previewAccountErasure } = vi.hoisted(() => ({ previewAccountErasure: vi.fn() }));
@@ -64,11 +64,14 @@ const deletionWrites = vi.hoisted(() => ({
 // which is what every case in THIS suite is about; the scheduled state has its
 // own suite (`accountDeletionBanner.test.tsx`).
 const findOpenDeletion = vi.hoisted(() => vi.fn(async () => null));
-const { assertNotLastOwner } = vi.hoisted(() => ({
-  assertNotLastOwner: vi.fn(() => {
+// The Owner lock (MOTIR-6307) lives on the two member paths that can refuse
+// the Owner — removal and demotion. The pane must never reach either.
+const { ownerLockedPaths } = vi.hoisted(() => {
+  const refuse = () => {
     throw new Error('the pane must READ the block, not call the guard and catch its error');
-  }),
-}));
+  };
+  return { ownerLockedPaths: { removeMember: vi.fn(refuse), changeMemberRole: vi.fn(refuse) } };
+});
 
 vi.mock('@/lib/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth')>()),
@@ -103,10 +106,13 @@ vi.mock('@/lib/services/dataExportService', () => ({
 vi.mock('@/lib/services/accountDeletionService', () => ({
   accountDeletionService: { ...deletionWrites, findOpenDeletion },
 }));
-vi.mock('@/lib/services/organizationsService', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organizationsService')>()),
-  assertNotLastOwner,
-}));
+vi.mock('@/lib/services/organizationsService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/services/organizationsService')>();
+  return {
+    ...actual,
+    organizationsService: { ...actual.organizationsService, ...ownerLockedPaths },
+  };
+});
 // The Server Action the export card calls. Importing the real module pulls
 // `next/cache` into a unit render; its own behaviour is covered by
 // `tests/export/dataExportLatest.test.ts`.
@@ -273,10 +279,11 @@ describe('⚠️ the BLOCKED state — read at rest, never raised at submit', ()
   it('⚠️ never invokes the delete write, nor the guard whose error it would catch', async () => {
     await renderPane();
     // The whole criterion: the refusal came from the PREVIEW's answer, not from
-    // trying the action and translating `LastOrgOwnerError`. A reader must not
-    // type their own email address into a form that was always going to refuse.
+    // trying the action and translating `OwnerMembershipLockedError`. A reader must
+    // not type their own email address into a form that was always going to refuse.
     expect(previewAccountErasure).toHaveBeenCalledWith('u1');
-    expect(assertNotLastOwner).not.toHaveBeenCalled();
+    expect(ownerLockedPaths.removeMember).not.toHaveBeenCalled();
+    expect(ownerLockedPaths.changeMemberRole).not.toHaveBeenCalled();
     for (const write of Object.values(deletionWrites)) {
       expect(write).not.toHaveBeenCalled();
     }

@@ -19,12 +19,17 @@ import { isOrgOwnerRole, ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { orgCan } from '@/lib/organizations/capabilities';
 import {
   AlreadyOrgMemberError,
-  LastOrgOwnerError,
   OrganizationNotFoundError,
   OrgInviteeNotFoundError,
   OrgSlugCollisionError,
+  OwnerMembershipLockedError,
+  OwnerOnlyByTransferError,
 } from '@/lib/organizations/errors';
-import { assertOrgAdmin, assertOrgMember } from '@/lib/services/organizationAccessService';
+import {
+  assertOrgAdmin,
+  assertOrgCapability,
+  assertOrgMember,
+} from '@/lib/services/organizationAccessService';
 import {
   toCurrentOrganizationDTO,
   toOrganizationDTO,
@@ -339,9 +344,12 @@ export const organizationsService = {
    * the id comes from a TRUSTED resolution — the org's own workspace row, read
    * inside this transaction — never from request input.
    *
-   * The actor must be an org owner/admin. Idempotency: a duplicate
-   * (organizationId, userId) raises AlreadyOrgMemberError; a duplicate workspace
-   * membership is swallowed, exactly as `ensureOrgMembership` does upward.
+   * The actor must hold `manageOrgMembers` (an Owner or an Admin). A target role
+   * of `owner` is refused with OwnerOnlyByTransferError (409): an organization
+   * has exactly one Owner, and ownership moves only by transfer (MOTIR-6307).
+   * Idempotency: a duplicate (organizationId, userId) raises
+   * AlreadyOrgMemberError; a duplicate workspace membership is swallowed, exactly
+   * as `ensureOrgMembership` does upward.
    */
   async addMember(input: {
     organizationId: string;
@@ -353,7 +361,15 @@ export const organizationsService = {
       await withOrgContext(
         { userId: input.actorUserId, organizationId: input.organizationId },
         async (tx) => {
-          await assertOrgAdmin(input.actorUserId, input.organizationId, tx);
+          await assertOrgCapability(
+            input.actorUserId,
+            input.organizationId,
+            'manageOrgMembers',
+            tx,
+          );
+          if (input.role === ORGANIZATION_ROLE.owner) {
+            throw new OwnerOnlyByTransferError(input.organizationId);
+          }
           await organizationMembershipRepository.create(
             { organizationId: input.organizationId, userId: input.userId, role: input.role },
             tx,
@@ -436,12 +452,16 @@ export const organizationsService = {
   },
 
   /**
-   * Change a member's org role. Requires the actor to be an org owner/admin.
-   * Guards the last owner: demoting the only remaining owner is refused
-   * (LastOrgOwnerError). The guard LOCKS the org's owner rows `FOR UPDATE`
-   * before counting (assertNotLastOwner), so two concurrent demotions of a
-   * 2-owner org serialize — the second blocks, re-counts after the first
-   * commits, and is refused — and the org can never drop to zero owners.
+   * Change a member's org role between Admin and Member. Requires
+   * `manageOrgMembers` (an Owner or an Admin). The Owner stays out of reach of
+   * this path in both directions (MOTIR-6307):
+   *   - a target role of `owner` → OwnerOnlyByTransferError (409) — ownership
+   *     moves only by transfer;
+   *   - a target who IS the Owner → OwnerMembershipLockedError (409), whoever is
+   *     acting, the Owner included.
+   * The target's row is read `FOR UPDATE` inside the transaction, so a transfer
+   * committing concurrently cannot slip a new Owner under the check: the second
+   * writer blocks, re-reads the committed role, and is refused.
    */
   async changeMemberRole(input: {
     organizationId: string;
@@ -452,16 +472,12 @@ export const organizationsService = {
     await withOrgContext(
       { userId: input.actorUserId, organizationId: input.organizationId },
       async (tx) => {
-        await assertOrgAdmin(input.actorUserId, input.organizationId, tx);
-        if (input.role !== ORGANIZATION_ROLE.owner) {
-          await assertNotLastOwner(input.organizationId, input.userId, tx);
+        await assertOrgCapability(input.actorUserId, input.organizationId, 'manageOrgMembers', tx);
+        if (input.role === ORGANIZATION_ROLE.owner) {
+          throw new OwnerOnlyByTransferError(input.organizationId);
         }
-        await organizationMembershipRepository.updateRole(
-          input.organizationId,
-          input.userId,
-          input.role,
-          tx,
-        );
+        await assertNotOwnerMembership(input.organizationId, input.userId, tx);
+        await writeMembershipRole(input.organizationId, input.userId, input.role, tx);
       },
     );
   },
@@ -472,10 +488,11 @@ export const organizationsService = {
    * workspace access (the gate denies once the org membership is gone — 6.10.2
    * §5iii); we deliberately do NOT delete the workspace_membership rows (the
    * asymmetry: leaving a workspace doesn't drop org membership, and the gate is
-   * what enforces access, not row presence). Guards the last owner — the guard
-   * LOCKS the org's owner rows `FOR UPDATE` before counting (assertNotLastOwner),
-   * so two concurrent removals of a 2-owner org serialize and the org can never
-   * drop to zero owners. Idempotent: removing a non-member is a no-op.
+   * what enforces access, not row presence). The OWNER's membership cannot be
+   * removed by anyone, the Owner leaving included — OwnerMembershipLockedError
+   * (409); the Owner leaves only by transferring first (MOTIR-6307). The target's
+   * row is read `FOR UPDATE`, so a concurrent transfer serializes against it.
+   * Idempotent: removing a non-member is a no-op.
    */
   async removeMember(input: {
     organizationId: string;
@@ -487,9 +504,14 @@ export const organizationsService = {
       async (tx) => {
         const isSelfLeave = input.actorUserId === input.userId;
         if (!isSelfLeave) {
-          await assertOrgAdmin(input.actorUserId, input.organizationId, tx);
+          await assertOrgCapability(
+            input.actorUserId,
+            input.organizationId,
+            'manageOrgMembers',
+            tx,
+          );
         }
-        await assertNotLastOwner(input.organizationId, input.userId, tx);
+        await assertNotOwnerMembership(input.organizationId, input.userId, tx);
         await organizationMembershipRepository.deleteByOrgAndUser(
           input.organizationId,
           input.userId,
@@ -756,27 +778,54 @@ export const organizationsService = {
 // ── Internal authorization helpers (read the actor's own membership; the
 // org_membership RLS policy's userId branch admits it under the bound context) ─
 
-async function assertNotLastOwner(
+/**
+ * Refuse any change to the OWNER's own membership (MOTIR-6307): the Owner's row
+ * moves only by transfer, which is what keeps the organization at exactly one
+ * Owner and never zero. Reads the target row `FOR UPDATE` in the caller's
+ * transaction (lock, then re-read, then decide): a transfer committing between a
+ * plain read and this write would otherwise hand the role to the very row being
+ * demoted or removed. A non-member target passes — the write that follows is then
+ * a no-op or a not-found, as before.
+ */
+async function assertNotOwnerMembership(
   organizationId: string,
   targetUserId: string,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  const target = await organizationMembershipRepository.findByOrgAndUserInTx(
+  const target = await organizationMembershipRepository.findByOrgAndUserForUpdate(
     organizationId,
     targetUserId,
     tx,
   );
-  // Only removing/demoting an OWNER can drop the owner count; a non-owner target
-  // (or a non-member) can't, so there's nothing to guard.
-  if (!target || target.role !== ORGANIZATION_ROLE.owner) return;
-  // Lock the org's owner rows before counting (lock-before-read-derived-update):
-  // a plain COUNT doesn't lock the rows a concurrent remove/demote mutates, so
-  // two racers could both see count = 2 and both write → zero owners. The
-  // FOR-UPDATE read serializes them — the second blocks, re-reads the reduced
-  // owner set, and correctly hits LastOrgOwnerError.
-  const owners = await organizationMembershipRepository.countOwnersByOrgForUpdate(
-    organizationId,
-    tx,
-  );
-  if (owners <= 1) throw new LastOrgOwnerError(organizationId);
+  if (target?.role === ORGANIZATION_ROLE.owner) {
+    throw new OwnerMembershipLockedError(organizationId);
+  }
+}
+
+/**
+ * The ONE place an organization membership's role is written, so the one-Owner
+ * index's refusal has one translation (MOTIR-6307). The partial unique index
+ * `organization_membership_one_owner_key` allows at most one `owner` row per
+ * organization; a write that would add a second — two promotions racing, a
+ * transfer racing a raw write — is refused by the database whatever path it took.
+ * An UPDATE of `role` cannot violate the only other unique key,
+ * (organizationId, userId), so a P2002 on a write to `owner` IS that index, and
+ * it surfaces as the typed 409 rather than a 500.
+ *
+ * Exported for the transfer service, which promotes the new Owner through it.
+ */
+export async function writeMembershipRole(
+  organizationId: string,
+  userId: string,
+  role: OrganizationRole,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  try {
+    await organizationMembershipRepository.updateRole(organizationId, userId, role, tx);
+  } catch (err) {
+    if (role === ORGANIZATION_ROLE.owner && isUniqueViolation(err)) {
+      throw new OwnerOnlyByTransferError(organizationId);
+    }
+    throw err;
+  }
 }

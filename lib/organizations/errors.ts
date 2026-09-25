@@ -72,18 +72,37 @@ export class OrgInviteeNotFoundError extends Error {
 }
 
 /**
- * Thrown when removing/demoting the membership would leave the organization
- * with zero owners. An org with no owner is unadministrable, so the last owner
- * must transfer ownership (promote another member to owner) before leaving or
- * being demoted — the org-tier analogue of the workspace LastMemberError.
+ * Thrown when a member path asks to MAKE someone an owner — `addMember`,
+ * `addMemberByEmail`, `changeMemberRole` with `role: 'owner'` — or when a role
+ * write would put a second `owner` row in an organization (the one-owner partial
+ * unique index refusing it). An organization has exactly one Owner
+ * (`docs/decisions/role-model.md` §1), and the only door to ownership is the
+ * Owner's own transfer. → 409.
  */
-export class LastOrgOwnerError extends Error {
-  readonly code = 'LAST_ORG_OWNER' as const;
+export class OwnerOnlyByTransferError extends Error {
+  readonly code = 'ORG_OWNER_ONLY_BY_TRANSFER' as const;
   constructor(organizationId: string) {
     super(
-      `Cannot remove or demote the last owner of organization ${organizationId}: ` +
-        `promote another member to owner first.`,
+      `An organization has exactly one owner. Ownership of ${organizationId} moves only ` +
+        `by the owner transferring it.`,
     );
-    this.name = 'LastOrgOwnerError';
+    this.name = 'OwnerOnlyByTransferError';
+  }
+}
+
+/**
+ * Thrown when a member path would change or remove the OWNER's own membership —
+ * a demotion, a removal, or the Owner leaving — whoever is acting, the Owner
+ * included. The Owner's row changes only by transfer, which is what keeps the
+ * organization at exactly one Owner and never zero. → 409.
+ */
+export class OwnerMembershipLockedError extends Error {
+  readonly code = 'ORG_OWNER_MEMBERSHIP_LOCKED' as const;
+  constructor(organizationId: string) {
+    super(
+      `The owner's membership of ${organizationId} cannot be changed or removed; ` +
+        `the owner must transfer ownership first.`,
+    );
+    this.name = 'OwnerMembershipLockedError';
   }
 }

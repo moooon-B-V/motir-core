@@ -143,8 +143,7 @@ export const workspaceMembershipRepository = {
    * Count of memberships in a workspace, LOCKING those rows `FOR UPDATE` inside
    * the caller's transaction — the race-safe read the last-member guard in
    * workspacesService.removeMember uses (lock-before-read-derived-update,
-   * CLAUDE.md § 4-layer; mirrors organizationMembershipRepository
-   * .countOwnersByOrgForUpdate). A plain same-transaction COUNT does NOT lock
+   * CLAUDE.md § 4-layer). A plain same-transaction COUNT does NOT lock
    * the rows another transaction deletes, so two concurrent leaves of a
    * 2-member workspace could both see `count = 2`, both pass the guard, and both
    * delete → ZERO members (an orphaned, unreachable workspace). Locking the

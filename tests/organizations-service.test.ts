@@ -5,9 +5,9 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import {
   AlreadyOrgMemberError,
-  LastOrgOwnerError,
   OrganizationNotFoundError,
   OrgForbiddenError,
+  OwnerMembershipLockedError,
 } from '@/lib/organizations/errors';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
@@ -17,7 +17,7 @@ import { truncateAuthTables } from './helpers/db';
 // membership management. Real Postgres, no mocks (the project rule); the
 // exhaustive matrix (incl. the RLS-policy assertions + the migration backfill)
 // is Subtask 6.10.7. This suite locks the gate composition, the asymmetric
-// membership direction, the last-owner guard, and the paginated roster — the
+// membership direction, the Owner lock (MOTIR-6307), and the paginated roster — the
 // load-bearing behaviour this subtask introduces.
 
 beforeEach(async () => {
@@ -434,7 +434,9 @@ describe('org admin authorization + last-owner guard', () => {
     ).rejects.toBeInstanceOf(OrganizationNotFoundError);
   });
 
-  it('refuses to remove or demote the last owner (LastOrgOwnerError)', async () => {
+  it('refuses to remove or demote the Owner, the Owner acting on themselves included (OwnerMembershipLockedError)', async () => {
+    // The full matrix — owner AND admin as the actor, the add paths, the route and
+    // the race — is `tests/organizations/oneOwner.test.ts` (MOTIR-6307).
     const owner = await createTestUser();
     const { workspace } = await workspacesService.createWorkspace({
       name: 'Acme',
@@ -448,7 +450,7 @@ describe('org admin authorization + last-owner guard', () => {
         userId: owner.id,
         actorUserId: owner.id,
       }),
-    ).rejects.toBeInstanceOf(LastOrgOwnerError);
+    ).rejects.toBeInstanceOf(OwnerMembershipLockedError);
 
     await expect(
       organizationsService.changeMemberRole({
@@ -457,33 +459,7 @@ describe('org admin authorization + last-owner guard', () => {
         role: 'member',
         actorUserId: owner.id,
       }),
-    ).rejects.toBeInstanceOf(LastOrgOwnerError);
-  });
-
-  it('allows removing an owner once another owner exists', async () => {
-    const owner = await createTestUser();
-    const second = await createTestUser();
-    const { workspace } = await workspacesService.createWorkspace({
-      name: 'Acme',
-      ownerUserId: owner.id,
-    });
-    const orgId = await orgIdOfWorkspace(workspace.id);
-    await organizationsService.addMember({
-      organizationId: orgId,
-      userId: second.id,
-      role: 'owner',
-      actorUserId: owner.id,
-    });
-
-    await organizationsService.removeMember({
-      organizationId: orgId,
-      userId: owner.id,
-      actorUserId: second.id,
-    });
-    const gone = await adminDb.$transaction((tx) =>
-      organizationMembershipRepository.findByOrgAndUserInTx(orgId, owner.id, tx),
-    );
-    expect(gone).toBeNull();
+    ).rejects.toBeInstanceOf(OwnerMembershipLockedError);
   });
 });
 

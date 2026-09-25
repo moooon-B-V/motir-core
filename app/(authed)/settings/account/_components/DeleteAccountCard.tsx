@@ -15,9 +15,10 @@ import { DeleteAccountTrigger } from './DeleteAccountTrigger';
 //
 // ⚠️ THE BLOCK IS READ, NEVER CAUGHT. Design DECISION 5, and the specific
 // failure this card names: the pane ASKS whether deletion is possible — from
-// MOTIR-3699's impact preview, which evaluates `assertNotLastOwner`'s CONDITION
-// as a read and takes no lock — and renders the refusal at rest. It does not
-// call the delete path and translate `LastOrgOwnerError` into an error message.
+// MOTIR-3699's impact preview, which evaluates the owner-lock CONDITION (the
+// Owner of a shared organization cannot leave it, MOTIR-6307) as a read and takes
+// no lock — and renders the refusal at rest. It does not call the delete path
+// and translate `OwnerMembershipLockedError` into an error message.
 // A blocked state discovered at submit is a design defect, and the reader would
 // have typed their own email address into a form that was always going to
 // refuse.

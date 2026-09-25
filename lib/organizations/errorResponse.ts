@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import {
   AlreadyOrgMemberError,
-  LastOrgOwnerError,
   OrganizationNotFoundError,
   OrgForbiddenError,
   OrgInviteeNotFoundError,
   OrgSlugCollisionError,
+  OwnerMembershipLockedError,
+  OwnerOnlyByTransferError,
 } from '@/lib/organizations/errors';
 
 // Typed-error → HTTP-status mapper for the organization routes (Story 6.10.5),
@@ -33,7 +34,10 @@ export function mapOrgError(err: unknown): NextResponse | null {
   if (err instanceof AlreadyOrgMemberError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
-  if (err instanceof LastOrgOwnerError) {
+  if (err instanceof OwnerOnlyByTransferError || err instanceof OwnerMembershipLockedError) {
+    // Both are the one-Owner invariant (MOTIR-6307): the request is well-formed,
+    // it conflicts with the organization's state — exactly one Owner, whose row
+    // moves only by transfer.
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
   if (err instanceof OrgSlugCollisionError) {

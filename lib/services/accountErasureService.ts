@@ -32,17 +32,17 @@ import {
 // pane at rest and by tests, and the write stays a small locked transaction.
 //
 // ⚠️ IT WRITES NOTHING AND LOCKS NOTHING. Nothing has been decided when this
-// runs. In particular the BLOCK is computed from `assertNotLastOwner`'s
-// CONDITION rather than by calling the delete path and catching
-// `LastOrgOwnerError` — which is the whole point of the card: a reader who is
-// the sole owner of a shared organization must meet that refusal on the pane at
+// runs. In particular the BLOCK is computed from the Owner lock's CONDITION (the
+// Owner's membership cannot be removed, MOTIR-6307) rather than by calling the
+// delete path and catching `OwnerMembershipLockedError` — which is the whole
+// point of the card: a reader who owns a shared organization must meet that refusal on the pane at
 // rest, not after typing their email address into a type-to-confirm field for an
 // action that was always going to be refused.
 //
 // ⚠️ AND IT TAKES NO ROW LOCK, which is the SECOND half of the same decision.
-// The shipped guard reads `countOwnersByOrgForUpdate`, because a guard that
-// counts and then WRITES has to serialize its racers. A preview derives no
-// write, so it uses the non-locking twin — locking every owner row of every
+// The shipped guard reads the target membership `FOR UPDATE`, because a guard
+// that reads and then WRITES has to serialize its racers. A preview derives no
+// write, so it reads without a lock — locking every owner row of every
 // organization a reader owns, for a screen that only paints numbers, would be a
 // write-shaped cost for a read.
 //
@@ -153,9 +153,9 @@ export const accountErasureService = {
           members: await organizationMembershipRepository.countByOrg(organization.id, tx),
         }),
       );
-      // `assertNotLastOwner`'s own condition (owner count ≤ 1, on an OWNER
-      // target — which `ownedOrganizations` already selected for), AND the org
-      // being SHARED. The second conjunct is what keeps a solo organization from
+      // The Owner lock's condition (an OWNER target — which `ownedOrganizations`
+      // already selected for; an organization holds exactly one since MOTIR-6307,
+      // so `owners <= 1` always holds), AND the org being SHARED. The second conjunct is what keeps a solo organization from
       // trapping its only user inside their own account: the guard would refuse
       // the membership removal there too, but nobody is left behind, so the
       // erasure takes the organization with it exactly as it takes a
