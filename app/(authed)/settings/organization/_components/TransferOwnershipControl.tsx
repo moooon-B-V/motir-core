@@ -239,6 +239,10 @@ function TransferOwnershipDialog({
         if (!o && !isPending) onClose();
       }}
       size="md"
+      // The dialog draws its own visible heading below (the icon + title row), so
+      // the accessible name comes from `srTitle` — without it Radix names the
+      // dialog "Dialog" and a screen reader never hears which org is at stake.
+      srTitle={t('transfer.title', { org: orgName })}
     >
       <div className="mb-(--spacing-md) flex items-start gap-3">
         <span

@@ -369,6 +369,9 @@ function RemoveWorkspaceModal({
         if (!o) close();
       }}
       size="md"
+      // Its own visible heading below; `srTitle` gives the dialog that name rather
+      // than the generic "Dialog" fallback.
+      srTitle={t('workspaces.removeTitle', { workspace: name })}
     >
       <div className="mb-(--spacing-md) flex items-start gap-3">
         <span

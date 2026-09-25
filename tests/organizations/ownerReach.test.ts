@@ -124,9 +124,36 @@ describe('the org Owner, in a workspace they never joined', () => {
     expect(ids).toEqual([home.id, sales.id]);
     expect(await workspacesService.resolveActiveWorkspace(owner.id, sales.id)).toBe(sales.id);
   });
+
+  // MOTIR-6316's acceptance walk found this one: with the active workspace
+  // pinned there, every project-scoped page resolves the ACTIVE PROJECT, and the
+  // pointer lives on a membership row the Owner does not have — so the resolver
+  // answered null, the page redirected to `/sign-in`, and sign-in bounced a
+  // signed-in reader back: a redirect loop.
+  it('resolves an active project there — read-only, persisting no roster row', async () => {
+    const { owner, sales, project } = await orgWithForeignWorkspace();
+    const active = await projectsService.getActiveProject(owner.id, sales.id);
+    expect(active?.id).toBe(project.id);
+    expect(await readMembership(owner.id, sales.id)).toBeNull();
+  });
 });
 
 describe('an org Admin reaches a workspace through membership', () => {
+  it('resolves NO active project in a workspace they are not a member of', async () => {
+    const { owner, admin, organizationId } = await orgWithForeignWorkspace();
+    // A workspace the Owner creates now: the Admin was never added to it.
+    const { workspace: ops } = await workspacesService.createWorkspace({
+      name: 'Ops',
+      ownerUserId: owner.id,
+      organizationId,
+    });
+    expect(await readMembership(admin.id, ops.id)).toBeNull();
+    // A project exists, so a null answer is the REFUSAL and not an empty workspace.
+    await createTestProject({ workspaceId: ops.id, actorUserId: owner.id, identifier: 'OPS' });
+    expect(await projectsService.getActiveProject(admin.id, ops.id)).toBeNull();
+    expect(await projectsService.getActiveProject(owner.id, ops.id)).not.toBeNull();
+  });
+
   it('is refused a workspace they are not a member of, and its projects', async () => {
     const { owner, admin, organizationId } = await orgWithForeignWorkspace();
     // Created AFTER the keep-whole migration: the Admin holds no membership here.

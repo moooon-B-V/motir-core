@@ -12,6 +12,7 @@ import {
   type WorkspaceContext,
 } from '@/lib/workspaces/context';
 import { readReachRole } from '@/lib/workspaces/membershipGate';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { readProjectForService } from '@/lib/workspaces/tenantRead';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
@@ -376,7 +377,24 @@ async function resolveActiveProjectInContext(
         workspaceId,
         tx,
       );
-      if (!membership) return null;
+      if (!membership) {
+        // THE ORG OWNER REACHES A WORKSPACE THEY NEVER JOINED (MOTIR-6308), and
+        // the active-project POINTER lives on a membership row they do not have.
+        // Returning null here sent every project-scoped page to `/sign-in`, which
+        // bounced a signed-in reader back to `/workbench` — a redirect loop, found
+        // by the story's acceptance walk (MOTIR-6316). So the Owner resolves to
+        // the workspace's first non-archived project, read-only: nothing is
+        // PERSISTED, because there is no row to hold the pointer and reaching a
+        // workspace must not put the Owner on its roster. Anyone else without a
+        // membership is still refused (null), exactly as before.
+        if (
+          !(await organizationMembershipRepository.isOwnerOfWorkspaceOrg(userId, workspaceId, tx))
+        ) {
+          return null;
+        }
+        const [first] = await projectRepository.findByWorkspace(workspaceId, tx);
+        return first ? toProjectDTO(first) : null;
+      }
 
       if (membership.activeProjectId) {
         const pinned = await projectRepository.findById(membership.activeProjectId, tx);

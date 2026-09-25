@@ -104,8 +104,9 @@ describe('TransferOwnershipControl', () => {
   it('opens on arrival when the deep link asked for it', async () => {
     installFetch(() => json(page([MARA])));
     renderControl(true);
-    expect(await screen.findByRole('dialog')).toBeTruthy();
-    expect(screen.getByText('Transfer ownership of acme')).toBeTruthy();
+    // Named by the org it hands over, not the generic "Dialog" fallback
+    // (MOTIR-6316 found the unnamed dialog from the E2E walk).
+    expect(await screen.findByRole('dialog', { name: 'Transfer ownership of acme' })).toBeTruthy();
   });
 
   it('opens on arrival at #transfer-ownership, the roster Owner-row link (MOTIR-6311)', async () => {
