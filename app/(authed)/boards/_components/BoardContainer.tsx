@@ -72,6 +72,8 @@ import {
   resolveSwimlaneDrop,
   setCardSwimlaneKey,
 } from './boardSwimlanes';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 // The board client container (Subtask 3.2.2 · drag-drop 3.2.4 · scale 3.2.5 ·
 // swimlanes + WIP 3.3). A PURE CONSUMER of the Story-3.1/3.3 board API: it
@@ -154,6 +156,13 @@ export function BoardContainer({
   workflow?: WorkflowDto;
 }) {
   const t = useTranslations('boards');
+  // MOTIR-6174 — the permission-gated UI rule on the board. The read-only banner's
+  // copy lives in `projectAccess` (it read `boards.readOnlyBoardBanner`, which is
+  // not a key, so a Viewer saw the raw key). The group-by is a `board:configure`
+  // write; Complete sprint a `sprint:manage` one.
+  const tpa = useTranslations('projectAccess');
+  const { can } = useProjectAccess();
+  const canConfigure = can('board:configure');
   // The board's projection-fetch query. `?boardId=` (Subtask 3.7.5) carries the
   // page's `?board=<id>` selection so the picked board (not just the default)
   // loads; absent → the server resolves the project's default. `?filter=`
@@ -335,7 +344,7 @@ export function BoardContainer({
             role="status"
             className="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding) py-(--spacing-control-y) text-sm text-(--el-text-secondary)"
           >
-            {t('readOnlyBoardBanner')}
+            {tpa('readOnlyBoardBanner')}
           </div>
         ) : null}
         <NoActiveSprintState />
@@ -359,7 +368,7 @@ export function BoardContainer({
           sprint={board.sprint}
           projectName={projectName}
           workflow={workflow}
-          canEdit={canEdit}
+          canCompleteSprint={can('sprint:manage')}
           onSprintCompleted={retry}
         />
       ) : null}
@@ -373,6 +382,7 @@ export function BoardContainer({
               value={board.swimlaneGroupBy}
               onChange={changeGroupBy}
               disabled={relaying}
+              readOnlyReason={canConfigure ? undefined : tpa('readOnlyHint')}
             />,
             groupBySlot,
           )
@@ -382,7 +392,7 @@ export function BoardContainer({
           role="status"
           className="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding) py-(--spacing-control-y) text-sm text-(--el-text-secondary)"
         >
-          {t('readOnlyBoardBanner')}
+          {tpa('readOnlyBoardBanner')}
         </div>
       ) : null}
       {board.truncated ? (
@@ -431,20 +441,26 @@ function GroupByControl({
   value,
   onChange,
   disabled,
+  readOnlyReason,
 }: {
   value: BoardSwimlaneGroupByDto;
   onChange: (v: BoardSwimlaneGroupByDto) => void;
   disabled: boolean;
+  /** MOTIR-6174 — the group-by is stored on the BOARD (`setSwimlaneGroupBy`
+   *  asserts `board:configure`). An actor without the key sees the grouping,
+   *  DISABLED, with this reason — it is an in-place control on a surface they can
+   *  see (the permission-gated UI rule, row 7's grammar). */
+  readOnlyReason?: string;
 }) {
   const t = useTranslations('boards');
-  return (
-    <div className="flex items-center gap-2">
+  const control = (
+    <div className="flex items-center gap-2" data-read-only={readOnlyReason ? '' : undefined}>
       <span className="text-xs font-medium text-(--el-text-muted)">{t('groupByLabel')}</span>
       <Segmented<BoardSwimlaneGroupByDto>
         label={t('groupByAria')}
         value={value}
         onChange={onChange}
-        disabled={disabled}
+        disabled={disabled || readOnlyReason !== undefined}
         options={[
           { value: 'none', label: t('groupByNone'), icon: <LayoutGrid /> },
           { value: 'assignee', label: t('groupByAssignee'), icon: <User /> },
@@ -454,6 +470,8 @@ function GroupByControl({
       />
     </div>
   );
+  // A disabled button swallows the pointer, so the reason hangs off the wrapper.
+  return readOnlyReason ? <Tooltip content={readOnlyReason}>{control}</Tooltip> : control;
 }
 
 // The interactive board (Subtask 3.2.4 · swimlanes 3.3.5) — a dnd-kit

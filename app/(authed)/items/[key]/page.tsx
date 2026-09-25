@@ -718,7 +718,7 @@ export default async function IssueDetailPage({
                       labels: detail.labels,
                       components: detail.components,
                       projectComponents,
-                      canManageProject,
+                      canManageComponents: held.has('component:manage'),
                     }}
                     sprints={sprints}
                   />

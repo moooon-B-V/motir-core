@@ -717,7 +717,7 @@ describe('A FAILED APPROVE keeps `approvePlan`’s repair — the lazy `stale` b
   });
 });
 
-// ─── the row's summary (design Part XX §20.3) ────────────────────────────────
+// ─── the row's summary (design Part XXII §22.3) ────────────────────────────────
 
 describe('the To-approve ROW’s subject summary for a plan gate', () => {
   it('carries the plan, its conversation, its targets, the count, the author and `held`', async () => {

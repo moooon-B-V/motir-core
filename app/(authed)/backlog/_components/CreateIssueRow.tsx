@@ -5,9 +5,11 @@ import { Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Popover } from '@/components/ui/Popover';
 import { Button } from '@/components/ui/Button';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ISSUE_TYPES, TYPES_REQUIRING_PARENT, type IssueType } from '@/lib/issues/parentRules';
 import { useBacklogDnd } from './BacklogDndProvider';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // The inline "+ Create issue" row (Story 4.2 · Subtask 4.2.5), per
 // design/backlog/backlog.mock.html panel 1. PLACED in 4.2.3 (the read render),
@@ -27,6 +29,8 @@ export function CreateIssueRow({ sprintId = null }: { sprintId?: string | null }
   const t = useTranslations('backlog');
   const tl = useTranslations('labels');
   const { createInto } = useBacklogDnd();
+  const tpa = useTranslations('projectAccess');
+  const canCreate = useProjectAccess().can('work_item:edit');
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState('');
@@ -47,6 +51,25 @@ export function CreateIssueRow({ sprintId = null }: { sprintId?: string | null }
     const ok = await createInto({ kind, title: trimmed, sprintId });
     setBusy(false);
     if (ok) setTitle(''); // keep the form open for rapid entry
+  }
+
+  // MOTIR-6174 — the permission-gated UI rule's row 8: Create is an in-place
+  // control a read-only actor can SEE, so it stays, DISABLED, and says why.
+  // `createBacklogIssue` asserts `work_item:edit` (for a sprint row as well —
+  // the server asks for nothing more, so neither does this).
+  if (!canCreate) {
+    return (
+      <Tooltip content={tpa('readOnlyHint')}>
+        <span
+          aria-disabled="true"
+          data-testid={sprintId ? `create-issue-sprint-${sprintId}` : 'create-issue-backlog'}
+          className="flex w-full cursor-not-allowed items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm font-medium text-(--el-text-faint)"
+        >
+          <Plus className="h-4 w-4 shrink-0" aria-hidden />
+          {t('createIssue')}
+        </span>
+      </Tooltip>
+    );
   }
 
   if (!editing) {

@@ -1,7 +1,7 @@
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 
 // WHAT THE PLANNING SURFACE'S DECISION CONTROLS SHOW for the plan in hand (Story
-// MOTIR-6012 · MOTIR-6037; `design/ai-planning/design-notes.md` Part XX §20.4–§20.5).
+// MOTIR-6012 · MOTIR-6037; `design/ai-planning/design-notes.md` Part XXII §22.4–§22.5).
 // ONE derivation, read by both the canvas bar and the rail's review block, so the gate
 // and its mirror cannot disagree about which state they are in.
 //

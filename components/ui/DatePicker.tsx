@@ -142,7 +142,8 @@ export function DatePicker({
   className,
 }: DatePickerProps) {
   const selected = parseKey(value);
-  const [open, setOpen] = useState(autoOpen);
+  // Disabled never opens, `autoOpen` included (MOTIR-6173 — the MOTIR-4822 path).
+  const [open, setOpen] = useState(autoOpen && !disabled);
   // The month on screen + the day holding roving focus. Seeded on each open.
   const [view, setView] = useState<{ y: number; m: number }>(() => {
     const seed = selected ?? todayUTC();
@@ -187,6 +188,7 @@ export function DatePicker({
   }
 
   function select(day: YMD) {
+    if (disabled) return;
     onChange(toKey(day));
     setOpen(false);
   }

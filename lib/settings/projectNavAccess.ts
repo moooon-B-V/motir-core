@@ -175,6 +175,14 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
 /** The AI planning entry point (`plan-with-ai`, and the sprint-planning door). */
 export const AI_PLANNING_REQUIREMENT: NavRequirement = 'ai:plan';
 
+/**
+ * The CREATE entry point in the command palette (MOTIR-6175): `work_item:edit`,
+ * what `workItemsService.createWorkItem` asserts. The palette row is an entry
+ * point with no disabled form, so it is offered only on this key; the top-bar
+ * `+` keeps teaching the action, drawn disabled with its reason.
+ */
+export const CREATE_WORK_ITEM_REQUIREMENT: NavRequirement = 'work_item:edit';
+
 const BY_HREF = new Map(PROJECT_NAV_ACCESS.map((entry) => [entry.href, entry]));
 
 /**

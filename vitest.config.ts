@@ -2564,6 +2564,28 @@ export default defineConfig({
         // here would gate this story on code no card in it wrote — the trap the
         // `changeRequestCiFeedback.ts` note above names.
         'components/planning/PlanChangeComposer.tsx',
+        // ── Story MOTIR-6166 · PERMISSION-GATED SURFACES (Subtask MOTIR-6177) ──
+        // The five surfaces this story CREATED or reshaped around a permission
+        // branch, measured on this branch with the story's specs before being
+        // pinned: every one at 100 / 100 / 100 / 100 except `CreateIssueRow`,
+        // 100 / 94.73 / 100 / 100 (its residue is the in-flight double-submit
+        // guard's second arm).
+        //
+        // ⚠️ THE LARGE CONTAINERS THE STORY EDITED ARE NOT HERE, and that is a
+        // disposition: `CoreFieldsPanel` (865 lines), `BoardContainer`,
+        // `BacklogContainer`, `AppCommandPalette`, `OrgControl` and `SprintHeader`
+        // each took a few lines of gating; gating their whole files would gate
+        // this story on code no card in it wrote (the `PlanChangeComposer` note
+        // above). Their NEW lines are asserted, Viewer and Member, by
+        // `tests/integration/permissions/gatedSurfacesStoryGate.test.tsx` and the
+        // per-surface suites, and the ones already listed (`TodoListSection`,
+        // `QuickViewRailEdit`, `SidebarNav`, `ShellTierNav`, the two nav
+        // registries) keep their existing floors.
+        'app/**/_components/FieldCard.tsx',
+        'app/**/boards/_components/ColumnActionsMenu.tsx',
+        'app/**/boards/_components/UnmappedStatusesTray.tsx',
+        'app/**/backlog/_components/SelectionBar.tsx',
+        'app/**/backlog/_components/CreateIssueRow.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2574,6 +2596,37 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-6166 · PERMISSION-GATED SURFACES (Subtask MOTIR-6177) ──
+        'app/**/_components/FieldCard.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/boards/_components/ColumnActionsMenu.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/boards/_components/UnmappedStatusesTray.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/backlog/_components/SelectionBar.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/backlog/_components/CreateIssueRow.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-6156 · THE MULTI-LINE COMPOSER (Subtask MOTIR-6239) ──
         // Measured at 97.11 / 90.43 / 100 / 100 on this branch. The branch axis
         // has the thinnest margin in this list — its residue is three `if (!el)

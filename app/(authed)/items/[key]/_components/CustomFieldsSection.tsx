@@ -36,6 +36,8 @@ export interface CustomFieldsSectionProps {
 
 export function CustomFieldsSection({ workItemId, fields, members }: CustomFieldsSectionProps) {
   const t = useTranslations('issueViews');
+  // MOTIR-6173 — a read-only actor keeps the DISABLED chevron and its reason.
+  const tpa = useTranslations('projectAccess');
   const locale = useLocale() as Locale;
   // MOTIR-2473 — the key this control's own write asserts:
   // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
@@ -108,7 +110,7 @@ export function CustomFieldsSection({ workItemId, fields, members }: CustomField
       <FieldCard
         key={field.id}
         label={field.label}
-        editable={!readOnly}
+        readOnlyReason={readOnly ? tpa('readOnlyHint') : undefined}
         editing={editing}
         onToggle={() => cf.onToggle(field, editing)}
       >

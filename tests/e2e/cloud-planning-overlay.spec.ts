@@ -7,8 +7,8 @@
 // (`docs/decisions/acceptance-receipt-lifecycle.md` §3) rather than being edited
 // in place. It went RED on Story MOTIR-6012's branch because MOTIR-6037 made the
 // close-with-pending guard stay SHUT for an asked (gated) or generating plan
-// (ADR `approval-gates.md` §11; `design/ai-planning/design-notes.md` Part XX
-// §20.11): once every `planned` plan waits in To approve, closing discards
+// (ADR `approval-gates.md` §11; `design/ai-planning/design-notes.md` Part XXII
+// §22.11): once every `planned` plan waits in To approve, closing discards
 // nothing, so the guard's *"Closing now discards them"* was false. The one
 // chapter that read the guard is restated below as that rule — Esc closes
 // straight through and the plan still waits in To approve. Every other
@@ -339,8 +339,8 @@ test('the planner opens over your work, and closing puts you back exactly there'
     // raised its `plan_approval` gate when the plan reached `planned`.
     await expect(page.getByTestId('plan-change-confirm-bar')).toBeVisible();
 
-    // ⚠️ RESTATED BY MOTIR-6037 (ADR `approval-gates.md` §11; design Part XX
-    // §20.11). The receipt asserted the close-with-pending guard here —
+    // ⚠️ RESTATED BY MOTIR-6037 (ADR `approval-gates.md` §11; design Part XXII
+    // §22.11). The receipt asserted the close-with-pending guard here —
     // *"Nothing is saved until you confirm. Closing now discards them."* — and
     // walked its Keep planning / Discard. An asked plan waits in To approve, so
     // closing discards nothing and the guard stays shut: Esc closes straight

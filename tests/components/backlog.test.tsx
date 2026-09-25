@@ -38,6 +38,7 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
 }));
 
 import { BacklogContainer } from '@/app/(authed)/backlog/_components/BacklogContainer';
+import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 
 function render(ui: ReactElement) {
   return renderWithIntl(<ToastProvider>{ui}</ToastProvider>);
@@ -479,5 +480,75 @@ describe('BacklogContainer — sprint completion refreshes destination regions (
     );
     // And the carried row is now in the backlog with no remount / reload.
     expect(await screen.findByTestId('backlog-row-PROD-300')).toBeTruthy();
+  });
+});
+
+// ── MOTIR-6174 — the backlog offers no write to an actor without its key ───────
+// Every grooming write (rank drag, cross-region drag, the bulk bar, the row ⋯
+// Move rows, Create / Start / Complete sprint, the sprint ⋯ menu) asserts
+// `sprint:manage`; inline Create asserts `work_item:edit`. Rendered through the
+// layout's own provider with each actor's permission SET — never the
+// provider-less default, which answers every key true.
+describe('the backlog’s permission-gated controls (MOTIR-6174)', () => {
+  const VIEWER = ['project:browse', 'report:view'] as const;
+  const EDITOR_ONLY = ['project:browse', 'work_item:edit'] as const;
+  const MEMBER = ['project:browse', 'work_item:edit', 'sprint:manage', 'report:view'] as const;
+
+  function renderAs(permissions: readonly string[]) {
+    mockFetch({
+      sprints: [
+        sprint({ id: 'active1', name: 'Sprint 24', state: 'active', sequence: 1, issueCount: 1 }),
+        sprint({ id: 'planned1', name: 'Sprint 25', state: 'planned', sequence: 2, issueCount: 1 }),
+      ],
+      backlog: { items: [item({ id: 'b1', key: 150 })], nextCursor: null, totalCount: 1 },
+      sprintIssues: { items: [item({ id: 's1', key: 151 })], nextCursor: null, totalCount: 1 },
+    });
+    return render(
+      <ProjectAccessProvider permissions={[...permissions] as never}>
+        <BacklogContainer workflow={workflow} members={members} projectName="motir" />
+      </ProjectAccessProvider>,
+    );
+  }
+
+  it('a Viewer reads the sprints and the backlog and is offered no grooming control', async () => {
+    renderAs(VIEWER);
+    expect(await screen.findByText('Sprint 24')).toBeTruthy();
+    expect(await screen.findByText('Item 150')).toBeTruthy();
+    // Entry points: HIDDEN.
+    expect(screen.queryByTestId('create-sprint')).toBeNull();
+    expect(screen.queryByTestId('plan-sprints-with-motir')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start sprint' })).toBeNull();
+    expect(screen.queryByTestId('complete-sprint-active1')).toBeNull();
+    expect(screen.queryByTestId('sprint-actions-active1')).toBeNull();
+    expect(screen.queryByTestId('sprint-actions-planned1')).toBeNull();
+    expect(screen.queryByTestId('backlog-row-actions-PROD-150')).toBeNull();
+    expect(screen.queryByTestId('backlog-row-check-PROD-150')).toBeNull();
+    // In-place Create: DISABLED, with the reason (row 8).
+    const create = screen.getByTestId('create-issue-backlog');
+    expect(create.tagName).toBe('SPAN');
+    expect(create.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(create);
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
+  it('an actor who may edit but not groom creates, and still cannot move or plan sprints', async () => {
+    renderAs(EDITOR_ONLY);
+    expect(await screen.findByText('Sprint 24')).toBeTruthy();
+    expect(screen.getByTestId('create-issue-backlog').tagName).toBe('BUTTON');
+    expect(screen.queryByTestId('create-sprint')).toBeNull();
+    expect(screen.queryByTestId('complete-sprint-active1')).toBeNull();
+    expect(screen.queryByTestId('backlog-row-actions-PROD-150')).toBeNull();
+  });
+
+  it('a Member keeps every grooming control', async () => {
+    renderAs(MEMBER);
+    expect(await screen.findByText('Sprint 24')).toBeTruthy();
+    expect(await screen.findByTestId('backlog-row-actions-PROD-150')).toBeTruthy();
+    expect(screen.getByTestId('backlog-row-check-PROD-150')).toBeTruthy();
+    expect(screen.getByTestId('create-sprint')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start sprint' })).toBeTruthy();
+    expect(screen.getByTestId('complete-sprint-active1')).toBeTruthy();
+    expect(screen.getByTestId('sprint-actions-active1')).toBeTruthy();
+    expect(screen.getByTestId('create-issue-backlog').tagName).toBe('BUTTON');
   });
 });
