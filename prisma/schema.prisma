@@ -6422,10 +6422,16 @@ model PlanRevision {
   /// their actor, because those are only ever reached by a person.
   changedById  String?                 @map("changed_by_id")
   changedAt    DateTime                @default(now()) @map("changed_at")
-  /// `created` | `appended` | `edited` | `planned` | `approved` | `declined`.
+  /// `created` | `appended` | `edited` | `planned` | `approved` | `declined` |
+  /// `reason_classified`.
   /// String, not an enum — the same call `WorkItemRevision.changeKind` makes and
   /// for the same reason: a new verb is then a code change rather than a
   /// migration, and the value set is read by this product's own surfaces only.
+  ///
+  /// ⚠️ `reason_classified` is INTERNAL (Story MOTIR-5543 · MOTIR-6083). It is
+  /// Motir's own planner-quality data, not the tenant's, so every tenant-facing
+  /// read excludes it — at the QUERY, through the one shared
+  /// `TENANT_VISIBLE_PLAN_REVISION_WHERE` fragment in `planRevisionRepository`.
   changeKind   String                  @map("change_kind")
   /// WHICH AGENT acted, when one did — the `source · harness · model` triple
   /// `docs/decisions/work-item-provenance.md` Decision 2 fixes, recorded PER ACT
@@ -6440,6 +6446,22 @@ model PlanRevision {
   /// themselves. `design/ai-planning/design-notes.md` Part X §5 decides what the
   /// timeline shows of it.
   diff         Json
+  /// The EVIDENCE behind a `reason_classified` row, as free text — populated ONLY
+  /// by that kind, and null on every other (Story MOTIR-5543 · MOTIR-6083).
+  ///
+  /// ⚠️ INTERNAL: never serialised to a tenant. It rides the same row the
+  /// classification does, and the one read that returns it
+  /// (`planRevisionRepository.listReasonClassifications`) has no route, no MCP
+  /// tool and no DTO on any tenant surface — `PlanHistoryEventDto` is unchanged.
+  ///
+  /// ⚠️ WHY IT CANNOT LIVE IN `diff`. That payload is COUNT-shaped by contract
+  /// (directly above) — how many proposals an append carried, which fields an
+  /// edit supplied — and the timeline renders it on that promise. Evidence is
+  /// prose: the turn that raised the thing, or the rule search that came back
+  /// empty. Putting it in `diff` would either break the count contract for every
+  /// existing reader or smuggle a body into a payload documented as never
+  /// carrying one. Bounded at 4 000 characters by the service.
+  noteMd       String?                 @map("note_md")
 
   plan      Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
   planItem  PlanItem? @relation(fields: [planItemId], references: [id], onDelete: SetNull)

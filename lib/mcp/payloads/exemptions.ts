@@ -23,6 +23,15 @@ import type { McpToolName } from '../registry';
  * column fails the run rather than being skipped.
  */
 export const EXEMPT_TOOLS = {
+  record_plan_revision_reason:
+    'Returns the recorded EVENT — `{ kind, revisionId, planId, branch, planningBugKey, at }` ' +
+    '— and the whole point of the card it ships with is that this event has NO tenant-facing ' +
+    'representation AT ALL: a classification of why a plan had to change is Motir’s own ' +
+    'judgement about its own planner, excluded from every tenant read at the QUERY. So there ' +
+    'is nothing in `/api/v1` to derive from, and there must not be — deriving this from a ' +
+    'published component would be the first step toward publishing it. ⚠️ This exemption is ' +
+    'therefore LOAD-BEARING rather than a gap to close later: if a v1 component for it ever ' +
+    'appears, THAT is the defect, not this line (MOTIR-6086).',
   validate_work_item:
     'Returns a subtree FINISHABILITY verdict (valid / blockers / advisories) — a planning ' +
     'judgement computed over a tree, not a representation of a resource. No v1 operation ' +

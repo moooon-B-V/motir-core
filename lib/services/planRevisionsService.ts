@@ -24,7 +24,8 @@
 // DTO are the sibling card's), no reads. `workItemRevisionsService` is the
 // shipped precedent this mirrors exactly.
 
-import type { Prisma, WorkItemPlanningSource } from '@/generated/prisma/client';
+import type { PlanRevision, Prisma, WorkItemPlanningSource } from '@/generated/prisma/client';
+import { INTERNAL_PLAN_REVISION_CHANGE_KINDS } from '@/lib/plans/revisionReason';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 
 /**
@@ -90,7 +91,33 @@ export type PlanRevisionChangeKind =
   | 'revision_started'
   | 'revision_ended'
   | 'bug_filed'
-  | 'brief_edited';
+  | 'brief_edited'
+  | 'reason_classified';
+
+/**
+ * ⚠️ `reason_classified` is the TWELFTH (Story MOTIR-5543 · MOTIR-6083), and it
+ * is the first verb that is not about the plan's CONTENTS at all — it records
+ * WHY a change was asked of a plan that is not yet approved, on every one of the
+ * four branches `REVISION_REASON_BRANCHES` names, including the two that file
+ * nothing. Recording it on all four is the point: a silent "no bug" cannot be
+ * told from a forgotten one, and a recorded *different solution, no bug* can be
+ * checked.
+ *
+ * It carries no `planItemId` — the classification is about the REQUEST, not
+ * about a proposal — its `diff` is `{ branch, planningBugId }`, and its prose
+ * evidence rides `noteMd` because `diff` is count-shaped by contract.
+ *
+ * ⚠️ AND IT IS INTERNAL: it is Motir's own judgement about its own planner, so
+ * NO tenant-facing read returns it. `INTERNAL_PLAN_REVISION_CHANGE_KINDS` is the
+ * one list, and `planRevisionRepository` applies it at the QUERY.
+ *
+ * The assertion below is what keeps that list and this union honest: it lives
+ * HERE, where the union is, because `lib/plans/revisionReason.ts` may not import
+ * this file. A kind listed as internal that is not a real change kind fails to
+ * compile.
+ */
+export const INTERNAL_CHANGE_KINDS =
+  INTERNAL_PLAN_REVISION_CHANGE_KINDS satisfies readonly PlanRevisionChangeKind[];
 
 /**
  * WHICH AGENT performed a change, when one did — the
@@ -122,6 +149,11 @@ export interface PlanRevisionAgentActor {
  * COUNT-shaped payload whose shape varies per kind — how many proposals an append
  * carried, which fields an edit supplied, how many items a decision covered —
  * never the proposal bodies themselves.
+ *
+ * `noteMd` is the ONE exception to that, and it is a separate field precisely so
+ * the `diff` contract above stays true: a `reason_classified` row carries prose
+ * EVIDENCE (the turn that raised the thing, or the rule search that came back
+ * empty), which has no count-shaped form. Every other kind leaves it undefined.
  */
 export interface RecordPlanRevisionArgs {
   planId: string;
@@ -130,19 +162,26 @@ export interface RecordPlanRevisionArgs {
   changeKind: PlanRevisionChangeKind;
   actor?: PlanRevisionAgentActor | null;
   diff: Record<string, unknown>;
+  noteMd?: string | null;
 }
 
 export const planRevisionsService = {
   /**
    * Record one revision row for a plan mutation, inside the caller's transaction
-   * (required `tx`). Returns the created row's id; every current call site is
-   * free to ignore it.
+   * (required `tx`).
+   *
+   * Returns the CREATED ROW; every call site but one is free to ignore it. The
+   * exception is `recordRevisionClassification`, whose caller reports WHEN the
+   * classification was recorded — and the only honest answer to that is the
+   * row's own `changedAt`, written by the database. A service that returned the
+   * id alone would leave its caller to stamp `new Date()`, which is the time it
+   * ASKED rather than the time the row exists at.
    */
   async recordRevision(
     args: RecordPlanRevisionArgs,
     tx: Prisma.TransactionClient,
-  ): Promise<string> {
-    const row = await planRevisionRepository.create(
+  ): Promise<PlanRevision> {
+    return planRevisionRepository.create(
       {
         planId: args.planId,
         planItemId: args.planItemId ?? null,
@@ -152,9 +191,9 @@ export const planRevisionsService = {
         actorHarness: args.actor?.harness ?? null,
         actorModel: args.actor?.model ?? null,
         diff: args.diff as Prisma.InputJsonValue,
+        noteMd: args.noteMd ?? null,
       },
       tx,
     );
-    return row.id;
   },
 };

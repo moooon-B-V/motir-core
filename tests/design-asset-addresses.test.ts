@@ -1546,6 +1546,24 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'design/ai-chat/planning-workspace--resume.mock.html',
     why: "the resume mock Part XXII amends, published on MOTIR-6019's design result and not mirrored in the tree",
   },
+  //  MOTIR-6214 landed the workbench area's two sections the same way: § 28 from
+  //  MOTIR-5997's result and § 29, the pointer to Part XXII, from MOTIR-6033's. Each
+  //  names a delta mock that result carries and the tree does not.
+  {
+    file: 'design/workbench/design-notes.md',
+    path: 'design/workbench/approvals-row--plain-words.mock.html',
+    why: "§ 28's To-approve row mock, published on MOTIR-5997 (evidence cmucp2cd00019hwoi9dvnqzpe) and not mirrored in the tree",
+  },
+  {
+    file: 'design/workbench/design-notes.md',
+    path: 'design/workbench/approval-overlay--quick-view.mock.html',
+    why: "§ 28's overlay exit-row mock, published on MOTIR-5997 (evidence cmucp2cd00019hwoi9dvnqzpe) and not mirrored in the tree",
+  },
+  {
+    file: 'design/workbench/design-notes.md',
+    path: 'design/workbench/approvals-row--plan.mock.html',
+    why: "§ 29's To-approve row mock, published on MOTIR-6033 (evidence cmueg6bue00kghwoikl5e6bxp) and not mirrored in the tree",
+  },
   // ── ✅ RETIRED 2026-09-11 (MOTIR-5170, under Bug MOTIR-4925) ──────────────
   //  One FORWARD-LOOKING row stood here: `design/projects/design-notes.md` names
   //  `app/(authed)/settings/project/approvals/page.tsx`, the file MOTIR-4942's

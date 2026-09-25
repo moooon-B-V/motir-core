@@ -72,6 +72,7 @@ import {
   PlanPersistenceError,
   PlanGrammarError,
   PlanRefGraphError,
+  PlanRevisionClassificationInvalidError,
 } from '@/lib/plans/errors';
 import {
   EmptyPlanChangeIntentError,
@@ -502,7 +503,13 @@ export function toToolError(err: unknown): CallToolResult {
     // Unmapped, every one reached the agent without its code; mapped, the agent
     // reads the same code approve's route returns for the same verdict.
     err instanceof PlanRefGraphError ||
-    err instanceof PlanGrammarError
+    err instanceof PlanGrammarError ||
+    // PLAN_REVISION_CLASSIFICATION_INVALID (MOTIR-5543). Every refusal this one
+    // raises names the caller's next move — file the bug first and pass its key,
+    // drop the key on a no-bug branch, supply evidence, pass ONE of id/key — and
+    // an agent can only act on that sentence if it arrives as a tool error
+    // carrying the code, not as a JSON-RPC internal error.
+    err instanceof PlanRevisionClassificationInvalidError
   ) {
     return toolError(err.code, err.message);
   }

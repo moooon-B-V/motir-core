@@ -21,6 +21,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { plansService } from '@/lib/services/plansService';
 import { NoPlanForJobError } from '@/lib/plans/errors';
+import { NATIVE_PLANNER_HARNESS } from '@/lib/ai/plannerTenantBug';
+import type { RevisionReasonBranch } from '@/lib/plans/revisionReason';
 import type {
   CorrectProposalInput,
   PlanItemDto,
@@ -357,6 +359,67 @@ export const aiGenerationService = {
   // reuses for intra-plan parent/blocker refs. The plan is resolved by `sourceJobId`
   // (workspace-scoped → NoPlanForJobError/404 cross-tenant); `addProposals` then
   // re-asserts edit access + the `generating` status under its own row lock.
+  /**
+   * RECORD WHY the shipped planner's REVISE_PLAN pass had to change a plan
+   * (Story MOTIR-5543 · Subtask MOTIR-6087) — the internal door onto
+   * `plansService.recordRevisionClassification`.
+   *
+   * ⚠️ THE PLAN IS THE JOB'S, and the `planId` the caller may send is a
+   * CROSS-CHECK rather than the address. This service's own header states the
+   * binding — *"the internal seam resolves 'the job's Plan' from the jobId the
+   * handler already holds — no planId threading through motir-ai"* — and the
+   * posture that comes with it is the one `log-bug` spells out: a foreign plan
+   * should be UNEXPRESSIBLE rather than refused. Resolving from the job keeps
+   * that true, and a mismatched `planId` is answered with the same
+   * {@link NoPlanForJobError} a foreign job gets, so the route leaks nothing
+   * about whether the plan exists.
+   *
+   * Pinned to the TOKEN's project as well as its workspace, exactly as
+   * `aiWorkItemsService.filePlannerBug` is: a token minted for project A may not
+   * record on a job whose plan belongs to B.
+   *
+   * The actor is the NATIVE planner triple — the same one the planner's own bug
+   * filing stamps — so the internal record says Motir classified this, and the
+   * model is the run's own self-reported string.
+   */
+  async recordRevisionReason(
+    input: {
+      jobId: string;
+      planId?: string | null;
+      branch: RevisionReasonBranch;
+      evidenceMd: string;
+      planningBugId?: string | null;
+      model?: string | null;
+    },
+    auth: { ctx: ServiceContext; projectId: string },
+  ): Promise<{ revisionId: string; planId: string; branch: RevisionReasonBranch }> {
+    const { ctx, projectId } = auth;
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(input.jobId, ctx.workspaceId, tx),
+    );
+    if (!plan || plan.projectId !== projectId) throw new NoPlanForJobError(input.jobId);
+    // The cross-check. Same error as a foreign job: a caller that guessed a plan
+    // id learns nothing from the difference.
+    if (input.planId && input.planId !== plan.id) throw new NoPlanForJobError(input.jobId);
+
+    const model = input.model?.trim() ?? '';
+    const recorded = await plansService.recordRevisionClassification(
+      {
+        planId: plan.id,
+        branch: input.branch,
+        evidenceMd: input.evidenceMd,
+        planningBugId: input.planningBugId ?? null,
+        actor: {
+          source: 'native',
+          harness: NATIVE_PLANNER_HARNESS,
+          model: model === '' ? null : model,
+        },
+      },
+      ctx,
+    );
+    return { revisionId: recorded.revisionId, planId: plan.id, branch: recorded.branch };
+  },
+
   async appendProposals(
     jobId: string,
     proposals: ProposalInput[],

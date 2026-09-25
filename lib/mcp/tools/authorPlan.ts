@@ -27,7 +27,7 @@ import { InvalidProposalError, PlanRefGraphError } from '@/lib/plans/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
-import { derived } from '../payloads/define';
+import { derived, exempt } from '../payloads/define';
 import {
   planAppendPayload,
   planPayload,
@@ -38,6 +38,12 @@ import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import { isFolderRef, isTempRef } from '@/lib/plans/refs';
+import {
+  REASON_CLASSIFIED_KIND,
+  REVISION_REASON_BRANCHES,
+  REVISION_REASON_EVIDENCE_MAX,
+  type RevisionReasonBranch,
+} from '@/lib/plans/revisionReason';
 import { resolveWorkItemIdsByKeys } from './workItemRef';
 import { projectKeyField } from './readyFilters';
 import { GET_PLAN_TOOL_NAME } from './getPlan';
@@ -159,6 +165,7 @@ export const UPDATE_PLAN_ITEM_TOOL_NAME = 'update_plan_item';
 export const UPDATE_PLAN_PROPOSAL_TOOL_NAME = 'update_plan_proposal';
 export const WITHDRAW_PLAN_PROPOSAL_TOOL_NAME = 'withdraw_plan_proposal';
 export const UPDATE_PLAN_TOOL_NAME = 'update_plan';
+export const RECORD_PLAN_REVISION_REASON_TOOL_NAME = 'record_plan_revision_reason';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arguments
@@ -910,6 +917,79 @@ interface UpdatePlanArgs {
   planId: string;
   title?: string | null;
   summary?: string | null;
+}
+
+// ── AND `record_plan_revision_reason` (Story MOTIR-5543 · MOTIR-6086) ────────
+// The SEVENTH tool, and the only one that changes NOTHING about the plan. The
+// six above all edit what the plan SAYS; this one records WHY it had to change.
+//
+// It exists because the planner-bug home is only as useful as its signal. The
+// runbook used to file a planning bug on every re-plan, so a reviewer saying
+// "I'd rather have a side panel" produced the same record as a plan that forgot
+// to check whether its repository still exists — and several hundred records
+// later a triager cannot tell the planner's real blind spots from ordinary
+// conversation.
+//
+// ⚠️ THE ROW IS WRITTEN ON ALL FOUR BRANCHES, including the two that file
+// nothing, and that is the point rather than a completeness flourish: a silent
+// "no bug" is indistinguishable from a forgotten one, while a recorded
+// "different solution, no bug" can be checked.
+//
+// ⚠️ AND NOTHING READS IT BACK HERE. The record is INTERNAL — Motir's own
+// judgement about its own planner — so no tenant surface returns it and no MCP
+// read exposes it. Epic 10 is the eventual reader.
+//
+// Gated on `ai:view_plan`, the key the other correction doors assert, so a
+// CLI-minted token cannot reach it either: classifying a revision is part of
+// revising a plan, and a run that may not revise one should not annotate one.
+//
+// THIN, like its siblings: the branch/bug agreement, the key resolution, the
+// frozen-status gate and the trail write are all
+// `plansService.recordRevisionClassification`.
+
+const recordPlanRevisionReasonInputSchema = {
+  planId: z.string().trim().min(1).describe('The plan id `create_plan` returned.'),
+  branch: z
+    .enum(REVISION_REASON_BRANCHES)
+    .describe(
+      'WHY this plan has to change. `new_ask` — the person now wants something the ' +
+        'conversation that settled the plan never raised. `different_solution` — the plan ' +
+        'answered what was asked and they prefer another answer. `rule_gap` — the plan missed ' +
+        'a check and NO planning rule asks for it; its fix is a new rule. `rule_not_followed` ' +
+        '— a rule requires the check and this pass did not apply it. The first two are about ' +
+        'the person and file NO planning bug; the last two are about the planner and each file ' +
+        'exactly one.',
+    ),
+  evidenceMd: z
+    .string()
+    .trim()
+    .min(1)
+    .max(REVISION_REASON_EVIDENCE_MAX)
+    .describe(
+      'WHY you chose that branch, in Markdown — required on every branch. For `new_ask` / ' +
+        '`different_solution`, quote the turn that raised the thing or say that none did. For ' +
+        'the two rule branches, quote the rule SEARCH: choosing between them, and ruling both ' +
+        'out, is a search and not a judgement, and a gap asserted without one is an unverified ' +
+        'negative.',
+    ),
+  planningBugKey: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      'The planning bug you filed, by its key (`MOTIR-123`) — REQUIRED on `rule_gap` and ' +
+        '`rule_not_followed`, and REFUSED on the other two. File it first with ' +
+        '`create_work_item` into the project’s `Planning bugs` folder, then pass its key here ' +
+        'so the classification points at the record it produced.',
+    ),
+};
+
+interface RecordPlanRevisionReasonArgs {
+  planId: string;
+  branch: RevisionReasonBranch;
+  evidenceMd: string;
+  planningBugKey?: string;
 }
 
 interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
@@ -1717,6 +1797,58 @@ export async function runUpdatePlan(
   );
 }
 
+/**
+ * RECORD the reason a re-plan was asked of an unapproved plan (Story MOTIR-5543
+ * · MOTIR-6086) — a transport over
+ * `plansService.recordRevisionClassification`, adding no logic of its own.
+ *
+ * It returns the EVENT, not the plan: nothing about the plan changed, so handing
+ * back a whole `PlanWithItemsDto` would invite a reader to diff it for a
+ * difference that is not there.
+ */
+export async function runRecordPlanRevisionReason(
+  args: RecordPlanRevisionReasonArgs,
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  const recorded = await plansService.recordRevisionClassification(
+    {
+      planId: args.planId,
+      branch: args.branch,
+      evidenceMd: args.evidenceMd,
+      planningBugKey: args.planningBugKey ?? null,
+    },
+    ctx,
+  );
+
+  const filed = recorded.planningBugKey
+    ? `Planning bug ${recorded.planningBugKey} is recorded against it.`
+    : 'No planning bug: this branch is about what the person wants, not about the planner — ' +
+      'and the judgement is ON THE RECORD, so it can be told from a forgotten one.';
+
+  return toolOk(
+    `Recorded \`${recorded.branch}\` on plan ${args.planId}. ${filed}\n\n` +
+      'This is INTERNAL — Motir’s own record of why the plan had to change. No tenant-facing ' +
+      'read returns it, and nothing about the plan itself changed: correct the plan with the ' +
+      `correction doors (\`${UPDATE_PLAN_PROPOSAL_TOOL_NAME}\`, ` +
+      `\`${WITHDRAW_PLAN_PROPOSAL_TOOL_NAME}\`, \`${UPDATE_PLAN_TOOL_NAME}\`, or ` +
+      `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` with \`revision: true\`) as a separate act.`,
+    exempt(RECORD_PLAN_REVISION_REASON_TOOL_NAME, {
+      kind: REASON_CLASSIFIED_KIND,
+      revisionId: recorded.revisionId,
+      planId: args.planId,
+      branch: recorded.branch,
+      planningBugKey: recorded.planningBugKey,
+      // ⚠️ THE ROW'S OWN TIME, NOT THIS CALL'S. `recordRevisionClassification`
+      // returns `at` from the written row precisely so this door does not have
+      // to guess; `new Date()` here would report the moment the tool was ASKED,
+      // which drifts from the moment the row exists at by however long the
+      // transaction took. `planRevisionsService.recordRevision` returns the row
+      // instead of its id for this one reason.
+      at: recorded.at,
+    }),
+  );
+}
+
 export function registerAuthorPlan(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
     CREATE_PLAN_TOOL_NAME,
@@ -1924,6 +2056,44 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
     async (args, extra) => {
       try {
         return await runUpdatePlan(args, resolveContext(extra));
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    RECORD_PLAN_REVISION_REASON_TOOL_NAME,
+    {
+      title: 'Record WHY a plan had to change',
+      description:
+        'Record WHY a change was asked of a plan that is NOT YET APPROVED — once per request, ' +
+        'BEFORE you correct anything. Four branches, and only two of them are about the ' +
+        'planner: `new_ask` (they now want something the conversation never raised) and ' +
+        '`different_solution` (the plan answered what was asked and they prefer another ' +
+        'answer) file NO planning bug; `rule_gap` (the plan missed a check and no planning ' +
+        'rule asks for it) and `rule_not_followed` (a rule requires the check and this pass ' +
+        'did not apply it) each file exactly ONE — create it first with `create_work_item` ' +
+        'into the project’s `Planning bugs` folder and pass its key as `planningBugKey`. ' +
+        'CHOOSING BETWEEN THE TWO RULE BRANCHES, AND RULING BOTH OUT, IS A SEARCH AND NOT A ' +
+        'JUDGEMENT: search the planning rules and the lesson store for the check that was ' +
+        'missed and quote what came back in `evidenceMd`, because a gap asserted without that ' +
+        'search is an unverified negative. Call it on EVERY branch, including the two that ' +
+        'file nothing — a silent "no bug" cannot be told from a forgotten one, and that is the ' +
+        'whole reason this tool exists rather than you simply filing fewer bugs. Legal while ' +
+        'the plan is `generating` or `planned`; REFUSED once it is `approved` or `declined`, ' +
+        'naming the status. IT CHANGES NOTHING about the plan — not a proposal, not the ' +
+        `heading, not the status: correct the plan with \`${UPDATE_PLAN_PROPOSAL_TOOL_NAME}\`, ` +
+        `\`${WITHDRAW_PLAN_PROPOSAL_TOOL_NAME}\`, \`${UPDATE_PLAN_TOOL_NAME}\` or ` +
+        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` with \`revision: true\` as a separate act. The record ` +
+        'is INTERNAL to Motir and no read returns it. The RULE that decides which branch ' +
+        'applies lives in the planning corpus, not in this description. Costs nothing and ' +
+        'starts no job.',
+      inputSchema: recordPlanRevisionReasonInputSchema,
+    },
+    async (args, extra) => {
+      try {
+        return await runRecordPlanRevisionReason(args, resolveContext(extra));
       } catch (err) {
         return toToolError(err);
       }

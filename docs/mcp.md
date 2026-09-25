@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **69 tools**.
+`initialize` handshake and registers **70 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -2798,7 +2798,7 @@ it fill.
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak). Requires `project:browse`.
 
-#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan`
+#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason`
 
 The three tools above hand a **prompt** to Motir's planner and let it decide the
 tree. These two are the other door: **you decide the tree, and Motir reviews it
@@ -3267,6 +3267,86 @@ same one every other authoring write names. A CLI-minted token does not carry it
 
 Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an `approved` or `declined` plan;
 `INVALID_PROPOSAL` for a call that sends neither field.
+
+##### `record_plan_revision_reason` — record WHY the plan had to change
+
+The four tools above all CHANGE the plan. This one changes nothing about it: it
+records **why a change was asked** of a plan that is not yet approved, once per
+request, _before_ you correct anything.
+
+It exists because the planner-bug home is only as useful as its signal. Filing a
+planning bug on every re-plan makes a reviewer saying _"I'd rather have a side
+panel"_ produce the same record as a plan that forgot to check whether its
+repository still exists — and several hundred records later nobody can tell the
+planner's real blind spots from ordinary conversation.
+
+| Input            | Type   | Required | Notes                                                                                          |
+| ---------------- | ------ | -------- | ---------------------------------------------------------------------------------------------- |
+| `planId`         | string | yes      | The id `create_plan` returned.                                                                 |
+| `branch`         | enum   | yes      | `new_ask` · `different_solution` · `rule_gap` · `rule_not_followed`.                           |
+| `evidenceMd`     | string | yes      | Why you chose that branch. Required on EVERY branch; 4 000 characters.                         |
+| `planningBugKey` | string | no       | The bug you filed (`MOTIR-123`) — required on the two rule branches, refused on the other two. |
+
+**Four branches, and only two are about the planner.**
+
+| the reason is…                                                                                   | planning bug? |
+| ------------------------------------------------------------------------------------------------ | ------------- |
+| **`new_ask`** — they now want something the conversation that settled the plan never raised      | no            |
+| **`different_solution`** — the plan answered what was asked; they prefer another answer          | no            |
+| **`rule_gap`** — the plan missed a check and NO planning rule asks for it; its fix is a new rule | yes           |
+| **`rule_not_followed`** — a rule requires the check and this pass did not apply it               | yes           |
+
+**Record it on EVERY branch, including the two that file nothing.** That is the
+point rather than a completeness flourish: a silent "no bug" is indistinguishable
+from a forgotten one, while a recorded _different solution, no bug_ is a judgement
+somebody can check.
+
+**Choosing between the two rule branches — and ruling both out — is a SEARCH and
+not a judgement.** Search the planning rules and the lesson store for the check
+that was missed and quote what came back in `evidenceMd`. A gap asserted without
+that search is an unverified negative, which is why the evidence is required on
+every branch rather than only on the two that file.
+
+**The bug is filed FIRST and named here.** Create it with `create_work_item` into
+the project's `Planning bugs` folder, then pass its key: the classification points
+at the record it produced, and this tool files nothing itself. The branch and the
+key must agree — a rule branch with no key, and a no-bug branch carrying one, are
+both refused with `PLAN_REVISION_CLASSIFICATION_INVALID`, because each makes the
+row say something its caller did not.
+
+**It changes NOTHING about the plan** — not a proposal, not the heading, not the
+status. Correcting the plan is a separate act through the doors above.
+
+**The record is INTERNAL to Motir and no read returns it.** It is Motir's own
+judgement about its own planner, not something a tenant asked to see: it is
+excluded from every tenant-facing read at the query, the plan's timeline included,
+and there is no tool, route or DTO that reads it back. Reading it is left to the
+platform-operations epic.
+
+**Legal on `generating` AND `planned`; `approved` and `declined` are FROZEN** — the
+same boundary the correction doors draw, and for the same reason: a classification
+recorded against a decided plan would be a judgement about a change that can no
+longer happen.
+
+```jsonc
+// A reviewer: "this should have checked whether the repo is archived."
+// You search the corpus; nothing asks for that check.
+create_work_item({ projectKey: "MOTIR", kind: "bug", folderId: "<Planning bugs>",
+                   title: "Planning bug: no rule checks whether the target repo is archived" })
+// → MOTIR-6201
+record_plan_revision_reason({ planId, branch: "rule_gap", planningBugKey: "MOTIR-6201",
+  evidenceMd: "Searched the rule corpus and the lesson store for 'archived repository'; 0 hits." })
+// → { kind: "reason_classified", branch: "rule_gap", planningBugKey: "MOTIR-6201", at }
+```
+
+Requires **`ai:view_plan`** — the key every other plan-authoring write names, so a
+CLI-minted token cannot reach it either: classifying a revision is part of revising
+a plan, and a run that may not revise one should not annotate one.
+
+Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an `approved` or `declined` plan,
+naming the status; `PLAN_REVISION_CLASSIFICATION_INVALID` for a branch/bug pairing
+that contradicts itself, a key that names no work item or not a `bug`, evidence that
+is empty or past its bound, and a call naming the bug twice.
 
 ##### `validate_plan` — CHECK the plan BEFORE `final: true`
 
