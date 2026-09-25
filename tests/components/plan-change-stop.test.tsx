@@ -273,7 +273,7 @@ describe('THE COMPOSER STAYS LIVE while the run works (MOTIR-4274)', () => {
     // put a real `disabled` on all three, so a user could not type at all while
     // a run worked. Making the composer live is a behaviour change, not styling.
     const form = container.querySelector('form')!;
-    expect(form.querySelector('input[type="text"]')?.hasAttribute('disabled')).toBe(false);
+    expect(form.querySelector('textarea')?.hasAttribute('disabled')).toBe(false);
     expect(
       form.querySelector('[data-testid="planning-target-trigger"]')?.hasAttribute('disabled'),
     ).toBe(false);
@@ -292,7 +292,9 @@ describe('THE COMPOSER STAYS LIVE while the run works (MOTIR-4274)', () => {
       { phase: 'streaming', progress: { kind: 'searching' } },
       { onStop },
     );
-    const input = container.querySelector('form input[type="text"]') as HTMLInputElement;
+    // A `<textarea>` since MOTIR-6238 — the composer's field, queried through
+    // the form because this suite drives the rail rather than the composer.
+    const input = container.querySelector('form textarea') as HTMLTextAreaElement;
     fireEvent.change(input, { target: { value: 'Also drop the narration card.' } });
 
     // The end-to-end proof the composer is live mid-run: a user can TYPE and then
@@ -307,7 +309,7 @@ describe('THE COMPOSER STAYS LIVE while the run works (MOTIR-4274)', () => {
     // mid-decision would race it. `loading` too — there is no thread yet.
     for (const phase of ['deciding', 'loading'] as const) {
       const { container, unmount } = renderRail({ phase }, { onStop });
-      const input = container.querySelector('form input[type="text"]');
+      const input = container.querySelector('form textarea');
       expect(input?.hasAttribute('disabled'), phase).toBe(true);
       unmount();
     }

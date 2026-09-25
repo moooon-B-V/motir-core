@@ -1138,10 +1138,31 @@ function Bubble({
       >
         {isUser ? '·' : <BrandMark variant="mark" tone="inverted" size={13} />}
       </span>
+      {/* ⚠️ THE USER BUBBLE KEEPS ITS LINE BREAKS, and until MOTIR-6238 it did
+          not: `{turn.body}` is a bare text child here, with no `white-space`
+          rule, so every newline in a typed or pasted message collapsed to a
+          single space and a ten-line list arrived as one run-on sentence. Three
+          classes, and each answers something the others do not
+          (`design/ai-chat/planning-workspace--multiline-composer.mock.html`
+          sheets 9 and 10):
+
+            • `whitespace-pre-wrap` honours the newlines — and only that. A long
+              unbroken token (a URL, a key) then overflows, because pre-wrap
+              still refuses to break inside a word.
+            • `wrap-anywhere` breaks it. The same class the shipped rail already
+              uses for exactly this on the revision-held title
+              (`PlanReviewRail.tsx:308`) — the surface's own treatment, not a
+              new one.
+            • `min-w-0` is what lets the flex item shrink at all, so the break
+              happens inside the bubble instead of widening it past the rail.
+
+          ASSISTANT bubbles are untouched: they render Markdown through
+          `MarkdownView`, which blocks its own paragraphs. Only the user bubble
+          renders raw typed text. */}
       <div
         className={
           isUser
-            ? 'rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)'
+            ? 'min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm whitespace-pre-wrap text-(--el-accent-text) wrap-anywhere'
             : `rounded-(--radius-card) px-3 py-2 text-sm ${BUBBLE_FILL[tone]}`
         }
       >
