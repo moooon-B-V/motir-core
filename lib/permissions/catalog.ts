@@ -368,12 +368,12 @@ const PERMISSION_META: Record<
   'watcher:manage': { domain: 'watcher', enforcement: 'enforced' },
   'approval:decide_any': { domain: 'approval', enforcement: 'enforced' }, // MOTIR-5292
   'approval:view_any': { domain: 'approval', enforcement: 'enforced' }, // MOTIR-5305 · MOTIR-5301
-  // `planned` on arrival, the way `approval:view_any` was for one commit
-  // (MOTIR-5305 → MOTIR-5301): nothing consults either key yet. The plan reads
-  // (MOTIR-6330) and the run reads (MOTIR-6331) flip them to `enforced` in the
-  // change that first asserts them — an `enforced` key no gate consults is the
-  // grid lie this file's header warns about.
-  'plan:view_any': { domain: 'plan', enforcement: 'planned' }, // MOTIR-6328
+  // Named `planned` by MOTIR-6328, the way `approval:view_any` was for one commit
+  // (MOTIR-5305 → MOTIR-5301); each flips to `enforced` in the change that first
+  // asserts it — an `enforced` key no gate consults is the grid lie this file's
+  // header warns about. `plan:view_any` is consulted by the plan reads' served
+  // scope (`planSessionsService`, `plansService.getPlanForReader`, MOTIR-6330).
+  'plan:view_any': { domain: 'plan', enforcement: 'enforced' }, // MOTIR-6328 · MOTIR-6330
   'run:view_any': { domain: 'run', enforcement: 'planned' }, // MOTIR-6328
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },

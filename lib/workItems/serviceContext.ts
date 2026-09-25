@@ -15,6 +15,8 @@
 //                 RLS itself lands in 1.4.5; this contract is fixed now so
 //                 the service surface doesn't change when it does.)
 
+import type { PermissionKey } from '@/lib/permissions/catalog';
+
 export interface ServiceContext {
   userId: string;
   workspaceId: string;
@@ -30,6 +32,19 @@ export interface ServiceContext {
    * enumerate the workspace (the 404-not-403 contract; ADR Amendment 1 §A.6).
    */
   tokenProjectId?: string;
+  /**
+   * The acting API token's GRANT (MOTIR-6330), when the actor is a bearer token.
+   * Absent for every cookie-session caller.
+   *
+   * ⚠️ The dispatch seam already checks the ONE key an operation declares (its
+   * floor). This carries the rest of the grant for the few reads that consult a
+   * FINER, record-level key AFTER the door — the rooms' view-any keys
+   * (`RECORD_VIEW_PERMISSIONS`, `lib/tokens/grant.ts`). Without it such a read
+   * decides from the owner's ROLE alone, so a token deliberately minted without
+   * the key would still see every record: the narrowing would not narrow.
+   * Read it through `projectAccessService.holdsRecordView`, never directly.
+   */
+  tokenGrant?: readonly PermissionKey[];
   /**
    * Automation provenance (Story 6.6 · Subtask 6.6.2). When a write is
    * performed by the automation engine running a rule's action, this carries

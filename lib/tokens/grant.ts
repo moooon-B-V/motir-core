@@ -94,6 +94,25 @@ export const DESIGN_PUBLISH_PERMISSION: PermissionKey = 'work_item:edit';
 export const V1_ONLY_PERMISSIONS: readonly PermissionKey[] = ['ai:decide_plan'];
 
 /**
+ * The RECORD-VIEW keys (Story MOTIR-6179) — the FOURTH derivation source for
+ * {@link GRANTABLE_PERMISSIONS}, and the one kind of key a token-reachable
+ * operation consults AFTER its dispatch door rather than at it.
+ *
+ * `get_plan`, `get_plan_status`, `validate_plan` and the v1 plan reads declare
+ * `project:browse` — the FLOOR every reader of a plan needs, because a reader
+ * always sees their own plans. Whether they may see ANYONE's plan is decided per
+ * record in the service (`plansService.getPlanForReader`), against the room's
+ * view key — and, for a bearer token, against the token's GRANT as well
+ * (`projectAccessService.holdsRecordView`, fed by `ServiceContext.tokenGrant`).
+ * So the key genuinely narrows a token, and a picker switch for it controls
+ * something real: grantable by the same rule as every other key here.
+ *
+ * `plan:view_any` (MOTIR-6330). `run:view_any` joins when the run reads assert it
+ * (MOTIR-6331).
+ */
+export const RECORD_VIEW_PERMISSIONS: readonly PermissionKey[] = ['plan:view_any'];
+
+/**
  * The permissions a token may be granted — DERIVED, never hand-listed.
  *
  * A permission is grantable **because a token-reachable operation asserts it**
@@ -110,6 +129,7 @@ export const V1_ONLY_PERMISSIONS: readonly PermissionKey[] = ['ai:decide_plan'];
 export const GRANTABLE_PERMISSIONS: readonly PermissionKey[] = sortByCatalogOrder([
   ...Object.values(TOOL_PERMISSIONS),
   ...V1_ONLY_PERMISSIONS,
+  ...RECORD_VIEW_PERMISSIONS,
   ACCEPTANCE_PUBLISH_PERMISSION,
   DESIGN_PUBLISH_PERMISSION,
 ]);

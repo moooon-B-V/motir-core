@@ -61,7 +61,7 @@ describe('the catalog carries `ai:decide_plan` as an enforced `ai` key', () => {
     // MOTIR-6328 parks the Plans and Runs rooms' view keys here, the way MOTIR-5305
     // parked `approval:view_any`: MOTIR-6330 wires `plan:view_any` and MOTIR-6331
     // wires `run:view_any`, each emptying its own entry in the same change.
-    expect([...PLANNED_PERMISSIONS]).toEqual(['plan:view_any', 'run:view_any']);
+    expect([...PLANNED_PERMISSIONS]).toEqual(['run:view_any']);
   });
 
   it('renders in the `ai` domain group, beside the key it was split from', () => {

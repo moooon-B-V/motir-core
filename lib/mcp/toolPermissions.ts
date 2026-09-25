@@ -107,6 +107,15 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `project:browse` after gaining their optional `planId`: the projected reach
   // is exactly the reach of the two browse-gated calls it replaces.
   validate_plan: 'project:browse',
+  // ⚠️ THE PLAN READS' ROW IS A FLOOR, NOT THE WHOLE ANSWER (Story MOTIR-6179 ·
+  // MOTIR-6330). `get_plan`, `get_plan_status` and `validate_plan` stay
+  // `project:browse` here, because every reader may read their OWN plans. Whether
+  // they may read ANYONE's is decided per record in the service —
+  // `plansService.getPlanForReader`, against `plan:view_any` AND the token's
+  // grant (`holdsRecordView`) — and answered not-found, never forbidden. That is
+  // why `plan:view_any` is grantable through `RECORD_VIEW_PERMISSIONS`
+  // (`lib/tokens/grant.ts`) rather than through a row here.
+  //
   // The two plan READS resolve through `plansService.getPlan` /
   // `findPlanIdForJob`, both `assertCanBrowse`. They are NOT `ai:view_plan`:
   // that key gates the plan AUTHOR writes (`addProposals` / `markPlanned` /

@@ -240,9 +240,9 @@ describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
   // the server's MCP surface, both of which are untouched.
 
   it('every scope in the grant is a real scope, and the destructive ones are withheld', () => {
-    // MOTIR-6329 — `plan:view_any` / `run:view_any` become grantable when their
-    // reads' tool rows land (MOTIR-6330 / MOTIR-6331), which remove this filter.
-    const awaitingRead = ['plan:view_any', 'run:view_any'];
+    // MOTIR-6329 — `run:view_any` becomes grantable when the run reads land
+    // (MOTIR-6331), which removes this filter; `plan:view_any` did in MOTIR-6330.
+    const awaitingRead = ['run:view_any'];
     for (const key of CLI_TOKEN_GRANT.filter((k) => !awaitingRead.includes(k))) {
       expect(isGrantable(key), key).toBe(true);
     }

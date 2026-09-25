@@ -69,6 +69,23 @@ export interface AccessActorContext {
   /** See {@link ServiceContext.tokenProjectId} — the acting token's project
    *  binding, enforced in {@link resolveInputs}. */
   tokenProjectId?: string;
+  /** See {@link ServiceContext.tokenGrant} — read by {@link holdsRecordView}. */
+  tokenGrant?: readonly PermissionKey[];
+}
+
+/**
+ * Whether an actor holds a RECORD-VIEW key (MOTIR-6330) — the role's `held` set
+ * AND, for a bearer token, the token's grant. `grant ∩ role` for the one class of
+ * key that is consulted after the dispatch door rather than at it
+ * (`RECORD_VIEW_PERMISSIONS`, `lib/tokens/grant.ts`).
+ */
+export function holdsRecordView(
+  held: ReadonlySet<PermissionKey>,
+  ctx: AccessActorContext,
+  key: PermissionKey,
+): boolean {
+  if (!held.has(key)) return false;
+  return ctx.tokenGrant === undefined || ctx.tokenGrant.includes(key);
 }
 
 /**

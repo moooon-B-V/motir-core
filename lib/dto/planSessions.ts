@@ -44,8 +44,24 @@ export interface PlanSessionRowDto {
   planCount: number;
 }
 
+/**
+ * WHICH sessions a Plans-room read covers (Story MOTIR-6179 · MOTIR-6330).
+ *
+ *   * `project` — every session of the project; served only to a reader who
+ *     holds `plan:view_any`.
+ *   * `mine` — the sessions the reader started, and those holding a plan they
+ *     asked for, decided, or have routed to them; served to anyone who browses.
+ *
+ * A caller only ASKS for one. The service resolves what it SERVES and says so on
+ * the DTO, the `approvalGatesService.listRecords` shape: a `project` request from
+ * a reader without the key is served `mine`, never refused.
+ */
+export type PlanSessionView = 'mine' | 'project';
+
 export interface PlanSessionListPageDto {
   sessions: PlanSessionRowDto[];
   /** Opaque; null at the end of the list. */
   nextCursor: string | null;
+  /** The scope the service actually SERVED — see {@link PlanSessionView}. */
+  scope: PlanSessionView;
 }

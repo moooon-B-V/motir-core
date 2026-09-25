@@ -407,7 +407,7 @@ describe('the story leaves nothing behind', () => {
     // MOTIR-6328 parks the Plans and Runs rooms' view keys here, the way MOTIR-5305
     // parked `approval:view_any`: MOTIR-6330 wires `plan:view_any` and MOTIR-6331
     // wires `run:view_any`, each emptying its own entry in the same change.
-    expect(stillPlanned).toEqual(['plan:view_any', 'run:view_any']);
+    expect(stillPlanned).toEqual(['run:view_any']);
   });
 });
 

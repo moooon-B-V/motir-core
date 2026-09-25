@@ -605,7 +605,10 @@ export const planReviewService = {
   },
 
   async getPlanReview(planId: string, ctx: ServiceContext): Promise<PlanReviewDto> {
-    const plan = await plansService.getPlan(planId, ctx);
+    // A READ for an actor (the plan page, `GET /api/plans/[id]`, `get_plan`'s
+    // placements), so it admits by the Plans room's scope: a plan outside the
+    // reader's view is the same not-found as an unknown id (MOTIR-6330).
+    const plan = await plansService.getPlanForReader(planId, ctx);
     const staleness = await planStalenessService.computePlanStaleness(planId, ctx);
     // The plan's CONTENT trail (MOTIR-3536) — ONE query for the whole history,
     // walking the `(plan_id, changed_at)` index. It rides the plan read rather

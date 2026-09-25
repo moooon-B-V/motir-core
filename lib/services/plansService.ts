@@ -58,7 +58,8 @@ import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 
@@ -3874,6 +3875,52 @@ async function attachPlanSessionWithin(
   return created.id;
 }
 
+/**
+ * The record-level admit `getPlanForReader` applies (MOTIR-6330) — the SAME
+ * `mine` rule the session list filters on (`planChangeSessionRepository`'s
+ * `mineFilter`), read for one plan. A plan that belongs to a session is admitted
+ * exactly when that session is in the reader's Mine view, so the list and a
+ * pasted link cannot disagree.
+ */
+async function readerMaySeePlan(
+  plan: {
+    id: string;
+    projectId: string;
+    sessionId: string | null;
+    createdById: string | null;
+    decidedById: string | null;
+  },
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const held = await projectAccessService.getPermissions(plan.projectId, ctx, tx);
+  if (holdsRecordView(held, ctx, 'plan:view_any')) return true;
+  const routedPlanIds = await approvalGateRepository.findAwaitingRoutedPlanIds(
+    { projectIds: [plan.projectId], userId: ctx.userId },
+    tx,
+  );
+  if (plan.sessionId !== null) {
+    const rows = await planChangeSessionRepository.listPageByProject(
+      {
+        projectId: plan.projectId,
+        workspaceId: ctx.workspaceId,
+        limit: 1,
+        after: null,
+        state: null,
+        sessionId: plan.sessionId,
+        mine: { userId: ctx.userId, routedPlanIds },
+      },
+      tx,
+    );
+    return rows.length > 0;
+  }
+  return (
+    plan.createdById === ctx.userId ||
+    plan.decidedById === ctx.userId ||
+    routedPlanIds.includes(plan.id)
+  );
+}
+
 export const plansService = {
   /**
    * Open a `generating` Plan — the producer (7.4 generation / 7.11 re-planning)
@@ -4811,6 +4858,39 @@ export const plansService = {
     );
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertCanBrowse(plan.projectId, ctx);
+    const items = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planId, tx),
+    );
+    return toPlanWithItemsDto(plan, items);
+  },
+
+  /**
+   * ONE plan, for a READER — `getPlan` plus the Plans room's record-level admit
+   * (Story MOTIR-6179 · MOTIR-6330).
+   *
+   * Browse is the floor, as in `getPlan`. On top of it the plan is admitted when
+   * the reader holds `plan:view_any` (on a bearer token: in its grant too —
+   * `holdsRecordView`), or when it is in the reader's `mine` set — its session is
+   * one the room's Mine view lists (`planSessionsService`), or, for a plan with no
+   * session, the reader asked for it, decided it, or has it routed to them.
+   * Otherwise it throws the SAME `PlanNotFoundError` an unknown id throws, so the
+   * answer confirms nothing about a plan the reader may not see.
+   *
+   * ⚠️ ACTOR-FACING CALLERS ONLY — a page, a route, an MCP read. `getPlan` stays
+   * browse-only for the SYSTEM callers (the return of an approve / decline /
+   * generation / edit that already passed its own door), which must not start
+   * 404ing a plan the actor just acted on. The caller list is in MOTIR-6330's PR.
+   */
+  async getPlanForReader(planId: string, ctx: ServiceContext): Promise<PlanWithItemsDto> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertCanBrowse(plan.projectId, ctx);
+    const admitted = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      readerMaySeePlan(plan, ctx, tx),
+    );
+    if (!admitted) throw new PlanNotFoundError(planId);
     const items = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planItemRepository.findByPlan(planId, tx),
     );

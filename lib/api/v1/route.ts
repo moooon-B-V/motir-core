@@ -212,6 +212,9 @@ export function withV1Route<P = Record<string, never>>(
           // names none, which is every device credential — so an unbound token
           // behaves exactly as it did before this card.
           ...(auth.projectId ? { tokenProjectId: auth.projectId } : {}),
+          // The token's grant, for the record-view reads that consult a finer
+          // key after this door (MOTIR-6330, `holdsRecordView`).
+          tokenGrant: auth.grant,
         },
         requestId,
         presentedToken,

@@ -37,7 +37,7 @@ export async function GET(req: Request): Promise<Response> {
   const id = readSessionId(params.get('id'));
   try {
     const result = id
-      ? await planChangeSessionsService.getById(ctx, id)
+      ? await planChangeSessionsService.getByIdForReader(ctx, id)
       : await planChangeSessionsService.findResumableWithEarlier(
           ctx,
           params.get('scope') ?? PROJECT_SCOPE_KEY,

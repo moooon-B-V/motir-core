@@ -6,6 +6,7 @@ import {
   IRREVERSIBLE_PERMISSIONS,
   UNGRANTABLE_PERMISSIONS,
   V1_ONLY_PERMISSIONS,
+  RECORD_VIEW_PERMISSIONS,
   expandStoredGrant,
   grantAllows,
   grantsIrreversible,
@@ -31,6 +32,9 @@ describe('GRANTABLE_PERMISSIONS is DERIVED, in both directions', () => {
     const asserted = new Set<PermissionKey>([
       ...Object.values(TOOL_PERMISSIONS),
       ...V1_ONLY_PERMISSIONS,
+      // MOTIR-6330 — the record-view keys a token-reachable read consults after
+      // its door, honoured against the grant in the service (`holdsRecordView`).
+      ...RECORD_VIEW_PERMISSIONS,
       ACCEPTANCE_PUBLISH_PERMISSION,
     ]);
     for (const key of GRANTABLE_PERMISSIONS) {
@@ -315,11 +319,18 @@ describe('expandStoredGrant — reading a row written before this story', () => 
     // — later than every one of the three above. Conferring it on a stored
     // `work_items:write` row would let a token issued years ago for work-item
     // edits start recording occurrences against a project's lesson corpus.
+    //
+    // ⚠️ AND `plan:view_any` (MOTIR-6330) is not an exclusion of the same kind:
+    // a legacy row that BROWSES is read forward into it — but only given the
+    // token's provenance (`expandStoredGrant`'s second argument, MOTIR-6329),
+    // which this provenance-free call does not pass. The forward read has its own
+    // describe block below.
     const POSTDATE_THE_SCOPES: PermissionKey[] = [
       'ai:decide_plan',
       'lesson:manage',
       'lesson:view',
       'lesson:reinforce',
+      'plan:view_any',
     ];
     expect([...grant].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),

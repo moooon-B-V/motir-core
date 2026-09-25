@@ -17,6 +17,7 @@ import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
 import { TOOL_PERMISSIONS, CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import {
   GRANTABLE_PERMISSIONS,
+  RECORD_VIEW_PERMISSIONS,
   ROOM_VIEW_FORWARD_KEYS,
   ROOM_VIEW_KEYS_CUTOVER,
   isGrantable,
@@ -260,6 +261,9 @@ describe('GUARDS — the properties no single card owns', () => {
       ...Object.values(TOOL_PERMISSIONS),
       ...V1_OPERATIONS.map((o) => o.permission),
       'work_item:edit', // the acceptance publish
+      // The record-view keys the plan / run reads consult after their door,
+      // against the token's grant (MOTIR-6330 · `holdsRecordView`).
+      ...RECORD_VIEW_PERMISSIONS,
     ]);
     for (const key of GRANTABLE_PERMISSIONS) expect(asserted.has(key)).toBe(true);
     for (const key of asserted) expect(GRANTABLE_PERMISSIONS).toContain(key);
@@ -330,9 +334,9 @@ describe('GUARDS — the properties no single card owns', () => {
   });
 
   it('the CLI device grant is grantable and withholds the irreversible key', () => {
-    // MOTIR-6329 — `plan:view_any` / `run:view_any` become grantable when their
-    // reads' tool rows land (MOTIR-6330 / MOTIR-6331), which remove this filter.
-    const awaitingRead = ['plan:view_any', 'run:view_any'];
+    // MOTIR-6329 — `run:view_any` becomes grantable when the run reads land
+    // (MOTIR-6331), which removes this filter; `plan:view_any` did in MOTIR-6330.
+    const awaitingRead = ['run:view_any'];
     for (const key of CLI_TOKEN_GRANT.filter((k) => !awaitingRead.includes(k))) {
       expect(GRANTABLE_PERMISSIONS).toContain(key);
     }
