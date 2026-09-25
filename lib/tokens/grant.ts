@@ -213,6 +213,53 @@ function expandStoredValue(value: string): readonly PermissionKey[] {
   return [];
 }
 
+/**
+ * The two keys a STORED grant holding `project:browse` is read forward into —
+ * the Plans and Runs rooms' view keys (Story MOTIR-6179 · MOTIR-6329).
+ *
+ * Every token that can browse today opens `/plans` and `/runs`, because both
+ * reads asserted browse and nothing further. Once the reads assert these keys
+ * (MOTIR-6330 / MOTIR-6331), a stored grant that predates them would silently
+ * lose two rooms — so it is read forward, exactly as a legacy scope string is.
+ */
+export const ROOM_VIEW_FORWARD_KEYS: readonly PermissionKey[] = ['plan:view_any', 'run:view_any'];
+
+/**
+ * THE CUTOVER MARKER for {@link ROOM_VIEW_FORWARD_KEYS} (MOTIR-6329;
+ * `docs/decisions/token-permissions.md` AMENDMENT 2).
+ *
+ * A CHOSEN grant (a token bound to a project, its keys picked in the token
+ * picker) created BEFORE this instant is read forward; one created at or after
+ * it is taken exactly as stored — so a person who deliberately leaves a room's
+ * key out of a NEW token keeps it out. Before this story's deploy the picker
+ * could not offer either key (neither was grantable), so no grant stored before
+ * it can have withheld one on purpose.
+ *
+ * ⚠️ IT MUST NOT PRECEDE THE DEPLOY THAT MAKES THE KEYS GRANTABLE. A chosen
+ * grant minted between the marker and that deploy lacks the keys and is not read
+ * forward, so it loses the rooms. The marker is set after the story's expected
+ * merge; if the merge slips past it, move it — the PR body says so.
+ *
+ * A FIXED grant (no project: the device credential, `CLI_TOKEN_GRANT`) is read
+ * forward whatever its date — nobody chose it, so there is no narrowing to honour.
+ */
+export const ROOM_VIEW_KEYS_CUTOVER = new Date('2026-10-01T00:00:00.000Z');
+
+/** Where a stored grant came from — what the read-time forward mapping needs to know. */
+export interface StoredGrantProvenance {
+  /** When the token was minted (`api_token.created_at`). */
+  createdAt: Date;
+  /** The project it is bound to; `null` is the FIXED device-credential shape. */
+  projectId: string | null;
+}
+
+/** Whether a stored grant is read forward into {@link ROOM_VIEW_FORWARD_KEYS}. */
+function readsRoomViewKeysForward(provenance: StoredGrantProvenance | undefined): boolean {
+  if (provenance === undefined) return false;
+  if (provenance.projectId === null) return true;
+  return provenance.createdAt.getTime() < ROOM_VIEW_KEYS_CUTOVER.getTime();
+}
+
 /** One unrecognised stored value, as {@link expandStoredGrant} reports it. */
 export interface UnrecognisedGrantValue {
   value: string;
@@ -227,19 +274,39 @@ export interface UnrecognisedGrantValue {
  * interpret so the caller can log it. Nothing is rewritten: expansion happens on
  * READ, and no migration ever touches a live credential's row.
  */
-export function expandStoredGrant(stored: readonly string[]): {
+export function expandStoredGrant(
+  stored: readonly string[],
+  provenance?: StoredGrantProvenance,
+): {
   grant: PermissionKey[];
   unrecognised: UnrecognisedGrantValue[];
 } {
   const grant = new Set<PermissionKey>();
   const unrecognised: UnrecognisedGrantValue[] = [];
   for (const value of stored) {
+    // The room view keys pass through as stored even while no token-reachable
+    // operation asserts them yet: `CLI_TOKEN_GRANT` carries them (MOTIR-6329),
+    // and a key the product itself wrote is not an unrecognised value.
+    if ((ROOM_VIEW_FORWARD_KEYS as readonly string[]).includes(value)) {
+      grant.add(value as PermissionKey);
+      continue;
+    }
     const expanded = expandStoredValue(value);
     if (expanded.length === 0) {
       unrecognised.push({ value });
       continue;
     }
     for (const key of expanded) grant.add(key);
+  }
+  // The ROOM VIEW KEYS, read forward (MOTIR-6329): a grant stored before the
+  // cutover — or any fixed device grant — that could BROWSE also holds the Plans
+  // and Runs rooms' view keys, so the rooms asserting them (MOTIR-6330 /
+  // MOTIR-6331) take nothing from a token that reached them on browse. Applied
+  // AFTER the legacy expansion, so a legacy `read` scope (which maps to browse)
+  // is carried too. On READ, like everything else here — no credential row is
+  // rewritten.
+  if (grant.has('project:browse') && readsRoomViewKeysForward(provenance)) {
+    for (const key of ROOM_VIEW_FORWARD_KEYS) grant.add(key);
   }
   // The IMPLICATIONS, applied to the whole grant rather than per stored value
   // (MOTIR-3629) — so a row carrying `work_item:delete` confers

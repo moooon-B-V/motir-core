@@ -30,6 +30,9 @@ export function toApiTokenDto(row: ApiTokenWithScope): ApiTokenDto {
     project: row.project ? { id: row.project.id, name: row.project.name } : null,
     workspace: { id: row.workspace.id, name: row.workspace.name },
     organization: { id: row.workspace.organization.id, name: row.workspace.organization.name },
-    permissions: expandStoredGrant(row.scopes).grant,
+    permissions: expandStoredGrant(row.scopes, {
+      createdAt: row.createdAt,
+      projectId: row.projectId,
+    }).grant,
   };
 }

@@ -15,7 +15,12 @@ import { grantFromExtra, contextFromExtra } from '@/lib/mcp/context';
 import { verifyMcpToken } from '@/lib/mcp/auth';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
 import { TOOL_PERMISSIONS, CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
-import { GRANTABLE_PERMISSIONS, isGrantable } from '@/lib/tokens/grant';
+import {
+  GRANTABLE_PERMISSIONS,
+  ROOM_VIEW_FORWARD_KEYS,
+  ROOM_VIEW_KEYS_CUTOVER,
+  isGrantable,
+} from '@/lib/tokens/grant';
 import { LEGACY_SCOPE_PERMISSIONS, LEGACY_TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import { PERMISSIONS, permissionSlug } from '@/lib/permissions/catalog';
 import { V1_OPERATIONS } from '@/lib/api/v1/openapi/registry';
@@ -117,7 +122,15 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
     });
 
     const verified = await apiTokensService.verify(token);
-    const expected = [...new Set(LEGACY_TOKEN_SCOPES.flatMap((s) => LEGACY_SCOPE_PERMISSIONS[s]))];
+    // MOTIR-6329 (`token-permissions.md` AMENDMENT 2): a FIXED grant that browses
+    // is read forward into the Plans and Runs rooms' view keys, so it keeps the two
+    // rooms once their reads assert them — the promise, carried, not broken.
+    const expected = [
+      ...new Set([
+        ...LEGACY_TOKEN_SCOPES.flatMap((s) => LEGACY_SCOPE_PERMISSIONS[s]),
+        ...ROOM_VIEW_FORWARD_KEYS,
+      ]),
+    ];
     expect([...verified.grant].sort()).toEqual([...expected].sort());
 
     // …and the gate agrees, tool by tool, rather than in aggregate.
@@ -177,7 +190,9 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
       data: { scopes: ['read', 'utter-nonsense'] },
     });
     const verified = await apiTokensService.verify(token);
-    expect(verified.grant).toEqual(['project:browse']);
+    // `read` → browse, and browse reads forward into the two room view keys
+    // (MOTIR-6329); the nonsense value still contributes NOTHING.
+    expect(verified.grant).toEqual(['project:browse', 'plan:view_any', 'run:view_any']);
   });
 });
 
@@ -186,10 +201,16 @@ describe('SEAM 3 — the DTO read BACK through its consumer', () => {
     // A renamed field passes the service test and breaks the surface; reading
     // back through `listForUser` is what catches it.
     const fx = await makeWorkItemFixture();
-    await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+    const { dto } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'dto',
       permissions: ['project:browse', 'work_item:edit'],
       projectId: fx.projectId,
+    });
+    // Minted AT the room-view cutover (MOTIR-6329), so the chosen grant is read
+    // exactly as stored — independent of the date the suite happens to run on.
+    await adminDb.apiToken.update({
+      where: { id: dto.id },
+      data: { createdAt: ROOM_VIEW_KEYS_CUTOVER },
     });
     const [row] = await apiTokensService.listForUser(fx.ownerId);
     expect(row!.permissions).toEqual(['project:browse', 'work_item:edit']);
@@ -309,7 +330,12 @@ describe('GUARDS — the properties no single card owns', () => {
   });
 
   it('the CLI device grant is grantable and withholds the irreversible key', () => {
-    for (const key of CLI_TOKEN_GRANT) expect(GRANTABLE_PERMISSIONS).toContain(key);
+    // MOTIR-6329 — `plan:view_any` / `run:view_any` become grantable when their
+    // reads' tool rows land (MOTIR-6330 / MOTIR-6331), which remove this filter.
+    const awaitingRead = ['plan:view_any', 'run:view_any'];
+    for (const key of CLI_TOKEN_GRANT.filter((k) => !awaitingRead.includes(k))) {
+      expect(GRANTABLE_PERMISSIONS).toContain(key);
+    }
     expect(CLI_TOKEN_GRANT).not.toContain('work_item:delete');
   });
 

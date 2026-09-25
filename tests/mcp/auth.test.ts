@@ -7,7 +7,7 @@ import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
-import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
+import { DEFAULT_TOKEN_GRANT, ROOM_VIEW_KEYS_CUTOVER } from '@/lib/tokens/grant';
 
 // MCP transport-level auth gate (Subtask 7.8.4) over real Postgres. `verifyMcpToken`
 // is the function `withMcpAuth` calls per request; returning `undefined` is what
@@ -70,10 +70,16 @@ describe('verifyMcpToken', () => {
   it('carries the token’s resolved GRANT on AuthInfo.extra (MOTIR-2576)', async () => {
     const fx = await makeWorkItemFixture();
     const permissions = grantForLegacyScopes(['read', 'work_items:write']);
-    const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+    const { token, dto } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'scoped',
       permissions,
       projectId: fx.projectId,
+    });
+    // Minted AT the room-view cutover (MOTIR-6329), so the chosen grant reads
+    // exactly as stored whatever day the suite runs on.
+    await adminDb.apiToken.update({
+      where: { id: dto.id },
+      data: { createdAt: ROOM_VIEW_KEYS_CUTOVER },
     });
 
     const info = await verifyMcpToken(reqWithBearer(), token);
@@ -97,7 +103,11 @@ describe('verifyMcpToken', () => {
 
     const info = await verifyMcpToken(reqWithBearer(), token);
     const grant = (info?.extra as { grant?: string[] }).grant ?? [];
-    expect([...grant].sort()).toEqual(['project:browse', 'sprint:manage'].sort());
+    // …and a FIXED grant that browses reads forward into the rooms' view keys
+    // (MOTIR-6329, `token-permissions.md` AMENDMENT 2).
+    expect([...grant].sort()).toEqual(
+      ['project:browse', 'sprint:manage', 'plan:view_any', 'run:view_any'].sort(),
+    );
     expect(grant).not.toContain('read');
   });
 

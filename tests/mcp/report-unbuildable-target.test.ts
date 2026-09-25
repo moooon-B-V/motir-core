@@ -200,6 +200,10 @@ describe('registered, permissioned, declared (criteria 1, 2, 7)', () => {
         'lesson:reinforce',
         'work_item:edit',
         'comment:add',
+        // MOTIR-6329 — the Plans and Runs rooms' view keys; the argument is at
+        // the constant (a stated widening, not an unrelated one).
+        'plan:view_any',
+        'run:view_any',
         'ai:plan',
       ]),
     );

@@ -374,7 +374,10 @@ export const apiTokensService = {
       if (lastUsed === undefined || now.getTime() - lastUsed >= LAST_USED_THROTTLE_MS) {
         await apiTokenRepository.touchLastUsed(row.id, now, tx);
       }
-      const { grant, unrecognised } = expandStoredGrant(row.scopes);
+      const { grant, unrecognised } = expandStoredGrant(row.scopes, {
+        createdAt: row.createdAt,
+        projectId: row.projectId,
+      });
       if (unrecognised.length > 0) {
         console.warn(
           `[apiTokens] token ${row.id} carries ${unrecognised.length} unrecognised grant value(s); ignoring them: ${unrecognised.map((u) => JSON.stringify(u.value)).join(', ')}`,

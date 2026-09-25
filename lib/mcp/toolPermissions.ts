@@ -504,5 +504,13 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
   'lesson:reinforce',
   'work_item:edit',
   'comment:add',
+  // ⚠️ `plan:view_any` · `run:view_any` — the Plans and Runs rooms' VIEW keys
+  // (Story MOTIR-6179 · MOTIR-6329), in catalog order after `comment:add`. Not a
+  // widening: the CLI already reads plans (`get_plan`, the run-found report) and
+  // its own runs on `project:browse`, and those reads now assert the rooms' keys
+  // (MOTIR-6330 / MOTIR-6331). Without them a device-minted token would start
+  // getting not-found on reads it performs today.
+  'plan:view_any',
+  'run:view_any',
   'ai:plan',
 ];

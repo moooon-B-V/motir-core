@@ -676,6 +676,39 @@ The two candidate resolutions, neither chosen here:
 The device flow is unaffected either way: a fixed grant binds to no project
 (A.3), so `motir login` works in a workspace with nothing in it.
 
+## AMENDMENT 2 — the room view keys are read FORWARD, never written (MOTIR-6329, 2026-09-25)
+
+Story MOTIR-6179 splits two VIEW keys out of `project:browse`'s reach —
+`plan:view_any` (the Plans room) and `run:view_any` (the Runs room) — and the
+rooms' reads start asserting them (MOTIR-6330 / MOTIR-6331). Every token that can
+browse opens both rooms today, so without a carry each would lose them the day the
+reads land. The carry follows §5's rule for a stored value, not a migration:
+
+- **`expandStoredGrant` reads a stored grant holding `project:browse` forward into
+  both keys** (`ROOM_VIEW_FORWARD_KEYS`, `lib/tokens/grant.ts`). On READ, beside the
+  legacy-scope expansion; **no migration touches `api_token`**, for the reason the
+  column's own comment gives — nothing rewrites a live credential's row.
+- **The cutover marker is the token's `created_at` against
+  `ROOM_VIEW_KEYS_CUTOVER`** (2026-10-01T00:00Z). A CHOSEN grant (project-bound)
+  created before it is read forward; one created at or after it is taken as stored,
+  so a person who deliberately leaves a room's key out of a new token keeps it out.
+  Before this story deploys, the picker cannot offer either key (neither is
+  grantable), so no earlier grant can have withheld one on purpose.
+  **The marker must not precede that deploy**: a chosen grant minted in between
+  lacks the keys and would lose the rooms. If the story's merge slips past the
+  marker, the marker moves with it.
+- **A FIXED grant (the device credential, `project_id` NULL) is read forward
+  whatever its date** — nobody chose it, so there is no narrowing to honour — and
+  `CLI_TOKEN_GRANT` itself now carries both keys, in catalog order, for the reads
+  the CLI already performs.
+- **No `PERMISSION_IMPLICATIONS` edge `project:browse ⇒ *:view_any`.** An
+  implication would make the view keys impossible to withhold anywhere, and the
+  DECISION card (MOTIR-6165 Q2) says a custom role and a token must be able to
+  close a room.
+- **Custom project roles are configuration, not credentials**, so they ARE
+  migrated: `20260925170000_room_view_keys_for_custom_roles` appends both keys to
+  every `project_role_definition` row holding `project:browse`, idempotently.
+
 ## Consequences
 
 - The picker offers six switches today and grows when an operation's permission

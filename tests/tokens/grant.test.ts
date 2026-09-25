@@ -10,6 +10,8 @@ import {
   grantAllows,
   grantsIrreversible,
   isGrantable,
+  ROOM_VIEW_FORWARD_KEYS,
+  ROOM_VIEW_KEYS_CUTOVER,
 } from '@/lib/tokens/grant';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { PERMISSIONS, isPermissionKey, type PermissionKey } from '@/lib/permissions/catalog';
@@ -325,5 +327,71 @@ describe('expandStoredGrant — reading a row written before this story', () => 
     // Said as its own assertion so an exclusion cannot be read as an oversight
     // in the line above: no legacy scope confers either key, by construction.
     for (const key of POSTDATE_THE_SCOPES) expect(grant).not.toContain(key);
+  });
+});
+
+describe('expandStoredGrant — the room view keys read FORWARD (MOTIR-6329)', () => {
+  const BEFORE = new Date(ROOM_VIEW_KEYS_CUTOVER.getTime() - 1);
+  const AFTER = ROOM_VIEW_KEYS_CUTOVER;
+
+  it('a CHOSEN grant stored before the cutover that browses gains both keys', () => {
+    const { grant } = expandStoredGrant(['project:browse', 'work_item:edit'], {
+      createdAt: BEFORE,
+      projectId: 'p1',
+    });
+    expect(grant).toContain('plan:view_any');
+    expect(grant).toContain('run:view_any');
+  });
+
+  it('a CHOSEN grant minted at or after the cutover without them stays without — a deliberate narrowing holds', () => {
+    const { grant } = expandStoredGrant(['project:browse', 'work_item:edit'], {
+      createdAt: AFTER,
+      projectId: 'p1',
+    });
+    expect(grant).not.toContain('plan:view_any');
+    expect(grant).not.toContain('run:view_any');
+  });
+
+  it('a post-cutover grant that CHOSE a key keeps exactly what it chose', () => {
+    const { grant, unrecognised } = expandStoredGrant(['project:browse', 'plan:view_any'], {
+      createdAt: AFTER,
+      projectId: 'p1',
+    });
+    expect(unrecognised).toEqual([]);
+    expect(grant).toContain('plan:view_any');
+    expect(grant).not.toContain('run:view_any');
+  });
+
+  it('a FIXED device grant (no project) is read forward whatever its date', () => {
+    const { grant } = expandStoredGrant(['project:browse'], { createdAt: AFTER, projectId: null });
+    expect(grant).toContain('plan:view_any');
+    expect(grant).toContain('run:view_any');
+  });
+
+  it('a grant that cannot browse gains nothing', () => {
+    const { grant } = expandStoredGrant(['comment:add'], { createdAt: BEFORE, projectId: 'p1' });
+    expect(grant).toEqual(['comment:add']);
+  });
+
+  it('a legacy `read` scope maps to browse and is carried forward with it', () => {
+    const { grant } = expandStoredGrant(['read'], { createdAt: BEFORE, projectId: 'p1' });
+    expect(grant).toContain('project:browse');
+    expect(grant).toContain('plan:view_any');
+    expect(grant).toContain('run:view_any');
+  });
+
+  it('legacy scopes map EXACTLY as before when no provenance is given', () => {
+    expect(expandStoredGrant(['read']).grant).toEqual(expandStoredGrant(['read']).grant);
+    expect(expandStoredGrant(['read']).grant).not.toContain('plan:view_any');
+  });
+
+  it('the forward keys are ONLY the Plans and Runs view keys — never approval:view_any', () => {
+    expect([...ROOM_VIEW_FORWARD_KEYS]).toEqual(['plan:view_any', 'run:view_any']);
+  });
+
+  it('DEFAULT_TOKEN_GRANT carries each view key exactly when it is grantable — derived, never hand-added', () => {
+    for (const key of ROOM_VIEW_FORWARD_KEYS) {
+      expect(DEFAULT_TOKEN_GRANT.includes(key), key).toBe(GRANTABLE_PERMISSIONS.includes(key));
+    }
   });
 });
