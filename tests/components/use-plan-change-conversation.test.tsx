@@ -26,6 +26,8 @@ const {
   rerunAsk,
   settleAsk,
   streamAsk,
+  getNamed,
+  readPendingSpy,
 } = vi.hoisted(() => ({
   open: vi.fn(),
   append: vi.fn(),
@@ -42,6 +44,8 @@ const {
   rerunAsk: vi.fn(),
   settleAsk: vi.fn(),
   streamAsk: vi.fn(),
+  getNamed: vi.fn(),
+  readPendingSpy: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
@@ -59,6 +63,8 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   submitAskTurn: submitAsk,
   rerunAskTurn: rerunAsk,
   settleAskJob: settleAsk,
+  // A NAMED session (`planSession=`, MOTIR-6024) — the MCP-session live case.
+  getPlanChangeSession: getNamed,
 }));
 
 vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
@@ -81,6 +87,14 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
     approvePlanRequest: approve,
     declinePlanRequest: decline,
   };
+});
+
+// The proposed-review read, SPIED and otherwise real: the live-review cases
+// (MOTIR-6295) count how often the hand-over reaches for it.
+vi.mock('@/lib/planning/planReview', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/planning/planReview')>();
+  readPendingSpy.mockImplementation(actual.readPendingProposal);
+  return { ...actual, readPendingProposal: readPendingSpy };
 });
 
 import { usePlanChangeConversation, narrateFrame } from '@/lib/hooks/usePlanChangeConversation';
@@ -986,5 +1000,154 @@ describe('usePlanChangeConversation — an ASKED plan (Story MOTIR-6012 · MOTIR
     });
     const row = renderHook(() => useDecidedGateState('gate-never'));
     expect(row.result.current).toBeNull();
+  });
+});
+
+// ─── THE LIVE REVIEW (MOTIR-6295) ─────────────────────────────────────────────
+//
+// The plan being WRITTEN is watched through the shared generating-plan poll, for
+// both planners: a hosted run's plan from the moment its turn is submitted, and a
+// named (MCP-authored) session's pending plan from mount. When the poll observes
+// the plan LEAVE `generating`, the proposed-review path takes over — once.
+describe('usePlanChangeConversation — the live review (MOTIR-6295)', () => {
+  const WRITING = planReview([planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1' })], {
+    id: 'plan-1',
+    status: 'generating',
+    plannedAt: null,
+  });
+
+  /** Let settled promises land and effects run, without moving the clock. */
+  async function flush() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a HOSTED turn: live while generating, then hands over to `review` exactly once', async () => {
+    const { result } = await mounted();
+    vi.useFakeTimers();
+
+    // The run's stream stays open until the test ends it.
+    let endStream!: () => void;
+    stream.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          endStream = resolve;
+        }),
+    );
+    fetchReview.mockResolvedValue(WRITING);
+    readPendingSpy.mockClear();
+
+    let sent!: Promise<void>;
+    act(() => {
+      sent = result.current.send('Add recurring invoices.');
+    });
+    await flush();
+    await flush();
+
+    // Submitted, still streaming — and the plan being written is on screen.
+    expect(result.current.state.phase).toBe('streaming');
+    expect(result.current.state.liveReview).toEqual(WRITING);
+    expect(result.current.state.liveVersion).toBeGreaterThan(0);
+    expect(result.current.state.liveFailing).toBe(false);
+    expect(result.current.state.review).toBeNull();
+    expect(readPendingSpy).not.toHaveBeenCalled();
+
+    // Each tick replaces the live snapshot.
+    const grown = { ...WRITING, items: [...WRITING.items, planReviewItem({ planItemId: 'pi_2' })] };
+    fetchReview.mockResolvedValue(grown);
+    const before = result.current.state.liveVersion;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    expect(result.current.state.liveReview?.items).toHaveLength(2);
+    expect(result.current.state.liveVersion).toBe(before + 1);
+
+    // The plan LEAVES `generating` → the proposed-review path takes over.
+    fetchReview.mockResolvedValue(REVIEW);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    await flush();
+    expect(result.current.state.liveReview).toBeNull();
+    expect(result.current.state.review).toEqual(REVIEW);
+    expect(readPendingSpy).toHaveBeenCalledTimes(1);
+
+    // The run's own settle reuses that read rather than making a second one.
+    await act(async () => {
+      endStream();
+      await sent;
+    });
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.review).toEqual(REVIEW);
+    expect(readPendingSpy).toHaveBeenCalledTimes(1);
+
+    // And the poll has stopped.
+    const reads = fetchReview.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(fetchReview).toHaveBeenCalledTimes(reads);
+  });
+
+  it('an MCP-authored NAMED session: live at mount, with no turn sent', async () => {
+    vi.useFakeTimers();
+    getNamed.mockResolvedValue({
+      ...session(['Plan the billing epic.']),
+      id: 's-mcp',
+      startedBy: { id: 'u2', name: 'Agent' },
+      startedByViewer: false,
+      viewerCanPlan: true,
+      pendingPlanId: 'plan-1',
+    });
+    fetchReview.mockResolvedValue(WRITING);
+
+    const { result } = renderHook(() => usePlanChangeConversation({ sessionId: 's-mcp' }));
+    await flush();
+    await flush();
+
+    expect(result.current.state.phase).toBe('idle');
+    expect(result.current.state.liveReview).toEqual(WRITING);
+    expect(result.current.state.review).toBeNull();
+    expect(submitAsk).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+
+    // The agent finishes: the one hand-over puts the proposal in review.
+    readPendingSpy.mockClear();
+    fetchReview.mockResolvedValue(REVIEW);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    await flush();
+    expect(result.current.state.liveReview).toBeNull();
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.review).toEqual(REVIEW);
+    expect(readPendingSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('a named session whose pending plan is already PROPOSED opens in review, with no live poll', async () => {
+    vi.useFakeTimers();
+    getNamed.mockResolvedValue({
+      ...session(['q']),
+      id: 's-done',
+      viewerCanPlan: true,
+      pendingPlanId: 'plan-1',
+    });
+    fetchReview.mockResolvedValue(REVIEW);
+
+    const { result } = renderHook(() => usePlanChangeConversation({ sessionId: 's-done' }));
+    await flush();
+    await flush();
+
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.liveReview).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(fetchReview).toHaveBeenCalledTimes(1);
   });
 });
