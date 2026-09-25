@@ -4063,6 +4063,9 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 18px;
       }
+      .hand .dlg {
+        top: 40px;
+      }
       .stage {
         display: flex;
         flex-direction: column;
@@ -4076,7 +4079,9 @@
       .stagecap .n {
         display: inline-grid;
         place-items: center;
-        width: 18px;
+        min-width: 18px;
+        padding: 0 4px;
+        box-sizing: border-box;
         height: 18px;
         border-radius: var(--radius-control);
         background: var(--el-accent);
@@ -4096,7 +4101,7 @@
       }
       .hf {
         position: relative;
-        height: 380px;
+        height: 400px;
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
         overflow: hidden;
@@ -4305,6 +4310,17 @@
       .px-\(--spacing-btn-x-sm\) {
         padding-inline: var(--spacing-btn-x-sm);
       }
+      .ring-\(--focus-ring-color\) {
+        --tw-ring-color: var(--focus-ring-color);
+      }
+      .ring-2 {
+        box-shadow:
+          0 0 0 var(--tw-ring-offset-width, 0px) var(--el-page-bg),
+          0 0 0 calc(2px + var(--tw-ring-offset-width, 0px)) var(--tw-ring-color, currentcolor);
+      }
+      .ring-offset-2 {
+        --tw-ring-offset-width: 2px;
+      }
       .space-y-0\.5 > :not(:last-child) {
         margin-bottom: calc(var(--spacing) * 0.5);
       }
@@ -4317,7 +4333,7 @@
   <body>
     <div class="page-head">
       <h1>
-        The SEEDED re-plan — a refusal opens the planner with the first turn written, and unsent
+        The SEEDED re-plan — a refusal OFFERS the planner, with the first turn written and unsent
       </h1>
       <p>
         A DELTA on the shipped <code>design/ai-chat/</code> set. It amends
@@ -4340,18 +4356,21 @@
         <div class="snum">1</div>
         <div>
           <h2>
-            The HAND-OFF — the approval overlay steps aside, and the planner rises over the same
-            page
+            The HAND-OFF — the band ASKS first. Only a yes opens the planner (amended 2026-09-25)
           </h2>
           <p>
-            The access path. A person refuses (<b>Request changes</b> on an agent&rsquo;s decision,
-            drawn here; <b>Overturn</b> and <b>None of these</b> are the same four stages). The
-            decision commits, <code>announceGateDecided</code> runs, and
-            <code>useOpenRefusalReplan().open(gate.id)</code> strips the approval address and writes
-            the planning address in <b>one</b> <code>shallowReplace</code> — the move
-            <code>usePlanGateForward.ts</code> already makes. The approval overlay is never
-            underneath, so there is no stack to pop: Close lands on the host page. The address
-            carries the <b>gate id only</b> — no reason text.
+            The access path. <b>Design gate: CHANGES REQUESTED, 2026-09-25.</b> The reviewer wrote:
+            &ldquo;Let the user confirm he wants to go to motir AI to replan the work item.&rdquo; A
+            person refuses (<b>Request changes</b> on an agent&rsquo;s decision, drawn here;
+            <b>Overturn</b> and <b>None of these</b> take the same steps). The decision commits and
+            <code>announceGateDecided</code> runs. <b>Nothing opens.</b> The just-decided band asks
+            &ldquo;Re-plan ACME-44 with Motir AI?&rdquo; in the shipped confirm band&rsquo;s inline
+            grammar. The ask is drawn once, as its own state, in
+            <code>work-items/approval-control--replan-door.mock.html</code> panel 0. Only
+            <b>Re-plan with AI</b> runs <code>useOpenRefusalReplan().open(gate.id)</code>, which
+            strips the approval address and writes the planning address in ONE
+            <code>shallowReplace</code>. <b>Not now</b> or Esc leaves the person on the decided
+            record, whose door does the same thing later.
           </p>
         </div>
       </div>
@@ -4359,7 +4378,7 @@
         <div class="hand">
           <div class="stage">
             <div class="stagecap">
-              <span class="n">A</span>The refusal is pressed in the approval overlay
+              <span class="n">A</span>In the approval overlay: the refusal is pressed
             </div>
             <div class="addr">
               /items/ACME-44?<b>approval=ACME-44&amp;approvalKind=decision_approval</b>
@@ -4430,98 +4449,89 @@ Keep the download page for large files — only the retention rule should change
           </div>
           <div class="stage">
             <div class="stagecap">
-              <span class="n">B</span>It commits → ONE address replace. The approval overlay is
-              gone; the planner rises over the SAME page
+              <span class="n">B</span>It commits. The band becomes the decided record and ASKS.
+              Nothing has opened yet
             </div>
             <div class="addr">
-              /items/ACME-44?<b>plan=replan&amp;planFrom=refused-gate&amp;planGate=cmg7k2q0</b> ·
-              the seed read in flight
+              /items/ACME-44?approval=ACME-44&amp;approvalKind=decision_approval · unchanged
             </div>
             <div class="hf">
-              <div class="full skel">
-                <div class="flex h-full min-h-0 flex-col bg-(--el-canvas)">
-                  <div
-                    aria-hidden="true"
-                    class="flex animate-pulse items-center gap-3 border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2"
+              <div class="hostpage">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-(--el-text-identifier)">ACME-44</span
+                  ><span class="text-xs text-(--el-text-secondary)">Decision · In review</span>
+                </div>
+                <div class="ttl">Where exports live</div>
+                <div
+                  class="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-4"
+                >
+                  <p class="note-inline">the Development block, under the overlay</p>
+                </div>
+              </div>
+              <div class="scrim"></div>
+              <div class="dlg" style="padding: 0">
+                <div
+                  class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
+                >
+                  <span class="font-medium text-(--el-text)">Yue</span
+                  ><span>25 Sep 2026, 16:02</span><span>the agent will publish a new version</span
+                  ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                    >&ldquo;Keep the download page for large files — only the retention rule should
+                    change.&rdquo;</span
                   >
-                    <div
-                      class="inline-flex items-center gap-1.5 px-(--spacing-control-x) py-(--spacing-control-y)"
-                    >
-                      <div class="rounded-(--radius-control) bg-(--el-muted) size-4"></div>
-                      <div class="rounded-(--radius-control) bg-(--el-muted) h-5 w-28"></div>
-                    </div>
-                    <div class="rounded-(--radius-control) bg-(--el-muted) h-5 w-40"></div>
-                  </div>
-                  <div class="min-h-0 flex-1 overflow-hidden">
-                    <div
-                      aria-hidden="true"
-                      class="flex h-full w-full animate-pulse flex-col gap-6 p-6"
-                    >
-                      <div class="flex items-start justify-between gap-4">
-                        <div class="rounded-(--radius-control) bg-(--el-muted) h-6 w-40"></div>
-                        <div class="flex gap-2">
-                          <div class="rounded-(--radius-control) bg-(--el-muted) h-8 w-8"></div>
-                          <div class="rounded-(--radius-control) bg-(--el-muted) h-8 w-8"></div>
-                          <div class="rounded-(--radius-control) bg-(--el-muted) h-8 w-8"></div>
-                        </div>
-                      </div>
-                      <div class="flex min-h-0 flex-1 items-center justify-center">
-                        <div class="skgrid">
-                          <div
-                            class="flex h-32 flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-4"
-                          >
-                            <div class="rounded-(--radius-control) bg-(--el-muted) h-4 w-16"></div>
-                            <div
-                              class="rounded-(--radius-control) bg-(--el-muted) h-4 w-full"
-                            ></div>
-                            <div class="rounded-(--radius-control) bg-(--el-muted) h-4 w-2/3"></div>
-                          </div>
-                          <div
-                            class="flex h-32 flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-4"
-                          >
-                            <div class="rounded-(--radius-control) bg-(--el-muted) h-4 w-16"></div>
-                            <div
-                              class="rounded-(--radius-control) bg-(--el-muted) h-4 w-full"
-                            ></div>
-                            <div class="rounded-(--radius-control) bg-(--el-muted) h-4 w-2/3"></div>
-                          </div>
-                          <div
-                            class="flex h-32 flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-4"
-                          >
-                            <div class="rounded-(--radius-control) bg-(--el-muted) h-4 w-16"></div>
-                            <div
-                              class="rounded-(--radius-control) bg-(--el-muted) h-4 w-full"
-                            ></div>
-                            <div class="rounded-(--radius-control) bg-(--el-muted) h-4 w-2/3"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
                 <div
-                  aria-hidden="true"
-                  class="flex h-full min-h-0 animate-pulse flex-col border-l border-(--el-border) bg-(--el-surface)"
+                  role="group"
+                  aria-labelledby="ask-ACME-44-en"
+                  data-testid="refusal-replan-ask"
+                  class="border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
                 >
-                  <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
-                    <div
-                      class="rounded-(--radius-control) bg-(--el-muted) size-2 rounded-full"
-                    ></div>
-                    <div class="rounded-(--radius-control) bg-(--el-muted) h-4 w-24"></div>
-                    <div class="rounded-(--radius-control) bg-(--el-muted) ml-auto h-5 w-20"></div>
-                  </div>
-                  <div class="flex min-h-0 flex-1 flex-col gap-3 px-4 py-4">
-                    <div
-                      class="rounded-(--radius-control) bg-(--el-muted) h-16 w-full rounded-(--radius-card)"
-                    ></div>
-                    <div
-                      class="rounded-(--radius-control) bg-(--el-muted) h-9 w-3/4 rounded-(--radius-card)"
-                    ></div>
-                  </div>
-                  <div class="border-t border-(--el-border-soft) px-4 py-4">
-                    <div
-                      class="rounded-(--radius-control) bg-(--el-muted) h-20 w-full rounded-(--radius-card)"
-                    ></div>
+                  <p id="ask-ACME-44-en" class="text-[13px] font-semibold text-(--el-text)">
+                    Re-plan ACME-44 with Motir AI?
+                  </p>
+                  <ul
+                    class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)"
+                  >
+                    <li>
+                      Motir AI opens on ACME-44 with your reason already written as the first
+                      message.
+                    </li>
+                    <li>Nothing is sent until you send it — you can edit it first.</li>
+                  </ul>
+                  <div class="mt-3 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) h-(--height-btn-sm) px-3 text-xs text-(--el-text) hover:bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                    >
+                      Not now</button
+                    ><button
+                      type="button"
+                      data-variant="primary"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 ring-2 ring-(--focus-ring-color) ring-offset-2"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-sparkles size-3.5 shrink-0"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                        ></path>
+                        <path d="M20 3v4"></path>
+                        <path d="M22 5h-4"></path>
+                        <path d="M4 17v2"></path>
+                        <path d="M5 18H3"></path></svg
+                      >Re-plan with AI
+                    </button>
                   </div>
                 </div>
               </div>
@@ -4529,10 +4539,12 @@ Keep the download page for large files — only the retention rule should change
           </div>
           <div class="stage">
             <div class="stagecap">
-              <span class="n">C</span>The seeded planner — the turn is in the composer, UNSENT
+              <span class="n">C</span>YES (Re-plan with AI, or Enter): one address replace. The
+              approval overlay is gone and the planner rises seeded
             </div>
             <div class="addr">
-              /items/ACME-44?plan=replan&amp;planFrom=refused-gate&amp;planGate=cmg7k2q0
+              /items/ACME-44?<b>plan=replan&amp;planFrom=refused-gate&amp;planGate=cmg7k2q0</b> ·
+              skeleton first (sheet 6)
             </div>
             <div class="hf">
               <div class="full">
@@ -4690,10 +4702,12 @@ Re-plan this work item from that reason.</textarea
           </div>
           <div class="stage">
             <div class="stagecap">
-              <span class="n">D</span>Close (Esc, the scrim, Close) → the host page, NOT the
-              approval overlay
+              <span class="n">D</span>NOT NOW (or Esc): the overlay stays on the decided record, and
+              focus goes to its door
             </div>
-            <div class="addr">/items/ACME-44 · the band now carries the door back</div>
+            <div class="addr">
+              /items/ACME-44?approval=ACME-44&amp;approvalKind=decision_approval · unchanged
+            </div>
             <div class="hf">
               <div class="hostpage">
                 <div class="flex items-center gap-2">
@@ -4704,25 +4718,20 @@ Re-plan this work item from that reason.</textarea
                 <div
                   class="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-4"
                 >
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-xs text-(--el-text-secondary)"
-                      >Decision document for Where exports live</span
-                    ><span class="ml-auto"
-                      ><span
-                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent"
-                        >Changes requested</span
-                      ></span
-                    >
-                  </div>
-                  <div
-                    class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) pt-3 text-xs text-(--el-text-secondary)"
-                  >
-                    <span class="font-medium text-(--el-text)">Yue</span
-                    ><span>25 Sep 2026, 16:02</span
-                    ><span>the pull request stays open — nothing merges</span
-                    ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
-                      >&ldquo;Keep the download page for large files — only the retention rule
-                      should change.&rdquo;</span
+                  <p class="note-inline">the Development block, under the overlay</p>
+                </div>
+              </div>
+              <div class="scrim"></div>
+              <div class="dlg" style="padding: 0">
+                <div
+                  class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
+                >
+                  <span class="font-medium text-(--el-text)">Yue</span
+                  ><span>25 Sep 2026, 16:02</span><span>the agent will publish a new version</span
+                  ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                    >&ldquo;Keep the download page for large files — only the retention rule should
+                    change.&rdquo;</span
+                  ><span class="flex basis-full items-center gap-2"
                     ><a
                       href="#"
                       aria-label="Re-plan ACME-44 with AI from this refusal"
@@ -4751,6 +4760,419 @@ Re-plan this work item from that reason.</textarea
                         <path d="M4 17v2"></path>
                         <path d="M5 18H3"></path></svg
                       >Re-plan with AI</a
+                    ></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="stagecap">
+              <span class="n">B′</span>On the ITEM PAGE: Request changes pressed on the Development
+              block. The band asks in place
+            </div>
+            <div class="addr">/items/ACME-44 · no overlay</div>
+            <div class="hf">
+              <div class="hostpage">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-(--el-text-identifier)">ACME-44</span
+                  ><span class="text-xs text-(--el-text-secondary)">Decision · In review</span>
+                </div>
+                <div class="ttl">Where exports live</div>
+                <div
+                  class="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-4"
+                >
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs text-(--el-text-secondary)"
+                      >Decision document for Where exports live</span
+                    ><span class="ml-auto"
+                      ><span
+                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent"
+                        >Changes requested</span
+                      ></span
+                    >
+                  </div>
+                  <div
+                    class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) pt-3 text-xs text-(--el-text-secondary)"
+                  >
+                    <span class="font-medium text-(--el-text)">Yue</span
+                    ><span>25 Sep 2026, 16:02</span><span>the agent will publish a new version</span
+                    ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                      >&ldquo;Keep the download page for large files — only the retention rule
+                      should change.&rdquo;</span
+                    >
+                  </div>
+                  <div
+                    role="group"
+                    aria-labelledby="ask-ACME-44-en"
+                    data-testid="refusal-replan-ask"
+                    class="mt-3 border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
+                  >
+                    <p id="ask-ACME-44-en" class="text-[13px] font-semibold text-(--el-text)">
+                      Re-plan ACME-44 with Motir AI?
+                    </p>
+                    <ul
+                      class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)"
+                    >
+                      <li>
+                        Motir AI opens on ACME-44 with your reason already written as the first
+                        message.
+                      </li>
+                      <li>Nothing is sent until you send it — you can edit it first.</li>
+                    </ul>
+                    <div class="mt-3 flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) h-(--height-btn-sm) px-3 text-xs text-(--el-text) hover:bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                      >
+                        Not now</button
+                      ><button
+                        type="button"
+                        data-variant="primary"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 ring-2 ring-(--focus-ring-color) ring-offset-2"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-sparkles size-3.5 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                          ></path>
+                          <path d="M20 3v4"></path>
+                          <path d="M22 5h-4"></path>
+                          <path d="M4 17v2"></path>
+                          <path d="M5 18H3"></path></svg
+                        >Re-plan with AI
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="stagecap"><span class="n">B′</span>zh · 同一步：在工作项页面上询问</div>
+            <div class="addr">/items/ACME-44</div>
+            <div class="hf">
+              <div class="hostpage">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-(--el-text-identifier)">ACME-44</span
+                  ><span class="text-xs text-(--el-text-secondary)">Decision · In review</span>
+                </div>
+                <div class="ttl">Where exports live</div>
+                <div
+                  class="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-4"
+                >
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs text-(--el-text-secondary)"
+                      >“导出文件存放在哪里”的决策文档</span
+                    ><span class="ml-auto"
+                      ><span
+                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent"
+                        >已要求修改</span
+                      ></span
+                    >
+                  </div>
+                  <div
+                    class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) pt-3 text-xs text-(--el-text-secondary)"
+                  >
+                    <span class="font-medium text-(--el-text)">Yue</span
+                    ><span>2026年9月25日 16:02</span><span>代理将发布新版本</span
+                    ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                      >&ldquo;大文件继续保留下载页面——只需要改保留规则。&rdquo;</span
+                    >
+                  </div>
+                  <div
+                    role="group"
+                    aria-labelledby="ask-ACME-44-zh"
+                    data-testid="refusal-replan-ask"
+                    class="mt-3 border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
+                  >
+                    <p id="ask-ACME-44-zh" class="text-[13px] font-semibold text-(--el-text)">
+                      用 Motir AI 重新规划 ACME-44？
+                    </p>
+                    <ul
+                      class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)"
+                    >
+                      <li>Motir AI 会在 ACME-44 上打开，并把你的理由写成第一条消息。</li>
+                      <li>在你发送之前不会发出任何内容——你可以先修改。</li>
+                    </ul>
+                    <div class="mt-3 flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) h-(--height-btn-sm) px-3 text-xs text-(--el-text) hover:bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                      >
+                        暂时不用</button
+                      ><button
+                        type="button"
+                        data-variant="primary"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 ring-2 ring-(--focus-ring-color) ring-offset-2"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-sparkles size-3.5 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                          ></path>
+                          <path d="M20 3v4"></path>
+                          <path d="M22 5h-4"></path>
+                          <path d="M4 17v2"></path>
+                          <path d="M5 18H3"></path></svg
+                        >用 AI 重新规划
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="stagecap">
+              <span class="n">C′</span>YES → the same seeded planner over the item page (as C).
+              Close → the item page
+            </div>
+            <div class="addr">
+              /items/ACME-44?<b>plan=replan&amp;planFrom=refused-gate&amp;planGate=cmg7k2q0</b>
+            </div>
+            <div class="hf">
+              <div class="full">
+                <div class="canvas minicanvas">
+                  <div class="ov ov-top">
+                    <span class="wclose"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-x size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M18 6 6 18"></path>
+                        <path d="m6 6 12 12"></path>
+                      </svg>
+                      Close</span
+                    ><span class="crumb"
+                      ><span class="muted">Acme /</span> Exports
+                      <span class="muted">/</span> ACME-44</span
+                    >
+                  </div>
+                  <div class="mnode"><span class="k">ACME-44</span>Where exports live</div>
+                </div>
+                <div
+                  class="anatbox railbox"
+                  style="height: 380px; display: flex; flex-direction: column"
+                >
+                  <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                    <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                    ><span
+                      class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                      >Motir AI</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
+                      data-testid="planning-mode-chip"
+                      >plan change</span
+                    >
+                  </div>
+                  <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                    <div class="flex items-start gap-2">
+                      <span
+                        aria-hidden="true"
+                        class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                        ><span class="brand-inv"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            width="13"
+                            height="13"
+                            class="brand-glyph"
+                            aria-hidden="true"
+                            focusable="false"
+                          >
+                            <path
+                              d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                              fill="currentColor"
+                            ></path></svg></span
+                      ></span>
+                      <div
+                        class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                      >
+                        <span>Opened in the context of ACME-44.</span>
+                        <span>What should change — or what would you like to know?</span>
+                      </div>
+                    </div>
+                  </div>
+                  <form class="relative border-t border-(--el-border) px-3 py-3">
+                    <div class="flex items-end gap-2">
+                      <div
+                        role="combobox"
+                        aria-expanded="false"
+                        aria-haspopup="listbox"
+                        aria-controls="planning-target-listbox"
+                        class="relative flex min-w-0 flex-1 items-end"
+                      >
+                        <button
+                          type="button"
+                          aria-label="Add a work item to plan around"
+                          data-testid="planning-target-trigger"
+                          class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-at-sign size-4"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                          </svg></button
+                        ><textarea
+                          aria-autocomplete="list"
+                          rows="1"
+                          placeholder="What’s wrong? What should change?"
+                          aria-label="What’s wrong? What should change?"
+                          data-autogrow
+                          data-scroll-end
+                          class="min-h-(--height-input) resize-none overflow-y-hidden min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                          style="height: 44px; padding-block: 11px"
+                        >
+ACME-44 · Where exports live
+
+Changes were requested on this decision.
+
+The reason given:
+“Keep the download page for large files — only the retention rule should change.”
+
+Re-plan this work item from that reason.</textarea
+                        >
+                      </div>
+                      <button
+                        type="submit"
+                        data-variant="primary"
+                        class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                        aria-label="Send"
+                      >
+                        <span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-send size-4"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                            ></path>
+                            <path d="m21.854 2.147-10.94 10.939"></path></svg
+                        ></span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="stagecap">
+              <span class="n">D′</span>NOT NOW → the decided record with Re-plan with AI, which is
+              also where Close from C or C′ lands
+            </div>
+            <div class="addr">/items/ACME-44</div>
+            <div class="hf">
+              <div class="hostpage">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-(--el-text-identifier)">ACME-44</span
+                  ><span class="text-xs text-(--el-text-secondary)">Decision · In review</span>
+                </div>
+                <div class="ttl">Where exports live</div>
+                <div
+                  class="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-4"
+                >
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs text-(--el-text-secondary)"
+                      >Decision document for Where exports live</span
+                    ><span class="ml-auto"
+                      ><span
+                        class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent"
+                        >Changes requested</span
+                      ></span
+                    >
+                  </div>
+                  <div
+                    class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) pt-3 text-xs text-(--el-text-secondary)"
+                  >
+                    <span class="font-medium text-(--el-text)">Yue</span
+                    ><span>25 Sep 2026, 16:02</span><span>the agent will publish a new version</span
+                    ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                      >&ldquo;Keep the download page for large files — only the retention rule
+                      should change.&rdquo;</span
+                    ><span class="flex basis-full items-center gap-2"
+                      ><a
+                        href="#"
+                        aria-label="Re-plan ACME-44 with AI from this refusal"
+                        data-testid="refusal-replan-door"
+                        data-depth="key"
+                        data-mode="replan"
+                        class="inline-flex h-(--height-btn-sm) shrink-0 items-center gap-1.5 rounded-(--radius-badge) border px-(--spacing-btn-x-sm) font-sans text-xs font-semibold whitespace-nowrap transition-colors focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 border-(--el-border-strong) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-sparkles size-3.5 shrink-0"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                          ></path>
+                          <path d="M20 3v4"></path>
+                          <path d="M22 5h-4"></path>
+                          <path d="M4 17v2"></path>
+                          <path d="M5 18H3"></path></svg
+                        >Re-plan with AI</a
+                      ></span
                     >
                   </div>
                 </div>
@@ -4760,12 +5182,18 @@ Re-plan this work item from that reason.</textarea
         </div>
       </div>
       <div class="note">
-        <b>Why a replace and not a push.</b> The approval overlay&rsquo;s question is answered —
-        going Back to an awaiting band that is no longer awaiting would show a stale question. Back
-        from the planner goes where Back from the approval overlay went. <b>On the item page</b> (a
-        <code>decision_approval</code> refused from the Development block) stages B–D are identical
-        and stage A is the band in place, with no overlay to strip.
-        <b>Nothing is sent in any stage</b>: no session, no turn, no job exists until Send (ADR
+        <b>Why inline and not a dialog.</b> The shipped app has no confirm-dialog primitive (<code
+          >components/ui</code
+        >
+        holds only <code>Modal</code>). Its approval confirmations are the inline band, and
+        <code>ApprovalGateControl</code> says so: &ldquo;an inline band over the verbs, never a
+        modal&rdquo;. In the overlay, a dialog would stack a modal on a full-screen modal. The
+        inline ask sits exactly where the door will sit, so declining changes nothing visible except
+        the question becoming the door. <b>Focus</b> lands on <b>Re-plan with AI</b> (Enter = yes).
+        <b>Esc</b> = Not now, and inside the overlay it does not also close the overlay.
+        <b>Why a replace on yes.</b> The approval overlay&rsquo;s question is answered, so Back to
+        it would show a stale band. Close from the planner lands on the host page.
+        <b>Nothing is sent in any stage</b>: no session, no turn and no job exists until Send (ADR
         &sect;10f).
       </div>
     </section>
@@ -6238,7 +6666,7 @@ Re-plan this work item from that reason.</textarea
             draft
           </h2>
           <p>
-            Pressing <b>Re-plan with AI</b> again (or the hand-off, if it ever re-fires) while the
+            Pressing <b>Re-plan with AI</b> again (the door, or the yes of the ask) while the
             viewer&rsquo;s own seeded session is inside the 2-hour window: the seed read answers
             <code>seededSessionId</code>, and the overlay opens THAT conversation —
             MOTIR-6019&rsquo;s <b>resumed</b> state, drawn as it ships. The first turn is the seeded

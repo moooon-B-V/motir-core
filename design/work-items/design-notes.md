@@ -8709,7 +8709,7 @@ Already in both catalogues (MOTIR-6096): `activity.fields.difficulty` _Difficult
 
 ## ⭐ The RE-PLAN WITH AI door on the three decided record bands (Story MOTIR-6068 · MOTIR-6206 — `approval-control--replan-door.mock.html`, DATED 2026-09-25)
 
-**Asset:** `design/work-items/approval-control--replan-door.mock.html`, a **DELTA** in five panels (en and
+**Asset:** `design/work-items/approval-control--replan-door.mock.html`, a **DELTA** in six panels, 0 to 5 (en and
 zh, light and dark). It amends MOTIR-6073's published
 `work-items/approval-control--refusal-reason.mock.html`, which quotes the reason on a decided record.
 It also amends the decision-confirm record, `OverturnedBand` in
@@ -8741,6 +8741,10 @@ to a style preset.
 
 ### The panels
 
+0. **Just decided: the band ASKS (amended 2026-09-25).** This panel is the one source for this state.
+   It shows the ask in the decided band on the item page and in the approval overlay, for all three
+   kinds, in en and zh and in dark. It also shows the state after **Not now**: the record with its
+   door, and focus on the door.
 1. **The item page.** Each of the three kinds shows its decided band with the reason quoted as before
    and **Re-plan with AI** at the foot. For the overturn, the band as it ships today is drawn beside
    it, with the plain epic `WorkItemPlanEntrance` line struck through. That line is what this card
@@ -8772,10 +8776,27 @@ to a style preset.
   stay exactly as they are. The door opens the planner on the **decision work item, seeded**, with the
   supersedes keys already in the turn. The old entrance opened it on the epic, blank.
 - **The same door on the item page and in the approval overlay.** The overlay renders the same
-  `ApprovalGateControl` in its fill layout, so nothing overlay-specific is drawn. When the door is
-  pressed in the overlay, it strips the approval address and opens the planner in one replace, the same
-  hand-off as the refusal press (the `refusal-seed` delta, sheet 1). The approval overlay does not
-  stay underneath.
+  `ApprovalGateControl` in its fill layout, so nothing overlay-specific is drawn. **The door is itself
+  a yes.** Pressing it opens the planner directly, with no second ask: it strips the approval address
+  and opens the planner in one replace (the `refusal-seed` delta, sheet 1). The approval overlay does
+  not stay underneath.
+- **Right after a refusal, the band ASKS before anything opens (amended 2026-09-25).** The design gate
+  came back CHANGES REQUESTED. The reviewer's note, verbatim, is: _"Let the user confirm he wants to
+  go to motir AI to replan the work item."_ So the planner no longer opens when the decision is
+  recorded. The just-decided band shows, in the door's place, _"Re-plan {key} with Motir AI?"_, two
+  consequence lines, **Not now** (ghost) and **Re-plan with AI** (primary, the door's own label).
+  - **The form.** It is the shipped confirm band's grammar: `ApprovalGateControl`'s `confirming`
+    phase, _"an inline band over the verbs, never a modal"_, with `--el-surface-soft`, the 13px title
+    and the list. `components/ui` has no confirm-dialog primitive, and in the approval overlay a
+    dialog would stack a modal on a full-screen modal.
+  - **Keyboard and focus.** Focus goes to **Re-plan with AI**, so Enter means yes. Esc means Not now.
+    In the overlay it declines only, and the overlay stays open.
+  - **Not now.** The ask becomes the door, and focus moves to the door.
+  - **Transient.** The ask is shown once, to the person who pressed. A reload, another viewer or a
+    later visit sees only the door.
+  - **Copy.** The copy table is in `design/ai-chat/design-notes.md` §"The amendment of 2026-09-25".
+    en: _Re-plan {key} with Motir AI?_ · _Not now_ · _Re-plan with AI_. zh: _用 Motir AI 重新规划
+    {key}？_ · _暂时不用_ · _用 AI 重新规划_.
 - **Absent means absent.** The door does not render on `approved`, `awaiting` or `superseded`, or for
   `pull_request_approval`, `design_result` or `acceptance_result`. The last two get their own verdicts
   in MOTIR-6070 and MOTIR-6071. It also does not render where `WorkItemPlanEntrance` would not
@@ -8794,7 +8815,10 @@ entrance's `replanAria` does.
 
 ### GIVES / TAKES
 
-- **MOTIR-6211** gets the door's face, label, placement and absence rules on all three bands, on both
+- **MOTIR-6211** — **TAKES _"open it the moment the decision commits"_**, and GIVES the ask
+  (panel 0) in its place. The exact amended wording for MOTIR-6211, MOTIR-6068 criterion 1 and the
+  MOTIR-6213 E2E step is in `design/ai-chat/design-notes.md` §"The amendment of 2026-09-25".
+- **MOTIR-6211** also gets the door's face, label, placement and absence rules on all three bands, on both
   hosts, and the overturned band's entrance swap. Its criteria match this delta, and nothing is taken
   away from them.
 - **MOTIR-6210** is not affected by the band. The one-label rule relies on its seed read resolving

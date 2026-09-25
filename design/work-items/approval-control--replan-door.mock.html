@@ -4608,6 +4608,17 @@
       .px-\(--spacing-btn-x-sm\) {
         padding-inline: var(--spacing-btn-x-sm);
       }
+      .ring-\(--focus-ring-color\) {
+        --tw-ring-color: var(--focus-ring-color);
+      }
+      .ring-2 {
+        box-shadow:
+          0 0 0 var(--tw-ring-offset-width, 0px) var(--el-page-bg),
+          0 0 0 calc(2px + var(--tw-ring-offset-width, 0px)) var(--tw-ring-color, currentcolor);
+      }
+      .ring-offset-2 {
+        --tw-ring-offset-width: 2px;
+      }
       /* the token the door padding reads, as packages/design-system/theme.css defines it — the lifted sheet predates it */
       :root {
         --spacing-btn-x-sm: 12px;
@@ -4625,9 +4636,506 @@
         None of these, and an overturned <code>decision_confirmation</code> each gain
         <b>Re-plan with AI</b>, on the item page and in the approval overlay. ADR
         <code>approval-gates.md</code> &sect;10f (&ldquo;a decided record keeps a door to it&rdquo;)
-        and &sect;10h. Built by MOTIR-6211.
+        and &sect;10h. Right after a refusal commits, the band first ASKS whether to re-plan with
+        Motir AI (panel 0, amended 2026-09-25). Built by MOTIR-6211.
       </p>
     </div>
+    <p class="panel-label">
+      Panel 0 — JUST DECIDED: the band ASKS before the planner opens (amended 2026-09-25, design
+      gate: CHANGES REQUESTED)
+    </p>
+    <div class="panel">
+      <div class="cmp">
+        <div>
+          <p class="cmp-cap">
+            0a · item page · decision_approval — Request changes pressed on the Development block
+          </p>
+          <div class="cmp-frame p-4">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs text-(--el-text-secondary)"
+                  >Decision document for Where exports live · 1 pull request</span
+                ><span class="ml-auto"
+                  ><span
+                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent"
+                    >Changes requested</span
+                  ></span
+                >
+              </div>
+              <div class="mt-3 border-t border-(--el-border-soft) pt-3">
+                <p class="note-inline">The decision document — the port, unchanged (base mock)</p>
+              </div>
+              <div
+                class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) pt-3 text-xs text-(--el-text-secondary)"
+              >
+                <span class="font-medium text-(--el-text)">Yue</span><span>25 Sep 2026, 16:02</span
+                ><span class="font-mono text-(--el-text-identifier)">version 3f9a21c0</span
+                ><span>the agent will publish a new version</span
+                ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                  >&ldquo;Keep the download page for large files — only the retention rule should
+                  change.&rdquo;</span
+                >
+              </div>
+              <div
+                role="group"
+                aria-labelledby="ask-ACME-44-en"
+                data-testid="refusal-replan-ask"
+                class="mt-3 border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
+              >
+                <p id="ask-ACME-44-en" class="text-[13px] font-semibold text-(--el-text)">
+                  Re-plan ACME-44 with Motir AI?
+                </p>
+                <ul
+                  class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)"
+                >
+                  <li>
+                    Motir AI opens on ACME-44 with your reason already written as the first message.
+                  </li>
+                  <li>Nothing is sent until you send it — you can edit it first.</li>
+                </ul>
+                <div class="mt-3 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    data-variant="ghost"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) h-(--height-btn-sm) px-3 text-xs text-(--el-text) hover:bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                  >
+                    Not now</button
+                  ><button
+                    type="button"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 ring-2 ring-(--focus-ring-color) ring-offset-2"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles size-3.5 shrink-0"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                      ></path>
+                      <path d="M20 3v4"></path>
+                      <path d="M22 5h-4"></path>
+                      <path d="M4 17v2"></path>
+                      <path d="M5 18H3"></path></svg
+                    >Re-plan with AI
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="cmp-cap">
+            0b · approval overlay · decision_confirmation — Overturn pressed in the overlay
+          </p>
+          <div class="cmp-frame">
+            <div
+              class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
+            >
+              <span class="font-medium text-(--el-text)"
+                >Overturned by Yue · 25 Sep 2026, 16:02</span
+              ><span
+                class="basis-full whitespace-pre-wrap border-l-2 border-(--el-border-strong) pl-3 text-(--el-text)"
+                >&ldquo;The retry storm last week came from exactly this. We retry by hand until the
+                queue has back-pressure.&rdquo;</span
+              ><span class="flex basis-full flex-wrap items-center gap-2"
+                ><span
+                  class="inline-flex items-center rounded-(--radius-badge) border border-transparent bg-(--el-tint-peach) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-strong)"
+                  >Re-plan owed</span
+                ><span class="text-(--el-text-secondary)"
+                  >for the work this decision superseded — nothing has changed yet</span
+                ></span
+              ><span class="flex basis-full flex-wrap gap-1.5"
+                ><a
+                  href="#"
+                  class="inline-flex max-w-full items-center gap-1.5 rounded-(--radius-badge) border border-(--el-border) px-(--spacing-chip-x) py-(--spacing-chip-y) hover:bg-(--el-surface)"
+                  ><span class="font-mono text-xs text-(--el-text-identifier)">ACME-38</span
+                  ><span class="truncate text-xs text-(--el-text)"
+                    >Nightly export retry job</span
+                  ></a
+                ><a
+                  href="#"
+                  class="inline-flex max-w-full items-center gap-1.5 rounded-(--radius-badge) border border-(--el-border) px-(--spacing-chip-x) py-(--spacing-chip-y) hover:bg-(--el-surface)"
+                  ><span class="font-mono text-xs text-(--el-text-identifier)">ACME-39</span
+                  ><span class="truncate text-xs text-(--el-text)">Retry backoff settings</span></a
+                ><a
+                  href="#"
+                  class="inline-flex max-w-full items-center gap-1.5 rounded-(--radius-badge) border border-(--el-border) px-(--spacing-chip-x) py-(--spacing-chip-y) hover:bg-(--el-surface)"
+                  ><span class="font-mono text-xs text-(--el-text-identifier)">ACME-41</span
+                  ><span class="truncate text-xs text-(--el-text)"
+                    >Retry alerts to the owner</span
+                  ></a
+                ></span
+              >
+            </div>
+            <div
+              role="group"
+              aria-labelledby="ask-ACME-47-en"
+              data-testid="refusal-replan-ask"
+              class="border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
+            >
+              <p id="ask-ACME-47-en" class="text-[13px] font-semibold text-(--el-text)">
+                Re-plan ACME-47 with Motir AI?
+              </p>
+              <ul class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
+                <li>
+                  Motir AI opens on ACME-47 with your reason already written as the first message.
+                </li>
+                <li>Nothing is sent until you send it — you can edit it first.</li>
+              </ul>
+              <div class="mt-3 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  data-variant="ghost"
+                  class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) h-(--height-btn-sm) px-3 text-xs text-(--el-text) hover:bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                >
+                  Not now</button
+                ><button
+                  type="button"
+                  data-variant="primary"
+                  class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 ring-2 ring-(--focus-ring-color) ring-offset-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-sparkles size-3.5 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                    ></path>
+                    <path d="M20 3v4"></path>
+                    <path d="M22 5h-4"></path>
+                    <path d="M4 17v2"></path>
+                    <path d="M5 18H3"></path></svg
+                  >Re-plan with AI
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="height: 16px"></div>
+      <div class="cmp">
+        <div>
+          <p class="cmp-cap">0c · approval overlay · decision_choice — None of these</p>
+          <div class="cmp-frame">
+            <div
+              class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
+            >
+              <span class="font-medium text-(--el-text)">Yue</span><span>25 Sep 2026, 16:02</span
+              ><span>the options will be revised</span
+              ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                >&ldquo;We need the files in the customer’s own bucket — none of these offers
+                that.&rdquo;</span
+              >
+            </div>
+            <div
+              role="group"
+              aria-labelledby="ask-ACME-42-en"
+              data-testid="refusal-replan-ask"
+              class="border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
+            >
+              <p id="ask-ACME-42-en" class="text-[13px] font-semibold text-(--el-text)">
+                Re-plan ACME-42 with Motir AI?
+              </p>
+              <ul class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
+                <li>
+                  Motir AI opens on ACME-42 with your reason already written as the first message.
+                </li>
+                <li>Nothing is sent until you send it — you can edit it first.</li>
+              </ul>
+              <div class="mt-3 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  data-variant="ghost"
+                  class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) h-(--height-btn-sm) px-3 text-xs text-(--el-text) hover:bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                >
+                  Not now</button
+                ><button
+                  type="button"
+                  data-variant="primary"
+                  class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 ring-2 ring-(--focus-ring-color) ring-offset-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-sparkles size-3.5 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                    ></path>
+                    <path d="M20 3v4"></path>
+                    <path d="M22 5h-4"></path>
+                    <path d="M4 17v2"></path>
+                    <path d="M5 18H3"></path></svg
+                  >Re-plan with AI
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <p class="cmp-cap">0d · zh · item page · decision_approval</p>
+          <div class="cmp-frame p-4">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs text-(--el-text-secondary)"
+                  >“导出文件存放在哪里”的决策文档 · 1 个拉取请求</span
+                ><span class="ml-auto"
+                  ><span
+                    class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent"
+                    >已要求修改</span
+                  ></span
+                >
+              </div>
+              <div class="mt-3 border-t border-(--el-border-soft) pt-3">
+                <p class="note-inline">The decision document — the port, unchanged (base mock)</p>
+              </div>
+              <div
+                class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) pt-3 text-xs text-(--el-text-secondary)"
+              >
+                <span class="font-medium text-(--el-text)">Yue</span><span>2026年9月25日 16:02</span
+                ><span class="font-mono text-(--el-text-identifier)">版本 3f9a21c0</span
+                ><span>代理将发布新版本</span
+                ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                  >&ldquo;大文件继续保留下载页面——只需要改保留规则。&rdquo;</span
+                >
+              </div>
+              <div
+                role="group"
+                aria-labelledby="ask-ACME-44-zh"
+                data-testid="refusal-replan-ask"
+                class="mt-3 border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
+              >
+                <p id="ask-ACME-44-zh" class="text-[13px] font-semibold text-(--el-text)">
+                  用 Motir AI 重新规划 ACME-44？
+                </p>
+                <ul
+                  class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)"
+                >
+                  <li>Motir AI 会在 ACME-44 上打开，并把你的理由写成第一条消息。</li>
+                  <li>在你发送之前不会发出任何内容——你可以先修改。</li>
+                </ul>
+                <div class="mt-3 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    data-variant="ghost"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) h-(--height-btn-sm) px-3 text-xs text-(--el-text) hover:bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                  >
+                    暂时不用</button
+                  ><button
+                    type="button"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 ring-2 ring-(--focus-ring-color) ring-offset-2"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles size-3.5 shrink-0"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                      ></path>
+                      <path d="M20 3v4"></path>
+                      <path d="M22 5h-4"></path>
+                      <path d="M4 17v2"></path>
+                      <path d="M5 18H3"></path></svg
+                    >用 AI 重新规划
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="height: 16px"></div>
+      <div data-theme="dark" data-appearance-scope class="dark-stage">
+        <div class="cmp">
+          <div>
+            <p class="cmp-cap">0e · dark · approval overlay · decision_approval</p>
+            <div class="cmp-frame">
+              <div
+                class="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) px-4 py-3 text-xs text-(--el-text-secondary)"
+              >
+                <span class="font-medium text-(--el-text)">Yue</span><span>25 Sep 2026, 16:02</span
+                ><span class="font-mono text-(--el-text-identifier)">version 3f9a21c0</span
+                ><span>the agent will publish a new version</span
+                ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                  >&ldquo;Keep the download page for large files — only the retention rule should
+                  change.&rdquo;</span
+                >
+              </div>
+              <div
+                role="group"
+                aria-labelledby="ask-ACME-44-en"
+                data-testid="refusal-replan-ask"
+                class="border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
+              >
+                <p id="ask-ACME-44-en" class="text-[13px] font-semibold text-(--el-text)">
+                  Re-plan ACME-44 with Motir AI?
+                </p>
+                <ul
+                  class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)"
+                >
+                  <li>
+                    Motir AI opens on ACME-44 with your reason already written as the first message.
+                  </li>
+                  <li>Nothing is sent until you send it — you can edit it first.</li>
+                </ul>
+                <div class="mt-3 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    data-variant="ghost"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) h-(--height-btn-sm) px-3 text-xs text-(--el-text) hover:bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                  >
+                    Not now</button
+                  ><button
+                    type="button"
+                    data-variant="primary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 ring-2 ring-(--focus-ring-color) ring-offset-2"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles size-3.5 shrink-0"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                      ></path>
+                      <path d="M20 3v4"></path>
+                      <path d="M22 5h-4"></path>
+                      <path d="M4 17v2"></path>
+                      <path d="M5 18H3"></path></svg
+                    >Re-plan with AI
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="cmp-cap">
+              0f · after <b>Not now</b> (or Esc) — the decided record with its door, focus on the
+              door
+            </p>
+            <div class="cmp-frame p-4">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-xs text-(--el-text-secondary)"
+                    >Decision document for Where exports live · 1 pull request</span
+                  ><span class="ml-auto"
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-peach) text-(--el-text-strong) border-transparent"
+                      >Changes requested</span
+                    ></span
+                  >
+                </div>
+                <div class="mt-3 border-t border-(--el-border-soft) pt-3">
+                  <p class="note-inline">The decision document — the port, unchanged (base mock)</p>
+                </div>
+                <div
+                  class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--el-border-soft) pt-3 text-xs text-(--el-text-secondary)"
+                >
+                  <span class="font-medium text-(--el-text)">Yue</span
+                  ><span>25 Sep 2026, 16:02</span
+                  ><span class="font-mono text-(--el-text-identifier)">version 3f9a21c0</span
+                  ><span>the agent will publish a new version</span
+                  ><span class="basis-full whitespace-pre-wrap text-(--el-text)"
+                    >&ldquo;Keep the download page for large files — only the retention rule should
+                    change.&rdquo;</span
+                  ><span class="flex basis-full items-center gap-2"
+                    ><a
+                      href="#"
+                      aria-label="Re-plan ACME-44 with AI from this refusal"
+                      data-testid="refusal-replan-door"
+                      data-depth="key"
+                      data-mode="replan"
+                      class="inline-flex h-(--height-btn-sm) shrink-0 items-center gap-1.5 rounded-(--radius-badge) border px-(--spacing-btn-x-sm) font-sans text-xs font-semibold whitespace-nowrap transition-colors focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 border-(--el-border-strong) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-sparkles size-3.5 shrink-0"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                        ></path>
+                        <path d="M20 3v4"></path>
+                        <path d="M22 5h-4"></path>
+                        <path d="M4 17v2"></path>
+                        <path d="M5 18H3"></path></svg
+                      >Re-plan with AI</a
+                    ></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      <b>The reviewer&rsquo;s note, verbatim:</b> &ldquo;Let the user confirm he wants to go to
+      motir AI to replan the work item.&rdquo; So the planner no longer opens by itself. The refusal
+      commits, the band turns into the decided record, and in the place where the door will sit it
+      ASKS. It uses the shipped confirm band&rsquo;s own grammar
+      (<code>ApprovalGateControl</code>&rsquo;s <code>confirming</code> phase: &ldquo;an inline band
+      over the verbs, never a modal&rdquo;): a <code>--el-surface-soft</code> strip, a question, two
+      consequence lines, <b>Not now</b> (ghost) and <b>Re-plan with AI</b> (primary, the
+      door&rsquo;s own label). <b>Focus</b> moves to <b>Re-plan with AI</b> when the band appears,
+      so Enter says yes. <b>Esc</b> is Not now. In the approval overlay, Esc inside the ask declines
+      only and does not close the overlay. <b>Yes</b> runs the hand-off: one address replace, the
+      approval overlay is not left underneath, and the planner rises seeded. <b>Not now</b> leaves
+      the decided record with <b>Re-plan with AI</b> (0f), and focus goes to the door. The ask is
+      shown once, to the person who pressed the refusal, right after it commits. It is not stored,
+      so a reload, another viewer or a later visit sees only the record and its door.
+    </p>
     <p class="panel-label">
       Panel 1 — the ITEM PAGE: the decided band of each kind, the reason quoted (unchanged), and
       Re-plan with AI
@@ -5138,10 +5646,11 @@
     </div>
     <p class="note">
       The overlay renders the SAME <code>ApprovalGateControl</code> in its fill layout
-      (MOTIR-6073&rsquo;s overlay delta), so nothing overlay-specific is drawn. Pressing the door
-      here does what the refusal press does: it strips the approval address and opens the planner in
-      ONE replace (see <code>ai-chat/planning-workspace--refusal-seed.mock.html</code> sheet 1). The
-      approval overlay does not stay underneath.
+      (MOTIR-6073&rsquo;s overlay delta), so nothing overlay-specific is drawn. Pressing the door is
+      itself the yes: it opens the planner directly, with no second ask. It strips the approval
+      address and opens the planner in ONE replace (see
+      <code>ai-chat/planning-workspace--refusal-seed.mock.html</code> sheet 1). The approval overlay
+      does not stay underneath.
     </p>
     <p class="panel-label">Panel 3 — where the door is NOT drawn</p>
     <div class="panel">

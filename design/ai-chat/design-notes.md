@@ -3735,7 +3735,7 @@ base assets it amends are records of their own moment and are not edited, and th
 (AMENDMENT 4 retired the export). Published as MOTIR-6236's design result, which is what MOTIR-6238 is
 `blocked_by`.
 
-## ⭐ The SEEDED re-plan — a refusal opens the planner with the first turn written, and unsent (MOTIR-6206, 2026-09-25)
+## ⭐ The SEEDED re-plan — a refusal OFFERS the planner, with the first turn written and unsent (MOTIR-6206, 2026-09-25)
 
 **Asset:** `design/ai-chat/planning-workspace--refusal-seed.mock.html` — a **DELTA**, ten sheets,
 en + zh, light + dark, the conversation at MOTIR-6236's 480px (`defaultRailWidth(1440)`). It amends
@@ -3763,11 +3763,12 @@ confirm band in sheet 1 is MOTIR-6073's panel 2b. The decided band and its door 
 
 ### The sheets
 
-1. **The hand-off**, in four stages with the address under each: A, the refusal pressed in the
-   approval overlay; B, the decision commits and ONE `shallowReplace` swaps the approval address for
-   the planning address, with the seed read in flight; C, the seeded planner over the same host page;
-   D, Close lands on the host page (not in the approval overlay), whose decided band now carries
-   **Re-plan with AI**.
+1. **The hand-off, ASKING FIRST (amended 2026-09-25).** In the approval overlay: A, the refusal is
+   pressed; B, it commits and the decided band ASKS, with nothing opened; C, yes (**Re-plan with AI**)
+   does one `shallowReplace` from the approval address to the planning address, and the seeded planner
+   rises; D, **Not now** or Esc leaves the overlay on the decided record, with focus on its door. On the
+   item page: B′ is the same ask in place (en and zh); C′ is yes, the same planner over the item page;
+   D′ is Not now, the decided record with its door, which is also where Close from the planner lands.
 2. **`decision_approval` · Request changes**, seeded, en and zh.
 3. **`decision_confirmation` · Overturn**, with three supersedes keys and with none, en and zh.
 4. **`decision_choice` · None of these**, en and zh.
@@ -3781,14 +3782,32 @@ confirm band in sheet 1 is MOTIR-6073's panel 2b. The decided band and its door 
 
 ### The decisions
 
-- **The hand-off is ONE address REPLACE, and the approval overlay is never underneath.**
-  `useOpenRefusalReplan().open(gateId)` (MOTIR-6211) does what `usePlanGateForward.ts` already does:
-  it strips `approval` / `approvalKind`, writes `plan=replan&planFrom=refused-gate&planGate=<id>`, and
-  replaces the history entry. The approval overlay's question has been answered, so there is nothing
-  to go Back to. Close strips the planning params and lands on the host page as it was. On the item
-  page's Development block, where `decision_approval` can also be refused, stage A is the band in
-  place and B–D are identical. **The address carries the gate id and nothing else.** No reason text
-  and no card title go in the URL (§10f).
+- **The planner does NOT open when the decision is recorded. The band ASKS first (amended
+  2026-09-25).** The design gate came back CHANGES REQUESTED, and the reviewer's note, verbatim, is:
+  _"Let the user confirm he wants to go to motir AI to replan the work item."_ After Request changes,
+  Overturn or None of these commits, the just-decided band shows the ask in the place where the door
+  will sit: _"Re-plan {key} with Motir AI?"_, two consequence lines, **Not now** and **Re-plan with
+  AI**. That state is drawn once, in `design/work-items/approval-control--replan-door.mock.html`
+  panel 0. Sheet 1 here shows the flow around it.
+- **Why an inline ask and not a dialog.** `components/ui` has no confirm-dialog primitive; it has
+  only `Modal`. The approval surfaces confirm with the inline band, and `ApprovalGateControl`'s
+  `confirming` phase states the rule: _"an inline band over the verbs, never a modal"_. In the
+  approval overlay, a dialog would stack a modal on a full-screen modal. The inline ask sits exactly
+  where the door will sit, so declining only turns the question into the door.
+- **Keyboard and focus.** When the ask appears, focus moves to **Re-plan with AI**, so Enter means
+  yes. **Esc means Not now.** In the approval overlay, Esc inside the ask declines and does not also
+  close the overlay. After Not now, focus goes to the **Re-plan with AI** door that replaces the ask.
+  The ask is shown once, to the person who pressed the refusal, right after it commits. It is client
+  state and is never stored, so a reload, another viewer or a later visit sees only the record and
+  its door.
+- **Yes is ONE address REPLACE, and the approval overlay is never left underneath.**
+  `useOpenRefusalReplan().open(gateId)` (MOTIR-6211) does what `usePlanGateForward.ts` already does.
+  It strips `approval` / `approvalKind`, writes `plan=replan&planFrom=refused-gate&planGate=<id>`,
+  and replaces the history entry. The approval overlay's question has been answered, so there is
+  nothing to go Back to. Close strips the planning params and lands on the host page, whose decided
+  band carries the door. **The address carries the gate id and nothing else.** No reason text and no
+  work-item title go in the URL (§10f). The door itself is a yes, so pressing it opens the planner
+  directly, with no second ask.
 - **The turn is in the COMPOSER, unsent.** The transcript is empty. The opener bubble is not a turn,
   and it reads _"Opened in the context of {item}."_ because the launch resolves to a `work-item`
   re-plan on `anchorKey`. The mode chip reads **plan change**. The field is focused, sized to its
@@ -3904,9 +3923,71 @@ strips it with the other seven.
   not claim _"Reopened from the Plans page"_. Its criterion _"while the seed loads, the composer is
   disabled"_ is met by the skeleton, where no enabled composer exists. A component test can assert
   that no textbox and no re-plan placeholder render while the fetch is pending.
-- **MOTIR-6211 (the hand-off and the door)** — GIVES stages A–D: one replace, and Close to the host
-  page. TAKES nothing.
+- **MOTIR-6211 (the hand-off and the door)** — GIVES the ask and the yes / Not now paths, drawn on
+  both hosts. **TAKES _"open it the moment the decision commits"_.** The amended wording is in
+  §"The amendment of 2026-09-25" below.
 - **MOTIR-6209 (the Plans row)** — nothing on this surface. See `design/ai-planning/design-notes.md`.
+- **MOTIR-6068 (the story)** and **MOTIR-6213 (its E2E)** — the amendment below TAKES _"as soon as the
+  decision is recorded"_ from the story's first criterion, and changes the E2E's first step.
+
+### The amendment of 2026-09-25 — confirm before the seeded planner opens
+
+**The design gate came back CHANGES REQUESTED on 2026-09-25.** The reviewer's note, verbatim: _"Let the
+user confirm he wants to go to motir AI to replan the work item."_ Every sheet except sheet 1 is
+unchanged. The seeded composer, loading, return, fall-back and contract are all as before, because the
+ask sits in front of them. The copy for the ask:
+
+| key (suggested; MOTIR-6211 owns the namespace) | en                                                                               | zh                                                         |
+| ---------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `approvalGate.replanAsk.title`                 | `Re-plan {key} with Motir AI?`                                                   | `用 Motir AI 重新规划 {key}？`                             |
+| `approvalGate.replanAsk.opens`                 | `Motir AI opens on {key} with your reason already written as the first message.` | `Motir AI 会在 {key} 上打开，并把你的理由写成第一条消息。` |
+| `approvalGate.replanAsk.unsent`                | `Nothing is sent until you send it — you can edit it first.`                     | `在你发送之前不会发出任何内容——你可以先修改。`             |
+| `approvalGate.replanAsk.yes`                   | `Re-plan with AI` (the door's own label)                                         | `用 AI 重新规划`                                           |
+| `approvalGate.replanAsk.no`                    | `Not now`                                                                        | `暂时不用`                                                 |
+
+_Not now_ / _暂时不用_ is the planning surface's existing decline (`planningWorkspace.handoff.notNow`).
+
+**The wording proposed for the consumer cards.** This design edits no card; the orchestrator amends
+them on the record.
+
+- **MOTIR-6068, acceptance criterion 1.** Replace it with: _"Refusing a `decision_approval` with a
+  reason, overturning a `decision_confirmation` with a note, and pressing *None of these* on a
+  `decision_choice` with a reason each, once the decision is recorded, ASK the person in the decided
+  band whether to re-plan the work item with Motir AI. Only **Re-plan with AI** opens the planning
+  surface over the current page. **Not now** (or Esc) opens nothing and leaves them on the decided
+  record, with its Re-plan with AI door."_ In the journey, "Right after the press, the planning
+  surface opens…" becomes "Right after the press, they are asked whether to re-plan with Motir AI;
+  on yes, the planning surface opens…". Verification steps 1, 4 and 5 gain "the band asks; press
+  **Re-plan with AI**" before "the planning surface opens". Add a step: _"Press Not now instead:
+  nothing opens, and the record shows Re-plan with AI."_
+- **MOTIR-6211.** Title: _"A REFUSAL ASKS, THEN HANDS OFF to the seeded planner — after Request
+  changes on a decision, Overturn or None of these commits, the decided band asks to re-plan with
+  Motir AI and opens the planner on yes; the three decided record bands carry Re-plan with AI in
+  place of the overturned band's plain epic entrance (+ user doc, en + zh)"_.
+  - Deliver 2 becomes: _"After a successful refusal of one of the three kinds (`isRefusalSeedGate`),
+    render the ASK in the just-decided band, in the place of the door. Use the confirm-band grammar:
+    a title, two consequence lines, **Not now** (ghost) and **Re-plan with AI** (primary). Focus goes
+    to Re-plan with AI. Esc means Not now and stops propagation, so the approval overlay stays open.
+    Re-plan with AI calls `open(gate.id)`. Not now removes the ask and shows the door, with focus on
+    it. The ask is transient client state for the person who pressed, and is never persisted."_
+  - Criteria 1–2 become: _"Pressing Request changes with a reason on a `decision_approval` (overlay or
+    item page), Overturn with a note, or None of these with a reason (overlay) shows the ask in the
+    decided band and opens nothing. Re-plan with AI closes the approval overlay's address and opens
+    the planning overlay at `planFrom=refused-gate&planGate=<id>`. Not now or Esc opens nothing,
+    leaves the approval overlay open on the decided record where it applies, and shows Re-plan with
+    AI with focus on it."_
+  - Add: _"A reload after the press shows the door, never the ask."_ Criterion 3 reads _"No other
+    outcome shows the ask or opens the planner…"_. The user-doc section says the planner is
+    **offered** after these refusals, not opened.
+- **MOTIR-6213.** Title: _"…Request changes on a decision ASKS, then Re-plan with AI opens the seeded
+  planner, close and reopen from the door, send and return to the session, then Overturn (Not now,
+  then the door) and None of these"_. The E2E's first step becomes: _"press Request changes with a
+  reason → assert the band asks 'Re-plan {key} with Motir AI?' and no planning overlay is open → press
+  Re-plan with AI → the seeded planner opens."_ The Overturn leg first presses **Not now** and asserts
+  that nothing opened, the approval overlay is still open, and the door has focus. Then it presses the
+  door. The None of these leg answers the ask with Enter.
+- **MOTIR-6210, MOTIR-6208, MOTIR-6209** — unaffected. The ask sits before the `planGate` address is
+  written.
 
 Referenced for provenance only: MOTIR-6011, MOTIR-6019, MOTIR-6024, MOTIR-6067, MOTIR-6072,
 MOTIR-6073, MOTIR-6154, MOTIR-6156, MOTIR-6159, MOTIR-6207, MOTIR-6236, MOTIR-6238. `ACME-38`,
