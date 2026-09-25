@@ -1036,6 +1036,10 @@ export default defineConfig({
         // (`tests/plans/validateProposedDifficulty`, `proposedDifficulty`,
         // `planDifficultyStoryGate`): 100 stmts · 100 branch · 100 fn · 100 lines.
         'lib/plans/validateProposedDifficulty.ts',
+        // Story MOTIR-5544 · MOTIR-6283 — the run-found planning bug's COMPOSER,
+        // the one place a customer's text could cross into Motir's own project.
+        // Pure; gated from its own spec (`tests/plans/runFoundPlanningBug`).
+        'lib/plans/runFoundPlanningBug.ts',
         // Story 7.12 · Subtask 7.12.6 (MOTIR-912) — the REVIEW-AND-CONFIRM seam
         // the story's rail runs on (MOTIR-1746/1747). `planReview.ts` answers the
         // three questions every AI-planning entrance asks of a run (is a proposal
@@ -4377,6 +4381,13 @@ export default defineConfig({
         'lib/plans/validateProposals.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-6095 · MOTIR-6141 — the plan path's difficulty bar.
         'lib/plans/validateProposedDifficulty.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        // Story MOTIR-5544 · MOTIR-6283 — the run-found planning bug's composer.
+        'lib/plans/runFoundPlanningBug.ts': {
           branches: 90,
           functions: 90,
           lines: 90,
