@@ -87,6 +87,9 @@ export const APPROVED_SHAPE_IGNORED_KEYS: ReadonlySet<string> = new Set([
   'comment',
   // a plan `remove`'s archive reason (written inside the approve itself)
   'reason',
+  // the provenance of a re-scope reset (MOTIR-5359, retired by MOTIR-5640) — it
+  // rode a `status` cell on historic rows; the activity registry still reads it
+  'statusReset',
   // identity columns only a `created` row carries
   'projectId',
   'key',
