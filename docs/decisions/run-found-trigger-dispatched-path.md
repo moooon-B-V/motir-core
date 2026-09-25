@@ -90,9 +90,10 @@ This is the strict reading, and the reviewer can relax it to `sourceJobId != nul
 
 **This precondition is the dispatched (product) path's, and motir-meta is an exception.** The
 runbook `motir run` plans Motir itself through the MCP (`authorSource: 'mcp'`) and keeps filing
-its planning bugs under its own run-found rule (MOTIR-6231, conditional on the same verdict),
-through its own door rather than this endpoint. This record changes nothing in motir-meta's
-plan or run procedures.
+its planning bugs under its own run-found rule (MOTIR-6231, conditional on the same verdict).
+**The runbook NEVER calls this endpoint**: it files a planning bug directly, from its own plan
+procedure (the re-plan's planning-bug act, `create_work_item` into the planner-bug home). This
+record changes nothing in motir-meta's plan or run procedures.
 
 **The verdict (recommended, the reviewer can overrule): file only on `unchanged`.** That is the
 story's premise: a target edited after approval (`changed`) or never shaped by a plan
