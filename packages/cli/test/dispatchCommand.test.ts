@@ -532,6 +532,93 @@ describe('motir run <key>', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HARD vs SOFT blocks — `--allow-soft-block` (MOTIR-6355)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The verdict the command already read tells the two apart: open blockers of
+// its own are HARD; `ready: false` with none and a `blockedByAncestor` is SOFT.
+describe('motir run <key> --allow-soft-block (MOTIR-6355)', () => {
+  const SOFT = workItem({
+    readiness: {
+      ready: false,
+      openBlockers: [],
+      blockedByAncestor: { identifier: 'PROD-2', title: 'The story' },
+    },
+  });
+  const HARD = workItem({
+    readiness: {
+      ready: false,
+      openBlockers: [{ identifier: 'PROD-3', kind: 'subtask', title: 'Schema', status: 'todo' }],
+      blockedByAncestor: { identifier: 'PROD-2', title: 'The story' },
+    },
+  });
+
+  it('claims and dispatches a SOFT-blocked item, naming the overridden ancestor', async () => {
+    setup({ detail: SOFT });
+    await runCommand('PROD-7', { allowSoftBlock: true, print: true });
+    expect(toolNames()).toEqual(['get_work_item', 'whoami', 'claim', 'dispatch_prompt']);
+    expect(harness.stderr).toContain(
+      "PROD-7 is held only by its ancestor PROD-2's block — dispatching (--allow-soft-block).",
+    );
+    expect(harness.stderr).not.toContain('(--force)');
+    expect(harness.stdout).toBe(PROMPT_TEXT);
+  });
+
+  it('still REFUSES a HARD-blocked item, naming its blockers, and claims nothing', async () => {
+    setup({ detail: HARD });
+    const err = await runCommand('PROD-7', { allowSoftBlock: true, print: true }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(CliError);
+    expect((err as CliError).message).toMatch(/PROD-7 is not ready.*PROD-3 \(Schema\)/s);
+    expect((err as CliError).hint).toContain('overrides only an ancestor');
+    expect((err as CliError).hint).toContain('--force');
+    expect(toolNames()).toEqual(['get_work_item']);
+  });
+
+  it('dispatches a READY item with the flag silently — there is nothing to override', async () => {
+    setup();
+    await runCommand('PROD-7', { allowSoftBlock: true, print: true });
+    expect(toolNames()).toEqual(['get_work_item', 'whoami', 'claim', 'dispatch_prompt']);
+    expect(harness.stderr).not.toContain('--allow-soft-block');
+  });
+
+  it('WITHOUT the flag, a SOFT block is refused and the hint names --allow-soft-block', async () => {
+    setup({ detail: SOFT });
+    const err = await runCommand('PROD-7', {}).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CliError);
+    expect((err as CliError).hint).toContain('--allow-soft-block');
+    expect((err as CliError).hint).not.toContain('--force');
+    expect(toolNames()).toEqual(['get_work_item']);
+  });
+
+  it('WITHOUT the flag, a HARD block is refused and the hint names --force', async () => {
+    setup({ detail: HARD });
+    const err = await runCommand('PROD-7', {}).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CliError);
+    expect((err as CliError).hint).toBe('Pass --force to dispatch it anyway.');
+  });
+
+  it('--force still passes a SOFT block, and says --force', async () => {
+    setup({ detail: SOFT });
+    await runCommand('PROD-7', { force: true, print: true });
+    expect(toolNames()).toContain('dispatch_prompt');
+    expect(harness.stderr).toContain('dispatching anyway (--force)');
+  });
+
+  it('refuses --allow-soft-block with --force as redundant, before any read', async () => {
+    setup({ detail: SOFT });
+    const err = await runCommand('PROD-7', { allowSoftBlock: true, force: true }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(CliError);
+    expect((err as CliError).message).toContain('redundant with `--force`');
+    expect((err as CliError).hint).toContain('`--force` already overrides both');
+    expect(toolNames()).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // THE CLAIM DISCRIMINATES (MOTIR-3048)
 // ─────────────────────────────────────────────────────────────────────────────
 //

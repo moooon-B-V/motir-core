@@ -727,8 +727,11 @@ they describe have different shapes.
 
 > A **ready set or a sprint spans many parents**, so its edges are disconnected
 > fragments with no graph to draw → a **column**. A **story's children are one
-> closed dependency graph** (every `blocked_by` edge joins siblings under the
-> same parent) → a **build order**.
+> dependency graph** → a **build order**. A `blocked_by` edge joins two work
+> items at the **same level** (epic·epic, story·story, leaf·leaf), and the two
+> may sit under **different parents** — so an edge into the story from outside
+> it is a blocker the build order does not own, and the drain reports it rather
+> than working it.
 
 #### 1. Edge COLUMNS — on `motir ready` and `motir sprint`
 
@@ -858,7 +861,7 @@ reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 | Command                | Flags                                                                                                                                                                                        |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `motir next`           | `--kinds <list>` · `--print` · `--print-prompt` · `--agent <cmd>` · `--reset` · `--disable-log-bug` · `--disable-replan`                                                                     |
-| `motir run <scope>`    | `--print`¹ · `--print-prompt` · `--agent <cmd>` · `--force`¹ · `--max <n>` · `--keep-going` · `--include-planning` · `--disable-log-bug` · `--disable-replan`                                |
+| `motir run <scope>`    | `--print`¹ · `--print-prompt` · `--agent <cmd>` · `--force`¹ · `--allow-soft-block`² · `--max <n>` · `--keep-going` · `--include-planning` · `--disable-log-bug` · `--disable-replan`        |
 | `motir auto`           | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` · `--print-prompt` · `--disable-log-bug` · `--disable-replan` · `--auto-approve-replan` |
 | `motir batch`          | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--print-prompt` · `--disable-log-bug` · `--disable-replan`                                                  |
 | `motir plan [args...]` | `--detach`                                                                                                                                                                                   |
@@ -869,6 +872,7 @@ motir next --kinds subtask --print
 motir next --agent "claude --dangerously-skip-permissions" --reset
 motir run MOTIR-42 --print                  # ONE item
 motir run MOTIR-42 --force                  # dispatch it even though it isn't ready
+motir run MOTIR-42 --allow-soft-block       # dispatch it though its EPIC/STORY is blocked
 motir run MOTIR-40 --agent "…"              # a whole STORY: claim its leaves, work them all
 motir run sprint --agent "…" --max 5        # the ACTIVE sprint, first five cards
 motir auto --agent "claude --dangerously-skip-permissions" --max 5 --keep-going
@@ -888,6 +892,24 @@ cannot be finished needs a re-plan rather than a forced run. Passed with a
 container they fail with that sentence. `--kinds` is refused on a scope for a
 sharper reason — the claim is all-or-nothing over the whole membership, so a
 filtered run would HOLD cards it never worked.
+
+² **HARD vs SOFT blocks.** A work item with its **own** open `blocked_by`
+dependency is **HARD**-blocked. One whose own dependencies are all done, but
+whose epic or story has an open blocker, is **SOFT**-blocked — held only by an
+ancestor's block. `--allow-soft-block` runs past a SOFT block and never past a
+HARD one:
+
+- On a **leaf**, a SOFT-blocked item is dispatched with one line naming the
+  ancestor it overrode; a HARD-blocked one is still refused.
+- On a **story**, the story's own verdict is read first: if the story itself
+  has an open blocker the run is refused before anything is claimed. Otherwise
+  the scope is built from the ready read with `allowSoftBlock=true`, so the
+  children held only by the story's ancestor chain are in it. A child with its
+  own open blocker outside the scope stays out and is reported, never built.
+
+`--force` overrides both kinds (leaf only), so `--allow-soft-block --force` is
+refused as redundant. `motir next`, `motir auto` and `motir batch` do not take
+the flag — a pick from the ready set never reaches past a block.
 
 `--print` is **registered but refused** on `auto` and `batch` too: an unattended
 run has nobody to paste a prompt, so the flag fails with guidance rather than
@@ -1818,8 +1840,10 @@ root is not covered.
 **`MOTIR-42 is not ready. Waiting on: …`** — readiness is dependency-only, so
 the message names the open blockers (and an ancestor that is itself blocked). If
 you know a blocker is about to merge, override it deliberately:
-`motir run MOTIR-42 --force`. This is a refusal rather than a silent decision on
-purpose.
+`motir run MOTIR-42 --force`. When the only thing holding it is an ancestor's
+block (a SOFT block), the hint names the narrower override instead:
+`motir run MOTIR-42 --allow-soft-block`. This is a refusal rather than a silent
+decision on purpose.
 
 **`Suspect dispatch: the agent exited 0 but "<repo>" still has no checkout at
 <path>.`** — a bootstrap dispatch did not produce its checkout. Usually the repo
