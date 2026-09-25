@@ -229,7 +229,9 @@ test('an Owner hands the organization over; each role then holds exactly its own
     const created = actionWrite(page, '/settings/organization', 'Scratch');
     await create.getByRole('button', { name: 'New workspace', exact: true }).click();
     expect((await created).status()).toBe(200);
-    await expect(page.getByText('Scratch', { exact: true })).toBeVisible();
+    // Scoped to the card: creating a workspace also switches into it, so the
+    // header's workspace and project switchers read 'Scratch' too.
+    await expect(page.getByLabel('Workspaces').getByText('Scratch', { exact: true })).toBeVisible();
     await beat();
 
     await page.getByRole('button', { name: 'Remove Scratch' }).click();
