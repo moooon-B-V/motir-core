@@ -32,6 +32,11 @@ describe('runsHref — the two parameters compose, neither replaces the other', 
 
   it('spells every combination', () => {
     expect(runsHref()).toBe('/runs');
+    // MOTIR-6335 — WHOSE runs, first, and composing with both other parameters.
+    expect(runsHref({ view: 'mine' })).toBe('/runs?view=mine');
+    expect(runsHref({ view: 'mine', scope: 'MOTIR-1789', run: 'r' })).toBe(
+      '/runs?view=mine&scope=MOTIR-1789&run=r',
+    );
     expect(runsHref({ scope: 'MOTIR-1789' })).toBe('/runs?scope=MOTIR-1789');
     expect(runsHref({ run: 'run_7f2c' })).toBe('/runs?run=run_7f2c');
     expect(runsHref({ scope: 'MOTIR-1789', run: 'run_7f2c' })).toBe(

@@ -8320,8 +8320,16 @@
       "emptyTitle": "{key} 尚未作为范围运行过",
       "emptyBody": "用 motir run {key} 运行整个工作项。单独处理其某个子项的运行，会显示在该子项的页面上。",
       "notFoundTitle": "此项目中没有工作项 {key}",
-      "notFoundBody": "它可能已被删除，或你没有访问权限。已删除工作项的运行仍在“全部运行”中，按其标签列出。"
-    }
+      "notFoundBody": "它可能已被删除，或你没有访问权限。已删除工作项的运行仍在“全部运行”中，按其标签列出。",
+      "emptyMineTitle": "你还没有将 {key} 作为范围运行过"
+    },
+    "viewAria": "显示你的运行或整个项目的运行",
+    "indexSubtitleMine": "你在 {project} 中发起的运行——正在进行的和已完成的。",
+    "indexEmptyMineTitle": "你还没有发起过运行",
+    "indexEmptyMineBody": "当你用 motir next、motir run 或 motir batch 派发工作时，你的每一次运行都会出现在这里——正在进行的，以及此前的每一次。",
+    "indexEmptyBodyRead": "当本项目的工作通过 motir next、motir run 或 motir batch 派发时，每一次运行都会出现在这里——正在进行的，以及此前的每一次。",
+    "noneRunningMine": "当前没有你发起的正在运行的任务。",
+    "nonePastMine": "你发起的运行还没有已完成的。"
   },
   "repositoryPicker": {
     "add": "添加仓库",

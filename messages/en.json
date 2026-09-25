@@ -8324,8 +8324,16 @@
       "emptyTitle": "{key} has not been run as a scope yet",
       "emptyBody": "Run the whole work item with motir run {key}. A run that worked one of its children on its own shows on that child’s page.",
       "notFoundTitle": "No work item {key} in this project",
-      "notFoundBody": "It may have been deleted, or you may not have access to it. Runs of a deleted work item stay under All runs, listed by their label."
-    }
+      "notFoundBody": "It may have been deleted, or you may not have access to it. Runs of a deleted work item stay under All runs, listed by their label.",
+      "emptyMineTitle": "You haven’t run {key} as a scope yet"
+    },
+    "viewAria": "Show your runs or the whole project's",
+    "indexSubtitleMine": "Runs you started in {project} — current and past.",
+    "indexEmptyMineTitle": "You haven’t started a run yet",
+    "indexEmptyMineBody": "When you dispatch work with motir next, motir run or motir batch, your runs appear here — the one happening now, and every one before it.",
+    "indexEmptyBodyRead": "When work in this project is dispatched with motir next, motir run or motir batch, every run appears here — the one happening now, and every one before it.",
+    "noneRunningMine": "Nothing you started is running.",
+    "nonePastMine": "No run you started has finished yet."
   },
   "repositoryPicker": {
     "add": "Add repository",

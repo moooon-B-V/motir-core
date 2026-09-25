@@ -53,6 +53,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms/roomView';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE DISPATCH RUN SERVICE (Story MOTIR-1789 · MOTIR-1792) — the WRITE half of
@@ -976,6 +977,29 @@ export const dispatchRunService = {
         return { runs: runs.map(toDispatchRunListItemDto), scope: served };
       },
     );
+  },
+
+  /**
+   * The Runs ROOM's views for this reader (Story MOTIR-6179 · MOTIR-6335):
+   * `project` on `run:view_any` (role ∩ token grant), `mine` on a way to act —
+   * starting a run (`RUN_ACT_PERMISSIONS`, what {@link open} asserts). Empty ⇒ the
+   * room is closed to them. `canRun` also picks the Project-empty copy.
+   */
+  async roomAccess(
+    projectKey: string,
+    ctx: ServiceContext,
+  ): Promise<{ views: DispatchRunView[]; canRun: boolean }> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    const held = await projectAccessService.getPermissions(project.id, ctx);
+    if (!held.has('project:browse')) return { views: [], canRun: false };
+    const canRun = holdsAnyOf(held, RUN_ACT_PERMISSIONS);
+    return {
+      views: availableRoomViews({
+        hasViewKey: holdsRecordView(held, ctx, 'run:view_any'),
+        canAct: canRun,
+      }),
+      canRun,
+    };
   },
 
   /**

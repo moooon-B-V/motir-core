@@ -22,9 +22,25 @@ const redirected = vi.fn((_to: string) => {
   throw new Error('NEXT_REDIRECT');
 });
 const getRunScope = vi.fn();
-const listRunsForProject = vi.fn(async () => []);
+const listRunsForProject = vi.fn(async (..._args: unknown[]) => ({ runs: [], scope: 'project' }));
+const roomAccess = vi.fn(async (..._args: unknown[]) => ({
+  views: ['project'] as ('mine' | 'project')[],
+  canRun: true,
+}));
 
-vi.mock('next/navigation', () => ({ redirect: (to: string) => redirected(to) }));
+vi.mock('next/navigation', () => ({
+  redirect: (to: string) => redirected(to),
+  notFound: () => {
+    throw new Error('NEXT_NOT_FOUND');
+  },
+}));
+// The switch is its own suite's (`approval-records-page.test.tsx` presses it);
+// here it only has to be recognisable, with the value the page handed it.
+vi.mock('@/components/rooms/RoomViewSwitch', () => ({
+  RoomViewSwitch: ({ label, value }: { label: string; value: string }) => (
+    <div role="group" aria-label={label} data-value={value} />
+  ),
+}));
 vi.mock('next-intl/server', () => ({
   // The key IS the rendered text, with a `{key}` value appended where one is
   // passed — enough to tell the three faces apart without a catalog.
@@ -45,7 +61,8 @@ vi.mock('@/lib/projects', () => ({
 vi.mock('@/lib/services/dispatchRunService', () => ({
   dispatchRunService: {
     getRunScope: (...args: unknown[]) => getRunScope(...args),
-    listRunsForProject: () => listRunsForProject(),
+    listRunsForProject: (...args: unknown[]) => listRunsForProject(...args),
+    roomAccess: (...args: unknown[]) => roomAccess(...args),
   },
 }));
 // The list is the index's own suite; here it only has to be recognisable.
@@ -55,8 +72,10 @@ vi.mock('@/app/(authed)/runs/_components/RunsIndex', () => ({
 
 const { default: RunsPage } = await import('@/app/(authed)/runs/page');
 
-const page = (scope?: string) =>
-  RunsPage({ searchParams: Promise.resolve(scope === undefined ? {} : { scope }) });
+const page = (scope?: string, extra: Record<string, string> = {}) =>
+  RunsPage({
+    searchParams: Promise.resolve({ ...(scope === undefined ? {} : { scope }), ...extra }),
+  });
 
 /**
  * Every string in a returned element tree, without rendering it. A React
@@ -75,6 +94,8 @@ function textOf(node: unknown, seen = new WeakSet<object>()): string {
 beforeEach(() => {
   getRunScope.mockReset();
   listRunsForProject.mockClear();
+  roomAccess.mockClear();
+  roomAccess.mockResolvedValue({ views: ['project'], canRun: true });
 });
 afterEach(() => cleanup());
 
@@ -122,5 +143,46 @@ describe('the whole-project page never makes the header read', () => {
   it('a blank `?scope=` narrows nothing either', async () => {
     await page('   ');
     expect(getRunScope).not.toHaveBeenCalled();
+  });
+});
+
+// ── THE VIEW (Story MOTIR-6179 · MOTIR-6335, design MOTIR-6327) ──────────────
+describe('/runs — the Mine / Project view', () => {
+  it('a reader with NEITHER the key nor a way to run gets not-found', async () => {
+    roomAccess.mockResolvedValue({ views: [], canRun: false });
+    await expect(page()).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  it('a MEMBER gets the switch; the narrowed page’s All-runs link KEEPS the view', async () => {
+    roomAccess.mockResolvedValue({ views: ['mine', 'project'], canRun: true });
+    getRunScope.mockResolvedValue({ key: 'PROD-7', title: 'A story', archived: false });
+    render(await page('PROD-7', { view: 'mine' }));
+    expect(screen.getByRole('group', { name: 'viewAria' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'scopeIndex.allRuns' }).getAttribute('href')).toBe(
+      '/runs?view=mine',
+    );
+  });
+
+  it('a VIEWER gets the Project index, no switch; a runner without the key gets Mine, no switch', async () => {
+    roomAccess.mockResolvedValue({ views: ['project'], canRun: false });
+    render(await page(undefined, { view: 'mine' }));
+    expect(screen.queryByRole('group', { name: 'viewAria' })).toBeNull();
+    expect(screen.getByText('indexSubtitle')).toBeTruthy();
+    cleanup();
+    roomAccess.mockResolvedValue({ views: ['mine'], canRun: true });
+    render(await page(undefined, { view: 'project' }));
+    expect(screen.queryByRole('group', { name: 'viewAria' })).toBeNull();
+    expect(screen.getByText(/indexSubtitleMine/)).toBeTruthy();
+  });
+
+  it('a two-view reader on a clean URL lands on Mine when Mine has a run, else Project', async () => {
+    roomAccess.mockResolvedValue({ views: ['mine', 'project'], canRun: true });
+    listRunsForProject.mockResolvedValueOnce({ runs: [{ id: 'r1' }] as never, scope: 'mine' });
+    render(await page());
+    expect(screen.getByText(/indexSubtitleMine/)).toBeTruthy();
+    cleanup();
+    listRunsForProject.mockResolvedValueOnce({ runs: [], scope: 'mine' });
+    render(await page());
+    expect(screen.queryByText(/indexSubtitleMine/)).toBeNull();
   });
 });
