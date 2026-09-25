@@ -1,0 +1,3868 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · DELTA — the board refuses ON THE CARD while a plan holds it (MOTIR-6017 ·
+      MOTIR-6264)
+    </title>
+    <!--
+      DELTA MOCK — design subtask MOTIR-6264 (Story MOTIR-6017). Spec:
+      design/boards/design-notes.md section "The board refuses ON THE CARD while a
+      PLAN holds it". Built by MOTIR-6268.
+
+      IT EDITS NO EXISTING MOCK. The base is design/boards/board.mock.html panel 2b
+      (MOTIR-5525): a move HELD by an approval or a merge springs back and the held
+      line is anchored ON the returned card. That sheet is a RECORD. This sheet
+      carries its STYLESHEET and ICON SPRITE verbatim — so the two cannot drift —
+      and adds only a small DELTA-ONLY block after them.
+
+      THE LINE IS NOT OURS. Its copy, its string keys (approvalGate.statusHeld
+      planHeld · planState.<status> · reviewPlan), its Lock glyph and its Sparkles
+      door are owned by design/work-items/status-held-by-decision--plan-hold.mock.html
+      (MOTIR-6263); its panel 8 is the /items row sibling of what this sheet draws
+      on a board card. The rule is docs/decisions/agent-authored-plans.md
+      AMENDMENT 21.
+
+      The components composed, read rather than reconstructed:
+      app/(authed)/boards/_components/BoardHeldRefusal.tsx (BoardCardHeldRefusal:
+      the [data-board-held] mt-2 wrapper under the card), components/issues/
+      StatusHeldNotice.tsx (the role="status" box), components/issues/heldRefusal.ts
+      (the code branch + useDismissOnEscapeOrOutside), and
+      app/(authed)/boards/_components/BoardContainer.tsx (runMove's snap-back, the
+      held aria-live region, the focus effect).
+
+      Every key, id, title and href below is an EXAMPLE of an interpolated value.
+      Toggle the theme for the dark board.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1240px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1240px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1240px;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed) board route) ─── */
+      .page {
+        padding: 24px 24px 8px;
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      .tb-btn.is-disabled {
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      /* ── The board: a horizontally-scrolling row of columns ───────────────── */
+      .board {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        overflow-x: auto;
+        padding: 4px 24px 24px;
+        scroll-snap-type: x proximity;
+      }
+      .col {
+        scroll-snap-align: start;
+        flex: 0 0 288px;
+        width: 288px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        display: flex;
+        flex-direction: column;
+        /* Uniform column height (3.2.8): every column is the same height
+           regardless of card count — a sparse column shows empty space below its
+           cards rather than hugging them. In the app this is a viewport-relative
+           `h-[calc(100dvh-12rem)]` layout height; the mock fixes it for the board view. */
+        height: 560px;
+      }
+      .col-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 12px 10px;
+      }
+      .col-head .nm {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        letter-spacing: 0.01em;
+      }
+      /* per-column card count (the total from the projection) */
+      .col-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .col-head .spacer {
+        flex: 1;
+      }
+      /* WIP-limit indicator SLOT — drawn as a placeholder; Story 3.3 enforces. */
+      .wip-slot {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+      }
+      .col-head .icon-btn {
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .col-head .icon-btn:hover {
+        background: var(--el-muted);
+      }
+      .col-head .icon-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .col-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 10px 10px;
+        overflow-y: auto;
+      }
+
+      /* ── Board card — REUSES the issue primitives, compactly ───────────────── */
+      .bcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        cursor: grab;
+        text-decoration: none;
+        color: inherit;
+      }
+      .bcard:hover {
+        border-color: var(--el-border-strong);
+      }
+      .bcard:hover .bc-title {
+        text-decoration: underline;
+      }
+      .bc-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .type-icon {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .bc-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .bc-top .spacer {
+        flex: 1;
+      }
+      /* the drag handle — a grip; the whole card is draggable, this signals it */
+      .grip {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+        flex: none;
+        opacity: 0;
+        transition: opacity 0.1s ease;
+      }
+      .bcard:hover .grip {
+        opacity: 1;
+      }
+      .bc-title {
+        font-size: 13.5px;
+        line-height: 1.35;
+        color: var(--el-text);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .bc-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .bc-meta .spacer {
+        flex: 1;
+      }
+
+      /* Pill (components/ui/Pill.tsx): hue in tint background, strong text */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--highest,
+      .pill--high {
+        background: var(--el-tint-rose);
+      }
+      .pill--highest .pic,
+      .pill--high .pic {
+        color: var(--el-danger);
+      }
+      .pill--medium {
+        background: var(--el-tint-sky);
+      }
+      .pill--medium .pic {
+        color: var(--el-info);
+      }
+      .pill--low {
+        background: var(--el-tint-mint);
+      }
+      .pill--low .pic {
+        color: var(--el-success);
+      }
+      .pill--blocked {
+        background: var(--el-tint-peach);
+      }
+      .pill--blocked .pic {
+        color: var(--el-warning);
+      }
+      /* estimate / story-point chip — neutral */
+      .pts {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+      }
+      /* Avatar — initial-letter, mirrors IssueTreeTable's Avatar */
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border: 1px dashed var(--el-border-strong);
+      }
+
+      /* empty column */
+      .col-empty {
+        margin: 4px 0 12px;
+        padding: 18px 10px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Drag states ──────────────────────────────────────────────────────── */
+      /* the source card's hole while it's lifted */
+      .bcard.ghost {
+        opacity: 0.4;
+        border-style: dashed;
+        box-shadow: none;
+      }
+      /* the insertion indicator between cards (NOT colour-alone — it's a bar) */
+      .insertion {
+        height: 3px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        margin: 1px 2px;
+      }
+      /* the column being targeted — ring + tint, plus the insertion bar above */
+      .col.drop-target {
+        outline: 2px solid var(--el-accent);
+        outline-offset: -1px;
+        background: var(--el-tint-lavender);
+      }
+      /* the DragOverlay clone — lifted, tilted, elevated */
+      .drag-overlay {
+        position: absolute;
+        right: 28px;
+        top: 96px;
+        width: 264px;
+        transform: rotate(2.5deg);
+        box-shadow: var(--shadow-elevated);
+        pointer-events: none;
+      }
+      .drag-overlay .bcard {
+        cursor: grabbing;
+        border-color: var(--el-accent);
+      }
+      .stage.rel {
+        position: relative;
+      }
+      /* keyboard "picked up" state — strong focus ring + lifted */
+      .bcard.picked {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+        box-shadow: var(--shadow-elevated);
+        cursor: grabbing;
+      }
+      .focus-ring {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+        border-radius: var(--radius-card);
+      }
+
+      /* aria-live announcement region (visually shown here for review; in prod
+         it is sr-only and read by the screen reader) */
+      .live {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 24px 12px;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        border: 1px dashed var(--el-border-strong);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .live .tag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+
+      /* keyboard hint chips */
+      .kbd-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 24px 16px;
+        align-items: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      kbd {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1;
+        padding: 3px 6px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* ── Toast (components/ui/Toast.tsx) — illegal-move rejection ──────────── */
+      .toast-wrap {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+        width: 340px;
+      }
+      .toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-danger);
+        box-shadow: var(--shadow-elevated);
+      }
+      .toast .t-ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-danger);
+        flex: none;
+        margin-top: 1px;
+      }
+      .toast .t-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .toast .t-body {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+
+      /* ── Scale: PURE scroll-to-load (3.2.8) ───────────────────────────────────
+         No "Load more" button and no "{n} loaded" note — the column auto-pages on
+         scroll-to-bottom (an IntersectionObserver sentinel). The only visible
+         affordance is a small in-flow spinner while a page is in flight (and, on a
+         failed page, a minimal focusable inline retry — `.load-retry`). */
+      .load-spin {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 0 2px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Unmapped-statuses tray (banner) ──────────────────────────────────── */
+      .tray {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 24px 14px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-yellow);
+        border: 1px solid transparent;
+      }
+      .tray .tr-ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-warning);
+        flex: none;
+      }
+      .tray .tr-text {
+        font-size: 13px;
+        color: var(--el-text-strong);
+        flex: 1;
+      }
+      .tray .tr-chips {
+        display: inline-flex;
+        gap: 6px;
+      }
+      .tray .tr-link {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-link);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .pill--neutral {
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* ── States: loading skeleton / empty / error ─────────────────────────── */
+      .sk {
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .pulse {
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .sk-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 16px;
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border-radius: 9999px;
+      }
+      .empty .ic-wrap svg {
+        width: 24px;
+        height: 24px;
+      }
+      .empty h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        font-family: var(--font-serif);
+      }
+      .empty p {
+        margin: 0 0 16px;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 360px;
+      }
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 16px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        border: 0;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn-primary svg {
+        width: 16px;
+        height: 16px;
+      }
+      .err .ic-wrap {
+        color: var(--el-danger);
+      }
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border);
+        border-top-color: var(--el-accent);
+        display: inline-block;
+      }
+
+      /* ── Mobile panel ─────────────────────────────────────────────────────── */
+      .phone {
+        max-width: 380px;
+        margin: 0 auto;
+        border: 1px solid var(--el-border);
+        border-radius: 22px;
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .phone .page {
+        padding: 16px 14px 6px;
+      }
+      .phone .page-head h2 {
+        font-size: 19px;
+      }
+      .phone .col-pager {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 14px 10px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .phone .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: var(--el-border-strong);
+      }
+      .phone .dot.on {
+        background: var(--el-accent);
+        width: 18px;
+        border-radius: 9999px;
+      }
+      .phone .board {
+        padding: 0 14px 18px;
+      }
+      .phone .col {
+        flex: 0 0 296px;
+        width: 296px;
+      }
+      .legend {
+        max-width: 1240px;
+        margin: 8px auto 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        padding-left: 2px;
+      }
+
+      /* ── PANEL 2b — ADDED 2026-09-14 (MOTIR-5525): a move HELD by an approval or a
+         merge. Composes design/work-items/status-held-by-decision.mock.html's held
+         line and its Button primary · sm. Tokens it needs that this asset did not yet
+         declare, mapped as app/globals.css maps them. ── */
+      :root {
+        --color-hairline-soft: #ede9e4;
+        --el-border-soft: var(--color-hairline-soft);
+        --height-btn-sm: 32px;
+      }
+      [data-theme='dark'] {
+        --color-hairline-soft: #1f1f1f;
+      }
+      .held-specs {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(580px, 1fr));
+        gap: 16px;
+        padding: 16px;
+      }
+      .held-spec .cap {
+        margin: 0 0 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .held-spec .cap code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+      .held-spec .board {
+        padding: 0;
+      }
+      .held-spec .col {
+        flex: 0 0 288px;
+        width: 288px;
+        min-height: 0;
+        height: auto;
+      }
+      .held-spec .col-body {
+        overflow: visible;
+      }
+      /* the returned card + the held line anchored to it (never a corner toast) */
+      .bcard-anchor {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .held {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        background: var(--el-tint-yellow);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+      }
+      .held-glyph {
+        flex: none;
+        display: inline-flex;
+        margin-top: 2px;
+        color: var(--el-text-strong);
+      }
+      .held-glyph svg {
+        width: 14px;
+        height: 14px;
+      }
+      .held-body {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 0;
+      }
+      .held-text {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .held-text strong {
+        font-weight: 600;
+      }
+      /* Button primary · sm — Button.tsx's emitted classes */
+      .held-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 500;
+        text-decoration: none;
+      }
+      .held-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .held-spec .live {
+        margin: 8px 0 0;
+      }
+    </style>
+    <style>
+      /* ── DELTA-ONLY (MOTIR-6264) — everything above this block is board.mock.html's
+         stylesheet, carried VERBATIM so the two assets cannot drift. ── */
+      /* the plan line's second sentence — design/work-items/status-held-by-decision--plan-hold.mock.html,
+         verbatim */
+      .held-sub {
+        margin: 2px 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      /* StatusHeldNotice's line is text-[13px] leading-snug; the wrapper is mt-2
+         (BoardHeldRefusal.tsx). Panel 2b drew 12.5px and a 6px gap. */
+      .held-text {
+        font-size: 13px;
+        line-height: 1.375;
+      }
+      .bcard-anchor {
+        gap: 8px;
+      }
+      .held-btn.is-focused {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .held-specs.is-stacked {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .held-spec .board {
+        padding: 10px;
+      }
+      .held-spec .cap.is-after {
+        margin: 10px 0 8px;
+      }
+      .held-spec .cap strong {
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .lang-tag {
+        display: inline-block;
+        margin: 0 8px 6px 0;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        color: var(--el-text-tertiary);
+      }
+      .state-chips {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+      .chip {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+      }
+      .chip strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .dismiss-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 16px;
+      }
+      .dismiss-row .col {
+        flex: 0 0 288px;
+        width: 288px;
+      }
+      .dismiss-step .stage {
+        overflow-x: auto;
+      }
+      .ann {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        color: var(--el-text);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .ann th,
+      .ann td {
+        text-align: left;
+        vertical-align: top;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .ann th {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .phone-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+      }
+      .phone.is-narrow {
+        /* a 320px viewport, plus the review frame's own 1px border each side */
+        max-width: 322px;
+        margin: 0;
+      }
+      .phone.is-narrow .board {
+        padding: 12px 14px 18px;
+      }
+      .phone.is-narrow .col {
+        flex: 0 0 292px;
+        width: 292px;
+        height: auto;
+      }
+      .phone .pager-text {
+        margin-left: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>The board refuses ON THE CARD while a plan holds it</h1>
+        <p>
+          DELTA of board.mock.html panel 2b · MOTIR-6264 (Story MOTIR-6017) · the line is
+          MOTIR-6263’s · the rule is AMENDMENT 21. See design-notes.md.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs — board.mock.html's sprite, VERBATIM -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-grip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="9" cy="6" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="18" r="1" />
+          <circle cx="15" cy="6" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="18" r="1" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-circle-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </g>
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-merge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="18" cy="18" r="3" />
+          <circle cx="6" cy="6" r="3" />
+          <path d="M6 21V9a9 9 0 0 0 9 9" />
+        </g>
+        <g
+          id="i-scan-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+          <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+          <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+          <circle cx="12" cy="12" r="1" />
+        </g>
+      </defs>
+    </svg>
+    <!-- DELTA-ONLY: lucide sparkles — the Motir AI glyph (components/planning/PlanWithAILauncher.tsx),
+         the door's glyph per the status-control delta -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+          />
+          <path d="M20 3v4" />
+          <path d="M22 5h-4" />
+          <path d="M4 17v2" />
+          <path d="M5 18H3" />
+        </g>
+      </defs>
+    </svg>
+    <div class="panel-label">
+      1 · plan <code>generating</code> — a drag out of Planning is refused ON THE CARD (409
+      <code>PLAN_TARGET_HELD</code>)
+    </div>
+    <div class="panel">
+      <div class="held-specs is-stacked">
+        <div class="held-spec">
+          <span class="lang-tag">EN</span>
+          <div class="state-chips">
+            <span class="chip">refusal <strong>PLAN_TARGET_HELD</strong></span
+            ><span class="chip">planStatus <strong>generating</strong></span
+            ><span class="chip">sessionId <strong>pcs_41f8</strong></span>
+          </div>
+          <p class="cap">
+            Dragged from <strong>Planning</strong> onto <strong>In Progress</strong> while the plan
+            is being written. <code>POST …/move</code> answers 409 <code>PLAN_TARGET_HELD</code>:
+            the card springs back to its origin and the line sits ON it. No toast. The door opens
+            the planning surface over the board.
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="Planning">
+                <div class="col-head">
+                  <span class="nm">Planning</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >Medium</span
+                        ><span class="pts">3</span><span class="spacer"></span
+                        ><span class="avatar">YZ</span>
+                      </div>
+                    </a>
+                    <div class="held" role="status" data-board-held="">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">Status can't be changed while a plan is open.</p>
+                        <p class="held-sub">Motir AI is still writing this plan.</p>
+                        <a
+                          class="held-btn"
+                          href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" /></svg
+                          >Review plan</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Progress, the refused drop">
+                <div class="col-head">
+                  <span class="nm">In Progress</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >High</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Review">
+                <div class="col-head">
+                  <span class="nm">In Review</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-6031 returned. Status can't be changed while a plan is open. Motir AI is still
+              writing this plan.</span
+            >
+          </div>
+        </div>
+        <div class="held-spec">
+          <span class="lang-tag">ZH</span>
+          <div class="state-chips">
+            <span class="chip">refusal <strong>PLAN_TARGET_HELD</strong></span
+            ><span class="chip">planStatus <strong>generating</strong></span
+            ><span class="chip">sessionId <strong>pcs_41f8</strong></span>
+          </div>
+          <p class="cap">
+            计划仍在撰写时，把卡片从<strong>规划中</strong>拖到<strong>进行中</strong>。<code
+              >POST …/move</code
+            >
+            返回 409 <code>PLAN_TARGET_HELD</code>：卡片弹回原位，提示框贴在卡片上。不弹
+            toast。按钮在面板之上打开规划界面。
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="规划中">
+                <div class="col-head">
+                  <span class="nm">规划中</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >中</span
+                        ><span class="pts">3</span><span class="spacer"></span
+                        ><span class="avatar">YZ</span>
+                      </div>
+                    </a>
+                    <div class="held" role="status" data-board-held="">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">计划未决定前无法更改状态。</p>
+                        <p class="held-sub">Motir AI 正在撰写该计划。</p>
+                        <a
+                          class="held-btn"
+                          href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" /></svg
+                          >审阅计划</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="进行中, the refused drop">
+                <div class="col-head">
+                  <span class="nm">进行中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >高</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="评审中">
+                <div class="col-head">
+                  <span class="nm">评审中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span>MOTIR-6031 已退回。计划未决定前无法更改状态。 Motir AI 正在撰写该计划。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      2 · plan <code>planned</code> — a drag out of Planning is refused ON THE CARD (409
+      <code>PLAN_TARGET_HELD</code>)
+    </div>
+    <div class="panel">
+      <div class="held-specs is-stacked">
+        <div class="held-spec">
+          <span class="lang-tag">EN</span>
+          <div class="state-chips">
+            <span class="chip">refusal <strong>PLAN_TARGET_HELD</strong></span
+            ><span class="chip">planStatus <strong>planned</strong></span
+            ><span class="chip">sessionId <strong>pcs_41f8</strong></span>
+          </div>
+          <p class="cap">
+            The same drop while the plan waits for a reviewer. Only the second sentence changes; the
+            refusal and the door are constant.
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="Planning">
+                <div class="col-head">
+                  <span class="nm">Planning</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >Medium</span
+                        ><span class="pts">3</span><span class="spacer"></span
+                        ><span class="avatar">YZ</span>
+                      </div>
+                    </a>
+                    <div class="held" role="status" data-board-held="">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">Status can't be changed while a plan is open.</p>
+                        <p class="held-sub">This plan is waiting for approval.</p>
+                        <a
+                          class="held-btn"
+                          href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" /></svg
+                          >Review plan</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Progress, the refused drop">
+                <div class="col-head">
+                  <span class="nm">In Progress</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >High</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Review">
+                <div class="col-head">
+                  <span class="nm">In Review</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-6031 returned. Status can't be changed while a plan is open. This plan is
+              waiting for approval.</span
+            >
+          </div>
+        </div>
+        <div class="held-spec">
+          <span class="lang-tag">ZH</span>
+          <div class="state-chips">
+            <span class="chip">refusal <strong>PLAN_TARGET_HELD</strong></span
+            ><span class="chip">planStatus <strong>planned</strong></span
+            ><span class="chip">sessionId <strong>pcs_41f8</strong></span>
+          </div>
+          <p class="cap">计划等待审阅时的同一次拖放。只有第二句不同；拒绝原因与按钮不变。</p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="规划中">
+                <div class="col-head">
+                  <span class="nm">规划中</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >中</span
+                        ><span class="pts">3</span><span class="spacer"></span
+                        ><span class="avatar">YZ</span>
+                      </div>
+                    </a>
+                    <div class="held" role="status" data-board-held="">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">计划未决定前无法更改状态。</p>
+                        <p class="held-sub">该计划正在等待审批。</p>
+                        <a
+                          class="held-btn"
+                          href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" /></svg
+                          >审阅计划</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="进行中, the refused drop">
+                <div class="col-head">
+                  <span class="nm">进行中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >高</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="评审中">
+                <div class="col-head">
+                  <span class="nm">评审中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span>MOTIR-6031 已退回。计划未决定前无法更改状态。 该计划正在等待审批。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      3 · plan <code>stale</code> — a drag out of Planning is refused ON THE CARD (409
+      <code>PLAN_TARGET_HELD</code>)
+    </div>
+    <div class="panel">
+      <div class="held-specs is-stacked">
+        <div class="held-spec">
+          <span class="lang-tag">EN</span>
+          <div class="state-chips">
+            <span class="chip">refusal <strong>PLAN_TARGET_HELD</strong></span
+            ><span class="chip">planStatus <strong>stale</strong></span
+            ><span class="chip">sessionId <strong>pcs_41f8</strong></span>
+          </div>
+          <p class="cap">
+            <code>stale</code> is UNDECIDED, so it still holds (AMENDMENT 21 §1). The longest second
+            line — it wraps inside the 288px column.
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="Planning">
+                <div class="col-head">
+                  <span class="nm">Planning</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >Medium</span
+                        ><span class="pts">3</span><span class="spacer"></span
+                        ><span class="avatar">YZ</span>
+                      </div>
+                    </a>
+                    <div class="held" role="status" data-board-held="">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">Status can't be changed while a plan is open.</p>
+                        <p class="held-sub">This plan needs attention before it can be approved.</p>
+                        <a
+                          class="held-btn"
+                          href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" /></svg
+                          >Review plan</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Progress, the refused drop">
+                <div class="col-head">
+                  <span class="nm">In Progress</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >High</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Review">
+                <div class="col-head">
+                  <span class="nm">In Review</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-6031 returned. Status can't be changed while a plan is open. This plan needs
+              attention before it can be approved.</span
+            >
+          </div>
+        </div>
+        <div class="held-spec">
+          <span class="lang-tag">ZH</span>
+          <div class="state-chips">
+            <span class="chip">refusal <strong>PLAN_TARGET_HELD</strong></span
+            ><span class="chip">planStatus <strong>stale</strong></span
+            ><span class="chip">sessionId <strong>pcs_41f8</strong></span>
+          </div>
+          <p class="cap">
+            <code>stale</code> 仍属未决定，因此依然占用（AMENDMENT 21 §1）。第二句最长——在 288px
+            列内换行。
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="规划中">
+                <div class="col-head">
+                  <span class="nm">规划中</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >中</span
+                        ><span class="pts">3</span><span class="spacer"></span
+                        ><span class="avatar">YZ</span>
+                      </div>
+                    </a>
+                    <div class="held" role="status" data-board-held="">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">计划未决定前无法更改状态。</p>
+                        <p class="held-sub">该计划需要先处理，然后才能批准。</p>
+                        <a
+                          class="held-btn"
+                          href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" /></svg
+                          >审阅计划</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="进行中, the refused drop">
+                <div class="col-head">
+                  <span class="nm">进行中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >高</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="评审中">
+                <div class="col-head">
+                  <span class="nm">评审中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-6031 已退回。计划未决定前无法更改状态。 该计划需要先处理，然后才能批准。</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      4 · plan with NO session — the same line and the same door; the door lands on
+      <code>/plans/&lt;id&gt;</code>
+    </div>
+    <div class="panel">
+      <div class="held-specs is-stacked">
+        <div class="held-spec">
+          <span class="lang-tag">EN</span>
+          <div class="state-chips">
+            <span class="chip">refusal <strong>PLAN_TARGET_HELD</strong></span
+            ><span class="chip">planStatus <strong>planned</strong></span
+            ><span class="chip">sessionId <strong>null</strong></span>
+          </div>
+          <p class="cap">
+            <code>planRowDestination</code>’s <code>no-conversation</code> arm
+            (<code>lib/planning/planDestination.ts</code>): with <code>sessionId: null</code> there
+            is no conversation to open, so <strong>Review plan</strong> is an ordinary link to the
+            plan page <code>/plans/pln_7c2e</code>. The COPY does not change — the reader is not
+            told which of the two doors this is.
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="Planning">
+                <div class="col-head">
+                  <span class="nm">Planning</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >Medium</span
+                        ><span class="pts">3</span><span class="spacer"></span
+                        ><span class="avatar">YZ</span>
+                      </div>
+                    </a>
+                    <div class="held" role="status" data-board-held="">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">Status can't be changed while a plan is open.</p>
+                        <p class="held-sub">This plan is waiting for approval.</p>
+                        <a class="held-btn" href="/plans/pln_7c2e"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" /></svg
+                          >Review plan</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Progress, the refused drop">
+                <div class="col-head">
+                  <span class="nm">In Progress</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >High</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Review">
+                <div class="col-head">
+                  <span class="nm">In Review</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-6031 returned. Status can't be changed while a plan is open. This plan is
+              waiting for approval.</span
+            >
+          </div>
+        </div>
+        <div class="held-spec">
+          <span class="lang-tag">ZH</span>
+          <div class="state-chips">
+            <span class="chip">refusal <strong>PLAN_TARGET_HELD</strong></span
+            ><span class="chip">planStatus <strong>planned</strong></span
+            ><span class="chip">sessionId <strong>null</strong></span>
+          </div>
+          <p class="cap">
+            <code>planRowDestination</code> 的
+            <code>no-conversation</code> 分支（<code>lib/planning/planDestination.ts</code>）：<code
+              >sessionId</code
+            >
+            为 null 时没有可打开的对话，<strong>审阅计划</strong>是指向计划页面
+            <code>/plans/pln_7c2e</code> 的普通链接。文案不变。
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="规划中">
+                <div class="col-head">
+                  <span class="nm">规划中</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <div class="bcard-anchor">
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >中</span
+                        ><span class="pts">3</span><span class="spacer"></span
+                        ><span class="avatar">YZ</span>
+                      </div>
+                    </a>
+                    <div class="held" role="status" data-board-held="">
+                      <span class="held-glyph" aria-hidden="true"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                      ></span>
+                      <div class="held-body">
+                        <p class="held-text">计划未决定前无法更改状态。</p>
+                        <p class="held-sub">该计划正在等待审批。</p>
+                        <a class="held-btn" href="/plans/pln_7c2e"
+                          ><svg viewBox="0 0 24 24" aria-hidden="true">
+                            <use href="#i-sparkles" /></svg
+                          >审阅计划</a
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="进行中, the refused drop">
+                <div class="col-head">
+                  <span class="nm">进行中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >高</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="评审中">
+                <div class="col-head">
+                  <span class="nm">评审中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span>MOTIR-6031 已退回。计划未决定前无法更改状态。 该计划正在等待审批。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      5 · a drag WITHIN Planning — a rank change is NOT a status move, so it is never refused and
+      nothing renders
+    </div>
+    <div class="panel">
+      <div class="held-specs is-stacked">
+        <div class="held-spec">
+          <span class="lang-tag">EN</span>
+          <div class="state-chips">
+            <span class="chip">planStatus <strong>planned</strong></span
+            ><span class="chip">move <strong>rank only</strong></span>
+          </div>
+          <p class="cap">
+            MOTIR-6031 is held, and is dragged from above MOTIR-6032 to below it, inside Planning.
+            <code>boardsService.moveCard</code> finds the card’s status already mapped to the target
+            column and writes only <code>position</code> — <code>applyStatusTransition</code> is
+            never called, so the hold (which lives there) is never asked. The move lands; no box, no
+            toast.
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col drop-target" aria-label="Planning, drop target">
+                <div class="col-head">
+                  <span class="nm">Planning</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                  <div class="insertion" aria-hidden="true"></div>
+                  <a
+                    class="bcard ghost"
+                    href="#"
+                    aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">3</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Progress">
+                <div class="col-head">
+                  <span class="nm">In Progress</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >High</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Review">
+                <div class="col-head">
+                  <span class="nm">In Review</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <p class="cap is-after">↓ after the drop</p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="Planning">
+                <div class="col-head">
+                  <span class="nm">Planning</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div> </a
+                  ><a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">3</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Progress">
+                <div class="col-head">
+                  <span class="nm">In Progress</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >High</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Review">
+                <div class="col-head">
+                  <span class="nm">In Review</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span><span>MOTIR-6031 dropped into Planning.</span>
+          </div>
+        </div>
+        <div class="held-spec">
+          <span class="lang-tag">ZH</span>
+          <div class="state-chips">
+            <span class="chip">planStatus <strong>planned</strong></span
+            ><span class="chip">move <strong>仅排序</strong></span>
+          </div>
+          <p class="cap">
+            MOTIR-6031 处于占用状态，在规划中列内被拖到 MOTIR-6032
+            下方。卡片状态已映射到目标列，<code>boardsService</code> 只写
+            <code>position</code>，不调用
+            <code>applyStatusTransition</code>，因此不会触发占用。移动成功，无提示框、无 toast。
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col drop-target" aria-label="规划中, drop target">
+                <div class="col-head">
+                  <span class="nm">规划中</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                  <div class="insertion" aria-hidden="true"></div>
+                  <a
+                    class="bcard ghost"
+                    href="#"
+                    aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">3</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="进行中">
+                <div class="col-head">
+                  <span class="nm">进行中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >高</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="评审中">
+                <div class="col-head">
+                  <span class="nm">评审中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <p class="cap is-after">↓ 放下之后</p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="规划中">
+                <div class="col-head">
+                  <span class="nm">规划中</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div> </a
+                  ><a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">3</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="进行中">
+                <div class="col-head">
+                  <span class="nm">进行中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >高</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="评审中">
+                <div class="col-head">
+                  <span class="nm">评审中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span><span>MOTIR-6031 已放入 规划中 列。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      6 · a card held only by a planning SESSION (no plan) — the drag out SUCCEEDS; draw no refusal
+      here
+    </div>
+    <div class="panel">
+      <div class="held-specs is-stacked">
+        <div class="held-spec">
+          <span class="lang-tag">EN</span>
+          <div class="state-chips">
+            <span class="chip">lock.sessionId <strong>pcs_90ab</strong></span
+            ><span class="chip">lock.planId <strong>null</strong></span>
+          </div>
+          <p class="cap">
+            MOTIR-6040 sits in Planning because a planning CONVERSATION parked it, and no plan
+            exists yet. AMENDMENT 21 §1 excludes a session-held lock by name — a conversation is not
+            a decision about the card — so <code>POST …/move</code> answers 200 and the card lands
+            in In Progress. (The same holds for an EXPIRED lease on a <code>generating</code> plan.)
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="Planning">
+                <div class="col-head">
+                  <span class="nm">Planning</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Progress">
+                <div class="col-head">
+                  <span class="nm">In Progress</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >High</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div> </a
+                  ><a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6040 CSV export — quote embedded newlines"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6040</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">CSV export — quote embedded newlines</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >High</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="In Review">
+                <div class="col-head">
+                  <span class="nm">In Review</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >Medium</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span><span>MOTIR-6040 dropped into In Progress.</span>
+          </div>
+        </div>
+        <div class="held-spec">
+          <span class="lang-tag">ZH</span>
+          <div class="state-chips">
+            <span class="chip">lock.sessionId <strong>pcs_90ab</strong></span
+            ><span class="chip">lock.planId <strong>null</strong></span>
+          </div>
+          <p class="cap">
+            MOTIR-6040 因一次规划对话而停在规划中，尚无计划。AMENDMENT 21 §1
+            明确排除仅由会话持有的锁——对话不是对卡片的决定——因此 <code>POST …/move</code> 返回
+            200，卡片进入进行中。（<code>generating</code> 计划的租约已过期时同理。）
+          </p>
+          <div class="stage">
+            <div class="board">
+              <section class="col" aria-label="规划中">
+                <div class="col-head">
+                  <span class="nm">规划中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6032 Import — dry-run report before commit"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Import — dry-run report before commit</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">2</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="进行中">
+                <div class="col-head">
+                  <span class="nm">进行中</span><span class="col-count">2</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-5990 Webhook delivery — retry with backoff"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-story"
+                        ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                      ><span class="bc-id">MOTIR-5990</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Webhook delivery — retry with backoff</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >高</span
+                      ><span class="pts">5</span><span class="spacer"></span
+                      ><span class="avatar">MS</span>
+                    </div> </a
+                  ><a
+                    class="bcard"
+                    href="#"
+                    aria-label="MOTIR-6040 CSV export — quote embedded newlines"
+                  >
+                    <div class="bc-top">
+                      <span class="type-icon t-task"
+                        ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                      ><span class="bc-id">MOTIR-6040</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">CSV export — quote embedded newlines</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--high"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg></span
+                        >高</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+              <section class="col" aria-label="评审中">
+                <div class="col-head">
+                  <span class="nm">评审中</span><span class="col-count">1</span
+                  ><span class="spacer"></span>
+                </div>
+                <div class="col-body">
+                  <a class="bcard" href="#" aria-label="MOTIR-5971 Audit log — actor column">
+                    <div class="bc-top">
+                      <span class="type-icon t-subtask"
+                        ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                      ><span class="bc-id">MOTIR-5971</span><span class="spacer"></span>
+                    </div>
+                    <div class="bc-title">Audit log — actor column</div>
+                    <div class="bc-meta">
+                      <span class="pill pill--medium"
+                        ><span class="pic"
+                          ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                        >中</span
+                      ><span class="pts">1</span><span class="spacer"></span
+                      ><span class="avatar">YZ</span>
+                    </div>
+                  </a>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span><span>MOTIR-6040 已放入 进行中 列。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      7 · dismissal and keyboard — <code>Esc</code>, a click outside, or the next drag start; the
+      <code>aria-live</code> text
+    </div>
+    <div class="panel">
+      <div class="held-specs is-stacked">
+        <div class="held-spec">
+          <span class="lang-tag">EN</span>
+          <div class="dismiss-row">
+            <div class="dismiss-step">
+              <p class="cap">
+                <strong>Open</strong> — focus moves to
+                <strong>Review plan</strong> (BoardContainer’s focus effect: the door, else the
+                returned card).
+              </p>
+              <div class="stage">
+                <div class="board">
+                  <section class="col" aria-label="Planning">
+                    <div class="col-head">
+                      <span class="nm">Planning</span><span class="col-count">2</span
+                      ><span class="spacer"></span>
+                    </div>
+                    <div class="col-body">
+                      <div class="bcard-anchor">
+                        <a
+                          class="bcard"
+                          href="#"
+                          aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                        >
+                          <div class="bc-top">
+                            <span class="type-icon t-task"
+                              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                            ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                          </div>
+                          <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                          <div class="bc-meta">
+                            <span class="pill pill--medium"
+                              ><span class="pic"
+                                ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                              >Medium</span
+                            ><span class="pts">3</span><span class="spacer"></span
+                            ><span class="avatar">YZ</span>
+                          </div>
+                        </a>
+                        <div class="held" role="status" data-board-held="">
+                          <span class="held-glyph" aria-hidden="true"
+                            ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                          ></span>
+                          <div class="held-body">
+                            <p class="held-text">Status can't be changed while a plan is open.</p>
+                            <p class="held-sub">This plan is waiting for approval.</p>
+                            <a
+                              class="held-btn is-focused"
+                              href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                              ><svg viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-sparkles" /></svg
+                              >Review plan</a
+                            >
+                          </div>
+                        </div>
+                      </div>
+                      <a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6032 Import — dry-run report before commit"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import — dry-run report before commit</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >Medium</span
+                          ><span class="pts">2</span><span class="spacer"></span
+                          ><span class="avatar">MS</span>
+                        </div>
+                      </a>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <div class="dismiss-step">
+              <p class="cap">
+                <strong>Esc</strong> or a click outside the box — the line closes; the card stays in
+                Planning.
+              </p>
+              <div class="stage">
+                <div class="board">
+                  <section class="col" aria-label="Planning">
+                    <div class="col-head">
+                      <span class="nm">Planning</span><span class="col-count">2</span
+                      ><span class="spacer"></span>
+                    </div>
+                    <div class="col-body">
+                      <a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >Medium</span
+                          ><span class="pts">3</span><span class="spacer"></span
+                          ><span class="avatar">YZ</span>
+                        </div> </a
+                      ><a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6032 Import — dry-run report before commit"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import — dry-run report before commit</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >Medium</span
+                          ><span class="pts">2</span><span class="spacer"></span
+                          ><span class="avatar">MS</span>
+                        </div>
+                      </a>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <div class="dismiss-step">
+              <p class="cap">
+                <strong>The next drag start</strong> — closes it too, whichever card is lifted.
+              </p>
+              <div class="stage">
+                <div class="board">
+                  <section class="col" aria-label="Planning">
+                    <div class="col-head">
+                      <span class="nm">Planning</span><span class="col-count">2</span
+                      ><span class="spacer"></span>
+                    </div>
+                    <div class="col-body">
+                      <a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >Medium</span
+                          ><span class="pts">3</span><span class="spacer"></span
+                          ><span class="avatar">YZ</span>
+                        </div> </a
+                      ><a
+                        class="bcard ghost"
+                        href="#"
+                        aria-label="MOTIR-6032 Import — dry-run report before commit"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import — dry-run report before commit</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >Medium</span
+                          ><span class="pts">2</span><span class="spacer"></span
+                          ><span class="avatar">MS</span>
+                        </div>
+                      </a>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span
+              >MOTIR-6031 returned. Status can't be changed while a plan is open. This plan is
+              waiting for approval.</span
+            >
+          </div>
+        </div>
+        <div class="held-spec">
+          <span class="lang-tag">ZH</span>
+          <div class="dismiss-row">
+            <div class="dismiss-step">
+              <p class="cap">
+                <strong>打开</strong> — 焦点移到<strong>审阅计划</strong>（BoardContainer
+                的聚焦逻辑：有按钮聚焦按钮，否则聚焦退回的卡片）。
+              </p>
+              <div class="stage">
+                <div class="board">
+                  <section class="col" aria-label="规划中">
+                    <div class="col-head">
+                      <span class="nm">规划中</span><span class="col-count">2</span
+                      ><span class="spacer"></span>
+                    </div>
+                    <div class="col-body">
+                      <div class="bcard-anchor">
+                        <a
+                          class="bcard"
+                          href="#"
+                          aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                        >
+                          <div class="bc-top">
+                            <span class="type-icon t-task"
+                              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                            ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                          </div>
+                          <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                          <div class="bc-meta">
+                            <span class="pill pill--medium"
+                              ><span class="pic"
+                                ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                              >中</span
+                            ><span class="pts">3</span><span class="spacer"></span
+                            ><span class="avatar">YZ</span>
+                          </div>
+                        </a>
+                        <div class="held" role="status" data-board-held="">
+                          <span class="held-glyph" aria-hidden="true"
+                            ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                          ></span>
+                          <div class="held-body">
+                            <p class="held-text">计划未决定前无法更改状态。</p>
+                            <p class="held-sub">该计划正在等待审批。</p>
+                            <a
+                              class="held-btn is-focused"
+                              href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                              ><svg viewBox="0 0 24 24" aria-hidden="true">
+                                <use href="#i-sparkles" /></svg
+                              >审阅计划</a
+                            >
+                          </div>
+                        </div>
+                      </div>
+                      <a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6032 Import — dry-run report before commit"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import — dry-run report before commit</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >中</span
+                          ><span class="pts">2</span><span class="spacer"></span
+                          ><span class="avatar">MS</span>
+                        </div>
+                      </a>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <div class="dismiss-step">
+              <p class="cap"><strong>Esc</strong> 或点击提示框之外 — 提示关闭；卡片留在规划中。</p>
+              <div class="stage">
+                <div class="board">
+                  <section class="col" aria-label="规划中">
+                    <div class="col-head">
+                      <span class="nm">规划中</span><span class="col-count">2</span
+                      ><span class="spacer"></span>
+                    </div>
+                    <div class="col-body">
+                      <a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >中</span
+                          ><span class="pts">3</span><span class="spacer"></span
+                          ><span class="avatar">YZ</span>
+                        </div> </a
+                      ><a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6032 Import — dry-run report before commit"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import — dry-run report before commit</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >中</span
+                          ><span class="pts">2</span><span class="spacer"></span
+                          ><span class="avatar">MS</span>
+                        </div>
+                      </a>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <div class="dismiss-step">
+              <p class="cap"><strong>下一次开始拖动</strong> — 同样关闭提示，无论拿起哪张卡片。</p>
+              <div class="stage">
+                <div class="board">
+                  <section class="col" aria-label="规划中">
+                    <div class="col-head">
+                      <span class="nm">规划中</span><span class="col-count">2</span
+                      ><span class="spacer"></span>
+                    </div>
+                    <div class="col-body">
+                      <a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >中</span
+                          ><span class="pts">3</span><span class="spacer"></span
+                          ><span class="avatar">YZ</span>
+                        </div> </a
+                      ><a
+                        class="bcard ghost"
+                        href="#"
+                        aria-label="MOTIR-6032 Import — dry-run report before commit"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import — dry-run report before commit</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >中</span
+                          ><span class="pts">2</span><span class="spacer"></span
+                          ><span class="avatar">MS</span>
+                        </div>
+                      </a>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="live" aria-hidden="true">
+            <span class="tag">aria-live</span
+            ><span>MOTIR-6031 已退回。计划未决定前无法更改状态。 该计划正在等待审批。</span>
+          </div>
+        </div>
+        <div class="held-spec">
+          <p class="cap">
+            <code>board.announcementHeld</code> = <code>{key} returned. {line}</code> /
+            <code>{key} 已退回。{line}</code>, where <code>{line}</code> = <code>planHeld</code> +
+            one space + <code>planState.&lt;planStatus&gt;</code>, as plain text. Every value below
+            is exact.
+          </p>
+          <table class="ann">
+            <thead>
+              <tr>
+                <th>planStatus</th>
+                <th>en</th>
+                <th>zh</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>generating</code></td>
+                <td>
+                  MOTIR-6031 returned. Status can't be changed while a plan is open. Motir AI is
+                  still writing this plan.
+                </td>
+                <td>MOTIR-6031 已退回。计划未决定前无法更改状态。 Motir AI 正在撰写该计划。</td>
+              </tr>
+              <tr>
+                <td><code>planned</code></td>
+                <td>
+                  MOTIR-6031 returned. Status can't be changed while a plan is open. This plan is
+                  waiting for approval.
+                </td>
+                <td>MOTIR-6031 已退回。计划未决定前无法更改状态。 该计划正在等待审批。</td>
+              </tr>
+              <tr>
+                <td><code>stale</code></td>
+                <td>
+                  MOTIR-6031 returned. Status can't be changed while a plan is open. This plan needs
+                  attention before it can be approved.
+                </td>
+                <td>
+                  MOTIR-6031 已退回。计划未决定前无法更改状态。 该计划需要先处理，然后才能批准。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      8 · a NARROW board — the box wraps inside the column and the door keeps its own line
+    </div>
+    <div class="panel">
+      <div class="held-specs is-stacked">
+        <div class="phone-row">
+          <div class="held-spec">
+            <span class="lang-tag">EN</span>
+            <p class="cap">320px phone — the column is 292px</p>
+            <div class="phone is-narrow">
+              <div class="col-pager" aria-hidden="true">
+                <span class="dot on"></span><span class="dot"></span><span class="dot"></span
+                ><span class="pager-text">Planning · 1 / 3</span>
+              </div>
+              <div class="board">
+                <section class="col" aria-label="Planning">
+                  <div class="col-head">
+                    <span class="nm">Planning</span><span class="col-count">2</span
+                    ><span class="spacer"></span>
+                  </div>
+                  <div class="col-body">
+                    <div class="bcard-anchor">
+                      <a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >Medium</span
+                          ><span class="pts">3</span><span class="spacer"></span
+                          ><span class="avatar">YZ</span>
+                        </div>
+                      </a>
+                      <div class="held" role="status" data-board-held="">
+                        <span class="held-glyph" aria-hidden="true"
+                          ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                        ></span>
+                        <div class="held-body">
+                          <p class="held-text">Status can't be changed while a plan is open.</p>
+                          <p class="held-sub">
+                            This plan needs attention before it can be approved.
+                          </p>
+                          <a
+                            class="held-btn"
+                            href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                            ><svg viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            >Review plan</a
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6032 Import — dry-run report before commit"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import — dry-run report before commit</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >Medium</span
+                        ><span class="pts">2</span><span class="spacer"></span
+                        ><span class="avatar">MS</span>
+                      </div>
+                    </a>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+          <div class="held-spec">
+            <span class="lang-tag">ZH</span>
+            <p class="cap">320px 手机——列宽 292px</p>
+            <div class="phone is-narrow">
+              <div class="col-pager" aria-hidden="true">
+                <span class="dot on"></span><span class="dot"></span><span class="dot"></span
+                ><span class="pager-text">规划中 · 1 / 3</span>
+              </div>
+              <div class="board">
+                <section class="col" aria-label="规划中">
+                  <div class="col-head">
+                    <span class="nm">规划中</span><span class="col-count">2</span
+                    ><span class="spacer"></span>
+                  </div>
+                  <div class="col-body">
+                    <div class="bcard-anchor">
+                      <a
+                        class="bcard"
+                        href="#"
+                        aria-label="MOTIR-6031 Import mapper — rewrite the column matcher"
+                      >
+                        <div class="bc-top">
+                          <span class="type-icon t-task"
+                            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                          ><span class="bc-id">MOTIR-6031</span><span class="spacer"></span>
+                        </div>
+                        <div class="bc-title">Import mapper — rewrite the column matcher</div>
+                        <div class="bc-meta">
+                          <span class="pill pill--medium"
+                            ><span class="pic"
+                              ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                            >中</span
+                          ><span class="pts">3</span><span class="spacer"></span
+                          ><span class="avatar">YZ</span>
+                        </div>
+                      </a>
+                      <div class="held" role="status" data-board-held="">
+                        <span class="held-glyph" aria-hidden="true"
+                          ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                        ></span>
+                        <div class="held-body">
+                          <p class="held-text">计划未决定前无法更改状态。</p>
+                          <p class="held-sub">该计划需要先处理，然后才能批准。</p>
+                          <a
+                            class="held-btn"
+                            href="/boards?board=brd_eng&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-6017&amp;planSession=pcs_41f8"
+                            ><svg viewBox="0 0 24 24" aria-hidden="true">
+                              <use href="#i-sparkles" /></svg
+                            >审阅计划</a
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <a
+                      class="bcard"
+                      href="#"
+                      aria-label="MOTIR-6032 Import — dry-run report before commit"
+                    >
+                      <div class="bc-top">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="bc-id">MOTIR-6032</span><span class="spacer"></span>
+                      </div>
+                      <div class="bc-title">Import — dry-run report before commit</div>
+                      <div class="bc-meta">
+                        <span class="pill pill--medium"
+                          ><span class="pic"
+                            ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                          >中</span
+                        ><span class="pts">2</span><span class="spacer"></span
+                        ><span class="avatar">MS</span>
+                      </div>
+                    </a>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="legend">
+          The shipped <code>StatusHeldNotice</code> already stacks the text above the door (<code
+            >flex-col items-start</code
+          >), so the narrow column needs no separate rule: the sentences wrap, the button keeps its
+          own line at its own width, nothing truncates. <code>stale</code> is drawn because it is
+          the longest second line.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

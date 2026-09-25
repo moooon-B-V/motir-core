@@ -2064,3 +2064,154 @@ queue's checks run on the merge group's own commit, not on the head. Measured on
 (`merge_conflict`) all read **`SUCCESS`**. So GitHub's own list shows an ejected pull request as
 green — which is the gap this story closes on Motir's surfaces — and it offers no distinct marker that
 would argue for a fourth value. The three reasons above stand.
+
+---
+
+# ⭐ The board refuses ON THE CARD while a PLAN holds it (Story MOTIR-6017 · MOTIR-6264 — `board--plan-hold.mock.html`, DATED 2026-09-25)
+
+**A DELTA of panel 2b** — § _A move HELD by an approval or a merge (panel 2b)_ above (MOTIR-5525,
+`board.mock.html`). That panel is a RECORD and is not edited: it still draws exactly what it drew,
+for a move held by an APPROVAL GATE or a MERGE. This section adds the case where the dragged card is
+held by an **undecided PLAN**, and the delta mock holds only the panels that change. It carries
+`board.mock.html`'s stylesheet and icon sprite **verbatim**, so the two cannot drift, and adds one
+small DELTA-ONLY block after them.
+
+**The line is not ours.** Its copy, its string keys, its glyphs and its door are owned by
+`design/work-items/design-notes.md` § _⭐ The status control says a PLAN holds it_ (MOTIR-6263,
+`design/work-items/status-held-by-decision--plan-hold.mock.html`); that asset's panel 8 is the
+`/items` row form of the same anchored refusal, and this sheet is its board-card sibling. Nothing
+here restates or re-decides that section.
+
+**The rule it depicts** is `docs/decisions/agent-authored-plans.md` **AMENDMENT 21** (not 20):
+
+- **§1 — the hold.** A card is HELD when its status is `planning`, a `plan_target_lock` row names it
+  with a non-null `planId`, and that plan is `generating`, `planned` or `stale`. A SESSION-held lock
+  (`planId` null) never holds, and neither does an expired lease on a `generating` plan.
+- **§2 — the refusal.** Every non-system move out is refused inside `applyStatusTransition` with
+  `PLAN_TARGET_HELD`, whose payload carries `itemKey`, `planId`, `planStatus`, `sessionId` and
+  `anchorKey` — enough to draw the door without a second read.
+- **§3 — the exits.** Approve, decline, a withdraw that empties the plan, a discarded close, the
+  abandoned-plan sweep. **There is no manual escape hatch**, so the board offers none: the only thing
+  the refusal gives the reader is the way to the plan.
+
+### What the board does on a held drop
+
+`POST …/move` answers **409** `{ code: 'PLAN_TARGET_HELD', … }`. When — and only when — `code` is
+`PLAN_TARGET_HELD` (beside the shipped `APPROVAL_GATE_PENDING` branch):
+
+1. **The card springs back to Planning**, exactly as panel 2b's does (`runMove` restores the
+   snapshot; the swimlane path `runTransition` the same). The board never shows a status the item
+   does not have.
+2. **No toast.** The plan line renders **ON the returned card**, directly under it: one box, the
+   `Lock` glyph, the refusal sentence, the plan-state sentence, and **Review plan** (`Sparkles`).
+3. **The door** goes where `planRowDestination` (`lib/planning/planDestination.ts`) sends the plan,
+   fed from the payload: with a `sessionId`, the **planning surface** — `withPlanningOverlay` over
+   the board's own URL, so Close returns to the board; with `sessionId: null`, the `no-conversation`
+   arm, **`/plans/<id>`**. It never opens the approval overlay. The COPY does not change between the
+   two.
+4. **It stays** until `Esc`, a click outside, or the start of the next drag, and never blocks dragging
+   another card — all shipped (`useDismissOnEscapeOrOutside` in `components/issues/heldRefusal.ts`;
+   `handleDragStart`'s `setHeld(null)` in `app/(authed)/boards/_components/BoardContainer.tsx`).
+5. **Keyboard:** focus moves to **Review plan** when the line renders (`BoardContainer`'s existing
+   focus effect: the door, else the returned card).
+
+**Every other refusal keeps panel 2's toast, unchanged** — the illegal workflow edge, the unmapped
+column, network errors. The code branches on `code` and on nothing else.
+
+### The panels
+
+| #   | state                                                | what it settles                                                                                    |
+| --- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 1   | plan `generating`, dropped on In Progress            | the card returns and the line sits on it; the door opens the planning surface                      |
+| 2   | plan `planned`                                       | only the second sentence changes                                                                   |
+| 3   | plan `stale`                                         | `stale` is UNDECIDED and still holds (§1); the longest second line wraps inside the 288px column   |
+| 4   | plan with **no session**                             | same line, same door label; the door is a plain link to `/plans/<id>` (`no-conversation`)          |
+| 5   | a drag **within** Planning (rank only)               | **not refused**: no box, no toast; the ordinary `announcementDropped`                              |
+| 6   | a card held only by a planning **session** (no plan) | **not refused**: the drag out succeeds; drawn so the builder adds no refusal where none belongs    |
+| 7   | dismissal and keyboard                               | open (focus on the door) → `Esc` / click outside → the next drag start; the exact `aria-live` text |
+| 8   | a narrow board (320px phone, 292px column)           | the box wraps and the door keeps its own line; no separate rule                                    |
+
+Every panel is drawn in **en and zh**.
+
+### Which drags are refused, and which are NOT
+
+| the drag                                                 | refused? | why                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| out of Planning onto any other column, plan undecided    | **yes**  | a status move out of `planning`, which §2 refuses on every door                                                                                                                                                                                                                                                           |
+| within Planning (a rank change)                          | **no**   | not a status move. `boardsService.moveCard` (`lib/services/boardsService.ts`) sees the card's status already mapped to the target column and writes only `position`; `applyStatusTransition` — where the hold lives — is never called. The same is true of a drop into a multi-status column that already maps `planning` |
+| out of Planning, card held only by a planning SESSION    | **no**   | §1 excludes a session-held lock by name: a conversation is not a decision about the card. The move succeeds with the ordinary drop                                                                                                                                                                                        |
+| out of Planning, `generating` plan with an EXPIRED lease | **no**   | §1's other exclusion — the sweep is about to release it                                                                                                                                                                                                                                                                   |
+| INTO Planning                                            | **no**   | §2: moves into `planning` are untouched; the hold is about leaving                                                                                                                                                                                                                                                        |
+
+### The copy — reused, not new
+
+Every sentence is MOTIR-6263's, under `approvalGate.statusHeld`: **`planHeld`** (_Status can't be
+changed while a plan is open._ / _计划未决定前无法更改状态。_), **`planState.generating`** /
+**`.planned`** / **`.stale`**, and **`reviewPlan`** (_Review plan_ / _审阅计划_). The glyphs are that
+section's too: `Lock` for the line and `Sparkles` for the door — not the gate's `ScanEye`, because the
+two doors go to different places.
+
+**The announcement** reuses the shipped `board.announcementHeld` (`{key} returned. {line}` /
+`{key} 已退回。{line}`). Today `{line}` is the plain-text form of the gate sentence that
+`heldSentence` (`components/issues/StatusHeldNotice.tsx`) chooses, rendered with `tHeld.markup` and
+`<strong>` stripped, so the notice and the announcement cannot say different things. For a plan line,
+`{line}` is **the `planHeld` sentence + one space + the `planState.<planStatus>` sentence**, as plain
+text — the same two sentences the box shows, in the same order. One space in both locales: the region
+is `sr-only`, so the space is never seen, and it saves a locale branch. Exactly:
+
+| `planStatus` | en                                                                                                                      | zh                                                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `generating` | MOTIR-6031 returned. Status can't be changed while a plan is open. Motir AI is still writing this plan.                 | MOTIR-6031 已退回。计划未决定前无法更改状态。 Motir AI 正在撰写该计划。        |
+| `planned`    | MOTIR-6031 returned. Status can't be changed while a plan is open. This plan is waiting for approval.                   | MOTIR-6031 已退回。计划未决定前无法更改状态。 该计划正在等待审批。             |
+| `stale`      | MOTIR-6031 returned. Status can't be changed while a plan is open. This plan needs attention before it can be approved. | MOTIR-6031 已退回。计划未决定前无法更改状态。 该计划需要先处理，然后才能批准。 |
+
+**No new string key.** The board needs none beyond `board.announcementHeld`, which already exists.
+
+### What the code composes — reuse, do not redraw
+
+- **`BoardCardHeldRefusal`** (`app/(authed)/boards/_components/BoardHeldRefusal.tsx`) is THE
+  component — rendered by `BoardCard` under itself: the `[data-board-held]` wrapper
+  (`mt-2 rounded-(--radius-control) shadow-(--shadow-elevated)`) around `StatusHeldNotice`. **There
+  is no second refusal component**: the `BoardHeldRefusal` state widens to carry a plan line, and the
+  wrapper, the context, the dismissal and the focus effect are unchanged.
+- **`StatusHeldNotice`** (`components/issues/StatusHeldNotice.tsx`) draws the box — `role="status"`,
+  `bg-(--el-tint-yellow)`, `border-(--el-border-soft)`, the 13px `leading-snug` line — and gains the
+  plan line SHAPE MOTIR-6263 specifies (the refusal sentence, the second sentence, the door).
+- **`readHeldRefusal`** (`components/issues/heldRefusal.ts`) gains `PLAN_TARGET_HELD` beside
+  `APPROVAL_GATE_PENDING`; both `runMove` and `runTransition` already route its result to
+  `showHeld`.
+- **Tokens:** nothing new. The box is panel 2b's (`--el-tint-yellow`, `--el-border-soft`,
+  `--el-text-strong`, `--radius-control`, `--spacing-control-x/y`, `--shadow-elevated`); the second
+  sentence is `--el-text-secondary` at 12px (MOTIR-6263's `.held-sub`); the door is `Button`
+  `primary` `sm` (`--el-accent`, `--el-accent-text`, `--radius-btn`, `--height-btn-sm`).
+  `--el-status-planning` is **not drawn here**: a board column head carries no status dot
+  (`BoardColumn.tsx`'s header is the name and the count), so the token has no board surface to paint.
+- **Two measured corrections to panel 2b's drawing**, carried in the delta block rather than by
+  editing the record: the line is **13px / `leading-snug`** (panel 2b drew 12.5px) and the gap under
+  the card is **8px**, the wrapper's `mt-2` (panel 2b drew 6px). The shipped component was right;
+  the drawing had drifted.
+
+### Not drawn here, and owed by whom
+
+| surface                                                                                                                                       | owner                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| the board card's refusal and the `/items` inline-edit refusal, built — `readHeldRefusal`, `showHeld`, the plan line in `BoardCardHeldRefusal` | **MOTIR-6268** (composing this section)  |
+| the item page, quick view and edit page status control, `StatusHeldNotice`'s plan line, and the en + zh strings                               | **MOTIR-6267**                           |
+| the server refusal — `PLAN_TARGET_HELD` in `applyStatusTransition`, its payload, `STATUS_TRANSITION_REFUSALS`                                 | **MOTIR-6265**                           |
+| the planning surface and the plan page the door LANDS on                                                                                      | already shipped — MOTIR-6012, MOTIR-6043 |
+
+### Grounding, and one honest limit
+
+Read at `parent/MOTIR-6017-plan-hold` **`17e4a1410`**: `board.mock.html` panel 2b and its section
+above; `design/work-items/design-notes.md` § _The status control says a PLAN holds it_ and its mock;
+AMENDMENT 21 §1–§4; and the shipped `BoardHeldRefusal.tsx`, `BoardCard.tsx`, `BoardContainer.tsx`
+(`runMove`, `snapBack`, `showHeld`, the held `aria-live` region, the focus effect), `BoardColumn.tsx`,
+`StatusHeldNotice.tsx`, `heldRefusal.ts`, `planDestination.ts`, `launcher.ts`
+(`withPlanningOverlay`'s parameter names) and `boardsService.moveCard`'s in-column branch. The
+asset was rendered headlessly (Playwright Chromium) in light and dark, every panel inspected, and no
+board in it scrolls horizontally.
+
+**The limit:** the render used DejaVu Sans and Noto Sans CJK substitutes, because `--font-sans`'s
+`-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto` are not installed on the box that drew it.
+That stack is copied unchanged from the base mock. The substitute is WIDER than the real face, so
+every box that fits in the render fits in the product.
