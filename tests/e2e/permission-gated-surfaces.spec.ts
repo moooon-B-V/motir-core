@@ -31,6 +31,8 @@ test.beforeAll(async () => {
 });
 
 const rail = (page: Page) => page.getByRole('navigation', { name: 'Primary' });
+// Test ids are read inside the live `main` landmark, never page-rooted.
+const main = (page: Page) => page.getByRole('main');
 const READ_ONLY = /— You have read-only access to this project$/;
 
 async function enterAs(page: Page, email: string) {
@@ -67,7 +69,7 @@ test('a VIEWER meets no control that writes, and every disabled one says why', a
 
   // ── The quick view, from the list ──────────────────────────────────────────
   await page.goto('/items');
-  const row = page.getByTestId(`issue-row-${seed.itemKey}`);
+  const row = main(page).getByTestId(`issue-row-${seed.itemKey}`);
   await expect(row).toBeVisible();
   await row.press('Enter');
   const fromList = page.getByRole('dialog');
@@ -82,7 +84,7 @@ test('a VIEWER meets no control that writes, and every disabled one says why', a
 
   // ── The board: read-only banner, no drag, no grouping or column writes ─────
   await page.goto('/boards');
-  await expect(page.getByTestId('board')).toBeVisible();
+  await expect(main(page).getByTestId('board')).toBeVisible();
   await expect(
     page.getByRole('status').filter({ hasText: 'Read-only access — you can view this board' }),
   ).toBeVisible();
@@ -101,10 +103,13 @@ test('a VIEWER meets no control that writes, and every disabled one says why', a
 
   // ── The backlog: nothing to groom, Create disabled ─────────────────────────
   await page.goto('/backlog');
-  await expect(page.getByTestId('create-issue-backlog')).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByTestId('create-sprint')).toHaveCount(0);
-  await expect(page.getByTestId(`backlog-row-actions-${seed.itemKey}`)).toHaveCount(0);
-  await expect(page.getByTestId(`backlog-row-check-${seed.itemKey}`)).toHaveCount(0);
+  await expect(main(page).getByTestId('create-issue-backlog')).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await expect(main(page).getByTestId('create-sprint')).toHaveCount(0);
+  await expect(main(page).getByTestId(`backlog-row-actions-${seed.itemKey}`)).toHaveCount(0);
+  await expect(main(page).getByTestId(`backlog-row-check-${seed.itemKey}`)).toHaveCount(0);
 
   // ── The rail: no door onto a room that refuses the Viewer ──────────────────
   await expect(rail(page).getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0);
@@ -131,7 +136,7 @@ test('a MEMBER keeps every edit, each confirmed by its response and the persiste
 
   // ── The quick view keeps its editors ───────────────────────────────────────
   await page.goto('/items');
-  const row = page.getByTestId(`issue-row-${seed.itemKey}`);
+  const row = main(page).getByTestId(`issue-row-${seed.itemKey}`);
   await expect(row).toBeVisible();
   await row.press('Enter');
   const dialog = page.getByRole('dialog');
@@ -142,16 +147,16 @@ test('a MEMBER keeps every edit, each confirmed by its response and the persiste
 
   // ── The board: no read-only banner, cards draggable ────────────────────────
   await page.goto('/boards');
-  await expect(page.getByTestId('board')).toBeVisible();
+  await expect(main(page).getByTestId('board')).toBeVisible();
   await expect(
     page.getByRole('status').filter({ hasText: 'Read-only access — you can view this board' }),
   ).toHaveCount(0);
 
   // ── The backlog: every grooming control is there ───────────────────────────
   await page.goto('/backlog');
-  await expect(page.getByTestId('create-sprint')).toBeVisible();
-  await expect(page.getByTestId(`backlog-row-actions-${seed.itemKey}`)).toBeVisible();
-  await expect(page.getByTestId(`backlog-row-check-${seed.itemKey}`)).toBeVisible();
+  await expect(main(page).getByTestId('create-sprint')).toBeVisible();
+  await expect(main(page).getByTestId(`backlog-row-actions-${seed.itemKey}`)).toBeVisible();
+  await expect(main(page).getByTestId(`backlog-row-check-${seed.itemKey}`)).toBeVisible();
   // The inline create row (the page header carries a second Create button).
-  await expect(page.getByTestId('create-issue-backlog')).toBeEnabled();
+  await expect(main(page).getByTestId('create-issue-backlog')).toBeEnabled();
 });

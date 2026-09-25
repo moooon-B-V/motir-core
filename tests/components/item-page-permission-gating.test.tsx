@@ -363,10 +363,10 @@ const DATA: QuickViewData = {
   },
 };
 
-function renderQuickView(permissions: PermissionKey[], proposal = false) {
+function renderQuickView(permissions: PermissionKey[]) {
   return renderWithIntl(
     <ProjectAccessProvider permissions={permissions}>
-      <IssueQuickViewPanel state="ready" data={DATA} {...(proposal ? { proposal: true } : {})} />
+      <IssueQuickViewPanel state="ready" data={DATA} />
     </ProjectAccessProvider>,
   );
 }
