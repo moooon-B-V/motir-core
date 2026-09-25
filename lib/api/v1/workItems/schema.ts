@@ -1121,6 +1121,26 @@ export const approvalGatePendingSchema = z.object({
 });
 
 /**
+ * The refusal body for a move out of Planning while an UNDECIDED plan holds the
+ * card (MOTIR-6265; `agent-authored-plans.md` AMENDMENT 21 §2): the pinned
+ * `{ code, error }` PLUS an additive `plan` object — the SAME payload the board
+ * move, the status server action and MCP carry, so a client can say which plan
+ * holds the card and send a person where it is decided.
+ */
+export const planTargetHeldSchema = z.object({
+  code: z.literal('PLAN_TARGET_HELD'),
+  error: z.string(),
+  plan: z.object({
+    itemKey: z.string(),
+    workItemId: z.string(),
+    planId: z.string(),
+    planStatus: z.enum(['generating', 'planned', 'stale']),
+    sessionId: z.string().nullable(),
+    anchorKey: z.string().nullable(),
+  }),
+});
+
+/**
  * The MINIMAL ACTOR a v1 collection row embeds (Amendment 10 Q1).
  *
  * Two fields and no more: the id a client acts on (it is what 11.2's PATCH takes

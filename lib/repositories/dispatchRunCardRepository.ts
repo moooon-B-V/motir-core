@@ -126,6 +126,39 @@ export const dispatchRunCardRepository = {
   },
 
   /**
+   * The leg that was OPEN for this work item AT A GIVEN INSTANT — the one a
+   * finding whose act happened then belongs to, even when it is recorded later
+   * (MOTIR-6279).
+   *
+   * ⚠️ A SUBMITTED PLAN IS RECORDED LONG AFTER IT WAS SUBMITTED. The agent's
+   * `submit_plan_session` opens the plan `generating` and returns at once; the
+   * agent exits, the CLI settles the leg `replanned` and may close the run, and
+   * only then does the model finish and the plan reach `planned`. By that time
+   * {@link findOpenLegForWorkItem} finds nothing, so the question has to be
+   * asked about the instant the plan was CREATED, not the instant it closed.
+   *
+   * Spanning means `started_at <= at` and the leg had not ended by `at`: either
+   * `ended_at >= at`, or it is still unsettled on a run that is still running —
+   * the same two halves `findOpenLegForWorkItem` holds, for the one leg that
+   * has not ended yet. A leg that never started (`queued`, `skipped`) spans
+   * nothing. Newest first, as there.
+   */
+  async findLegSpanningInstantForWorkItem(
+    workItemId: string,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<DispatchRunCard | null> {
+    return tx.dispatchRunCard.findFirst({
+      where: {
+        workItemId,
+        startedAt: { lte: at },
+        OR: [{ endedAt: { gte: at } }, { endedAt: null, dispatchRun: { status: 'running' } }],
+      },
+      orderBy: [{ startedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /**
    * Advance one leg. `tx` required — a write.
    *
    * ⚠️ THE `skip_reason` CHECK CONSTRAINT IS THE ARBITER, NOT THIS METHOD. The

@@ -11,8 +11,10 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 import {
   ApprovalGatePendingError,
+  PlanTargetHeldError,
   IllegalParentTypeError,
   IllegalTransitionError,
   StaleWorkItemError,
@@ -91,10 +93,13 @@ export type IssueActionResult =
       error: string;
       field?: 'parent' | 'status';
       stale?: boolean;
-      /** Set ONLY for an approval-gate refusal (MOTIR-5526): the status control
-       *  renders it in place, with a door into the approval, from `gate`. */
-      code?: 'APPROVAL_GATE_PENDING';
+      /** Set ONLY for a HELD move: an approval-gate refusal (MOTIR-5526), which the
+       *  status control renders in place with a door into the approval from
+       *  `gate`; or a plan hold (MOTIR-6265), rendered with a Review plan door
+       *  from `plan`. */
+      code?: 'APPROVAL_GATE_PENDING' | 'PLAN_TARGET_HELD';
       gate?: ApprovalGatePendingPayloadDTO;
+      plan?: PlanHoldDTO;
     };
 
 async function requireContext() {
@@ -248,6 +253,17 @@ export async function changeStatusAction(input: {
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         }),
+      };
+    }
+    // An undecided plan holds the card at Planning (MOTIR-6265) — its code and its
+    // complete payload, so the status control can say which plan and open it.
+    if (err instanceof PlanTargetHeldError) {
+      return {
+        ok: false,
+        error: workItemErrorMessage(err, t),
+        field: 'status',
+        code: 'PLAN_TARGET_HELD',
+        plan: err.payload,
       };
     }
     if (err instanceof IllegalTransitionError || err instanceof UnknownStatusError)

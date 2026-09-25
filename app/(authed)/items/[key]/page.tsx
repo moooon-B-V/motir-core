@@ -33,6 +33,7 @@ import { PlanHistorySection } from './_components/PlanHistorySection';
 import { PLAN_HISTORY_FIRST_PAGE } from './_components/planHistoryPaging';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { MonitorErrorsDoorProvider } from './_components/MonitorErrorsLinkControl';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
@@ -238,6 +239,7 @@ export default async function IssueDetailPage({
     planHistory,
     heldTransitions,
     pendingDecisions,
+    planHold,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -356,6 +358,14 @@ export default async function IssueDetailPage({
       { projectId: item.projectId, workItemIds: [item.id] },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     ),
+    // THE PLAN HOLD (Story MOTIR-6017 · MOTIR-6267) — beside the held moves, for
+    // their reason: an undecided plan holding the card at Planning locks every
+    // move, and the status control says so under its value. `null` on almost every
+    // card (anything not at Planning stops after the item row).
+    planTargetLockService.readPlanHold(item.id, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -697,6 +707,7 @@ export default async function IssueDetailPage({
                   <CoreFieldsPanel
                     item={item}
                     heldTransitions={heldTransitions}
+                    planHold={planHold}
                     members={members}
                     workflow={detail.workflow}
                     parent={detail.parent}

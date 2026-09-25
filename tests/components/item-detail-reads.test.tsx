@@ -146,6 +146,12 @@ vi.mock('@/lib/services/approvalGatesService', async (importOriginal) => {
     },
   };
 });
+// The PLAN HOLD (MOTIR-6267) — a tier-two member beside the held moves, for the
+// same reason: the status card draws it under its value. Mocked: the real read
+// opens a database transaction.
+vi.mock('@/lib/services/planTargetLockService', () => ({
+  planTargetLockService: { readPlanHold: deferred('planHold', null, 'tierTwo') },
+}));
 // THE LATE STACK IS DRAINED TOO (MOTIR-6278). The page STARTS `readLateSections`
 // and hands the promise to two `<Suspense>` boundaries — which never render
 // here, because the page is called, not rendered. So nothing awaited it, and the
@@ -476,6 +482,8 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
       // The held status moves (MOTIR-5528): the rail's status card draws them
       // under its value, so they are read with the rail, not after it.
       'heldTransitions',
+      // The plan hold (MOTIR-6267): the status card says it under its value too.
+      'planHold',
       // The header's decision-waiting marker (MOTIR-5878): the header is what the
       // reader lands on, so its read is in THIS group, never in the late stack.
       'pendingDecisions',

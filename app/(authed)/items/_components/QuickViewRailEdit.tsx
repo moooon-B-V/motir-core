@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Check, CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Tooltip } from '@/components/ui/Tooltip';
+import { QuickViewReadOnlyChevron } from '@/components/workItems/QuickViewSurface';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import {
   updateIssueAction,
@@ -188,9 +188,11 @@ export function useQuickViewRailEdit(
         for (const k of Object.keys(optimistic)) delete next[k as keyof QuickViewData];
         return next;
       });
-      // An approval-gate hold is said ON the status control, with its door, by
-      // the held notice (MOTIR-5528) — not as a row error beside it.
-      if (res.code !== 'APPROVAL_GATE_PENDING') setErrorFor({ key, message: res.error });
+      // An approval-gate hold (MOTIR-5528) or a plan hold (MOTIR-6267) is said ON
+      // the status control, with its door, by the held notice — not as a row
+      // error beside it.
+      if (res.code !== 'APPROVAL_GATE_PENDING' && res.code !== 'PLAN_TARGET_HELD')
+        setErrorFor({ key, message: res.error });
       // A stale conflict is not a field error — the whole payload is behind, so
       // the rail says so at the top and the driver re-reads.
       if (res.stale) setStale(true);
@@ -327,18 +329,7 @@ export function EditableRailField({
             />
           </button>
         ) : edit.readOnlyReason && control != null ? (
-          <Tooltip content={edit.readOnlyReason}>
-            <button
-              type="button"
-              aria-disabled="true"
-              aria-label={`${label} — ${edit.readOnlyReason}`}
-              data-read-only-field=""
-              onClick={(e) => e.preventDefault()}
-              className="ml-auto inline-flex cursor-not-allowed rounded-(--radius-control) p-0.5 text-(--el-text-faint) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-            >
-              <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          </Tooltip>
+          <QuickViewReadOnlyChevron label={label} reason={edit.readOnlyReason} />
         ) : null}
       </dt>
       <dd

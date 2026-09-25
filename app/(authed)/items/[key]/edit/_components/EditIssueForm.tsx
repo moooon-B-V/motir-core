@@ -16,6 +16,7 @@ import { StatusPicker } from '@/components/issues/StatusPicker';
 import { StatusHeldNotice } from '@/components/issues/StatusHeldNotice';
 import { useStatusHeld } from '@/components/issues/useStatusHeld';
 import type { HeldTransitionDTO } from '@/lib/dto/approvalGate';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
@@ -57,6 +58,9 @@ export interface EditIssueFormProps {
   /** The status moves an approval HOLDS (MOTIR-5528) — the status field says so
    *  and locks them. Defaults to `[]`. */
   heldTransitions?: HeldTransitionDTO[];
+  /** The undecided PLAN holding the card at Planning (MOTIR-6267) — every move
+   *  locked, said on the status field with a Review plan door. Defaults to none. */
+  planHold?: PlanHoldDTO | null;
 }
 
 export function EditIssueForm({
@@ -65,8 +69,9 @@ export function EditIssueForm({
   members,
   aiConfigured = false,
   heldTransitions,
+  planHold,
 }: EditIssueFormProps) {
-  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, issue.status);
+  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, issue.status, planHold);
   const router = useRouter();
   const t = useTranslations('issueViews');
   const tc = useTranslations('common');
@@ -182,6 +187,11 @@ export function EditIssueForm({
           if (res.code === 'APPROVAL_GATE_PENDING' && res.gate) {
             statusHeld.onRefused(status, res.gate);
             setStatus(issue.status);
+          } else if (res.code === 'PLAN_TARGET_HELD' && res.plan) {
+            // A plan took the card after render (MOTIR-6267): the same, with the
+            // plan's line and its Review plan door.
+            statusHeld.onPlanHeldRefused(res.plan);
+            setStatus(issue.status);
           } else if (res.field === 'status') setStatusError(res.error);
           else toast({ variant: 'error', title: res.error });
           return;
@@ -267,7 +277,11 @@ export function EditIssueForm({
             disabled={isPending}
             held={statusHeld.held}
           />
-          <StatusHeldNotice itemKey={issue.identifier} lines={statusHeld.lines} />
+          <StatusHeldNotice
+            itemKey={issue.identifier}
+            lines={statusHeld.lines}
+            plan={statusHeld.plan}
+          />
         </div>
 
         <div className="flex flex-col gap-1 font-sans text-sm">

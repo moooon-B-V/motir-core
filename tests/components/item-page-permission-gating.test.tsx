@@ -62,6 +62,7 @@ vi.mock('@/app/(authed)/items/[key]/labelComponentActions', () => ({
 import { CoreFieldsPanel } from '@/app/(authed)/items/[key]/_components/CoreFieldsPanel';
 import { IssueQuickViewPanel } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
+import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { Combobox } from '@/components/ui/Combobox';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
@@ -392,5 +393,82 @@ describe('the quick view rail', () => {
     renderQuickView(MEMBER);
     expect(screen.getAllByRole('button', { name: /^Edit / }).length).toBeGreaterThan(2);
     expect(screen.queryAllByRole('button', { name: new RegExp(REASON) })).toHaveLength(0);
+  });
+});
+
+// ── MOTIR-6338 — Story points, the one rail field MOTIR-6173 missed ───────────
+//
+// The story-points badge IS its own edit affordance, so for a Member its card
+// has no chevron. For a Viewer the badge falls to its static chip, and before
+// this fix the card then said nothing — thirteen fields gave the read-only
+// reason and this one read as a field nobody edits. Both surfaces now draw the
+// disabled chevron with the reason for an actor without `work_item:edit`.
+
+const STORY_POINTS_REASON = `Story points — ${REASON}`;
+const ESTIMATION = {
+  estimationStatistic: 'story_points' as const,
+  pointScale: 'fibonacci' as const,
+  customScaleValues: [],
+};
+
+/** The rail as the item page mounts it: inside the page's estimation provider,
+ *  whose `canEdit` is the same `work_item:edit` the access provider resolves. */
+function renderRailWithEstimation(permissions: PermissionKey[]) {
+  const canEdit = permissions.includes('work_item:edit');
+  return renderWithIntl(
+    <ProjectAccessProvider permissions={permissions}>
+      <EstimationConfigProvider config={ESTIMATION} canEdit={canEdit}>
+        <CoreFieldsPanel
+          item={makeItem({ storyPoints: 5 })}
+          members={[]}
+          workflow={workflow}
+          parent={null}
+          sprints={[]}
+        />
+      </EstimationConfigProvider>
+    </ProjectAccessProvider>,
+  );
+}
+
+/** The peek, with the payload's estimation `canEdit` a real server would send. */
+function renderQuickViewWithPoints(permissions: PermissionKey[]) {
+  const canEdit = permissions.includes('work_item:edit');
+  return renderWithIntl(
+    <ProjectAccessProvider permissions={permissions}>
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...DATA, storyPoints: 5, estimation: { ...ESTIMATION, canEdit } }}
+      />
+    </ProjectAccessProvider>,
+  );
+}
+
+describe.each([
+  ['the work item page rail', renderRailWithEstimation],
+  ['the quick view rail', renderQuickViewWithPoints],
+])('%s — the Story points field (MOTIR-6338)', (_surface, render) => {
+  it('as a VIEWER: a disabled chevron carries the reason, and pressing it opens nothing', async () => {
+    render(VIEWER);
+    const chevron = screen.getByRole('button', { name: STORY_POINTS_REASON });
+    expect(chevron.getAttribute('aria-disabled')).toBe('true');
+    expect(chevron.hasAttribute('data-read-only-field')).toBe(true);
+    // The value is still shown — as the badge's static chip, not its editor.
+    expect(screen.getByLabelText('Estimate: 5')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Story points: 5 — edit' })).toBeNull();
+    await act(async () => {
+      fireEvent.click(chevron);
+      fireEvent.keyDown(chevron, { key: 'Enter' });
+    });
+    expect(openEditors()).toHaveLength(0);
+  });
+
+  it('as a MEMBER: no chevron and no reason — the badge is the affordance and opens the scale deck', async () => {
+    render(MEMBER);
+    expect(screen.queryByRole('button', { name: STORY_POINTS_REASON })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Story points —/ })).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Story points: 5 — edit' }));
+    });
+    expect(screen.getByRole('dialog', { name: /story points/i })).toBeTruthy();
   });
 });

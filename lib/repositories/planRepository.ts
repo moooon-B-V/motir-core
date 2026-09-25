@@ -384,6 +384,27 @@ export const planRepository = {
     });
   },
 
+  /**
+   * What THE PLAN HOLD reads about the plan a `plan_target_lock` names (Story
+   * MOTIR-6017 · MOTIR-6265; `agent-authored-plans.md` AMENDMENT 21 §§1–2): its
+   * status, which decides whether it holds, and its session + that session's
+   * anchor keys, which are where its Review plan door goes. One read, on the
+   * caller's `tx` — the status funnel makes it while holding the item `FOR UPDATE`.
+   */
+  async findHoldSubject(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    status: Plan['status'];
+    sessionId: string | null;
+    session: { targetKeys: string[] } | null;
+  } | null> {
+    return tx.plan.findUnique({
+      where: { id },
+      select: { status: true, sessionId: true, session: { select: { targetKeys: true } } },
+    });
+  },
+
   async lockById(id: string, tx: Prisma.TransactionClient): Promise<{ id: string } | null> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "plan" WHERE "id" = ${id} FOR UPDATE

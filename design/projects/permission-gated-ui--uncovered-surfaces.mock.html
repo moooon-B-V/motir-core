@@ -1,0 +1,2136 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The permission-gated rule for the surfaces its table did not cover — list and
+      tree cells, the estimate badge, the Resume-onboarding door (MOTIR-6326)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup), a DELTA of `design/projects/permission-gated-ui.mock.html`
+      (Story MOTIR-2258 · MOTIR-2464). Card MOTIR-6326, epic MOTIR-6164.
+
+      WHAT THIS DRAWS: the three surfaces the permission-gating inventory
+      (`docs/permissions/ui-gating-inventory.md`, story MOTIR-6166) marked NEEDS DESIGN:
+      rows B46 / A29 / A37 (the /items list and tree inline cells), B45 (the inline
+      estimate badge) and D76 (the sidebar "Resume onboarding" door and its ⌘K twin). Each
+      is drawn for a read-only actor beside a Member.
+
+      THE RULE IS NOT THIS ASSET'S. It is the treatment table in
+      `design/projects/design-notes.md` § "Amendment 2026-08-08 — hide the entry point,
+      disable the in-place control, guard the destination". The three rows this asset draws
+      (10, 11, 12) are added to that table by the section "Amendment 2026-09-25" in the same
+      file. That section is the decision, and this asset is its drawing.
+
+      DRAWN AGAINST A RENDER, NOT FROM MEMORY: `/items` (list and tree), `/backlog` and
+      `/boards` were rendered as a project Viewer and a Member on `origin/main` @ 936c17022
+      (next dev, seeded with tests/e2e/_helpers/permission-gated-ui-seed.ts), and the
+      markup below mirrors the classes those renders carried: the row grid, the pills,
+      EditTrigger, EstimateBadge's two arms, BacklogRow, BoardCard's static points and
+      BoardContainer's read-only banner. The sidebar and palette rows mirror
+      components/ui/Sidebar.tsx (SidebarNavItem, its emphasis arm) and
+      components/ui/CommandPalette.tsx. The Resume row itself could not be rendered locally
+      (it needs motir-ai for its pre-plan read), so it is composed from those two sources.
+
+      COMPOSES, DOES NOT REDRAW: the token block and the review chrome are copied 1:1 from
+      the base asset, plus seven Tier-3 tokens the base did not need, each defined as
+      packages/design-system/theme.css defines it. Every product colour is an `--el-*`
+      token, and every shape is an element-semantic token.
+
+      Toggle `data-theme="dark"` on <html> (the button, top right) to confirm token parity.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --el-sidebar-item-bg-hover: #eeede9;
+
+        /* Shape tokens — the [data-display-style] swap layer (default / 'default' values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: ui-serif, Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-hairline);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* Shell — sidebar tokens (app/globals.css §App shell, Subtask 1.5.2) */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 860px;
+        line-height: 1.55;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      /* The review page's own label ink. NOT product surface — `--el-text-faint`
+         is legal here and nowhere inside a `.stage`. */
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 46px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel-label span {
+        color: var(--el-text-secondary);
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: 500;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .legend {
+        max-width: 1180px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .legend code,
+      .review-head code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .legend b {
+        color: var(--el-text);
+      }
+      .duo {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+      }
+      .duo > * + * {
+        border-left: 1px solid var(--el-border);
+      }
+      .state-cap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .state-cap .who {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-tint-lavender);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+      }
+      .state-cap .who.viewer {
+        background: var(--el-tint-mint);
+      }
+      .state-cap .who.member {
+        background: var(--el-tint-sky);
+      }
+      .state-cap .who.custom {
+        background: var(--el-tint-peach);
+      }
+      .annot {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-strong);
+        background: var(--el-tint-yellow);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        display: inline-block;
+      }
+      .tip {
+        position: relative;
+        display: inline-flex;
+      }
+      .tip .bubble {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        white-space: nowrap;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 11.5px;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+        z-index: 3;
+      }
+
+      /* ── Board / banner / inline pickers (panel 5, UNCHANGED treatments) ──── */
+      .notice {
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-control-y) var(--spacing-card-padding);
+        font-size: 13px;
+      }
+      .tbl {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .tbl th,
+      .tbl td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+      }
+      .tbl th {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+      }
+      .tag {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        display: inline-block;
+      }
+      .tag.hide {
+        background: var(--el-tint-rose);
+      }
+      .tag.dis {
+        background: var(--el-tint-sky);
+      }
+      .tag.same {
+        background: var(--el-tint-mint);
+      }
+
+      /* ── Tier-3 tokens the base asset did not need (values as packages/design-system/theme.css
+         declares them in light; each references a Tier-0 token above, so dark follows) ── */
+      :root {
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-text-identifier: var(--color-slate);
+        --el-accent-on-surface: var(--color-primary);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+      }
+
+      /* ── The /items page head + toolbar (app/(authed)/items/page.tsx, as rendered) ── */
+      .page {
+        padding: 22px 20px 20px;
+        background: var(--el-page-bg);
+        min-height: 360px;
+      }
+      .page-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .page-head h3 {
+        font-family: var(--font-serif);
+        font-size: 21px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin-top: 4px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 12.5px;
+        font-weight: 500;
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        white-space: nowrap;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      /* The shipped disabled primary (CreateIssueButton's aria-disabled arm) — faded, not removed. */
+      .btn.primary.off {
+        opacity: 0.45;
+      }
+      .btn svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ── THE NEW STRIP: the shipped board banner's classes, verbatim ──────────
+         BoardContainer.tsx: role="status", rounded-(--radius-card) border
+         border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding)
+         py-(--spacing-control-y) text-sm text-(--el-text-secondary).            */
+      .ro-banner {
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-control-y) var(--spacing-card-padding);
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+      .ro-banner.new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 3px;
+      }
+
+      /* ── The list / tree table (TreeTable + issueColumns, as rendered) ──────── */
+      .grid-tbl {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .grid-row {
+        display: grid;
+        grid-template-columns: minmax(8rem, 1fr) 96px 104px 56px 84px;
+        column-gap: 12px;
+        align-items: center;
+        height: 44px;
+        padding: 0 14px 0 14px;
+        border-bottom: 1px solid var(--el-border);
+        font-size: 13px;
+      }
+      .grid-row:last-child {
+        border-bottom: 0;
+      }
+      .grid-row.head {
+        height: 36px;
+        font-family: var(--font-sans);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+      }
+      .grid-row.tree {
+        height: 40px;
+      }
+      .grid-row .r {
+        justify-self: end;
+      }
+      .ttl {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+      }
+      .ttl .glyph {
+        flex: none;
+        color: var(--el-type-task);
+        display: inline-flex;
+      }
+      .ttl .glyph svg {
+        width: 15px;
+        height: 15px;
+      }
+      .ttl .key {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-identifier);
+      }
+      .ttl .name {
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--el-text);
+      }
+      .ttl.indent {
+        padding-left: 22px;
+      }
+      .ttl .folder {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ttl .folder svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-icon-muted);
+      }
+      .muted2 {
+        color: var(--el-text-secondary);
+      }
+      /* Pill (issueCellPrimitives): rounded-(--radius-badge) px-(--spacing-chip-x)
+         py-(--spacing-chip-y) text-xs font-medium, hue in the tint, --el-text-strong ink. */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill.hi {
+        background: color-mix(in srgb, var(--el-priority-high) 14%, var(--el-surface));
+      }
+      .pill.med {
+        background: color-mix(in srgb, var(--el-priority-medium) 14%, var(--el-surface));
+      }
+      .pill.lo {
+        background: color-mix(in srgb, var(--el-priority-low) 14%, var(--el-surface));
+      }
+      .pill.todo {
+        background: var(--el-tint-lavender);
+      }
+      /* EditTrigger (IssueInlineEdit.tsx): relative z-10 -mx-1 inline-flex px-1 py-0.5
+         rounded-(--radius-control) hover:bg-(--el-surface). Drawn at REST, and once hovered. */
+      .trig {
+        display: inline-flex;
+        align-items: center;
+        margin: 0 -4px;
+        padding: 2px 4px;
+        border-radius: var(--radius-control);
+      }
+      .trig.hover {
+        background: var(--el-surface);
+        box-shadow: 0 0 0 1px var(--el-border-soft);
+      }
+      /* EstimateBadge (components/issues/EstimateBadge.tsx): font-mono text-xs
+         font-semibold, --el-text-secondary ink; the editor arm adds a chip frame on hover. */
+      .est {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+        border: 1px solid transparent;
+        border-radius: var(--radius-badge);
+      }
+      .est svg {
+        width: 11px;
+        height: 11px;
+      }
+      .est.btn-arm {
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+      }
+      .est.btn-arm.hover {
+        border-color: var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-strong);
+      }
+      .tabstops {
+        display: inline-block;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-strong);
+        background: var(--el-tint-yellow);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        margin-left: 6px;
+      }
+
+      /* ── The backlog region (BacklogContainer / BacklogRow, as rendered) ────── */
+      .region {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .region-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .region-head b {
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .region-head .count {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .bl-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 40px;
+        padding: 0 12px 0 14px;
+        font-size: 13px;
+      }
+      .bl-row .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .cbx {
+        flex: none;
+        width: 15px;
+        height: 15px;
+        border-radius: 999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .av-empty {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        border: 1px dashed var(--el-border-strong);
+      }
+      .dots {
+        flex: none;
+        color: var(--el-icon-muted);
+        font-weight: 700;
+        letter-spacing: 1px;
+      }
+      .create-row {
+        padding: 10px 14px 12px;
+        font-size: 13px;
+        color: var(--el-link);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .create-row.off {
+        color: var(--el-text-faint);
+      }
+
+      /* ── Board card (BoardCard.tsx — the static .pts span) ──────────────────── */
+      .bcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 12px 14px;
+        font-size: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 240px;
+      }
+      .bcard .meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* ── The app-shell rail (components/ui/Sidebar.tsx SidebarNavItem, as rendered) ── */
+      .srail {
+        width: 232px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-height: 380px;
+      }
+      .sitem {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        border: 1px solid transparent;
+      }
+      .sitem svg {
+        width: 18px;
+        height: 18px;
+        color: var(--el-icon-muted);
+        flex: none;
+      }
+      .sitem .lbl {
+        flex: 1;
+      }
+      .sitem.active {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .sitem.active svg {
+        color: var(--el-icon-active);
+      }
+      /* isEmphasis: border-(--el-border-soft) bg-(--el-tint-lavender) font-medium
+         text-(--el-text-strong); glyph text-(--el-accent-on-surface); ResumeInProgressBadge's dot. */
+      .sitem.emph {
+        border-color: var(--el-border-soft);
+        background: var(--el-tint-lavender);
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+      .sitem.emph svg {
+        color: var(--el-accent-on-surface);
+      }
+      .sitem .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--el-accent);
+        flex: none;
+      }
+
+      /* ── The command palette (components/ui/CommandPalette.tsx, as rendered) ── */
+      .pal {
+        width: 100%;
+        max-width: 420px;
+        margin: 18px auto;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .pal-input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 44px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--el-border);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+      }
+      .pal-input svg {
+        width: 16px;
+        height: 16px;
+      }
+      .pal-grp {
+        padding: 2px 8px 4px;
+      }
+      .pal-h {
+        padding: 8px 8px 4px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--el-text-muted);
+      }
+      .pal-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .pal-opt.on {
+        background: var(--el-surface);
+      }
+      .pal-opt svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+
+      /* ── Panel 6: the guarded destination, drawn as a route trace ─────────── */
+      .route {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 22px 20px;
+        font-size: 13px;
+      }
+      .route .hop {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 10px 12px;
+        min-width: 170px;
+      }
+      .route .hop code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      .route .hop .why {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .route .arrow {
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+      }
+      .copy-tbl td:first-child {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        white-space: nowrap;
+      }
+      .trio {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      .trio > * + * {
+        border-left: 1px solid var(--el-border);
+      }
+      .pad {
+        padding: 16px;
+      }
+      .shell {
+        display: flex;
+      }
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>The permission-gated rule, for the three surfaces its table did not cover</h1>
+        <p>
+          <b>MOTIR-6326</b> (epic <b>MOTIR-6164</b>) · a <b>delta</b> of
+          <code>design/projects/permission-gated-ui.mock.html</code>. The permission-gating
+          inventory (<code>docs/permissions/ui-gating-inventory.md</code>, MOTIR-6166) marked five
+          rows <b>NEEDS DESIGN</b>: B45, B46, A29, A37 and D76. This asset draws the treatment for
+          each, a Viewer beside a Member, composed from the SHIPPED components as they rendered on
+          <code>origin/main</code> @ <code>936c17022</code>. The RULE is the treatment table in
+          <code>design/projects/design-notes.md</code> § <em>Amendment 2026-08-08</em>; the three
+          rows this asset adds to it (10–12) are in that file's
+          <em>Amendment 2026-09-25</em> section.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle theme
+      </button>
+    </div>
+
+    <!-- ══ PANEL 1 — the /items LIST ══════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 1 —
+      <span
+        >The <code>/items</code> list: inline cells for a Viewer and a Member (table row 10 · B46,
+        A29, A37)</span
+      >
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="duo">
+          <div>
+            <div class="state-cap">
+              <span class="who viewer">viewer</span> no <code>work_item:edit</code> — the notice is
+              NEW; every cell is its plain value (unchanged)
+            </div>
+            <div class="page">
+              <div class="page-head">
+                <div>
+                  <h3>Work Items</h3>
+                  <div class="sub">All work items in Permission-gated Project</div>
+                </div>
+                <span
+                  class="btn primary off"
+                  aria-disabled="true"
+                  title="You have read-only access to this project"
+                  ><svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >New work item</span
+                >
+              </div>
+              <div class="ro-banner new" role="status">
+                Read-only access — you can view these work items but can’t edit them.
+              </div>
+              <div class="grid-tbl" role="table">
+                <div class="grid-row head" role="row">
+                  <span>Title</span><span>Priority</span><span>Assignee</span
+                  ><span class="r">Points</span><span>Status</span>
+                </div>
+                <div class="grid-row" role="row">
+                  <span class="ttl"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-1</span
+                    ><span class="name">A card everyone can see</span></span
+                  >
+                  <span><span class="pill med">– Medium</span></span>
+                  <span class="muted2">Unassigned</span>
+                  <span class="r"
+                    ><span class="est"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >4</span
+                    ></span
+                  >
+                  <span><span class="pill todo">To Do</span></span>
+                </div>
+                <div class="grid-row" role="row">
+                  <span class="ttl"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-2</span
+                    ><span class="name">Invite flow copy review</span></span
+                  >
+                  <span><span class="pill hi">↑ High</span></span>
+                  <span class="muted2">Unassigned</span>
+                  <span class="r"
+                    ><span class="est"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >5</span
+                    ></span
+                  >
+                  <span><span class="pill todo">To Do</span></span>
+                </div>
+                <div class="grid-row" role="row">
+                  <span class="ttl"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-4</span
+                    ><span class="name">Backlog rank on drop</span></span
+                  >
+                  <span><span class="pill lo">↓ Low</span></span>
+                  <span class="muted2">Unassigned</span>
+                  <span class="r"
+                    ><span class="est"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >4</span
+                    ></span
+                  >
+                  <span><span class="pill todo">To Do</span></span>
+                </div>
+              </div>
+              <div class="legend">
+                Tab stops per row: <b>1</b> (the row's own link)
+                <span class="tabstops">unchanged</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="state-cap">
+              <span class="who member">member</span> holds <code>work_item:edit</code> — UNCHANGED:
+              no notice; five edit triggers per row
+            </div>
+            <div class="page">
+              <div class="page-head">
+                <div>
+                  <h3>Work Items</h3>
+                  <div class="sub">All work items in Permission-gated Project</div>
+                </div>
+                <span class="btn primary"
+                  ><svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >New work item</span
+                >
+              </div>
+              <div class="grid-tbl" role="table">
+                <div class="grid-row head" role="row">
+                  <span>Title</span><span>Priority</span><span>Assignee</span
+                  ><span class="r">Points</span><span>Status</span>
+                </div>
+                <div class="grid-row" role="row">
+                  <span class="ttl"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-1</span
+                    ><span class="name">A card everyone can see</span></span
+                  >
+                  <span
+                    ><span class="trig"><span class="pill med">– Medium</span></span></span
+                  >
+                  <span><span class="trig muted2">Unassigned</span></span>
+                  <span class="r"
+                    ><span class="est btn-arm"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >4</span
+                    ></span
+                  >
+                  <span
+                    ><span class="trig"><span class="pill todo">To Do</span></span></span
+                  >
+                </div>
+                <div class="grid-row" role="row">
+                  <span class="ttl"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-2</span
+                    ><span class="name">Invite flow copy review</span></span
+                  >
+                  <span
+                    ><span class="trig hover"><span class="pill hi">↑ High</span></span></span
+                  >
+                  <span><span class="trig muted2">Unassigned</span></span>
+                  <span class="r"
+                    ><span class="est btn-arm hover"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >5</span
+                    ></span
+                  >
+                  <span
+                    ><span class="trig"><span class="pill todo">To Do</span></span></span
+                  >
+                </div>
+                <div class="grid-row" role="row">
+                  <span class="ttl"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-4</span
+                    ><span class="name">Backlog rank on drop</span></span
+                  >
+                  <span
+                    ><span class="trig"><span class="pill lo">↓ Low</span></span></span
+                  >
+                  <span><span class="trig muted2">Unassigned</span></span>
+                  <span class="r"
+                    ><span class="est btn-arm"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >4</span
+                    ></span
+                  >
+                  <span
+                    ><span class="trig"><span class="pill todo">To Do</span></span></span
+                  >
+                </div>
+              </div>
+              <div class="legend">
+                Tab stops per row: <b>1 + 5</b> (Priority · Assignee · Estimate · Points · Status).
+                Row 2 drawn with its Priority trigger and its points badge HOVERED.
+                <span class="tabstops">unchanged</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <b>Decided: DISABLE at the SURFACE, not per cell.</b> The Viewer's cells stay exactly what
+        ships (plain values, not focusable, no hover frame). What changes is ONE
+        <code>role="status"</code> strip between the toolbar and the table, using the shipped board
+        banner's classes verbatim. The dashed outline marks the new element for review and is not
+        product chrome. A per-cell disabled trigger was considered and rejected: it would add five
+        <code>aria-disabled</code> tab stops to every row, each announcing the same sentence.
+        <b>The columns are cropped</b> to the five that carry an inline editor or its neighbour.
+        <b>Title is not inline-edited</b> in the shipped list (the card's "title" is read off the
+        inventory row). Its cell is the row's link for both actors.
+      </div>
+    </div>
+
+    <!-- ══ PANEL 2 — the /items TREE ══════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 2 —
+      <span>The <code>/items</code> tree: the same strip, the same cells (table row 10 · B46)</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="duo">
+          <div>
+            <div class="state-cap">
+              <span class="who viewer">viewer</span> the strip sits above the tree exactly as above
+              the list
+            </div>
+            <div class="page">
+              <div class="ro-banner new" role="status">
+                Read-only access — you can view these work items but can’t edit them.
+              </div>
+              <div class="grid-tbl" role="treegrid">
+                <div class="grid-row head" role="row">
+                  <span>Title</span><span>Priority</span><span>Assignee</span
+                  ><span class="r">Points</span><span>Status</span>
+                </div>
+                <div class="grid-row tree" role="row">
+                  <span class="ttl"
+                    ><span class="folder"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                        /></svg
+                      >Bugs</span
+                    ></span
+                  ><span></span><span></span><span></span><span></span>
+                </div>
+                <div class="grid-row tree" role="row">
+                  <span class="ttl indent"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-1</span
+                    ><span class="name">A card everyone can see</span></span
+                  >
+                  <span><span class="pill med">– Medium</span></span
+                  ><span class="muted2">Unassigned</span>
+                  <span class="r"
+                    ><span class="est"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >4</span
+                    ></span
+                  ><span><span class="pill todo">To Do</span></span>
+                </div>
+                <div class="grid-row tree" role="row">
+                  <span class="ttl indent"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-2</span
+                    ><span class="name">Invite flow copy review</span></span
+                  >
+                  <span><span class="pill hi">↑ High</span></span
+                  ><span class="muted2">Unassigned</span>
+                  <span class="r"
+                    ><span class="est"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >5</span
+                    ></span
+                  ><span><span class="pill todo">To Do</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="state-cap">
+              <span class="who member">member</span> UNCHANGED — no strip; the cells are edit
+              triggers
+            </div>
+            <div class="page">
+              <div class="grid-tbl" role="treegrid">
+                <div class="grid-row head" role="row">
+                  <span>Title</span><span>Priority</span><span>Assignee</span
+                  ><span class="r">Points</span><span>Status</span>
+                </div>
+                <div class="grid-row tree" role="row">
+                  <span class="ttl"
+                    ><span class="folder"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                        /></svg
+                      >Bugs</span
+                    ></span
+                  ><span></span><span></span><span></span><span></span>
+                </div>
+                <div class="grid-row tree" role="row">
+                  <span class="ttl indent"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-1</span
+                    ><span class="name">A card everyone can see</span></span
+                  >
+                  <span
+                    ><span class="trig"><span class="pill med">– Medium</span></span></span
+                  ><span><span class="trig muted2">Unassigned</span></span>
+                  <span class="r"
+                    ><span class="est btn-arm"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >4</span
+                    ></span
+                  ><span
+                    ><span class="trig hover"><span class="pill todo">To Do</span></span></span
+                  >
+                </div>
+                <div class="grid-row tree" role="row">
+                  <span class="ttl indent"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-2</span
+                    ><span class="name">Invite flow copy review</span></span
+                  >
+                  <span
+                    ><span class="trig"><span class="pill hi">↑ High</span></span></span
+                  ><span><span class="trig muted2">Unassigned</span></span>
+                  <span class="r"
+                    ><span class="est btn-arm"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                      >5</span
+                    ></span
+                  ><span
+                    ><span class="trig"><span class="pill todo">To Do</span></span></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        List and tree are two modes of ONE page (<code>/items</code>, the
+        <b>List / Tree</b> switch). The strip belongs to the page, so switching modes neither moves
+        nor repeats it. The <b>empty state</b> is not changed: the first-run mock (<code
+          >design/work-items/items-first-run.mock.html</code
+        >
+        panel 3) already drops the create action for a member who cannot create, and an empty
+        project shows no strip, because there is no cell whose read-only state needs explaining.
+      </div>
+    </div>
+
+    <!-- ══ PANEL 3 — the BACKLOG and its estimate badge ═══════════════════ -->
+    <div class="panel-label">
+      Panel 3 — <span>The backlog: the estimate badge for three actors (table row 11 · B45)</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="trio">
+          <div>
+            <div class="state-cap">
+              <span class="who viewer">viewer</span> no <code>work_item:edit</code>
+            </div>
+            <div class="pad">
+              <div class="ro-banner new" role="status">
+                Read-only access — you can view the backlog but can’t rank, estimate or edit work
+                items.
+              </div>
+              <div class="region">
+                <div class="region-head"><b>Backlog</b><span class="count">5 work items</span></div>
+                <div class="bl-row">
+                  <span class="ttl grow"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-1</span><span class="name">A card everyone…</span></span
+                  ><span class="est"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                    >4</span
+                  ><span class="av-empty"></span><span class="pill todo">To Do</span>
+                </div>
+                <div class="bl-row">
+                  <span class="ttl grow"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-2</span><span class="name">Invite flow cop…</span></span
+                  ><span class="est"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                    >5</span
+                  ><span class="av-empty"></span><span class="pill todo">To Do</span>
+                </div>
+                <div class="create-row off" aria-disabled="true">+ Create work item</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="state-cap">
+              <span class="who member">member</span> both keys — UNCHANGED
+            </div>
+            <div class="pad">
+              <div class="region">
+                <div class="region-head"><b>Backlog</b><span class="count">5 work items</span></div>
+                <div class="bl-row">
+                  <span class="cbx"></span
+                  ><span class="ttl grow"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-1</span><span class="name">A card every…</span></span
+                  ><span class="est btn-arm"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                    >4</span
+                  ><span class="av-empty"></span><span class="pill todo">To Do</span
+                  ><span class="dots">···</span>
+                </div>
+                <div class="bl-row">
+                  <span class="cbx"></span
+                  ><span class="ttl grow"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-2</span><span class="name">Invite flow…</span></span
+                  ><span class="est btn-arm hover"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                    >5</span
+                  ><span class="av-empty"></span><span class="pill todo">To Do</span
+                  ><span class="dots">···</span>
+                </div>
+                <div class="create-row">+ Create work item</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="state-cap">
+              <span class="who custom">custom</span> <code>work_item:edit</code>, no
+              <code>sprint:manage</code>
+            </div>
+            <div class="pad">
+              <div class="ro-banner new" role="status">
+                You can edit work items here, but ranking them and planning sprints needs permission
+                to manage sprints.
+              </div>
+              <div class="region">
+                <div class="region-head"><b>Backlog</b><span class="count">5 work items</span></div>
+                <div class="bl-row">
+                  <span class="ttl grow"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-1</span><span class="name">A card everyone…</span></span
+                  ><span class="est btn-arm"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                    >4</span
+                  ><span class="av-empty"></span><span class="pill todo">To Do</span>
+                </div>
+                <div class="bl-row">
+                  <span class="ttl grow"
+                    ><span class="glyph"
+                      ><svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <path d="m8 12 3 3 5-6" /></svg></span
+                    ><span class="key">PGU-2</span><span class="name">Invite flow cop…</span></span
+                  ><span class="est btn-arm"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                    >5</span
+                  ><span class="av-empty"></span><span class="pill todo">To Do</span>
+                </div>
+                <div class="create-row">+ Create work item</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <b>The badge itself does not change.</b> Its read-only arm (the static chip) is also what
+        EVERY actor sees when the project estimates in Time or Issue count, so a reason on the chip
+        would be wrong for a Member in those projects. The reason therefore goes on the surface: the
+        backlog gets the same strip as the list, keyed on <code>work_item:edit</code>.
+        <b>The third column is the partial role</b> MOTIR-6174 left with no explanation. Its
+        grooming controls (drag, selection box, ⋯ menu, Create sprint) were hidden and nothing said
+        why. It gets the second copy string. Both strips are keyed on the SAME two capabilities the
+        page's writes assert (<code>work_item:edit</code> for the badge and inline create,
+        <code>sprint:manage</code> for grooming), and a Member holding both sees neither.
+      </div>
+    </div>
+
+    <!-- ══ PANEL 4 — the BOARD, unchanged ═════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 4 — <span>The board's points: NOT the badge, and UNCHANGED (no new row)</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="duo">
+          <div>
+            <div class="state-cap">
+              <span class="who viewer">viewer</span> the shipped banner (row 7) already explains it
+            </div>
+            <div class="pad">
+              <div class="ro-banner" role="status">
+                Read-only access — you can view this board but can’t move or edit work items.
+              </div>
+              <div class="bcard">
+                <span class="ttl"
+                  ><span class="glyph"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="3" />
+                      <path d="m8 12 3 3 5-6" /></svg></span
+                  ><span class="key">PGU-2</span></span
+                >
+                <span>Invite flow copy review</span>
+                <span class="meta"
+                  ><span class="pill hi">↑ High</span
+                  ><span class="est"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                    >5</span
+                  ></span
+                >
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="state-cap">
+              <span class="who member">member</span> the same static span — nobody edits points on a
+              board card
+            </div>
+            <div class="pad">
+              <div class="bcard">
+                <span class="ttl"
+                  ><span class="glyph"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="3" />
+                      <path d="m8 12 3 3 5-6" /></svg></span
+                  ><span class="key">PGU-2</span></span
+                >
+                <span>Invite flow copy review</span>
+                <span class="meta"
+                  ><span class="pill hi">↑ High</span
+                  ><span class="est"
+                    ><svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></svg
+                    >5</span
+                  ></span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        The inventory row names "board / backlog / list", but the board card is not an
+        <code>EstimateBadge</code> call site. <code>BoardCard.tsx</code> renders its own static
+        <code>.pts</code> span, because the whole card is the drag-handle button and the badge's
+        editable arm cannot nest inside it (the badge's own call-site comment says so). Nobody edits
+        points on a board card, so there is no read-only state to explain. Drawn only so the
+        implementing card does not add a strip or a tooltip here.
+      </div>
+    </div>
+
+    <!-- ══ PANEL 5 — the RESUME-ONBOARDING door + its ⌘K twin ════════════ -->
+    <div class="panel-label">
+      Panel 5 — <span>"Resume onboarding": the rail row and its ⌘K twin (table row 12 · D76)</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="duo">
+          <div>
+            <div class="state-cap">
+              <span class="who viewer">viewer</span> no <code>ai:plan</code>: the row and the ⌘K
+              group are NOT RENDERED
+            </div>
+            <div class="shell">
+              <div class="srail">
+                <div class="sitem">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg
+                  ><span class="lbl">Workbench</span>
+                </div>
+                <div class="sitem active">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <circle cx="12" cy="12" r="2" /></svg
+                  ><span class="lbl">Work Items</span>
+                </div>
+                <div class="sitem">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="m10 8 6 4-6 4z" /></svg
+                  ><span class="lbl">Ready</span>
+                </div>
+                <div class="sitem">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M9 4v16M15 4v16" /></svg
+                  ><span class="lbl">Boards</span>
+                </div>
+                <div class="sitem">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M4 6h16M4 12h10M4 18h6" /></svg
+                  ><span class="lbl">Backlog</span>
+                </div>
+              </div>
+              <div class="content">
+                <div class="pal">
+                  <div class="pal-input">
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="m20 20-3.5-3.5" /></svg
+                    >Type a command or search…
+                  </div>
+                  <div class="pal-grp">
+                    <div class="pal-h">Navigation</div>
+                    <div class="pal-opt on">
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <circle cx="12" cy="12" r="2" /></svg
+                      >Go to Work Items
+                    </div>
+                    <div class="pal-opt">
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <rect x="3" y="4" width="18" height="16" rx="2" />
+                        <path d="M9 4v16M15 4v16" /></svg
+                      >Go to Boards
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="state-cap">
+              <span class="who member">member</span> holds <code>ai:plan</code>, onboarding in
+              progress — UNCHANGED
+            </div>
+            <div class="shell">
+              <div class="srail">
+                <div class="sitem emph">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                    <path d="M3 3v5h5M12 7v5l3 2" /></svg
+                  ><span class="lbl">Resume onboarding</span
+                  ><span class="dot" aria-hidden="true"></span>
+                </div>
+                <div class="sitem">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg
+                  ><span class="lbl">Workbench</span>
+                </div>
+                <div class="sitem active">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <circle cx="12" cy="12" r="2" /></svg
+                  ><span class="lbl">Work Items</span>
+                </div>
+                <div class="sitem">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="m10 8 6 4-6 4z" /></svg
+                  ><span class="lbl">Ready</span>
+                </div>
+                <div class="sitem">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M9 4v16M15 4v16" /></svg
+                  ><span class="lbl">Boards</span>
+                </div>
+              </div>
+              <div class="content">
+                <div class="pal">
+                  <div class="pal-input">
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="m20 20-3.5-3.5" /></svg
+                    >Type a command or search…
+                  </div>
+                  <div class="pal-grp">
+                    <div class="pal-h">AI</div>
+                    <div class="pal-opt on">
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                        <path d="M3 3v5h5M12 7v5l3 2" /></svg
+                      >Resume onboarding
+                    </div>
+                    <div class="pal-opt">
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /></svg
+                      >Plan with AI
+                    </div>
+                  </div>
+                  <div class="pal-grp">
+                    <div class="pal-h">Navigation</div>
+                    <div class="pal-opt">
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <circle cx="12" cy="12" r="2" /></svg
+                      >Go to Work Items
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <b>Decided: HIDE</b> (table row 1's reason, on the key the destination's writes assert:
+        <code>ai:plan</code>, the same <code>AI_PLANNING_REQUIREMENT</code> the "Plan with AI" pill,
+        orb and ⌘K row already read). The door is shown only when the in-progress STATE holds AND
+        the actor holds the key. The Viewer's rail starts at Workbench and nothing marks the gap, as
+        in the base asset's panel 4. With both AI actions gone the palette's <b>AI</b> heading goes
+        too; the shipped "no heading above nothing" rule already does that. The rail rows drawn are
+        the first five of each actor's shipped primary nav. The row's glyph is lucide
+        <code>History</code> and its trailing mark is <code>ResumeInProgressBadge</code>, both
+        verbatim.
+      </div>
+    </div>
+
+    <!-- ══ PANEL 6 — the guarded destination ══════════════════════════════ -->
+    <div class="panel-label">
+      Panel 6 —
+      <span>The hidden door's destination, reached by URL (table row 12, the GUARD limb)</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="state-cap">
+          <span class="who viewer">viewer</span> no <code>ai:plan</code>, types or follows
+          <code>/onboarding/discovery</code>
+        </div>
+        <div class="route">
+          <div class="hop">
+            <code>/onboarding/discovery</code>
+            <div class="why">a page read — <code>project:browse</code> only, today</div>
+          </div>
+          <span class="arrow">→ redirect →</span>
+          <div class="hop">
+            <code>onboardingReturnHref(…) ?? '/roadmap'</code>
+            <div class="why">the page's OWN exit for a finished onboarding, reused</div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <b>A redirect, not a no-access screen.</b> This follows the base asset's precedent for an
+        edit surface (<code>/items/[key]/edit</code> redirects to the read-only detail view): the
+        page is a workspace to act in, and the actor cannot act in it. The page already has an exit
+        for "there is nothing for you to do here" (the <code>onboardingRanAt</code> branch). The
+        guard reuses it, so there is no new screen and no new copy.
+        <b>Hiding is still presentation</b>: the flow's writes already assert
+        <code>ai:plan</code> (every discovery answer through <code>aiChatService</code>, the design
+        step through <code>aiPreplanService.saveDesignChoice</code>), and that server refusal is
+        what rule 3 relies on. The redirect only stops a Viewer from arriving in a flow whose first
+        save would bounce.
+      </div>
+    </div>
+
+    <!-- ══ TRACE TABLE ═══════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Trace — <span>panel → the new table row → the inventory rows it disposes of</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Panel</th>
+              <th>Table row</th>
+              <th>Treatment</th>
+              <th>Inventory rows</th>
+              <th>What changes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1, 2</td>
+              <td>10 — collection inline cell</td>
+              <td><span class="tag dis">DISABLE</span> at the surface</td>
+              <td>B46 · A29 · A37</td>
+              <td>One read-only strip on <code>/items</code> (list + tree). Cells unchanged.</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>11 — inline estimate badge</td>
+              <td><span class="tag dis">DISABLE</span> at the surface</td>
+              <td>B45</td>
+              <td>
+                The backlog gains the strip (two copy variants). The badge is unchanged; the list is
+                covered by row 10.
+              </td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>— (row 7, unchanged)</td>
+              <td><span class="tag same">UNCHANGED</span></td>
+              <td>B45 (its board limb)</td>
+              <td>Nothing: the board card's points are a static span for every actor.</td>
+            </tr>
+            <tr>
+              <td>5, 6</td>
+              <td>12 — onboarding resume door</td>
+              <td><span class="tag hide">HIDE</span> + guard</td>
+              <td>D76</td>
+              <td>
+                Rail row and ⌘K twin gated on <code>ai:plan</code>; the discovery page redirects an
+                actor without it.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <table class="tbl copy-tbl">
+          <thead>
+            <tr>
+              <th>New key (<code>projectAccess.*</code>)</th>
+              <th>en</th>
+              <th>zh</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>readOnlyItemsBanner</td>
+              <td>Read-only access — you can view these work items but can’t edit them.</td>
+              <td>只读访问——你可以查看这些工作项，但无法编辑。</td>
+            </tr>
+            <tr>
+              <td>readOnlyBacklogBanner</td>
+              <td>
+                Read-only access — you can view the backlog but can’t rank, estimate or edit work
+                items.
+              </td>
+              <td>只读访问——你可以查看待办列表，但无法排序、估算或编辑工作项。</td>
+            </tr>
+            <tr>
+              <td>noGroomingBacklogBanner</td>
+              <td>
+                You can edit work items here, but ranking them and planning sprints needs permission
+                to manage sprints.
+              </td>
+              <td>你可以在这里编辑工作项，但排序和规划 Sprint 需要管理 Sprint 的权限。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </body>
+</html>

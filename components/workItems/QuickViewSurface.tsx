@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 // The READ-ONLY chrome of a quick-view peek — extracted from
 // `IssueQuickViewPanel` so a PROPOSAL can be read with the same grammar a work
@@ -103,16 +105,48 @@ export function QuickViewSectionLabel({
   );
 }
 
+/**
+ * The PERMISSION-GATED chevron (MOTIR-6173, the permission-gated UI rule's
+ * part 2 — `design/projects/design-notes.md`, treatment-table row 6): a field the
+ * actor could edit if they held the key keeps its chevron DISABLED and says why
+ * in a Tooltip and in its accessible name. It never toggles, so no editor is
+ * ever mounted for an actor whose write the server would refuse.
+ */
+export function QuickViewReadOnlyChevron({ label, reason }: { label: string; reason: string }) {
+  return (
+    <Tooltip content={reason}>
+      <button
+        type="button"
+        aria-disabled="true"
+        aria-label={`${label} — ${reason}`}
+        data-read-only-field=""
+        onClick={(e) => e.preventDefault()}
+        className="ml-auto inline-flex cursor-not-allowed rounded-(--radius-control) p-0.5 text-(--el-text-faint) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+      >
+        <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+      </button>
+    </Tooltip>
+  );
+}
+
 /** A rail field — uppercase caption over its value. */
 export function QuickViewRailField({
   label,
   marker,
+  readOnlyReason,
   children,
 }: {
   label: string;
   /** The CHANGED chip, when a plan is moving this row (MOTIR-4184, Part XIV §3).
    *  Inside the `<dt>` so it is announced as part of the row's own term. */
   marker?: ReactNode;
+  /**
+   * For a row whose VALUE is its own edit affordance (the story-points badge,
+   * MOTIR-6338): the reason an actor without the key cannot edit it, drawn as
+   * the disabled chevron its `EditableRailField` neighbours carry. Omit it for a
+   * row nobody edits here (reporter, repositories) — there is no right to lack.
+   */
+  readOnlyReason?: string;
   children: ReactNode;
 }) {
   return (
@@ -120,6 +154,7 @@ export function QuickViewRailField({
       <dt className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {label}
         {marker}
+        {readOnlyReason ? <QuickViewReadOnlyChevron label={label} reason={readOnlyReason} /> : null}
       </dt>
       <dd className="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)">
         {children}

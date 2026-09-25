@@ -278,6 +278,10 @@ export async function linkPullRequestAction(input: {
   } catch (err) {
     const msg = prLinkErrorMessage(err, tg);
     if (msg) return { ok: false, error: msg };
+    // The service asserts `work_item:edit` (MOTIR-6318). The door is hidden from
+    // an actor without it, so this answers a direct call or a role revoked while
+    // the page was open.
+    if (err instanceof PermissionDeniedError) return { ok: false, error: err.message };
     const refused = await unmappedActionRefusalMessage(err, 'linkPullRequestAction');
     if (refused) return { ok: false, error: refused };
     throw err;
@@ -333,6 +337,10 @@ export async function unlinkPullRequestAction(input: {
   } catch (err) {
     const msg = prLinkErrorMessage(err, tg);
     if (msg) return { ok: false, error: msg };
+    // The service asserts `work_item:edit` (MOTIR-6318). The door is hidden from
+    // an actor without it, so this answers a direct call or a role revoked while
+    // the page was open.
+    if (err instanceof PermissionDeniedError) return { ok: false, error: err.message };
     const refused = await unmappedActionRefusalMessage(err, 'unlinkPullRequestAction');
     if (refused) return { ok: false, error: refused };
     throw err;
