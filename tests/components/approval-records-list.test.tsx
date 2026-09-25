@@ -101,6 +101,8 @@ function decidedRow(over: Partial<ApprovalRecordDecidedRowDto> = {}): ApprovalRe
 function page(over: Partial<ApprovalRecordsPageDto> = {}): ApprovalRecordsPageDto {
   return {
     fullView: false,
+    scope: 'mine',
+    views: ['mine'],
     sections: {
       awaiting: { items: [awaitingRow()], total: 1 },
       decided: { items: [decidedRow()], total: 1 },
@@ -255,6 +257,9 @@ describe('every row is the ONE approvals row, and its door is the overlay', () =
     renderWithIntl(<ApprovalRecordsList records={page({ total: 60, page: 1, pageSize: 25 })} />);
     expect(approvalRecordsHref(1)).toBe('/approvals');
     expect(approvalRecordsHref(3)).toBe('/approvals?page=3');
+    // MOTIR-6333 — a page turn keeps the served view when the reader has the switch.
+    expect(approvalRecordsHref(3, 'mine')).toBe('/approvals?view=mine&page=3');
+    expect(approvalRecordsHref(1, 'project')).toBe('/approvals?view=project');
   });
 
   it('`git grep` finds ONE approvals row component in the repo', () => {
@@ -305,11 +310,15 @@ describe('the room decides nothing about access, and its door is browse-only', (
     expect(out).toBe('');
   });
 
-  it('the page hands the read nothing but the page number — no parameter reaches the scope', () => {
+  it('the page hands the read the page number and the REQUESTED view — nothing else reaches the scope', () => {
+    // MOTIR-6333: the reader may now ASK for a view (`?view=`); the read still
+    // decides what that request may show. No other parameter reaches it.
     const src = readFileSync(join(ROOT, 'app/(authed)/approvals/page.tsx'), 'utf8');
-    const readParams = [...src.matchAll(/params\['([^']+)'\]/g)].map((m) => m[1]);
-    expect(readParams).toEqual(['page']);
-    expect(src).toMatch(/listRecords\(ctx, \{ page: parsePage\(params\['page'\]\) \}\)/);
+    const readParams = [...src.matchAll(/params\[([^\]]+)\]/g)].map((m) => m[1]);
+    expect(readParams.sort()).toEqual(["'page'", 'ROOM_VIEW_PARAM'].sort());
+    expect(src).toMatch(
+      /listRecords\(ctx, \{\s*page: parsePage\(params\['page'\]\),\s*view: requested,\s*\}\)/,
+    );
   });
 
   it('`/approvals` is in the one nav map as browse-only, naming the widening key in its evidence', () => {

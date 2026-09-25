@@ -16,15 +16,20 @@ import type { ApprovalRecordsPageDto } from '@/lib/dto/approvalGate';
 //     asserted by the absence of the product's access-denied strings, by key;
 //   · the subtitle follows the read's `fullView`, never a check of its own.
 
-const { getSession, redirect, getActiveProject, listRecords, push } = vi.hoisted(() => ({
-  push: vi.fn(),
-  getSession: vi.fn(),
-  redirect: vi.fn((to: string) => {
-    throw new Error(`redirect:${to}`);
-  }),
-  getActiveProject: vi.fn(),
-  listRecords: vi.fn(),
-}));
+const { getSession, redirect, getActiveProject, listRecords, recordViews, notFound, push } =
+  vi.hoisted(() => ({
+    push: vi.fn(),
+    recordViews: vi.fn(),
+    notFound: vi.fn(() => {
+      throw new Error('notFound');
+    }),
+    getSession: vi.fn(),
+    redirect: vi.fn((to: string) => {
+      throw new Error(`redirect:${to}`);
+    }),
+    getActiveProject: vi.fn(),
+    listRecords: vi.fn(),
+  }));
 
 vi.mock('@/lib/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth')>()),
@@ -33,6 +38,7 @@ vi.mock('@/lib/auth', async (importOriginal) => ({
 vi.mock('next/navigation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next/navigation')>()),
   redirect,
+  notFound,
   useRouter: () => ({ push, refresh: vi.fn() }),
   usePathname: () => '/approvals',
   useSearchParams: () => new URLSearchParams(''),
@@ -47,7 +53,7 @@ vi.mock('next-intl/server', async () => {
 });
 vi.mock('@/lib/projects', () => ({ getActiveProject }));
 vi.mock('@/lib/services/approvalGatesService', () => ({
-  approvalGatesService: { listRecords },
+  approvalGatesService: { listRecords, recordViews },
 }));
 
 const CTX = { userId: 'u1', workspaceId: 'ws1', projectId: 'p1' };
@@ -55,6 +61,9 @@ const CTX = { userId: 'u1', workspaceId: 'ws1', projectId: 'p1' };
 function empty(fullView: boolean): ApprovalRecordsPageDto {
   return {
     fullView,
+    // One view each, so the switch stays out of these cases (the switch has its own).
+    scope: fullView ? 'project' : 'mine',
+    views: fullView ? ['project'] : ['mine'],
     sections: { awaiting: { items: [], total: 0 }, decided: { items: [], total: 0 } },
     total: 0,
     page: 1,
@@ -96,10 +105,14 @@ describe('the /approvals page', () => {
     expect(listRecords).not.toHaveBeenCalled();
   });
 
-  it('hands the read the page number and NOTHING else from the URL', async () => {
+  it('hands the read the page number and the REQUESTED view — nothing else from the URL', async () => {
     await renderPage({ page: '3', userId: 'someone-else', fullView: 'true', scope: 'project' });
     expect(listRecords).toHaveBeenCalledTimes(1);
-    expect(listRecords).toHaveBeenCalledWith(CTX, { page: 3 });
+    expect(listRecords).toHaveBeenCalledWith(CTX, { page: 3, view: null });
+    cleanup();
+    listRecords.mockClear();
+    await renderPage({ view: 'project' });
+    expect(listRecords).toHaveBeenCalledWith(CTX, { page: 1, view: 'project' });
   });
 
   it('a reader with no records reads "no approvals yet" in their own words — never an access message', async () => {
@@ -272,6 +285,8 @@ describe('the /approvals page', () => {
   it('a page that ENDS inside the pending half draws no Decided heading — its rows are on a later page', async () => {
     listRecords.mockResolvedValue({
       fullView: false,
+      scope: 'mine',
+      views: ['mine'],
       sections: {
         awaiting: { items: [awaiting()], total: 1 },
         decided: { items: [], total: 1 },
@@ -286,5 +301,52 @@ describe('the /approvals page', () => {
     // …and the pager moves to the next page of the ROOM.
     fireEvent.click(screen.getByRole('button', { name: en.common.pager.nextPage }));
     expect(push).toHaveBeenCalledWith('/approvals?page=2');
+  });
+});
+
+// ── The Mine / Project switch (Story MOTIR-6179 · MOTIR-6333, design MOTIR-6327) ──
+describe('the /approvals page — the view switch and its faces', () => {
+  const switchGroup = () => screen.queryByRole('group', { name: en.approvalRecords.viewAria });
+
+  it('a reader with BOTH views (a Member) gets the switch, Mine then Project, on the served view', async () => {
+    listRecords.mockResolvedValue({ ...empty(false), scope: 'mine', views: ['mine', 'project'] });
+    await renderPage();
+    const group = switchGroup();
+    expect(group).toBeTruthy();
+    const buttons = [...group!.querySelectorAll('button')];
+    expect(buttons.map((b) => b.textContent)).toEqual([en.roomView.mine, en.roomView.project]);
+    expect(buttons[0]!.getAttribute('aria-pressed')).toBe('true');
+    // Pressing Project writes an explicit view and drops the page number.
+    fireEvent.click(buttons[1]!);
+    expect(push).toHaveBeenCalledWith('/approvals?view=project', { scroll: false });
+  });
+
+  it('a Viewer (key, no act) gets the Project list with NO switch', async () => {
+    listRecords.mockResolvedValue({ ...empty(true), views: ['project'] });
+    await renderPage({ view: 'mine' });
+    expect(switchGroup()).toBeNull();
+    expect(screen.getByText(en.approvalRecords.subtitle.full)).toBeTruthy();
+  });
+
+  it('a reader who acts without the key gets Mine with NO switch — `?view=project` is not an error', async () => {
+    listRecords.mockResolvedValue({ ...empty(false), views: ['mine'] });
+    await renderPage({ view: 'project' });
+    expect(switchGroup()).toBeNull();
+    expect(screen.getByText(en.approvalRecords.subtitle.own)).toBeTruthy();
+  });
+
+  it('a reader with NEITHER the key nor a way to act gets the not-found face', async () => {
+    listRecords.mockResolvedValue({ ...empty(false), views: [] });
+    await expect(renderPage()).rejects.toThrow('notFound');
+  });
+
+  it('a FAILED read renders the ErrorState under the header, the switch staying', async () => {
+    listRecords.mockRejectedValue(new Error('db down'));
+    recordViews.mockResolvedValue(['mine', 'project']);
+    await renderPage({ view: 'project' });
+    expect(screen.getByText(en.approvalRecords.readFailedTitle)).toBeTruthy();
+    expect(screen.getByText(en.approvalRecords.readFailedBody)).toBeTruthy();
+    expect(switchGroup()).toBeTruthy();
+    expect(screen.queryByText(en.approvalRecords.empty.title)).toBeNull();
   });
 });

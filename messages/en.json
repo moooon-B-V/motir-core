@@ -7639,7 +7639,10 @@
       "decidedFull": "No approval in this project has been decided yet.",
       "decidedOwn": "You have not decided an approval in this project yet."
     },
-    "decidedByOnGithub": "{label} · on GitHub"
+    "decidedByOnGithub": "{label} · on GitHub",
+    "viewAria": "Show your approvals or the whole project's",
+    "readFailedTitle": "We couldn’t load these approvals",
+    "readFailedBody": "Reload to try again."
   },
   "platformAdmin": {
     "shell": {
@@ -9358,5 +9361,9 @@
     "plan": "Opens the plan",
     "noConversation": "no conversation",
     "noConversationWhy": "There is no conversation on record for this plan."
+  },
+  "roomView": {
+    "mine": "Mine",
+    "project": "Project"
   }
 }

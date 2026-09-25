@@ -29,9 +29,17 @@ import type { ApprovalRecordsPageDto } from '@/lib/dto/approvalGate';
 // A page holding rows of only one section still draws both headings once there is a
 // row anywhere, with `0` in the empty section's chip and its one-line empty state.
 
-/** The room's page address — the only query this list writes besides the overlay's. */
-export function approvalRecordsHref(page: number): string {
-  return page > 1 ? `/approvals?page=${page}` : '/approvals';
+/**
+ * The room's page address — the only query this list writes besides the overlay's.
+ * It carries the SERVED view (MOTIR-6333) when the reader has the switch, so a
+ * page turn stays in the view it was on; each view has its own pager and clamp.
+ */
+export function approvalRecordsHref(page: number, view?: 'mine' | 'project'): string {
+  const params = new URLSearchParams();
+  if (view) params.set('view', view);
+  if (page > 1) params.set('page', String(page));
+  const query = params.toString();
+  return query ? `/approvals?${query}` : '/approvals';
 }
 
 function SectionHeader({
@@ -202,7 +210,11 @@ export function ApprovalRecordsList({ records }: { records: ApprovalRecordsPageD
         total={records.total}
         page={records.page}
         pageSize={records.pageSize}
-        onPage={(page) => router.push(approvalRecordsHref(page))}
+        onPage={(page) =>
+          router.push(
+            approvalRecordsHref(page, records.views.length > 1 ? records.scope : undefined),
+          )
+        }
       />
     </div>
   );

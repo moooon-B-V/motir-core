@@ -850,11 +850,22 @@ export interface ApprovalRecordsSectionDto<Row> {
  */
 export interface ApprovalRecordsPageDto {
   /**
-   * Whether this reader holds `approval:view_any` — a FACT ABOUT THE ANSWER, which
-   * the surface reads for copy and for the person column. It is never an input: no
-   * caller can ask the read for the wider view.
+   * Whether the SERVED view is the whole project's — `scope === 'project'`. A FACT
+   * ABOUT THE ANSWER, kept beside `scope` for its existing readers; the surface
+   * keys its copy and the person column on it (never on holding the key: a
+   * key-holder looking at Mine must not see their own name on every row).
    */
   fullView: boolean;
+  /**
+   * The view the service SERVED (Story MOTIR-6179 · MOTIR-6333). The caller only
+   * ASKS for one; `project` is served only to a reader holding `approval:view_any`.
+   */
+  scope: 'mine' | 'project';
+  /**
+   * The views this reader HAS, in switch order — the page draws the Mine /
+   * Project switch only when both are here, and the not-found face when none is.
+   */
+  views: ('mine' | 'project')[];
   sections: {
     awaiting: ApprovalRecordsSectionDto<ApprovalQueueRowDto>;
     decided: ApprovalRecordsSectionDto<ApprovalRecordDecidedRowDto>;

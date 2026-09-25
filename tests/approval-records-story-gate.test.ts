@@ -153,8 +153,11 @@ async function seed() {
   await gate({ title: 'superseded', state: 'superseded', createdAt: t(4) });
 }
 
-async function titlesFor(userId: string) {
-  const page = await approvalGatesService.listRecords(ctxOf(userId), { limit: 100 });
+/** The records a reader is SERVED when asking for `view` — `project` by default,
+ *  so the cases below are about what the key admits (MOTIR-6333 made the view a
+ *  request; the no-view default is Mine-when-it-has-rows, asserted on its own). */
+async function titlesFor(userId: string, view: 'mine' | 'project' = 'project') {
+  const page = await approvalGatesService.listRecords(ctxOf(userId), { limit: 100, view });
   return {
     fullView: page.fullView,
     awaiting: page.sections.awaiting.items.map((r) => r.workItem?.title),
@@ -350,5 +353,108 @@ describe('the decided-row mapper refuses a row that is not a decision', () => {
     expect(() =>
       toApprovalRecordDecidedRowDto({ ...base, state: 'approved', decidedAt: null } as never, null),
     ).toThrow(/no decidedAt/);
+  });
+});
+
+// ── THE VIEW (Story MOTIR-6179 · MOTIR-6333) — the reader asks, the read serves ──
+describe('listRecords takes a requested view and serves a scope', () => {
+  const OWN_A = { awaiting: ['await-a-old', 'await-a-new'], decided: ['changes-a', 'dec-a-old'] };
+
+  async function seatViewer(): Promise<string> {
+    const user = await createTestUser({ email: 'viewer@ex.com', name: 'Reader viewer' });
+    await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
+    await projectMembersService.addMember({
+      key: fx.projectIdentifier,
+      actorUserId: fx.ownerId,
+      ctx: fx.ctx,
+      targetUserId: user.id,
+      role: 'viewer',
+    });
+    return user.id;
+  }
+
+  async function onCustomRole(userId: string, permissions: string[]) {
+    const role = await adminDb.projectRoleDefinition.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: `R ${userId}`,
+        permissions,
+      },
+    });
+    await adminDb.$transaction((tx) =>
+      projectMembershipRepository.setRoleDefinition(
+        userId,
+        fx.projectId,
+        { roleDefinitionId: role.id, role: CUSTOM_ROLE_TIER },
+        tx,
+      ),
+    );
+  }
+
+  it('a MEMBER (key + act): `project` serves everything, `mine` only their own; both views offered', async () => {
+    await seed();
+    const project = await approvalGatesService.listRecords(ctxOf(ids.a), {
+      limit: 100,
+      view: 'project',
+    });
+    expect(project.scope).toBe('project');
+    expect(project.views).toEqual(['mine', 'project']);
+    expect(await titlesFor(ids.a, 'project')).toEqual(EVERYTHING);
+
+    const mine = await approvalGatesService.listRecords(ctxOf(ids.a), { limit: 100, view: 'mine' });
+    expect(mine.scope).toBe('mine');
+    expect(await titlesFor(ids.a, 'mine')).toEqual({ fullView: false, ...OWN_A });
+  });
+
+  it('with no view asked, a two-view reader lands on Mine when Mine has rows, else Project', async () => {
+    await seed();
+    const a = await approvalGatesService.listRecords(ctxOf(ids.a), { limit: 100 });
+    expect(a.scope).toBe('mine');
+    // C holds no record of their own, so their clean URL opens on the project.
+    const c = await approvalGatesService.listRecords(ctxOf(ids.c), { limit: 100 });
+    expect(c.scope).toBe('project');
+  });
+
+  it('a VIEWER (key, no act) is served `project` whatever they ask, and offered no Mine', async () => {
+    await seed();
+    const viewer = await seatViewer();
+    const page = await approvalGatesService.listRecords(ctxOf(viewer), {
+      limit: 100,
+      view: 'mine',
+    });
+    expect(page).toMatchObject({ scope: 'project', views: ['project'], total: 7 });
+  });
+
+  it('a reader who ACTS without the key asking for `project` is served `mine`', async () => {
+    await seed();
+    await onCustomRole(ids.a, ['project:browse', 'work_item:edit']);
+    const page = await approvalGatesService.listRecords(ctxOf(ids.a), {
+      limit: 100,
+      view: 'project',
+    });
+    expect(page).toMatchObject({ scope: 'mine', views: ['mine'] });
+    expect(await titlesFor(ids.a, 'project')).toEqual({ fullView: false, ...OWN_A });
+  });
+
+  it('a reader with NEITHER is offered no view — the page’s not-found face', async () => {
+    await seed();
+    await onCustomRole(ids.c, ['project:browse']);
+    const page = await approvalGatesService.listRecords(ctxOf(ids.c), {
+      limit: 100,
+      view: 'project',
+    });
+    expect(page).toMatchObject({ scope: 'mine', views: [] });
+    expect(await approvalGatesService.recordViews(ctxOf(ids.c))).toEqual([]);
+  });
+
+  it('the Workbench To-approve count equals Mine’s awaiting total for the same reader', async () => {
+    await seed();
+    for (const who of [ids.a, ids.b, ids.admin]) {
+      const mine = await approvalGatesService.listRecords(ctxOf(who), { limit: 100, view: 'mine' });
+      expect(await approvalGatesService.countAwaitingMe(ctxOf(who))).toBe(
+        mine.sections.awaiting.total,
+      );
+    }
   });
 });
