@@ -167,7 +167,9 @@ describe('PlanChangeRail — empty', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add work to an epic' }));
 
     expect(handlers.onSend).not.toHaveBeenCalled();
-    expect(screen.getByRole('textbox').getAttribute('value')).toBe('Add work to an epic');
+    // `.value`, not the `value` ATTRIBUTE — the composer is a `<textarea>`
+    // since MOTIR-6238, and a textarea has no `value` attribute to read.
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Add work to an epic');
   });
 
   it('sends what was typed and clears the composer', () => {
@@ -179,7 +181,7 @@ describe('PlanChangeRail — empty', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(handlers.onSend).toHaveBeenCalledWith('Add recurring invoices to Billing.');
-    expect(screen.getByRole('textbox').getAttribute('value')).toBe('');
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
   });
 });
 
@@ -272,7 +274,7 @@ describe('PlanChangeRail — streaming', () => {
     // sends into it, so the lock is the feature's opposite. The narration half of
     // this test is untouched — only the claim about the input changed, and it
     // changed because the product did.
-    expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false);
   });
 });
 
@@ -326,7 +328,7 @@ describe('PlanChangeRail — after approve', () => {
       screen.getByText(/Added 2 work items, changed 1, removed 1 — it's in the plan now/),
     ).toBeTruthy();
     // The composer is still there, enabled — the thread continues.
-    expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false);
   });
 
   it('retires the mirrored gate — a decided plan offers no Approve and no Discard', () => {
@@ -363,7 +365,7 @@ describe('PlanChangeRail — after discard', () => {
     // nothing, so the rail must not say anything landed.
     expect(screen.queryByText(/it's in the plan now/)).toBeNull();
     // The thread stays open for the next turn — that is the point of keeping it.
-    expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(false);
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false);
   });
 });
 
@@ -429,7 +431,7 @@ describe('PlanChangeRail — the re-plan composer (MOTIR-910)', () => {
 
     const composer = screen.getByRole('textbox', {
       name: 'What’s wrong? What should change?',
-    }) as HTMLInputElement;
+    }) as HTMLTextAreaElement;
     expect(composer.placeholder).toBe('What’s wrong? What should change?');
     expect(document.activeElement).toBe(composer);
   });
@@ -455,7 +457,7 @@ describe('PlanChangeRail — the re-plan composer (MOTIR-910)', () => {
 
     const composer = screen.getByRole('textbox', {
       name: 'Reply, or refine further…',
-    }) as HTMLInputElement;
+    }) as HTMLTextAreaElement;
     expect(composer.placeholder).toBe('Reply, or refine further…');
   });
 
@@ -464,7 +466,7 @@ describe('PlanChangeRail — the re-plan composer (MOTIR-910)', () => {
 
     const composer = screen.getByRole('textbox', {
       name: 'Reply, or refine further…',
-    }) as HTMLInputElement;
+    }) as HTMLTextAreaElement;
     expect(composer.placeholder).toBe('Reply, or refine further…');
     expect(document.activeElement).not.toBe(composer);
   });
@@ -474,5 +476,50 @@ describe('PlanChangeRail — the re-plan composer (MOTIR-910)', () => {
 
     expect(screen.queryByRole('textbox', { name: 'What’s wrong? What should change?' })).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Reply, or refine further…' })).toBeTruthy();
+  });
+});
+
+describe('PlanChangeRail — a user turn KEEPS its line breaks (MOTIR-6238)', () => {
+  // Before this, `{turn.body}` was a bare text child of a `<div>` with no
+  // `white-space` rule, so a multi-line message collapsed to one run-on line
+  // and a pasted list arrived as one sentence. Design:
+  // `design/ai-chat/planning-workspace--multiline-composer.mock.html` sheets 9
+  // and 10.
+  const LIST = 'Rework the epic:\n- split the billing story\n- drop the retry job';
+
+  it('renders a three-line turn with its newlines intact, on a pre-wrap bubble', () => {
+    renderRail({ session: session([turn(0, LIST)]) });
+
+    // Queried by the bubble's own fill rather than by its text, because
+    // `getByText` normalises whitespace on BOTH sides of the match — which is
+    // exactly the collapse under test, so it cannot see it.
+    const body = document.querySelector('[class*="el-chat-bubble-user"]') as HTMLElement;
+    // The text reaches the DOM unchanged — nothing normalised it on the way in.
+    expect(body.textContent).toContain(LIST);
+    // …and the bubble is what makes those newlines VISIBLE. The class is the
+    // only thing that can tell a rendered three-line turn from a one-line one.
+    expect(body.className).toContain('whitespace-pre-wrap');
+  });
+
+  it('lets a long unbroken token break INSIDE the bubble rather than widening it', () => {
+    const token = 'x'.repeat(200);
+    renderRail({ session: session([turn(0, token)]) });
+
+    const body = document.querySelector('[class*="el-chat-bubble-user"]') as HTMLElement;
+    expect(body.textContent).toContain(token);
+    // `wrap-anywhere` breaks the word; `min-w-0` is what lets the flex item
+    // shrink so the break happens instead of the bubble growing past the rail.
+    expect(body.className).toContain('wrap-anywhere');
+    expect(body.className).toContain('min-w-0');
+  });
+
+  it('leaves the ASSISTANT bubble alone — it renders Markdown, which blocks its own paragraphs', () => {
+    renderRail({
+      session: session([turn(0, 'Add invoices.'), turn(1, 'Here is the plan.', 'assistant')]),
+    });
+
+    const assistant = screen.getByText('Here is the plan.');
+    const bubble = assistant.closest('[class*="rounded-"]')!;
+    expect(bubble.className).not.toContain('whitespace-pre-wrap');
   });
 });

@@ -844,6 +844,9 @@ export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
   fill: ['fill'],
   h: ['height'],
   mb: ['margin-bottom'],
+  // `min-h` arrived with MOTIR-6236's multi-line composer, the first mock whose
+  // field is sized by a floor rather than a fixed `h-*`.
+  'min-h': ['min-height'],
   'min-w': ['min-width'],
   mt: ['margin-top'],
   p: ['padding'],

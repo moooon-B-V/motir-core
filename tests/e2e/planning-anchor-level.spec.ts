@@ -26,6 +26,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedPlanningAnchorTree } from './_helpers/planning-anchor-seed';
+import { SPLIT_MIN_CONTAINER_PX } from '@/lib/planning/railWidth';
+import en from '@/messages/en.json';
 
 // ⚠️ RE-POINTED FOR THE OVERLAY (MOTIR-4732, story MOTIR-4725). The planning
 // workspace was a ROUTE at `/planning`; it is a full-screen OVERLAY on the page
@@ -261,4 +263,112 @@ test('re-entering from the canvas’s OWN peek re-seeds the level and the target
   await expect(breadcrumb).toContainText(`${seed.storyKey} · ${seed.storyTitle}`);
   // …and the chat's target tray, which the same stale-seed bug left empty.
   await expect(workspace(page).getByTestId('planning-target-chip')).toContainText(seed.subtaskKey);
+});
+
+// ── BELOW THE SPLIT BREAKPOINT THE CANVAS STILL HAS A HEIGHT (Bug MOTIR-6276) ──
+//
+// Under `md` the frame is ONE column, canvas first and conversation below it —
+// MOTIR-6249's sheet 9, which chose the stack because it is "the only layout that
+// leaves either pane usable". As shipped it left the canvas unusable: the stacked
+// grid had no row template, so its two IMPLICIT `auto` rows were sized from their
+// content, and a canvas whose drawing area is `min-h-0 flex-1` contributes only its
+// chrome. The transcript, which has real content height, took the rest — and the
+// drawn level between the canvas's top bar and its footer came out zero pixels tall.
+//
+// Nothing about this is visible to `toBeVisible()`: the nodes are laid out, they are
+// merely CLIPPED by a box with no height. So the proof is geometry — the canvas
+// viewport's own box, and a node of the opened level inside it — read from the
+// elements, never from a screenshot.
+test('below the split breakpoint the panes STACK and the canvas keeps a real height', async ({
+  page,
+}) => {
+  const seed = await seedPlanningAnchorTree('planning-anchor-narrow@example.com');
+  // One pixel under the breakpoint the product itself uses — the first width at
+  // which the frame is no longer a split. Read from the module, never typed.
+  const narrow = { width: SPLIT_MIN_CONTAINER_PX - 1, height: 720 };
+  await page.setViewportSize(narrow);
+  await signIn(page, seed.email, seed.password);
+
+  const arrived = drilledLevelLoad(page);
+  await page.goto(anchoredHref(seed.subtaskKey));
+  await arrived;
+
+  const frame = workspace(page).getByTestId('planning-resizable-frame');
+  const viewport = workspace(page).getByTestId('planning-canvas');
+  const anchorNode = canvasNode(page, seed.subtaskTitle);
+  await expect(anchorNode).toBeAttached();
+
+  // ── A conversation that has been going for a while ─────────────────────────
+  // The collapse needs a transcript TALLER than the frame's free space: a fresh
+  // conversation is short, and with it the canvas still got a slice (154px at
+  // 767×720, measured on the base commit). It was observed after a plan had been
+  // proposed, i.e. several turns in. A persisted session cannot be seeded for a
+  // CARD-anchored workspace from this lane (the session door writes the project
+  // scope), and what the frame sizes from is only the transcript's content HEIGHT,
+  // not what the content says. So a block as tall as the frame itself stands in for
+  // those turns, appended to the REAL transcript. On the base commit this took the
+  // canvas's drawing area to exactly 0px.
+  const rail = page.getByRole('complementary', { name: 'Motir AI' });
+  await rail.getByRole('log').evaluate((log) => {
+    const turns = document.createElement('div');
+    turns.dataset['testid'] = 'stand-in-earlier-turns';
+    turns.style.height = `${window.innerHeight}px`;
+    turns.style.flexShrink = '0';
+    log.prepend(turns);
+  });
+  await expect(rail.getByTestId('stand-in-earlier-turns')).toBeAttached();
+
+  // ── The canvas's drawing area has a height, and the opened level is IN it ──
+  await expect
+    .poll(async () => (await viewport.boundingBox())?.height ?? 0, {
+      message: 'the stacked canvas viewport has a non-zero height',
+    })
+    .toBeGreaterThan(0);
+  const canvasBox = (await viewport.boundingBox())!;
+  const nodeBox = (await anchorNode.boundingBox())!;
+  const nodeMidX = nodeBox.x + nodeBox.width / 2;
+  const nodeMidY = nodeBox.y + nodeBox.height / 2;
+  expect(nodeMidX).toBeGreaterThanOrEqual(canvasBox.x);
+  expect(nodeMidX).toBeLessThanOrEqual(canvasBox.x + canvasBox.width);
+  expect(nodeMidY).toBeGreaterThanOrEqual(canvasBox.y);
+  expect(nodeMidY).toBeLessThanOrEqual(canvasBox.y + canvasBox.height);
+
+  // ── Still the design's stack: canvas first, conversation below, no divider ──
+  const stacked = await frame.evaluate((el) => {
+    const f = el.getBoundingClientRect();
+    const c = el.children[0]!.getBoundingClientRect();
+    const r = el.children[1]!.getBoundingClientRect();
+    return {
+      frame: f.width,
+      canvas: c.width,
+      chat: r.width,
+      canvasBottom: c.bottom,
+      chatTop: r.top,
+    };
+  });
+  expect(stacked.chatTop).toBeGreaterThanOrEqual(stacked.canvasBottom - 1);
+  expect(Math.abs(stacked.canvas - stacked.frame)).toBeLessThanOrEqual(1);
+  expect(Math.abs(stacked.chat - stacked.frame)).toBeLessThanOrEqual(1);
+  await expect(
+    workspace(page).getByRole('separator', { name: en.planningWorkspace.dividerAria }),
+  ).toHaveCount(0);
+
+  // ── The conversation's composer and Send are still reachable ──────────────
+  const composer = rail.getByRole('textbox');
+  await composer.scrollIntoViewIfNeeded();
+  await expect(composer).toBeInViewport();
+  await expect(rail.getByRole('button', { name: 'Send' })).toBeInViewport();
+
+  // ── At the breakpoint the frame is the unchanged split ─────────────────────
+  await page.setViewportSize({ width: SPLIT_MIN_CONTAINER_PX, height: narrow.height });
+  await expect(
+    workspace(page).getByRole('separator', { name: en.planningWorkspace.dividerAria }),
+  ).toBeVisible();
+  const split = await frame.evaluate((el) => {
+    const c = el.children[0]!.getBoundingClientRect();
+    const r = el.children[1]!.getBoundingClientRect();
+    return { canvasRight: c.right, chatLeft: r.left, canvasTop: c.top, chatTop: r.top };
+  });
+  expect(split.chatLeft).toBeGreaterThanOrEqual(split.canvasRight - 1);
+  expect(Math.abs(split.chatTop - split.canvasTop)).toBeLessThanOrEqual(1);
 });

@@ -36,6 +36,14 @@ published design results too (`list_designs` with `pathPrefix: design/ai-plannin
 has been published but not landed here has already used its number. Part XXII records the one time
 that was missed.
 
+**And a Part is CITED by number only once it has landed here.** A design that is published but not
+landed is cited by its card key and the result's own section — _MOTIR-<n>'s published design result,
+§<m>_ — never as "Part <N>", because that number belongs to the result and this file may meanwhile
+give it to a different Part. When the design lands, move its citations to the Part it landed as. (The
+case this comes from: MOTIR-6033's result called itself Part XX, MOTIR-6134's difficulty design took
+Part XX here, and a citation of "Part XX §20.2" for `planVia` resolved to the difficulty design —
+MOTIR-6192.)
+
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
 Part III **amends Part I's asset in place** — it adds one meta entry, carrying the plan's REQUESTER
@@ -2873,6 +2881,33 @@ worth repeating outside it:
 - **No diff view of a proposal's before / after.** The reviewer sees the plan as it now stands, marked
   where it moved. A per-proposal diff is a real surface and a different card; nothing here depends on
   it.
+
+## ⚠️ AMENDED 2026-09-24 by MOTIR-6236 — the revise box is a MULTI-LINE field
+
+**The drawing lives in `design/ai-chat/planning-workspace--multiline-composer.mock.html`, sheet 11,
+and this is a POINTER to it rather than a second drawing.** Part XII's own panels stay exactly as
+drawn.
+
+`PlanChangeComposer` is one component with two hosts, and the revise box is the second. When it
+becomes a multi-line auto-growing field on the planning rail it becomes one here too, with the same
+cap (**8 rows / 184px**), the same bottom-aligned Send and the same `resize-none`. Two things are
+specific to this host and are drawn on that sheet:
+
+- **`mentions={false}` still holds** (§B's reason is unchanged — a revision names PROPOSALS, which
+  have no key to mention), so there is no `@` trigger and the field carries no left inset.
+- **The pinned decision footer does not move.** The box grows into the scrolling body above it, never
+  into the footer — which is what keeps §A's _composer inside the decision block, above the two
+  verbs_ true at every height.
+
+`reviseNote` is unchanged: shown only while the field has text.
+
+**⚠️ AND THE WIDTH: the revise box is NOT a split host.** MOTIR-6249's resizable split (story
+MOTIR-6248) makes the planning surface's conversation pane a draggable third of its container, and
+MOTIR-6236's sheets were redrawn at that width. **This host is unaffected**: the plan page's rail keeps
+its own width, so no number in Part XII moves. Measured, its container-derived 378px default puts the
+field at 328px, where the composer behaves exactly as at the planning surface's 480px default — same
+cap, same row arithmetic, same alignment. The one width at which the same message costs an extra row
+is the split's 352px floor, which this host never takes.
 
 ---
 
