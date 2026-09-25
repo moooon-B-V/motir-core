@@ -310,16 +310,10 @@ describe('the RENDERED dispatch prompt (criterion 5)', () => {
     expect(block).toMatch(Q3_NEGATION);
   });
 
-  // ⚠️ A FINDING, pinned as a known failure (MOTIR-6232). The card asks for Q3's
-  // instruction in BOTH lanes. The re-planning-OFF lane never carried it: its
-  // only prose about the finding is step 3's "what is false, and the evidence"
-  // and step 5's "Your comment is the whole report". It asks for no diagnosis,
-  // so nothing classifies — but the sentence the card names is absent, and
-  // since MOTIR-6287 that lane now also names `report_unbuildable_target`.
-  // Adding the sentence is a prompt change owned by MOTIR-6287's lane, not by
-  // this gate (which changes no production code). When the sentence lands this
-  // case starts PASSING, `it.fails` turns red, and it must become a plain `it`.
-  it.fails('re-planning OFF: Q3’s instruction is carried (KNOWN GAP — see comment)', () => {
+  // The re-planning-OFF lane carries Q3's instruction too (MOTIR-6287's criterion 4,
+  // closed on the MOTIR-6232 run): step 5's "Your comment is the whole report" says
+  // what that comment describes.
+  it('re-planning OFF: Q3’s instruction is carried', () => {
     expect(flat(cardIsWrongBlock(render(false)))).toMatch(NOT_WHY_PLANNED);
   });
 });

@@ -1963,7 +1963,8 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
       ...restructuring,
       '  5. Stop, and leave the card In Progress. Do not move its status: this run',
       '     was launched without re-planning, so there is no plan to submit and no',
-      '     decision for anyone to make yet. Your comment is the whole report.',
+      '     decision for anyone to make yet. Your comment is the whole report:',
+      '     describe what is wrong with the CARD, not why it was planned that way.',
       '  6. Do not pick up other work.',
     ];
   }
