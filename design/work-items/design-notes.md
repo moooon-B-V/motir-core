@@ -8880,9 +8880,12 @@ Every panel is drawn in **en and zh**.
 ### The two things nobody had drawn, decided here with their reasons
 
 **(a) A plan AND a gate both holding — BOTH lines render, the plan FIRST, and only the plan line
-carries a button.** AMENDMENT 16 D3 keeps an `awaiting` gate alive across the park, so the two
-genuinely coexist. They are two different refusals with two different destinations, so saying only
-one would leave a reader who resolves it still stuck. The plan goes first because it is the wider
+carries a button.** The two genuinely coexist, though not by a gate surviving the park: parking a
+card from In Review CLOSES its `awaiting` gate (AMENDMENT 16 D3, as corrected by MOTIR-6339). A gate
+can be raised on a held card afterwards, by any reconcile that re-derives it, and AMENDMENT 21 §6
+names the pull-request reconcile as one. The panel's own label, _"AMENDMENT 16 D3 keeps the gate"_,
+is the mock's record of the premise it was drawn on and is left as drawn. They are two different
+refusals with two different destinations, so saying only one would leave a reader who resolves it still stuck. The plan goes first because it is the wider
 hold — it owns every move, the gate owns one — and because **deciding the gate is itself refused
 while the plan holds** (AMENDMENT 21 §6). That is why the gate line here has **no** _Review &
 approve_ button: it would be a door onto a refusal. Its sentence says instead that it can be decided
