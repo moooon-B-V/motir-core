@@ -64,6 +64,7 @@ SUMMARIES = {
     "validate_work_item": "Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.",
     "get_plan_status": "What became of a submitted planning job — its state, and how many proposals it produced.",
     "get_plan": "A plan with the proposals it bundles: what the planner actually proposed, not just how much.",
+    "get_approved_shape_verdict": "Is this card still what its last approved plan approved? Its plan history and the verdict.",
     "open_plan_session": "Open — or resume — a project's planning conversation, and read its thread.",
     "create_work_item": "Create an epic, story, task, bug or subtask; points, estimate, type, executor and repo in one call.",
     "update_work_item": "Edit any subset of an item's fields, including the explanation body create cannot set.",

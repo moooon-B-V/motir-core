@@ -296,6 +296,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // proposal, so a non-member must be refused on the PLAN. Recording a
         // judgement about a plan is as much a leak as reading one.
         record_plan_revision_reason: { planId: plan.id, branch: 'new_ask', evidenceMd: 'leak?' },
+        // Is A's card still what its plan approved? (MOTIR-6227) — item-keyed, so a
+        // non-member must read the key as not-found rather than learn A's plan
+        // history or a verdict about it.
+        get_approved_shape_verdict: { key: item1 },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'leak?' },
         submit_plan_session: { projectKey: 'PROD' },
@@ -812,6 +816,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           branch: 'new_ask',
           evidenceMd: 'scoped classification',
         },
+        // MOTIR-6227 — the caller's OWN item. Gated on `ai:view_plan`, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate.
+        get_approved_shape_verdict: { key: item1 },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },
         submit_plan_session: { projectKey: 'PROD' },

@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **70 tools**.
+`initialize` handshake and registers **71 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -2797,6 +2797,82 @@ it fill.
 
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak). Requires `project:browse`.
+
+#### `get_approved_shape_verdict`
+
+Is this work item **still what the last approved plan approved?** The question a
+run that finds its card unbuildable asks BEFORE it blames the planner (Story
+MOTIR-5544 · MOTIR-6227). Returns the card's plan history, the last `approved`
+plan that shaped it, and a verdict computed on the server.
+
+| Input           | Type     | Required | Notes                                                                                                                             |
+| --------------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `key`           | string   | yes      | The work item identifier (`ACME-7`), case-insensitive.                                                                            |
+| `childKeys`     | string[] | no       | Keys of `key`'s CHILDREN to judge as well — at most 49. Each must be a direct child of `key`; one that is not is refused by name. |
+| `historyCursor` | string   | no       | A `planHistory.nextCursor` from a previous call, for the next page of the history. The verdict is always over the WHOLE history.  |
+
+**Output** — `structuredContent`:
+
+- **`key`**, **`workItemId`** — the card asked about.
+- **`verdict`** — `unchanged` · `changed` · `no_plan`.
+- **`planId`**, **`planTitle`**, **`decidedAt`** — the APPROVING plan: the
+  latest `approved` plan in the card's history. All three `null` on `no_plan`.
+- **`proposalId`** — that plan's proposal naming the card (`add` / `modify` /
+  `remove`); `null` when the plan only added children under it.
+- **`divergingRevision`** — on `changed`, the FIRST revision after `decidedAt`
+  that departed from what the plan approved:
+  `{ id, changedAt, changedById, changeKind, changedKeys }`. `changedKeys` is
+  every key that revision wrote, not only the ones that count. `null` when
+  nothing diverged — and also on a container that is `changed` by its child set
+  ALONE.
+- **`childSet`** — for a container (a card with children now, or children the
+  plan approved): `{ verdict, approvedChildIds, currentChildIds, added, removed }`,
+  card ids, each list sorted. `null` for a leaf.
+- **`planHistory`** — the card's plan-history page, oldest plan first:
+  `{ items, nextCursor }`, each item `{ planId, planTitle, planStatus, createdAt,
+plannedAt, decidedAt, decidedById, decidedByName, author, relation: { op,
+childCount }, proposalIds: { self, children } }` — the same page the item's
+  Plan history panel reads.
+- **`children`** — one verdict per `childKeys` entry, in the order given, each
+  the same shape as the card's own verdict fields above (with its `key`).
+
+**`no_plan` is an ANSWER, not an error.** The card was never shaped by an
+approved plan — no plan touched it, or only plans that are still open or were
+declined. It comes back as a successful result with `planId: null`.
+
+**THE CHANGE DEFINITION — what counts against what the plan approved.** The
+verdict walks the card's revision log after `decidedAt`, oldest first, and stops
+at the first revision that is a change:
+
+- **Counts:** an edit to `title`, `descriptionMd`, `explanationMd`, `kind`,
+  `type`, `executor`, `storyPoints`, `estimateMinutes`, `difficulty`, `priority`
+  or the target repository; a move to another parent or folder; a **blocked-by**
+  edge added or removed; an **archive** (or an unarchive, when the plan was the
+  one that removed the card); a child permanently deleted; and, for a container,
+  a child **added** or **removed** against the set the plan approved.
+- **Does not count:** status transitions, sprint and rank moves, assignee,
+  reporter, due date, labels, components, to-dos, attachments, comments, custom
+  fields, and `relates_to` links. Work happening ON a card is not a change TO it.
+
+When the approving plan did not create a container (it amended it, or only added
+children), the children it already had count as approved.
+
+**Refusals**, each with its code:
+
+- an unknown key, or a key in another workspace → the same `PROJECT_NOT_FOUND` /
+  `WORK_ITEM_NOT_FOUND` every work-item tool returns (404-not-403 — nothing
+  distinguishes "absent" from "not yours");
+- a caller without `ai:view_plan` → `PERMISSION_DENIED` naming the key (or
+  `PERMISSION_NOT_GRANTED` at the token gate) — never an empty history and never
+  `no_plan`;
+- a `childKeys` entry that is not a child of `key` → `APPROVED_SHAPE_NOT_A_CHILD`
+  naming it — never silently dropped and never answered;
+- a malformed `historyCursor` → `INVALID_PLAN_HISTORY_CURSOR`.
+
+A PURE READ, safe to repeat: it files nothing, transitions nothing and creates
+nothing — what to do with the verdict is the caller's. Requires **`ai:view_plan`**,
+which is deliberately NOT in `CLI_TOKEN_GRANT`: a dispatched agent is not this
+tool's caller (`docs/decisions/run-findings-protocol.md` Q3).
 
 #### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan` · `record_plan_revision_reason`
 

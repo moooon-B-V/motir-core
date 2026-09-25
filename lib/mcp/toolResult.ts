@@ -73,6 +73,9 @@ import {
   PlanGrammarError,
   PlanRefGraphError,
   PlanRevisionClassificationInvalidError,
+  InvalidPlanHistoryCursorError,
+  ApprovedShapeVerdictTooManyIdsError,
+  ApprovedShapeChildKeyNotAChildError,
 } from '@/lib/plans/errors';
 import {
   EmptyPlanChangeIntentError,
@@ -509,7 +512,15 @@ export function toToolError(err: unknown): CallToolResult {
     // drop the key on a no-bug branch, supply evidence, pass ONE of id/key — and
     // an agent can only act on that sentence if it arrives as a tool error
     // carrying the code, not as a JSON-RPC internal error.
-    err instanceof PlanRevisionClassificationInvalidError
+    err instanceof PlanRevisionClassificationInvalidError ||
+    // The approved-shape verdict door's three refusals (MOTIR-6227): a
+    // `childKeys` entry that is not a child of `key` (named), a set larger than
+    // one read answers, and a malformed plan-history cursor. Each is the
+    // caller's own input, fixable in one hop, and each must arrive as a code —
+    // a verdict read that fails opaquely is one an agent retries or guesses past.
+    err instanceof ApprovedShapeChildKeyNotAChildError ||
+    err instanceof ApprovedShapeVerdictTooManyIdsError ||
+    err instanceof InvalidPlanHistoryCursorError
   ) {
     return toolError(err.code, err.message);
   }

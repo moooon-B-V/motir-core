@@ -357,6 +357,18 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // off the constant.
   update_plan: 'ai:view_plan',
   record_plan_revision_reason: 'ai:view_plan',
+  // The APPROVED-SHAPE verdict read (MOTIR-6227). A READ, and still NOT
+  // `project:browse` like `get_plan` above: it hands back what a plan proposed
+  // and a judgement about it, and BOTH services it calls
+  // (`listPlanHistoryForWorkItem`, `resolveApprovedShapeVerdict`) assert
+  // `ai:view_plan` themselves — a map entry claiming less would be a second,
+  // weaker statement of the same gate. ⚠️ This leaves it UNREACHABLE from
+  // `CLI_TOKEN_GRANT`, deliberately: a dispatched agent is not the caller
+  // (`docs/decisions/run-findings-protocol.md` Q3) — the shipped planner reads
+  // the verdict through its internal AI route. Do not widen the grant for it;
+  // `tests/mcp/get-approved-shape-verdict.test.ts` asserts the refusal off the
+  // constant.
+  get_approved_shape_verdict: 'ai:view_plan',
 
   // ── removal — the RECOVERABLE and the IRREVERSIBLE, now two keys ─────────
   // ⚠️ CORRECTED (MOTIR-3629). This block used to read: "`archiveWorkItem` /

@@ -250,6 +250,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       "The approved-shape verdict read's refusal of an oversized id set (MOTIR-6225). It compares cards against an ALREADY approved plan; approve takes one plan id and reads no verdict.",
   },
+  APPROVED_SHAPE_NOT_A_CHILD: {
+    cause: 'not-approve',
+    justification:
+      "The approved-shape verdict MCP door's refusal of a `childKeys` entry that is not a child of `key` (MOTIR-6227). It reads a verdict against an ALREADY approved plan; approve takes one plan id and resolves no child keys.",
+  },
   PLAN_REVISION_CLASSIFICATION_INVALID: {
     cause: 'not-approve',
     justification:

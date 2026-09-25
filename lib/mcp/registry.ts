@@ -23,6 +23,10 @@ import {
 } from './tools/expandItem';
 import { GET_PLAN_TOOL_NAME, registerGetPlan } from './tools/getPlan';
 import {
+  GET_APPROVED_SHAPE_VERDICT_TOOL_NAME,
+  registerGetApprovedShapeVerdict,
+} from './tools/getApprovedShapeVerdict';
+import {
   ADD_PLAN_ITEMS_TOOL_NAME,
   CREATE_PLAN_TOOL_NAME,
   UPDATE_PLAN_ITEM_TOOL_NAME,
@@ -135,6 +139,7 @@ export const MCP_TOOL_NAMES = [
   EXPAND_ITEM_TOOL_NAME,
   GET_PLAN_STATUS_TOOL_NAME,
   GET_PLAN_TOOL_NAME,
+  GET_APPROVED_SHAPE_VERDICT_TOOL_NAME,
   CREATE_PLAN_TOOL_NAME,
   ADD_PLAN_ITEMS_TOOL_NAME,
   UPDATE_PLAN_ITEM_TOOL_NAME,
@@ -278,6 +283,10 @@ export function registerMcpTools(
   // of sending its user to a browser to look. Same proposal gate: it reads
   // proposals, it does not create work items.
   registerGetPlan(target, resolveContext);
+  // The APPROVED-SHAPE verdict (MOTIR-6227) — the runbook's door: is this card
+  // still what the last approved plan approved? A pure read over the card's plan
+  // history; it files nothing, and what to do with the verdict is the caller's.
+  registerGetApprovedShapeVerdict(target, resolveContext);
   // The plan AUTHORING door (MOTIR-2988) — `create_plan` + `add_plan_items`, so
   // an agent can PROPOSE a tree the user reviews instead of writing work items
   // straight into it. The third door beside `create_work_item` (writes now, no

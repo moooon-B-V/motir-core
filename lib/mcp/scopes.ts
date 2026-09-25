@@ -218,6 +218,14 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   validate_plan: 'read',
   get_plan_status: 'read',
   get_plan: 'read',
+  // The approved-shape verdict (MOTIR-6227). A pure READ, and still filed under
+  // `work_items:write` rather than `read`, because this row decides which legacy
+  // scope's forward map must carry its REAL gate (`TOOL_PERMISSIONS` →
+  // `ai:view_plan`). `read` does not carry it, and must not start to: a stale
+  // `read` token would gain every plan tool at once. `work_items:write` already
+  // carries it for the six plan-authoring neighbours, so this adds no loss and no
+  // widening (`tests/mcp/scopes.test.ts`'s forward-map check).
+  get_approved_shape_verdict: 'work_items:write',
   open_plan_session: 'read',
   // The plan-AUTHORING door (MOTIR-2988), mapped into the RETIRED six-scope
   // vocabulary only because this table is total over the registry and a new tool
