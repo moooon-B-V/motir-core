@@ -28,6 +28,9 @@ tests/setup/**
 tests/helpers/perWorkerDb.ts
 tests/helpers/actEnvironment.ts
 tests/helpers/inFlightProbe.ts
+tests/helpers/rateLimitStoreDefault.ts
+tests/helpers/rateLimitStore.ts
+tests/helpers/rateLimitStoreDeadline.ts
 tests/helpers/inFlightWork.ts
 tests/helpers/adminDb.ts
 prisma/**

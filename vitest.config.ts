@@ -100,9 +100,14 @@ export default defineConfig({
     // database, naming the query (MOTIR-6278; MOTIR-3077 built it as an
     // opt-in sweep). A file that never opened a Prisma client skips it, and its
     // import is dynamic, so a pure component file pays nothing.
+    // `rateLimitStoreDefault` gives the shared rate-limit store the TEST-TIME
+    // deadline in those same files, so a request waits for its own counter
+    // write instead of failing open and abandoning it mid-transaction —
+    // which the in-flight check would otherwise catch as a leak (MOTIR-6278).
     setupFiles: [
       './tests/helpers/perWorkerDb.ts',
       './tests/helpers/actEnvironment.ts',
+      './tests/helpers/rateLimitStoreDefault.ts',
       './tests/helpers/inFlightProbe.ts',
     ],
     // Cross-FILE parallelism is now safe (each worker has its own DB, above).
