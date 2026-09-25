@@ -222,18 +222,28 @@ describe('item page — the Difficulty card', () => {
     expect(within(card('Difficulty')).getByRole('button', { name: 'Set difficulty' })).toBeTruthy();
   });
 
-  it('a read-only viewer sees the value with no chevron and no picker', () => {
+  // MOTIR-6173 — the permission-gated rule's part 2: the chevron STAYS, disabled,
+  // and says why; pressing it mounts no picker. (It used to be removed outright.)
+  it('a read-only viewer sees the value and a DISABLED chevron that says why, and no picker', () => {
     renderPanel(makeItem({ difficulty: 'high' }), { readOnly: true });
     const c = card('Difficulty');
     expect(c.querySelector('[data-difficulty]')!.textContent).toBe('High');
-    expect(within(c).queryByRole('button')).toBeNull();
+    const chevron = within(c).getByRole('button', {
+      name: 'Difficulty — You have read-only access to this project',
+    });
+    expect(chevron.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(chevron);
+    expect(within(c).queryByRole('group')).toBeNull();
+    expect(within(c).getAllByRole('button')).toHaveLength(1);
   });
 
   it('a read-only viewer of an unset leaf sees None, not the Set affordance', () => {
     renderPanel(makeItem(), { readOnly: true });
     const c = card('Difficulty');
     expect(within(c).getByText('None')).toBeTruthy();
-    expect(within(c).queryByRole('button')).toBeNull();
+    // No "Set difficulty" button — only the disabled chevron.
+    expect(within(c).queryByRole('button', { name: /set difficulty/i })).toBeNull();
+    expect(within(c).getByRole('button').getAttribute('aria-disabled')).toBe('true');
   });
 
   it.each(['epic', 'story'] as const)('renders NO Difficulty card on an %s', (kind) => {
@@ -360,10 +370,15 @@ describe('quick view — the Difficulty rail field', () => {
     await waitFor(() => expect(within(row('Difficulty')).getByText('None')).toBeTruthy());
   });
 
-  it('a read-only viewer sees the value and no edit affordance', () => {
+  it('a read-only viewer sees the value and a DISABLED chevron that says why (MOTIR-6173)', () => {
     renderQuickView({ difficulty: 'medium' }, { readOnly: true });
     expect(row('Difficulty').querySelector('[data-difficulty]')!.textContent).toBe('Medium');
-    expect(within(row('Difficulty')).queryByRole('button')).toBeNull();
+    const chevron = within(row('Difficulty')).getByRole('button', {
+      name: 'Difficulty — You have read-only access to this project',
+    });
+    expect(chevron.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(chevron);
+    expect(within(row('Difficulty')).queryByRole('group')).toBeNull();
   });
 
   it.each(['epic', 'story'] as const)('renders NO Difficulty row on an %s', (kind) => {
