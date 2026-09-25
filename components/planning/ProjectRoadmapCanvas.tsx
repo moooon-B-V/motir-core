@@ -1017,6 +1017,19 @@ export function ProjectRoadmapCanvas({
   const animateInitial = motion && shownLevelKey !== null && emptySeenAt === shownLevelKey;
   const deps = useMemo(() => level?.data.deps ?? [], [level]);
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  // ⚠️ AN EXITING NODE STILL NEEDS ITS CARD (bug MOTIR-6345). With `motion` on, the
+  // engine RETAINS a node that has left the level for its exit animation and still
+  // asks `renderNode` to draw it — but the id is no longer in `byId`, so the box
+  // faded out EMPTY and the card simply vanished (Part XXIII §23.3 says the CARD
+  // leaves). So the last card drawn for each id is kept here and read only for an
+  // id the current level no longer holds. It is written in an effect, so on the
+  // render where a node leaves it still holds that node. With `motion` off nothing
+  // reads it, and the output is unchanged.
+  const lastDrawnRef = useRef(new Map<string, (typeof nodes)[number]>());
+  useEffect(() => {
+    if (!motion) return;
+    for (const n of nodes) lastDrawnRef.current.set(n.id, n);
+  }, [motion, nodes]);
   const matchIds = useMemo(() => new Set(searchMatches(nodes, query)), [nodes, query]);
 
   // The emphasised ids that are actually ON this level. The consumer hands over
@@ -1319,7 +1332,7 @@ export function ProjectRoadmapCanvas({
   const locateDisabledReason = emphasis ? emphasis.emptyLabel : t('locateNothing');
 
   function renderNode(cn: CanvasNode) {
-    const node = byId.get(cn.id);
+    const node = byId.get(cn.id) ?? (motion ? lastDrawnRef.current.get(cn.id) : undefined);
     if (!node) return null;
     const matched = highlightId === cn.id || matchIds.has(cn.id);
     const selected = cn.id === selectedId;

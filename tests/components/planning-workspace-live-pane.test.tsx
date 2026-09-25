@@ -359,6 +359,10 @@ describe('the generating pane — the shared List | Canvas, fed the live review'
     // ── EXIT: a withdrawn proposal leaves, then is gone ──
     next(live([{ ...P1, title: 'First card, deepened' }, P3]));
     await waitFor(() => expect(motionOf('pi_2')).toBe('exit'));
+    // The retained box draws the card that is LEAVING, not an empty box (bug
+    // MOTIR-6345): the id has left the level, so a lookup in the current level
+    // alone drew nothing and the card vanished instead of fading (§23.3).
+    expect(within(node('pi_2')!).getByText(P2.title)).toBeTruthy();
     await waitFor(() => expect(node('pi_2')).toBeNull());
     // The count still stands, and the level never moved.
     expect(screen.getByTestId('canvas-arrivals-offer')).toBeTruthy();
