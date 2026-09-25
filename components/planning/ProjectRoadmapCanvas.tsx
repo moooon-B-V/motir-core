@@ -326,7 +326,8 @@ interface ProjectRoadmapCanvasBaseProps {
    * level LOAD resolves. The consumer supplied that trail; telling it what it
    * just said is a write loop waiting to happen.
    *
-   * Absent by default — the four other consumers are untouched.
+   * Absent by default. The two plan canvases forward it (MOTIR-6155), and of their
+   * hosts only the planning surface supplies it; the rest leave it `undefined`.
    */
   onLevelChange?: (trail: readonly CanvasCrumb[]) => void;
   /**

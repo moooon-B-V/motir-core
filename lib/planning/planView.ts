@@ -102,13 +102,17 @@ export function defaultPlanView(review: PlanReviewDto): PlanViewDto {
   // STILL FIXED — read it as a premise about THAT host, not about every planning
   // surface (MOTIR-6250). The planning WORKSPACE's frame became a resizable split
   // whose rail is `clamp(352px, 33.333%, 50%)`, so a canvas width derived from a
-  // constant `22rem` would be wrong there. It does not reach this computation:
-  // `defaultPlanView`'s only production caller is `PlanDetail` (`:399`), and
-  // `PlanDetail` deliberately does NOT opt into the split — both MOTIR-6250
+  // constant `22rem` would be wrong there. It reaches this computation through
+  // exactly two production callers, and each was asked which frame it reads:
+  // `PlanDetail` (`:396`) deliberately does NOT opt into the split — MOTIR-6250
   // (*"Does NOT change: … the plan page's rail"*) and MOTIR-6236 (*"This host is
-  // NOT a split"*) say so. `tests/planning/planView.test.ts` pins that: if the
-  // plan page ever opts in, the test fails NAMING this derivation, because the
-  // number below would then be justified against a width the frame no longer has.
+  // NOT a split"*) both say so — and `PlanningWorkspaceHost` (MOTIR-6155, Part XXI
+  // decision 2) IS the split, but seeds on the plan's first proposed read, the same
+  // transition the rail resets on. So at that moment the rail is at most
+  // `max(352px, a third)` of a FULL-BLEED overlay, and the canvas is at least as
+  // wide as the plan page's at every viewport Part XIII §6 measured: the number was
+  // derived against the narrower frame. `tests/planning/planView.test.ts` pins both:
+  // a third caller, or the plan page opting in, fails NAMING this derivation.
   if (review.arrivalLevelSize > ARRIVAL_LEVEL_MAX_NODES) return 'list';
 
   // Part IX §3's arm, unchanged and last: a plan SPREAD across containers has no
