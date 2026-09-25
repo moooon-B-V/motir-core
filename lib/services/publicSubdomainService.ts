@@ -21,7 +21,7 @@ import { tenantBaseDomain, tenantHostname } from '@/lib/publicAddresses/tenantDo
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
 import { publicHostnameReservationRepository } from '@/lib/repositories/publicHostnameReservationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
-import { readMembership } from '@/lib/workspaces/membershipGate';
+import { readReachRole } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // A WORKSPACE'S TENANT SUBDOMAIN — claim it, rename it, read it back.
@@ -289,9 +289,10 @@ function assertAvailable(): void {
 }
 
 async function assertMember(workspaceId: string, actorUserId: string): Promise<string> {
-  const membership = await readMembership(actorUserId, workspaceId);
-  if (!membership) throw new WorkspaceNotVisibleError();
-  return membership.role;
+  // The org Owner reads as `owner` in every workspace of the org (MOTIR-6308).
+  const role = await readReachRole(actorUserId, workspaceId);
+  if (!role) throw new WorkspaceNotVisibleError();
+  return role;
 }
 
 async function assertAddressAdmin(workspaceId: string, actorUserId: string): Promise<void> {

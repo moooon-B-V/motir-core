@@ -11,7 +11,7 @@ import {
   type TransactionBudget,
   type WorkspaceContext,
 } from '@/lib/workspaces/context';
-import { readMembership } from '@/lib/workspaces/membershipGate';
+import { readReachRole } from '@/lib/workspaces/membershipGate';
 import { readProjectForService } from '@/lib/workspaces/tenantRead';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
@@ -844,8 +844,10 @@ export const projectsService = {
    * OWNER was told they were not a member of their own workspace.
    */
   async assertMembership(userId: string, workspaceId: string): Promise<void> {
-    const m = await readMembership(userId, workspaceId);
-    if (!m) throw new NotAMemberError(userId, workspaceId);
+    // `readReachRole`, not a bare membership read (MOTIR-6308): the org Owner
+    // acts in every workspace of the org, member or not.
+    const role = await readReachRole(userId, workspaceId);
+    if (!role) throw new NotAMemberError(userId, workspaceId);
   },
 
   /**

@@ -47,6 +47,37 @@ export const organizationMembershipRepository = {
   },
 
   /**
+   * Is `userId` the OWNER of the organization that owns `workspaceId`? One
+   * round trip — the project permission gate asks it on every resolution for an
+   * actor who is not already a workspace manager (MOTIR-6308: the org Owner acts
+   * with full rights in every project of the org, member or not).
+   *
+   * ⚠️ BINDING: the caller's `tx` must bind `app.workspace_id` to `workspaceId`
+   * (a `withWorkspaceContext` body). The `workspace` row is admitted by
+   * `workspace_active` off that GUC — a non-member Owner has no
+   * `workspace_membership_visible` arm to fall back on — and the membership row
+   * by the "or your own" arm of `org_membership_visible_active_or_own`, keyed on
+   * `app.user_id`. Unbound, the join sees no workspace and answers `false`,
+   * which fails CLOSED (the Owner is treated as a non-member), never open.
+   */
+  async isOwnerOfWorkspaceOrg(
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const rows = await tx.$queryRaw<Array<{ one: number }>>`
+      SELECT 1 AS one
+      FROM "workspace" w
+      JOIN "organization_membership" om ON om."organizationId" = w."organizationId"
+      WHERE w."id" = ${workspaceId}
+        AND om."userId" = ${userId}
+        AND om."role" = 'owner'
+      LIMIT 1
+    `;
+    return rows.length > 0;
+  },
+
+  /**
    * The organizations a user belongs to, ordered by membership.createdAt asc so
    * the auto-provisioned default org (6.10.4 signup flow) lands first in the
    * switcher list (6.10.5). Mirrors workspaceMembershipRepository.findWorkspacesByUser.

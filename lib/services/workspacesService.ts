@@ -22,7 +22,7 @@ import {
   withWorkspaceContext,
   type TransactionBudget,
 } from '@/lib/workspaces/context';
-import { readMembership } from '@/lib/workspaces/membershipGate';
+import { readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
@@ -479,6 +479,9 @@ export const workspacesService = {
     cookieWorkspaceId: string | null,
     userName?: string,
   ): Promise<string | null> {
+    // Set when the cookie names a workspace the user holds NO membership in —
+    // the one case a second, workspace-bound read is needed (below).
+    let cookieWithoutMembership = false as boolean;
     const existing = await withUserContext(
       userId,
       async (tx) => {
@@ -494,6 +497,7 @@ export const workspacesService = {
           ) {
             return pinned.workspaceId;
           }
+          cookieWithoutMembership = !pinned;
         }
         // No valid cookie pin. Before the first-by-createdAt default, try the
         // user's GLOBAL last-active project (Subtask 8.8.27): land them back in
@@ -515,6 +519,18 @@ export const workspacesService = {
       },
       ACTIVE_WORKSPACE_RESOLVE_TX,
     );
+
+    // THE ORG OWNER OPENS A WORKSPACE THEY ARE NOT A MEMBER OF (MOTIR-6308): the
+    // switcher lists every workspace of their org, so a cookie may pin one with no
+    // membership row. The user-bound transaction above cannot see that workspace
+    // (no `workspace_membership_visible` arm, no workspace GUC), so the gate runs
+    // in its OWN workspace-bound read — and only in this case, so the common path
+    // keeps its one transaction. It admits the Owner alone: `resolveWorkspaceAccess`
+    // refuses every non-member who is not the org Owner.
+    if (cookieWorkspaceId && cookieWithoutMembership) {
+      const access = await organizationsService.resolveWorkspaceAccess(userId, cookieWorkspaceId);
+      if (access?.isOrgOwner) return cookieWorkspaceId;
+    }
 
     if (existing) return existing;
 
@@ -601,9 +617,32 @@ export const workspacesService = {
    * `organizationsService.listUserOrganizations` uses.
    */
   async listUserWorkspaces(userId: string): Promise<Workspace[]> {
-    return withUserContext(userId, (tx) =>
-      workspaceMembershipRepository.findWorkspacesByUser(userId, tx),
-    );
+    return withUserContext(userId, async (tx) => {
+      const memberOf = await workspaceMembershipRepository.findWorkspacesByUser(userId, tx);
+      // THE ORG OWNER SEES EVERY WORKSPACE OF THEIR ORG (MOTIR-6308): they act in
+      // all of them, member or not, so the switcher lists all of them. Anyone
+      // else — an org Admin included (`role-model.md` §1 R1) — sees exactly their
+      // memberships. The workspaces they are a member of come first, in the
+      // order they always did; the rest follow by creation.
+      //
+      // ONE transaction, the org GUC re-bound per owned org: `workspace_org_member_read`
+      // admits an org's workspaces off `app.organization_id`, and the ids come from
+      // the actor's own owner rows (trusted — `bindOrganizationContext`'s rule).
+      const owned = await organizationMembershipRepository.findOwnedOrganizationsByUser(userId, tx);
+      if (owned.length === 0) return memberOf;
+      const seen = new Set(memberOf.map((w) => w.id));
+      const extra: Workspace[] = [];
+      for (const org of owned) {
+        await bindOrganizationContext(tx, org.id);
+        for (const w of await workspaceRepository.listByOrganization(org.id, tx)) {
+          if (!seen.has(w.id)) {
+            seen.add(w.id);
+            extra.push(w);
+          }
+        }
+      }
+      return [...memberOf, ...extra];
+    });
   },
 
   /**
@@ -876,8 +915,9 @@ export const workspacesService = {
     const workspace = await withWorkspaceContext(
       { userId: actorUserId, workspaceId },
       async (tx) => {
-        const membership = await readMembership(actorUserId, workspaceId, tx);
-        if (!membership) return null;
+        // The org Owner reads a workspace they are not a member of (MOTIR-6308).
+        const role = await readReachRole(actorUserId, workspaceId, tx);
+        if (!role) return null;
         return workspaceRepository.findByIdInTx(workspaceId, tx);
       },
     );
@@ -903,8 +943,9 @@ export const workspacesService = {
    *
    * Story 6.10.4: this now goes through the ORG access gate
    * (organizationsService.resolveWorkspaceAccess), so "access" means org
-   * membership gates workspace access AND an org owner/admin reaches every
-   * workspace under the org (composed above the 6.4 workspace role). A user with
+   * membership gates workspace access AND the org OWNER reaches every
+   * workspace under the org (composed above the 6.4 workspace role; an org
+   * Admin reaches by membership since MOTIR-6308). A user with
    * a stale workspace membership but no org membership is DENIED. The gate
    * self-binds withWorkspaceContext so the rows are RLS-visible.
    */
@@ -919,8 +960,8 @@ export const workspacesService = {
    * privileged tier (e.g. the 1.6.5 dashboard's owner-only Replay button).
    *
    * Story 6.10.4: the role composes the org tier above the 6.4 workspace role —
-   * an org owner/admin reports `owner` on every workspace under the org even
-   * with no workspace membership; a plain org member reports their stored
+   * the org OWNER reports `owner` on every workspace under the org even with no
+   * workspace membership (MOTIR-6308); anyone else reports their stored
    * workspace role; a non-org-member (no access) reports null. Callers compare
    * via lib/workspaces/roles.
    */

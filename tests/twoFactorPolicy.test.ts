@@ -536,24 +536,36 @@ describe('setWorkspacePolicy', () => {
     expect(dto.requiresTwoFactor).toBe(true);
   });
 
-  it('allows an ORG admin holding NO workspace membership row', async () => {
+  it('allows the ORG OWNER holding NO workspace membership row (MOTIR-6308)', async () => {
+    const { owner, workspace } = await makeOrgWithWorkspace();
+    // The Owner keeps their org role and loses the workspace row: their reach is
+    // the org role alone (role-model.md §1).
+    await adminDb.workspaceMembership.deleteMany({
+      where: { workspaceId: workspace.id, userId: owner.id },
+    });
+
+    const dto = await twoFactorPolicyService.setWorkspacePolicy({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      requiresTwoFactor: true,
+    });
+    expect(dto.requiresTwoFactor).toBe(true);
+  });
+
+  it('refuses an ORG ADMIN holding NO workspace membership row — an Admin reaches by membership (MOTIR-6308)', async () => {
     const { workspace, organizationId } = await makeOrgWithWorkspace();
     const orgAdmin = await makeUser();
     await adminDb.organizationMembership.create({
       data: { organizationId, userId: orgAdmin.id, role: ORGANIZATION_ROLE.admin },
     });
 
-    const dto = await twoFactorPolicyService.setWorkspacePolicy({
-      workspaceId: workspace.id,
-      actorUserId: orgAdmin.id,
-      requiresTwoFactor: true,
-    });
-    expect(dto.requiresTwoFactor).toBe(true);
-    expect(
-      (await adminDb.workspaceMembership.findFirst({
-        where: { workspaceId: workspace.id, userId: orgAdmin.id },
-      })) === null,
-    ).toBe(true);
+    await expect(
+      twoFactorPolicyService.setWorkspacePolicy({
+        workspaceId: workspace.id,
+        actorUserId: orgAdmin.id,
+        requiresTwoFactor: true,
+      }),
+    ).rejects.toBeInstanceOf(NotAMemberError);
   });
 
   it('raises NotAMemberError for someone with no access', async () => {
