@@ -8,6 +8,8 @@ import {
 
 import { keyForAppend } from '@/lib/workItems/positioning';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import { resolveExecutor } from '@/lib/issues/executorDefaults';
 import {
   classifyBlockerReadiness,
   type BlockerReadinessState,
@@ -59,6 +61,7 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
 import { foldAppend } from '@/lib/plans/mergeModifyPatch';
+import { assertKnownPatchKeys } from '@/lib/plans/validatePatchKeys';
 import {
   FOLDER_REF_PREFIX,
   TEMP_REF_PREFIX,
@@ -445,6 +448,10 @@ function validateProposal(p: ProposalInput): void {
   } else if (p.op === 'modify') {
     if (!p.workItemId) throw new InvalidProposalError('A `modify` proposal requires workItemId.');
     if (!p.patch) throw new InvalidProposalError('A `modify` proposal requires a patch.');
+    // A key the patch cannot apply is REFUSED, by name, rather than accepted and
+    // dropped at the merge (bug MOTIR-6259) — first, so every check below reads a
+    // patch whose every key means something.
+    assertKnownPatchKeys(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
     // A `modify` may RE-SCOPE the target's sizing (MOTIR-1532) — validate the
     // patched-in points/estimate at the boundary, the SAME rules the `add` path
     // applies (`validateProposedSizing`), so a malformed re-scope is rejected here
@@ -2675,6 +2682,26 @@ async function applyModify(
   if (patch.type !== undefined && patch.type !== current.type) {
     update.type = patch.type as WorkItemUpdateInput['type'];
     diff.type = { from: current.type, to: patch.type };
+  }
+  // A RE-TYPE SEEDS THE EXECUTOR when the target has none (bug MOTIR-6259) —
+  // through the direct door's own seed-if-absent rule, so the two doors cannot
+  // disagree about what re-typing a card writes. The patch still has no
+  // `executor` key (AMENDMENT 4 D3a: on every op but `add` it is the TARGET's),
+  // and this does not reopen that: an executor the target already carries is
+  // never touched. What it closes is the case D3a predates — a re-plan that
+  // re-types an UNTYPED card, where the target's executor is null and stays null,
+  // so a card re-typed `decision` raised no decision gate at all.
+  // `planReviewService.buildChanges` shows the approver this same cell.
+  if (patch.type !== undefined) {
+    const nextExecutor = resolveExecutor(
+      (patch.type ?? null) as WorkItemTypeDto | null,
+      undefined,
+      current.executor as ExecutorDto | null,
+    );
+    if (nextExecutor !== current.executor) {
+      update.executor = nextExecutor as WorkItemUpdateInput['executor'];
+      diff.executor = { from: current.executor, to: nextExecutor };
+    }
   }
   // Leaf sizing re-scope (MOTIR-1532) — the SAME point/estimate columns the `add`
   // path materializes, applied here as an in-place modify. `storyPoints` is a
@@ -4923,6 +4950,13 @@ export const plansService = {
             if (item.op !== 'modify') {
               throw new InvalidProposalError('Only a `modify` proposal carries a `patch`.');
             }
+            // The correction REPLACES the patch, so it is held to the append's
+            // own key check (bug MOTIR-6259) — a correction door looser than the
+            // append would be the way round it.
+            assertKnownPatchKeys(
+              input.patch,
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
             // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the

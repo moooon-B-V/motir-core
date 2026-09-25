@@ -50,6 +50,12 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
   'title',
   'priority',
   'type',
+  /** The target's EXECUTOR when the approve will SEED it (bug MOTIR-6259) — a
+   *  `modify` that re-types a card with no executor gets the type's default, by
+   *  the direct door's seed-if-absent rule. Like `status` below, no patch key
+   *  produces it: the approve DERIVES it, and it is the field that decides which
+   *  decision gate (if any) the card will raise, so the reviewer sees it first. */
+  'executor',
   'storyPoints',
   'estimateMinutes',
   /** A leaf's DIFFICULTY (story MOTIR-6095 · MOTIR-6137) — the sizing group's
@@ -139,11 +145,13 @@ const PATCH_KEY_RAIL_ROW = {
  * DERIVED from {@link PATCH_KEY_RAIL_ROW}, never listed.
  *
  * ⚠️ `executor` is deliberately absent, and it is the one a reader expects to
- * find. `PlanItemPatch` has no `executor` key and `plansService.applyModify`
- * never writes one: it is settable on an `add` and deepenable
- * (`agent-authored-plans.md` AMENDMENT 4 D3a), and on every other op it is the
- * TARGET's. Part XIV's first draft marked it changeable on a `modify` and was
- * corrected against this type.
+ * find. `PlanItemPatch` has no `executor` key: it is settable on an `add` and
+ * deepenable (`agent-authored-plans.md` AMENDMENT 4 D3a), and on every other op
+ * it is the TARGET's. Part XIV's first draft marked it changeable on a `modify`
+ * and was corrected against this type. The one thing a `modify` does to it is
+ * DERIVED, not set (bug MOTIR-6259): re-typing a target that has NO executor
+ * seeds the type's default at approve, reported as an `executor` CHANGE row the
+ * way the resting `status` is — never a rail field the author can move.
  */
 export const PLAN_ITEM_SETTABLE_RAIL_FIELDS: readonly PlanItemChangeField[] = Array.from(
   // `flatMap` rather than `filter` + a predicate: the map's value type is a

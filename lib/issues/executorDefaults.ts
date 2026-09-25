@@ -120,6 +120,32 @@ export function defaultExecutorForType(type: WorkItemTypeDto): ExecutorDto {
 }
 
 /**
+ * Resolve the executor a write should persist, given the resulting `type`, any
+ * explicitly-supplied executor, and the row's CURRENT executor.
+ * SEED-IF-ABSENT (the 2.7.2 ADR "executor is seeded when a type is first
+ * chosen, and overridable"): an explicit executor always wins; otherwise, when
+ * a non-null `type` lands on a row that has no executor yet, seed from
+ * {@link defaultExecutorForType}. An existing executor (a prior override) is
+ * never clobbered by a bare type change, and a null type never auto-sets one.
+ *
+ * ONE rule, three callers (bug MOTIR-6259): the direct create/update door
+ * (`workItemsService`), a plan `modify` that re-types its target at approve
+ * (`plansService.applyModify`), and the review surface that shows the approver
+ * what that approve will write (`planReviewService`). Before it lived here the
+ * `modify` path had no copy at all, so a re-plan that re-typed an untyped card
+ * as `decision` materialized `executor: null` and no decision gate could ask.
+ */
+export function resolveExecutor(
+  type: WorkItemTypeDto | null,
+  explicit: ExecutorDto | null | undefined,
+  current: ExecutorDto | null,
+): ExecutorDto | null {
+  if (explicit !== undefined) return explicit;
+  if (type !== null && current === null) return defaultExecutorForType(type);
+  return current;
+}
+
+/**
  * True when a work item of `kind` may carry a `type` / `executor` — i.e. it is
  * an executable leaf (task / subtask / bug). False for the container kinds
  * (epic / story). The service uses this to gate writes; the picker uses it to
