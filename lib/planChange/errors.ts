@@ -185,3 +185,20 @@ export class InvalidPlanSessionCursorError extends Error {
     this.name = 'InvalidPlanSessionCursorError';
   }
 }
+
+/**
+ * A SEEDED first turn named a gate that may not seed this session (story
+ * MOTIR-6068 · MOTIR-6207; `agent-authored-plans.md` AMENDMENT 17 §9). One error
+ * for every way the seed fails the guard — the gate is missing or in another
+ * workspace or project, it is not a refusal `isRefusalSeedGate` accepts, or it
+ * belongs to a work item the turn's scope does not anchor on — so the refusal
+ * never distinguishes a hidden gate from an absent one. Nothing is written when
+ * it is thrown. → 422 `SEED_NOT_APPLICABLE` (the route mapping is MOTIR-6210's).
+ */
+export class PlanSeedNotApplicableError extends Error {
+  readonly code = 'PLAN_SEED_NOT_APPLICABLE' as const;
+  constructor(readonly seedGateId: string) {
+    super(`Gate ${seedGateId} cannot seed a planning session on this scope.`);
+    this.name = 'PlanSeedNotApplicableError';
+  }
+}

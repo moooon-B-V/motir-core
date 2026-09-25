@@ -17,6 +17,8 @@ export type PlanChangeSessionUpdateInput = Prisma.PlanChangeSessionUncheckedUpda
 // gates the rows; the `workspaceId` argument is the belt-and-suspenders
 // app-level scope (a cross-tenant project id returns null → 404, never 403).
 export const planChangeSessionRepository = {
+  /** Create a session. `seedGateId` is set ONLY by a seeded first turn
+   *  (`planChangeSessionsService.startSeededWithFirstTurn`, AMENDMENT 17 §9). */
   async create(
     data: Prisma.PlanChangeSessionUncheckedCreateInput,
     tx: Prisma.TransactionClient,
@@ -96,6 +98,31 @@ export const planChangeSessionRepository = {
         workspaceId,
         createdById: userId,
         origin: 'conversation',
+        lastActivityAt: { gte: since },
+      },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /** The SEEDED-session read (AMENDMENT 17 §9; MOTIR-6207): this member's OWN
+   *  most recent session seeded by `seedGateId` in this project, active at or
+   *  after `since`. Never another member's (sessions are per member), never an
+   *  unseeded session and never one seeded by a different gate. Served by the
+   *  `(seed_gate_id, created_by_id, last_activity_at)` index. */
+  async findSeededForUser(
+    projectId: string,
+    seedGateId: string,
+    userId: string,
+    workspaceId: string,
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({
+      where: {
+        projectId,
+        workspaceId,
+        seedGateId,
+        createdById: userId,
         lastActivityAt: { gte: since },
       },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],

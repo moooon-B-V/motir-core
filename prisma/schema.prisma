@@ -4853,16 +4853,19 @@ model ApprovalGate {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workItem  WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem           WorkItem?           @relation(fields: [workItemId], references: [id], onDelete: Cascade)
   /// Both relations to `User` carry a NAME because there are two of them now and
   /// an unnamed pair is ambiguous. A relation name does not change a constraint
   /// name — the FK is derived from table + column — so `decidedBy`'s existing
   /// `approval_gate_decided_by_id_fkey` is untouched, and `migrate diff` reports
   /// only the additions.
-  decidedBy User?     @relation("ApprovalGateDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-  routedTo  User?     @relation("ApprovalGateRoutedTo", fields: [routedToId], references: [id], onDelete: SetNull)
+  decidedBy          User?               @relation("ApprovalGateDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  routedTo           User?               @relation("ApprovalGateRoutedTo", fields: [routedToId], references: [id], onDelete: SetNull)
+  /// The planning sessions this REFUSED gate seeded (MOTIR-6207; AMENDMENT 17 §9
+  /// of `agent-authored-plans.md`). SetNull on the session side.
+  seededPlanSessions PlanChangeSession[] @relation("PlanChangeSessionSeedGate")
 
   /// The WORKSPACE-tier read: a workspace's gates by state. Kept for
   /// MOTIR-2920's "what is on me across everything" surface, which is the
@@ -7777,12 +7780,21 @@ model PlanChangeSession {
   /// MOTIR-6020 backfill, for a pre-existing plan whose conversation cannot be
   /// identified.
   origin          PlanSessionOrigin @default(conversation)
+  /// The REFUSED approval gate that SEEDED this session (story MOTIR-6068 ·
+  /// MOTIR-6207; `agent-authored-plans.md` AMENDMENT 17 §9). Written ONLY at the
+  /// session's creation by a seeded first turn
+  /// (`planChangeSessionsService.startSeededWithFirstTurn`) and never changed
+  /// afterwards; NULL on every unseeded session. A seeded start resumes only a
+  /// session of the SAME seed. SetNull — a gate row that goes leaves the
+  /// conversation intact and unseeded.
+  seedGateId      String?           @map("seed_gate_id")
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
 
   workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy   User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  seedGate    ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
   turns       PlanChangeTurn[]
   /// The BOUNDARY MAILBOX for this thread's runs (MOTIR-4067) — one ordered
   /// sequence per job, carrying BOTH the turns typed mid-run and the stop.
@@ -7809,6 +7821,9 @@ model PlanChangeSession {
   @@index([projectId, scopeKey, createdById, lastActivityAt])
   /// The Plans page's session list (AMENDMENT 17 §8), newest activity first.
   @@index([projectId, lastActivityAt])
+  /// The SEEDED-session read (AMENDMENT 17 §9): "this member's most recent
+  /// session seeded by this gate" — `findSeededForUser`.
+  @@index([seedGateId, createdById, lastActivityAt])
   @@index([workspaceId])
   @@map("plan_change_session")
 }

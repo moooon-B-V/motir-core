@@ -3283,6 +3283,21 @@ proposed nothing. A session with no plan IS listed. The list pages newest-activi
 on that plan state. What a row LOOKS like is the design's (MOTIR-6019); where a row opens is its
 conversation, with its plan one click away.
 
+### §9 — a session MAY remember the gate that SEEDED it (story MOTIR-6068 · MOTIR-6207, 2026-09-25)
+
+A session MAY carry the approval gate that seeded it: `PlanChangeSession.seedGateId`, a nullable FK
+to `ApprovalGate`. It is set **only at the session's creation, by a seeded first turn**
+(`planChangeSessionsService.startSeededWithFirstTurn`), and never changed afterwards. Only a refused
+gate may seed one: `decision_approval` / `decision_choice` in `changes_requested`, or
+`decision_confirmation` in `overturned` (`isRefusalSeedGate`, `lib/planning/refusalSeed.ts`), in the
+caller's workspace and project, on a work item the turn's scope anchors on; anything else is refused
+`PLAN_SEED_NOT_APPLICABLE` and nothing is written. **A seeded start resumes only a session of the
+SAME seed** — the caller's own, inside the §3 window — and otherwise creates a new one; it never
+lands on the caller's unseeded conversation of the scope, nor on one seeded by another gate, and it
+decides under the same per-member scope lock as §3. The column is `ON DELETE SET NULL`: if the gate
+row goes, the conversation stays and is merely unseeded. An unseeded session is unchanged in every
+respect.
+
 ---
 
 ## AMENDMENT 18 — a `modify` may re-parent under an `add` in the same plan, a second `modify` of one card MERGES, and a `remove` carries its REASON (story MOTIR-6013 · MOTIR-6048, 2026-09-23)
