@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { availableRoomViews, parseRoomView, resolveRoomView } from '@/lib/rooms/roomView';
+import {
+  PLAN_ACT_PERMISSIONS,
+  RUN_ACT_PERMISSIONS,
+  availableRoomViews,
+  holdsAnyOf,
+  parseRoomView,
+  resolveRoomView,
+} from '@/lib/rooms/roomView';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // Story MOTIR-6179 — the one statement of which view a room serves (design
 // MOTIR-6327 § The SWITCH).
@@ -60,5 +68,14 @@ describe('resolveRoomView', () => {
     expect(
       await resolveRoomView({ requested: 'mine', available: [], mineHasRows: never }),
     ).toBeNull();
+  });
+});
+
+describe('holdsAnyOf — a room’s act keys (MOTIR-6336 coverage floor)', () => {
+  const set = (...keys: PermissionKey[]) => new Set<PermissionKey>(keys);
+  it('is true on any one act key, false on none', () => {
+    expect(holdsAnyOf(set('ai:decide_plan'), PLAN_ACT_PERMISSIONS)).toBe(true);
+    expect(holdsAnyOf(set('work_item:edit'), RUN_ACT_PERMISSIONS)).toBe(true);
+    expect(holdsAnyOf(set('project:browse', 'plan:view_any'), PLAN_ACT_PERMISSIONS)).toBe(false);
   });
 });
