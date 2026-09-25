@@ -99,29 +99,48 @@ afterEach(() => {
 
 describe('SessionsList streams on scroll', () => {
   it('is the labelled list of conversations, one listitem per session', () => {
-    renderWithIntl(<SessionsList initialViews={views(3)} initialCursor={null} planState={null} />);
+    renderWithIntl(
+      <SessionsList view="project" initialViews={views(3)} initialCursor={null} planState={null} />,
+    );
 
     const list = screen.getByRole('list', { name: 'Planning conversations' });
     expect(list.querySelectorAll('[role="listitem"]')).toHaveLength(3);
   });
 
   it('arms the sentinel only while a cursor remains', () => {
-    renderWithIntl(<SessionsList initialViews={views(3)} initialCursor={null} planState={null} />);
+    renderWithIntl(
+      <SessionsList view="project" initialViews={views(3)} initialCursor={null} planState={null} />,
+    );
     expect(sentinels()).toHaveLength(0);
   });
 
   it('appends the next page, carrying the FILTER with the cursor', async () => {
     loadMoreSessionsAction.mockResolvedValue({ views: views(2, 3), nextCursor: null });
-    renderWithIntl(<SessionsList initialViews={views(3)} initialCursor="cur_1" planState="none" />);
+    renderWithIntl(
+      <SessionsList
+        view="project"
+        initialViews={views(3)}
+        initialCursor="cur_1"
+        planState="none"
+      />,
+    );
 
     await fireSentinel();
 
-    expect(loadMoreSessionsAction).toHaveBeenCalledWith('cur_1', 'none');
+    // …and the VIEW (MOTIR-6334), so a later page comes from the same predicate.
+    expect(loadMoreSessionsAction).toHaveBeenCalledWith('cur_1', 'none', 'project');
     expect(rowIds()).toEqual(['s_0', 's_1', 's_2', 's_3', 's_4']);
   });
 
   it('ignores a non-intersecting callback', async () => {
-    renderWithIntl(<SessionsList initialViews={views(1)} initialCursor="cur_1" planState={null} />);
+    renderWithIntl(
+      <SessionsList
+        view="project"
+        initialViews={views(1)}
+        initialCursor="cur_1"
+        planState={null}
+      />,
+    );
     const io = sentinels().at(-1)!;
     await act(async () => {
       io.cb([{ isIntersecting: false } as IntersectionObserverEntry], {} as IntersectionObserver);
@@ -135,6 +154,7 @@ describe('SessionsList streams on scroll', () => {
     loadMoreSessionsAction.mockResolvedValue({ views: views(2, 8), nextCursor: null });
     renderWithIntl(
       <SessionsList
+        view="project"
         initialViews={pinned}
         initialCursor="cur_1"
         planState={null}
@@ -151,7 +171,14 @@ describe('SessionsList streams on scroll', () => {
 describe('a FAILED page says so, and Retry re-runs the same cursor (§19.5 panel 8)', () => {
   it('shows the error line and a Retry control, then recovers', async () => {
     loadMoreSessionsAction.mockRejectedValueOnce(new Error('boom'));
-    renderWithIntl(<SessionsList initialViews={views(2)} initialCursor="cur_1" planState={null} />);
+    renderWithIntl(
+      <SessionsList
+        view="project"
+        initialViews={views(2)}
+        initialCursor="cur_1"
+        planState={null}
+      />,
+    );
     const armedBefore = sentinels().length;
 
     await fireSentinel();
@@ -166,7 +193,7 @@ describe('a FAILED page says so, and Retry re-runs the same cursor (§19.5 panel
       fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     });
 
-    expect(loadMoreSessionsAction).toHaveBeenLastCalledWith('cur_1', null);
+    expect(loadMoreSessionsAction).toHaveBeenLastCalledWith('cur_1', null, 'project');
     expect(loadMoreSessionsAction).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('alert')).toBeNull();
     expect(rowIds()).toEqual(['s_0', 's_1', 's_2']);
@@ -179,6 +206,7 @@ describe('the `?session=` landing', () => {
     Element.prototype.scrollIntoView = scroll;
     renderWithIntl(
       <SessionsList
+        view="project"
         initialViews={views(3)}
         initialCursor={null}
         planState={null}
@@ -198,7 +226,9 @@ describe('the `?session=` landing', () => {
   it('scrolls nothing without a landing', () => {
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
-    renderWithIntl(<SessionsList initialViews={views(2)} initialCursor={null} planState={null} />);
+    renderWithIntl(
+      <SessionsList view="project" initialViews={views(2)} initialCursor={null} planState={null} />,
+    );
     expect(scroll).not.toHaveBeenCalled();
   });
 });
@@ -206,7 +236,9 @@ describe('the `?session=` landing', () => {
 describe('the guarded dereference (MOTIR-3241)', () => {
   it('renders nothing for an out-of-range slot instead of throwing', () => {
     forceRange.value = [0, 5];
-    renderWithIntl(<SessionsList initialViews={views(2)} initialCursor={null} planState={null} />);
+    renderWithIntl(
+      <SessionsList view="project" initialViews={views(2)} initialCursor={null} planState={null} />,
+    );
     expect(rowIds()).toEqual(['s_0', 's_1']);
   });
 });

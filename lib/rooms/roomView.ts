@@ -13,6 +13,8 @@
 // with neither, the room's not-found face. PURE — no I/O — so the three rooms'
 // pages, their services and their tests read one statement of the rule.
 
+import type { PermissionKey } from '@/lib/permissions/catalog';
+
 /** Which rows a room shows. The URL spells it `?view=mine|project`. */
 export type RoomView = 'mine' | 'project';
 
@@ -54,4 +56,25 @@ export async function resolveRoomView(args: {
   if (requested && available.includes(requested)) return requested;
   if (available.length === 1) return available[0]!;
   return (await args.mineHasRows()) ? 'mine' : 'project';
+}
+
+/**
+ * "Can act" in the PLANS room (design MOTIR-6327 § the readers): author a plan
+ * (`ai:plan`) or decide one (`ai:decide_plan`). The page and MOTIR-6332's nav
+ * row read this one list.
+ */
+export const PLAN_ACT_PERMISSIONS: readonly PermissionKey[] = ['ai:plan', 'ai:decide_plan'];
+
+/**
+ * "Can act" in the RUNS room: start a run — `work_item:edit`, what
+ * `dispatchRunService.open` asserts.
+ */
+export const RUN_ACT_PERMISSIONS: readonly PermissionKey[] = ['work_item:edit'];
+
+/** Whether `held` holds any of a room's act keys. */
+export function holdsAnyOf(
+  held: ReadonlySet<PermissionKey>,
+  keys: readonly PermissionKey[],
+): boolean {
+  return keys.some((key) => held.has(key));
 }

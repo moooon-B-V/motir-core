@@ -6540,7 +6540,15 @@
       "filteredEmptyTitle": "此状态下没有对话",
       "filteredEmptyDescription": "本项目的其他对话在“全部”下。",
       "loadMoreError": "无法加载更多对话。",
-      "loadMoreRetry": "重试"
+      "loadMoreRetry": "重试",
+      "viewAria": "显示你的对话或整个项目的对话",
+      "subtitleMine": "你在 {project} 中发起的规划对话，以及请你决定的计划",
+      "emptyMineTitle": "还没有你的规划对话",
+      "emptyMineDescription": "你与 Motir AI 发起的对话，以及请你决定的计划，都会列在这里。",
+      "emptyDescriptionRead": "当本项目中有人与 Motir AI 发起规划对话时，它会列在这里——无论是否已有计划。",
+      "filteredEmptyDescriptionMine": "你的其他对话在“全部”下。",
+      "readFailedTitle": "无法加载这些对话",
+      "readFailedBody": "请重新加载后重试。"
     }
   },
   "planningWorkspace": {

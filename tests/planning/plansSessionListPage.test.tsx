@@ -16,8 +16,10 @@ const {
   listSessions,
   countSessionsByPlanState,
   getSessionRow,
+  roomAccess,
   isMotirAiConfigured,
 } = vi.hoisted(() => ({
+  roomAccess: vi.fn(),
   getSession: vi.fn(),
   getActiveProject: vi.fn(),
   getCapabilities: vi.fn(),
@@ -27,13 +29,16 @@ const {
   isMotirAiConfigured: vi.fn(),
 }));
 
-const { redirect } = vi.hoisted(() => ({
+const { redirect, notFound } = vi.hoisted(() => ({
   redirect: vi.fn((path: string) => {
     throw new Error(`REDIRECT:${path}`);
   }),
+  notFound: vi.fn(() => {
+    throw new Error('NOT_FOUND');
+  }),
 }));
 
-vi.mock('next/navigation', () => ({ redirect }));
+vi.mock('next/navigation', () => ({ redirect, notFound }));
 vi.mock('next-intl/server', () => ({
   getTranslations: async () => (key: string) => key,
 }));
@@ -44,7 +49,7 @@ vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: { getCapabilities },
 }));
 vi.mock('@/lib/services/planSessionsService', () => ({
-  planSessionsService: { listSessions, countSessionsByPlanState, getSessionRow },
+  planSessionsService: { listSessions, countSessionsByPlanState, getSessionRow, roomAccess },
 }));
 vi.mock('@/app/(authed)/plans/sessionRowView', () => ({
   buildSessionRowViews: async (sessions: { id: string }[]) =>
@@ -58,6 +63,8 @@ import { planStateFromParam } from '@/lib/planning/planSessionFilter';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { RoomViewSwitch } from '@/components/rooms/RoomViewSwitch';
 
 const PROJECT = {
   userId: 'u1',
@@ -100,6 +107,9 @@ beforeEach(() => {
   listSessions.mockResolvedValue({ sessions: [row('s_1')], nextCursor: null });
   countSessionsByPlanState.mockResolvedValue(COUNTS);
   getSessionRow.mockResolvedValue(null);
+  // One view by default, so the no-switch cases below read as they did; the
+  // switch and each reader's faces have their own describe (MOTIR-6334).
+  roomAccess.mockResolvedValue({ views: ['project'], canAuthor: true });
 });
 
 afterEach(() => {
@@ -125,7 +135,7 @@ describe('/plans reads the filter from the URL', () => {
     const tree = await render();
 
     expect(listSessions).toHaveBeenCalledTimes(1);
-    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: null });
+    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: null, view: 'project' });
     // Ten rows come from the READ's own default; the page passes no literal.
     expect(listSessions.mock.calls[0]![2]).not.toHaveProperty('limit');
     expect(find(tree, PlanStatusTabs)[0]!.props.value).toBeNull();
@@ -135,19 +145,19 @@ describe('/plans reads the filter from the URL', () => {
   it('`?planState=none` opens on No plan yet', async () => {
     const tree = await render({ planState: 'none' });
 
-    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: 'none' });
+    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: 'none', view: 'project' });
     expect(find(tree, PlanStatusTabs)[0]!.props.value).toBe('none');
     expect(find(tree, SessionsList)[0]!.props.planState).toBe('none');
   });
 
   it('`?planState=nonsense` falls back to All without throwing', async () => {
     await render({ planState: 'nonsense' });
-    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: null });
+    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: null, view: 'project' });
   });
 
-  it('the list is KEYED on the filter, so a switch remounts rather than appends', async () => {
+  it('the list is KEYED on the view and the filter, so a switch remounts rather than appends', async () => {
     const tree = await render({ planState: 'declined' });
-    expect(find(tree, SessionsList)[0]!.key).toBe('declined|');
+    expect(find(tree, SessionsList)[0]!.key).toBe('project|declined|');
   });
 
   it('the strip gets the counts, total over the vocabulary', async () => {
@@ -164,7 +174,9 @@ describe('/plans?session=<id> lands on that conversation', () => {
     const tree = await render({ session: 's_2' });
     const list = find(tree, SessionsList)[0]!;
 
-    expect(getSessionRow).toHaveBeenCalledWith('p1', 's_2', expect.anything());
+    expect(getSessionRow).toHaveBeenCalledWith('p1', 's_2', expect.anything(), {
+      view: 'project',
+    });
     expect(list.props.highlightId).toBe('s_2');
     expect((list.props.initialViews as { id: string }[]).map((v) => v.id)).toEqual(['s_1', 's_2']);
   });
@@ -249,5 +261,97 @@ describe('/plans is gated on browse', () => {
   it('signed out → sign-in', async () => {
     getSession.mockResolvedValue(null);
     await expect(render()).rejects.toThrow('REDIRECT:/sign-in');
+  });
+});
+
+// ── THE VIEW (Story MOTIR-6179 · MOTIR-6334, design MOTIR-6327) ──────────────
+describe('/plans — the Mine / Project view', () => {
+  const header = (tree: ReactNode) => find(tree, RoomViewSwitch);
+
+  it('a MEMBER (both views) gets the switch; `?view=mine` asks for Mine, keeps planState, drops session', async () => {
+    roomAccess.mockResolvedValue({ views: ['mine', 'project'], canAuthor: true });
+    const tree = await render({ view: 'mine', planState: 'planned' });
+    const sw = header(tree);
+    expect(sw).toHaveLength(1);
+    expect(sw[0]!.props.value).toBe('mine');
+    expect(sw[0]!.props.drop).toEqual(['session']);
+    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: 'planned', view: 'mine' });
+    expect(countSessionsByPlanState).toHaveBeenCalledWith('p1', expect.anything(), {
+      view: 'mine',
+    });
+    const list = find(tree, SessionsList)[0]!;
+    expect(list.props.view).toBe('mine');
+    expect(list.key).toBe('mine|planned|');
+  });
+
+  it('a two-view reader on a clean URL lands on Mine when Mine has rows, else Project', async () => {
+    roomAccess.mockResolvedValue({ views: ['mine', 'project'], canAuthor: true });
+    let tree = await render();
+    expect(header(tree)[0]!.props.value).toBe('mine');
+    vi.clearAllMocks();
+    roomAccess.mockResolvedValue({ views: ['mine', 'project'], canAuthor: true });
+    listSessions.mockResolvedValue({ sessions: [row('s_1')], nextCursor: null });
+    getSessionRow.mockResolvedValue(null);
+    countSessionsByPlanState.mockImplementation(
+      async (_p: string, _c: unknown, o: { view: string }) =>
+        o.view === 'mine' ? NONE_AT_ALL : COUNTS,
+    );
+    tree = await render();
+    expect(header(tree)[0]!.props.value).toBe('project');
+  });
+
+  it('a VIEWER gets every session, NO switch, and no Plan-with-AI CTA even when empty', async () => {
+    roomAccess.mockResolvedValue({ views: ['project'], canAuthor: false });
+    let tree = await render({ view: 'mine' });
+    expect(header(tree)).toHaveLength(0);
+    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: null, view: 'project' });
+    listSessions.mockResolvedValue({ sessions: [], nextCursor: null });
+    countSessionsByPlanState.mockResolvedValue(NONE_AT_ALL);
+    tree = await render();
+    const empty = find(tree, EmptyState)[0]!;
+    expect(empty.props.description).toBe('sessions.emptyDescriptionRead');
+    expect(empty.props.action).toBeUndefined();
+    expect(find(tree, PlanWithAILauncher)).toHaveLength(0);
+  });
+
+  it('an AUTHOR without the view key gets Mine alone — `?view=project` is not an error', async () => {
+    roomAccess.mockResolvedValue({ views: ['mine'], canAuthor: true });
+    const tree = await render({ view: 'project' });
+    expect(header(tree)).toHaveLength(0);
+    expect(listSessions.mock.calls[0]![2]).toEqual({ planState: null, view: 'mine' });
+  });
+
+  it('Mine empty: its own copy; the CTA only for an author, never for a decide-only reader', async () => {
+    listSessions.mockResolvedValue({ sessions: [], nextCursor: null });
+    countSessionsByPlanState.mockResolvedValue(NONE_AT_ALL);
+    roomAccess.mockResolvedValue({ views: ['mine'], canAuthor: true });
+    let empty = find(await render(), EmptyState)[0]!;
+    expect(empty.props.title).toBe('sessions.emptyMineTitle');
+    expect(find(empty.props.action as ReactNode, PlanWithAILauncher)).toHaveLength(1);
+    roomAccess.mockResolvedValue({ views: ['mine'], canAuthor: false });
+    empty = find(await render(), EmptyState)[0]!;
+    expect(empty.props.action).toBeUndefined();
+  });
+
+  it('a filter empty within Mine points at Mine’s other conversations', async () => {
+    roomAccess.mockResolvedValue({ views: ['mine'], canAuthor: true });
+    listSessions.mockResolvedValue({ sessions: [], nextCursor: null });
+    const empty = find(await render({ planState: 'stale' }), EmptyState)[0]!;
+    expect(empty.props.description).toBe('sessions.filteredEmptyDescriptionMine');
+  });
+
+  it('a reader with NEITHER the key nor a way to act gets not-found', async () => {
+    roomAccess.mockResolvedValue({ views: [], canAuthor: false });
+    await expect(render()).rejects.toThrow('NOT_FOUND');
+    expect(listSessions).not.toHaveBeenCalled();
+  });
+
+  it('a FAILED read renders the ErrorState under the header, the switch staying', async () => {
+    roomAccess.mockResolvedValue({ views: ['mine', 'project'], canAuthor: true });
+    listSessions.mockRejectedValue(new Error('db down'));
+    const tree = await render({ view: 'project' });
+    expect(header(tree)).toHaveLength(1);
+    expect(find(tree, ErrorState)[0]!.props.title).toBe('sessions.readFailedTitle');
+    expect(find(tree, SessionsList)).toHaveLength(0);
   });
 });

@@ -74,15 +74,15 @@ describe('buildSessionRowViews', () => {
 });
 
 describe('loadMoreSessionsAction', () => {
-  it('streams the next page of the SAME filter, as row views', async () => {
-    listSessions.mockResolvedValue({ sessions: [dto()], nextCursor: 'cur_2' });
+  it('streams the next page of the SAME filter and view, as row views', async () => {
+    listSessions.mockResolvedValue({ sessions: [dto()], nextCursor: 'cur_2', scope: 'mine' });
 
-    const out = await loadMoreSessionsAction('cur_1', 'none');
+    const out = await loadMoreSessionsAction('cur_1', 'none', 'mine');
 
     expect(listSessions).toHaveBeenCalledWith(
       'p1',
       { userId: 'u1', workspaceId: 'ws1' },
-      { cursor: 'cur_1', planState: 'none' },
+      { cursor: 'cur_1', planState: 'none', view: 'mine' },
     );
     expect(out.nextCursor).toBe('cur_2');
     expect(out.views.map((v) => v.id)).toEqual(['s_1']);
@@ -90,13 +90,19 @@ describe('loadMoreSessionsAction', () => {
 
   it('streams nothing once signed out', async () => {
     getActiveProject.mockResolvedValue(null);
-    expect(await loadMoreSessionsAction('cur_1', null)).toEqual({ views: [], nextCursor: null });
+    expect(await loadMoreSessionsAction('cur_1', null, 'project')).toEqual({
+      views: [],
+      nextCursor: null,
+    });
     expect(listSessions).not.toHaveBeenCalled();
   });
 
   it('re-gates browse — access lost mid-scroll streams nothing', async () => {
     getCapabilities.mockResolvedValue({ canBrowse: false });
-    expect(await loadMoreSessionsAction('cur_1', null)).toEqual({ views: [], nextCursor: null });
+    expect(await loadMoreSessionsAction('cur_1', null, 'project')).toEqual({
+      views: [],
+      nextCursor: null,
+    });
     expect(listSessions).not.toHaveBeenCalled();
   });
 });

@@ -6544,7 +6544,15 @@
       "filteredEmptyTitle": "No conversations in this state",
       "filteredEmptyDescription": "This project's other conversations are under All.",
       "loadMoreError": "Couldn’t load more conversations.",
-      "loadMoreRetry": "Retry"
+      "loadMoreRetry": "Retry",
+      "viewAria": "Show your conversations or the whole project's",
+      "subtitleMine": "Planning conversations you started in {project}, and plans you were asked to decide",
+      "emptyMineTitle": "No planning conversations of yours yet",
+      "emptyMineDescription": "Conversations you start with Motir AI, and plans you are asked to decide, are listed here.",
+      "emptyDescriptionRead": "When someone in this project starts a planning conversation with Motir AI, it is listed here — with a plan or not yet.",
+      "filteredEmptyDescriptionMine": "Your other conversations are under All.",
+      "readFailedTitle": "We couldn’t load these conversations",
+      "readFailedBody": "Reload to try again."
     }
   },
   "planningWorkspace": {

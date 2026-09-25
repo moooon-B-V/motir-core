@@ -7,6 +7,12 @@ import {
   type PlanSessionMineScope,
 } from '@/lib/repositories/planChangeSessionRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import {
+  availableRoomViews,
+  holdsAnyOf,
+  PLAN_ACT_PERMISSIONS,
+  type RoomView,
+} from '@/lib/rooms/roomView';
 import { toPlanSessionRowDto } from '@/lib/mappers/planSessionMappers';
 import { InvalidPlanSessionCursorError } from '@/lib/planChange/errors';
 import {
@@ -82,6 +88,13 @@ async function resolveScope(
     tx,
   );
   return { scope: 'mine', mine: { userId: ctx.userId, routedPlanIds } };
+}
+
+/** What the Plans ROOM offers this reader (MOTIR-6334) — its views, and whether
+ *  it may start a fresh conversation (the empty states' CTA). */
+export interface PlanRoomAccess {
+  views: RoomView[];
+  canAuthor: boolean;
 }
 
 export interface ListSessionsOptions {
@@ -160,6 +173,24 @@ export const planSessionsService = {
       );
     });
     return rows[0] ? toPlanSessionRowDto(rows[0]) : null;
+  },
+
+  /**
+   * The Plans room's VIEWS for this reader (Story MOTIR-6179 · MOTIR-6334):
+   * `project` on `plan:view_any` (role ∩ token grant), `mine` on a way to act —
+   * author or decide a plan (`PLAN_ACT_PERMISSIONS`). Empty ⇒ the room is closed
+   * to them. `canAuthor` (`ai:plan`) is what offers the fresh start.
+   */
+  async roomAccess(projectId: string, ctx: ServiceContext): Promise<PlanRoomAccess> {
+    const held = await projectAccessService.getPermissions(projectId, ctx);
+    if (!held.has('project:browse')) return { views: [], canAuthor: false };
+    return {
+      views: availableRoomViews({
+        hasViewKey: holdsRecordView(held, ctx, 'plan:view_any'),
+        canAct: holdsAnyOf(held, PLAN_ACT_PERMISSIONS),
+      }),
+      canAuthor: held.has('ai:plan'),
+    };
   },
 
   /**
