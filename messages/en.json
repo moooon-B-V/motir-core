@@ -6847,7 +6847,14 @@
       "movedAnnouncement": "Showing work inside {target}",
       "goToTarget": "Plan is in {identifier} · Go there",
       "arrivedIn": "{count} new in {identifier} · Go there",
-      "arrivedAcross": "{count} new elsewhere · latest in {identifier} · Go there"
+      "arrivedAcross": "{count} new elsewhere · latest in {identifier} · Go there",
+      "levelChange": {
+        "srPrefix": "Pending change to this level:",
+        "changed": "This level",
+        "titleTo": "title → <b>{title}</b>",
+        "removed": "This level goes on approve",
+        "added": "This level is proposed — nothing here exists yet"
+      }
     },
     "dividerAria": "Resize the conversation"
   },

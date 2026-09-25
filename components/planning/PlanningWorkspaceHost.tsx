@@ -712,6 +712,8 @@ export function PlanningWorkspaceHost({
                 live={paneLive}
                 liveFailing={state.liveFailing}
                 discarded={paneDiscarded}
+                // The plan BESIDE the reader's level offers the trip (MOTIR-6223).
+                offerPlanElsewhere
               />
             ) : openingNamedSession ? (
               <div className="h-full w-full" data-testid="planning-pane-opening" aria-busy>
