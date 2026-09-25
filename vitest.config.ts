@@ -95,14 +95,19 @@ export default defineConfig({
     // React flush passive effects synchronously inside RTL's act scopes, which
     // REMOVES the effect-ordering race class MOTIR-1736/1737 hit — see that file
     // for the mechanism and the contract it imposes on component tests.
-    // `inFlightProbe` is LAST and is a no-op unless `MOTIR_INFLIGHT_PROBE=1`
-    // (MOTIR-3077): it registers one `afterEach` that reads `pg_stat_activity`
-    // for work this worker started and did not wait for. Off by default — it
-    // costs a round trip per test and its import is dynamic, so an ordinary run
-    // does not even construct the admin client.
+    // `inFlightProbe` registers one `afterEach` that FAILS a DB-backed test
+    // which left a backend `active` or `idle in transaction` on its worker's
+    // database, naming the query (MOTIR-6278; MOTIR-3077 built it as an
+    // opt-in sweep). A file that never opened a Prisma client skips it, and its
+    // import is dynamic, so a pure component file pays nothing.
+    // `rateLimitStoreDefault` gives the shared rate-limit store the TEST-TIME
+    // deadline in those same files, so a request waits for its own counter
+    // write instead of failing open and abandoning it mid-transaction —
+    // which the in-flight check would otherwise catch as a leak (MOTIR-6278).
     setupFiles: [
       './tests/helpers/perWorkerDb.ts',
       './tests/helpers/actEnvironment.ts',
+      './tests/helpers/rateLimitStoreDefault.ts',
       './tests/helpers/inFlightProbe.ts',
     ],
     // Cross-FILE parallelism is now safe (each worker has its own DB, above).
