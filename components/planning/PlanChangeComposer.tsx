@@ -1,10 +1,11 @@
 'use client';
 
-import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { AtSign, CircleStop, MessageCircleQuestionMark, Send } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Textarea';
 import { PlanningTargetChip } from '@/components/planning/PlanningTargetChip';
 import { TargetSearchListbox } from '@/components/planning/TargetSearchListbox';
 import { useWorkItemTargetSearch } from '@/lib/hooks/useWorkItemTargetSearch';
@@ -21,7 +22,7 @@ import type { WorkItemMentionCandidate } from '@/components/ui/markdownEditorMen
 // picker (Subtask MOTIR-1491; design `design/ai-chat/target-picker.mock.html`
 // panels 1, 2 and 4). Typing `@` (or pressing the `@` button) searches the
 // project's work items; picking one adds it to the TARGET SET the turn is
-// anchored at, shown as a chip tray above the input.
+// anchored at, shown as a chip tray above the field.
 //
 // The picked chip goes to the TRAY, not inline into the message text (design
 // panel 2): the target set is structured data the session is scoped by, not
@@ -32,14 +33,27 @@ import type { WorkItemMentionCandidate } from '@/components/ui/markdownEditorMen
 // CANVAS highlights it too; this component renders it and reports adds/removes.
 // The draft text lives in the rail, whose starter hints prefill it.
 //
-// A11Y — the ARIA 1.2 combobox pattern: the input is the combobox
+// A11Y — the ARIA 1.2 combobox pattern: the field is the combobox
 // (`aria-expanded` / `aria-controls` / `aria-activedescendant`), the popup owns
 // the listbox, and ↑/↓/Enter/Esc are handled here because focus never leaves the
-// input. Esc closes the picker and is swallowed, so it does not also reach the
+// field. Esc closes the picker and is swallowed, so it does not also reach the
 // workspace's "Esc closes" handler.
 
 const LISTBOX_ID = 'planning-target-listbox';
 const OPTION_PREFIX = 'planning-target-option';
+
+/**
+ * The composer's height CAP, in rows — the design's decision 1
+ * (`design/ai-chat/design-notes.md`, the MULTI-LINE composer section; sheet 3).
+ *
+ * Eight is the last row count at which the transcript stays the LARGER region in
+ * the worst case, measured at the split's FLOOR (a 327px footer: the capped field
+ * plus the target tray plus the running bar) rather than at its default — the
+ * floor being the binding case. It is a VERTICAL budget, so the resizable split
+ * (MOTIR-6249) did not move it; a wider field only means the same paragraph
+ * reaches the cap later.
+ */
+const COMPOSER_MAX_ROWS = 8;
 
 /**
  * What the pinned bar says while a run is in flight, and what its control does.
@@ -142,7 +156,11 @@ export function PlanChangeComposer({
   const t = useTranslations('planningWorkspace.targets');
   const tc = useTranslations('planningWorkspace.conversation');
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // TRUE while an IME is composing — and for the rest of the task in which the
+  // composition ENDS. See `onCompositionEnd` for why the tail matters.
+  const composingRef = useRef(false);
+  const caretPlacedRef = useRef(false);
   const [mention, setMention] = useState<MentionQueryRange | null>(null);
   const [dismissed, setDismissed] = useState(false);
   // Tracked by candidate ID, not index: when the result set changes under the
@@ -162,8 +180,21 @@ export function PlanChangeComposer({
   const foundIndex = activeId === null ? -1 : results.findIndex((r) => r.id === activeId);
   const activeIndex = foundIndex >= 0 ? foundIndex : 0;
 
-  /** Re-derive the `@` query from the input's current value + caret. */
-  function syncMention(el: HTMLInputElement) {
+  // A PRE-FILLED draft — a starter chip's text, MOTIR-6210's seeded first turn —
+  // is present before any typing, and a textarea whose value was set at mount
+  // does not guarantee the caret lands at its end the way a one-line input does.
+  // Placed ONCE: on every later focus the caret belongs to whoever moved it (a
+  // click into the middle of a sentence, a Tab back into a half-typed draft).
+  useEffect(() => {
+    if (!autoFocus || caretPlacedRef.current) return;
+    const el = inputRef.current;
+    if (!el) return;
+    caretPlacedRef.current = true;
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [autoFocus]);
+
+  /** Re-derive the `@` query from the field's current value + caret. */
+  function syncMention(el: HTMLTextAreaElement) {
     setMention(findMentionQuery(el.value, el.selectionStart ?? el.value.length));
   }
 
@@ -190,40 +221,87 @@ export function PlanChangeComposer({
     setActiveId(null);
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (!open) return;
-    if (event.key === 'Escape') {
-      // Swallowed: the workspace's own Esc handler must not close the whole
-      // surface because the user was dismissing a dropdown.
-      event.preventDefault();
-      event.stopPropagation();
-      setDismissed(true);
-      return;
-    }
-    if (event.key === 'Tab') {
-      setDismissed(true);
-      return;
-    }
-    if (results.length === 0) return;
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setActiveId(results[(activeIndex + 1) % results.length]!.id);
-      return;
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setActiveId(results[(activeIndex - 1 + results.length) % results.length]!.id);
-      return;
-    }
-    if (event.key === 'Enter') {
-      // Commits the row — NOT the message. Without the preventDefault the form
-      // would submit the half-typed `@bil` as a turn.
-      event.preventDefault();
-      pick(results[activeIndex]!);
-    }
+  /**
+   * Is this Enter CONFIRMING an IME candidate rather than sending a message?
+   *
+   * Three signals, because no one of them is enough:
+   *
+   *  - `nativeEvent.isComposing` — the standard flag, true for every keydown
+   *    dispatched while a composition session is open.
+   *  - `keyCode === 229` — the legacy "the IME swallowed this key" code, still
+   *    what some engines report where `isComposing` is not set.
+   *  - `composingRef` — the WebKit guard. **Safari fires `compositionend`
+   *    BEFORE the keydown of the Enter that confirmed the candidate**, so that
+   *    keydown arrives with `isComposing: false` and both signals above miss it.
+   *    Tracking the session ourselves and holding the flag to the end of the
+   *    task is the only thing that catches it.
+   *
+   * Reported against assistant-ui (#8199, #8319), vercel-labs/agent-browser
+   * (#1379) and bytedance/deer-flow (#1540) — one bug, four composers, and the
+   * reason `isComposing` alone is not the fix it looks like.
+   */
+  function confirmsComposition(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+    return composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229;
   }
 
-  /** The visible `@` affordance (design panel 2d) — focuses the input and opens
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // (1) An IME is composing — or has just finished. Do NOTHING: the Enter
+    // belongs to the candidate, and sending a half-written message is the
+    // failure people typing Chinese or Japanese would hit on their first turn.
+    if (event.key === 'Enter' && confirmsComposition(event)) return;
+
+    // (2) The `@` picker owns the keys while it is open — unchanged.
+    if (open) {
+      if (event.key === 'Escape') {
+        // Swallowed: the workspace's own Esc handler must not close the whole
+        // surface because the user was dismissing a dropdown.
+        event.preventDefault();
+        event.stopPropagation();
+        setDismissed(true);
+        return;
+      }
+      if (event.key === 'Tab') {
+        setDismissed(true);
+        return;
+      }
+      if (results.length > 0) {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          setActiveId(results[(activeIndex + 1) % results.length]!.id);
+          return;
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          setActiveId(results[(activeIndex - 1 + results.length) % results.length]!.id);
+          return;
+        }
+        if (event.key === 'Enter') {
+          // Commits the row — NOT the message. Without the preventDefault the
+          // send below would submit the half-typed `@bil` as a turn.
+          event.preventDefault();
+          pick(results[activeIndex]!);
+          return;
+        }
+      }
+      // An OPEN picker with no rows falls through: there is no row to commit,
+      // so Enter still sends, exactly as it did when the field was an `<input>`
+      // and the browser submitted the form for us.
+    }
+
+    // (3) Enter SENDS and (4) Shift+Enter breaks the line. A textarea submits no
+    // form of its own, so the send is explicit — and it goes through
+    // `requestSubmit()` rather than calling `submit()` directly, so the trim,
+    // the empty-message refusal and the `disabled` guard keep exactly one home.
+    //
+    // (5) ↑/↓ with the picker CLOSED never reach here, so the caret moves
+    // between lines the way it does in any other multi-line field.
+    if (event.key !== 'Enter') return;
+    if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
+  }
+
+  /** The visible `@` affordance (design panel 2d) — focuses the field and opens
    *  the picker, inserting the trigger the keyboard path would have typed. */
   function triggerMention() {
     const el = inputRef.current;
@@ -288,7 +366,7 @@ export function PlanChangeComposer({
         </div>
       ) : null}
 
-      {/* THE ANSWER BAR — a sibling above the input, where the target tray sits.
+      {/* THE ANSWER BAR — a sibling above the field, where the target tray sits.
           Not an alert: nothing failed, the planner is simply waiting. Its copy
           names the state in words, so the live region announces it when the log
           updates, and the state is carried by THREE cues that are not colour —
@@ -359,16 +437,25 @@ export function PlanChangeComposer({
         />
       ) : null}
 
-      <div className="flex items-center gap-2">
+      {/* ⚠️ `items-end`, NOT `items-center` — the design's decision 2. Send is a
+          SIBLING of the field in this row, not a child of it, so a growing field
+          walks Send (and the absolutely-positioned `@` trigger) down the box as
+          the caret moves away from them. Bottom-aligning holds both a fixed
+          distance from the caret's last line. The stated price: at rest the row
+          is `--height-input` and Send is `--height-btn-sm`, so Send sits 6px
+          lower than today's centring — the one visible change to a composer
+          nobody has typed into. */}
+      <div className="flex items-end gap-2">
         {/* The combobox WRAPPER, per the shipped `CommandPalette` pattern: the
             role sits on the container so the message field keeps its native
             textbox role (every existing consumer — and the acceptance spec —
-            addresses it that way), while `aria-controls` /
-            `aria-activedescendant` on the input still voice the active row. */}
+            addresses it that way, and a `<textarea>` carries that role exactly
+            as the `<input>` did), while `aria-controls` /
+            `aria-activedescendant` on the field still voice the active row. */}
         {/* ⚠️ WITHOUT MENTIONS THE COMBOBOX ROLE GOES TOO, not just the button.
             A `role="combobox"` that owns no popup and can never expand is a lie
             told to a screen reader — it promises an autocomplete the surface does
-            not have. So the wrapper degrades to a plain `div`, and the input keeps
+            not have. So the wrapper degrades to a plain `div`, and the field keeps
             its native textbox role, which is what every consumer addresses it by
             anyway. */}
         <div
@@ -383,7 +470,12 @@ export function PlanChangeComposer({
                 'aria-controls': LISTBOX_ID,
               }
             : {})}
-          className="relative flex min-w-0 flex-1 items-center"
+          // ⚠️ NOT a flex row any more. `Textarea` renders its field inside the
+          // design system's `FormField` wrapper, and a flex child with no
+          // `flex-1` of its own would size to content instead of filling the
+          // row. Block flow lets the wrapper fill this container and the field
+          // fill the wrapper, which is the geometry the design draws.
+          className="relative min-w-0 flex-1"
         >
           {mentions ? (
             <button
@@ -392,15 +484,33 @@ export function PlanChangeComposer({
               disabled={disabled || atLimit}
               aria-label={t('trigger')}
               data-testid="planning-target-trigger"
-              className="absolute left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+              // `bottom-1.5` rather than vertical centring: the trigger is
+              // absolutely positioned, so it followed the row's `items-center`
+              // to the middle of a grown field. 6px above the field's bottom
+              // edge in every one of the design's thirteen sheets.
+              className="absolute bottom-1.5 left-1.5 z-10 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
             >
               <AtSign className="size-4" aria-hidden="true" />
             </button>
           ) : null}
-          <input
+          <Textarea
             ref={inputRef}
-            type="text"
+            autoGrow
+            rows={1}
+            maxRows={COMPOSER_MAX_ROWS}
             value={draft}
+            onCompositionStart={() => {
+              composingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              // Cleared on the NEXT task, deliberately. WebKit fires this
+              // BEFORE the keydown of the Enter that confirmed the candidate,
+              // so clearing it synchronously would hand that keydown a field
+              // that looks idle — which is the bug this flag exists for.
+              setTimeout(() => {
+                composingRef.current = false;
+              }, 0);
+            }}
             {...(mentions ? { 'aria-autocomplete': 'list' as const } : {})}
             {...(open && results.length > 0
               ? {
@@ -425,11 +535,30 @@ export function PlanChangeComposer({
             // The accessible name TRACKS the prompt (MOTIR-910's contract): a
             // screen reader must hear the same ask the placeholder shows.
             aria-label={resolvedPlaceholder}
-            // The placeholder paints on this input's OWN `--el-surface` fill
+            // The composer's own tokens, overriding the primitive's defaults
+            // (`cn` is `twMerge`, and this className is last). Three of them are
+            // the multi-line change rather than a carry-over:
+            //
+            //  • `min-h-(--height-input)` replaces `h-(--height-input)` — the
+            //    shipped 44px becomes the FLOOR instead of the height, and the
+            //    primitive writes the measured height above it.
+            //  • the VERTICAL PADDING is DERIVED, not the `--spacing-input-y`
+            //    token: one row has to come to `--height-input` exactly, which
+            //    is `(--height-input − line-height − both borders) ÷ 2`. The
+            //    token's 12px gives 46px — a visible 2px growth on a field
+            //    nobody has typed into. Written as the arithmetic so it stays
+            //    exact under every density and type scale the axes produce.
+            //  • `focus:ring-0 focus:ring-offset-0` retires the primitive's
+            //    plain-`focus` ring, which paints on a mouse click and carries
+            //    an offset. The composer's ring is `focus-visible` and
+            //    offsetless, as it has always been, and `twMerge` cannot reach
+            //    across the two modifiers to do this for us.
+            //
+            // The placeholder paints on this field's OWN `--el-surface` fill
             // (4.17:1 for muted), and it is load-bearing here — the prompt IS
             // the placeholder, and the accessible name tracks it. Secondary is
             // 6.24:1 on that surface.
-            className={`h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) ${mentions ? 'pl-8' : 'pl-(--spacing-input-x)'} text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60`}
+            className={`min-h-(--height-input) py-[calc((var(--height-input)-(var(--text-sm)*var(--text-sm--line-height))-2px)/2)] min-w-0 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) ${mentions ? 'pl-8' : 'pl-(--spacing-input-x)'} text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus:ring-0 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60`}
           />
         </div>
         {/* Send gains the WORD "Answer" while a question is pending — the third

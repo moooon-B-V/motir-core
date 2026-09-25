@@ -55,11 +55,12 @@ import { db } from '@/lib/db';
 //     open a second — Prisma rejects nesting.
 //   * Read paths do NOT pass `options`. 118 ms against a 5 s default is a
 //     38x margin; see {@link TransactionBudget}, whose callers carry very
-//     different justifications — including the two read paths that do
-//     pass it (the 2FA gate, MOTIR-5866, and the active-project resolver,
-//     MOTIR-6254), where the budget is outgrown by a WAIT the expiry cannot
-//     shorten, never by the read's work. Both are DOORS nearly every signed-in
-//     request passes through; that, not the read, is what earns the exception.
+//     different justifications — including the three read paths that do
+//     pass it (the 2FA gate, MOTIR-5866, the active-project resolver,
+//     MOTIR-6254, and the active-workspace resolver, MOTIR-6253), where the
+//     budget is outgrown by a WAIT the expiry cannot shorten, never by the
+//     read's work. All three are DOORS nearly every signed-in request passes
+//     through; that, not the read, is what earns the exception.
 //
 // The ONE sanctioned exception is STRUCTURAL, never performance: a fan-out
 // whose members need DIFFERENT bindings. `publicProjectsService` is it —
@@ -405,7 +406,7 @@ export async function withBootstrapSlugContext<T>(
  * two loose numbers so that raising it is a visible, argued decision at the call
  * site instead of a magic literal.
  *
- * The shipped callers are FIVE, and they are raised for different reasons — which
+ * The shipped callers are SIX, and they are raised for different reasons — which
  * is why the type asks for an argument rather than a number:
  *
  *   * the per-project runner-group sync (MOTIR-1972), which must hold the
@@ -438,8 +439,15 @@ export async function withBootstrapSlugContext<T>(
  *     reads under the (authed) layout and ~130 other callers, expired in
  *     production at COMMIT after a 6.4 s wait. Its one lock (the pointer heal's
  *     UPDATE) is its LAST statement, so the ceiling cannot lengthen how long a
- *     lock is held. A third read path reaching for this owes the same two
- *     facts: that it is a door, and that the time is a wait, not work.
+ *     lock is held.
+ *   * the active-WORKSPACE resolver (MOTIR-6253,
+ *     `workspacesService.resolveActiveWorkspace`) — the THIRD read path, a door of
+ *     the same kind as the other two: `getWorkspaceContext` runs it for every
+ *     signed-in request. It writes nothing and takes no lock, and production
+ *     expired it at QUERY after a 30.5 s wait — so its ceiling is 60 s, not the
+ *     siblings' 30 s, which would have failed that very event. A fourth read path
+ *     reaching for this owes the same two facts: that it is a door, and that the
+ *     time is a wait, not work — and a ceiling sized against the wait it saw.
  */
 export interface TransactionBudget {
   /** Max wall-clock ms the transaction body may run before Prisma rolls back. */
@@ -480,7 +488,7 @@ export interface TransactionBudget {
  *
  * `options` raises Prisma's interactive-transaction budget — see
  * {@link TransactionBudget}. Omit it and the default 5s applies, which is what
- * every caller but the 2FA gate wants.
+ * every caller but the 2FA gate and the active-workspace resolver wants.
  */
 export async function withUserContext<T>(
   userId: string,

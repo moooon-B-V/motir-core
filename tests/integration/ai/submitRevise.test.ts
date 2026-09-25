@@ -99,6 +99,23 @@ describe('submitRevise — the change lands on the plan you are holding', () => 
     expect(context).not.toHaveProperty('targetKeys');
   });
 
+  // MOTIR-6239 — the revise door is the composer's THIRD send door, and a
+  // revision instruction is the one most likely to be a LIST. Asserted at the
+  // mock rather than past it: what matters is that the planner is handed the
+  // same bytes the reviewer typed.
+  it('carries a MULTI-LINE instruction to the job with its line breaks, trimming only the ends', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx);
+    // A blank line among them — the character a naive normaliser eats first.
+    const instruction = 'Split the second story:\n- monthly\n\n- yearly';
+
+    await aiPlanEditsService.submitRevise(planId, `  ${instruction}  `.trim(), projectCtx(fx));
+
+    const [, , context] = (submitJob as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(context).toMatchObject({ planId, prompt: instruction });
+    expect(instruction.split('\n')).toHaveLength(4);
+  });
+
   it('ACQUIRES the lease and BINDS the plan to the revision job — ONE act, one transaction', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx);

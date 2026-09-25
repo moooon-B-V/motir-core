@@ -1688,6 +1688,57 @@ describe('workItemsService.validateWorkItem — the SELF-BLOCKING-DESIGN advisor
     );
   });
 
+  it('MOTIR-6201: says NOTHING about a `type: design` card — a design card IS the design', async () => {
+    // MOTIR-6044's own acceptance criteria, verbatim. Criterion 1 names the delta
+    // mock (a design ASSET), and criterion 3 describes what the DRAWING shows —
+    // `row` / `surface` + `drawn` — which the surface arm reads as building a
+    // rendered surface. On a card whose whole deliverable is the design result,
+    // the LIFT remedy has no meaning, so the card's TYPE settles it before any
+    // criterion is scanned. The same body on a `code` card still emits: that is
+    // the arm the check was built for.
+    const body = [
+      '## Acceptance criteria',
+      '',
+      "- This card's run publishes (`publish_design_result`) a design result carrying the delta mock and its notes section.",
+      '- Every state above appears in the mock, in both themes. That includes the undecided MCP-authored row, the no-conversation row and the secondary link.',
+      '- The undecided MCP-authored row is drawn as opening the **planning surface**, and the notes record that `noConversation.agent` is retired, citing `agent-authored-plans.md` AMENDMENT 20.',
+      '- The notes state which parts of both base rows are inherited and not redrawn, citing them by path.',
+      '- The copy is listed with its keys, and the access path is drawn for both destinations.',
+    ].join('\n');
+    const fx = await makeWorkItemFixture();
+    const make = (type: 'design' | 'code') =>
+      workItemsService.createWorkItem(
+        {
+          projectId: fx.projectId,
+          kind: 'task',
+          title: `The row says where it goes (${type})`,
+          descriptionMd: body,
+          type,
+          executor: 'coding_agent',
+          storyPoints: 3,
+          estimateMinutes: 45,
+        },
+        fx.ctx,
+      );
+    const design = await make('design');
+    const code = await make('code');
+
+    const selfBlockingOf = async (identifier: string) =>
+      (await workItemsService.validateWorkItem(fx.projectId, identifier, fx.ctx)).advisories.filter(
+        (a) => a.severity === 'likely-self-blocking-design',
+      );
+    expect(await selfBlockingOf(design.identifier)).toEqual([]);
+    expect(await selfBlockingOf(code.identifier)).toEqual([
+      {
+        kind: 'shape',
+        item: code.identifier,
+        severity: 'likely-self-blocking-design',
+        designCriterionIndex: 1,
+        surfaceCriterionIndex: 3,
+      },
+    ]);
+  });
+
   it('scans a whole SUBTREE — the story reports its self-blocking child', async () => {
     const fx = await makeWorkItemFixture();
     const story = await workItemsService.createWorkItem(

@@ -75,10 +75,10 @@ export interface ProseAdvisorySubject {
   /** Number of outgoing `blocked_by` edges; compared with counted prose claims. */
   blockerCount: number;
   /**
-   * The card's work TYPE and EXECUTOR — read by the ORDERING check's exemption
-   * ({@link isOrderingCheckExempt}) and, TYPE only, by the SELF-BLOCKING-DESIGN
-   * check's third scope test ({@link isSelfBlockingDesignCheckExempt},
-   * MOTIR-6245) — never by the reference scan.
+   * The card's work TYPE and EXECUTOR — read by the ORDERING check's
+   * exemption ({@link isOrderingCheckExempt}) and, `type` alone, by the
+   * SELF-BLOCKING-DESIGN check's scope ({@link isSelfBlockingDesignCheckExempt});
+   * never by the reference scan.
    * Required so every caller has to decide what it knows; `null` is a real
    * answer ("untyped", and therefore not exempt).
    */
@@ -492,20 +492,28 @@ function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto
  * wrong. The arm this does NOT touch is the one the check was built for: a card
  * that both draws and builds with NO design blocker still emits.
  *
- * ⚠️ AND A `type: design` CARD IS NEVER REPORTED (MOTIR-6245) — the THIRD scope
- * test, {@link isSelfBlockingDesignCheckExempt}. The remedy is to lift the
- * drawing into a `type: design` card; on a card that already IS one, following
- * it proposes a design card for a design card and halts a correct chain. The
- * prose predicate's per-criterion exclusion misses a design card whose criteria
- * name panels by number or oblige it to render the shipped surface, and 7 of the
- * 16 open design cards carried the false entry when this was measured.
+ * ⚠️ AND A `type: design` CARD IS NEVER REPORTED (MOTIR-6201). It IS the design,
+ * so the LIFT remedy has no meaning on it — and `hasDesignBlocker` cannot exclude
+ * it, because the card that produces a design is never `blocked_by` one. The
+ * per-criterion scan cannot either: a design card's criteria describe what the
+ * DRAWING shows (*"the row is drawn as opening the planning surface"*), which the
+ * surface arm reads as building a rendered surface, and there is no finite list of
+ * asset words to exclude that with. So the TYPE is the scope test. A card of any
+ * other type that both commissions a design and builds the surface still emits.
+ *
+ * The test is {@link isSelfBlockingDesignCheckExempt}, exported and asserted
+ * directly so a later widening of the prose predicate cannot silently re-open it
+ * (MOTIR-6245). Its fixtures add the two other sentence shapes a design card's
+ * criteria take — panels named by NUMBER (MOTIR-6236) and the render-the-shipped-
+ * surface precondition (MOTIR-6241). 7 of the 16 open design cards carried the
+ * false entry when this was measured.
  */
 function selfBlockingDesignAdvisory(
   subject: ProseAdvisorySubject,
 ): WorkItemProseAdvisoryDto | null {
   if (subject.hasChildren) return null;
-  if (subject.hasDesignBlocker) return null;
   if (isSelfBlockingDesignCheckExempt(subject.type)) return null;
+  if (subject.hasDesignBlocker) return null;
   const found = selfBlockingDesignCriteria(subject.descriptionMd);
   if (!found) return null;
   return {

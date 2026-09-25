@@ -1002,6 +1002,14 @@ APPROVED designs.
 otherwise `{ items: ApprovedDesign[], nextCursor }`. Both derive from the
 `/api/v1` design components, so the two surfaces cannot drift.
 
+**A filtered page is filled, not cut.** With `pathPrefix` or `query`, the tool
+reads on past the cards the filter drops until the page holds `limit` designs or
+the project's designs run out, so an empty page normally means nothing matched.
+It reads at most 1,000 cards per call; past that ceiling a page can come back
+SHORT, even empty, with a `nextCursor` — and the text summary then says more
+pages remain rather than "No approved designs matched". Keep paging until
+`nextCursor` is null before concluding nothing matches (MOTIR-6272).
+
 **No download links, on either arm.** A link lives minutes, so a page of them
 would expire before you read the list. Find the design here; call
 [`get_design`](#get_design) for links minted when you actually fetch.
