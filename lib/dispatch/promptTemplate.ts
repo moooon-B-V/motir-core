@@ -1915,6 +1915,21 @@ function openPullRequestStep(src: DispatchPromptSource): string[] {
  * articulate the problem is told to submit anyway, without it, and the planner
  * falls back to asking.
  *
+ * ── THE REPORT (Story MOTIR-5544 · MOTIR-6287) ──────────────────────────────
+ *
+ * Step 4, in BOTH lanes, is one `report_unbuildable_target` call carrying the
+ * card and the same text as the step-3 comment
+ * (`docs/decisions/run-found-trigger-dispatched-path.md`, *The prompt change*).
+ * It is in both lanes because the lane changes what the runner does NEXT, not
+ * what it found. It is the THIRD part of "run it once": the report (free, safe
+ * to repeat — the server keeps one record per run), the append (free), and the
+ * submit, which is still the only act that spends credits and is never retried.
+ * The runner still classifies nothing: it is told the call spends nothing, is
+ * safe to repeat and returns nothing to act on, and NOT what the server does
+ * with it — the server classifies, from the approving plan's recorded author and
+ * a verdict computed off recorded rows. An agent told a planning defect might be
+ * filed would start writing its reason for that audience.
+ *
  * One composition, every dispatching path: `run`, `batch`, `auto` and `next` all
  * fetch this same server-assembled prompt, so the instruction is written here
  * and nowhere per command.
@@ -1930,6 +1945,14 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     `     ${permitted}`,
     `  3. Comment the finding on ${src.key}: what is false, and the evidence — the`,
     '     file you read, the command you ran, what it said.',
+    '  4. Report it with the report_unbuildable_target tool:',
+    '',
+    `         projectKey: ${src.projectKey}`,
+    `         targetKey:  ${src.key}`,
+    '         reason:     the SAME text as your step-3 comment',
+    '',
+    '     It spends nothing. It is safe to repeat: the server keeps one record per',
+    '     run. It returns nothing to act on.',
   ];
 
   // The switch. With re-planning disabled there is nothing to submit and nowhere
@@ -1938,22 +1961,22 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
   if (!policy.replan) {
     return [
       ...restructuring,
-      '  4. Stop, and leave the card In Progress. Do not move its status: this run',
+      '  5. Stop, and leave the card In Progress. Do not move its status: this run',
       '     was launched without re-planning, so there is no plan to submit and no',
       '     decision for anyone to make yet. Your comment is the whole report.',
-      '  5. Do not pick up other work.',
+      '  6. Do not pick up other work.',
     ];
   }
 
   return [
     ...restructuring,
-    `  4. Move ${src.key} to Planning with the transition_status tool (key`,
+    `  5. Move ${src.key} to Planning with the transition_status tool (key`,
     `     ${src.key}, status planning). That status is in the in-progress`,
     '     category, which is what actually takes the card out of the pickable set',
     '     — the card is not stuck on a dependency, it is being re-planned, and it',
     '     must not be handed out again until a human has acted on the plan.',
     ...twoLanes(src, policy),
-    '  5. Put the finding on the planning thread with the append_plan_turn tool:',
+    '  6. Put the finding on the planning thread with the append_plan_turn tool:',
     '',
     `         projectKey: ${src.projectKey}`,
     `         targetKeys: [${src.key}]`,
@@ -1962,8 +1985,8 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '     targetKeys anchors the thread to this card. Without it you open the',
     "     PROJECT-WIDE thread and file a plan about one card's defect against the",
     '     whole project. APPENDING IS NOT SUBMITTING: this call costs nothing and',
-    '     starts no job. Nothing has reached the planner until step 6.',
-    '  6. Compose the WHAT and send it with the submit_plan_session tool:',
+    '     starts no job. Nothing has reached the planner until step 7.',
+    '  7. Compose the WHAT and send it with the submit_plan_session tool:',
     '',
     `         projectKey:  ${src.projectKey}`,
     `         targetKeys:  [${src.key}]   — the same anchor, again`,
@@ -1984,13 +2007,13 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '     If you genuinely cannot articulate the problem, submit anyway, WITHOUT',
     '     requirement — refusing the card must never wait on writing well. The',
     '     planner opens a conversation with the operator instead.',
-    "  7. SUBMITTING IS THE ACT THAT SPENDS the token owner's AI credits, and you",
+    "  8. SUBMITTING IS THE ACT THAT SPENDS the token owner's AI credits, and you",
     '     do it exactly ONCE. Never retry it, even on a timeout — a blind retry in',
     '     an unattended run costs them twice for one finding. The one exception:',
     '     if submit_plan_session REJECTS your arguments (a malformed requirement),',
     '     nothing happened — no job was created and no credits were spent — so',
     '     re-submit once, WITHOUT the requirement. That is the only retry there is.',
-    '  8. Stop. Do not pick up other work.',
+    '  9. Stop. Do not pick up other work.',
   ];
 }
 
@@ -2044,14 +2067,14 @@ function twoLanes(src: DispatchPromptSource, policy: FindingsPolicy): string[] {
     '',
     `    THE CARD'S OWN LANE — the correction is ${siblingLevel}:`,
     '    a rewrite, a split into two siblings, an added sibling, a sibling that',
-    '    should not exist. Keep targetKeys at the value steps 5 and 6 show and the',
+    '    should not exist. Keep targetKeys at the value steps 6 and 7 show and the',
     '    loop may approve it, then carry on with the corrected work.',
     '',
     '    THE NORMAL LANE — everything wider, and it is ALWAYS available, including',
     '    right now. Put the CONTAINER’s key in targetKeys instead — in BOTH calls,',
     parent
-      ? `    steps 5 and 6, e.g. [${parent}] — when the mis-planning is bigger than`
-      : '    steps 5 and 6 — when the mis-planning is bigger than',
+      ? `    steps 6 and 7, e.g. [${parent}] — when the mis-planning is bigger than`
+      : '    steps 6 and 7 — when the mis-planning is bigger than',
     '    this one card; or omit targetKeys entirely when what is missing is a',
     '    precondition no card names yet, and the planner will settle a new one.',
     '    A person reviews the plan, and this run stops.',
