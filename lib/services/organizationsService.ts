@@ -19,12 +19,17 @@ import { isOrgOwnerRole, ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { orgCan } from '@/lib/organizations/capabilities';
 import {
   AlreadyOrgMemberError,
+  InvalidOwnershipTargetError,
   OrganizationNotFoundError,
   OrgInviteeNotFoundError,
   OrgSlugCollisionError,
   OwnerMembershipLockedError,
   OwnerOnlyByTransferError,
+  OwnershipChangedError,
+  OwnershipConfirmationMismatchError,
 } from '@/lib/organizations/errors';
+import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import {
   assertOrgAdmin,
   assertOrgCapability,
@@ -526,6 +531,96 @@ export const organizationsService = {
   },
 
   /**
+   * TRANSFER OWNERSHIP — the one door by which an organization's Owner changes
+   * (Story MOTIR-6167 · Subtask MOTIR-6310). The Owner hands the role WHOLE to
+   * another member and becomes an Admin; there is exactly one Owner before and
+   * after, and never a moment with zero or two.
+   *
+   * Refusals, in the order they are checked:
+   *   - a non-member actor → OrganizationNotFoundError (404); an Admin or Member
+   *     → OrgForbiddenError (403) — `transferOwnership` is the Owner's alone;
+   *   - the actor as the target → InvalidOwnershipTargetError('self') (422);
+   *   - `confirmName` not EXACTLY the organization's current name →
+   *     OwnershipConfirmationMismatchError (400). The server checks the typed
+   *     confirmation, not only the dialog;
+   *   - a target who is not a member → InvalidOwnershipTargetError('not_member');
+   *   - the actor no longer the Owner once their row is LOCKED — a concurrent
+   *     transfer committed first → OwnershipChangedError (409).
+   *
+   * ⚠️ ONE TRANSACTION, LOCK THEN RE-READ. Both membership rows are read
+   * `FOR UPDATE` in a stable order (by user id, so two transfers touching the
+   * same pair cannot deadlock), and the actor's role is re-read UNDER that lock:
+   * the capability check above ran on an unlocked read, which a transfer racing
+   * this one can have made stale. The loser blocks on the Owner's row, then sees
+   * the committed role and is refused — it never writes.
+   *
+   * ⚠️ DEMOTE FIRST, THEN PROMOTE, so the one-owner partial unique index is
+   * never violated mid-transaction (MOTIR-6307).
+   *
+   * The target's workspace memberships are untouched: an Owner reaches every
+   * workspace by role (MOTIR-6308), which the new Owner inherits. Billing does
+   * not move — the subscription belongs to the organization, not to a person
+   * (`organization-tier.md` §3).
+   *
+   * After the commit, both people are emailed. Best-effort: a failed enqueue is
+   * logged and never undoes the transfer.
+   */
+  async transferOwnership(input: {
+    organizationId: string;
+    actorUserId: string;
+    toUserId: string;
+    confirmName: string;
+  }): Promise<void> {
+    const organizationName = await withOrgContext(
+      { userId: input.actorUserId, organizationId: input.organizationId },
+      async (tx) => {
+        await assertOrgCapability(input.actorUserId, input.organizationId, 'transferOwnership', tx);
+        if (input.toUserId === input.actorUserId) {
+          throw new InvalidOwnershipTargetError(input.organizationId, 'self');
+        }
+        const organization = await organizationRepository.findByIdInTx(input.organizationId, tx);
+        if (!organization) throw new OrganizationNotFoundError(input.organizationId);
+        if (input.confirmName !== organization.name) {
+          throw new OwnershipConfirmationMismatchError();
+        }
+
+        // Lock both rows in a stable order, then decide on what is COMMITTED.
+        const locked = new Map<string, Awaited<ReturnType<typeof lockMembership>>>();
+        for (const userId of [input.actorUserId, input.toUserId].sort()) {
+          locked.set(userId, await lockMembership(input.organizationId, userId, tx));
+        }
+        if (!locked.get(input.toUserId)) {
+          throw new InvalidOwnershipTargetError(input.organizationId, 'not_member');
+        }
+        if (locked.get(input.actorUserId)?.role !== ORGANIZATION_ROLE.owner) {
+          throw new OwnershipChangedError(input.organizationId);
+        }
+
+        await writeMembershipRole(
+          input.organizationId,
+          input.actorUserId,
+          ORGANIZATION_ROLE.admin,
+          tx,
+        );
+        await writeMembershipRole(
+          input.organizationId,
+          input.toUserId,
+          ORGANIZATION_ROLE.owner,
+          tx,
+        );
+        return organization.name;
+      },
+    );
+
+    await notifyOwnershipTransferred({
+      organizationId: input.organizationId,
+      organizationName,
+      previousOwnerId: input.actorUserId,
+      newOwnerId: input.toUserId,
+    });
+  },
+
+  /**
    * The UPWARD auto-join primitive (6.10.2 §5i): ensure `userId` has an
    * OrganizationMembership in `organizationId`, creating a `member`-role row if
    * absent. Idempotent (a duplicate create is swallowed). Called by the
@@ -827,5 +922,69 @@ export async function writeMembershipRole(
       throw new OwnerOnlyByTransferError(organizationId);
     }
     throw err;
+  }
+}
+
+function lockMembership(organizationId: string, userId: string, tx: Prisma.TransactionClient) {
+  return organizationMembershipRepository.findByOrgAndUserForUpdate(organizationId, userId, tx);
+}
+
+/**
+ * Email both sides of a committed ownership transfer (MOTIR-6310). Runs AFTER
+ * the transaction and is best-effort: the transfer is the durable fact, and a
+ * provider or queue failure must never be reported as a failed transfer — so a
+ * failure is logged and swallowed, per recipient. The provider call itself runs
+ * in the durable `email.send` job (enqueued, never sent inline).
+ */
+async function notifyOwnershipTransferred(input: {
+  organizationId: string;
+  organizationName: string;
+  previousOwnerId: string;
+  newOwnerId: string;
+}): Promise<void> {
+  try {
+    // `user` carries no RLS, and these reads gate no write.
+    const [previousOwner, newOwner] = await Promise.all([
+      userRepository.findById(input.previousOwnerId),
+      userRepository.findById(input.newOwnerId),
+    ]);
+    if (!previousOwner || !newOwner) return;
+    const settingsUrl = `${resolveBaseUrlTrimmed()}/settings/organization`;
+    const transferredAt = Date.now();
+    for (const [recipient, audience] of [
+      [newOwner, 'new-owner'],
+      [previousOwner, 'previous-owner'],
+    ] as const) {
+      if (!recipient.email) continue;
+      try {
+        await sendEvent('email.send', {
+          // Organization-scoped, not workspace-scoped: it has no single workspace.
+          workspaceId: null,
+          idempotencyKey: `ownership-transferred:${input.organizationId}:${transferredAt}:${audience}`,
+          to: recipient.email,
+          template: 'ownership-transferred',
+          data: {
+            audience,
+            recipientName: recipient.name,
+            organizationName: input.organizationName,
+            previousOwnerName: previousOwner.name,
+            newOwnerName: newOwner.name,
+            settingsUrl,
+          },
+        });
+      } catch (err) {
+        console.error(
+          '[organizationsService] the ownership-transferred email could not be enqueued; ' +
+            'the transfer is committed',
+          { organizationId: input.organizationId, audience, err },
+        );
+      }
+    }
+  } catch (err) {
+    console.error(
+      '[organizationsService] the ownership-transferred notification failed; ' +
+        'the transfer is committed',
+      { organizationId: input.organizationId, err },
+    );
   }
 }

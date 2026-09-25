@@ -106,3 +106,51 @@ export class OwnerMembershipLockedError extends Error {
     this.name = 'OwnerMembershipLockedError';
   }
 }
+
+/**
+ * The target of an ownership transfer is not someone ownership can go to — they
+ * are not a member of the organization, or they are the Owner themselves.
+ * `reason` names which, so the dialog can say it. → 422 (MOTIR-6310).
+ */
+export class InvalidOwnershipTargetError extends Error {
+  readonly code = 'INVALID_OWNERSHIP_TARGET' as const;
+  constructor(
+    organizationId: string,
+    readonly reason: 'not_member' | 'self',
+  ) {
+    super(
+      reason === 'self'
+        ? `You already own ${organizationId}; pick another member to transfer it to.`
+        : `The chosen person is not a member of ${organizationId}.`,
+    );
+    this.name = 'InvalidOwnershipTargetError';
+  }
+}
+
+/**
+ * The actor was the Owner when the transfer began and is not any more, read
+ * under the row lock — a concurrent transfer committed first. Nothing changed
+ * in this request. → 409 (MOTIR-6310).
+ */
+export class OwnershipChangedError extends Error {
+  readonly code = 'OWNERSHIP_CHANGED' as const;
+  constructor(organizationId: string) {
+    super(
+      `Ownership of ${organizationId} changed while this transfer was in progress; nothing was changed.`,
+    );
+    this.name = 'OwnershipChangedError';
+  }
+}
+
+/**
+ * The typed confirmation did not match the organization's current name. The
+ * server checks it, not only the dialog, because a transfer hands over the
+ * whole organization. → 400 (MOTIR-6310).
+ */
+export class OwnershipConfirmationMismatchError extends Error {
+  readonly code = 'OWNERSHIP_CONFIRMATION_MISMATCH' as const;
+  constructor() {
+    super('Type the organization’s name exactly to confirm the transfer.');
+    this.name = 'OwnershipConfirmationMismatchError';
+  }
+}

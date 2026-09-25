@@ -763,6 +763,17 @@
       "freshLink": "出于安全考虑，此邮件不含附件，也不含下载链接。每次点击下载都会生成一个全新的私密链接，5分钟后失效。",
       "retention": "该文件我们保留{days}天，之后会删除。此后你可以随时重新申请导出。"
     },
+    "ownershipTransferred": {
+      "subject": "{organization} 的所有权已转移给 {newOwner}",
+      "preview": "{newOwner} 现在是 {organization} 的所有者",
+      "greeting": "{name}，你好：",
+      "ledeNewOwner": "{previousOwner} 已将 {organization} 的所有权转移给你。你现在是它的所有者。",
+      "ledePreviousOwner": "你已将 {organization} 的所有权转移给 {newOwner}。你现在是管理员。",
+      "detailNewOwner": "作为所有者，你拥有该组织的全部权限，并且只有你可以转移或删除它。",
+      "detailPreviousOwner": "你保留管理员的全部能力：工作区、成员、设置和账单。只有所有者可以转移或删除该组织。",
+      "open": "打开组织设置",
+      "notYou": "如果你没有预料到这项变更，请联系该组织的所有者。"
+    },
     "mentionNotification": {
       "subject": "{author}在{identifier}中提到了你：{title}",
       "preview": "{author}在{identifier}中提到了你",

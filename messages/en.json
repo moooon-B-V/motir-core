@@ -763,6 +763,17 @@
       "freshLink": "For your security, the file is not attached and there is no download link in this email. Each Download makes a fresh, private link that expires after five minutes.",
       "retention": "We keep the file for {days} days, then delete it. After that, you can ask for a new export at any time."
     },
+    "ownershipTransferred": {
+      "subject": "Ownership of {organization} has moved to {newOwner}",
+      "preview": "{newOwner} is now the owner of {organization}",
+      "greeting": "Hi {name},",
+      "ledeNewOwner": "{previousOwner} transferred ownership of {organization} to you. You are now its Owner.",
+      "ledePreviousOwner": "You transferred ownership of {organization} to {newOwner}. You are now an Admin.",
+      "detailNewOwner": "As the Owner you hold every permission in the organization, and you alone can transfer it or delete it.",
+      "detailPreviousOwner": "You keep everything an Admin can do: workspaces, members, settings and billing. Only the Owner can transfer or delete the organization.",
+      "open": "Open organization settings",
+      "notYou": "If you did not expect this change, contact the organization's owner."
+    },
     "mentionNotification": {
       "subject": "{author} mentioned you on {identifier}: {title}",
       "preview": "{author} mentioned you on {identifier}",
