@@ -272,7 +272,11 @@ function TransferOwnershipDialog({
             list, the consequence line and an inline error can outgrow a short
             viewport, so the fields scroll and the footer below stays pinned. */}
         <Modal.Body className="gap-(--spacing-md)">
-          <fieldset disabled={isPending} className={isPending ? 'opacity-60' : undefined}>
+          {/* `min-w-0`: a fieldset's intrinsic minimum is its content's min-content
+              width, so inside Modal.Body's scroll box it would refuse to shrink and
+              push the role pills and the pager past the dialog's edge, where the
+              scroll box clips them (seen in the MOTIR-6167 acceptance recording). */}
+          <fieldset disabled={isPending} className={isPending ? 'min-w-0 opacity-60' : 'min-w-0'}>
             <legend className="mb-1.5 font-sans text-sm font-medium text-(--el-text)">
               {t('transfer.pickerLabel')}
             </legend>
@@ -346,6 +350,9 @@ function TransferOwnershipDialog({
             placeholder={orgName}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
+            // On a short viewport the body scrolls, and the field sits at its foot:
+            // bring the whole field (and its focus ring) into view while it is typed in.
+            onFocus={(e) => e.currentTarget.scrollIntoView?.({ block: 'nearest' })}
             disabled={isPending}
             autoComplete="off"
           />
