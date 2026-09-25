@@ -4744,6 +4744,12 @@ kind for which that is true.
 - The row's words, the two verbs' placement and copy, and the hand-off message
   before generation are MOTIR-6033's to draw.
 
+- **The PLAN-HELD status refusal uses this same door rule.** While an undecided
+  plan holds a card at `planning`, every hand move out of it is refused with
+  `PLAN_TARGET_HELD`, and the **Review plan** button on that refusal goes where
+  `planRowDestination` sends the plan — never the approval overlay
+  (`agent-authored-plans.md` AMENDMENT 20 §2; story MOTIR-6017).
+
 #### 11.5c HELD while the planner rewrites — NOT superseded, NOT re-raised
 
 While a new version of the plan is being written, **the gate stays `awaiting`
