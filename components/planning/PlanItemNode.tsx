@@ -77,8 +77,7 @@ function toKind(raw: string): IssueType {
  *
  * Its HOME is the one card (MOTIR-6296 · Part XXIII §23.4): `locked` is drawn
  * ONLY on a `modify` / `remove` whose target is terminal, which is a fact about a
- * PROPOSAL, so it lives with the proposal's layer. `PlanChangeDiffFrame` imports
- * it from here until MOTIR-6299 deletes that frame.
+ * PROPOSAL, so it lives with the proposal's layer, and nowhere else draws it.
  *
  * Deliberately SPARSE + palette-derived: the stripes must read as "hatched, so
  * not editable" without competing with the card's own title underneath (a dense
@@ -205,8 +204,7 @@ export function PlanItemNode({
       data-locked={locked ? 'true' : undefined}
       data-testid="plan-item-node"
       // A locked proposal cannot be applied — the approve is refused server-side
-      // for a finished target — so say so rather than imply it (the attribute
-      // `PlanChangeDiffFrame` carried for the same state).
+      // for a finished target — so say so rather than imply it.
       aria-disabled={locked ? true : undefined}
       // TOP ROW — the op badge (left) + the status pill / stale flag (right).
       statusRow={

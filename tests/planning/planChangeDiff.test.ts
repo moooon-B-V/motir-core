@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   changedFields,
-  diffStateForItem,
   indexPlanReview,
   isProposedNodeId,
   proposalForItem,
@@ -120,7 +119,13 @@ describe('proposedAddsForLevel', () => {
   });
 });
 
-describe('diffStateForItem', () => {
+// The per-item diff-STATE helper is DELETED (MOTIR-6299) with the level builder
+// that was its only caller (`planChangeLevel.tsx`). Its unconditional terminal lock — every `done` card on a level
+// drawn `locked` whenever any plan was pending — is the rule Part XXIII §23.4
+// retired: `locked` is now `PlanItemNode`'s `isLockedProposal`, a modify / remove
+// over a finished target, and `plan-item-node-shell.test.tsx` holds it (with
+// `plan-level-op-treatments.test.tsx` holding it through `mergePlanLevel`).
+describe('proposalForItem', () => {
   const index = indexPlanReview(
     planReview([
       planReviewItem({
@@ -133,31 +138,7 @@ describe('diffStateForItem', () => {
     ]),
   );
 
-  it('marks an item the proposal modifies as CHANGED', () => {
-    expect(diffStateForItem(index, { id: 'wi_21', status: 'todo' })).toBe('change');
-  });
-
-  it('marks an item the proposal removes as REMOVE — a state the engine really emits', () => {
-    // `expandItem` / `replan` append `remove` proposals; the delta contract this
-    // surface used to read had no op for them, so they were invisible before.
-    expect(diffStateForItem(index, { id: 'wi_24', status: 'todo' })).toBe('remove');
-  });
-
-  it('leaves an untouched item undecorated', () => {
-    expect(diffStateForItem(index, { id: 'wi_22', status: 'todo' })).toBeNull();
-  });
-
-  it('LOCKS finished work — the same terminal rule the approve enforces server-side', () => {
-    expect(diffStateForItem(index, { id: 'wi_12', status: 'done' })).toBe('locked');
-    expect(diffStateForItem(index, { id: 'wi_13', status: 'cancelled' })).toBe('locked');
-  });
-
-  it('LOCKED wins over a proposed change or removal (the approve would reject it)', () => {
-    expect(diffStateForItem(index, { id: 'wi_21', status: 'done' })).toBe('locked');
-    expect(diffStateForItem(index, { id: 'wi_24', status: 'done' })).toBe('locked');
-  });
-
-  it('hands back the proposal behind the state, so the node can name what changed', () => {
+  it('hands back the proposal that touches an item, so a caller can name what changed', () => {
     expect(proposalForItem(index, 'wi_21')?.op).toBe('modify');
     expect(proposalForItem(index, 'wi_24')?.op).toBe('remove');
     expect(proposalForItem(index, 'wi_99')).toBeUndefined();

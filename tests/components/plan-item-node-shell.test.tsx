@@ -6,10 +6,8 @@ import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode, isLockedProposal } from '@/components/planning/PlanItemNode';
 import { KIND_TINT, WorkItemNode } from '@/components/planning/WorkItemNode';
-import { ProposedAddNode } from '@/components/planning/PlanChangeDiffNode';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
-import type { ProposedAdd } from '@/lib/planning/planChangeDiff';
 
 // ONE CARD for a proposal and a committed work item (MOTIR-6296, absorbing bug
 // MOTIR-6196; design Part XXIII §23.4). `PlanItemNode` is a LAYER over
@@ -234,7 +232,7 @@ describe('ONE KIND_TINT', () => {
 });
 
 describe('ONE outcome spine', () => {
-  it('a decided add through PlanReviewCanvas draws exactly one spine', async () => {
+  it('a decided add through PlanReviewCanvas draws exactly one spine, and keeps the word', async () => {
     // No project key ⇒ no level read; the proposal renders alone.
     vi.stubGlobal(
       'fetch',
@@ -250,20 +248,11 @@ describe('ONE outcome spine', () => {
     );
     await screen.findByText('An accepted add');
     expect(container.querySelectorAll('[data-testid$="outcome-spine"]')).toHaveLength(1);
-  });
-
-  it('a decided add through ProposedAddNode draws exactly one spine, and keeps the word', () => {
-    const add: ProposedAdd = {
-      nodeId: 'proposed:pi_1',
-      item: item({ title: 'An accepted add' }),
-      parentNodeId: null,
-      hasChildren: false,
-    };
-    const { container } = renderWithIntl(<ProposedAddNode add={add} outcome="accepted" />);
-    expect(container.querySelectorAll('[data-testid$="outcome-spine"]')).toHaveLength(1);
-    // The frame still carries the outcome WORD, so the decided state is not
-    // reduced to the spine's colour.
-    expect(screen.getByTestId('plan-change-outcome').textContent).toBe('accepted');
+    // The card still carries the outcome WORD, so the decided state is not
+    // reduced to the spine's colour. (This limb was asserted on the planning
+    // surface's own add frame until MOTIR-6299 deleted it; every pane with a
+    // plan now draws through this canvas.)
+    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('accepted');
   });
 });
 

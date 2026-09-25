@@ -300,11 +300,11 @@ const itemPage = (page: Page) => page.getByRole('main');
 const entrance = (page: Page) => itemPage(page).getByTestId('work-item-plan-entrance');
 /** A PROPOSED `add`, as the PLAN PAGE draws it.
  *
- *  ⚠️ `PlanItemNode`'s `data-op`, NOT `PlanChangeDiffFrame`'s `data-diff-state`
- *  (MOTIR-6155). Once a plan is proposed the left pane mounts the plan page's own
- *  List | Canvas component, so a proposal here is the same node `/plans/<id>`
- *  draws. The diff frames remain the UNDECORATED roadmap's language, which is
- *  what this surface shows with no plan — asserted as an absence at the empty
+ *  ⚠️ `PlanItemNode`'s `data-op` (MOTIR-6155). Once a plan is proposed the left
+ *  pane mounts the plan page's own List | Canvas component, so a proposal here is
+ *  the same node `/plans/<id>` draws — the one proposal card, since MOTIR-6299
+ *  deleted this surface's own diff frame. With no plan the pane is the plain
+ *  roadmap, and no proposal card is on it — asserted as an absence at the empty
  *  state below. */
 const addFrames = (page: Page) => workspace(page).locator('[data-op="add"]');
 /** The shipped List | Canvas switch, inside the overlay (MOTIR-6155).
@@ -492,7 +492,7 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     await expect(workspace(page).getByTestId('roadmap-canvas')).toBeVisible();
     await expect(confirmBar(page)).toHaveCount(0);
     await expect(railReview(page)).toHaveCount(0);
-    await expect(workspace(page).getByTestId('plan-change-diff-node')).toHaveCount(0);
+    await expect(workspace(page).getByTestId('plan-item-node')).toHaveCount(0);
   });
   await dwell(page);
 
@@ -765,8 +765,7 @@ test('re-planning the PARENT goes through the same confirm', async ({ page, acce
   );
   await crumb(page, 'Roadmap').click();
   await rootLevel;
-  // `PlanItemNode`'s `data-op`, not the diff frame's `data-diff-state` — see
-  // `addFrames` above. Scoped to the dialog like every other locator here.
+  // `PlanItemNode`'s `data-op` — see `addFrames` above. Scoped to the dialog like every other locator here.
   await expect(workspace(page).locator('[data-op="modify"]')).toHaveCount(1);
 
   // Nothing written yet — the rename has not touched the item.

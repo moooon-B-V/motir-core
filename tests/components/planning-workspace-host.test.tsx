@@ -14,10 +14,10 @@ import type { PlanningTarget } from '@/lib/planning/planningTargets';
 // must carry, and — since MOTIR-1730 — the wiring between the conversation, the
 // canvas diff and the confirm-to-persist gate.
 //
-// The canvas is STUBBED: `PlanChangeCanvas` fetches its own levels, and its
-// decoration is covered by `plan-change-level.test.tsx`. What matters here is
-// that the host mounts it for a populated project (with the proposal it should
-// draw), and swaps in the empty state otherwise.
+// The canvas is STUBBED: `PlanChangeCanvas` fetches its own levels, and a plan's
+// op treatments are `mergePlanLevel`'s (`plan-level-op-treatments.test.tsx`).
+// What matters here is that the host mounts it for a populated project, and
+// swaps in the empty state otherwise.
 
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 /** The host's `onClose` is REQUIRED since MOTIR-4732 — there is no `backHref`
@@ -57,7 +57,6 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     projectKey,
     ariaLabel,
     diffKey,
-    outcome,
     targetIds,
     initialTrail,
     followTo,
@@ -67,7 +66,6 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     projectKey: string;
     ariaLabel?: string;
     diffKey: string | number;
-    outcome?: string | null;
     targetIds?: readonly string[];
     initialTrail?: readonly { id: string; label: string }[];
     followTo?: { key: string; trail: readonly { id: string; label: string }[] } | null;
@@ -78,7 +76,6 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
       data-testid="canvas-stub"
       data-project={projectKey}
       data-diff-key={String(diffKey)}
-      data-outcome={outcome ?? ''}
       data-targets={(targetIds ?? []).join(',')}
       data-trail={(initialTrail ?? []).map((c) => c.id).join(',')}
       // THE FOLLOW-MOVE's request (MOTIR-6161) — the host DERIVES it; the canvas

@@ -644,9 +644,7 @@ export function PlanningWorkspaceHost({
             ) : (
               <PlanChangeCanvas
                 projectKey={projectKey}
-                index={index}
                 diffKey={diffKey}
-                outcome={state.decided}
                 targetIds={targetIds}
                 initialTrail={initialCanvasTrail}
                 // MOTIR-6154/6161's follow-move. It stays on THIS branch of the
