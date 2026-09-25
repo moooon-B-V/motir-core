@@ -6,6 +6,7 @@ import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { linkPr } from './_helpers/pr-link';
 import { approvalSentence } from './_helpers/approval-sentence';
+import { closeOverlay, openDevelopmentOverlay } from './_helpers/development-decide';
 import {
   API_REPO,
   WEB_REPO,
@@ -180,15 +181,29 @@ async function mergedWebhook(
   );
 }
 
-/** Press Approve and merge, read the confirm step, confirm, and wait for the action. */
+/** One pull-request row of the approval overlay's Development block. */
+const overlayRow = (dialog: Locator, repo: SeedRepo, number: number): Locator =>
+  dialog.locator('li').filter({ hasText: prName(repo, number) });
+
+/**
+ * Press Approve and merge, read the confirm step, confirm, and wait for the action — IN THE
+ * APPROVAL OVERLAY, opened from the card's Development band. Returns the still-open dialog,
+ * where the press's own outcomes are drawn.
+ *
+ * ⚠️ AMENDED by MOTIR-6323: the verb moved OFF the item page — the Development section hands
+ * the decision over like every other section (design-notes § *The item page HANDS THE
+ * DECISION OVER*, planning flag 2). The press, its confirm step and every consequence it
+ * lists are unchanged; only the door to them moved, the MOTIR-5440 / MOTIR-5999 precedent
+ * this file already carries.
+ */
 async function pressApproveAndMerge(
   page: Page,
   card: SeededCard,
   scenario: Scenario,
   messages: typeof en = en,
-): Promise<void> {
+): Promise<Locator> {
   const pra = messages.approvalGate.pullRequestApproval;
-  const dev = developmentCard(page, messages.github.development.title);
+  const dev = await openDevelopmentOverlay(page, messages);
   await dev.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }).click();
   for (const [repo, pr] of [
     [WEB_REPO, PRS[scenario].web],
@@ -211,6 +226,7 @@ async function pressApproveAndMerge(
     })
     .click();
   expect((await action).status()).toBe(200);
+  return dev;
 }
 
 test.describe('approve and merge a card’s pull requests in Motir', () => {
@@ -291,7 +307,7 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
     );
     await beat();
 
-    await chapter('The card: one frame over both pull requests and How to test', async () => {
+    await chapter('The card: one question over both pull requests and How to test', async () => {
       // ⚠️ THE ROW'S WORK-ITEM LINK, NOT ITS DECIDE CELL (amended by MOTIR-5440). This row's
       // decide cell used to read *Open work item* and lead here; since the overlay can render
       // this kind it reads *Review* and opens the overlay instead. What this chapter is about
@@ -312,12 +328,19 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       ).toBeVisible();
       await page.goto(`/items/${seed.merged.identifier}`);
       await expect(page).toHaveURL(new RegExp(`/items/${seed.merged.identifier}$`));
-      const dev = developmentCard(page);
-      await expect(dev).toHaveCount(1, { timeout: 60_000 });
-      const port = dev.getByRole('group', { name: 'The subject being decided', exact: true });
-      await expect(port.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
+      const card = developmentCard(page);
+      await expect(card).toHaveCount(1, { timeout: 60_000 });
+      await expect(card.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
       await expect(prRow(page, WEB_REPO, mergedWeb)).toHaveCount(1);
       await expect(prRow(page, API_REPO, mergedApi)).toHaveCount(1);
+      // ⚠️ AMENDED by MOTIR-6323: the card asks the question with ONE control and no verb;
+      // the frame over both pull requests and How to test is the approval overlay's.
+      await expect(card.getByRole('button', { name: pra.verb.approveAndMerge })).toHaveCount(0);
+      const dev = await openDevelopmentOverlay(page);
+      const port = dev.getByRole('group', { name: 'The subject being decided', exact: true });
+      await expect(port.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
+      await expect(overlayRow(dev, WEB_REPO, mergedWeb)).toHaveCount(1);
+      await expect(overlayRow(dev, API_REPO, mergedApi)).toHaveCount(1);
       await expect(dev.getByRole('button', { name: pra.verb.approveAndMerge })).toBeVisible();
       await expect(
         dev.getByText(
@@ -331,6 +354,7 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
           { exact: true },
         ),
       ).toBeVisible();
+      await closeOverlay(page);
     });
     await beat();
 
@@ -356,7 +380,7 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
         await signIn(page, seed.ownerEmail, seed.password);
         await page.goto(`/items/${seed.merged.identifier}`);
         await expect(developmentCard(page)).toHaveCount(1, { timeout: 60_000 });
-        await pressApproveAndMerge(page, seed.merged, 'merged');
+        const dev = await pressApproveAndMerge(page, seed.merged, 'merged');
 
         // The press reached the merge seam — and not the real host — for both pull requests.
         const merges = journal()
@@ -365,13 +389,14 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
         expect(merges).toEqual(
           expect.arrayContaining([prKey(WEB_REPO, mergedWeb), prKey(API_REPO, mergedApi)]),
         );
+        await expect(
+          overlayRow(dev, WEB_REPO, mergedWeb).getByText(pra.outcome.merged, { exact: true }),
+        ).toBeVisible();
+        await expect(
+          overlayRow(dev, API_REPO, mergedApi).getByText(pra.outcome.merged, { exact: true }),
+        ).toBeVisible();
+        await closeOverlay(page);
         await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
-        await expect(
-          prRow(page, WEB_REPO, mergedWeb).getByText(pra.outcome.merged, { exact: true }),
-        ).toBeVisible();
-        await expect(
-          prRow(page, API_REPO, mergedApi).getByText(pra.outcome.merged, { exact: true }),
-        ).toBeVisible();
       },
     );
     await beat();
@@ -392,14 +417,15 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       const api = PRS.queued.api.number;
       await page.goto(`/items/${seed.queued.identifier}`);
       await expect(developmentCard(page)).toHaveCount(1, { timeout: 60_000 });
-      await pressApproveAndMerge(page, seed.queued, 'queued');
+      const dev = await pressApproveAndMerge(page, seed.queued, 'queued');
 
       await expect(
-        prRow(page, API_REPO, api).getByText(pra.outcome.queued, { exact: true }),
+        overlayRow(dev, API_REPO, api).getByText(pra.outcome.queued, { exact: true }),
       ).toBeVisible();
       await expect(
-        prRow(page, WEB_REPO, web).getByText(pra.outcome.merged, { exact: true }),
+        overlayRow(dev, WEB_REPO, web).getByText(pra.outcome.merged, { exact: true }),
       ).toBeVisible();
+      await closeOverlay(page);
       await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
       expect(
         journal().some((c) => c.path === '/graphql' && c.pullRequest === prKey(API_REPO, api)),
@@ -482,8 +508,11 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
       // The card by its address, for the reason the English chapter gives (MOTIR-5999).
       await page.goto(`/items/${seed.zh.identifier}`);
       await expect(page).toHaveURL(new RegExp(`/items/${seed.zh.identifier}$`));
-      const dev = developmentCard(page, zh.github.development.title);
-      await expect(dev).toHaveCount(1, { timeout: 60_000 });
+      await expect(developmentCard(page, zh.github.development.title)).toHaveCount(1, {
+        timeout: 60_000,
+      });
+      // ⚠️ AMENDED by MOTIR-6323: the verb and its consequence are the overlay's.
+      const dev = await openDevelopmentOverlay(page, zh as unknown as typeof en);
       await expect(dev.getByRole('button', { name: zpra.verb.approveAndMerge })).toBeVisible();
       await expect(
         dev.getByText(
@@ -494,17 +523,15 @@ test.describe('approve and merge a card’s pull requests in Motir', () => {
           { exact: true },
         ),
       ).toBeVisible();
-      await pressApproveAndMerge(page, seed.zh, 'zh', zh as unknown as typeof en);
+      await closeOverlay(page);
+      const pressed = await pressApproveAndMerge(page, seed.zh, 'zh', zh as unknown as typeof en);
       await expect(
-        prRow(page, WEB_REPO, web, zh.github.development.title).getByText(zpra.outcome.merged, {
-          exact: true,
-        }),
+        overlayRow(pressed, WEB_REPO, web).getByText(zpra.outcome.merged, { exact: true }),
       ).toBeVisible();
       await expect(
-        prRow(page, API_REPO, api, zh.github.development.title).getByText(zpra.outcome.merged, {
-          exact: true,
-        }),
+        overlayRow(pressed, API_REPO, api).getByText(zpra.outcome.merged, { exact: true }),
       ).toBeVisible();
+      await closeOverlay(page);
     });
     await beat();
   });
