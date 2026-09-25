@@ -24,7 +24,10 @@ import {
 import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
-import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
+import {
+  usePlanChangeConversation,
+  type PlanChangeConversationState,
+} from '@/lib/hooks/usePlanChangeConversation';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import {
   closeLosesProposal,
@@ -386,6 +389,21 @@ export function PlanningWorkspaceHost({
     review: state.review,
     rewriting: state.phase === 'streaming' && state.planId !== null,
   });
+  // ── THE CONVERSATION HAPPENED ELSEWHERE (MOTIR-6298; design Part XXIII §23.11) ─────
+  //
+  // An MCP agent plans in its own harness, so its session can reach this surface
+  // holding NO turns (MOTIR-6157). The rail then names the harness. WHO WROTE the
+  // plan is read off its own attribution — `authorSource` alone, as the plan page's
+  // `ReviewAttribution` does, never inferred from `sourceJobId` — from the live
+  // review while an agent is still writing it and from the proposed one after.
+  //
+  // ⚠️ KEYED ON THE SESSION, AND LATCHED. The note shows when the plan is read while
+  // the session holds zero turns, and it STAYS once a turn is sent — it is still
+  // true, and sending clears `review` for the new run, so a live derivation would
+  // drop it the moment the person used the composer. An MCP session that ALREADY
+  // had turns when its plan was read never latches, and renders as before.
+  const conversationElsewhere = useConversationElsewhere(state);
+
   // ── THE PLAN PAGE'S OWN List | Canvas, ON THIS SURFACE (Subtask MOTIR-6186) ────────
   //
   // Once the conversation holds a PROPOSED plan, the left pane renders the very
@@ -709,8 +727,41 @@ export function PlanningWorkspaceHost({
           onCancelDecline={() => setDeclineFrom(null)}
           onConfirmDecline={confirmDecline}
           staleRefused={staleRefusedAt === 'rail'}
+          conversationElsewhere={conversationElsewhere}
         />
       }
     />
   );
+}
+
+/**
+ * The harness an MCP-authored plan's conversation happened in, for the session
+ * that opened here with NO turns (MOTIR-6298; design §23.11) — latched per
+ * session id so it survives the turns sent after it. `null` for a hosted plan
+ * (`authorSource` other than `mcp`), a plan with no recorded harness, and a
+ * session that already held turns when its plan was read.
+ */
+function useConversationElsewhere(state: PlanChangeConversationState): { harness: string } | null {
+  const sessionId = state.session?.id ?? null;
+  const plan = state.liveReview ?? state.review;
+  const harness =
+    sessionId !== null &&
+    (state.session?.turns.length ?? 0) === 0 &&
+    plan?.authorSource === 'mcp' &&
+    plan.authorHarness
+      ? plan.authorHarness
+      : null;
+  const [latched, setLatched] = useState<{ sessionId: string; harness: string } | null>(null);
+  // Adjusting state while rendering (React's documented pattern for a value
+  // derived from a transition): the latch is set in the same render that first
+  // sees the zero-turn MCP plan, so the note never flashes in a frame late.
+  if (
+    harness !== null &&
+    sessionId !== null &&
+    (latched?.sessionId !== sessionId || latched.harness !== harness)
+  ) {
+    setLatched({ sessionId, harness });
+  }
+  if (harness !== null) return { harness };
+  return latched !== null && latched.sessionId === sessionId ? { harness: latched.harness } : null;
 }

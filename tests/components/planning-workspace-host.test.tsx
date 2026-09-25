@@ -1086,3 +1086,108 @@ describe('PlanningWorkspaceHost — the follow-move request', () => {
     expect(canvas().getAttribute('data-follow-key')).toBe('');
   });
 });
+
+// THE ZERO-TURN MCP RAIL (Subtask MOTIR-6298; design Part XXIII §23.11). The host
+// derives the rail's note from the plan's OWN attribution — the live review while an
+// agent writes it, the proposed review after — and the thread's turn count, and keeps
+// it once a turn is sent, because it is still true.
+describe('PlanningWorkspaceHost — the conversation happened ELSEWHERE (MOTIR-6298)', () => {
+  const PARAMS = { mode: 'replan', from: 'project', planSession: 's1' };
+  const note = () => screen.queryByTestId('planning-mcp-no-turns');
+  const byAgent = (
+    over: Partial<ReturnType<typeof planReview>> = {},
+  ): ReturnType<typeof planReview> =>
+    planReview([planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', kind: 'story' })], {
+      authorSource: 'mcp',
+      authorHarness: 'Claude Code',
+      ...over,
+    });
+  const WRITING: PlanChangeConversationState = {
+    ...IDLE,
+    planId: 'plan-1',
+    liveReview: byAgent({ status: 'generating' }),
+  };
+  const withTurn = (state: PlanChangeConversationState): PlanChangeConversationState => ({
+    ...state,
+    session: {
+      ...IDLE.session!,
+      turnCount: 1,
+      turns: [
+        {
+          id: 't1',
+          seq: 1,
+          role: 'user',
+          body: 'Split the billing story.',
+          jobId: 'job-2',
+          question: null,
+          isAnswer: false,
+          intent: null,
+          intentCorrected: false,
+          citations: [],
+          authorId: 'u1',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    },
+  });
+
+  it('names the harness from the LIVE review of a plan an agent is still writing', () => {
+    renderHost(PARAMS, { state: WRITING });
+    expect(note()?.textContent).toContain('happened in Claude Code,');
+    // The composer stays live beside it.
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false);
+  });
+
+  it('names it from the PROPOSED review once the plan is proposed', () => {
+    renderHost(PARAMS, {
+      state: { ...IDLE, phase: 'review', planId: 'plan-1', review: byAgent() },
+    });
+    expect(note()?.textContent).toContain('happened in Claude Code,');
+  });
+
+  it('never shows for a HOSTED plan — its conversation IS the rail', () => {
+    renderHost(PARAMS, {
+      state: {
+        ...IDLE,
+        planId: 'plan-1',
+        liveReview: byAgent({ status: 'generating', authorSource: 'native', authorHarness: null }),
+      },
+    });
+    expect(note()).toBeNull();
+  });
+
+  it('does not show for an MCP plan with NO recorded harness', () => {
+    renderHost(PARAMS, {
+      state: { ...WRITING, liveReview: byAgent({ status: 'generating', authorHarness: null }) },
+    });
+    expect(note()).toBeNull();
+  });
+
+  it('does not show for an MCP session that ALREADY had turns when its plan was read', () => {
+    renderHost(PARAMS, { state: withTurn(WRITING) });
+    expect(note()).toBeNull();
+  });
+
+  it('⭐ STAYS once a turn is sent — the new run clears the review, and it is still true', () => {
+    const { rerender } = renderHost(PARAMS, { state: WRITING });
+    expect(note()).not.toBeNull();
+
+    // The person asks Motir AI: the thread gains a turn and the run's own state
+    // replaces the agent's review.
+    conversation.state = { ...withTurn(IDLE), phase: 'streaming', jobId: 'job-2' };
+    rerender(hostElement(PARAMS));
+    expect(note()?.textContent).toContain('happened in Claude Code,');
+  });
+
+  it('is keyed on the SESSION — a different session does not inherit it', () => {
+    const { rerender } = renderHost(PARAMS, { state: WRITING });
+    expect(note()).not.toBeNull();
+
+    conversation.state = {
+      ...withTurn(IDLE),
+      session: { ...withTurn(IDLE).session!, id: 's2' },
+    };
+    rerender(hostElement(PARAMS));
+    expect(note()).toBeNull();
+  });
+});

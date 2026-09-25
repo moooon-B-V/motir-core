@@ -6771,7 +6771,8 @@
       "reopened": "从计划页面重新打开 · 发起人 {name} · 最近活动 {when}",
       "reopenedYours": "从计划页面重新打开 · 由你发起 · 最近活动 {when}",
       "readOnly": "你可以阅读此对话。继续对话需要使用 Motir AI 规划的权限。",
-      "someone": "某人"
+      "someone": "某人",
+      "mcpNoTurns": "此计划背后的对话发生在 {harness} 中，因此不会显示在这里。可在下方提出修改。"
     },
     "arrival": {
       "crumbTargetPrefix": "规划目标：",

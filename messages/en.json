@@ -6775,7 +6775,8 @@
       "reopened": "Reopened from the Plans page · started by {name} · last active {when}",
       "reopenedYours": "Reopened from the Plans page · started by you · last active {when}",
       "readOnly": "You can read this conversation. Continuing it needs permission to plan with Motir AI.",
-      "someone": "someone"
+      "someone": "someone",
+      "mcpNoTurns": "The conversation behind this plan happened in {harness}, so it isn’t shown here. Ask below to change the plan."
     },
     "arrival": {
       "crumbTargetPrefix": "Planning target:",
