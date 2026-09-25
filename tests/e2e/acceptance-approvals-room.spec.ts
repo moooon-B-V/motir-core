@@ -28,6 +28,19 @@ import { seedApprovalsRoom, type ApprovalsRoomSeed } from './_helpers/approvals-
 //      does not see a colleague's decision — seeded, present in the database, absent
 //      from their page. A reader holding the key, at the same `/approvals`, does.
 //
+// ⚠️ AMENDED ON THE RECORD — Story MOTIR-6179 (MOTIR-6328 · MOTIR-6333 · MOTIR-6337).
+// Claim 2's premise stopped describing the built-in MEMBER: the DECISION card
+// MOTIR-6165 (Q2) gave `member` and `viewer` `approval:view_any`, so the reviewer
+// below is no longer "a reader without the key". What this receipt still proves is
+// true and is NOT rewritten: the reviewer has records of their own, so a clean
+// arrival serves the room's MINE view (design MOTIR-6327's default), and Mine is
+// exactly "routed to me or decided by me" — the colleague's decision stays absent;
+// the admin, with no records of their own, lands on PROJECT and sees it; the
+// custom role holding only the key has Project alone. The assertions are unchanged
+// (the disposition is KEEP, per `CLAUDE.md` § acceptance receipts). A reader who
+// truly lacks the key — a custom role without it — and the Viewer / Member / custom
+// walk across all three rooms are `acceptance-rooms-view-tabs.spec.ts`'s.
+//
 // ── THE DOOR IS PART OF THE ACCEPTANCE ──────────────────────────────────────
 //
 // `canOfferNavDestination` answers FALSE for an href the nav map does not carry,

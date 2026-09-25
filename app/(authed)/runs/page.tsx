@@ -285,6 +285,12 @@ async function RunsIndexData({
 
   return (
     <RunsIndex
+      // ⚠️ KEYED ON WHAT THE ROWS WERE READ FOR (`CLAUDE.md` § page state, case 3):
+      // the island seeds `useState(initialLive / initialPast)` ONCE, so a Mine /
+      // Project switch — a real navigation that re-reads both sections — would
+      // otherwise hand it new props and keep the old rows until a poll, which
+      // runs only while something is live (MOTIR-6337's walk caught it).
+      key={`${view}|${scopeKey ?? ''}`}
       projectKey={projectKey}
       scopeKey={scopeKey}
       view={view}
