@@ -16,7 +16,7 @@ import type { ReportedCheckRun } from '@/lib/github/checkRuns';
 import { reconcileRecordedCheckSet, shaSetClaimsComplete } from './checkSetReconcile';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
-import { promoteDeliveredCardsOnGreen } from './ciPromotion';
+import { promoteDeliveredCardsOnGreen, withdrawDeliveredCardsOnRed } from './ciPromotion';
 import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
@@ -531,6 +531,29 @@ export async function applyCiStatusFeedback(
   // durable write may never fail it. A promotion that throws would turn a
   // recorded verdict into a delivery the host retries forever, and the retry
   // would re-post nothing and re-promote nothing — the state is already right.
+  // ── AND A TERMINAL RED WITHDRAWS THE QUESTION (MOTIR-6271) ──────────────
+  // The mirror of the promotion below, on the same terms and for the same reason: the
+  // approve-to-merge question rides on the green set (`approval-gates.md` §8's amendment,
+  // decision 2), so the verdict that takes the set out of green must retire it. Until this
+  // call the consumer did everything about a red build EXCEPT the one thing that mattered —
+  // it re-rendered the comment as ❌ and recomputed `ciState` to `failing`, and left the
+  // card at In Review with an `awaiting` gate over the very commits that had just failed.
+  //
+  // Best-effort and AFTER the durable writes, exactly like the promotion: a withdrawal that
+  // throws must not turn a recorded verdict into a delivery the host retries for ever.
+  if (ciState === 'failing') {
+    await withdrawDeliveredCardsOnRed({
+      changeRequestId: resolved.prId,
+      workspaceId: resolved.workspaceId,
+      actorUserId: resolved.actorUserId,
+    }).catch((err: unknown) => {
+      console.error('[changeRequestCiFeedback] withdrawal failed; the verdict still stands', {
+        changeRequestId: resolved.prId,
+        error: err instanceof Error ? err.message : 'unknown',
+      });
+    });
+  }
+
   const promoted =
     ciState === 'passing'
       ? await promoteDeliveredCardsOnGreen({

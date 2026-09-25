@@ -317,6 +317,69 @@ export async function withdrawPullRequestApprovalGatesOnConflict(
 }
 
 /**
+ * WITHDRAW on a RED BUILD: CI reported a terminal FAILURE at the commits the question was
+ * asked about (MOTIR-6271; `approval-gates.md` §8's amendment, decision 2).
+ *
+ * ⚠️ THIS IS THE CAUSE THE ENUMERATION WAS MISSING, NOT A NEW RULE. Decision 2 states the
+ * governing principle over EVERY event — *the question rides on the green set, so every
+ * event that takes the set out of green withdraws it … an unanswered question about a set
+ * that is no longer green is not a question anybody can act on* — and then lists four
+ * events, none of which is the most direct way a set stops being green. So a gate raised on
+ * a green verdict and contradicted by the build minutes later stood for ever: the feedback
+ * consumer re-rendered its comment as ❌ and recomputed `ciState` to `failing`, and the card
+ * kept asking a person to approve a pull request whose suite was red.
+ *
+ * ⚠️ AND IT IS THE ACCEPTED ANSWER TO A FALLIBLE RAISE, WHICH IS WHY IT IS NOT MERELY A
+ * TIDY-UP. `ci-verdict-expected-check-set.md` accepts, in its failure modes 1 and 3, that
+ * the raise CANNOT be made exact: a host read sees only the runs GitHub has CREATED, and a
+ * host that cannot be reached answers `null` and falls back to the recorded set. Both leave
+ * a window in which a verdict is formed over a partial set, and this is the correction the
+ * ADR's own principle prescribes for it.
+ *
+ * ⚠️ GATES ONLY — the Implemented hold that goes with it is a STATUS write, which this
+ * module may not reach (it imports no service; see the header). `ciPromotion`'s
+ * `withdrawDeliveredCardsOnRed` composes the two, exactly as
+ * `pullRequestMergeabilityService.withdrawForConflict` does for the conflict class.
+ *
+ * A gate a person already DECIDED is untouched, as with every cause here: §8's decision 5
+ * settles that a failure after approval re-opens the merge question alone, through its own
+ * doors.
+ */
+export async function withdrawPullRequestApprovalGatesOnCiFailure(
+  pullRequestId: string,
+  tx: Prisma.TransactionClient,
+): Promise<number> {
+  let withdrawn = 0;
+  for (const { workItemId } of await workItemDeliveryRepository.listByPullRequest(
+    pullRequestId,
+    tx,
+  )) {
+    withdrawn += await approvalGateRepository.supersedeAwaitingByWorkItem(
+      workItemId,
+      KIND,
+      'ci_failed',
+      tx,
+    );
+    // The acceptance question rides on the same green set (MOTIR-5903): a story run's
+    // receipt is evidence for the one approve-to-merge decision, so a red build retires it
+    // with the merge question under the same cause.
+    if (await acceptanceNoLongerOwed(workItemId, tx)) {
+      await approvalGateRepository.supersedeAwaitingByWorkItem(
+        workItemId,
+        ACCEPTANCE_KIND,
+        'ci_failed',
+        tx,
+      );
+    }
+    // Ask what the card should hold NOW (MOTIR-5663). The verdict is red, so the predicate
+    // answers *no merge gate* and nothing goes back up — the NEXT green raises it. A design
+    // gate the card is owed and does not have still goes up from the same statement.
+    await reraiseAfterWithdrawal(workItemId, tx);
+  }
+  return withdrawn;
+}
+
+/**
  * WITHDRAW on a SET CHANGE: a delivery row joined or left this card, so the set its gate
  * asked about is not the set it now carries. Called by every writer of `work_item_delivery`
  * (`githubPullRequestService`'s two link arms and two unlink arms), only when the write

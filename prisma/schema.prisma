@@ -4642,6 +4642,12 @@ enum ApprovalGateSupersedeCause {
   conflict
   /// A delivery row joined or left the card.
   set_changed
+  /// CI reported a terminal FAILURE at the very commits the gate asked about
+  /// (MOTIR-6271, for the bug of the same key; `approval-gates.md` §8's amendment,
+  /// decision 2 — *every event that takes the set out of green withdraws it*).
+  /// The CAN'T-LAND class, reached from the build rather than from the base:
+  /// a red set cannot merge, so the question stops being one anybody can act on.
+  ci_failed
   /// The work was pulled out of review, or moved to Cancelled.
   pulled_back
   /// A person re-opened a decided design gate (AMENDMENT 6 Q3's door back).

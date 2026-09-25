@@ -175,6 +175,15 @@ export function withdrawnMergeCopy({
               cite: pra('withdrawn.citeConflict'),
             };
       }
+      case 'ci_failed':
+        // A RED BUILD AT THE ASKED-ABOUT COMMITS (MOTIR-6271). The members carry no CI
+        // verdict on this row — `WithdrawnMember` is what the Development block draws, and
+        // the pill is rendered from the delivery's own `ciState` beside it — so the sentence
+        // says what the CAUSE records and names nobody. The cite is the RE-ASK one while a
+        // member is still open, and that promise is exact here: a push fixing the build
+        // raises a fresh gate on its next green, which is the whole point of withdrawing
+        // rather than leaving the question standing over a commit that failed.
+        return { ...unrecorded('ci_failed'), cite: reask };
       case 'pulled_back':
         return {
           meta: pra('meta.withdrawnPulledBack', { count }),
