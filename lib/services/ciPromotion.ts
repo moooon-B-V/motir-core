@@ -25,7 +25,12 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { settleGreenVerdict, type AutoMergeRequest } from './mergeGates';
-import { raisePullRequestApprovalGate } from './pullRequestApprovalGates';
+import { queueExitCardMoves, settleUnlandedOutcome } from './mergeQueueExitService';
+import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
+import {
+  raisePullRequestApprovalGate,
+  withdrawPullRequestApprovalGatesOnCiFailure,
+} from './pullRequestApprovalGates';
 import { evaluateAfterRaise } from './pullRequestReviewSync';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
@@ -302,6 +307,76 @@ export async function promoteDeliveredCardsOnGreen(args: {
   const promoted = await promoteEach(targets.promote, ctx);
   await reRaiseMergeGates(targets.reRaise, ctx);
   return promoted;
+}
+
+/**
+ * THE OTHER DIRECTION OF THE LATCH — CI has just reported a terminal FAILURE
+ * (MOTIR-6271; `approval-gates.md` §8's amendment, decision 2).
+ *
+ * ⚠️ WHY IT BELONGS BESIDE THE PROMOTION AND NOT IN THE FEEDBACK CONSUMER. This module is
+ * the ONE place a CI verdict is allowed to move a card between `implemented` and
+ * `in_review` — the header above says so of the green direction, and a red verdict moving
+ * it back is the same authority exercised the other way. Splitting them would give the
+ * pair two homes and let them drift about which statuses they touch, which is the defect
+ * `everyDeliveryIsGreen`'s own doc block argues against for the two green edges.
+ *
+ * It withdraws the approve-to-merge question over every card the change request delivers,
+ * and HOLDS at Implemented each card that was waiting on a person. The shape is
+ * `pullRequestMergeabilityService.withdrawForConflict`'s, deliberately: a red build and a
+ * conflict are the same CAN'T-LAND class (§ 28's class table) reached from two directions,
+ * so they take the same lock order, the same `settleUnlandedOutcome` and the same
+ * only-a-card-at-`in_review`-moves rule.
+ *
+ * ⚠️ ONLY A CARD AT `in_review` MOVES. That is where a person is being asked; a card at
+ * Implemented already, Approved mid-merge, or in a terminal status is left exactly where it
+ * is — the gate is still withdrawn, which is the part that matters for *To approve*. A
+ * DECIDED gate is untouched on every path (§8's decision 5).
+ *
+ * Best-effort, like the promotion: it runs after the feedback comment and the `ciState`
+ * write have committed, and it must never turn a recorded verdict into a webhook the host
+ * retries for ever.
+ */
+export async function withdrawDeliveredCardsOnRed(args: {
+  changeRequestId: string;
+  workspaceId: string;
+  actorUserId: string;
+}): Promise<{ withdrawn: number; moved: string[] }> {
+  const ctx = { userId: args.actorUserId, workspaceId: args.workspaceId };
+  const outcome = await withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, args.workspaceId);
+    const pr = await githubPullRequestRepository.findByIdWithInstallation(args.changeRequestId, tx);
+    // ⚠️ RE-DERIVE, never trust the delivery that woke us. The event that called this is one
+    // check; the question is whether the PULL REQUEST is red at its latest recorded sha,
+    // which is the same reading `derivePrCiState` gives the pill and the promotion. A single
+    // red check on a superseded run must retire nothing.
+    if (!pr || derivePrCiState(pr.checkRuns) !== 'failing') {
+      return { withdrawn: 0, moved: [] as string[] };
+    }
+    const refs = await resolveDeliveredWorkItems(args.changeRequestId, tx);
+    // LOCK ORDER — each card's awaiting gates, then the card (ADR §6d amendment, rule 8),
+    // the order `applyStatusTransition` takes them in.
+    for (const ref of refs) await queueExitCardMoves.lockCard(ref.id, tx);
+    const withdrawn = await withdrawPullRequestApprovalGatesOnCiFailure(args.changeRequestId, tx);
+    const moved: string[] = [];
+    for (const ref of refs) {
+      const item = await workItemRepository.findById(ref.id, tx);
+      // `TARGET_STATUS` — the very status the green direction moves a card TO, read back
+      // here as the only status the red direction moves one FROM. One constant for both,
+      // so the pair cannot drift about which rung the person is being asked at.
+      if (!item || item.status !== TARGET_STATUS) continue;
+      const settled = await settleUnlandedOutcome(item, 'cant_land', ctx, tx);
+      if (settled.transition) moved.push(item.id);
+    }
+    return { withdrawn, moved };
+  });
+  if (outcome.withdrawn > 0 || outcome.moved.length > 0) {
+    console.warn('[ciPromotion] a red build withdrew the approve-to-merge question', {
+      changeRequestId: args.changeRequestId,
+      withdrawn: outcome.withdrawn,
+      heldAtImplemented: outcome.moved.length,
+    });
+  }
+  return outcome;
 }
 
 /**
