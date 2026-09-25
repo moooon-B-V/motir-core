@@ -3841,7 +3841,12 @@
     "noActiveSprintTitle": "没有进行中的 Sprint",
     "noActiveSprintDescription": "此看板当前没有进行中的 Sprint。在待办列表中规划并开始一个 Sprint，其事项将在此处的工作流列中显示。",
     "noActiveSprintCta": "前往待办列表",
-    "announcementHeld": "{key} 已退回。{line}"
+    "announcementHeld": "{key} 已退回。{line}",
+    "announcementPlanHeld": "{key} 已退回。它由 {plan} 占用。{line}",
+    "planHold": {
+      "marker": "计划 · {name}",
+      "siblings": "{count, plural, =0 {此面板上没有其他工作项属于该计划。} other {此面板上还有 # 个工作项属于该计划。}}"
+    }
   },
   "ready": {
     "heading": "可开始",

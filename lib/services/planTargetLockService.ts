@@ -16,7 +16,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { PlanTargetLockedError } from '@/lib/planChange/errors';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
-import { planHoldFor } from '@/lib/plans/planHold';
+import { holdsWhile, planHoldFor } from '@/lib/plans/planHold';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
 import { classifyBlockerReadiness } from '@/lib/workItems/blockerReadiness';
 import {
@@ -492,7 +492,100 @@ export async function readPlanHoldWithin(
   };
 }
 
+/** A plan named by {@link readPlanHoldsWithin}: its label columns and status. */
+export interface HeldPlanSubject {
+  title: string | null;
+  anchorKey: string | null;
+  planStatus: PlanHoldDTO['planStatus'];
+}
+
+/**
+ * THE PLAN HOLD FOR MANY ITEMS AT ONCE (Story MOTIR-6017 · MOTIR-6268) — the
+ * batched twin of {@link readPlanHoldWithin}: ONE read of the items' plan-held
+ * leases joined to their plans, each row through the SAME `planHoldFor`, so a
+ * surface that lists many cards (the board) and the funnel that refuses one move
+ * cannot disagree. Only items at `planning` are read at all. Returns the hold per
+ * held item, and each holding plan's label columns.
+ */
+export async function readPlanHoldsWithin(
+  items: readonly { id: string; identifier: string; status: string }[],
+  tx: Prisma.TransactionClient,
+  now: Date = new Date(),
+): Promise<{ byItemId: Map<string, PlanHoldDTO>; plans: Map<string, HeldPlanSubject> }> {
+  const byItemId = new Map<string, PlanHoldDTO>();
+  const plans = new Map<string, HeldPlanSubject>();
+  const planning = items.filter((item) => item.status === PLANNING_STATUS_KEY);
+  if (planning.length === 0) return { byItemId, plans };
+  const itemById = new Map(planning.map((item) => [item.id, item]));
+  const locks = await planTargetLockRepository.listPlanHeldByWorkItemIds(
+    planning.map((item) => item.id),
+    tx,
+  );
+  for (const lock of locks) {
+    // The read asked for exactly these items, and a plan-held lock's plan is a
+    // cascading FK — both lookups resolve.
+    const item = itemById.get(lock.workItemId)!;
+    const plan = lock.plan!;
+    const hold = planHoldFor({ itemStatus: item.status, lock, planStatus: plan.status, now });
+    if (!hold.held) continue;
+    const anchorKey = plan.session?.targetKeys[0] ?? null;
+    byItemId.set(item.id, {
+      itemKey: item.identifier,
+      workItemId: item.id,
+      planId: hold.planId,
+      planStatus: hold.planStatus,
+      sessionId: plan.sessionId,
+      anchorKey,
+    });
+    plans.set(hold.planId, { title: plan.title, anchorKey, planStatus: hold.planStatus });
+  }
+  return { byItemId, plans };
+}
+
 export const planTargetLockService = {
+  /**
+   * THE BOARD'S PLAN HOLDS (Story MOTIR-6017 · MOTIR-6268;
+   * `design/boards/design-notes.md` § _The board refuses ON THE CARD while a PLAN
+   * holds it_ → _THE DATA_): per loaded card, the plan holding it
+   * ({@link readPlanHoldsWithin}); per holding plan, its label columns and how
+   * many live items of the PROJECT it holds — counted here, not by the client,
+   * because a column loads a bounded set. The count applies the same rule: an
+   * item at `planning`, and a `generating` plan's lease only while it runs.
+   */
+  async readBoardPlanHolds(
+    projectId: string,
+    items: readonly { id: string; identifier: string; status: string }[],
+    ctx: Pick<ServiceContext, 'workspaceId'>,
+  ): Promise<{
+    byItemId: Map<string, PlanHoldDTO>;
+    plans: Map<string, HeldPlanSubject & { heldCount: number }>;
+  }> {
+    if (!items.some((item) => item.status === PLANNING_STATUS_KEY)) {
+      return { byItemId: new Map(), plans: new Map() };
+    }
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const now = new Date();
+      const { byItemId, plans } = await readPlanHoldsWithin(items, tx, now);
+      const planIds = [...plans.keys()];
+      const counts = await planTargetLockRepository.countByPlanIds(
+        {
+          workspaceId: ctx.workspaceId,
+          projectId,
+          workItemStatus: PLANNING_STATUS_KEY,
+          planIds,
+          leasedPlanIds: planIds.filter((id) => holdsWhile(plans.get(id)!.planStatus) === 'lease'),
+          leaseAfter: now,
+        },
+        tx,
+      );
+      const counted = new Map<string, HeldPlanSubject & { heldCount: number }>();
+      for (const [planId, subject] of plans) {
+        counted.set(planId, { ...subject, heldCount: counts.get(planId) ?? 0 });
+      }
+      return { byItemId, plans: counted };
+    });
+  },
+
   /** The shared open-blocker read, exposed so approve's resting pass
    *  (`plansService.restPlanTargets`) asks it the same way a release does. */
   hasOpenBlockerWithin,

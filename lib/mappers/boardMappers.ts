@@ -18,6 +18,7 @@ import type {
 } from '@/lib/dto/boards';
 import type { SprintStateDto } from '@/lib/dto/sprints';
 import type { PendingDecisionDTO } from '@/lib/dto/approvalGate';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
 
 // Prisma → DTO converters for the board domain. The service calls these just
@@ -106,6 +107,8 @@ export function toBoardCardDto(
      * read per card. `null` when the row's status maps to no live status.
      */
     statusCategory?: StatusCategoryDto | null;
+    /** The undecided plan holding the card (MOTIR-6268); `null` when omitted. */
+    planHold?: PlanHoldDTO | null;
   },
 ): BoardCardDto {
   const dto: BoardCardDto = {
@@ -126,6 +129,7 @@ export function toBoardCardDto(
     ready: opts.ready,
     pendingDecision: opts.pendingDecision ?? null,
     ciState: row.ciState,
+    planHold: opts.planHold ?? null,
     statusCategory: opts.statusCategory ?? null,
   };
   if (opts.swimlaneKey !== undefined) dto.swimlaneKey = opts.swimlaneKey;

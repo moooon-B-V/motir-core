@@ -35,7 +35,7 @@ export const UNDECIDED_PLAN_STATUSES = (['generating', 'planned', 'stale'] as co
  * `default`, in the style of `lib/planning/planDestination.ts`: a sixth plan
  * status is a compile error here rather than a silent answer.
  */
-function holdsWhile(status: PlanStatusDto): 'lease' | 'always' | 'never' {
+export function holdsWhile(status: PlanStatusDto): 'lease' | 'always' | 'never' {
   switch (status) {
     case 'generating':
       // The author is still writing; its lease is the dead-author detector.
