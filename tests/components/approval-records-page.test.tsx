@@ -348,5 +348,24 @@ describe('the /approvals page — the view switch and its faces', () => {
     expect(screen.getByText(en.approvalRecords.readFailedBody)).toBeTruthy();
     expect(switchGroup()).toBeTruthy();
     expect(screen.queryByText(en.approvalRecords.empty.title)).toBeNull();
+    // …on the view that was ASKED for, since the read never said what it served.
+    expect(screen.getByText(en.approvalRecords.subtitle.full)).toBeTruthy();
+  });
+
+  it('a FAILED read on a clean URL falls back to the reader’s first view', async () => {
+    listRecords.mockRejectedValue(new Error('db down'));
+    recordViews.mockResolvedValue(['mine', 'project']);
+    await renderPage();
+    expect(screen.getByText(en.approvalRecords.readFailedTitle)).toBeTruthy();
+    expect(screen.getByText(en.approvalRecords.subtitle.own)).toBeTruthy();
+  });
+
+  it('when the VIEWS read fails too, the page still answers — the error face, no switch, never a crash', async () => {
+    listRecords.mockRejectedValue(new Error('db down'));
+    recordViews.mockRejectedValue(new Error('db still down'));
+    await renderPage({ view: 'project' });
+    expect(screen.getByText(en.approvalRecords.readFailedTitle)).toBeTruthy();
+    expect(switchGroup()).toBeNull();
+    expect(screen.getByText(en.approvalRecords.subtitle.own)).toBeTruthy();
   });
 });
