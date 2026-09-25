@@ -18,6 +18,7 @@ import {
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME } from '@/lib/mcp/tools/publishTestInstructions';
+import { REPORT_UNBUILDABLE_TARGET_TOOL_NAME } from '@/lib/mcp/tools/reportUnbuildableTarget';
 import { GET_DESIGN_TOOL_NAME as REGISTERED_GET_DESIGN } from '@/lib/mcp/tools/getDesign';
 import { LIST_DESIGNS_TOOL_NAME as REGISTERED_LIST_DESIGNS } from '@/lib/mcp/tools/listDesigns';
 import { MOTIR_DESIGN_DIR_ENV as CLI_MOTIR_DESIGN_DIR_ENV } from '../../packages/cli/src/designFiles';
@@ -1546,12 +1547,14 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
    * one call cannot be satisfied by text belonging to the other.
    */
   function toolSteps(arm: string): { append: string; submit: string } {
-    const append = arm.indexOf('5. Put the finding on the planning thread');
-    const submit = arm.indexOf('6. Compose the WHAT');
-    const once = arm.indexOf('7. SUBMITTING IS THE ACT THAT SPENDS');
-    expect(append, 'step 5 is the append').toBeGreaterThan(-1);
-    expect(submit, 'step 6 is the submit').toBeGreaterThan(append);
-    expect(once, 'step 7 is the once rule').toBeGreaterThan(submit);
+    // Renumbered by MOTIR-6287: the report became step 4, so the append is 6,
+    // the submit 7 and the once rule 8.
+    const append = arm.indexOf('6. Put the finding on the planning thread');
+    const submit = arm.indexOf('7. Compose the WHAT');
+    const once = arm.indexOf('8. SUBMITTING IS THE ACT THAT SPENDS');
+    expect(append, 'step 6 is the append').toBeGreaterThan(-1);
+    expect(submit, 'step 7 is the submit').toBeGreaterThan(append);
+    expect(once, 'step 8 is the once rule').toBeGreaterThan(submit);
     return { append: arm.slice(append, submit), submit: arm.slice(submit, once) };
   }
 
@@ -1565,7 +1568,7 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
     return lines.slice(start, end).join('\n');
   }
 
-  it('step 5 names the TOOLS — append, then submit — after the Planning transition, and the shell-out is GONE', () => {
+  it('steps 6 and 7 name the TOOLS — append, then submit — after the Planning transition, and the shell-out is GONE', () => {
     const { prompt } = assembleDispatchPrompt(source({ key: 'PROD-99' }));
     const arm = replanArm(prompt);
     const at = (needle: string) => arm.indexOf(needle);
@@ -1651,7 +1654,7 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
     const { append } = toolSteps(arm);
     expect(append).toContain('APPENDING IS NOT SUBMITTING');
     expect(append).toMatch(/costs nothing and\s+starts no job/);
-    expect(append).toContain('Nothing has reached the planner until step 6');
+    expect(append).toContain('Nothing has reached the planner until step 7');
     expect(arm).toContain("SUBMITTING IS THE ACT THAT SPENDS the token owner's AI credits");
   });
 
@@ -2493,4 +2496,160 @@ describe('the difficulty line', () => {
     const set = assembleDispatchPrompt(source({ difficulty: 'medium' })).prompt;
     expect(set.replace(/^- Difficulty: .*\n/m, '')).toBe(unset);
   });
+});
+
+// ── THE REPORT — step 4 of THE CARD IS WRONG, in both lanes (MOTIR-6287) ────
+//
+// `docs/decisions/run-found-trigger-dispatched-path.md`, *The prompt change*:
+// right after the step-3 comment the runner calls `report_unbuildable_target`
+// with the card and the SAME text, in BOTH lanes, because the lane changes what
+// it does next, not what it found. It is told the call spends nothing, is safe
+// to repeat and returns nothing to act on — and NOT what the server does with
+// it, so it keeps describing the card rather than judging the plan.
+//
+// Every assertion is on the RENDERED prompt (`assembleDispatchPrompt`).
+describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)', () => {
+  const REPLAN = { logBug: true, replan: true, autoApproveReplan: false };
+  const NO_REPLAN = { logBug: true, replan: false, autoApproveReplan: false };
+  const TWO_LANES = { logBug: true, replan: true, autoApproveReplan: true };
+  const RENDERS = [
+    { name: 're-planning ON', policy: REPLAN },
+    { name: 're-planning OFF', policy: NO_REPLAN },
+    { name: '--auto-approve-replan', policy: TWO_LANES },
+  ] as const;
+
+  /** THE CARD IS WRONG, from its heading up to FOUND A DEFECT. */
+  function block(policy: DispatchPromptSource['findingsPolicy']): string {
+    const prompt = assembleDispatchPrompt(
+      source({ key: 'PROD-99', findingsPolicy: policy }),
+    ).prompt;
+    const branches = cardOutcomeBranches(prompt);
+    const at = branches.indexOf('THE CARD IS WRONG');
+    expect(at, 'the prompt carries THE CARD IS WRONG').toBeGreaterThan(-1);
+    return branches.slice(at);
+  }
+
+  /** The numbered steps — `  N. <heading>` — in the order they render. */
+  function steps(text: string): { n: number; heading: string; at: number }[] {
+    return [...text.matchAll(/^ {2}(\d+)\. (.*)$/gm)].map((m) => ({
+      n: Number(m[1]),
+      heading: m[2]!,
+      at: m.index!,
+    }));
+  }
+
+  /** Step `n`'s whole text, up to the next numbered step. */
+  function stepText(text: string, n: number): string {
+    const all = steps(text);
+    const i = all.findIndex((s) => s.n === n);
+    expect(i, `step ${n} exists`).toBeGreaterThan(-1);
+    return text.slice(all[i]!.at, all[i + 1]?.at ?? text.length);
+  }
+
+  it('names a REGISTERED tool', () => {
+    expect(MCP_TOOL_NAMES).toContain(REPORT_UNBUILDABLE_TARGET_TOOL_NAME);
+  });
+
+  it.each(RENDERS)(
+    '$name: exactly ONE report step, numbered 4, after the step-3 comment',
+    ({ policy }) => {
+      const text = block(policy);
+      expect(text.split(REPORT_UNBUILDABLE_TARGET_TOOL_NAME)).toHaveLength(2);
+      const four = stepText(text, 4);
+      expect(four).toMatch(/^ {2}4\. Report it with the report_unbuildable_target tool/);
+      expect(stepText(text, 3)).toContain('3. Comment the finding on PROD-99');
+      expect(four).toMatch(/projectKey:\s+PROD\b/);
+      expect(four).toMatch(/targetKey:\s+PROD-99\b/);
+      expect(four).toMatch(/reason:\s+the SAME text as your step-3 comment/);
+    },
+  );
+
+  it('re-planning ON: the report sits BEFORE the Planning transition, which is now step 5', () => {
+    const text = block(REPLAN);
+    expect(text.indexOf(REPORT_UNBUILDABLE_TARGET_TOOL_NAME)).toBeLessThan(
+      text.indexOf('status planning'),
+    );
+    expect(stepText(text, 5)).toContain('5. Move PROD-99 to Planning');
+  });
+
+  it('re-planning OFF: the report sits BEFORE "Stop, and leave the card In Progress"', () => {
+    const text = block(NO_REPLAN);
+    expect(text.indexOf(REPORT_UNBUILDABLE_TARGET_TOOL_NAME)).toBeLessThan(
+      text.indexOf('Stop, and leave the card In Progress'),
+    );
+    expect(stepText(text, 5)).toContain('5. Stop, and leave the card In Progress');
+    expect(stepText(text, 6)).toContain('6. Do not pick up other work');
+  });
+
+  it('--auto-approve-replan: the step has the SAME number, text and position as re-planning ON', () => {
+    const on = block(REPLAN);
+    const lanes = block(TWO_LANES);
+    expect(stepText(lanes, 4)).toBe(stepText(on, 4));
+    expect(steps(lanes).map((s) => s.heading)).toEqual(steps(on).map((s) => s.heading));
+  });
+
+  it.each(RENDERS)(
+    '$name: the step says free, repeatable, nothing to act on — and never what the server does',
+    ({ policy }) => {
+      const text = block(policy);
+      const four = stepText(text, 4);
+      expect(four).toContain('It spends nothing.');
+      expect(four).toContain('It is safe to repeat');
+      expect(four).toContain('one record per');
+      expect(four).toContain('It returns nothing to act on.');
+      expect(four).not.toMatch(/verdict|unchanged|native|planning bug|planner|classif/i);
+      // …and the whole block gains none of them. The block's ONE pre-existing
+      // "classify" is the negation the re-plan lane has always carried ("you are
+      // not asked to classify the mistake") — the runner still classifies nothing.
+      expect(text).not.toMatch(/verdict|unchanged|native|planning bug/i);
+      const classify = text.match(/classify/gi) ?? [];
+      if (policy.replan) {
+        expect(classify).toHaveLength(1);
+        expect(text).toMatch(/you are not asked to classify the/);
+        expect(text).toMatch(
+          /Describe what is wrong with the\s+CARD, not why it was planned that way/,
+        );
+      } else {
+        expect(classify).toHaveLength(0);
+      }
+    },
+  );
+
+  it.each(RENDERS)(
+    '$name: steps number contiguously from 1, and every "step N" names what it meant before',
+    ({ policy }) => {
+      const text = block(policy);
+      const numbered = steps(text);
+      expect(numbered.map((s) => s.n)).toEqual(numbered.map((_, i) => i + 1));
+      expect(numbered).toHaveLength(policy.replan ? 9 : 6);
+
+      // Every in-text reference, resolved to the heading of the step it names.
+      // Before the report existed they named the comment (3), the append (5)
+      // and the submit (6); they must still name those same steps.
+      const heading = (n: number) => numbered.find((s) => s.n === n)?.heading ?? '<missing>';
+      const refs = [...text.matchAll(/\bsteps?[ -](\d+)(?: and (\d+))?/gi)].flatMap((m) =>
+        [m[1], m[2]].filter(Boolean).map(Number),
+      );
+      expect(refs.length).toBeGreaterThan(0);
+      const allowed = [
+        /^Comment the finding on /,
+        /^Put the finding on the planning thread/,
+        /^Compose the WHAT/,
+      ];
+      for (const n of refs) {
+        expect(
+          allowed.some((re) => re.test(heading(n))),
+          `"step ${n}" names "${heading(n)}"`,
+        ).toBe(true);
+      }
+      if (policy.replan) {
+        expect(text).toContain('Nothing has reached the planner until step 7');
+        expect(heading(7)).toMatch(/^Compose the WHAT/);
+      }
+      if (policy.autoApproveReplan) {
+        expect(text).toContain('steps 6 and 7');
+        expect(text).not.toContain('steps 5 and 6');
+      }
+    },
+  );
 });

@@ -152,6 +152,27 @@ vi.mock('@/lib/services/approvalGatesService', async (importOriginal) => {
 vi.mock('@/lib/services/planTargetLockService', () => ({
   planTargetLockService: { readPlanHold: deferred('planHold', null, 'tierTwo') },
 }));
+// THE LATE STACK IS DRAINED TOO (MOTIR-6278). The page STARTS `readLateSections`
+// and hands the promise to two `<Suspense>` boundaries — which never render
+// here, because the page is called, not rendered. So nothing awaited it, and the
+// reads inside it that this file does NOT mock (the decision, choice and
+// confirmation gate bodies, run history, …) kept running on the real database
+// after their case ended: seven `idle in transaction` backends were still open
+// when the suite-wide in-flight check looked. Recording the promise in
+// `inFlight` puts it under the same `afterEach` drain as the page invocation.
+vi.mock('@/app/(authed)/items/[key]/_components/lateReads', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/app/(authed)/items/[key]/_components/lateReads')>();
+  return {
+    ...actual,
+    readLateSections: (input: Parameters<typeof actual.readLateSections>[0]) => {
+      const reads = actual.readLateSections(input);
+      inFlight.push(reads);
+      void reads.catch(() => undefined);
+      return reads;
+    },
+  };
+});
 vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: {
     getPermissions: () => getPermissions(),

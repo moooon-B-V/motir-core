@@ -986,7 +986,10 @@ export type DispatchEventKind =
   // the ids exist only server-side and accepting them would let a client forge a
   // finding. Nothing in this package may emit one.
   | 'bug_filed'
-  | 'plan_submitted';
+  | 'plan_submitted'
+  // The run-found report's conclusion (MOTIR-6282) — appended by the report
+  // SERVICE on the leg, refused by the ingest like the two above.
+  | 'unbuildable_reported';
 
 export interface DispatchRunOpened {
   runId: string;
@@ -1006,16 +1009,20 @@ export interface DispatchRunAppended {
 
 /**
  * The kinds this CLI may REPORT — every member of {@link DispatchEventKind}
- * except the two the server writes.
+ * except the three the server writes.
  *
  * ⚠️ THE EXCLUSION IS THE POINT (MOTIR-3981, `run-findings-protocol.md` Q5).
- * `bug_filed` and `plan_submitted` carry ids that exist only server-side, and
- * the v1 ingest refuses them so a client cannot assert a finding a run never
- * produced. Deriving this by EXCLUSION rather than re-listing nineteen strings
- * means a member added to the enum is reportable by default and the two that
- * are not stay named in one place.
+ * `bug_filed`, `plan_submitted` and `unbuildable_reported` (MOTIR-6282) carry
+ * ids or verdicts that exist only server-side, and the v1 ingest refuses them so
+ * a client cannot assert a finding a run never produced. Deriving this by
+ * EXCLUSION rather than re-listing nineteen strings means a member added to the
+ * enum is reportable by default and the three that are not stay named in one
+ * place.
  */
-export type ReportableEventKind = Exclude<DispatchEventKind, 'bug_filed' | 'plan_submitted'>;
+export type ReportableEventKind = Exclude<
+  DispatchEventKind,
+  'bug_filed' | 'plan_submitted' | 'unbuildable_reported'
+>;
 
 /** One event on the wire. `body` is the OPT-IN log payload — default OFF. */
 export interface DispatchRunEventInput {
@@ -1360,13 +1367,21 @@ export class MotirClient {
    *
    * TWO reads: v1 splits identity from workspace description, and the adapter
    * matches them on `workspaceId` rather than assuming a position.
+   *
+   * ⚠️ SETTLED, not `Promise.all` (MOTIR-6278). A token without `project:browse`
+   * is refused on both reads; `Promise.all` rejected on the first refusal and
+   * handed control back while the other request was still being served. The
+   * error the caller sees is the same either way — the FIRST read's, `/me`'s
+   * when both fail — but the call no longer ends with its own work in flight.
    */
   async whoami(): Promise<WhoamiResult> {
-    const [me, workspaces] = await Promise.all([
+    const [me, workspaces] = await Promise.allSettled([
       this.v1.request('getMe'),
       this.v1.request('listWorkspaces'),
     ]);
-    return toWhoami(me, workspaces);
+    if (me.status === 'rejected') throw me.reason;
+    if (workspaces.status === 'rejected') throw workspaces.reason;
+    return toWhoami(me.value, workspaces.value);
   }
 
   /** The token workspace's browsable projects (MOTIR-1879). Takes no arguments:

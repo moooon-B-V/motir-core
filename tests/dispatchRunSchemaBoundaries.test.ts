@@ -229,7 +229,7 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
     ]);
   });
 
-  it('DispatchEventKind — six run-scoped, fifteen card-scoped', () => {
+  it('DispatchEventKind — six run-scoped, sixteen card-scoped', () => {
     const kinds = Object.keys(DispatchEventKind);
     expect(kinds).toEqual([
       'run_opened',
@@ -256,7 +256,10 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
       // produces the plan appends them, because the ids exist only there.
       'bug_filed',
       'plan_submitted',
+      // The run-found report's conclusion (MOTIR-6282) — server-written too,
+      // by the report service, on every arm that reaches a leg.
+      'unbuildable_reported',
     ]);
-    expect(kinds).toHaveLength(21);
+    expect(kinds).toHaveLength(22);
   });
 });

@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { Readable } from 'node:stream';
 import * as route from '@/app/api/mcp/route';
+import { trackServerWork } from './serverWork';
 
 // A real HTTP listener in FRONT of the real `/api/mcp` route handler (Story 7.9
 // · Subtask 7.9.5 · MOTIR-883).
@@ -226,50 +227,55 @@ export async function startMcpHttpServer(
   }
 
   const server: Server = createServer((req, res) => {
-    void (async () => {
-      const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-      requests.push({
-        method: req.method ?? 'GET',
-        pathname: url.pathname,
-        authorization: req.headers.authorization ?? null,
-      });
-      const matched = matchRoute(routes, url.pathname);
-      if (!matched) {
-        res.writeHead(404, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ code: 'NOT_FOUND' }));
-        return;
-      }
-      try {
-        const body = await readBody(req);
-        const request = new Request(`http://127.0.0.1${req.url ?? '/'}`, {
+    // Tracked, because the MCP SDK client starts a request it never awaits (its
+    // SSE-stream GET): the in-flight probe settles it before checking the
+    // database (`serverWork.ts`, MOTIR-6324).
+    void trackServerWork(
+      (async () => {
+        const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+        requests.push({
           method: req.method ?? 'GET',
-          headers: toHeaders(req),
-          // `Uint8Array`, not `Buffer`: the Web `RequestInit` body union does
-          // not include Node's Buffer type.
-          ...(body && body.length > 0 ? { body: new Uint8Array(body) } : {}),
+          pathname: url.pathname,
+          authorization: req.headers.authorization ?? null,
         });
-        const verb = (req.method ?? 'GET').toUpperCase();
-        const method: ServedMethod = (SERVED_METHODS as readonly string[]).includes(verb)
-          ? (verb as ServedMethod)
-          : 'POST';
-        const handler = matched.mod[method];
-        if (!handler) {
-          res.writeHead(405, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ code: 'METHOD_NOT_ALLOWED' }));
+        const matched = matchRoute(routes, url.pathname);
+        if (!matched) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ code: 'NOT_FOUND' }));
           return;
         }
-        await writeResponse(
-          await handler(request as never, { params: Promise.resolve(matched.params) }),
-          res,
-        );
-      } catch (err) {
-        // A handler crash must surface as a 500 the CLI reports, never as an
-        // unhandled rejection that takes the whole worker down mid-suite.
-        console.error('MCP test server handler error:', err);
-        if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Internal server error' }));
-      }
-    })();
+        try {
+          const body = await readBody(req);
+          const request = new Request(`http://127.0.0.1${req.url ?? '/'}`, {
+            method: req.method ?? 'GET',
+            headers: toHeaders(req),
+            // `Uint8Array`, not `Buffer`: the Web `RequestInit` body union does
+            // not include Node's Buffer type.
+            ...(body && body.length > 0 ? { body: new Uint8Array(body) } : {}),
+          });
+          const verb = (req.method ?? 'GET').toUpperCase();
+          const method: ServedMethod = (SERVED_METHODS as readonly string[]).includes(verb)
+            ? (verb as ServedMethod)
+            : 'POST';
+          const handler = matched.mod[method];
+          if (!handler) {
+            res.writeHead(405, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ code: 'METHOD_NOT_ALLOWED' }));
+            return;
+          }
+          await writeResponse(
+            await handler(request as never, { params: Promise.resolve(matched.params) }),
+            res,
+          );
+        } catch (err) {
+          // A handler crash must surface as a 500 the CLI reports, never as an
+          // unhandled rejection that takes the whole worker down mid-suite.
+          console.error('MCP test server handler error:', err);
+          if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Internal server error' }));
+        }
+      })(),
+    );
   });
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

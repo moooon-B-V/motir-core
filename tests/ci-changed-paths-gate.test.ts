@@ -292,6 +292,23 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       return body.join('\n');
     })();
 
+    /** A package manifest as `pnpm`/Changesets write it: two-space JSON, trailing newline. */
+    const manifest = (
+      name: string,
+      version: string,
+      fields: Record<string, unknown> = {},
+    ): string =>
+      `${JSON.stringify(
+        { name, version, type: 'module', dependencies: { clsx: '^2.1.1' }, ...fields },
+        null,
+        2,
+      )}\n`;
+    /** `@motir/brand`'s manifest, with its peer range on the design system. */
+    const brand = (version: string, designSystemRange: string): string =>
+      manifest('@motir/brand', version, {
+        peerDependencies: { '@motir/design-system': designSystemRange, react: '^19' },
+      });
+
     /**
      * The file sets each fixture head adds on top of the base commit.
      *
@@ -300,9 +317,11 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
      * control — the control is what stops `images` widening to "always true",
      * which would make every assertion here pass for the wrong reason. The last
      * three are MOTIR-5323's package-lane cases: one package, no package, and an
-     * install input every package lane shares.
+     * install input every package lane shares. The `release-*` and `manifest-*`
+     * heads are the release-only-manifest cases (PR #3130): a path given with
+     * contents overrides the default one-line body.
      */
-    const HEADS: Record<string, readonly string[]> = {
+    const HEADS: Record<string, readonly (string | readonly [string, string])[]> = {
       'design-and-docs-only': [
         'design/work-items/design-notes.md',
         'design/work-items/provenance.mock.html',
@@ -316,6 +335,51 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       'cli-package-only': ['packages/cli/src/index.ts'],
       'lib-only': ['lib/db.ts'],
       'lockfile-only': ['pnpm-lock.yaml'],
+      // The Changesets release PR's own shape: CHANGELOGs, two version bumps,
+      // and the dependent's peer range on the sibling it now requires.
+      'release-version-bumps': [
+        'packages/brand/CHANGELOG.md',
+        ['packages/brand/package.json', brand('0.2.2', '^0.5.0')],
+        'packages/design-system/CHANGELOG.md',
+        ['packages/design-system/package.json', manifest('@motir/design-system', '0.5.0')],
+      ],
+      // A sibling range moved ONTO the `workspace:` protocol: changes the install.
+      'manifest-sibling-range-to-workspace': [
+        ['packages/brand/package.json', brand('0.2.1', 'workspace:*')],
+      ],
+      // A range on a package that is NOT a sibling.
+      'manifest-foreign-peer-range': [
+        [
+          'packages/brand/package.json',
+          manifest('@motir/brand', '0.2.2', {
+            peerDependencies: { '@motir/design-system': '^0.4.3', react: '^20' },
+          }),
+        ],
+      ],
+      // A bump that ALSO changes something else in the manifest.
+      'manifest-version-and-dependency': [
+        [
+          'packages/design-system/package.json',
+          manifest('@motir/design-system', '0.4.4', {
+            dependencies: { clsx: '^2.1.1', 'left-pad': '^1.3.0' },
+          }),
+        ],
+      ],
+      // No `version` change at all, but the manifest did change.
+      'manifest-dependency-only': [
+        [
+          'packages/design-system/package.json',
+          manifest('@motir/design-system', '0.4.3', { dependencies: { clsx: '^2.1.2' } }),
+        ],
+      ],
+      // A manifest the merge base does not have — nothing to compare against.
+      'manifest-added': [['packages/newpkg/package.json', manifest('@motir/newpkg', '0.1.0')]],
+      // Nested below a package: not a workspace manifest, so not exempt.
+      'nested-manifest-version-only': [
+        ['packages/cli/sandbox/package.json', manifest('sandbox-fixture', '1.0.1')],
+      ],
+      // Not JSON on the head side: the comparison cannot run, so it counts.
+      'manifest-unparseable': [['packages/design-system/package.json', '{ "version": "0.4.4",\n']],
     };
 
     let repo: string;
@@ -337,12 +401,15 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       git('config', 'user.email', 'ci@example.invalid');
       git('config', 'user.name', 'CI fixture');
       git('config', 'commit.gpgsign', 'false');
-      const write = (path: string): void => {
+      const write = (path: string, contents = `${path}\n`): void => {
         const full = join(repo, path);
         mkdirSync(dirname(full), { recursive: true });
-        writeFileSync(full, `${path}\n`);
+        writeFileSync(full, contents);
       };
       write('README.md');
+      write('packages/brand/package.json', brand('0.2.1', '^0.4.3'));
+      write('packages/design-system/package.json', manifest('@motir/design-system', '0.4.3'));
+      write('packages/cli/sandbox/package.json', manifest('sandbox-fixture', '1.0.0'));
       git('add', '-A');
       git('commit', '-qm', 'base');
       base = git('rev-parse', 'HEAD');
@@ -350,7 +417,10 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         // Detached at `base` so every head is a SIBLING of the others: the
         // queue's own shape, where each entry is built on the same tip.
         git('checkout', '-q', base);
-        for (const path of paths) write(path);
+        for (const entry of paths) {
+          if (typeof entry === 'string') write(entry);
+          else write(entry[0], entry[1]);
+        }
         git('add', '-A');
         git('commit', '-qm', name);
         head[name] = git('rev-parse', 'HEAD');
@@ -515,6 +585,48 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
           pkg_orchestrator: 'true',
           pkg_design_system: 'true',
         });
+      });
+    });
+
+    describe("a manifest whose only changes are a release's (PR #3130)", () => {
+      it('runs no app or image lane for the Changesets release PR', () => {
+        // THE SAVING. The release PR is CHANGELOGs and version bumps; before
+        // this the two manifests put it on the whole Vitest matrix, the build
+        // and the image lanes, for fields none of them reads.
+        const outputs = asPullRequest('release-version-bumps');
+        expect(outputs.app).toBe('false');
+        expect(outputs.images).toBe('false');
+        expect(outputs.stdout).toContain(
+          'packages/brand/package.json: release-only manifest change',
+        );
+      });
+
+      it('still runs the lane of the package that was bumped, and only that one', () => {
+        // The CLI's own suite asserts its version, so a package lane is never
+        // exempted — only `app` and `images` are.
+        expect(asPullRequest('release-version-bumps')).toMatchObject({
+          pkg_cli: 'false',
+          pkg_orchestrator: 'false',
+          pkg_design_system: 'true',
+        });
+      });
+
+      it.each([
+        ['manifest-version-and-dependency'],
+        ['manifest-dependency-only'],
+        ['manifest-added'],
+        ['nested-manifest-version-only'],
+        ['manifest-unparseable'],
+        ['manifest-sibling-range-to-workspace'],
+        ['manifest-foreign-peer-range'],
+        ['cli-package-only'],
+      ])('still runs the app and image lanes for %s — the fail-open direction', (name) => {
+        // Each is a way the exemption could widen past "only `version`
+        // changed": another field, a file with no before-side, a manifest that
+        // is not a workspace package's, one the comparison cannot parse, a
+        // sibling range moved onto `workspace:`, a non-sibling's range —
+        // and the control: package SOURCE, which the CHANGELOG arm must not reach.
+        expect(asPullRequest(name)).toMatchObject({ app: 'true', images: 'true' });
       });
     });
 

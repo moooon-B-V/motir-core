@@ -14,6 +14,7 @@ import type {
   WorkItemValidityAdvisoryDto,
 } from '@/lib/dto/workItems';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { MOTIR_6236_DESIGN_CARD_CRITERIA } from '../fixtures/designCardCriteria';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkProjectRepo } from '../helpers/projectRepoLink';
@@ -1142,16 +1143,16 @@ describe('THE DESIGN GATE advisory — a card that draws its own design and then
     fx: WorkItemFixture,
     title: string,
     descriptionMd: string,
-    placement: { kind?: 'task' | 'subtask'; parentId?: string } = {},
+    placement: { kind?: 'task' | 'subtask'; parentId?: string; type?: WorkItemTypeDto } = {},
   ) {
-    const { kind = 'task', parentId } = placement;
+    const { kind = 'task', parentId, type = 'code' } = placement;
     return workItemsService.createWorkItem(
       {
         projectId: fx.projectId,
         kind,
         title,
         descriptionMd,
-        type: 'code',
+        type,
         executor: 'coding_agent',
         storyPoints: 5,
         estimateMinutes: 55,
@@ -1258,6 +1259,31 @@ describe('THE DESIGN GATE advisory — a card that draws its own design and then
 
     expect(await buildDispatchProseAdvisories(designOnly, fx.ctx)).toEqual([]);
     expect(await buildDispatchProseAdvisories(surfaceOnly, fx.ctx)).toEqual([]);
+  });
+
+  it('EXEMPTS a `type: design` card — the TYPE is the third scope test (MOTIR-6245)', async () => {
+    // A design card IS the card the LIFT remedy would create. MOTIR-6236's own
+    // criteria name panels by number and read as building a surface, so without
+    // this the agent it is dispatched to is told to propose a design card for a
+    // design card. The same body on a `code` card still reports.
+    const fx = await makeWorkItemFixture();
+    const design = await makeDesignCard(fx, 'Draw the composer', MOTIR_6236_DESIGN_CARD_CRITERIA, {
+      type: 'design',
+    });
+    const code = await makeDesignCard(fx, 'Build the composer', MOTIR_6236_DESIGN_CARD_CRITERIA);
+
+    expect(
+      (await buildDispatchProseAdvisories(design, fx.ctx)).filter(
+        (a) => a.severity === 'likely-self-blocking-design',
+      ),
+    ).toEqual([]);
+    expect(await buildDispatchProseAdvisories(code, fx.ctx)).toContainEqual({
+      kind: 'shape',
+      item: code.identifier,
+      severity: 'likely-self-blocking-design',
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
   });
 
   it('EXEMPTS a card that HOLDS children — and the child count is read, not assumed', async () => {

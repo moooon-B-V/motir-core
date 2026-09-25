@@ -1483,3 +1483,60 @@ export interface PlanHoldDTO {
   /** The plan's first anchor key (its session's `targetKeys[0]`), or null. */
   anchorKey: string | null;
 }
+
+/**
+ * Is this work item still what the last APPROVED plan approved? (Story
+ * MOTIR-5544 · Subtask MOTIR-6225.) `no_plan` is a verdict, never an error: the
+ * card was never shaped by an approved plan (untouched by any plan, or touched
+ * only by plans still `generating` / `planned` / `stale`, or `declined`).
+ */
+export type ApprovedShapeVerdictDto = 'unchanged' | 'changed' | 'no_plan';
+
+/**
+ * The FIRST revision after the approving plan's `decidedAt` that changed what it
+ * approved. `changedKeys` is every key of that revision's diff, not only the
+ * shape-changing ones, so the reader sees the whole edit.
+ */
+export interface ApprovedShapeDivergingRevisionDto {
+  id: string;
+  changedAt: string;
+  changedById: string;
+  changeKind: string;
+  changedKeys: string[];
+}
+
+/**
+ * A CONTAINER's child set against the one its approving plan approved. Card ids,
+ * each list sorted. `added` are children the container has now that the plan did
+ * not approve; `removed` are approved children no longer (live) under it.
+ */
+export interface ApprovedShapeChildSetDto {
+  verdict: 'unchanged' | 'changed';
+  approvedChildIds: string[];
+  currentChildIds: string[];
+  added: string[];
+  removed: string[];
+}
+
+/** ONE work item's verdict against the last approved plan that shaped it. */
+export interface WorkItemApprovedShapeVerdictDto {
+  workItemId: string;
+  verdict: ApprovedShapeVerdictDto;
+  /** The approving plan — all four null on `no_plan`. */
+  planId: string | null;
+  planTitle: string | null;
+  decidedAt: string | null;
+  /** The approving plan's proposal NAMING the card (`add` / `modify` / `remove`);
+   *  null when that plan only added children under it. */
+  proposalId: string | null;
+  /** Null unless a REVISION diverged; a container can be `changed` by its child
+   *  set alone, with no diverging revision. */
+  divergingRevision: ApprovedShapeDivergingRevisionDto | null;
+  /** Null for a leaf — a card with no children now and none approved. */
+  childSet: ApprovedShapeChildSetDto | null;
+}
+
+/** The verdicts for a set of work items, in the order the ids were supplied. */
+export interface WorkItemApprovedShapeVerdictPageDto {
+  items: WorkItemApprovedShapeVerdictDto[];
+}
